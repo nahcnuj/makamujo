@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+
+set -eu
+
+SCRIPT_PATH=$(dirname "$0")
+OBS_STUDIO="${SCRIPT_PATH}/../obs-studio"
+
+"${OBS_STUDIO}" \
+    --startstreaming \
+    --disable-shutdown-check \
+    --disable-missing-files-check \
+    --disable-updater \
+    --unfiltered_log \
+    --verbose

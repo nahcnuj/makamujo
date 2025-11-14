@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+
+set -eu
+
+flatpak run -vv \
+    --share=network \
+    com.obsproject.Studio \
+    "$@"
