@@ -1,7 +1,8 @@
 import { serve } from "bun";
 import { parseArgs } from "node:util";
 import { MarkovChainModel } from "./lib/MarkovChainModel";
-import index from "./src/index.html";
+import App from "./src/index.html";
+import * as index from "./routes/index";
 
 const { values: {
   model: modelFile,
@@ -21,7 +22,9 @@ const text = model.generate();
 const server = serve({
   routes: {
     // Serve index.html for all unmatched routes.
-    "/*": index,
+    '/*': App,
+
+    '/': index,
 
     "/api/hello": {
       async GET(req) {
