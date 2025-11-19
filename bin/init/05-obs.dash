@@ -1,0 +1,14 @@
+#!/usr/bin/env dash
+
+set -eu
+
+echo Disable OBS browser hardware acceleration
+sed -i \
+    -e '/BrowserHWAccel=/ s/true/false/' \
+    '/root/.var/app/com.obsproject.Studio/config/obs-studio/global.ini'
+
+echo Enable OBS websocket
+sed -i \
+    -e '/server_enabled/ s/false/true/' \
+    -e '/auth_required/ s/true/false/' \
+    '/root/.var/app/com.obsproject.Studio/config/obs-studio/plugin_config/obs-websocket/config.json'
