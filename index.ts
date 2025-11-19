@@ -1,5 +1,22 @@
 import { serve } from "bun";
+import { parseArgs } from "node:util";
+import { MarkovChainModel } from "./lib/MarkovChainModel";
 import index from "./src/index.html";
+
+const { values: {
+  model: modelFile,
+} } = parseArgs({
+  options: {
+    model: {
+      short: 'm',
+      type: 'string',
+    },
+  },
+});
+
+const model = modelFile ? MarkovChainModel.fromFile(modelFile) : new MarkovChainModel();
+
+const text = model.generate();
 
 const server = serve({
   routes: {
@@ -30,7 +47,7 @@ const server = serve({
 
     '/api/speech': async () => {
       return Response.json({
-        text: 'こんにちは。',
+        text,
       });
     },
 
