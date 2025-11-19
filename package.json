@@ -3,8 +3,8 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "bun --hot --port=7777 src/index.ts",
-    "start": "NODE_ENV=production bun --port=7777 src/index.ts"
+    "dev": "bun --hot --port=7777 index.ts",
+    "start": "NODE_ENV=production bun --port=7777 index.ts"
   },
   "dependencies": {
     "automated-gameplay-transmitter": "link:automated-gameplay-transmitter",

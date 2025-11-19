@@ -5,9 +5,9 @@
  * It is included in `src/index.html`.
  */
 
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import { StrictMode } from "react";
 
 function start() {
   const root = createRoot(document.getElementById("root")!);
