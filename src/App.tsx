@@ -1,4 +1,5 @@
 import { Box, Container, Layout } from "automated-gameplay-transmitter";
+import { CharacterSprite } from "./components/CharacterSprite";
 import "./index.css";
 
 export function App() {
@@ -36,10 +37,16 @@ export function App() {
         </div>
       </Container>
       <Container>
-        Sprite
-        <Box>
-          Bottom
-        </Box>
+        <div className="flex gap-2 h-full">
+          <div className="flex-none w-45 max-h-full aspect-square">
+            <CharacterSprite />
+          </div>
+          <div className="flex-auto h-full">
+            <Box>
+              Bottom
+            </Box>
+          </div>
+        </div>
       </Container>
     </Layout>
   );
