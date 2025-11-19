@@ -5,11 +5,11 @@ const faces = {
 } as const;
 
 type Props = {
-  expression?: keyof typeof faces,
+  // expression?: keyof typeof faces,
 };
 
-export function CharacterSprite({ expression = 'default' }: Props) {
+export function CharacterSprite({}: Props) {
   return (
-    <img src={faces[expression]} height="50" className="transform-[scale(-1,1)]" />
+    <img src={faces['default']} height="50" className="transform-[scale(-1,1)]" />
   );
 }

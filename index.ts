@@ -27,6 +27,19 @@ const server = serve({
         message: `Hello, ${name}!`,
       });
     },
+
+    '/api/speech': async () => {
+      return Response.json({
+        text: 'こんにちは。',
+      });
+    },
+
+    '/api/game': async () => {
+      return Response.json({
+        game: 'cookieclicker',
+        datetime: new Date().toISOString(),
+      });
+    },
   },
 
   development: process.env.NODE_ENV !== "production" && {
