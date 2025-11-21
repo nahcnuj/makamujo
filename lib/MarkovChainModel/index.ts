@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import type { TalkModel } from "../Agent/TalkModel";
 import { choose } from "./choose";
 
 type WeightedCandidates = Record<string, number>;
@@ -43,7 +44,7 @@ const acceptBeginning = (text: string) => [...text].length > 1 || !text.match(/[
  * const reply = model.reply('元気ですか？');
  * console.log(reply);
  */
-export class MarkovChainModel {
+export class MarkovChainModel implements TalkModel {
   #dist: Distribution;
   #corpus: string[] = [];
   #wordSegmenter;

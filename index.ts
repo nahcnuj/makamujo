@@ -1,8 +1,10 @@
 import { serve } from "bun";
+import { MakaMujo } from "lib/Agent";
+import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { MarkovChainModel } from "./lib/MarkovChainModel";
-import App from "./src/index.html";
 import * as index from "./routes/index";
+import App from "./src/index.html";
 
 const { values: {
   model: modelFile,
@@ -11,13 +13,24 @@ const { values: {
     model: {
       short: 'm',
       type: 'string',
+      default: './var/model.json',
     },
   },
 });
 
 const model = modelFile ? MarkovChainModel.fromFile(modelFile) : new MarkovChainModel();
 
-const text = model.generate();
+let speech: string | undefined;
+
+const streamer = new MakaMujo(model);
+streamer.onSpeech(async (text) => {
+  console.debug('[DEBUG]', 'say', speech = text);
+
+  // TODO tts
+  await setTimeout(100 * text.length);
+
+  speech = undefined;
+});
 
 const server = serve({
   routes: {
@@ -50,7 +63,7 @@ const server = serve({
 
     '/api/speech': async () => {
       return Response.json({
-        text,
+        text: speech ?? '',
       });
     },
 
