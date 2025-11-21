@@ -19,7 +19,7 @@ export class MakaMujo {
     this.#loop();
   }
 
-  async speech(text: string = this.#talkModel.generate()): Promise<void> {
+  async speech(text: string = this.#talkModel.generate()) {
     this.#speechPromise = this.#speechPromise.then(async () => {
       await Promise.all(this.#speechListeners.map(f => f(text)));
     });
@@ -30,7 +30,7 @@ export class MakaMujo {
     this.#speechListeners.push(cb);
   }
 
-  async #loop(msPerTick: number = 100): Promise<void> {
+  async #loop(msPerTick: number = 100) {
     let running = false;
     for await (const _ of setInterval(msPerTick)) {
       if (!running) {
