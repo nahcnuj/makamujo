@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { setTimeout } from "node:timers/promises";
+import { setInterval, setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { create } from "../../lib/Browser/chromium";
 import { createSender } from "../../lib/Browser/socket";
@@ -42,6 +42,7 @@ const send = createSender(async (action) => {
       await browser.open(action.url);
       send({
         name: 'idle',
+        url: browser.url,
       });
       return;
     }
@@ -51,7 +52,19 @@ const send = createSender(async (action) => {
 send({ name: 'initialized' });
 
 try {
-  await setTimeout(10_000);
+  let running = false;
+  for await (const _ of setInterval(1_000)) {
+    if (!running) {
+      running = true;
+
+      send({
+        name: 'idle',
+        url: browser.url,
+      });
+
+      running = false;
+    }
+  }
 } catch (err) {
   console.error(err);
 } finally {

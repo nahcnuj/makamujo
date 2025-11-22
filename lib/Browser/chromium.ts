@@ -45,5 +45,9 @@ export const create = async (
       await ctx.close();
       await browser.close();
     },
+
+    get url() {
+      return page.url();
+    },
   } satisfies Browser;
 };

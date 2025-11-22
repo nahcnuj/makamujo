@@ -6,6 +6,7 @@ type State =
   }
   | {
     name: 'idle'
+    url: string
   }
   | {
     name: 'closed'
