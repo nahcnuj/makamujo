@@ -77,8 +77,10 @@ try {
   }
 } catch (err) {
   console.error(err);
+  process.exitCode = 1;
 } finally {
   await browser.close();
 }
 
 send({ name: 'closed' });
+process.exit();
