@@ -30,31 +30,6 @@ const tts = new TTS({
 
 let speech: string | undefined;
 
-const streamer = new MakaMujo(model)
-  .onSpeech(async (text) => {
-    console.debug('[DEBUG]', 'speech', speech = text);
-
-    tts.speech(text);
-
-    speech = undefined;
-  });
-
-(async () => {
-  let running = false;
-  for await (const _ of setInterval(1_000)) {
-    if (!running) {
-      running = true;
-      try {
-        await streamer.speech();
-      } catch (err) {
-        console.error(err);
-      } finally {
-        running = false;
-      }
-    }
-  }
-})();
-
 const server = serve({
   routes: {
     // Serve index.html for all unmatched routes.
@@ -85,6 +60,7 @@ const server = serve({
     },
 
     '/api/speech': async () => {
+      console.debug('[DEBUG]', '/api/speech', speech);
       return Response.json({
         text: speech ?? '',
       });
@@ -108,3 +84,25 @@ const server = serve({
 });
 
 console.log(`🚀 Server running at ${server.url}`);
+
+const streamer = new MakaMujo(model)
+  .onSpeech(async (text) => {
+    console.debug('[DEBUG]', 'speech', text);
+    tts.speech(speech = text);
+  });
+
+(async () => {
+  let running = false;
+  for await (const _ of setInterval(1_000)) {
+    if (!running) {
+      running = true;
+      try {
+        await streamer.speech();
+      } catch (err) {
+        console.error(err);
+      } finally {
+        running = false;
+      }
+    }
+  }
+})();
