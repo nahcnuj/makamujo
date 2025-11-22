@@ -1,0 +1,39 @@
+#!/usr/bin/env bun
+
+import { setTimeout } from "node:timers/promises";
+import { parseArgs } from "node:util";
+import type { Browser } from "../../lib/Browser";
+import { create } from "../../lib/Browser/chromium";
+
+const { values: {
+  file,
+  browser: executablePath,
+  lang,
+} } = parseArgs({
+  options: {
+    file: {
+      short: 'f',
+      type: 'string',
+      default: './var/cookieclicker.txt',
+    },
+    browser: {
+      type: 'string',
+      default: '/usr/bin/chromium',
+    },
+    lang: {
+      type: 'string',
+      default: '日本語',
+    },
+  },
+});
+
+const browser: Browser = await create(executablePath);
+
+try {
+  await browser.open('https://example.com/');
+  await setTimeout(60_000);
+} catch (err) {
+  console.error(err);
+} finally {
+  await browser.close();
+}
