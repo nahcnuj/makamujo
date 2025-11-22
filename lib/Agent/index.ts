@@ -30,9 +30,7 @@ export class MakaMujo {
           };
         }
         case 'idle': {
-          return {
-            name: 'noop',
-          };
+          return Games[this.#playing].solve(state);
         }
         case 'closed': {
           console.log('[INFO]', 'browser closed');

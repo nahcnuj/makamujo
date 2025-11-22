@@ -1,9 +1,8 @@
-import type { Action } from "./Action";
-import type { State } from "./State";
+import type { Action, State } from "../../../../Browser/socket";
 
 export const solve = (state: State): Action => {
-  console.debug('[DEBUG]', 'solve', 'state', JSON.stringify(state, null, 0));
+  console.debug('[DEBUG]', 'solve', state);
   return {
-    action: undefined,
+    name: 'noop',
   };
 };

@@ -47,10 +47,6 @@ const send = createSender(async (action) => {
     }
     case 'open': {
       await browser.open(action.url);
-      send({
-        name: 'idle',
-        url: browser.url,
-      });
       return;
     }
   }

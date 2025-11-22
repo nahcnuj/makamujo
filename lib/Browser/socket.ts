@@ -1,6 +1,6 @@
 import { createSocketPair } from "automated-gameplay-transmitter";
 
-type State =
+export type State =
   | {
     name: 'initialized'
   }
@@ -12,7 +12,7 @@ type State =
     name: 'closed'
   };
 
-type Action =
+export type Action =
   | {
     name: 'noop'
   }
