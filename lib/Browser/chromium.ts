@@ -1,7 +1,7 @@
+import type { Browser } from "automated-gameplay-transmitter";
 import type { ViewportSize } from "playwright";
 import { chromium as $_ } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
-import type { Browser } from "automated-gameplay-transmitter";
 
 const chromium = $_.use(StealthPlugin());
 

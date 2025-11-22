@@ -1,10 +1,12 @@
 import { setInterval } from "node:timers/promises";
+import { createReceiver } from "../socket";
 import * as Games from "./games";
 
 type GameName = keyof typeof Games;
 
 export class MakaMujo {
   #playing: GameName = 'CookieClicker';
+  #state: unknown;
 
   #talkModel: TalkModel;
   #tts: TTS;
@@ -18,6 +20,11 @@ export class MakaMujo {
     this.#tts = tts;
 
     this.#loop();
+
+    createReceiver((state) => {
+      console.log('[DEBUG]', 'receiver got', state);
+      this.#state = state;
+    });
   }
 
   async speech(text: string = this.#talkModel.generate()) {

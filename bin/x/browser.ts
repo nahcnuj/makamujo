@@ -3,6 +3,7 @@
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { create } from "../../lib/Browser/chromium";
+import { createSender } from "../../lib/socket";
 
 const { values: {
   file,
@@ -31,8 +32,13 @@ const browser = await create(executablePath, {
   height: 720 + 32 /* top bar */,
 });
 
+const send = createSender(async (action) => {
+  console.log('[DEBUG]', 'sender got', action);
+});
+
 try {
   await browser.open('https://example.com/');
+  send('https://example.com/');
   await setTimeout(60_000);
 } catch (err) {
   console.error(err);
