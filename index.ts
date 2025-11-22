@@ -1,5 +1,4 @@
 import { serve } from "bun";
-import { setInterval } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { MakaMujo } from "./lib/Agent";
 import { MarkovChainModel } from "./lib/MarkovChainModel";
@@ -67,19 +66,3 @@ const server = serve({
 });
 
 console.log(`🚀 Server running at ${server.url}`);
-
-(async () => {
-  let running = false;
-  for await (const _ of setInterval(1_000)) {
-    if (!running) {
-      running = true;
-      try {
-        await streamer.speech();
-      } catch (err) {
-        console.error(err);
-      } finally {
-        running = false;
-      }
-    }
-  }
-})();

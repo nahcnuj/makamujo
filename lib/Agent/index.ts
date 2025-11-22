@@ -21,6 +21,8 @@ export class MakaMujo {
   }
 
   async speech(text: string = this.#talkModel.generate()) {
+    console.debug('[DEBUG]', 'speech', text);
+
     this.#speechPromise = this.#speechPromise.then(async () => {
       await Promise.all(this.#speechListeners.map(f => f(text)));
     }).catch(() => Promise.resolve());
@@ -39,9 +41,10 @@ export class MakaMujo {
     let running = false;
     for await (const _ of setInterval(msPerTick)) {
       if (!running) {
-        // console.debug('[DEBUG]', '#loop', new Date().toISOString());
         try {
           running = true;
+
+          await this.speech();
         } catch (err) {
           console.warn('[WARN]', JSON.stringify(err, null, 2));
         } finally {
