@@ -6,14 +6,26 @@ let waiting: Action | undefined;
 export const solve = (s: State): Action => {
   console.debug('[DEBUG]', 'solve', s);
 
-  if (s.name === 'clicked') {
-    waiting = undefined;
-    return {
-      name: 'noop',
-    };
-  }
-
   if (waiting) {
+    if (s.name === 'clicked') {
+      if (s.target === '日本語') { // TODO
+        return waiting = {
+          name: 'click',
+          target: 'Got it',
+        };
+      } else if (s.target === 'Got it') {
+        return waiting = {
+          name: 'click',
+          target: '次回から表示しない',
+        };
+      }
+
+      waiting = undefined;
+      return {
+        name: 'noop',
+      };
+    }
+
     console.debug('[DEBUG]', 'waiting action', waiting);
     return {
       name: 'noop',
@@ -24,7 +36,6 @@ export const solve = (s: State): Action => {
     return waiting = {
       name: 'click',
       target: '日本語', // TODO
-      id: randomUUID(),
     } satisfies Action;
   } else if (s.name === 'idle') {
     return {

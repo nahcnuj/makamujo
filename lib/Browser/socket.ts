@@ -14,7 +14,7 @@ export type State =
   }
   | {
     name: 'clicked'
-    id: string
+    target: string
     succeeded: boolean
   }
   | {
@@ -34,7 +34,6 @@ export type Action =
   | {
     name: 'click'
     target: string
-    id: string
   };
 
 export const {
