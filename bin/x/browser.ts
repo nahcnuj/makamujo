@@ -38,20 +38,22 @@ const send = createSender(async (action) => {
     case 'noop': {
       return;
     }
-    default: {
-      console.error('[ERROR]', 'unknown action', action);
+    case 'open': {
+      await browser.open(action.url);
+      send({
+        name: 'idle',
+      });
       return;
     }
   }
 });
 
 send({
-  name: 'waiting',
+  name: 'initialized',
 });
 
 try {
-  await browser.open('https://example.com/');
-  await setTimeout(60_000);
+  await setTimeout(5_000);
 } catch (err) {
   console.error(err);
 } finally {

@@ -24,9 +24,19 @@ export class MakaMujo {
     createReceiver((state) => {
       console.log('[DEBUG]', 'receiver got', state);
       this.#state = state;
-      return {
-        name: 'noop',
-      };
+      switch (state.name) {
+        case 'initialized': {
+          return {
+            name: 'open',
+            url: Games[this.#playing].url,
+          };
+        }
+        case 'idle': {
+          return {
+            name: 'noop',
+          };
+        }
+      }
     });
   }
 

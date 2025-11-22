@@ -1,12 +1,21 @@
 import { createSocketPair } from "automated-gameplay-transmitter";
 
-type State = {
-  name: 'waiting'
-};
+type State =
+  | {
+    name: 'initialized'
+  }
+  | {
+    name: 'idle'
+  };
 
-type Action = {
-  name: 'noop'
-};
+type Action =
+  | {
+    name: 'noop'
+  }
+  | {
+    name: 'open'
+    url: string
+  };
 
 export const {
   sender: createSender,
