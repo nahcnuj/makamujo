@@ -11,7 +11,7 @@ export default class implements TTS {
 
   #tempDir: string;
 
-  constructor({ htsvoiceFile, dictionaryDir }: OpenJTalkOptions) {
+  constructor({ htsvoiceFile, dictionaryDir }: Pick<OpenJTalkOptions, 'htsvoiceFile' | 'dictionaryDir'>) {
     this.#htsvoiceFile = htsvoiceFile;
     this.#dictionaryDir = dictionaryDir;
 

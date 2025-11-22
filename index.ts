@@ -28,7 +28,13 @@ const tts = new TTS({
   dictionaryDir,
 });
 
-let speech: string | undefined;
+let speech: string = '';
+
+const streamer = new MakaMujo(model, tts)
+  .onSpeech(async (text) => {
+    // console.debug('[DEBUG]', 'speech', text);
+    speech = text;
+  });
 
 const server = serve({
   routes: {
@@ -39,7 +45,7 @@ const server = serve({
 
     '/api/speech': async () => {
       return Response.json({
-        text: speech ?? '',
+        speech,
       });
     },
 
@@ -61,12 +67,6 @@ const server = serve({
 });
 
 console.log(`🚀 Server running at ${server.url}`);
-
-const streamer = new MakaMujo(model)
-  .onSpeech(async (text) => {
-    // console.debug('[DEBUG]', 'speech', text);
-    tts.speech(speech = text);
-  });
 
 (async () => {
   let running = false;

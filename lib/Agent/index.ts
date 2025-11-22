@@ -7,13 +7,15 @@ export class MakaMujo {
   #playing: GameName = 'CookieClicker';
 
   #talkModel: TalkModel;
+  #tts: TTS;
 
   #speechPromise = Promise.resolve();
 
   #speechListeners: Array<(text: string) => Promise<void>> = [];
 
-  constructor(talkModel: TalkModel) {
+  constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
+    this.#tts = tts;
 
     this.#loop();
   }
@@ -22,6 +24,9 @@ export class MakaMujo {
     this.#speechPromise = this.#speechPromise.then(async () => {
       await Promise.all(this.#speechListeners.map(f => f(text)));
     }).catch(() => Promise.resolve());
+
+    this.#tts.speech(text);
+
     await this.#speechPromise;
   }
 

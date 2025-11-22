@@ -19,10 +19,15 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
   const [gameState, setGameState] = useState<Data['gameState']>();
 
   useInterval(100, async () => {
-    const { text } = await fetch('/api/speech', { unix: './var/api-speech.sock' })
-      .then(res => res.ok ? res.json() : { text: 'not ok' })
-      .catch(console.warn);
-    setSpeech(text);
+    const { speech } = await fetch('/api/speech', { unix: './var/api-speech.sock' })
+      .then(res => res.ok ? res.json() : { speech: '' })
+      .catch(err => {
+        console.warn('[WARN]', err);
+        return { speech: '' };
+      });
+    if (speech) {
+      setSpeech(speech);
+    }
   });
 
   useInterval(33, async () => {
