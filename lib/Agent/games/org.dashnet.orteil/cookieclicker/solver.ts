@@ -1,5 +1,6 @@
-import { randomUUID } from "node:crypto";
 import type { Action, State } from "../../../../Browser/socket";
+
+const timeoutMs = 10_000;
 
 let waiting: Action | undefined;
 
@@ -12,11 +13,13 @@ export const solve = (s: State): Action => {
         return waiting = {
           name: 'click',
           target: 'Got it',
+          datetime: Date.now(),
         };
       } else if (s.target === 'Got it') {
         return waiting = {
           name: 'click',
           target: '次回から表示しない',
+          datetime: Date.now(),
         };
       }
 
@@ -24,6 +27,11 @@ export const solve = (s: State): Action => {
       return {
         name: 'noop',
       };
+    }
+
+    if (waiting.name === 'click' && Date.now() - waiting.datetime > timeoutMs) {
+      console.log('[INFO]', 'resend the waiting action', waiting);
+      return waiting;
     }
 
     console.debug('[DEBUG]', 'waiting action', waiting);
@@ -36,7 +44,8 @@ export const solve = (s: State): Action => {
     return waiting = {
       name: 'click',
       target: '日本語', // TODO
-    } satisfies Action;
+      datetime: Date.now(),
+    };
   } else if (s.name === 'idle') {
     return {
       name: 'noop',
