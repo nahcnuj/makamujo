@@ -1,5 +1,5 @@
 import { setInterval } from "node:timers/promises";
-import { createReceiver } from "../socket";
+import { createReceiver } from "../Browser/socket";
 import * as Games from "./games";
 
 type GameName = keyof typeof Games;
@@ -24,6 +24,9 @@ export class MakaMujo {
     createReceiver((state) => {
       console.log('[DEBUG]', 'receiver got', state);
       this.#state = state;
+      return {
+        name: 'noop',
+      };
     });
   }
 
