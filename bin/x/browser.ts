@@ -2,7 +2,6 @@
 
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
-import type { Browser } from "../../lib/Browser";
 import { create } from "../../lib/Browser/chromium";
 
 const { values: {
@@ -27,7 +26,10 @@ const { values: {
   },
 });
 
-const browser: Browser = await create(executablePath);
+const browser = await create(executablePath, {
+  width: 1280,
+  height: 720 + 32 /* top bar */,
+});
 
 try {
   await browser.open('https://example.com/');
