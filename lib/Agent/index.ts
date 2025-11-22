@@ -44,9 +44,9 @@ export class MakaMujo {
         try {
           running = true;
 
-          await this.speech();
+          // await this.speech();
         } catch (err) {
-          console.warn('[WARN]', JSON.stringify(err, null, 2));
+          console.error(err);
         } finally {
           running = false;
         }
