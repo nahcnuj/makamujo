@@ -46,3 +46,5 @@ export class MakaMujo {
     }
   }
 }
+
+export type { TalkModel } from "./TalkModel";

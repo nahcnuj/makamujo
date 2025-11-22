@@ -1,7 +1,7 @@
 import { serve } from "bun";
-import { MakaMujo } from "lib/Agent";
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
+import { MakaMujo } from "./lib/Agent";
 import { MarkovChainModel } from "./lib/MarkovChainModel";
 import * as index from "./routes/index";
 import App from "./src/index.html";

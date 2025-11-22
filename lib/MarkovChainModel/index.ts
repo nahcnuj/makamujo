@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { TalkModel } from "../Agent/TalkModel";
+import type { TalkModel } from "../Agent";
 import { choose } from "./choose";
 
 type WeightedCandidates = Record<string, number>;
