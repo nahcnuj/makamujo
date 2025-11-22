@@ -1,11 +1,11 @@
 import { serve } from "bun";
+import { setInterval } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { MakaMujo } from "./lib/Agent";
 import { MarkovChainModel } from "./lib/MarkovChainModel";
 import TTS from "./lib/TTS";
 import * as index from "./routes/index";
 import App from "./src/index.html";
-import { setInterval } from "node:timers/promises";
 
 const { values: {
   model: modelFile,
@@ -37,30 +37,7 @@ const server = serve({
 
     '/': index,
 
-    "/api/hello": {
-      async GET(req) {
-        return Response.json({
-          message: "Hello, world!",
-          method: "GET",
-        });
-      },
-      async PUT(req) {
-        return Response.json({
-          message: "Hello, world!",
-          method: "PUT",
-        });
-      },
-    },
-
-    "/api/hello/:name": async req => {
-      const name = req.params.name;
-      return Response.json({
-        message: `Hello, ${name}!`,
-      });
-    },
-
     '/api/speech': async () => {
-      console.debug('[DEBUG]', '/api/speech', speech);
       return Response.json({
         text: speech ?? '',
       });
@@ -87,7 +64,7 @@ console.log(`🚀 Server running at ${server.url}`);
 
 const streamer = new MakaMujo(model)
   .onSpeech(async (text) => {
-    console.debug('[DEBUG]', 'speech', text);
+    // console.debug('[DEBUG]', 'speech', text);
     tts.speech(speech = text);
   });
 
