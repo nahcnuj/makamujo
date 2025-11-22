@@ -1,6 +1,5 @@
 import { setInterval } from "node:timers/promises";
 import * as Games from "./games";
-import type { TalkModel } from "./TalkModel";
 
 type GameName = keyof typeof Games;
 
@@ -22,19 +21,20 @@ export class MakaMujo {
   async speech(text: string = this.#talkModel.generate()) {
     this.#speechPromise = this.#speechPromise.then(async () => {
       await Promise.all(this.#speechListeners.map(f => f(text)));
-    });
+    }).catch(() => Promise.resolve());
     await this.#speechPromise;
   }
 
-  onSpeech(cb: (text: string) => Promise<void>) {
+  onSpeech(cb: (text: string) => Promise<void>): MakaMujo {
     this.#speechListeners.push(cb);
+    return this;
   }
 
   async #loop(msPerTick: number = 100) {
     let running = false;
     for await (const _ of setInterval(msPerTick)) {
       if (!running) {
-        console.debug('[DEBUG]', '#loop', new Date().toISOString());
+        // console.debug('[DEBUG]', '#loop', new Date().toISOString());
         try {
           running = true;
         } catch (err) {
@@ -47,4 +47,10 @@ export class MakaMujo {
   }
 }
 
-export type { TalkModel } from "./TalkModel";
+export interface TalkModel {
+  generate(): string
+}
+
+export interface TTS {
+  speech(text: string): void
+}

@@ -1,10 +1,11 @@
 import { serve } from "bun";
-import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { MakaMujo } from "./lib/Agent";
 import { MarkovChainModel } from "./lib/MarkovChainModel";
+import TTS from "./lib/TTS";
 import * as index from "./routes/index";
 import App from "./src/index.html";
+import { setInterval } from "node:timers/promises";
 
 const { values: {
   model: modelFile,
@@ -20,17 +21,39 @@ const { values: {
 
 const model = modelFile ? MarkovChainModel.fromFile(modelFile) : new MarkovChainModel();
 
+const htsvoiceFile = '/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice';
+const dictionaryDir = '/var/lib/mecab/dic/open-jtalk/naist-jdic';
+const tts = new TTS({
+  htsvoiceFile,
+  dictionaryDir,
+});
+
 let speech: string | undefined;
 
-const streamer = new MakaMujo(model);
-streamer.onSpeech(async (text) => {
-  console.debug('[DEBUG]', 'say', speech = text);
+const streamer = new MakaMujo(model)
+  .onSpeech(async (text) => {
+    console.debug('[DEBUG]', 'speech', speech = text);
 
-  // TODO tts
-  await setTimeout(100 * text.length);
+    tts.speech(text);
 
-  speech = undefined;
-});
+    speech = undefined;
+  });
+
+(async () => {
+  let running = false;
+  for await (const _ of setInterval(1_000)) {
+    if (!running) {
+      running = true;
+      try {
+        await streamer.speech();
+      } catch (err) {
+        console.error(err);
+      } finally {
+        running = false;
+      }
+    }
+  }
+})();
 
 const server = serve({
   routes: {
