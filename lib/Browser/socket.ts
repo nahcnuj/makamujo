@@ -6,6 +6,9 @@ type State =
   }
   | {
     name: 'idle'
+  }
+  | {
+    name: 'closed'
   };
 
 type Action =

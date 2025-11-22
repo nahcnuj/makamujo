@@ -36,6 +36,12 @@ export class MakaMujo {
             name: 'noop',
           };
         }
+        case 'closed': {
+          console.log('[INFO]', 'browser closed');
+          return {
+            name: 'noop',
+          };
+        }
       }
     });
   }

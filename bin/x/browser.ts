@@ -48,14 +48,14 @@ const send = createSender(async (action) => {
   }
 });
 
-send({
-  name: 'initialized',
-});
+send({ name: 'initialized' });
 
 try {
-  await setTimeout(5_000);
+  await setTimeout(10_000);
 } catch (err) {
   console.error(err);
 } finally {
   await browser.close();
 }
+
+send({ name: 'closed' });
