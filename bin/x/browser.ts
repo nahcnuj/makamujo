@@ -47,6 +47,29 @@ const send = createSender(async (action) => {
     }
     case 'open': {
       await browser.open(action.url);
+      send({
+        name: 'opened',
+        url: action.url,
+      });
+      return;
+    }
+    case 'click': {
+      if (typeof action.target === 'string') {
+        let succeeded = true;
+        try {
+          await browser.clickByText(action.target);
+        } catch {
+          succeeded = false;
+        } finally {
+          send({
+            ...action,
+            name: 'clicked',
+            succeeded,
+          });
+        }
+      } else {
+        console.error('[ERROR]', 'Unimplemented target', action.target);
+      }
       return;
     }
   }

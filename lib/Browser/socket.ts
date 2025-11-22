@@ -1,15 +1,26 @@
 import { createSocketPair } from "automated-gameplay-transmitter";
+import type { Locator } from "playwright";
 
 export type State =
   | {
     name: 'initialized'
   }
   | {
-    name: 'idle'
+    name: 'opened'
     url: string
   }
   | {
     name: 'closed'
+  }
+  | {
+    name: 'clicked'
+    id: string
+    succeeded: boolean
+  }
+  | {
+    name: 'idle'
+    url: string
+    state?: unknown
   };
 
 export type Action =
@@ -19,6 +30,11 @@ export type Action =
   | {
     name: 'open'
     url: string
+  }
+  | {
+    name: 'click'
+    target: string
+    id: string
   };
 
 export const {

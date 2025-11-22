@@ -54,7 +54,7 @@ export type Statistics = {
   }
 };
 
-export type State = {
+export type Data = {
   modal?: undefined
 
   ticks: number

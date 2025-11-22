@@ -1,5 +1,4 @@
-import { setInterval } from "node:timers/promises";
-import { createReceiver } from "../Browser/socket";
+import { createReceiver, type State } from "../Browser/socket";
 import * as Games from "./games";
 
 type GameName = keyof typeof Games;
@@ -29,14 +28,14 @@ export class MakaMujo {
             url: Games[this.#playing].url,
           };
         }
-        case 'idle': {
-          return Games[this.#playing].solve(state);
-        }
         case 'closed': {
           console.log('[INFO]', 'browser closed');
           return {
             name: 'noop',
           };
+        }
+        default: {
+          return Games[this.#playing].solve(state);
         }
       }
     });

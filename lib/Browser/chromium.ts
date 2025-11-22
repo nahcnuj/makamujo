@@ -46,6 +46,10 @@ export const create = async (
       await browser.close();
     },
 
+    clickByText: async (text: string) => {
+      await page.getByText(text).click();
+    },
+
     get url() {
       return page.url();
     },
