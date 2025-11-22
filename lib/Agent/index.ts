@@ -19,8 +19,6 @@ export class MakaMujo {
     this.#talkModel = talkModel;
     this.#tts = tts;
 
-    this.#loop();
-
     createReceiver((state) => {
       console.log('[DEBUG]', 'receiver got', state);
       this.#state = state;
@@ -61,23 +59,6 @@ export class MakaMujo {
   onSpeech(cb: (text: string) => Promise<void>): MakaMujo {
     this.#speechListeners.push(cb);
     return this;
-  }
-
-  async #loop(msPerTick: number = 100) {
-    let running = false;
-    for await (const _ of setInterval(msPerTick)) {
-      if (!running) {
-        try {
-          running = true;
-
-          // await this.speech();
-        } catch (err) {
-          console.error(err);
-        } finally {
-          running = false;
-        }
-      }
-    }
   }
 }
 

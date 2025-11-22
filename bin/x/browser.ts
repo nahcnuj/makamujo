@@ -9,6 +9,7 @@ const { values: {
   file,
   browser: executablePath,
   lang,
+  timeout: timeoutStr,
 } } = parseArgs({
   options: {
     file: {
@@ -24,8 +25,14 @@ const { values: {
       type: 'string',
       default: '日本語',
     },
+    timeout: {
+      type: 'string',
+      default: Number.MAX_SAFE_INTEGER.toFixed(0),
+    },
   },
 });
+
+const timeout = Number.parseInt(timeoutStr, 10);
 
 const browser = await create(executablePath, {
   width: 1280,
@@ -53,8 +60,11 @@ send({ name: 'initialized' });
 
 try {
   let running = false;
-  for await (const _ of setInterval(1_000)) {
+  for await (const start of setInterval(1_000, Date.now())) {
     if (!running) {
+      if (Date.now() - start >= timeout) {
+        break;
+      }
       running = true;
 
       send({
