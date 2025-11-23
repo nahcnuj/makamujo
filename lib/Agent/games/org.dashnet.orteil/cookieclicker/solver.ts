@@ -19,6 +19,7 @@ export function* solver(state: GameState = { type: 'initialize' }): Generator<Ac
         ];
 
         for (const action of actions) {
+          console.debug('[DEBUG]', 'action =', action);
           result = yield action;
           if (result?.name === 'closed') {
             return { name: 'noop' };
@@ -27,13 +28,14 @@ export function* solver(state: GameState = { type: 'initialize' }): Generator<Ac
           };
         }
 
-        state = undefined;
+        state = undefined; // TODO next state
 
         break;
       }
       default: {
         console.warn('[WARN]', 'state unprocessed', state);
-        yield { name: 'noop' };
+        result = yield { name: 'noop' };
+        console.debug('[DEBUG]', 'result =', result);
         break;
       }
     }
