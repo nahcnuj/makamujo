@@ -1,6 +1,6 @@
 import { serve } from "bun";
 import { readFileSync } from "node:fs";
-import { setInterval } from "node:timers/promises";
+import { setInterval, setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { MakaMujo } from "./lib/Agent";
 import { MarkovChainModel } from "./lib/MarkovChainModel";
@@ -63,10 +63,8 @@ const server = serve({
     },
 
     '/api/game': async () => {
-      return Response.json({
-        game: 'cookieclicker',
-        datetime: new Date().toISOString(),
-      });
+      console.debug('[DEBUG]', '/api/game', streamer.playing);
+      return Response.json(streamer.playing ?? {});
     },
   },
 

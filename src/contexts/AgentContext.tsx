@@ -31,7 +31,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
   });
 
   useInterval(33, async () => {
-    const state = await fetch('/api/game', { unix: './var/api-game.sock' })
+    const { state } = await fetch('/api/game', { unix: './var/api-game.sock' })
       .then(res => res.ok ? res.json() : { error: 'not ok' })
       .catch(error => ({ error }));
     setGameState(state);

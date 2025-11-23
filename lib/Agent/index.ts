@@ -10,18 +10,41 @@ export class MakaMujo {
 
   #state: State | undefined;
 
+  #playing?: {
+    name: GameName
+    state: Partial<Awaited<ReturnType<typeof Games[GameName]['viewsight']>>>
+  }
+
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
     this.#tts = tts;
   }
 
-  play(game: GameName, data?: string) {
-    const solver = Games[game].solver({
+  play(name: GameName, data?: string) {
+    const solver = Games[name].solver({
       type: 'initialize',
       data,
     });
     createReceiver((state) => {
       this.#state = state;
+
+      if (state.name === 'closed') {
+        this.#playing = undefined;
+        return;
+      }
+
+      if (state.name === 'idle') {
+        if (state.state) {
+          this.#playing = {
+            name,
+            state: {
+              ...this.#playing?.state ?? {},
+              ...state.state,
+            },
+          };
+        }
+      }
+
       return solver.next(state).value;
     });
   }
@@ -49,6 +72,10 @@ export class MakaMujo {
       'result',
       'closed',
     ].includes(this.#state?.name ?? '');
+  }
+
+  get playing() {
+    return this.#playing;
   }
 }
 
