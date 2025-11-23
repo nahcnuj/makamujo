@@ -14,11 +14,11 @@ describe('solver', () => {
 
     expect(solve.next().value).toHaveProperty('name', 'open');
 
-    const actions = [
+    const actions: Action[] = [
       { name: 'click', target: '日本語' },
       { name: 'click', target: 'Got it' },
       { name: 'click', target: '次回から表示しない' },
-      { name: 'noop' },
+      { name: 'noop', game: 'CookieClicker' },
     ];
 
     let prev;
@@ -44,7 +44,7 @@ describe('solver', () => {
       { name: 'press', key: 'Control+O' },
       { name: 'fill', value: data, on: { selector: '#game', role: 'textbox' } },
       { name: 'press', key: 'Enter' },
-      { name: 'noop' },
+      { name: 'noop', game: 'CookieClicker' },
     ];
 
     let prev;
@@ -64,6 +64,6 @@ describe('solver', () => {
   it('should keep no-op in the idle state', () => {
     const solve = solver({ type: 'idle' });
 
-    expect(solve.next().value).toEqual({ name: 'noop' });
+    expect(solve.next().value).toHaveProperty('name', 'noop');
   });
 });
