@@ -10,33 +10,26 @@ export function* solver(state: GameState = { type: 'initialize' }): Generator<Ac
   do {
     switch (state.type) {
       case 'initialize': {
-        result = yield {
-          name: 'open',
-          url: 'https://orteil.dashnet.org/cookieclicker/',
-        };
-        if (result?.name !== 'result' || !result.succeeded) return { error: 'ERROR', result };
+        const actions: Action[] = [
+          { name: 'open', url: 'https://orteil.dashnet.org/cookieclicker/' },
+          { name: 'click', target: '日本語' },
+          { name: 'click', target: 'Got it' },
+          { name: 'click', target: '次回から表示しない' },
+        ];
 
-        result = yield {
-          name: 'click',
-          target: '日本語',
-        };
-        if (result?.name !== 'result' || !result.succeeded) return { error: 'ERROR', result };
-
-        result = yield {
-          name: 'click',
-          target: 'Got it',
-        };
-        if (result?.name !== 'result' || !result.succeeded) return { error: 'ERROR', result };
-
-        result = yield {
-          name: 'click',
-          target: '次回から表示しない',
-        };
-        if (result?.name !== 'result' || !result.succeeded) return { error: 'ERROR', result };
+        for (const action of actions) {
+          result = yield action;
+          if (result?.name === 'closed') {
+            return { name: 'noop' };
+          } else if (result?.name !== 'result' || !result.succeeded) {
+            return { error: 'ERROR', result }
+          };
+        }
 
         break;
       }
       default: {
+        console.warn('[WARN]', 'state unprocessed', state);
         break;
       }
     }

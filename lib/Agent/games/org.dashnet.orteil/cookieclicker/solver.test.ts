@@ -32,12 +32,10 @@ describe('solver', () => {
     });
   });
 
-  // it('should end when got closed state', () => {
-  //   const solve = solver();
+  it('should be done when got closed state', () => {
+    const solve = solver();
 
-  //   solve.next({ name: 'closed' });
-  //   expect(solve.next({ name: 'closed' }).value).toHaveProperty('name', 'open');
-  //   expect(solve.next({ name: 'closed' }).done).toBeTrue();
-  //   expect(solve.next({ name: 'closed' }).done).toBeTrue();
-  // });
+    console.log(solve.next({ name: 'closed' }));
+    expect(solve.next().done).toBeTrue();
+  });
 });
