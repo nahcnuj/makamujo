@@ -55,10 +55,13 @@ export const create = async (
     },
 
     fillByRole: async (value, role, selector) => {
-      await page.locator(selector).getByRole(role).fill(value);
+      await page.locator(selector).getByRole(role as any).fill(value);
+    },
+
+    evaluate: async (f) => {
+      return await page.evaluate(f);
     },
 
     get url() { return page.url() },
-    get page() { return page },
   } satisfies Browser;
 };

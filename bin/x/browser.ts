@@ -51,7 +51,7 @@ const send = createSender(async (action) => {
           send({
             name: 'idle',
             url: browser.url,
-            state: viewsight(browser.document),
+            state: await browser.evaluate(viewsight),
           });
         }
         return;
