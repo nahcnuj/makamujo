@@ -49,6 +49,10 @@ export class MakaMujo {
   get state() {
     return this.#state;
   }
+
+  get speechable() {
+    return this.state === undefined || ['idle', 'result', 'closed'].includes(this.state.name);
+  }
 }
 
 export interface TalkModel {
