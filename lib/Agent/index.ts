@@ -2,15 +2,13 @@ import { createReceiver, type State } from "../Browser/socket";
 import { Games, type GameName } from "./games";
 
 export class MakaMujo {
-  // #solver;
-  #state: State | undefined;
-
   #talkModel: TalkModel;
   #tts: TTS;
 
   #speechPromise = Promise.resolve();
-
   #speechListeners: Array<(text: string) => Promise<void>> = [];
+
+  #state: State | undefined;
 
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
@@ -23,7 +21,6 @@ export class MakaMujo {
       data,
     });
     createReceiver((state) => {
-      console.log(state);
       this.#state = state;
       return solver.next(state).value;
     });
@@ -46,12 +43,12 @@ export class MakaMujo {
     return this;
   }
 
-  get state() {
-    return this.#state;
-  }
-
   get speechable() {
-    return this.state === undefined || ['idle', 'result', 'closed'].includes(this.state.name);
+    return [
+      'idle',
+      'result',
+      'closed',
+    ].includes(this.#state?.name ?? '');
   }
 }
 

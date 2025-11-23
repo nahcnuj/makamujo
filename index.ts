@@ -45,7 +45,6 @@ let speech: string = '';
 
 const streamer = new MakaMujo(model, tts)
   .onSpeech(async (text) => {
-    console.debug('[DEBUG]', 'on speech', text);
     speech = text;
   });
 streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
