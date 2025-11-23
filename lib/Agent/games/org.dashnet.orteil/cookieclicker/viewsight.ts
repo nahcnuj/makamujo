@@ -1,13 +1,7 @@
-import type { Page } from "playwright";
 import type { Data } from "./State";
 
-export const viewsight = async (page: Page) => {
-  const [
-    cookies,
-  ] = await Promise.all([
-    page.locator('#cookies').innerText().then(s => s.replaceAll(',', '')).then(Number.parseFloat),
-  ]);
+export const viewsight = async (doc: Document) => {
   return {
-    cookies,
+    cookies: Number.parseFloat(doc.getElementById('cookies')?.innerText.replaceAll(',', '') ?? ''),
   } satisfies Partial<Data>;
 };

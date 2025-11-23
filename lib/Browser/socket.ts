@@ -1,5 +1,5 @@
 import { createSocketPair } from "automated-gameplay-transmitter";
-import type { GameName } from "lib/Agent/games";
+import type { GameName } from "../Agent/games";
 
 export type State =
   | {

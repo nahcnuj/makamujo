@@ -51,7 +51,7 @@ const send = createSender(async (action) => {
           send({
             name: 'idle',
             url: browser.url,
-            state: await viewsight(browser.page),
+            state: viewsight(browser.document),
           });
         }
         return;
@@ -76,7 +76,7 @@ const send = createSender(async (action) => {
         return;
       }
       case 'fill': {
-        await browser.fillByRole(action.value, action.on.role as any, action.on.selector);
+        await browser.fillByRole(action.value, action.on.role, action.on.selector);
         send(ok(action));
         return;
       }
@@ -88,7 +88,6 @@ const send = createSender(async (action) => {
 });
 
 send({ name: 'initialized' });
-
 
 try {
   await setTimeout(timeout);
