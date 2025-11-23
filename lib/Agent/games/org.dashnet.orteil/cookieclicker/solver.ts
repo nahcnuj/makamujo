@@ -5,28 +5,56 @@ const timeoutMs = 10_000;
 let waiting: Action | undefined;
 
 export const solve = (s: State): Action => {
-  console.debug('[DEBUG]', 'solve', s);
+  console.debug('[DEBUG]', 'solve', s, 'waiting', waiting);
 
   if (waiting) {
-    if (s.name === 'clicked') {
-      if (s.target === '日本語') { // TODO
-        return waiting = {
-          name: 'click',
-          target: 'Got it',
-          datetime: Date.now(),
-        };
-      } else if (s.target === 'Got it') {
-        return waiting = {
-          name: 'click',
-          target: '次回から表示しない',
-          datetime: Date.now(),
+    if (s.name === 'result') {
+      if (!s.succeeded) {
+        console.error('[ERROR]', 'failed action', s.action);
+        return {
+          name: 'noop',
         };
       }
 
-      waiting = undefined;
-      return {
-        name: 'noop',
-      };
+      const action = s.action;
+      switch (action.name) {
+        case 'open': {
+          return waiting = {
+            name: 'click',
+            target: '日本語', // TODO
+            datetime: Date.now(),
+          };
+          break;
+        }
+        case 'click': {
+          if (s.succeeded) {
+            if (action.target === '日本語') { // TODO
+              return waiting = {
+                name: 'click',
+                target: 'Got it',
+                datetime: Date.now(),
+              };
+            }
+            if (action.target === 'Got it') {
+              return waiting = {
+                name: 'click',
+                target: '次回から表示しない',
+                datetime: Date.now(),
+              };
+            }
+            console.warn('[WARN]', 'unprocessed result', s);
+          } else {
+            console.error('[ERROR]', 'failed to click', s.action);
+          }
+          break;
+        }
+        default: {
+          waiting = undefined;
+          return {
+            name: 'noop',
+          };
+        }
+      }
     }
 
     if (waiting.name === 'click' && Date.now() - waiting.datetime > timeoutMs) {
@@ -34,19 +62,13 @@ export const solve = (s: State): Action => {
       return waiting;
     }
 
-    console.debug('[DEBUG]', 'waiting action', waiting);
+    console.debug('[DEBUG]', 'waiting action...', waiting);
     return {
       name: 'noop',
     };
   }
 
-  if (s.name === 'opened') {
-    return waiting = {
-      name: 'click',
-      target: '日本語', // TODO
-      datetime: Date.now(),
-    };
-  } else if (s.name === 'idle') {
+  if (s.name === 'idle') {
     return {
       name: 'noop',
     };

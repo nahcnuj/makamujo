@@ -1,27 +1,22 @@
 import { createSocketPair } from "automated-gameplay-transmitter";
-import type { Locator } from "playwright";
 
 export type State =
   | {
     name: 'initialized'
   }
   | {
-    name: 'opened'
-    url: string
-  }
-  | {
     name: 'closed'
-  }
-  | {
-    name: 'clicked'
-    target: string
-    succeeded: boolean
   }
   | {
     name: 'idle'
     url: string
     state?: unknown
-  };
+  }
+  | {
+    name: 'result'
+    action: Action
+    succeeded: boolean
+  }
 
 export type Action =
   | {
@@ -35,7 +30,7 @@ export type Action =
     name: 'click'
     target: string
     datetime: number
-  };
+  }
 
 export const {
   sender: createSender,

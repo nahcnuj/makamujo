@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { setInterval, setTimeout } from "node:timers/promises";
+import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { create } from "../../lib/Browser/chromium";
 import { createSender } from "../../lib/Browser/socket";
@@ -40,7 +40,8 @@ const browser = await create(executablePath, {
 });
 
 const send = createSender(async (action) => {
-  console.log('[DEBUG]', 'sender got', action);
+  console.log('[DEBUG]', 'runner got', action);
+
   switch (action.name) {
     case 'noop': {
       return;
@@ -48,8 +49,9 @@ const send = createSender(async (action) => {
     case 'open': {
       await browser.open(action.url);
       send({
-        name: 'opened',
-        url: action.url,
+        name: 'result',
+        action,
+        succeeded: true,
       });
       return;
     }
@@ -62,8 +64,8 @@ const send = createSender(async (action) => {
           succeeded = false;
         } finally {
           send({
-            ...action,
-            name: 'clicked',
+            name: 'result',
+            action,
             succeeded,
           });
         }
@@ -77,29 +79,32 @@ const send = createSender(async (action) => {
 
 send({ name: 'initialized' });
 
+
 try {
-  let running = false;
-  for await (const start of setInterval(1_000, Date.now())) {
-    if (!running) {
-      if (Date.now() - start >= timeout) {
-        break;
-      }
-      running = true;
+  await setTimeout(timeout);
 
-      send({
-        name: 'idle',
-        url: browser.url,
-      });
+  // let running = false;
+  // for await (const start of setInterval(1_000, Date.now())) {
+  //   if (!running) {
+  //     if (Date.now() - start >= timeout) {
+  //       break;
+  //     }
+  //     running = true;
 
-      running = false;
-    }
-  }
+  //     send({
+  //       name: 'idle',
+  //       url: browser.url,
+  //     });
+
+  //     running = false;
+  //   }
+  // }
 } catch (err) {
   console.error(err);
   process.exitCode = 1;
 } finally {
   await browser.close();
+  send({ name: 'closed' });
 }
 
-send({ name: 'closed' });
 process.exit();
