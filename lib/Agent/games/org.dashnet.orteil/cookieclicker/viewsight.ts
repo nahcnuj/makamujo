@@ -6,7 +6,7 @@ export const viewsight = async () => {
   const cookiesPerSecond = document.getElementById('cookiesPerSecond');
   return {
     cookies: parseNumber(document.getElementById('cookies')?.innerText.replaceAll(',', '')),
-    cps: parseNumber(cookiesPerSecond?.innerText.replaceAll(',', '')),
+    cps: parseNumber(cookiesPerSecond?.innerText.replaceAll(/[^0-9.e+]/g, '')),
     isWrinkled: cookiesPerSecond?.classList.contains('wrinkled') ?? false,
     ascendNumber: parseNumber(document.getElementById('ascendNumber')?.innerText.replaceAll(',', '')),
     commentsText: document.getElementById('commentsText')?.innerText,
