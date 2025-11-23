@@ -1,4 +1,4 @@
-import { createReceiver, type State } from "../Browser/socket";
+import { createReceiver } from "../Browser/socket";
 import * as Games from "./games";
 
 type GameName = keyof typeof Games;
@@ -19,25 +19,8 @@ export class MakaMujo {
     this.#tts = tts;
 
     createReceiver((state) => {
-      console.log('[DEBUG]', 'receiver got', state);
       this.#state = state;
-      switch (state.name) {
-        case 'initialized': {
-          return {
-            name: 'open',
-            url: Games[this.#playing].url,
-          };
-        }
-        case 'closed': {
-          console.log('[INFO]', 'browser closed');
-          return {
-            name: 'noop',
-          };
-        }
-        default: {
-          return Games[this.#playing].solve(state);
-        }
-      }
+      return Games[this.#playing].solve(state);
     });
   }
 
