@@ -1,7 +1,5 @@
 import { createReceiver } from "../Browser/socket";
-import * as Games from "./games";
-
-type GameName = keyof typeof Games;
+import { Games, type GameName } from "./games";
 
 export class MakaMujo {
   // #solver;
@@ -17,15 +15,6 @@ export class MakaMujo {
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
     this.#tts = tts;
-    // this.#solver = Games[play].solver({
-    //   type: 'initialize',
-    //   data,
-    // });
-
-    // createReceiver((state) => {
-    //   // this.#state = state;
-    //   return this.#solver.next(state).value;
-    // });
   }
 
   play(game: GameName, data?: string) {
@@ -35,7 +24,7 @@ export class MakaMujo {
     });
     createReceiver((state) => {
       return solver.next(state).value;
-    })
+    });
   }
 
   async speech(text: string = this.#talkModel.generate()) {

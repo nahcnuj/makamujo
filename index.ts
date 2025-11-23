@@ -7,6 +7,12 @@ import TTS from "./lib/TTS";
 import * as index from "./routes/index";
 import App from "./src/index.html";
 
+process.on('exit', exitHandler.bind(null, { cleanup: true }));
+process.on('SIGINT', signalHandler.bind(null, { exit: true }));
+process.on('SIGUSR1', signalHandler.bind(null, { exit: true }));
+process.on('SIGUSR2', signalHandler.bind(null, { exit: true }));
+process.on('uncaughtException', exitHandler.bind(null, { exit: true }));
+
 const { values: {
   model: modelFile,
   data: dataFile,
@@ -74,3 +80,25 @@ const server = serve({
 });
 
 console.log(`🚀 Server running at ${server.url}`);
+
+/**
+ * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}
+ */
+function exitHandler(options: { cleanup: true; exit?: never } | { cleanup?: never; exit: true }, exitCode?: number) {
+  if (options.cleanup) {
+    console.log('[INFO]', 'server stopping...');
+    server.stop(options.exit);
+  }
+
+  if (typeof exitCode === 'number') {
+    process.exitCode = exitCode;
+  }
+
+  if (options.exit) {
+    process.exit();
+  }
+}
+
+function signalHandler(options: { cleanup: true; exit?: never } | { cleanup?: never; exit: true }, _: string, exitCode?: number) {
+  exitHandler(options, exitCode);
+}

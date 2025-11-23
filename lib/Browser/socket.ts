@@ -14,8 +14,8 @@ export type State =
   }
   | {
     name: 'result'
-    action: Action
     succeeded: boolean
+    action: Action
   }
 
 export const ok = (action: Action): State => ({
