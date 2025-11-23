@@ -42,6 +42,21 @@ export type Action =
     name: 'click'
     target: string
   }
+  | {
+    name: 'press'
+    key: string
+    on?: {
+      selector: string
+    }
+  }
+  | {
+    name: 'fill'
+    value: string
+    on: {
+      selector: string
+      role: string
+    }
+  }
 
 export const {
   sender: createSender,

@@ -24,6 +24,18 @@ export function* solver(state: GameState = init): Generator<Action> {
           { name: 'click', target: '次回から表示しない' },
         ];
 
+        if (state.data) {
+          actions.push(
+            { name: 'press', key: 'Control+O' },
+            {
+              name: 'fill',
+              value: state.data,
+              on: { selector: '#game', role: 'textbox' },
+            },
+            { name: 'press', key: 'Enter' },
+          );
+        }
+
         for (const action of actions) {
           console.debug('[DEBUG]', 'action =', action);
           result = yield action;

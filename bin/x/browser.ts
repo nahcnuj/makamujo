@@ -42,34 +42,39 @@ const browser = await create(executablePath, {
 const send = createSender(async (action) => {
   console.log('[DEBUG]', 'runner got', action);
 
-  switch (action.name) {
-    case 'noop': {
-      return;
-    }
-    case 'open': {
-      try {
+  try {
+    switch (action.name) {
+      case 'noop': {
+        return;
+      }
+      case 'open': {
         await browser.open(action.url);
         send(ok(action));
-      } catch (err) {
-        console.error(err);
-        send(error(action));
+        return;
       }
-      return;
-    }
-    case 'click': {
-      if (typeof action.target === 'string') {
-        try {
+      case 'click': {
+        if (typeof action.target === 'string') {
           await browser.clickByText(action.target);
           send(ok(action));
-        } catch (err) {
-          console.error(err);
-          send(error(action));
+        } else {
+          console.error('[ERROR]', 'Unimplemented target', action.target);
         }
-      } else {
-        console.error('[ERROR]', 'Unimplemented target', action.target);
+        return;
       }
-      return;
+      case 'press': {
+        await browser.press(action.key, action.on?.selector ?? 'body');
+        send(ok(action));
+        return;
+      }
+      case 'fill': {
+        await browser.fillByRole(action.value, action.on.role as any, action.on.selector);
+        send(ok(action));
+        return;
+      }
     }
+  } catch (err) {
+    console.error(err);
+    send(error(action));
   }
 });
 

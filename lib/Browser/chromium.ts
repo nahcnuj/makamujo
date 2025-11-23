@@ -46,8 +46,16 @@ export const create = async (
       await browser.close();
     },
 
-    clickByText: async (text: string) => {
+    clickByText: async (text) => {
       await page.getByText(text).click();
+    },
+
+    press: async (key, selector) => {
+      await page.locator(selector).press(key);
+    },
+
+    fillByRole: async (value, role, selector) => {
+      await page.locator(selector).getByRole(role).fill(value);
     },
 
     get url() {
