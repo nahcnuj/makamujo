@@ -1,6 +1,7 @@
 import type { Action, State } from "../../../../Browser/socket";
 
 type GameState =
+  | undefined
   | {
     type: 'initialize'
   };
@@ -8,7 +9,7 @@ type GameState =
 export function* solver(state: GameState = { type: 'initialize' }): Generator<Action> {
   let result: State | undefined;
   do {
-    switch (state.type) {
+    switch (state?.type) {
       case 'initialize': {
         const actions: Action[] = [
           { name: 'open', url: 'https://orteil.dashnet.org/cookieclicker/' },
@@ -26,10 +27,13 @@ export function* solver(state: GameState = { type: 'initialize' }): Generator<Ac
           };
         }
 
+        state = undefined;
+
         break;
       }
       default: {
         console.warn('[WARN]', 'state unprocessed', state);
+        yield { name: 'noop' };
         break;
       }
     }
