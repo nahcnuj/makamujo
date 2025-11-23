@@ -5,6 +5,7 @@ type GameName = keyof typeof Games;
 
 export class MakaMujo {
   #playing: GameName = 'CookieClicker';
+  #solver;
   #state: unknown;
 
   #talkModel: TalkModel;
@@ -17,10 +18,11 @@ export class MakaMujo {
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
     this.#tts = tts;
+    this.#solver = Games[this.#playing].solver();
 
     createReceiver((state) => {
       this.#state = state;
-      return Games[this.#playing].solve(state);
+      return this.#solver.next(state).value;
     });
   }
 
