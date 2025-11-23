@@ -1,5 +1,7 @@
 import type { Action, State } from "../../../../Browser/socket";
 
+const game = 'CookieClicker';
+
 type GameState =
   | undefined
   | {
@@ -52,13 +54,13 @@ export function* solver(state: GameState = init): Generator<Action> {
       }
       case 'idle': {
         // TODO
-        result = yield { name: 'noop' };
+        result = yield { name: 'noop', game };
         console.debug('[DEBUG]', 'result =', result);
         break;
       }
       default: {
         console.warn('[WARN]', 'state unprocessed', state);
-        result = yield { name: 'noop' };
+        result = yield { name: 'noop', game };
         console.debug('[DEBUG]', 'result =', result);
         break;
       }

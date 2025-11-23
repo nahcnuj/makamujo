@@ -2,6 +2,7 @@
 
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
+import { Games } from "../../lib/Agent/games";
 import { create } from "../../lib/Browser/chromium";
 import { createSender, error, ok } from "../../lib/Browser/socket";
 
@@ -45,11 +46,14 @@ const send = createSender(async (action) => {
   try {
     switch (action.name) {
       case 'noop': {
-        send({
-          name: 'idle',
-          url: browser.url,
-          state: {}, // TODO
-        });
+        if (action.game) {
+          const { viewsight } = Games[action.game];
+          send({
+            name: 'idle',
+            url: browser.url,
+            state: viewsight(browser.page),
+          });
+        }
         return;
       }
       case 'open': {

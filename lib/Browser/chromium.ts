@@ -58,8 +58,7 @@ export const create = async (
       await page.locator(selector).getByRole(role).fill(value);
     },
 
-    get url() {
-      return page.url();
-    },
+    get url() { return page.url() },
+    get page() { return page },
   } satisfies Browser;
 };

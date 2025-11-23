@@ -1,4 +1,5 @@
 import { createSocketPair } from "automated-gameplay-transmitter";
+import type { GameName } from "lib/Agent/games";
 
 export type State =
   | {
@@ -33,6 +34,7 @@ export const error = (action: Action): State => ({
 export type Action =
   | {
     name: 'noop'
+    game?: GameName
   }
   | {
     name: 'open'
