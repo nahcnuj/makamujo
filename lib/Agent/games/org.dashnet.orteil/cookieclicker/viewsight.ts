@@ -1,8 +1,8 @@
 import type { State } from "./State";
 
-const parseNumber = (text?: string): number => text ? Number.parseFloat(text.replaceAll(',', '')) : Number.NaN;
-
 export const viewsight = async () => {
+  const parseNumber = (text?: string): number => text ? Number.parseFloat(text.replaceAll(',', '')) : Number.NaN;
+
   const cookiesPerSecond = document.getElementById('cookiesPerSecond');
   return {
     cookies: parseNumber(document.getElementById('cookies')?.innerText.replaceAll(',', '')),
