@@ -29,7 +29,6 @@ export type Action =
   | {
     name: 'click'
     target: string
-    datetime: number
   }
 
 export const {
