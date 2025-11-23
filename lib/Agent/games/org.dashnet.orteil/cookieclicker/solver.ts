@@ -2,9 +2,8 @@ import type { Action, State } from "../../../../Browser/socket";
 
 type GameState =
   | undefined
-  | {
-    type: 'initialize'
-  };
+  | { type: 'initialize' }
+  | { type: 'idle' }
 
 export function* solver(state: GameState = { type: 'initialize' }): Generator<Action> {
   let result: State | undefined;
@@ -28,8 +27,13 @@ export function* solver(state: GameState = { type: 'initialize' }): Generator<Ac
           };
         }
 
-        state = undefined; // TODO next state
+        state = { type: 'idle' };
 
+        break;
+      }
+      case 'idle': {
+        result = yield { name: 'noop' };
+        console.debug('[DEBUG]', 'result =', result);
         break;
       }
       default: {

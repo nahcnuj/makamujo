@@ -1,5 +1,9 @@
-import { describe, expect, it } from "bun:test";
+import { beforeAll, describe, expect, it } from "bun:test";
 import { solver } from "./solver";
+
+beforeAll(() => {
+  console.debug = () => {};
+});
 
 describe('solver', () => {
   it('should initialize', () => {
@@ -35,7 +39,13 @@ describe('solver', () => {
   it('should be done when got closed state', () => {
     const solve = solver();
 
-    console.log(solve.next({ name: 'closed' }));
+    solve.next({ name: 'closed' });
     expect(solve.next().done).toBeTrue();
+  });
+
+  it('should keep no-op in the idle state', () => {
+    const solve = solver({ type: 'idle' });
+
+    expect(solve.next().value).toEqual({ name: 'noop' });
   });
 });
