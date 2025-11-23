@@ -45,6 +45,11 @@ const send = createSender(async (action) => {
   try {
     switch (action.name) {
       case 'noop': {
+        send({
+          name: 'idle',
+          url: browser.url,
+          state: {}, // TODO
+        });
         return;
       }
       case 'open': {
