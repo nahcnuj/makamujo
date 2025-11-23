@@ -87,7 +87,7 @@ for await (const _ of setInterval(1_000)) {
   console.debug(new Date().toISOString(), running);
   if (!running) {
     console.debug(streamer.state);
-    if (streamer.state?.name === 'idle') {
+    if (streamer.state?.name === 'idle' || streamer.state?.name === 'result') {
       try {
         running = true;
         await streamer.speech();
