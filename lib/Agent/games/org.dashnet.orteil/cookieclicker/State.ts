@@ -54,15 +54,12 @@ export type Statistics = {
   }
 };
 
-export type Data = {
-  modal?: undefined
-
-  ticks: number
+export type State = {
   cookies: number
   cps: number
   isWrinkled: boolean
   ascendNumber: number
-  commentsText: string
+  commentsText?: string
   store: {
     products: {
       bulkMode: 'buy' | 'sell'
@@ -73,6 +70,4 @@ export type Data = {
     switches: Switch[]
   }
   statistics?: Statistics
-} | {
-  modal: 'ascending'
 };
