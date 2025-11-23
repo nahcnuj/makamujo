@@ -45,7 +45,7 @@ let speech: string = '';
 
 const streamer = new MakaMujo(model, tts)
   .onSpeech(async (text) => {
-    // console.debug('[DEBUG]', 'speech', text);
+    console.debug('[DEBUG]', 'on speech', text);
     speech = text;
   });
 streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
@@ -83,8 +83,10 @@ const server = serve({
 console.log(`🚀 Server running at ${server.url}`);
 
 let running = false;
-for await (const _ of setInterval(250)) {
+for await (const _ of setInterval(1_000)) {
+  console.debug(new Date().toISOString(), running);
   if (!running) {
+    console.debug(streamer.state);
     if (streamer.state?.name === 'idle') {
       try {
         running = true;

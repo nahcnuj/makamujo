@@ -23,13 +23,14 @@ export class MakaMujo {
       data,
     });
     createReceiver((state) => {
+      console.log(state);
       this.#state = state;
       return solver.next(state).value;
     });
   }
 
   async speech(text: string = this.#talkModel.generate()) {
-    console.debug('[DEBUG]', 'speech', text);
+    console.log('[DEBUG]', 'speech', text);
 
     this.#speechPromise = this.#speechPromise.then(async () => {
       await Promise.all(this.#speechListeners.map(f => f(text)));
