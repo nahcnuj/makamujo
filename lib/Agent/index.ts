@@ -1,9 +1,9 @@
-import { createReceiver } from "../Browser/socket";
+import { createReceiver, type State } from "../Browser/socket";
 import { Games, type GameName } from "./games";
 
 export class MakaMujo {
   // #solver;
-  // #state: unknown;
+  #state: State | undefined;
 
   #talkModel: TalkModel;
   #tts: TTS;
@@ -23,6 +23,7 @@ export class MakaMujo {
       data,
     });
     createReceiver((state) => {
+      this.#state = state;
       return solver.next(state).value;
     });
   }
@@ -42,6 +43,10 @@ export class MakaMujo {
   onSpeech(cb: (text: string) => Promise<void>): MakaMujo {
     this.#speechListeners.push(cb);
     return this;
+  }
+
+  get state() {
+    return this.#state;
   }
 }
 

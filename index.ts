@@ -1,5 +1,6 @@
 import { serve } from "bun";
 import { readFileSync } from "node:fs";
+import { setInterval } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { MakaMujo } from "./lib/Agent";
 import { MarkovChainModel } from "./lib/MarkovChainModel";
@@ -80,6 +81,20 @@ const server = serve({
 });
 
 console.log(`🚀 Server running at ${server.url}`);
+
+let running = false;
+for await (const _ of setInterval(250)) {
+  if (!running) {
+    if (streamer.state?.name === 'idle') {
+      try {
+        running = true;
+        await streamer.speech();
+      } finally {
+        running = false;
+      }
+    }
+  }
+}
 
 /**
  * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}
