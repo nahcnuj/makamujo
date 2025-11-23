@@ -18,6 +18,18 @@ export type State =
     succeeded: boolean
   }
 
+export const ok = (action: Action): State => ({
+  name: 'result',
+  succeeded: true,
+  action,
+});
+
+export const error = (action: Action): State => ({
+  name: 'result',
+  succeeded: false,
+  action,
+});
+
 export type Action =
   | {
     name: 'noop'

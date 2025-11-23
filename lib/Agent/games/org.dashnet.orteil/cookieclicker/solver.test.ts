@@ -1,9 +1,12 @@
 import { beforeAll, describe, expect, it } from "bun:test";
+import { ok } from "../../../../Browser/socket";
 import { solver } from "./solver";
 
 beforeAll(() => {
   console.debug = () => {};
 });
+
+const expectOk = (solve: Generator, action: any) => expect(solve.next(ok(action)).value);
 
 describe('solver', () => {
   it('should initialize', () => {
@@ -11,29 +14,18 @@ describe('solver', () => {
 
     expect(solve.next().value).toHaveProperty('name', 'open');
 
-    expect(solve.next({
-      name: 'result',
-      succeeded: true,
-    }).value).toEqual({
-      name: 'click',
-      target: '日本語',
-    });
+    const actions = [
+      { name: 'click', target: '日本語' },
+      { name: 'click', target: 'Got it' },
+      { name: 'click', target: '次回から表示しない' },
+      { name: 'noop' },
+    ];
 
-    expect(solve.next({
-      name: 'result',
-      succeeded: true,
-    }).value).toEqual({
-      name: 'click',
-      target: 'Got it',
-    });
-
-    expect(solve.next({
-      name: 'result',
-      succeeded: true,
-    }).value).toEqual({
-      name: 'click',
-      target: '次回から表示しない',
-    });
+    let prev;
+    for (const action of actions) {
+      expectOk(solve, prev).toEqual(action);
+      prev = action;
+    }
   });
 
   it('should be done when got closed state', () => {

@@ -3,7 +3,7 @@
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { create } from "../../lib/Browser/chromium";
-import { createSender } from "../../lib/Browser/socket";
+import { createSender, error, ok } from "../../lib/Browser/socket";
 
 const { values: {
   file,
@@ -47,27 +47,23 @@ const send = createSender(async (action) => {
       return;
     }
     case 'open': {
-      await browser.open(action.url);
-      send({
-        name: 'result',
-        action,
-        succeeded: true,
-      });
+      try {
+        await browser.open(action.url);
+        send(ok(action));
+      } catch (err) {
+        console.error(err);
+        send(error(action));
+      }
       return;
     }
     case 'click': {
       if (typeof action.target === 'string') {
-        let succeeded = true;
         try {
           await browser.clickByText(action.target);
-        } catch {
-          succeeded = false;
-        } finally {
-          send({
-            name: 'result',
-            action,
-            succeeded,
-          });
+          send(ok(action));
+        } catch (err) {
+          console.error(err);
+          send(error(action));
         }
       } else {
         console.error('[ERROR]', 'Unimplemented target', action.target);
@@ -82,23 +78,6 @@ send({ name: 'initialized' });
 
 try {
   await setTimeout(timeout);
-
-  // let running = false;
-  // for await (const start of setInterval(1_000, Date.now())) {
-  //   if (!running) {
-  //     if (Date.now() - start >= timeout) {
-  //       break;
-  //     }
-  //     running = true;
-
-  //     send({
-  //       name: 'idle',
-  //       url: browser.url,
-  //     });
-
-  //     running = false;
-  //   }
-  // }
 } catch (err) {
   console.error(err);
   process.exitCode = 1;
