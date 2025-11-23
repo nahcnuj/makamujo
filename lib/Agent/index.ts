@@ -4,9 +4,8 @@ import * as Games from "./games";
 type GameName = keyof typeof Games;
 
 export class MakaMujo {
-  #playing: GameName = 'CookieClicker';
-  #solver;
-  #state: unknown;
+  // #solver;
+  // #state: unknown;
 
   #talkModel: TalkModel;
   #tts: TTS;
@@ -18,12 +17,25 @@ export class MakaMujo {
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
     this.#tts = tts;
-    this.#solver = Games[this.#playing].solver();
+    // this.#solver = Games[play].solver({
+    //   type: 'initialize',
+    //   data,
+    // });
 
-    createReceiver((state) => {
-      this.#state = state;
-      return this.#solver.next(state).value;
+    // createReceiver((state) => {
+    //   // this.#state = state;
+    //   return this.#solver.next(state).value;
+    // });
+  }
+
+  play(game: GameName, data?: string) {
+    const solver = Games[game].solver({
+      type: 'initialize',
+      data,
     });
+    createReceiver((state) => {
+      return solver.next(state).value;
+    })
   }
 
   async speech(text: string = this.#talkModel.generate()) {

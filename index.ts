@@ -1,4 +1,5 @@
 import { serve } from "bun";
+import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { MakaMujo } from "./lib/Agent";
 import { MarkovChainModel } from "./lib/MarkovChainModel";
@@ -8,12 +9,18 @@ import App from "./src/index.html";
 
 const { values: {
   model: modelFile,
+  data: dataFile,
 } } = parseArgs({
   options: {
     model: {
       short: 'm',
       type: 'string',
       default: './var/model.json',
+    },
+    data: {
+      short: 'd',
+      type: 'string',
+      default: './var/cookieclicker.txt',
     },
   },
 });
@@ -34,6 +41,7 @@ const streamer = new MakaMujo(model, tts)
     // console.debug('[DEBUG]', 'speech', text);
     speech = text;
   });
+streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
 
 const server = serve({
   routes: {
