@@ -15,6 +15,11 @@ export const solve = (s: State): Action => {
           url,
         };
       }
+      case 'closed': {
+        return {
+          name: 'noop',
+        };
+      }
       default: {
         console.warn('[WARN]', 'state was unprocessed', s);
         return {
@@ -31,12 +36,12 @@ export const solve = (s: State): Action => {
     };
   }
 
-  waiting = undefined;
-
   if (!s.succeeded) {
     console.error('[ERROR]', 'failed action, retrying...', s.action);
     return s.action;
   }
+
+  waiting = undefined;
 
   const action = s.action;
   switch (action.name) {
@@ -66,7 +71,7 @@ export const solve = (s: State): Action => {
     }
   }
 
-  console.warn('[WARN]', 'unexpected state', s);
+  console.warn('[WARN]', 'state was unprocessed', s);
   return {
     name: 'noop',
   };
