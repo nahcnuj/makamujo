@@ -8,7 +8,13 @@ type GameState =
     type: 'initialize'
     data?: string
   }
-  | { type: 'idle' }
+  | {
+    type: 'idle'
+    count: number
+  }
+  | {
+    type: 'seeStats'
+  }
 
 const init = {
   type: 'initialize',
@@ -17,7 +23,9 @@ const init = {
 export function* solver(state: GameState = init): Generator<Action> {
   let result: State | undefined;
   do {
-    switch (state?.type) {
+    console.debug('[DEBUG]', 'solver', 'state =', state);
+
+    switch (state.type) {
       case 'initialize': {
         const actions: Action[] = [
           { name: 'open', url: 'https://orteil.dashnet.org/cookieclicker/' },
@@ -42,33 +50,69 @@ export function* solver(state: GameState = init): Generator<Action> {
           console.debug('[DEBUG]', 'action =', action);
           result = yield action;
           if (result?.name === 'closed') {
-            return { name: 'noop' };
+            return { ...noop, name: undefined };
           } else if (result?.name !== 'result' || !result.succeeded) {
-            return { error: 'ERROR', result }
+            return { error: 'ERROR', result };
           };
         }
 
-        state = { type: 'idle' };
-
+        state = {
+          type: 'idle',
+          count: 0,
+        };
         break;
       }
       case 'idle': {
-        // TODO
-        result = yield { name: 'noop', game };
+        result = yield noop;
         console.debug('[DEBUG]', 'result =', result);
         result = yield clickByElementId('bigCookie');
         console.debug('[DEBUG]', 'result =', result);
+
+        state = state.count >= 1_000 ?
+          {
+            type: 'seeStats',
+          } :
+          {
+            ...state,
+            count: state.count + 1,
+          };
+        break;
+      }
+      case 'seeStats': {
+        const actions: Action[] = [
+          clickByText('記録'),
+          noop,
+        ];
+
+        for (const action of actions) {
+          console.debug('[DEBUG]', 'action =', action);
+          result = yield action;
+          if (result?.name === 'closed') {
+            return { ...noop, game: undefined };
+          } else if (result?.name !== 'result' || !result.succeeded) {
+            return { error: 'ERROR', result };
+          };
+        }
+
+        state = {
+          type: 'idle',
+          count: 0,
+        };
         break;
       }
       default: {
         console.warn('[WARN]', 'state unprocessed', state);
-        result = yield { name: 'noop', game };
+        result = yield noop;
         console.debug('[DEBUG]', 'result =', result);
         break;
       }
     }
+    console.debug('[DEBUG]', 'result =', result);
   } while (result?.name !== 'closed');
+  console.debug('[DEBUG]', 'solver end');
 }
+
+export const noop = { name: 'noop', game } as const;
 
 export function clickByText(text: string): Action {
   return {

@@ -12,7 +12,7 @@ export class MakaMujo {
   #state?: State;
   #playing?: {
     name: GameName
-    state: Partial<Awaited<ReturnType<typeof Games[GameName]['viewsight']>>>
+    state: ReturnType<typeof Games[GameName]['sight']>
   }
 
   #streamState: {
@@ -44,7 +44,7 @@ export class MakaMujo {
             state: {
               ...this.#playing?.state ?? {},
               ...state.state,
-            },
+            } as any,
           };
         }
       }

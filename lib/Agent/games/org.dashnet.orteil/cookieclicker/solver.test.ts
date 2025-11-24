@@ -1,12 +1,10 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ok, type Action } from "../../../../Browser/socket";
-import { clickByElementId, clickByText, solver } from "./solver";
+import { clickByElementId, clickByText, noop, solver } from "./solver";
 
 beforeAll(() => {
   console.debug = () => { };
 });
-
-const noop = { name: 'noop', game: 'CookieClicker' } as const;
 
 const expectOk = (solve: Generator, action: any) => expect(solve.next(ok(action)).value);
 
@@ -64,7 +62,7 @@ describe('solver', () => {
   });
 
   it('should click the big cookie in the idle state', () => {
-    const solve = solver({ type: 'idle' });
+    const solve = solver({ type: 'idle', count: 0 });
 
     expectOk(solve, undefined).toEqual(noop);
     expectOk(solve, noop).toEqual(clickByElementId('bigCookie'));

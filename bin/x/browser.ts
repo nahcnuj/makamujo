@@ -47,11 +47,11 @@ const send = createSender(async (action) => {
     switch (action.name) {
       case 'noop': {
         if (action.game) {
-          const { viewsight } = Games[action.game];
+          const { sight } = Games[action.game];
           send({
             name: 'idle',
             url: browser.url,
-            state: await browser.evaluate(viewsight),
+            state: browser.evaluate(sight),
           });
         }
         return;

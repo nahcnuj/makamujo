@@ -24,33 +24,33 @@ export type Statistics = {
       innerText: string
     }
   } & {
-    cookiesInBank: {
-      value: number
-    }
-    cookiesBakedInThisAscension: {
-      value: number
-    }
-    cookiesBakedInTotal: {
-      value: number
-    }
-    cookiesForfeitedByAscending: {
-      value: number
-    }
-    legacyStarted: {
-      ascensions: number
-    }
-    buildingsOwned: {
-      value: number
-    }
-    cookiesPerClick: {
-      value: number
-    }
-    cookieClicks: {
-      value: number
-    }
-    handmadeCookies: {
-      value: number
-    }
+    // cookiesInBank: {
+    //   value: number
+    // }
+    // cookiesBakedInThisAscension: {
+    //   value: number
+    // }
+    // cookiesBakedInTotal: {
+    //   value: number
+    // }
+    // cookiesForfeitedByAscending: {
+    //   value: number
+    // }
+    // legacyStarted: {
+    //   ascensions: number
+    // }
+    // buildingsOwned: {
+    //   value: number
+    // }
+    // cookiesPerClick: {
+    //   value: number
+    // }
+    // cookieClicks: {
+    //   value: number
+    // }
+    // handmadeCookies: {
+    //   value: number
+    // }
   }
 };
 
