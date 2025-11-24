@@ -25,7 +25,8 @@ export function GamePanel() {
   const now = new Date();
   const duration = new Date(now.getTime() - (streamState?.start ?? 0) + now.getTimezoneOffset() * 60_000);
 
-  const Component = gameState ? Games[(gameState as any).name as 'CookieClicker'].Component : () => null;
+  console.log('GamePanel', gameState);
+  const Component = gameState ? Games[(gameState as any).name as keyof typeof Games].Component : () => null;
 
   return (
     <div className="h-full flex flex-col justify-between text-2xl/8">
