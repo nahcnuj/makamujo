@@ -24,9 +24,8 @@ export const PUT: Bun.Serve.Handler<Bun.BunRequest, Bun.Server<unknown>, Respons
     return Response.json(undefined, { status: 404 });
   }
 
-  const comments: unknown[] = await req.json();
-  
-  console.log(JSON.stringify(comments, null, 2));
+  const comments: any[] = await req.json();
+  console.debug('[DEBUG]', 'PUT /', JSON.stringify(comments.map(({ data }) => data), null, 2));
 
-  return new Response();
+  return Response.json(comments);
 }; 

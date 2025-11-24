@@ -81,6 +81,8 @@ export class MarkovChainModel implements TalkModel {
 
   learn(text: string): void {
     for (const { segment: sentence } of this.#sentenceSegmenter.segment(text)) {
+      console.debug('[DEBUG]', 'learn a sentence', sentence);
+
       this.#corpus.push(sentence);
 
       Array.from(this.#wordSegmenter.segment(sentence)).map(({ segment }) => segment)

@@ -1,10 +1,10 @@
 import { serve } from "bun";
 import { readFileSync } from "node:fs";
-import { setInterval, setTimeout } from "node:timers/promises";
+import { setInterval } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { MakaMujo } from "./lib/Agent";
 import { MarkovChainModel } from "./lib/MarkovChainModel";
-import TTS from "./lib/TTS";
+import TTS, { FallbackTTS } from "./lib/TTS";
 import * as index from "./routes/index";
 import App from "./src/index.html";
 
@@ -34,12 +34,16 @@ const { values: {
 
 const model = modelFile ? MarkovChainModel.fromFile(modelFile) : new MarkovChainModel();
 
-const htsvoiceFile = '/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice';
-const dictionaryDir = '/var/lib/mecab/dic/open-jtalk/naist-jdic';
-const tts = new TTS({
-  htsvoiceFile,
-  dictionaryDir,
-});
+const tts = process.platform !== 'win32' ?
+  (() => {
+    const htsvoiceFile = '/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice';
+    const dictionaryDir = '/var/lib/mecab/dic/open-jtalk/naist-jdic';
+    return new TTS({
+      htsvoiceFile,
+      dictionaryDir,
+    });
+  })() :
+  new FallbackTTS();
 
 let speech: string = '';
 
@@ -54,7 +58,23 @@ const server = serve({
     // Serve index.html for all unmatched routes.
     '/*': App,
 
-    '/': index,
+    '/': {
+      ...index,
+      PUT: async (req, server) => {
+        const res = await index.PUT(req, server);
+        if (!res.ok) {
+          console.error('response is not ok', res);
+          return res;
+        }
+        const comments = await res.json();
+        if (!Array.isArray(comments)) {
+          console.error('response data was unprocessed', comments);
+          return Response.json({}, { status: 500 });
+        }
+        streamer.listen(comments);
+        return Response.json({});
+      },
+    },
 
     '/api/speech': async () => {
       return Response.json({
@@ -63,7 +83,7 @@ const server = serve({
     },
 
     '/api/game': async () => {
-      console.debug('[DEBUG]', '/api/game', streamer.playing);
+      if (streamer.playing) console.debug('[DEBUG]', '/api/game', streamer.playing);
       return Response.json(streamer.playing ?? {});
     },
   },

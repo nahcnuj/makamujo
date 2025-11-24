@@ -8,8 +8,7 @@ export class MakaMujo {
   #speechPromise = Promise.resolve();
   #speechListeners: Array<(text: string) => Promise<void>> = [];
 
-  #state: State | undefined;
-
+  #state?: State;
   #playing?: {
     name: GameName
     state: Partial<Awaited<ReturnType<typeof Games[GameName]['viewsight']>>>
@@ -66,6 +65,25 @@ export class MakaMujo {
     return this;
   }
 
+  listen(comments: Array<{ data: CommentData }>) {
+    for (const { data } of comments) {
+      const comment = data.comment.normalize('NFC').trim();
+
+      if (data.no || data.isOwner) {
+        this.#learn(`${comment}。`);
+      }
+
+      if (data.no || (data.userId === 'onecomme.system' && data.name === '生放送クルーズ')) {
+        // TODO
+        this.speech(comment);
+      }
+    }
+  }
+
+  #learn(text: `${string}。`) {
+    this.#talkModel.learn(text);
+  }
+
   get speechable() {
     return [
       'idle',
@@ -81,8 +99,17 @@ export class MakaMujo {
 
 export interface TalkModel {
   generate(): string
+  learn(text: string): void
 }
 
 export interface TTS {
   speech(text: string): void
 }
+
+type CommentData = {
+  comment: string
+  no?: number
+  isOwner?: boolean
+  name?: string
+  userId?: string
+};

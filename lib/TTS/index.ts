@@ -35,3 +35,9 @@ export default class implements TTS {
     rmSync(this.#tempDir, { recursive: true, force: true });
   }
 }
+
+export class FallbackTTS implements TTS {
+  speech(text: string): void {
+    console.debug('[DEBUG]', 'Fallback.speech', text);
+  }
+}
