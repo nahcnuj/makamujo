@@ -61,12 +61,7 @@ export class MakaMujo {
       await Promise.all(this.#speechListeners.map(f => f(text)));
     }).catch(() => Promise.resolve());
 
-    await new Promise((resolve) => {
-      this.#tts.speech(text);
-      resolve(null);
-    });
-
-    await this.#speechPromise;
+    this.#tts.speech(text);
   }
 
   onSpeech(cb: (text: string) => Promise<void>): MakaMujo {
