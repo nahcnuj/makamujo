@@ -6,6 +6,8 @@ beforeAll(() => {
   console.debug = () => { };
 });
 
+const noop = { name: 'noop', game: 'CookieClicker' } as const;
+
 const expectOk = (solve: Generator, action: any) => expect(solve.next(ok(action)).value);
 
 describe('solver', () => {
@@ -18,7 +20,7 @@ describe('solver', () => {
       clickByText('日本語'),
       clickByText('Got it'),
       clickByText('次回から表示しない'),
-      // { name: 'noop', game: 'CookieClicker' },
+      noop,
     ];
 
     let prev;
@@ -44,7 +46,7 @@ describe('solver', () => {
       { name: 'press', key: 'Control+O' },
       { name: 'fill', value: data, on: { selector: '#game', role: 'textbox' } },
       { name: 'press', key: 'Enter' },
-      // { name: 'noop', game: 'CookieClicker' },
+      noop,
     ];
 
     let prev;
@@ -64,6 +66,7 @@ describe('solver', () => {
   it('should click the big cookie in the idle state', () => {
     const solve = solver({ type: 'idle' });
 
-    expect(solve.next().value).toEqual(clickByElementId('bigCookie'));
+    expectOk(solve, undefined).toEqual(noop);
+    expectOk(solve, noop).toEqual(clickByElementId('bigCookie'));
   });
 });
