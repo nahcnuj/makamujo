@@ -86,6 +86,15 @@ const server = serve({
       if (streamer.playing) console.debug('[DEBUG]', '/api/game', streamer.playing);
       return Response.json(streamer.playing ?? {});
     },
+
+    '/api/meta': {
+      GET: () => Response.json(streamer.streamState),
+      POST: async (req) => {
+        const data = await req.json();
+        streamer.onAir(data.raw); // TODO
+        return Response.json({});
+      },
+    },
   },
 
   development: process.env.NODE_ENV !== "production" && {

@@ -1,5 +1,6 @@
 import { createReceiver, type State } from "../Browser/socket";
 import { Games, type GameName } from "./games";
+import type { StreamState } from "./states";
 
 export class MakaMujo {
   #talkModel: TalkModel;
@@ -13,6 +14,10 @@ export class MakaMujo {
     name: GameName
     state: Partial<Awaited<ReturnType<typeof Games[GameName]['viewsight']>>>
   }
+
+  #streamState: {
+    niconama?: StreamState
+  } = {}
 
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
@@ -84,6 +89,27 @@ export class MakaMujo {
     this.#talkModel.learn(text);
   }
 
+  onAir(state: StreamData) {
+    // console.debug('[DEBUG]', state);
+    switch (state.type) {
+      case 'niconama': {
+        const { isLive, title, startTime: start, url, total: listeners, points: { gift, ad } } = state.data;
+        this.#streamState[state.type] = isLive ? {
+          type: 'live',
+          title,
+          start,
+          url,
+          total: {
+            listeners,
+            gift: typeof gift === 'string' ? Number.parseFloat(gift) : gift,
+            ad: typeof ad === 'string' ? Number.parseFloat(ad) : ad,
+          },
+        } : undefined;
+        break;
+      }
+    }
+  }
+
   get speechable() {
     return [
       'idle',
@@ -95,6 +121,15 @@ export class MakaMujo {
   get playing() {
     return this.#playing;
   }
+
+  get streamState() {
+    return this.#streamState;
+  }
+
+  get Component() {
+    if (this.#playing === undefined) return () => null;
+    return Games[this.#playing.name].Component;
+  }
 }
 
 export interface TalkModel {
@@ -105,6 +140,22 @@ export interface TalkModel {
 export interface TTS {
   speech(text: string): void
 }
+
+type StreamData =
+  | {
+    type: 'niconama'
+    data: {
+      title: string
+      isLive: boolean
+      startTime: number
+      total: number
+      points: {
+        gift: number | string
+        ad: number | string
+      }
+      url: string
+    }
+  };
 
 type CommentData = {
   comment: string
