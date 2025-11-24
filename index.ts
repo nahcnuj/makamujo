@@ -8,11 +8,11 @@ import TTS, { FallbackTTS } from "./lib/TTS";
 import * as index from "./routes/index";
 import App from "./src/index.html";
 
-// process.on('exit', exitHandler.bind(null, { cleanup: true }));
-// process.on('SIGINT', signalHandler.bind(null, { exit: true }));
-// process.on('SIGUSR1', signalHandler.bind(null, { exit: true }));
-// process.on('SIGUSR2', signalHandler.bind(null, { exit: true }));
-// process.on('uncaughtException', exitHandler.bind(null, { exit: true }));
+process.on('exit', exitHandler.bind(null, { cleanup: true }));
+process.on('SIGINT', signalHandler.bind(null, { exit: true }));
+process.on('SIGUSR1', signalHandler.bind(null, { exit: true }));
+process.on('SIGUSR2', signalHandler.bind(null, { exit: true }));
+process.on('uncaughtException', exitHandler.bind(null, { exit: true }));
 
 const { values: {
   model: modelFile,
