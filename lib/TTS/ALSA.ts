@@ -1,8 +1,12 @@
 import { execFileSync } from "node:child_process";
 
 export const play = (file: `${string}.wav`) => {
-  execFileSync('aplay', [
-    '-q',
-    file,
-  ]);
+  try {
+    execFileSync('aplay', [
+      '-q',
+      file,
+    ]);
+  } catch {
+    // do nothing
+  }
 };

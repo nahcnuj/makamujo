@@ -26,14 +26,18 @@ export const generateWavFile = (input: string, path: `${string}.wav`, {
   additionalHalfTone = 0,
   speakingRate = 1,
 }: OpenJTalkOptions) => {
-  execFileSync('open_jtalk', [
-    '-m', htsvoiceFile,
-    '-x', dictionaryDir,
-    '-fm', additionalHalfTone.toFixed(1),
-    '-r', speakingRate.toFixed(1),
-    '-ow', path,
-  ], {
-    input,
-    encoding: 'utf-8',
-  });
+  try {
+    execFileSync('open_jtalk', [
+      '-m', htsvoiceFile,
+      '-x', dictionaryDir,
+      '-fm', additionalHalfTone.toFixed(1),
+      '-r', speakingRate.toFixed(1),
+      '-ow', path,
+    ], {
+      input,
+      encoding: 'utf-8',
+    });
+  } catch {
+    // do nothing
+  }
 };
