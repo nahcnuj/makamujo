@@ -37,7 +37,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
     }
   });
 
-  useInterval(33, async () => {
+  useInterval(100, async () => {
     const res = await fetch('/api/game', { unix: './var/api-game.sock' })
       .then(res => res.ok ? res.json() : { error: 'not ok' })
       .catch(error => ({ error }));
@@ -46,7 +46,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
     }
   });
 
-  useInterval(33, async () => {
+  useInterval(100, async () => {
     const { niconama } = await fetch('/api/meta', { unix: './var/api-meta.sock' })
       .then(res => res.ok ? res.json() : { error: 'not ok' })
       .catch(error => ({ error }));
