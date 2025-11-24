@@ -54,7 +54,7 @@ export function* solver(state: GameState = init): Generator<Action> {
       }
       case 'idle': {
         // TODO
-        result = yield { name: 'noop', game };
+        result = yield clickByElementId('bigCookie');
         console.debug('[DEBUG]', 'result =', result);
         break;
       }
@@ -74,6 +74,16 @@ export function clickByText(text: string): Action {
     target: {
       type: 'text',
       text,
+    },
+  };
+}
+
+export function clickByElementId(id: string): Action {
+  return {
+    name: 'click',
+    target: {
+      type: 'id',
+      id,
     },
   };
 }

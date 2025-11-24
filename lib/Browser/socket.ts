@@ -47,6 +47,10 @@ export type Action =
         type: 'text'
         text: string
       }
+      | {
+        type: 'id'
+        id: string
+      }
   }
   | {
     name: 'press'

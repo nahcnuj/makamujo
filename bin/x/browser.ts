@@ -69,8 +69,14 @@ const send = createSender(async (action) => {
             send(ok(action));
             break;
           }
+          case 'id': {
+            await browser.clickByElementId(target.id);
+            send(ok(action));
+            break;
+          }
           default: {
             console.error('[ERROR]', 'Unimplemented target type', target);
+            send(error(action));
             break;
           }
         }

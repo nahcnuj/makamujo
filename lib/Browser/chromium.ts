@@ -49,6 +49,9 @@ export const create = async (
     clickByText: async (text) => {
       await page.getByText(text).click();
     },
+    clickByElementId: async (id) => {
+      await page.locator(`#${id}`).click();
+    },
 
     press: async (key, selector) => {
       await page.locator(selector).press(key);

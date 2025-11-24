@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ok, type Action } from "../../../../Browser/socket";
-import { clickByText, solver } from "./solver";
+import { clickByElementId, clickByText, solver } from "./solver";
 
 beforeAll(() => {
   console.debug = () => { };
@@ -18,7 +18,7 @@ describe('solver', () => {
       clickByText('日本語'),
       clickByText('Got it'),
       clickByText('次回から表示しない'),
-      { name: 'noop', game: 'CookieClicker' },
+      // { name: 'noop', game: 'CookieClicker' },
     ];
 
     let prev;
@@ -44,7 +44,7 @@ describe('solver', () => {
       { name: 'press', key: 'Control+O' },
       { name: 'fill', value: data, on: { selector: '#game', role: 'textbox' } },
       { name: 'press', key: 'Enter' },
-      { name: 'noop', game: 'CookieClicker' },
+      // { name: 'noop', game: 'CookieClicker' },
     ];
 
     let prev;
@@ -61,9 +61,9 @@ describe('solver', () => {
     expect(solve.next().done).toBeTrue();
   });
 
-  it('should keep no-op in the idle state', () => {
+  it('should click the big cookie in the idle state', () => {
     const solve = solver({ type: 'idle' });
 
-    expect(solve.next().value).toHaveProperty('name', 'noop');
+    expect(solve.next().value).toEqual(clickByElementId('bigCookie'));
   });
 });
