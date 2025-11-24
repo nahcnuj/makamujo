@@ -38,20 +38,18 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
   });
 
   useInterval(33, async () => {
-    const { name, state } = await fetch('/api/game', { unix: './var/api-game.sock' })
+    const res = await fetch('/api/game', { unix: './var/api-game.sock' })
       .then(res => res.ok ? res.json() : { error: 'not ok' })
       .catch(error => ({ error }));
-    setPlaying({
-      name,
-      state,
-    });
+    if (res?.name) {
+      setPlaying(res);
+    }
   });
 
   useInterval(33, async () => {
     const { niconama } = await fetch('/api/meta', { unix: './var/api-meta.sock' })
       .then(res => res.ok ? res.json() : { error: 'not ok' })
       .catch(error => ({ error }));
-    console.log(niconama);
     setStreamState(niconama);
   });
 

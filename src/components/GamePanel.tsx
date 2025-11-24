@@ -25,6 +25,7 @@ export function GamePanel() {
   const now = new Date();
   const duration = new Date(now.getTime() - (streamState?.start ?? 0) + now.getTimezoneOffset() * 60_000);
 
+  console.log(playing);
   const Component = playing ? Games[playing.name].Component : () => undefined;
 
   return (
