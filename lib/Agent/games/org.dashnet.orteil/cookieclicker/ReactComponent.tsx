@@ -1,15 +1,14 @@
-'use client';
+import type { State } from "./State";
 
-import { useAgentContext } from "../../../../../src/contexts/AgentContext";
+export default function ({ state }: { state: State }) {
+  console.log('CookieClickerComponent', state);
+  const { cookies } = state;
 
-export default function () {
-  const { playing } = useAgentContext();
-  console.log('CookieClickerComponent', playing);
-  return (playing && (
+  return (
     <>
       <div>
-        {`🍪${playing.state.cookies}`}
+        {`🍪${cookies}`}
       </div>
     </>
-  ));
+  );
 }

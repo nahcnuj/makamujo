@@ -25,13 +25,12 @@ export function GamePanel() {
   const now = new Date();
   const duration = new Date(now.getTime() - (streamState?.start ?? 0) + now.getTimezoneOffset() * 60_000);
 
-  console.log('GamePanel', 'playing', playing);
   const Component = playing ? Games[playing.name].Component : () => undefined;
 
   return (
     <div className="h-full flex flex-col justify-between text-2xl/8">
       <div className="flex-none">
-        <Component />
+        {playing && <Component state={playing.state} />}
       </div>
       <div className="flex-none">
         {streamState?.total && (
