@@ -54,6 +54,8 @@ export function* solver(state: GameState = init): Generator<Action> {
       }
       case 'idle': {
         // TODO
+        result = yield { name: 'noop', game };
+        console.debug('[DEBUG]', 'result =', result);
         result = yield clickByElementId('bigCookie');
         console.debug('[DEBUG]', 'result =', result);
         break;
