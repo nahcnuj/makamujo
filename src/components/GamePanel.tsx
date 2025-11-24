@@ -20,13 +20,13 @@ const formatDuration = (d: Date) =>
 const formatNumber = new Intl.NumberFormat('ja-JP').format;
 
 export function GamePanel() {
-  const { gameState, streamState } = useAgentContext();
+  const { playing, streamState } = useAgentContext();
 
   const now = new Date();
   const duration = new Date(now.getTime() - (streamState?.start ?? 0) + now.getTimezoneOffset() * 60_000);
 
-  console.log('GamePanel', gameState);
-  const Component = gameState ? Games[(gameState as any).name as keyof typeof Games].Component : () => null;
+  console.log('GamePanel', 'playing', playing);
+  const Component = playing ? Games[playing.name].Component : () => undefined;
 
   return (
     <div className="h-full flex flex-col justify-between text-2xl/8">

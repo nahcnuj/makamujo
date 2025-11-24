@@ -1,12 +1,16 @@
 'use client';
 
 import { createContext, useContext, useState, type PropsWithChildren } from "react";
+import type { Games } from "../../lib/Agent/games";
 import type { StreamState } from "../../lib/Agent/states";
 import { useInterval } from "../hooks/useInterval";
 
 type Data = {
   speech: string
-  gameState?: unknown
+  playing?: {
+    name: keyof typeof Games
+    state: any
+  }
   streamState?: StreamState
 };
 
@@ -18,7 +22,7 @@ export const useAgentContext = () => useContext(AgentContext);
 
 export const AgentProvider = ({ children }: PropsWithChildren) => {
   const [speech, setSpeech] = useState('');
-  const [gameState, setGameState] = useState<Data['gameState']>();
+  const [playing, setPlaying] = useState<Data['playing']>();
   const [streamState, setStreamState] = useState<StreamState>();
 
   useInterval(100, async () => {
@@ -34,10 +38,13 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
   });
 
   useInterval(33, async () => {
-    const { state } = await fetch('/api/game', { unix: './var/api-game.sock' })
+    const { name, state } = await fetch('/api/game', { unix: './var/api-game.sock' })
       .then(res => res.ok ? res.json() : { error: 'not ok' })
       .catch(error => ({ error }));
-    setGameState(state);
+    setPlaying({
+      name,
+      state,
+    });
   });
 
   useInterval(33, async () => {
@@ -49,7 +56,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
   });
 
   return (
-    <AgentContext.Provider value={{ speech, gameState, streamState }}>
+    <AgentContext.Provider value={{ speech, streamState, playing }}>
       {children}
     </AgentContext.Provider>
   );
