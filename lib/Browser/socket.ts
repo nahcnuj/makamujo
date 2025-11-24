@@ -42,7 +42,11 @@ export type Action =
   }
   | {
     name: 'click'
-    target: string
+    target: 
+      | {
+        type: 'text'
+        text: string
+      }
   }
   | {
     name: 'press'

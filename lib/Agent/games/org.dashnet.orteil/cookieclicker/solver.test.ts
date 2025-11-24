@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ok, type Action } from "../../../../Browser/socket";
-import { solver } from "./solver";
+import { clickByText, solver } from "./solver";
 
 beforeAll(() => {
   console.debug = () => { };
@@ -15,9 +15,9 @@ describe('solver', () => {
     expect(solve.next().value).toHaveProperty('name', 'open');
 
     const actions: Action[] = [
-      { name: 'click', target: '日本語' },
-      { name: 'click', target: 'Got it' },
-      { name: 'click', target: '次回から表示しない' },
+      clickByText('日本語'),
+      clickByText('Got it'),
+      clickByText('次回から表示しない'),
       { name: 'noop', game: 'CookieClicker' },
     ];
 
@@ -38,9 +38,9 @@ describe('solver', () => {
     expect(solve.next().value).toHaveProperty('name', 'open');
 
     const actions: Action[] = [
-      { name: 'click', target: '日本語' },
-      { name: 'click', target: 'Got it' },
-      { name: 'click', target: '次回から表示しない' },
+      clickByText('日本語'),
+      clickByText('Got it'),
+      clickByText('次回から表示しない'),
       { name: 'press', key: 'Control+O' },
       { name: 'fill', value: data, on: { selector: '#game', role: 'textbox' } },
       { name: 'press', key: 'Enter' },

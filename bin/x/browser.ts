@@ -62,11 +62,17 @@ const send = createSender(async (action) => {
         return;
       }
       case 'click': {
-        if (typeof action.target === 'string') {
-          await browser.clickByText(action.target);
-          send(ok(action));
-        } else {
-          console.error('[ERROR]', 'Unimplemented target', action.target);
+        const target = action.target;
+        switch (target.type) {
+          case 'text': {
+            await browser.clickByText(target.text);
+            send(ok(action));
+            break;
+          }
+          default: {
+            console.error('[ERROR]', 'Unimplemented target type', target);
+            break;
+          }
         }
         return;
       }

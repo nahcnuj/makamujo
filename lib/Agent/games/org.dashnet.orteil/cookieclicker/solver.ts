@@ -21,9 +21,9 @@ export function* solver(state: GameState = init): Generator<Action> {
       case 'initialize': {
         const actions: Action[] = [
           { name: 'open', url: 'https://orteil.dashnet.org/cookieclicker/' },
-          { name: 'click', target: '日本語' },
-          { name: 'click', target: 'Got it' },
-          { name: 'click', target: '次回から表示しない' },
+          clickByText('日本語'),
+          clickByText('Got it'),
+          clickByText('次回から表示しない'),
         ];
 
         if (state.data) {
@@ -66,4 +66,14 @@ export function* solver(state: GameState = init): Generator<Action> {
       }
     }
   } while (result?.name !== 'closed');
+}
+
+export function clickByText(text: string): Action {
+  return {
+    name: 'click',
+    target: {
+      type: 'text',
+      text,
+    },
+  };
 }
