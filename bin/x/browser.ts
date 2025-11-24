@@ -40,7 +40,7 @@ const browser = await create(executablePath, {
   height: 720 + 32 /* top bar */,
 });
 
-const send = createSender(async (action) => {
+const send = await createSender(async (action) => {
   console.log('[DEBUG]', 'runner got', action);
 
   try {
