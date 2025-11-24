@@ -1,4 +1,4 @@
-import { createSocketPair } from "automated-gameplay-transmitter";
+import { createSender as sender, createReceiver as receiver } from "automated-gameplay-transmitter";
 import type { GameName } from "../Agent/games";
 
 export type State =
@@ -68,9 +68,7 @@ export type Action =
     }
   }
 
-export const {
-  sender: createSender,
-  receiver: createReceiver,
-} = createSocketPair<State, Action>(
-  (process.platform === 'win32' ? '' : '\0') + 'var/unix.sock',
-);
+const path = (process.platform === 'win32' ? '' : '\0') + 'var/unix.sock';
+
+export const createSender = sender<State, Action>(path);
+export const createReceiver = receiver<State, Action>(path);
