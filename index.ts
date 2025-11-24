@@ -126,7 +126,9 @@ for await (const _ of setInterval(1_000)) {
 function exitHandler(options: { cleanup: true; exit?: never } | { cleanup?: never; exit: true }, exitCode?: number) {
   if (options.cleanup) {
     console.log('[INFO]', 'server stopping...');
-    server.stop(options.exit);
+    if (server) {
+      server.stop(options.exit);
+    }
   }
 
   if (typeof exitCode === 'number') {
