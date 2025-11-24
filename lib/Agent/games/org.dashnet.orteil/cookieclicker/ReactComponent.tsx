@@ -7,7 +7,7 @@ export default function ({ state }: { state: State }) {
   return (
     <>
       <div>
-        {`🍪${cookies}`}
+        {`🍪${cookies.toExponential(2)}枚`}
       </div>
     </>
   );
