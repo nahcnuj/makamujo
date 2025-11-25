@@ -63,6 +63,8 @@ export class MakaMujo {
         ...this.#speechListeners.map(f => f(text)),
       ]);
     }).catch(() => Promise.resolve());
+
+    await this.#speechPromise;
   }
 
   onSpeech(cb: (text: string) => Promise<void>): MakaMujo {
