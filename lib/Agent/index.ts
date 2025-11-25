@@ -112,7 +112,7 @@ export class MakaMujo {
     // console.debug('[DEBUG]', state);
     switch (state.type) {
       case 'niconama': {
-        const { isLive, title, startTime: start, url, total: listeners, points: { gift, ad } } = state.data;
+        const { isLive, title, startTime: start, url, total: listeners, points } = state.data;
         this.#streamState[state.type] = isLive ? {
           type: 'live',
           title,
@@ -120,8 +120,8 @@ export class MakaMujo {
           url,
           total: {
             listeners,
-            gift: typeof gift === 'string' ? Number.parseFloat(gift) : gift,
-            ad: typeof ad === 'string' ? Number.parseFloat(ad) : ad,
+            gift: typeof points?.gift === 'string' ? Number.parseFloat(points.gift) : points?.gift,
+            ad: typeof points?.ad === 'string' ? Number.parseFloat(points.ad) : points?.ad,
           },
         } : undefined;
         break;
