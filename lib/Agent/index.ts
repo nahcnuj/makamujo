@@ -2,6 +2,19 @@ import { createReceiver, type State } from "../Browser/socket";
 import { Games, type GameName } from "./games";
 import type { StreamState } from "./states";
 
+const jaJP = new Intl.Locale('ja-JP');
+const pickTopic = (text: string) => {
+  const words = Array.from(new Intl.Segmenter(jaJP, { granularity: 'word' }).segment(text)).map(({ segment }) => segment);
+  const cands = words.reduce<string[]>((prev, s) => {
+    const a = [...s].length;
+    const b = [...prev[0] ?? ''].length;
+    // console.debug(s, a, b, [s], [...prev, s]);
+    return a > b ? [s] : a === b ? [...prev, s] : prev;
+  }, ['']);
+  const topic = cands.at(Math.floor(Math.random() * cands.length));
+  return topic;
+};
+
 export class MakaMujo {
   #talkModel: TalkModel;
   #tts: TTS;
@@ -72,7 +85,7 @@ export class MakaMujo {
     return this;
   }
 
-  async listen(comments: Array<{ data: CommentData }>) {
+  listen(comments: Array<{ data: CommentData }>) {
     for (const { data } of comments) {
       const comment = data.comment.normalize('NFC').trim();
 
@@ -81,8 +94,12 @@ export class MakaMujo {
       }
 
       if (data.no || (data.userId === 'onecomme.system' && data.name === '生放送クルーズ')) {
-        // TODO
-        await this.speech(comment);
+        // TODO reply
+        const topic = pickTopic(comment);
+        if (topic) {
+          console.debug('[DEBUG]', 'picked a word', `"${topic}"`, 'from', `"${comment}"`);
+          this.speech(this.#talkModel.generate(topic));
+        }
       }
     }
   }
@@ -135,7 +152,7 @@ export class MakaMujo {
 }
 
 export interface TalkModel {
-  generate(): string
+  generate(start?: string): string
   learn(text: string): void
 }
 
