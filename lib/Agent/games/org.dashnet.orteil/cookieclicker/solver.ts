@@ -81,7 +81,6 @@ export function* solver(state: GameState = init): Generator<Action> {
       case 'seeStats': {
         const actions: Action[] = [
           clickByText('記録'),
-          noop,
         ];
 
         for (const action of actions) {
