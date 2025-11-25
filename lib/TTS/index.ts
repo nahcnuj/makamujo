@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout } from "node:timers/promises";
 import type { TTS } from "../Agent";
 import { play } from "./ALSA";
 import { generateWavFile, type OpenJTalkOptions } from "./OpenJTalk";
@@ -18,14 +19,14 @@ export default class implements TTS {
     this.#tempDir = mkdtempSync(join(tmpdir(), 'makamujo-'));
   }
 
-  speech(text: string) {
+  async speech(text: string) {
     const tempFile = `${join(this.#tempDir, 'speech')}.wav` satisfies `${string}.wav`;
     try {
-      generateWavFile(text, tempFile, {
+      await generateWavFile(text, tempFile, {
         htsvoiceFile: this.#htsvoiceFile,
         dictionaryDir: this.#dictionaryDir,
       });
-      play(tempFile);
+      await play(tempFile);
     } finally {
       rmSync(tempFile, { force: true });
     }
@@ -37,7 +38,8 @@ export default class implements TTS {
 }
 
 export class FallbackTTS implements TTS {
-  speech(text: string): void {
+  async speech(text: string) {
+    await setTimeout(10_000);
     console.debug('[DEBUG]', 'Fallback.speech', text);
   }
 }

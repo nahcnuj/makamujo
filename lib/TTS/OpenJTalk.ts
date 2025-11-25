@@ -20,14 +20,15 @@ export type OpenJTalkOptions = {
  * @param path a file path where output result. `-ow`
  * @param options {OpenJTalkOptions}
  */
-export const generateWavFile = (input: string, path: `${string}.wav`, {
+export const generateWavFile = async (input: string, path: `${string}.wav`, {
   htsvoiceFile,
   dictionaryDir,
   additionalHalfTone = 0,
   speakingRate = 1,
-}: OpenJTalkOptions) => {
+}: OpenJTalkOptions) => new Promise((resolve, reject) => {
   try {
-    execFileSync('open_jtalk', [
+    // create tmp file and pass it
+    const res = execFileSync('open_jtalk', [
       '-m', htsvoiceFile,
       '-x', dictionaryDir,
       '-fm', additionalHalfTone.toFixed(1),
@@ -37,7 +38,8 @@ export const generateWavFile = (input: string, path: `${string}.wav`, {
       input,
       encoding: 'utf-8',
     });
-  } catch {
-    // do nothing
+    resolve(res);
+  } catch (err) {
+    reject(err);
   }
-};
+});

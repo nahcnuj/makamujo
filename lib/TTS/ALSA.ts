@@ -1,8 +1,11 @@
-import { execFileSync } from "node:child_process";
+import { execFile as $_ } from "node:child_process";
+import { promisify } from "node:util";
 
-export const play = (file: `${string}.wav`) => {
+const execFile = promisify($_);
+
+export const play = async (file: `${string}.wav`) => {
   try {
-    execFileSync('aplay', [
+    await execFile('aplay', [
       '-q',
       file,
     ]);

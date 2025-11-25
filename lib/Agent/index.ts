@@ -61,7 +61,7 @@ export class MakaMujo {
       await Promise.all(this.#speechListeners.map(f => f(text)));
     }).catch(() => Promise.resolve());
 
-    this.#tts.speech(text);
+    await this.#tts.speech(text);
   }
 
   onSpeech(cb: (text: string) => Promise<void>): MakaMujo {
@@ -69,7 +69,7 @@ export class MakaMujo {
     return this;
   }
 
-  listen(comments: Array<{ data: CommentData }>) {
+  async listen(comments: Array<{ data: CommentData }>) {
     for (const { data } of comments) {
       const comment = data.comment.normalize('NFC').trim();
 
@@ -79,7 +79,7 @@ export class MakaMujo {
 
       if (data.no || (data.userId === 'onecomme.system' && data.name === '生放送クルーズ')) {
         // TODO
-        this.speech(comment);
+        await this.speech(comment);
       }
     }
   }
@@ -114,7 +114,7 @@ export class MakaMujo {
       'idle',
       'result',
       'closed',
-    ].includes(this.#state?.name ?? '');
+    ].includes(this.#state?.name ?? 'idle');
   }
 
   get playing() {
@@ -137,7 +137,7 @@ export interface TalkModel {
 }
 
 export interface TTS {
-  speech(text: string): void
+  speech(text: string): Promise<void>
 }
 
 type StreamData =
