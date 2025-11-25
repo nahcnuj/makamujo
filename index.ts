@@ -83,7 +83,7 @@ const server = serve({
     },
 
     '/api/game': async () => {
-      if (streamer.playing) console.debug('[DEBUG]', '/api/game', streamer.playing);
+      // if (streamer.playing) console.debug('[DEBUG]', '/api/game', streamer.playing);
       return Response.json(streamer.playing ?? {});
     },
 
