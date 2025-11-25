@@ -101,6 +101,62 @@ export class MakaMujo {
           this.speech(this.#talkModel.generate(topic));
         }
       }
+
+      let isAd = false; // FIXME
+
+      if (data.userId === 'onecomme.system') {
+        if (data.comment === '「生放送クルーズさん」が引用を開始しました') {
+          for (const text of [
+            '生放送クルーズのみなさん、こんにちは',
+            'AI Vチューバーの馬可無序です',
+            'コメントを学習してお話ししています',
+            'ぜひ上のリンクから遊びに来てね',
+          ]) {
+            this.speech(text);
+          }
+          continue;
+        }
+
+        if (data.comment.endsWith('広告しました')) {
+          isAd = true;
+          const name = data.comment.slice(data.comment.indexOf('】') + '】'.length, data.comment.lastIndexOf('さんが'));
+
+          console.log(`[AD] ${name}`);
+          this.speech(`${name}さん、広告ありがとうございます！`);
+          continue;
+        }
+
+        if (data.comment === '配信終了1分前です') {
+          for (const text of [
+            'そろそろお別れのお時間が近づいてきました',
+            'ご視聴、コメント、広告、ギフト、皆様ありがとうございました！',
+            'AI Vチューバー、馬可無序がお送りしました',
+            '次回の配信もお楽しみに！',
+          ]) {
+            this.speech(text);
+          }
+          continue;
+        }
+      }
+
+      if (data.hasGift && !isAd) {
+        //     const userId = data.userId;
+        const name = (data as any).origin?.message?.gift?.advertiserName;
+        //     const icon = (({ comment }) => {
+        //       const start = comment.indexOf('https://');
+        //       return comment.substring(start, comment.indexOf('"', start));
+        //     })(data);
+        //     console.log(`[GIFT] ${name} ${icon}`);
+        console.log(`[GIFT] ${name}`);
+        if (data.anonymity) {
+          this.speech(`ギフトありがとうございます！`);
+          //       giftQueue.push({ userId, icon });
+        } else {//if (!giftQueue.map(({ userId }) => userId).includes(userId)) {
+          this.speech(`${name}さん、ギフトありがとうございます！`);
+          //       giftQueue.push({ userId, name, icon });
+        }
+        continue;
+      };
     }
   }
 
@@ -180,6 +236,8 @@ type CommentData = {
   comment: string
   no?: number
   isOwner?: boolean
+  anonymity: boolean
   name?: string
   userId?: string
+  hasGift: boolean
 };
