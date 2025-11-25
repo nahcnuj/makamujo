@@ -68,14 +68,14 @@ export function* solver(state: GameState = init): Generator<Action> {
         result = yield clickByElementId('bigCookie');
         console.debug('[DEBUG]', 'result =', result);
 
-        state = state.count >= 1_000 ?
-          {
-            type: 'seeStats',
-          } :
-          {
-            ...state,
-            count: state.count + 1,
-          };
+        // state = state.count >= 1_000 ?
+        //   {
+        //     type: 'seeStats',
+        //   } :
+        //   {
+        //     ...state,
+        //     count: state.count + 1,
+        //   };
         break;
       }
       case 'seeStats': {
