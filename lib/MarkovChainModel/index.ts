@@ -26,6 +26,9 @@ const pick = (cands: WeightedCandidates) => {
 
 const acceptBeginning = (text: string) => [...text].length > 1 || !text.match(/[\p{Script=Hiragana}\p{Script=Katakana}\p{Punctuation}\p{Modifier_Letter}\p{Other_Symbol}]/u);
 
+const textEncoder = new TextEncoder();
+const lengthInUtf8 = (text: string): number => textEncoder.encode(text).byteLength;
+
 /**
  * A word-level Markov chain model.
  * The model provides some helper methods to generate something to talk or replies and learn new sentences.
@@ -65,13 +68,28 @@ export class MarkovChainModel implements TalkModel {
 
   *#generator(start: string) {
     let word = start;
+    let byteLength = lengthInUtf8(word);
     do {
       const cands = this.#dist[word];
       if (!cands || Object.keys(cands).length <= 0) {
         console.warn(`No candidates after "${word}"`);
         break;
       }
-      yield word = pick(cands);
+      word = pick(cands);
+
+      const res = word.match(/[\s\p{Punctuation}]/u);
+      if (res) { // word includes a punctuation.
+        byteLength = 0; // TODO the length of the substring following the punctuation.
+      } else {
+        byteLength += lengthInUtf8(word);
+      }
+
+      if (byteLength >= 17) { // 息継ぎ
+        yield `${word} `;
+        byteLength = 0;
+      } else {
+        yield word;
+      }
     } while (word !== '。');
   }
 

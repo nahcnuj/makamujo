@@ -1,5 +1,9 @@
-import { describe, expect, it, jest, test } from "bun:test";
+import { beforeEach, describe, expect, it, jest } from "bun:test";
 import { MarkovChainModel } from ".";
+
+beforeEach(() => {
+  jest.clearAllMocks();
+});
 
 describe('an empty markov chain model', () => {
   it('should generate just "。"', () => {
@@ -66,5 +70,45 @@ describe('a distribution with two even branches', () => {
       counts[got]++;
     }
     expect(counts["こんにちは。"]).toStrictEqual(counts["こんばんは。"]);
+  });
+});
+
+describe('息継ぎ', () => {
+  it('latin alphabets', () => {
+    const model = new MarkovChainModel({
+      '': {
+        'abcde': 100,
+      },
+      'abcde': {
+        'abcde': 99,
+        '。': 1,
+      },
+    });
+
+    const times = 100;
+    for (const _ in [...new Array(times)]) {
+      const got = model.generate();
+      console.log(got, got.split(' ').map(s => new TextEncoder().encode(s).byteLength));
+      expect(got.split(' ').every(s => new TextEncoder().encode(s).byteLength <= 20)).toBeTrue();
+    }
+  });
+
+  it('ひらがな', () => {
+    const model = new MarkovChainModel({
+      '': {
+        'あいう': 100,
+      },
+      'あいう': {
+        'あいう': 99,
+        '。': 1,
+      },
+    });
+
+    const times = 100;
+    for (const _ in [...new Array(times)]) {
+      const got = model.generate();
+      console.log(got, got.split(' ').map(s => new TextEncoder().encode(s).byteLength));
+      expect(got.split(' ').every(s => new TextEncoder().encode(s).byteLength <= 20)).toBeTrue();
+    }
   });
 });
