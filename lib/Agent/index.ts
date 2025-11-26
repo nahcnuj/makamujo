@@ -1,4 +1,5 @@
-import { createReceiver, type State } from "../Browser/socket";
+import { Action, type State } from "../Browser";
+import { createReceiver } from "../Browser/socket";
 import { Games, type GameName } from "./games";
 import type { StreamState } from "./states";
 
@@ -22,7 +23,7 @@ export class MakaMujo {
   #speechPromise = Promise.resolve();
   #speechListeners: Array<(text: string) => Promise<void>> = [];
 
-  #state?: State;
+  #browserState?: State;
   #playing?: {
     name: GameName
     state: ReturnType<typeof Games[GameName]['sight']>
@@ -43,11 +44,11 @@ export class MakaMujo {
       data,
     });
     createReceiver((state) => {
-      this.#state = state;
+      this.#browserState = state;
 
       if (state.name === 'closed') {
         this.#playing = undefined;
-        return;
+        return Action.noop;
       }
 
       if (state.name === 'idle') {
@@ -63,7 +64,14 @@ export class MakaMujo {
         }
       }
 
-      return solver.next(state).value;
+      const { done, value } = solver.next(state);
+      if (done) {
+        this.#playing = undefined;
+        return Action.noop;
+      }
+      console.debug('[DEBUG]', 'next action =', value);
+
+      return value;
     });
   }
 
@@ -190,7 +198,7 @@ export class MakaMujo {
       'idle',
       'result',
       'closed',
-    ].includes(this.#state?.name ?? 'idle');
+    ].includes(this.#browserState?.name ?? 'idle');
   }
 
   get playing() {

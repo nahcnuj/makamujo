@@ -1,6 +1,5 @@
-import type { Action, State } from "../../../../Browser/socket";
-
-const game = 'CookieClicker';
+import * as Browser from "../../../../Browser";
+import { Action } from "../../../../Browser";
 
 type GameState =
   | undefined
@@ -16,22 +15,18 @@ type GameState =
     type: 'seeStats'
   }
 
-const init = {
-  type: 'initialize',
-} satisfies GameState;
-
-export function* solver(state: GameState = init): Generator<Action> {
-  let result: State | undefined;
+export function* solver(state: GameState = { type: 'initialize' }) {
+  let result: Browser.State | undefined;
   do {
     console.debug('[DEBUG]', 'solver', 'state =', state);
 
     switch (state.type) {
       case 'initialize': {
-        const actions: Action[] = [
-          { name: 'open', url: 'https://orteil.dashnet.org/cookieclicker/' },
-          clickByText('日本語'),
-          clickByText('Got it'),
-          clickByText('次回から表示しない'),
+        const actions = [
+          Action.open('https://orteil.dashnet.org/cookieclicker/'),
+          Action.clickByText('日本語'),
+          Action.clickByText('Got it'),
+          Action.clickByText('次回から表示しない'),
         ];
 
         if (state.data) {
@@ -47,12 +42,13 @@ export function* solver(state: GameState = init): Generator<Action> {
         }
 
         for (const action of actions) {
-          console.debug('[DEBUG]', 'action =', action);
+          // console.debug('[DEBUG]', 'action =', action);
           result = yield action;
           if (result?.name === 'closed') {
-            return { ...noop, name: undefined };
+            return Action.noop;
           } else if (result?.name !== 'result' || !result.succeeded) {
-            return { error: 'ERROR', result };
+            console.error(result);
+            return Action.noop;
           };
         }
 
@@ -63,10 +59,21 @@ export function* solver(state: GameState = init): Generator<Action> {
         break;
       }
       case 'idle': {
-        result = yield noop;
-        console.debug('[DEBUG]', 'result =', result);
-        result = yield clickByElementId('bigCookie');
-        console.debug('[DEBUG]', 'result =', result);
+        const actions = [
+          Action.noop,
+          Action.clickByElementId('bigCookie'),
+        ];
+
+        for (const action of actions) {
+          // console.debug('[DEBUG]', 'action =', action);
+          result = yield action;
+          if (result?.name === 'closed') {
+            return Action.noop;
+          } else if (result?.name !== 'result' || !result.succeeded) {
+            console.error(result);
+            return Action.noop;
+          };
+        }
 
         // state = state.count >= 1_000 ?
         //   {
@@ -79,17 +86,18 @@ export function* solver(state: GameState = init): Generator<Action> {
         break;
       }
       case 'seeStats': {
-        const actions: Action[] = [
-          clickByText('記録'),
+        const actions = [
+          Action.clickByText('記録'),
         ];
 
         for (const action of actions) {
-          console.debug('[DEBUG]', 'action =', action);
+          // console.debug('[DEBUG]', 'action =', action);
           result = yield action;
           if (result?.name === 'closed') {
-            return { ...noop, game: undefined };
+            return Action.noop;
           } else if (result?.name !== 'result' || !result.succeeded) {
-            return { error: 'ERROR', result };
+            console.error(result);
+            return Action.noop;
           };
         }
 
@@ -101,34 +109,12 @@ export function* solver(state: GameState = init): Generator<Action> {
       }
       default: {
         console.warn('[WARN]', 'state unprocessed', state);
-        result = yield noop;
+        result = yield Action.noop;
         console.debug('[DEBUG]', 'result =', result);
         break;
       }
     }
-    console.debug('[DEBUG]', 'result =', result);
+    // console.debug('[DEBUG]', 'result =', result);
   } while (result?.name !== 'closed');
-  console.debug('[DEBUG]', 'solver end');
-}
-
-export const noop = { name: 'noop', game } as const;
-
-export function clickByText(text: string): Action {
-  return {
-    name: 'click',
-    target: {
-      type: 'text',
-      text,
-    },
-  };
-}
-
-export function clickByElementId(id: string): Action {
-  return {
-    name: 'click',
-    target: {
-      type: 'id',
-      id,
-    },
-  };
+  console.log('[INFO]', 'solver end', state);
 }

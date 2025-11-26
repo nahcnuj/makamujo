@@ -1,12 +1,12 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { ok, type Action } from "../../../../Browser/socket";
-import { clickByElementId, clickByText, noop, solver } from "./solver";
+import { Action } from "../../../../Browser";
+import { solver } from "./solver";
 
 beforeAll(() => {
   console.debug = () => { };
 });
 
-const expectOk = (solve: Generator, action: any) => expect(solve.next(ok(action)).value);
+const expectOk = (solve: Generator, action: any) => expect(solve.next(Action.Result.ok(action)).value);
 
 describe('solver', () => {
   it('should initialize', () => {
@@ -14,11 +14,11 @@ describe('solver', () => {
 
     expect(solve.next().value).toHaveProperty('name', 'open');
 
-    const actions: Action[] = [
-      clickByText('日本語'),
-      clickByText('Got it'),
-      clickByText('次回から表示しない'),
-      noop,
+    const actions = [
+      Action.clickByText('日本語'),
+      Action.clickByText('Got it'),
+      Action.clickByText('次回から表示しない'),
+      Action.noop,
     ];
 
     let prev;
@@ -37,14 +37,14 @@ describe('solver', () => {
 
     expect(solve.next().value).toHaveProperty('name', 'open');
 
-    const actions: Action[] = [
-      clickByText('日本語'),
-      clickByText('Got it'),
-      clickByText('次回から表示しない'),
+    const actions = [
+      Action.clickByText('日本語'),
+      Action.clickByText('Got it'),
+      Action.clickByText('次回から表示しない'),
       { name: 'press', key: 'Control+O' },
       { name: 'fill', value: data, on: { selector: '#game', role: 'textbox' } },
       { name: 'press', key: 'Enter' },
-      noop,
+      Action.noop,
     ];
 
     let prev;
@@ -64,7 +64,7 @@ describe('solver', () => {
   it('should click the big cookie in the idle state', () => {
     const solve = solver({ type: 'idle', count: 0 });
 
-    expectOk(solve, undefined).toEqual(noop);
-    expectOk(solve, noop).toEqual(clickByElementId('bigCookie'));
+    expectOk(solve, undefined).toEqual(Action.noop);
+    expectOk(solve, Action.noop).toEqual(Action.clickByElementId('bigCookie'));
   });
 });
