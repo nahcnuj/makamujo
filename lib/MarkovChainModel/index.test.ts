@@ -16,25 +16,29 @@ describe('a no-branch model', () => {
   it('should generate always the same sentence', () => {
     const model = new MarkovChainModel({
       '': {
-        'こ': 1,
+        'こん': 1,
       },
-      'こ': {
-        'ん': 1,
+      'こん': {
+        'にち': 1,
       },
-      'ん': {
+      'にち': {
+        'は': 1,
+      },
+      'は': {
         '。': 1,
-      },
+      }
     });
-    expect(model.generate()).toBe('こん。');
+    expect(model.generate()).toBe('こんにちは 。');
     expect(model.generate('', 0)).toBe('');
-    expect(model.generate('', 1)).toBe('こ');
-    expect(model.generate('', 2)).toBe('こん');
-    expect(model.generate('', 3)).toBe('こん。');
-    expect(model.generate('', 4)).toBe('こん。');
+    expect(model.generate('', 1)).toBe('こん');
+    expect(model.generate('', 2)).toBe('こんにち');
+    expect(model.generate('', 3)).toBe('こんにちは ');
+    expect(model.generate('', 4)).toBe('こんにちは 。');
 
-    expect(model.generate('')).toBe('こん。');
-    expect(model.generate('こ')).toBe('こん。');
-    expect(model.generate('ん')).toBe('ん。');
+    expect(model.generate('')).toBe('こんにちは 。');
+    expect(model.generate('こん')).toBe('こんにちは 。');
+    expect(model.generate('にち')).toBe('にちは 。');
+    expect(model.generate('は')).toBe('は。');
     expect(model.generate('。')).toBe('。');
   });
 });
@@ -88,7 +92,7 @@ describe('息継ぎ', () => {
     const times = 100;
     for (const _ in [...new Array(times)]) {
       const got = model.generate();
-      console.log(got, got.split(' ').map(s => new TextEncoder().encode(s).byteLength));
+      // console.log(got, got.split(' ').map(s => new TextEncoder().encode(s).byteLength));
       expect(got.split(' ').every(s => new TextEncoder().encode(s).byteLength <= 20)).toBeTrue();
     }
   });
@@ -107,7 +111,7 @@ describe('息継ぎ', () => {
     const times = 100;
     for (const _ in [...new Array(times)]) {
       const got = model.generate();
-      console.log(got, got.split(' ').map(s => new TextEncoder().encode(s).byteLength));
+      // console.log(got, got.split(' ').map(s => new TextEncoder().encode(s).byteLength));
       expect(got.split(' ').every(s => new TextEncoder().encode(s).byteLength <= 20)).toBeTrue();
     }
   });

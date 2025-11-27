@@ -52,6 +52,7 @@ export class MarkovChainModel implements TalkModel {
   #corpus: string[] = [];
   #wordSegmenter;
   #sentenceSegmenter;
+  #graphemeSegmenter;
 
   constructor(
     dist: Distribution = { '': { '。': 1 } },
@@ -64,6 +65,7 @@ export class MarkovChainModel implements TalkModel {
     this.#dist = dist;
     this.#wordSegmenter = new Intl.Segmenter(locale, { granularity: 'word' });
     this.#sentenceSegmenter = new Intl.Segmenter(locale, { granularity: 'sentence' });
+    this.#graphemeSegmenter = new Intl.Segmenter(locale, { granularity: 'grapheme' });
   }
 
   *#generator(start: string) {
@@ -77,18 +79,24 @@ export class MarkovChainModel implements TalkModel {
       }
       word = pick(cands);
 
-      const res = word.match(/[\s\p{Punctuation}]/u);
-      if (res) { // word includes a punctuation.
-        byteLength = 0; // TODO the length of the substring following the punctuation.
-      } else {
-        byteLength += lengthInUtf8(word);
-      }
-
-      if (byteLength >= 17) { // 息継ぎ
+      if (Array.from(this.#graphemeSegmenter.segment(word)).map(({ segment }) => segment).length === 1 && word.match(/[\p{Script=Hiragana}]/u)) {
+        // breathe after the word
         yield `${word} `;
         byteLength = 0;
       } else {
-        yield word;
+        if (word.match(/[\s\p{Punctuation}]/u)) {
+          byteLength = 0;
+        } else {
+          byteLength += lengthInUtf8(word);
+        }
+
+        if (byteLength >= 17) {
+          // the phrase seems too long
+          yield `${word} `;
+          byteLength = 0;
+        } else {
+          yield word;
+        }
       }
     } while (word !== '。');
   }
