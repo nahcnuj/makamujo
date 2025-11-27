@@ -79,7 +79,7 @@ export class MarkovChainModel implements TalkModel {
       }
       word = pick(cands);
 
-      if (Array.from(this.#graphemeSegmenter.segment(word)).map(({ segment }) => segment).length === 1 && word.match(/[\p{Script=Hiragana}]/u)) {
+      if (byteLength > 0 && Array.from(this.#graphemeSegmenter.segment(word)).map(({ segment }) => segment).length === 1 && word.match(/[\p{Script=Hiragana}]/u)) {
         // breathe after the word
         yield `${word} `;
         byteLength = 0;
