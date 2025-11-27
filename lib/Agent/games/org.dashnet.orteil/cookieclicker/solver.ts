@@ -77,14 +77,14 @@ export function* solver(state: GameState = { type: 'initialize' }) {
           }
         }
 
-        state = state.count >= 1_000 ?
-          {
-            type: 'seeStats',
-          } :
-          {
-            ...state,
-            count: state.count + 1,
-          };
+        // state = state.count >= 1_000 ?
+        //   {
+        //     type: 'seeStats',
+        //   } :
+        //   {
+        //     ...state,
+        //     count: state.count + 1,
+        //   };
         break;
       }
       case 'seeStats': {
