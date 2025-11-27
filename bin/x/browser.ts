@@ -3,8 +3,9 @@
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { Games } from "../../lib/Agent/games";
+import { Result } from "../../lib/Browser/Action";
 import { create } from "../../lib/Browser/chromium";
-import { createSender, error, ok } from "../../lib/Browser/socket";
+import { createSender } from "../../lib/Browser/socket";
 
 const { values: {
   file,
@@ -46,19 +47,17 @@ const send = await createSender(async (action) => {
   try {
     switch (action.name) {
       case 'noop': {
-        if (action.game) {
-          const { sight } = Games[action.game];
-          send({
-            name: 'idle',
-            url: browser.url,
-            state: await browser.evaluate(sight),
-          });
-        }
+        const { sight } = Games['CookieClicker'];
+        send({
+          name: 'idle',
+          url: browser.url,
+          state: await browser.evaluate(sight),
+        });
         return;
       }
       case 'open': {
         await browser.open(action.url);
-        send(ok(action));
+        send(Result.ok(action));
         return;
       }
       case 'click': {
@@ -66,17 +65,17 @@ const send = await createSender(async (action) => {
         switch (target.type) {
           case 'text': {
             await browser.clickByText(target.text);
-            send(ok(action));
+            send(Result.ok(action));
             break;
           }
           case 'id': {
             await browser.clickByElementId(target.id);
-            send(ok(action));
+            send(Result.ok(action));
             break;
           }
           default: {
             console.error('[ERROR]', 'Unimplemented target type', target);
-            send(error(action));
+            send(Result.error(action));
             break;
           }
         }
@@ -84,18 +83,18 @@ const send = await createSender(async (action) => {
       }
       case 'press': {
         await browser.press(action.key, action.on?.selector ?? 'body');
-        send(ok(action));
+        send(Result.ok(action));
         return;
       }
       case 'fill': {
         await browser.fillByRole(action.value, action.on.role, action.on.selector);
-        send(ok(action));
+        send(Result.ok(action));
         return;
       }
     }
   } catch (err) {
     console.error(err);
-    send(error(action));
+    send(Result.error(action));
   }
 });
 
