@@ -67,12 +67,14 @@ export function* solver(state: GameState = { type: 'initialize' }) {
         for (const action of actions) {
           // console.debug('[DEBUG]', 'action =', action);
           result = yield action;
-          if (result?.name === 'closed') {
-            return Action.noop;
-          } else if (result?.name !== 'result' || !result.succeeded) {
-            console.error(result);
-            return Action.noop;
-          };
+          if (action.name !== 'noop') {
+            if (result?.name === 'closed') {
+              return Action.noop;
+            } else if (result?.name !== 'result' || !result.succeeded) {
+              console.error(result);
+              return Action.noop;
+            };
+          }
         }
 
         // state = state.count >= 1_000 ?
