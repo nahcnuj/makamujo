@@ -52,7 +52,7 @@ export class MakaMujo {
       }
 
       if (state.name === 'idle') {
-        console.debug('[DEBUG]', 'receiver idle state =', state);
+        console.debug('[DEBUG]', 'receiver idle state =', JSON.stringify(state.state, null, 0));
         if (state.state) {
           this.#playing = {
             name,

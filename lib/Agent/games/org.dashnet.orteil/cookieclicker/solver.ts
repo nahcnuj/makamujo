@@ -18,7 +18,7 @@ type GameState =
 export function* solver(state: GameState = { type: 'initialize' }) {
   let result: Browser.State | undefined;
   do {
-    console.debug('[DEBUG]', 'solver', 'state =', state);
+    // console.debug('[DEBUG]', 'solver', 'state =', state);
 
     switch (state.type) {
       case 'initialize': {
@@ -44,12 +44,14 @@ export function* solver(state: GameState = { type: 'initialize' }) {
         for (const action of actions) {
           // console.debug('[DEBUG]', 'action =', action);
           result = yield action;
-          if (result?.name === 'closed') {
-            return;
-          } else if (result?.name !== 'result' || !result.succeeded) {
-            console.error(result);
-            return;
-          };
+          if (action.name !== 'noop') {
+            if (result?.name === 'closed') {
+              return;
+            } else if (result?.name !== 'result' || !result.succeeded) {
+              console.error(result);
+              break;
+            }
+          }
         }
 
         state = {
@@ -72,19 +74,19 @@ export function* solver(state: GameState = { type: 'initialize' }) {
               return;
             } else if (result?.name !== 'result' || !result.succeeded) {
               console.error(result);
-              return;
+              break;
             };
           }
         }
 
-        // state = state.count >= 1_000 ?
-        //   {
-        //     type: 'seeStats',
-        //   } :
-        //   {
-        //     ...state,
-        //     count: state.count + 1,
-        //   };
+        state = state.count >= 1_000 ?
+          {
+            type: 'seeStats',
+          } :
+          {
+            ...state,
+            count: state.count + 1,
+          };
         break;
       }
       case 'seeStats': {
@@ -101,7 +103,7 @@ export function* solver(state: GameState = { type: 'initialize' }) {
               return;
             } else if (result?.name !== 'result' || !result.succeeded) {
               console.error(result);
-              return;
+              break;
             }
           }
         }
