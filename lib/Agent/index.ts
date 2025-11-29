@@ -172,8 +172,8 @@ export class MakaMujo {
     this.#talkModel.learn(text);
   }
 
-  onAir(state: StreamData) {
-    switch (state.type) {
+  onAir(state?: StreamData) {
+    switch (state?.type) {
       case 'niconama': {
         const { isLive, title, startTime: start, url, total: listeners, points } = state.data;
         this.#streamState[state.type] = isLive ? {
