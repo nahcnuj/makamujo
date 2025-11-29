@@ -90,8 +90,8 @@ const server = serve({
     '/api/meta': {
       GET: () => Response.json(streamer.streamState),
       POST: async (req) => {
-        const data = await req.json();
-        streamer.onAir(data.raw); // TODO
+        const body = await req.json();
+        streamer.onAir(body.data); // TODO
         return Response.json({});
       },
     },

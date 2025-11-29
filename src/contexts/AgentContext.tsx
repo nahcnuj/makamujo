@@ -50,6 +50,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
     const { niconama } = await fetch('/api/meta', { unix: './var/api-meta.sock' })
       .then(res => res.ok ? res.json() : { error: 'not ok' })
       .catch(error => ({ error }));
+    // console.log(JSON.stringify(niconama, null, 2));
     setStreamState(niconama);
   });
 

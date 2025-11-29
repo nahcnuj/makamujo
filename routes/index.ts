@@ -25,7 +25,7 @@ export const PUT: Bun.Serve.Handler<Bun.BunRequest, Bun.Server<unknown>, Respons
   }
 
   const comments: any[] = await req.json();
-  console.debug('[DEBUG]', 'PUT /', JSON.stringify(comments.map(({ data }) => data), null, 2));
+  // console.debug('[DEBUG]', 'PUT /', JSON.stringify(comments.map(({ data }) => data), null, 2));
 
   return Response.json(comments);
 }; 

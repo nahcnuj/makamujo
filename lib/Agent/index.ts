@@ -173,7 +173,6 @@ export class MakaMujo {
   }
 
   onAir(state: StreamData) {
-    // console.debug('[DEBUG]', state);
     switch (state.type) {
       case 'niconama': {
         const { isLive, title, startTime: start, url, total: listeners, points } = state.data;
