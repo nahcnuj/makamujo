@@ -52,7 +52,7 @@ export class MakaMujo {
       }
 
       if (state.name === 'idle') {
-        console.debug('[DEBUG]', 'receiver idle state =', JSON.stringify(state.state, null, 0));
+        // console.debug('[DEBUG]', 'receiver idle state =', JSON.stringify(state.state, null, 0));
         if (state.state) {
           this.#playing = {
             name,
@@ -69,7 +69,7 @@ export class MakaMujo {
         this.#playing = undefined;
         return Action.noop;
       }
-      console.debug('[DEBUG]', 'next action =', value);
+      console.debug('[DEBUG]', 'next action =', JSON.stringify(value, null, 0));
 
       return value;
     });
