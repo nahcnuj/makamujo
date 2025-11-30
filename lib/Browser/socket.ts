@@ -1,5 +1,4 @@
-import { Action, type State } from "automated-gameplay-transmitter";
-import { createReceiver as receiver, createSender as sender } from "automated-gameplay-transmitter";
+import { Action, createReceiver as receiver, createSender as sender, type State } from "automated-gameplay-transmitter";
 
 const path = (process.platform === 'win32' ? '' : '\0') + 'var/unix.sock';
 
