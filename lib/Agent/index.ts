@@ -1,4 +1,4 @@
-import { Action, type State } from "../Browser";
+import { Action, type State } from "automated-gameplay-transmitter";
 import { createReceiver } from "../Browser/socket";
 import { Games, type GameName } from "./games";
 import type { StreamState } from "./states";

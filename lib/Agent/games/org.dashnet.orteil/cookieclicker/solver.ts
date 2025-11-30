@@ -1,5 +1,4 @@
-import * as Browser from "../../../../Browser";
-import { Action } from "../../../../Browser";
+import { Action, type State } from "automated-gameplay-transmitter";
 
 type GameState =
   | undefined
@@ -16,7 +15,7 @@ type GameState =
   }
 
 export function* solver(state: GameState = { type: 'initialize' }) {
-  let result: Browser.State | undefined;
+  let result: State | undefined;
   do {
     // console.debug('[DEBUG]', 'solver', 'state =', state);
 
@@ -44,10 +43,11 @@ export function* solver(state: GameState = { type: 'initialize' }) {
         for (const action of actions) {
           // console.debug('[DEBUG]', 'action =', action);
           result = yield action;
+          if (result?.name === 'closed') {
+            return;
+          }
           if (action.name !== 'noop') {
-            if (result?.name === 'closed') {
-              return;
-            } else if (result?.name !== 'result' || !result.succeeded) {
+            if (result?.name !== 'result' || !result.succeeded) {
               console.error(result);
               break;
             }
@@ -69,10 +69,11 @@ export function* solver(state: GameState = { type: 'initialize' }) {
         for (const action of actions) {
           // console.debug('[DEBUG]', 'action =', action);
           result = yield action;
+          if (result?.name === 'closed') {
+            return;
+          }
           if (action.name !== 'noop') {
-            if (result?.name === 'closed') {
-              return;
-            } else if (result?.name !== 'result' || !result.succeeded) {
+            if (result?.name !== 'result' || !result.succeeded) {
               console.error(result);
               break;
             };
@@ -98,10 +99,11 @@ export function* solver(state: GameState = { type: 'initialize' }) {
         for (const action of actions) {
           // console.debug('[DEBUG]', 'action =', action);
           result = yield action;
+          if (result?.name === 'closed') {
+            return;
+          }
           if (action.name !== 'noop') {
-            if (result?.name === 'closed') {
-              return;
-            } else if (result?.name !== 'result' || !result.succeeded) {
+            if (result?.name !== 'result' || !result.succeeded) {
               console.error(result);
               break;
             }
