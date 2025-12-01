@@ -3,7 +3,7 @@
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { Games } from "../../lib/Agent/games";
-import { Result } from "../../lib/Browser/Action";
+import { ActionResult } from "automated-gameplay-transmitter";
 import { create } from "../../lib/Browser/chromium";
 import { createSender } from "../../lib/Browser/socket";
 
@@ -57,7 +57,7 @@ const send = await createSender(async (action) => {
       }
       case 'open': {
         await browser.open(action.url);
-        send(Result.ok(action));
+        send(ActionResult.ok(action));
         return;
       }
       case 'click': {
@@ -65,17 +65,17 @@ const send = await createSender(async (action) => {
         switch (target.type) {
           case 'text': {
             await browser.clickByText(target.text);
-            send(Result.ok(action));
+            send(ActionResult.ok(action));
             break;
           }
           case 'id': {
             await browser.clickByElementId(target.id);
-            send(Result.ok(action));
+            send(ActionResult.ok(action));
             break;
           }
           default: {
             console.error('[ERROR]', 'Unimplemented target type', target);
-            send(Result.error(action));
+            send(ActionResult.error(action));
             break;
           }
         }
@@ -83,18 +83,18 @@ const send = await createSender(async (action) => {
       }
       case 'press': {
         await browser.press(action.key, action.on?.selector ?? 'body');
-        send(Result.ok(action));
+        send(ActionResult.ok(action));
         return;
       }
       case 'fill': {
         await browser.fillByRole(action.value, action.on.role, action.on.selector);
-        send(Result.ok(action));
+        send(ActionResult.ok(action));
         return;
       }
     }
   } catch (err) {
     console.error(err);
-    send(Result.error(action));
+    send(ActionResult.error(action));
   }
 });
 
