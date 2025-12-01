@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 
+import { ActionResult } from "automated-gameplay-transmitter";
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { Games } from "../../lib/Agent/games";
-import { ActionResult } from "automated-gameplay-transmitter";
 import { create } from "../../lib/Browser/chromium";
 import { createSender } from "../../lib/Browser/socket";
 
