@@ -19,12 +19,13 @@ export default class implements TTS {
     this.#tempDir = mkdtempSync(join(tmpdir(), 'makamujo-'));
   }
 
-  async speech(text: string) {
+  async speech(text: string, options = {}) {
     const tempFile = `${join(this.#tempDir, 'speech')}.wav` satisfies `${string}.wav`;
     try {
       await generateWavFile(text, tempFile, {
         htsvoiceFile: this.#htsvoiceFile,
         dictionaryDir: this.#dictionaryDir,
+        ...options,
       });
       await play(tempFile);
     } finally {
