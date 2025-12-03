@@ -80,7 +80,7 @@ export class MakaMujo {
 
     this.#speechPromise = this.#speechPromise.then(async () => {
       await Promise.all([
-        this.#tts.speech(text, { additionalHalfTone: 7, speakingRate: 1.2 }),
+        this.#tts.speech(text, { additionalHalfTone: 3, speakingRate: 1.2 }),
         ...this.#speechListeners.map(f => f(text)),
       ]);
     }).catch(() => Promise.resolve());
