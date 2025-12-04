@@ -54,14 +54,10 @@ describe('solver', () => {
     }
   });
 
-  // it('should be done when got closed state', () => {
-  //   const solve = solver();
-
-  //   solve.next({ name: 'closed' });
-  //   const res = solve.next();
-  //   console.log(res);
-  //   expect(res.done).toBeTrue();
-  // });
+  it('should be done when got closed state', () => {
+    const solve = solver({ type: 'closed' });
+    expect(solve.next().done).toBeTrue();
+  });
 
   it('should click the big cookie in the idle state', () => {
     const solve = solver({ type: 'idle', count: 0 });

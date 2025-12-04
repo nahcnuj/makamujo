@@ -13,12 +13,10 @@ type GameState =
   | {
     type: 'seeStats'
   }
+  | { type: 'closed' };
 
-export function* solver(state: GameState = { type: 'initialize' }) {
-  let result: State | undefined;
-  do {
-    // console.debug('[DEBUG]', 'solver', 'state =', state);
-
+export function* solver(state: GameState = { type: 'initialize' }): Generator<Action.Action, undefined, State> {
+  while (state.type !== 'closed') {
     switch (state.type) {
       case 'initialize': {
         const actions = [
@@ -41,17 +39,25 @@ export function* solver(state: GameState = { type: 'initialize' }) {
         }
 
         for (const action of actions) {
-          // console.debug('[DEBUG]', 'action =', action);
-          result = yield action;
+          const result = yield action;
           if (result?.name === 'closed') {
-            return;
+            state = { type: 'closed' };
+            break;
           }
           if (action.name !== 'noop') {
-            if (result?.name !== 'result' || !result.succeeded) {
-              console.error(result);
-              break;
+            if (result.name === 'result') {
+              if (!result.succeeded) {
+                console.error(`failed to`, result.action);
+                break;
+              }
+            } else {
+              console.warn('unexpected result', result);
             }
           }
+        }
+
+        if (state.type === 'closed') {
+          break;
         }
 
         state = {
@@ -67,17 +73,25 @@ export function* solver(state: GameState = { type: 'initialize' }) {
         ];
 
         for (const action of actions) {
-          // console.debug('[DEBUG]', 'action =', action);
-          result = yield action;
+          const result = yield action;
           if (result?.name === 'closed') {
-            return;
+            state = { type: 'closed' };
+            break;
           }
           if (action.name !== 'noop') {
-            if (result?.name !== 'result' || !result.succeeded) {
-              console.error(result);
-              break;
-            };
+            if (result.name === 'result') {
+              if (!result.succeeded) {
+                console.error(`failed to`, result.action);
+                break;
+              }
+            } else {
+              console.warn('unexpected result', result);
+            }
           }
+        }
+
+        if (state.type === 'closed') {
+          break;
         }
 
         state = state.count >= 1_000 ?
@@ -97,17 +111,25 @@ export function* solver(state: GameState = { type: 'initialize' }) {
         ];
 
         for (const action of actions) {
-          // console.debug('[DEBUG]', 'action =', action);
-          result = yield action;
+          const result = yield action;
           if (result?.name === 'closed') {
-            return;
+            state = { type: 'closed' };
+            break;
           }
           if (action.name !== 'noop') {
-            if (result?.name !== 'result' || !result.succeeded) {
-              console.error(result);
-              break;
+            if (result.name === 'result') {
+              if (!result.succeeded) {
+                console.error(`failed to`, result.action);
+                break;
+              }
+            } else {
+              console.warn('unexpected result', result);
             }
           }
+        }
+
+        if (state.type === 'closed') {
+          break;
         }
 
         state = {
@@ -117,13 +139,9 @@ export function* solver(state: GameState = { type: 'initialize' }) {
         break;
       }
       default: {
-        console.warn('[WARN]', 'state unprocessed', state);
-        result = yield Action.noop;
-        console.debug('[DEBUG]', 'result =', result);
-        break;
+        const _: never = state;
+        throw new Error('unreachable');
       }
     }
-    // console.debug('[DEBUG]', 'result =', result);
-  } while (result?.name !== 'closed');
-  console.log('[INFO]', 'solver end', state);
+  }
 }
