@@ -48,10 +48,18 @@ const send = await createSender(async (action) => {
     switch (action.name) {
       case 'noop': {
         const { sight } = Games['CookieClicker'];
+        const [state, selectedText] = await Promise.all([
+          browser.evaluate(sight),
+          browser.evaluate(() => document.getSelection()?.toString()),
+        ]).catch((err) => {
+          console.warn(err);
+          return [];
+        });
         send({
           name: 'idle',
           url: browser.url,
-          state: await browser.evaluate(sight),
+          selectedText,
+          state,
         });
         return;
       }
