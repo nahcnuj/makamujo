@@ -15,7 +15,7 @@ type GameState =
   }
   | { type: 'save' }
   | { type: 'closed' };
-  
+
 type SolverEventListeners = {
   onSave: Array<(text: string) => void>
 };
@@ -45,7 +45,7 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
 
         for (const action of actions) {
           const result = yield action;
-          if (result?.name === 'closed') {
+          if (result.name === 'closed') {
             state = { type: 'closed' };
             break;
           }
@@ -79,7 +79,7 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
 
         for (const action of actions) {
           const result = yield action;
-          if (result?.name === 'closed') {
+          if (result.name === 'closed') {
             state = { type: 'closed' };
             break;
           }
@@ -110,25 +110,27 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
         break;
       }
       case 'save': {
-        const actions = [
-          Action.clickByText('オプション'),
-          Action.clickByText('セーブをエクスポート'),
-        ];
+        {
+          const actions = [
+            Action.clickByText('オプション'),
+            Action.clickByText('セーブをエクスポート'),
+          ];
 
-        for (const action of actions) {
-          const result = yield action;
-          if (result?.name === 'closed') {
-            state = { type: 'closed' };
-            break;
-          }
-          if (action.name !== 'noop') {
-            if (result.name === 'result') {
-              if (!result.succeeded) {
-                console.error(`failed to`, result.action);
-                break;
+          for (const action of actions) {
+            const result = yield action;
+            if (result.name === 'closed') {
+              state = { type: 'closed' };
+              break;
+            }
+            if (action.name !== 'noop') {
+              if (result.name === 'result') {
+                if (!result.succeeded) {
+                  console.error(`failed to`, result.action);
+                  break;
+                }
+              } else {
+                console.warn('unexpected result', result);
               }
-            } else {
-              console.warn('unexpected result', result);
             }
           }
         }
@@ -141,6 +143,19 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
           }
         }
 
+        {
+          const actions = [
+            { name: 'press', key: 'Escape' },
+          ] as const;
+
+          for (const action of actions) {
+            const result = yield action;
+            if (result.name === 'closed') {
+              state = { type: 'closed' };
+              break;
+            }
+          }
+        }
         state = { type: 'seeStats' };
         break;
       }
@@ -152,7 +167,7 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
 
         for (const action of actions) {
           const result = yield action;
-          if (result?.name === 'closed') {
+          if (result.name === 'closed') {
             state = { type: 'closed' };
             break;
           }
