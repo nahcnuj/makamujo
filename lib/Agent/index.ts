@@ -2,6 +2,7 @@ import { Action, type State } from "automated-gameplay-transmitter";
 import { createReceiver } from "../Browser/socket";
 import { Games, type GameName } from "./games";
 import type { StreamState } from "./states";
+import { writeFileSync } from "node:fs";
 
 const jaJP = new Intl.Locale('ja-JP');
 const pickTopic = (text: string) => {
@@ -42,6 +43,10 @@ export class MakaMujo {
     const solver = Games[name].solver({
       type: 'initialize',
       data,
+    }, {
+      onSave: [
+        (text) => writeFileSync('./var/cookieclicker.txt', text),
+      ],
     });
     createReceiver((state) => {
       this.#browserState = state;

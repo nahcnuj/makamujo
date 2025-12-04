@@ -13,9 +13,14 @@ type GameState =
   | {
     type: 'seeStats'
   }
+  | { type: 'save' }
   | { type: 'closed' };
+  
+type SolverEventListeners = {
+  onSave: Array<(text: string) => void>
+};
 
-export function* solver(state: GameState = { type: 'initialize' }): Generator<Action.Action, undefined, State> {
+export function* solver(state: GameState = { type: 'initialize' }, eventListeners: Partial<SolverEventListeners> = {}): Generator<Action.Action, undefined, State> {
   while (state.type !== 'closed') {
     switch (state.type) {
       case 'initialize': {
@@ -96,12 +101,47 @@ export function* solver(state: GameState = { type: 'initialize' }): Generator<Ac
 
         state = state.count >= 1_000 ?
           {
-            type: 'seeStats',
+            type: 'save',
           } :
           {
             ...state,
             count: state.count + 1,
           };
+        break;
+      }
+      case 'save': {
+        const actions = [
+          Action.clickByText('オプション'),
+          Action.clickByText('セーブをエクスポート'),
+        ];
+
+        for (const action of actions) {
+          const result = yield action;
+          if (result?.name === 'closed') {
+            state = { type: 'closed' };
+            break;
+          }
+          if (action.name !== 'noop') {
+            if (result.name === 'result') {
+              if (!result.succeeded) {
+                console.error(`failed to`, result.action);
+                break;
+              }
+            } else {
+              console.warn('unexpected result', result);
+            }
+          }
+        }
+
+        {
+          const result = yield Action.noop;
+          if (result.name === 'idle' && result.selectedText) {
+            const text = result.selectedText ?? '';
+            eventListeners.onSave?.forEach(f => f(text));
+          }
+        }
+
+        state = { type: 'seeStats' };
         break;
       }
       case 'seeStats': {
