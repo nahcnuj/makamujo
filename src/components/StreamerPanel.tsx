@@ -13,7 +13,7 @@ export function StreamerPanel() {
       <div className="flex-auto h-full">
         <Box>
           <Container>
-            <div className="w-full h-full text-3xl/8 break-all text-ellipsis overflow-hidden">
+            <div className="w-full h-full text-3xl/9 break-all text-ellipsis overflow-hidden">
               {speech.replace(/。$/, '')}
             </div>
           </Container>
