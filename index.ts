@@ -37,7 +37,6 @@ const model = (file => {
     return MarkovChainModel.fromFile(file);
   } catch (err) {
     console.warn('failed to open the file', file);
-  } finally {
     return new MarkovChainModel();
   }
 })(modelFile);

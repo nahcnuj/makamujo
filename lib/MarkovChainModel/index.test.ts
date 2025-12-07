@@ -116,3 +116,24 @@ describe('息継ぎ', () => {
     }
   });
 });
+
+describe('toJSON', () => {
+  it('should be parsed again', () => {
+    {
+      const model = new MarkovChainModel();
+      const { model: copied } = JSON.parse(model.toJSON());
+      expect(new MarkovChainModel(copied)).toStrictEqual(model);
+    }
+
+    {
+      const model = new MarkovChainModel({
+        '': { 'こん': 2 },
+        'こん': { 'にちは': 1, 'ばんは': 1 },
+        'にちは': { '。': 1 },
+        'ばんは': { '。': 1 },
+      });
+      const { model: copied } = JSON.parse(model.toJSON());
+      expect(new MarkovChainModel(copied)).toStrictEqual(model);
+    }
+  });
+});
