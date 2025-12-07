@@ -74,14 +74,14 @@ export class MakaMujo {
         this.#playing = undefined;
         return Action.noop;
       }
-      console.debug('[DEBUG]', 'next action =', JSON.stringify(value, null, 0));
+      console.debug('[DEBUG]', 'next action', JSON.stringify(value, null, 0));
 
       return value;
     });
   }
 
   async speech(text: string = this.#talkModel.generate()) {
-    console.log('[DEBUG]', 'speech', text);
+    // console.log('[DEBUG]', 'speech', text);
 
     this.#speechPromise = this.#speechPromise.then(async () => {
       await Promise.all([
@@ -101,16 +101,18 @@ export class MakaMujo {
   listen(comments: Array<{ data: CommentData }>) {
     for (const { data } of comments) {
       const comment = data.comment.normalize('NFC').trim();
+      console.debug('[DEBUG]', 'comment', JSON.stringify(data, null, 0));
 
       if (data.no || data.isOwner) {
         this.#learn(`${comment}。`);
       }
 
       if (data.no || (data.userId === 'onecomme.system' && data.name === '生放送クルーズ')) {
+        console.log('[INFO]', `got a comment: "${comment}"`);
         // TODO reply
         const topic = pickTopic(comment);
         if (topic) {
-          console.debug('[DEBUG]', 'picked a word', `"${topic}"`, 'from', `"${comment}"`);
+          // console.debug('[DEBUG]', 'picked a word', `"${topic}"`, 'from', `"${comment}"`);
           this.speech(this.#talkModel.generate(topic));
         }
       }
@@ -119,6 +121,7 @@ export class MakaMujo {
 
       if (data.userId === 'onecomme.system') {
         if (data.comment === '「生放送クルーズさん」が引用を開始しました') {
+          console.log('[INFO]', `niconama cruise is coming`);
           for (const text of [
             '生放送クルーズのみなさん、こんにちは',
             'AI Vチューバーの馬可無序です',
@@ -134,12 +137,13 @@ export class MakaMujo {
           isAd = true;
           const name = data.comment.slice(data.comment.indexOf('】') + '】'.length, data.comment.lastIndexOf('さんが'));
 
-          console.log(`[AD] ${name}`);
+          console.log('[INFO]', `AD ${name}`);
           this.speech(`${name}さん、広告ありがとうございます！`);
           continue;
         }
 
         if (data.comment === '配信終了1分前です') {
+          console.log('[INFO]', 'announce the end of a stream...');
           for (const text of [
             'そろそろお別れのお時間です',
             'ご視聴、コメント、広告、ギフト、皆様ありがとうございました！',
