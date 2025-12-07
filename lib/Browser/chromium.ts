@@ -48,13 +48,19 @@ export const create = async (
       await browser.close();
     },
 
-    clickByText: async (text) => {
-      const ls = page.getByText(text, { exact: true }).or(page.getByText(text));
+    clickByText: async (name) => {
+      const target = page.getByRole('button', { name, exact: true })
+        .or(page.getByRole('button', { name })).first()
+        .or(
+          page.getByRole('link', { name, exact: true })
+            .or(page.getByRole('link', { name }))
+            .first(),
+        ).first();
       do {
-        if (await ls.count() > 0) {
-          console.debug('[DEBUG]', 'clickByText targets:', await ls.allInnerTexts());
+        if (await target.count() > 0) {
+          console.debug('[DEBUG]', 'clickByText target:', await target.allInnerTexts());
           try {
-            await ls.first().click({ timeout: 1_000 });
+            await target.click({ timeout: 1_000 });
             break;
           } catch (err) {
             console.warn('[WARN]', err);
