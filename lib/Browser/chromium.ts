@@ -60,7 +60,7 @@ export const create = async (
         if (await target.count() > 0) {
           console.debug('[DEBUG]', 'clickByText target:', await target.allInnerTexts());
           try {
-            await target.click({ timeout: 1_000 });
+            await target.click();
             break;
           } catch (err) {
             console.warn('[WARN]', err);
