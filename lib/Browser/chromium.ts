@@ -50,17 +50,14 @@ export const create = async (
 
     clickByText: async (name) => {
       const target = page.getByRole('button', { name, exact: true })
-        .or(page.getByRole('button', { name })).first()
-        .or(
-          page.getByRole('link', { name, exact: true })
-            .or(page.getByRole('link', { name }))
-            .first(),
-        ).first();
+        .or(page.getByRole('button', { name }))
+        .or(page.getByRole('link', { name, exact: true }))
+        .or(page.getByRole('link', { name }))
       do {
         console.debug('[DEBUG]', 'clickByText target:', await target.allInnerTexts());
         if (await target.count() > 0) {
           try {
-            await target.click();
+            await target.first().click();
             break;
           } catch (err) {
             console.warn('[WARN]', err);
