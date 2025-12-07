@@ -221,11 +221,16 @@ export class MakaMujo {
     if (this.#playing === undefined) return () => null;
     return Games[this.#playing.name].Component;
   }
+
+  get talkModel() {
+    return this.#talkModel;
+  }
 }
 
 export interface TalkModel {
   generate(start?: string): string
   learn(text: string): void
+  toJSON(): string
 }
 
 type SpeechOptions = {

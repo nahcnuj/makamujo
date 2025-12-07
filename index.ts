@@ -1,5 +1,5 @@
 import { serve } from "bun";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { setInterval } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { MakaMujo } from "./lib/Agent";
@@ -32,7 +32,15 @@ const { values: {
   },
 });
 
-const model = modelFile ? MarkovChainModel.fromFile(modelFile) : new MarkovChainModel();
+const model = (file => {
+  try {
+    return MarkovChainModel.fromFile(file);
+  } catch (err) {
+    console.warn('failed to open the file', file);
+  } finally {
+    return new MarkovChainModel();
+  }
+})(modelFile);
 
 const tts = process.platform !== 'win32' ?
   (() => {
@@ -72,6 +80,15 @@ const server = serve({
           return Response.json({}, { status: 500 });
         }
         streamer.listen(comments);
+
+        if (modelFile) {
+          try {
+            writeFileSync(modelFile, streamer.talkModel.toJSON());
+          } catch (err) {
+            console.warn('[WARN]', 'failed to write model', modelFile, err);
+          }
+        }
+
         return Response.json({});
       },
     },

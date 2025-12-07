@@ -137,6 +137,9 @@ export class MarkovChainModel implements TalkModel {
   }
 
   toJSON(): string {
-    return JSON.stringify(this.#corpus, null, 0);
+    const obj = {
+      model: this.#dist,
+    };
+    return JSON.stringify(obj, null, 0);
   }
 };
