@@ -21,6 +21,30 @@ type SolverEventListeners = {
 };
 
 export function* solver(state: GameState = { type: 'initialize' }, eventListeners: Partial<SolverEventListeners> = {}): Generator<Action.Action, undefined, State> {
+  const listeners = { ...(eventListeners as SolverEventListeners) } as SolverEventListeners;
+  listeners.onSave = listeners.onSave ?? [];
+
+  function* runActions(actions: readonly Action.Action[]): Generator<Action.Action, boolean, State> {
+    for (const action of actions) {
+      const result = yield action;
+      if (result.name === 'closed') {
+        state = { type: 'closed' };
+        return false;
+      }
+      if (action.name !== 'noop') {
+        if (result.name === 'result') {
+          if (!result.succeeded) {
+            console.error(`failed to`, result.action);
+            return false;
+          }
+        } else {
+          console.warn('unexpected result', result);
+        }
+      }
+    }
+    return true;
+  }
+
   while (state.type !== 'closed') {
     switch (state.type) {
       case 'initialize': {
@@ -43,27 +67,8 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
           );
         }
 
-        for (const action of actions) {
-          const result = yield action;
-          if (result.name === 'closed') {
-            state = { type: 'closed' };
-            break;
-          }
-          if (action.name !== 'noop') {
-            if (result.name === 'result') {
-              if (!result.succeeded) {
-                console.error(`failed to`, result.action);
-                break;
-              }
-            } else {
-              console.warn('unexpected result', result);
-            }
-          }
-        }
+        if (!(yield* runActions(actions))) break;
 
-        if (state.type === 'closed') {
-          break;
-        }
 
         state = {
           type: 'idle',
@@ -77,27 +82,8 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
           Action.clickByElementId('bigCookie'),
         ];
 
-        for (const action of actions) {
-          const result = yield action;
-          if (result.name === 'closed') {
-            state = { type: 'closed' };
-            break;
-          }
-          if (action.name !== 'noop') {
-            if (result.name === 'result') {
-              if (!result.succeeded) {
-                console.error(`failed to`, result.action);
-                break;
-              }
-            } else {
-              console.warn('unexpected result', result);
-            }
-          }
-        }
+        if (!(yield* runActions(actions))) break;
 
-        if (state.type === 'closed') {
-          break;
-        }
 
         state = state.count >= 1_000 ?
           {
@@ -116,30 +102,14 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
             Action.clickByText('セーブをエクスポート'),
           ];
 
-          for (const action of actions) {
-            const result = yield action;
-            if (result.name === 'closed') {
-              state = { type: 'closed' };
-              break;
-            }
-            if (action.name !== 'noop') {
-              if (result.name === 'result') {
-                if (!result.succeeded) {
-                  console.error(`failed to`, result.action);
-                  break;
-                }
-              } else {
-                console.warn('unexpected result', result);
-              }
-            }
-          }
+          if (!(yield* runActions(actions))) break;
         }
 
         {
           const result = yield Action.noop;
-          if (result.name === 'idle' && result.selectedText) {
+            if (result.name === 'idle' && result.selectedText) {
             const text = result.selectedText ?? '';
-            eventListeners.onSave?.forEach(f => f(text));
+            listeners.onSave.forEach(f => f(text));
           }
         }
 
@@ -148,13 +118,7 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
             { name: 'press', key: 'Escape' },
           ] as const;
 
-          for (const action of actions) {
-            const result = yield action;
-            if (result.name === 'closed') {
-              state = { type: 'closed' };
-              break;
-            }
-          }
+          if (!(yield* runActions(actions))) break;
         }
         state = { type: 'seeStats' };
         break;
@@ -165,27 +129,8 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
           Action.noop,
         ];
 
-        for (const action of actions) {
-          const result = yield action;
-          if (result.name === 'closed') {
-            state = { type: 'closed' };
-            break;
-          }
-          if (action.name !== 'noop') {
-            if (result.name === 'result') {
-              if (!result.succeeded) {
-                console.error(`failed to`, result.action);
-                break;
-              }
-            } else {
-              console.warn('unexpected result', result);
-            }
-          }
-        }
+        if (!(yield* runActions(actions))) break;
 
-        if (state.type === 'closed') {
-          break;
-        }
 
         state = {
           type: 'idle',
