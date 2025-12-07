@@ -1,5 +1,7 @@
 import type { Browser } from "automated-gameplay-transmitter";
+import { setTimeout } from "node:timers/promises";
 import type { ViewportSize } from "playwright";
+import playwright from "playwright";
 import { chromium as $_ } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
@@ -48,8 +50,19 @@ export const create = async (
 
     clickByText: async (text) => {
       const ls = page.getByText(text, { exact: true }).or(page.getByText(text));
-      console.debug('[DEBUG]', 'clickByText targets:', ls.toString());
-      await ls.first().click();
+      do {
+        if (await ls.count() > 0) {
+          console.debug('[DEBUG]', 'clickByText targets:', await ls.allInnerTexts());
+          try {
+            await ls.first().click({ timeout: 1_000 });
+            break;
+          } catch (err) {
+            console.warn('[WARN]', err);
+          }
+        } else {
+          await setTimeout(1_000);
+        }
+      } while (true);
     },
     clickByElementId: async (id) => {
       await page.locator(`#${id}`).click();
