@@ -57,8 +57,8 @@ export const create = async (
             .first(),
         ).first();
       do {
+        console.debug('[DEBUG]', 'clickByText target:', await target.allInnerTexts());
         if (await target.count() > 0) {
-          console.debug('[DEBUG]', 'clickByText target:', await target.allInnerTexts());
           try {
             await target.click();
             break;
