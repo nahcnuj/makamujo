@@ -42,7 +42,7 @@ const browser = await create(executablePath, {
 });
 
 const send = await createSender(async (action) => {
-  console.log('[DEBUG]', 'runner got', action);
+  // console.log('[DEBUG]', 'runner got', action);
 
   try {
     switch (action.name) {
