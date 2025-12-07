@@ -50,12 +50,14 @@ export const create = async (
 
     clickByText: async (text) => {
       const ls = page.getByText(text, { exact: true }).or(page.getByText(text));
+      let retry = true;
       do {
         if (await ls.count() > 0) {
           console.debug('[DEBUG]', 'clickByText targets:', await ls.allInnerTexts());
           for (const l of await ls.all()) {
             try {
               await l.click({ timeout: 1_000 });
+              retry = false;
               break;
             } catch (err) {
               console.warn('[WARN]', err);
@@ -64,7 +66,7 @@ export const create = async (
         } else {
           await setTimeout(1_000);
         }
-      } while (true);
+      } while (retry);
     },
     clickByElementId: async (id) => {
       await page.locator(`#${id}`).click();
