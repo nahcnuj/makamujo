@@ -69,7 +69,6 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
 
         if (!(yield* runActions(actions))) break;
 
-
         state = {
           type: 'idle',
           count: 0,
@@ -83,7 +82,6 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
         ];
 
         if (!(yield* runActions(actions))) break;
-
 
         state = state.count >= 1_000 ?
           {
@@ -107,7 +105,7 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
 
         {
           const result = yield Action.noop;
-            if (result.name === 'idle' && result.selectedText) {
+          if (result.name === 'idle' && result.selectedText) {
             const text = result.selectedText ?? '';
             listeners.onSave.forEach(f => f(text));
           }
@@ -130,7 +128,6 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
         ];
 
         if (!(yield* runActions(actions))) break;
-
 
         state = {
           type: 'idle',
