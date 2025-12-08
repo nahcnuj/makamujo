@@ -34,6 +34,15 @@ const server = serve({
     },
   },
 
+  error(error) {
+    console.error(JSON.stringify(error, null, 0));
+    return new Response(`<pre>${error}\n${error.stack}</pre>`, {
+      headers: {
+        "Content-Type": "text/html",
+      },
+    });
+  },
+
   ...(process.env.NODE_ENV !== "production" ?
     {
       development: {
