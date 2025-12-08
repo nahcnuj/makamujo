@@ -11,14 +11,14 @@ const server = serve({
 
     "/api/hello": {
       async GET(req) {
-        console.debug(req.text());
+        console.debug(await req.text());
         return Response.json({
           message: "Hello, world!",
           method: "GET",
         });
       },
       async PUT(req) {
-        console.debug(req.text());
+        console.debug(await req.text());
         return Response.json({
           message: "Hello, world!",
           method: "PUT",
@@ -27,7 +27,7 @@ const server = serve({
     },
 
     "/api/hello/:name": async req => {
-      console.debug(req.text());
+      console.debug(await req.text());
       const name = req.params.name;
       return Response.json({
         message: `Hello, ${name}!`,
