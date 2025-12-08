@@ -4,8 +4,8 @@ import index from "./src/index.html";
 const server = serve({
   routes: {
     // Serve index.html for all unmatched routes.
-    // '/*': index,
-    '/*': new Response('Hello\n', { headers: { 'Cache-Control': 'no-store' } }),
+    '/*': index,
+    // '/*': new Response('Hello\n', { headers: { 'Cache-Control': 'no-store' } }),
 
     '/robots.txt': new Response('User-agent: *\nDisallow: /\n'),
 
