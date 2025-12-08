@@ -5,7 +5,6 @@ const server = serve({
   routes: {
     // Serve index.html for all unmatched routes.
     '/*': index,
-    // '/*': new Response('Hello\n', { headers: { 'Cache-Control': 'no-store' } }),
 
     '/robots.txt': new Response('User-agent: *\nDisallow: /\n'),
 
@@ -48,8 +47,8 @@ const server = serve({
     {
       port: 443,
       tls: {
-        cert: Bun.file("/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/cert.pem"),
-        key: Bun.file("/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem"),
+        cert: Bun.file('/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem'),
+        key: Bun.file('/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem'),
       },
     }),
 });
