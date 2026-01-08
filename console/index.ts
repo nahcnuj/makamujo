@@ -37,6 +37,7 @@ const server = serve({
   error(error) {
     console.error(JSON.stringify(error, null, 0));
     return new Response(`<pre>${error}\n${error.stack}</pre>`, {
+      status: 500,
       headers: {
         "Content-Type": "text/html",
       },

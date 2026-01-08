@@ -5,17 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "bun --hot index.ts",
-    "start": "NODE_ENV=production bun index.ts"
+    "start": "NODE_ENV=production bun index.ts",
+    "build": "bun build --compile --production --target=bun-linux-x64 index.ts --outfile ./myapp"
   },
   "dependencies": {
     "bun-plugin-tailwind": "^0.1.2",
-    "react": "^19",
-    "react-dom": "^19",
-    "tailwindcss": "^4.1.11"
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
     "@types/bun": "latest"
   }
 }
