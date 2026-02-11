@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import distribution from "../routes/api/distribution";
+import distribution from "./distribution";
 
 describe("/api/distribution (unit)", () => {
   it("returns the current distribution from talkModel.toJSON()", async () => {
