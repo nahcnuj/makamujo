@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 export type WeightedCandidates = Record<string, number>;
 export type Distribution = Record<string, WeightedCandidates>;
 
-export const MAX_DEPTH = 3;
+const MAX_DEPTH = 3;
 export const MIN_NODE_HEIGHT = 48;
 export const WEIGHT_UNIT = 10;
 export const ROW_GAP = 8;

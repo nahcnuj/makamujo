@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { CandidateList, MIN_NODE_HEIGHT, ROW_GAP, WEIGHT_UNIT } from "./components/DistributionTree";
 
 type WeightedCandidates = Record<string, number>;
 
