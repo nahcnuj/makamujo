@@ -6,6 +6,7 @@ import { MakaMujo } from "./lib/Agent";
 import { MarkovChainModel } from "./lib/MarkovChainModel";
 import TTS, { FallbackTTS } from "./lib/TTS";
 import * as index from "./routes/index";
+import api from "./routes/api";
 import App from "./src/index.html";
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
@@ -60,67 +61,54 @@ const streamer = new MakaMujo(model, tts)
   });
 streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
 
-const server = serve({
-  routes: {
-    // Serve index.html for all unmatched routes.
-    '/*': App,
+export function createServer(streamer: MakaMujo, { port }: { port?: number } = {}) {
+  return serve({
+    port: port ?? Number(process.env.PORT) ?? 0,
+    routes: {
+      // Serve index.html for all unmatched routes.
+      '/*': App,
 
-    '/': {
-      ...index,
-      PUT: async (req, server) => {
-        const res = await index.PUT(req, server);
-        if (!res.ok) {
-          console.error('response is not ok', res);
-          return res;
-        }
-        const comments = await res.json();
-        if (!Array.isArray(comments)) {
-          console.error('response data was unprocessed', comments);
-          return Response.json({}, { status: 500 });
-        }
-        streamer.listen(comments);
-
-        if (modelFile) {
-          try {
-            writeFileSync(modelFile, streamer.talkModel.toJSON());
-          } catch (err) {
-            console.warn('[WARN]', 'failed to write model', modelFile, err);
+      '/': {
+        ...index,
+        PUT: async (req, server) => {
+          const res = await index.PUT(req, server);
+          if (!res.ok) {
+            console.error('response is not ok', res);
+            return res;
           }
-        }
+          const comments = await res.json();
+          if (!Array.isArray(comments)) {
+            console.error('response data was unprocessed', comments);
+            return Response.json({}, { status: 500 });
+          }
+          streamer.listen(comments);
 
-        return Response.json({});
+          if (modelFile) {
+            try {
+              writeFileSync(modelFile, streamer.talkModel.toJSON());
+            } catch (err) {
+              console.warn('[WARN]', 'failed to write model', modelFile, err);
+            }
+          }
+
+          return Response.json({});
+        },
       },
+
+      ...api(streamer),
     },
 
-    '/api/speech': async () => {
-      return Response.json({
-        speech,
-      });
+    development: process.env.NODE_ENV !== "production" && {
+      // Enable browser hot reloading in development
+      hmr: true,
+
+      // Echo console logs from the browser to the server
+      console: true,
     },
+  });
+}
 
-    '/api/game': async () => {
-      // if (streamer.playing) console.debug('[DEBUG]', '/api/game', streamer.playing);
-      return Response.json(streamer.playing ?? {});
-    },
-
-    '/api/meta': {
-      GET: () => Response.json(streamer.streamState),
-      POST: async (req) => {
-        const body = await req.json();
-        streamer.onAir(body.data); // TODO
-        return Response.json({});
-      },
-    },
-  },
-
-  development: process.env.NODE_ENV !== "production" && {
-    // Enable browser hot reloading in development
-    hmr: true,
-
-    // Echo console logs from the browser to the server
-    console: true,
-  },
-});
+const server = createServer(streamer);
 
 console.log(`🚀 Server running at ${server.url}`);
 

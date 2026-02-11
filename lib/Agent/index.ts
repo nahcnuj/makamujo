@@ -24,6 +24,8 @@ export class MakaMujo {
   #speechPromise = Promise.resolve();
   #speechListeners: Array<(text: string) => Promise<void>> = [];
 
+  #lastSpeech?: string;
+
   #browserState?: State;
   #playing?: {
     name: GameName
@@ -83,6 +85,8 @@ export class MakaMujo {
   async speech(text: string = this.#talkModel.generate()) {
     // console.log('[DEBUG]', 'speech', text);
 
+    this.#lastSpeech = text;
+
     this.#speechPromise = this.#speechPromise.then(async () => {
       await Promise.all([
         this.#tts.speech(text, { additionalHalfTone: 3, speakingRate: 1.2 }),
@@ -91,6 +95,10 @@ export class MakaMujo {
     }).catch(() => Promise.resolve());
 
     await this.#speechPromise;
+  }
+
+  get lastSpeech() {
+    return this.#lastSpeech ?? '';
   }
 
   onSpeech(cb: (text: string) => Promise<void>): MakaMujo {
