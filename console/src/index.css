@@ -118,13 +118,18 @@
 .tree-canvas {
   --col-gap: 16px;
   overflow: auto;
-  padding: 12px 0 12px var(--col-gap);
+  padding: 12px var(--col-gap);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
 }
 
 .candidate-list {
   display: flex;
   flex-direction: column;
   gap: var(--row-gap, 8px);
+  align-items: flex-start;
+  width: max-content;
 }
 
 .candidate-row {
@@ -133,6 +138,8 @@
   grid-template-columns: minmax(240px, 310px) 1fr;
   gap: var(--col-gap);
   min-height: var(--min-node-height, 32px);
+  justify-content: start;
+  margin: 0;
 }
 
 .candidate-card {
@@ -197,39 +204,4 @@
   min-height: 80px;
 }
 
-@media (max-width: 900px) {
-  .app-shell {
-    padding: 24px;
-  }
 
-  .app-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .candidate-row {
-    grid-template-columns: 1fr;
-  }
-
-  .candidate-card {
-    border-left-width: 0;
-    margin-left: 0;
-  }
-
-  .candidate-truncate,
-  .candidate-empty {
-    border-left-width: 0;
-    margin-left: 0;
-  }
-
-  .tree-canvas {
-    padding-left: 0;
-  }
-
-  .candidate-children {
-    border-left: none;
-    border-top: 2px dashed rgba(117, 214, 255, 0.35);
-    padding-left: 0;
-    padding-top: 12px;
-  }
-}
