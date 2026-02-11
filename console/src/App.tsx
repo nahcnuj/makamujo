@@ -103,7 +103,7 @@ export function App() {
           <p className="app-eyebrow">MarkovChainModel Console</p>
           <h1 className="app-title">Distribution Explorer</h1>
           <p className="app-subtitle">
-            initial word candidates ('' key) から3階層までを表示
+            initial word candidates ('') から3階層までを表示
           </p>
         </div>
         <a
@@ -120,10 +120,6 @@ export function App() {
           <div>
             <h2>Distribution Tree</h2>
             <p>weight proportional height, depth capped at 3</p>
-          </div>
-          <div className="tree-panel-meta">
-            <span>root candidates: {Object.keys(rootCandidates).length}</span>
-            <span>min height: {MIN_NODE_HEIGHT}px</span>
           </div>
         </div>
         <div className="tree-canvas">
