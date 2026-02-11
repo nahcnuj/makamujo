@@ -100,6 +100,14 @@ export const CandidateList = ({ candidates, dist, depth, layout }: CandidateList
   );
 };
 
+const NoNextNode = () => {
+  return <div className="candidate-truncate">no next</div>;
+};
+
+const DepthLimitNode = () => {
+  return <div className="candidate-truncate">depth limit</div>;
+};
+
 type CandidateNodeProps = {
   word: string;
   weight: number;
@@ -123,8 +131,10 @@ const CandidateNode = ({ word, weight, height, childLayout, dist, depth }: Candi
       <div className="candidate-children">
         {canExpand ? (
           <CandidateList candidates={nextCandidates} dist={dist} depth={depth + 1} layout={childLayout} />
+        ) : depth + 1 >= MAX_DEPTH ? (
+          <DepthLimitNode />
         ) : (
-          <div className="candidate-truncate">{depth + 1 >= MAX_DEPTH ? "depth limit" : "no next"}</div>
+          <NoNextNode />
         )}
       </div>
     </div>

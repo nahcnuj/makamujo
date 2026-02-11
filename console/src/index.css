@@ -116,8 +116,9 @@
 }
 
 .tree-canvas {
+  --col-gap: 16px;
   overflow: auto;
-  padding: 12px 0;
+  padding: 12px 0 12px var(--col-gap);
 }
 
 .candidate-list {
@@ -127,15 +128,19 @@
 }
 
 .candidate-row {
+  --col-gap: 16px;
   display: grid;
   grid-template-columns: minmax(240px, 310px) 1fr;
-  gap: 16px;
+  gap: var(--col-gap);
   min-height: var(--min-node-height, 32px);
 }
 
 .candidate-card {
   background: linear-gradient(140deg, rgba(255, 214, 153, 0.15), rgba(255, 214, 153, 0.05));
   border: 1px solid rgba(255, 214, 153, 0.4);
+  border-left-width: var(--col-gap);
+  border-left-style: solid;
+  margin-left: calc(var(--col-gap) * -1);
   border-radius: 16px;
   padding: 8px 10px;
   display: flex;
@@ -161,8 +166,8 @@
 }
 
 .candidate-children {
-  border-left: 2px dashed rgba(117, 214, 255, 0.4);
-  padding-left: 16px;
+  border-left: none;
+  padding-left: var(--col-gap);
   height: 100%;
   display: flex;
 }
@@ -179,6 +184,9 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-left-width: var(--col-gap);
+  border-left-style: solid;
+  margin-left: calc(var(--col-gap) * -1);
   border-radius: 14px;
   font-size: 12px;
   line-height: 1.2;
@@ -201,6 +209,21 @@
 
   .candidate-row {
     grid-template-columns: 1fr;
+  }
+
+  .candidate-card {
+    border-left-width: 0;
+    margin-left: 0;
+  }
+
+  .candidate-truncate,
+  .candidate-empty {
+    border-left-width: 0;
+    margin-left: 0;
+  }
+
+  .tree-canvas {
+    padding-left: 0;
   }
 
   .candidate-children {
