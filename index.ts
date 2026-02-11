@@ -61,9 +61,8 @@ const streamer = new MakaMujo(model, tts)
   });
 streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
 
-export function createServer(streamer: MakaMujo, { port }: { port?: number } = {}) {
+export function createServer(streamer: MakaMujo) {
   return serve({
-    port: port ?? Number(process.env.PORT) ?? 0,
     routes: {
       // Serve index.html for all unmatched routes.
       '/*': App,
