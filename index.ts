@@ -61,53 +61,49 @@ const streamer = new MakaMujo(model, tts)
   });
 streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
 
-export function createServer(streamer: MakaMujo) {
-  return serve({
-    routes: {
-      // Serve index.html for all unmatched routes.
-      '/*': App,
+const server = serve({
+  // Serve index.html for all unmatched routes.
+  routes: {
+    '/*': App,
 
-      '/': {
-        ...index,
-        PUT: async (req, server) => {
-          const res = await index.PUT(req, server);
-          if (!res.ok) {
-            console.error('response is not ok', res);
-            return res;
-          }
-          const comments = await res.json();
-          if (!Array.isArray(comments)) {
-            console.error('response data was unprocessed', comments);
-            return Response.json({}, { status: 500 });
-          }
-          streamer.listen(comments);
+    '/': {
+      ...index,
+      PUT: async (req, server) => {
+        const res = await index.PUT(req, server);
+        if (!res.ok) {
+          console.error('response is not ok', res);
+          return res;
+        }
+        const comments = await res.json();
+        if (!Array.isArray(comments)) {
+          console.error('response data was unprocessed', comments);
+          return Response.json({}, { status: 500 });
+        }
+        streamer.listen(comments);
 
-          if (modelFile) {
-            try {
-              writeFileSync(modelFile, streamer.talkModel.toJSON());
-            } catch (err) {
-              console.warn('[WARN]', 'failed to write model', modelFile, err);
-            }
+        if (modelFile) {
+          try {
+            writeFileSync(modelFile, streamer.talkModel.toJSON());
+          } catch (err) {
+            console.warn('[WARN]', 'failed to write model', modelFile, err);
           }
+        }
 
-          return Response.json({});
-        },
+        return Response.json({});
       },
-
-      ...api(streamer),
     },
 
-    development: process.env.NODE_ENV !== "production" && {
-      // Enable browser hot reloading in development
-      hmr: true,
+    ...api(streamer),
+  },
 
-      // Echo console logs from the browser to the server
-      console: true,
-    },
-  });
-}
+  development: process.env.NODE_ENV !== "production" && {
+    // Enable browser hot reloading in development
+    hmr: true,
 
-const server = createServer(streamer);
+    // Echo console logs from the browser to the server
+    console: true,
+  },
+});
 
 console.log(`🚀 Server running at ${server.url}`);
 
