@@ -99,13 +99,7 @@ export function App() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <div>
-          <p className="app-eyebrow">MarkovChainModel Console</p>
-          <h1 className="app-title">Distribution Explorer</h1>
-          <p className="app-subtitle">
-            initial word candidates ('') から3階層までを表示
-          </p>
-        </div>
+        <h1 className="app-title">Maka Mujo Console</h1>
         <a
           className="app-link"
           href="https://live.nicovideo.jp/watch/user/14171889"
@@ -119,7 +113,6 @@ export function App() {
         <div className="tree-panel-header">
           <div>
             <h2>Distribution Tree</h2>
-            <p>weight proportional height, depth capped at 3</p>
           </div>
         </div>
         <div className="tree-canvas">
