@@ -4,11 +4,6 @@ type WeightedCandidates = Record<string, number>;
 
 type Distribution = Record<string, WeightedCandidates>;
 
-const MAX_DEPTH = 3;
-const MIN_NODE_HEIGHT = 48;
-const WEIGHT_UNIT = 10;
-const ROW_GAP = 8;
-
 const sampleDistribution: Distribution = {
   "": {
     "こんにちは": 12,
