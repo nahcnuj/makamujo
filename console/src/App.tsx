@@ -93,10 +93,6 @@ const sampleDistribution: Distribution = {
   },
 };
 
-import { CandidateList, MIN_NODE_HEIGHT, WEIGHT_UNIT, ROW_GAP } from "./components/DistributionTree";
-
-/* CandidateList, CandidateNode and layout helpers were moved to components/DistributionTree.tsx */
-
 export function App() {
   const rootCandidates = sampleDistribution[""] ?? {};
 
