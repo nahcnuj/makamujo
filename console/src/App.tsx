@@ -1,11 +1,7 @@
-import type { CSSProperties } from "react";
-import { CandidateList, MIN_NODE_HEIGHT } from "./components/DistributionTree";
+import { CandidateList } from "./components/DistributionTree";
 
 type WeightedCandidates = Record<string, number>;
-
 type Distribution = Record<string, WeightedCandidates>;
-
-
 
 import { useEffect, useState } from "react";
 
