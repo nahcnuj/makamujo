@@ -2,10 +2,206 @@
 
 @layer base {
   :root {
-    @apply text-[rgba(255,255,255,0.87)] bg-[#242424] font-sans;
+    color: #f4f0ea;
+    background: radial-gradient(circle at top, #2b1f3a 0%, #1b1c29 45%, #0f121a 100%);
+    font-family: "Space Grotesk", "Noto Sans JP", system-ui, sans-serif;
   }
 
   body {
-    @apply grid place-items-center min-w-[320px] min-h-screen relative m-0;
+    min-width: 320px;
+    min-height: 100vh;
+    margin: 0;
+    background: linear-gradient(140deg, rgba(28, 25, 42, 0.9), rgba(13, 16, 26, 0.96));
   }
 }
+
+.app-shell {
+  min-height: 100vh;
+  padding: 32px 40px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  position: relative;
+}
+
+.app-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 10% 10%, rgba(255, 214, 153, 0.1), transparent 40%),
+    radial-gradient(circle at 80% 15%, rgba(117, 214, 255, 0.1), transparent 45%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.app-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 12px;
+  color: rgba(255, 214, 153, 0.8);
+  margin: 0 0 8px;
+}
+
+.app-title {
+  font-size: clamp(32px, 5vw, 56px);
+  margin: 0 0 8px;
+  font-weight: 700;
+}
+
+.app-subtitle {
+  margin: 0;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.app-link {
+  font-weight: 600;
+  text-decoration: none;
+  color: #0f121a;
+  background: #ffd699;
+  padding: 10px 18px;
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(255, 214, 153, 0.25);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.app-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(255, 214, 153, 0.35);
+}
+
+.tree-panel {
+  background: rgba(16, 18, 28, 0.85);
+  border-radius: 24px;
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  position: relative;
+  z-index: 1;
+}
+
+.tree-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.tree-panel-header h2 {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+
+.tree-panel-header p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.tree-panel-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.tree-canvas {
+  --col-gap: 16px;
+  overflow: auto;
+  padding: 12px var(--col-gap);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--row-gap, 8px);
+  align-items: flex-start;
+  width: max-content;
+}
+
+.candidate-row {
+  --col-gap: 16px;
+  display: grid;
+  grid-template-columns: minmax(240px, 310px) 1fr;
+  gap: var(--col-gap);
+  min-height: var(--min-node-height, 32px);
+  justify-content: start;
+  margin: 0;
+}
+
+.candidate-card {
+  background: linear-gradient(140deg, rgba(255, 214, 153, 0.15), rgba(255, 214, 153, 0.05));
+  border: 1px solid rgba(255, 214, 153, 0.4);
+  border-left-width: var(--col-gap);
+  border-left-style: solid;
+  margin-left: calc(var(--col-gap) * -1);
+  border-radius: 16px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  min-height: var(--min-node-height, 32px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.candidate-word {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.candidate-weight {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 6px;
+}
+
+.candidate-children {
+  border-left: none;
+  padding-left: var(--col-gap);
+  height: 100%;
+  display: flex;
+}
+
+.candidate-truncate,
+.candidate-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  color: rgba(255, 255, 255, 0.5);
+  min-height: var(--min-node-height, 32px);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-left-width: var(--col-gap);
+  border-left-style: solid;
+  margin-left: calc(var(--col-gap) * -1);
+  border-radius: 14px;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 6px 8px;
+}
+
+.candidate-empty {
+  min-height: 80px;
+}
+
+

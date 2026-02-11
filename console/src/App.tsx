@@ -1,15 +1,59 @@
-import { APITester } from "./APITester";
-import "./index.css";
+import { CandidateList } from "./components/DistributionTree";
+
+type WeightedCandidates = Record<string, number>;
+type Distribution = Record<string, WeightedCandidates>;
+
+import { useEffect, useState } from "react";
 
 export function App() {
+  const [dist, setDist] = useState<Distribution>({ "": { "。": 1 } });
+
+  useEffect(() => {
+    const base = process.env.NODE_ENV !== 'production' ? 'http://localhost:8777' : 'http://localhost:7777';
+    fetch(`${base}/api/distribution`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`status=${res.status}`);
+        return res.json();
+      })
+      .then((json: Distribution) => {
+        if (json && typeof json === 'object') {
+          setDist(json);
+        }
+      })
+      .catch((err) => {
+        console.warn('[WARN]', 'failed to fetch distribution, using sample', err);
+      });
+  }, []);
+
+  const rootCandidates = dist[""] ?? {};
+
   return (
-    <div className="max-w-[100svw] mx-auto p-8 text-center relative z-10">
-      <h1 className="text-5xl font-bold my-4 leading-tight">
-        <a href="https://live.nicovideo.jp/watch/user/14171889" target="_blank">
-          馬可無序
+    <div className="app-shell">
+      <header className="app-header">
+        <h1 className="app-title">Maka Mujo Console</h1>
+        <a
+          className="app-link"
+          href="https://live.nicovideo.jp/watch/user/14171889"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Live
         </a>
-      </h1>
-      <APITester />
+      </header>
+      <section className="tree-panel">
+        <div className="tree-panel-header">
+          <div>
+            <h2>Distribution Tree</h2>
+          </div>
+        </div>
+        <div className="tree-canvas">
+          <CandidateList
+            candidates={rootCandidates}
+            dist={dist}
+            depth={0}
+          />
+        </div>
+      </section>
     </div>
   );
 }

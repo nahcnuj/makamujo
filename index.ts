@@ -5,6 +5,7 @@ import { parseArgs } from "node:util";
 import { MakaMujo } from "./lib/Agent";
 import { MarkovChainModel } from "./lib/MarkovChainModel";
 import TTS, { FallbackTTS } from "./lib/TTS";
+import api from "./routes/api";
 import * as index from "./routes/index";
 import App from "./src/index.html";
 
@@ -61,8 +62,8 @@ const streamer = new MakaMujo(model, tts)
 streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
 
 const server = serve({
+  // Serve index.html for all unmatched routes.
   routes: {
-    // Serve index.html for all unmatched routes.
     '/*': App,
 
     '/': {
@@ -92,25 +93,7 @@ const server = serve({
       },
     },
 
-    '/api/speech': async () => {
-      return Response.json({
-        speech,
-      });
-    },
-
-    '/api/game': async () => {
-      // if (streamer.playing) console.debug('[DEBUG]', '/api/game', streamer.playing);
-      return Response.json(streamer.playing ?? {});
-    },
-
-    '/api/meta': {
-      GET: () => Response.json(streamer.streamState),
-      POST: async (req) => {
-        const body = await req.json();
-        streamer.onAir(body.data); // TODO
-        return Response.json({});
-      },
-    },
+    ...api(streamer),
   },
 
   development: process.env.NODE_ENV !== "production" && {
