@@ -5,96 +5,31 @@ type WeightedCandidates = Record<string, number>;
 
 type Distribution = Record<string, WeightedCandidates>;
 
-const sampleDistribution: Distribution = {
-  "": {
-    "こんにちは": 12,
-    "ねえ": 6,
-    "今日は": 9,
-    "配信": 4,
-    "さて": 7,
-    "それで": 3,
-  },
-  "こんにちは": {
-    "みんな": 8,
-    "今日は": 5,
-    "配信": 2,
-  },
-  "ねえ": {
-    "みんな": 4,
-    "聞いて": 6,
-  },
-  "今日は": {
-    "天気": 5,
-    "配信": 7,
-    "ゲーム": 3,
-  },
-  "配信": {
-    "始める": 8,
-    "する": 5,
-  },
-  "さて": {
-    "本題": 6,
-    "次": 3,
-  },
-  "それで": {
-    "ね": 4,
-    "続き": 5,
-  },
-  "みんな": {
-    "元気": 6,
-    "集まって": 4,
-  },
-  "聞いて": {
-    "ほしい": 5,
-    "くれる": 2,
-  },
-  "天気": {
-    "いい": 4,
-    "悪い": 2,
-  },
-  "ゲーム": {
-    "やる": 6,
-    "始める": 4,
-  },
-  "始める": {
-    "よ": 7,
-    "ぞ": 3,
-  },
-  "本題": {
-    "に": 5,
-    "へ": 2,
-  },
-  "次": {
-    "は": 4,
-    "に": 3,
-  },
-  "元気": {
-    "です": 6,
-    "かな": 2,
-  },
-  "集まって": {
-    "くれて": 4,
-    "ありがとう": 3,
-  },
-  "いい": {
-    "ね": 5,
-  },
-  "やる": {
-    "よ": 6,
-  },
-  "よ": {
-    "。": 8,
-  },
-  "ぞ": {
-    "。": 5,
-  },
-  "。": {
-    "": 1,
-  },
-};
+
+
+import { useEffect, useState } from "react";
 
 export function App() {
-  const rootCandidates = sampleDistribution[""] ?? {};
+  const [dist, setDist] = useState<Distribution>({ "": { "。": 1 } });
+
+  useEffect(() => {
+    const base = process.env.NODE_ENV !== 'production' ? 'http://localhost:8777' : 'http://localhost:7777';
+    fetch(`${base}/api/distribution`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`status=${res.status}`);
+        return res.json();
+      })
+      .then((json: Distribution) => {
+        if (json && typeof json === 'object') {
+          setDist(json);
+        }
+      })
+      .catch((err) => {
+        console.warn('[WARN]', 'failed to fetch distribution, using sample', err);
+      });
+  }, []);
+
+  const rootCandidates = dist[""] ?? {};
 
   return (
     <div className="app-shell">
@@ -118,7 +53,7 @@ export function App() {
         <div className="tree-canvas">
           <CandidateList
             candidates={rootCandidates}
-            dist={sampleDistribution}
+            dist={dist}
             depth={0}
           />
         </div>
