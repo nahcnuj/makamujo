@@ -5,8 +5,8 @@ export type Distribution = Record<string, WeightedCandidates>;
 
 const MAX_DEPTH = 3;
 export const MIN_NODE_HEIGHT = 48;
-export const WEIGHT_UNIT = 10;
-export const ROW_GAP = 8;
+const WEIGHT_UNIT = 10;
+const ROW_GAP = 8;
 
 export type CandidateLayout = {
   listHeight: number;
@@ -69,7 +69,10 @@ type CandidateListProps = {
 
 export const CandidateList = ({ candidates, dist, depth, layout }: CandidateListProps) => {
   const resolvedLayout = layout ?? buildLayout(candidates, dist, depth);
-  const listStyle: CSSProperties = { height: resolvedLayout.listHeight };
+  const listStyle: CSSProperties = {
+    height: resolvedLayout.listHeight,
+    ...(depth === 0 ? { "--weight-unit": `${WEIGHT_UNIT}px`, "--row-gap": `${ROW_GAP}px`, "--min-node-height": `${MIN_NODE_HEIGHT}px` } : {}),
+  };
   const emptyStyle: CSSProperties = { height: resolvedLayout.listHeight };
 
   if (resolvedLayout.entries.length === 0) {

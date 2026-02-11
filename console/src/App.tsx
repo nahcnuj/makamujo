@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { CandidateList, MIN_NODE_HEIGHT, ROW_GAP, WEIGHT_UNIT } from "./components/DistributionTree";
+import { CandidateList, MIN_NODE_HEIGHT } from "./components/DistributionTree";
 
 type WeightedCandidates = Record<string, number>;
 
@@ -97,16 +97,7 @@ export function App() {
   const rootCandidates = sampleDistribution[""] ?? {};
 
   return (
-    <div
-      className="app-shell"
-      style={
-        {
-          "--min-node-height": `${MIN_NODE_HEIGHT}px`,
-          "--weight-unit": `${WEIGHT_UNIT}px`,
-          "--row-gap": `${ROW_GAP}px`,
-        } as CSSProperties
-      }
-    >
+    <div className="app-shell">
       <header className="app-header">
         <div>
           <p className="app-eyebrow">MarkovChainModel Console</p>
