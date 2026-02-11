@@ -1,5 +1,5 @@
-import distribution from "./distribution";
 import type { MakaMujo } from "../../lib/Agent";
+import distribution from "./distribution";
 
 export default function api(streamer: MakaMujo) {
   return {

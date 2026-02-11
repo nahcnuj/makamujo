@@ -5,8 +5,8 @@ import { parseArgs } from "node:util";
 import { MakaMujo } from "./lib/Agent";
 import { MarkovChainModel } from "./lib/MarkovChainModel";
 import TTS, { FallbackTTS } from "./lib/TTS";
-import * as index from "./routes/index";
 import api from "./routes/api";
+import * as index from "./routes/index";
 import App from "./src/index.html";
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
