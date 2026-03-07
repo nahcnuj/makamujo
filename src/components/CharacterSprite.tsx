@@ -1,4 +1,4 @@
-import { CharacterSprite as GenericSprite } from "automated-gameplay-transmitter";
+import { CharacterSprite as GenericSprite } from "../lib/agt";
 
 // simple wrapper that hard-codes the mascot image used by makamujo
 export function CharacterSprite(props: Omit<React.ComponentProps<typeof GenericSprite>, 'src'>) {
