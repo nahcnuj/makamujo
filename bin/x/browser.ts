@@ -1,9 +1,8 @@
 #!/usr/bin/env bun
 
-import { ActionResult } from "automated-gameplay-transmitter";
+import { ActionResult, CookieClicker } from "automated-gameplay-transmitter";
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
-import { Games } from "../../lib/Agent/games";
 import { create } from "../../lib/Browser/chromium";
 import { createSender } from "../../lib/Browser/socket";
 
@@ -47,7 +46,7 @@ const send = await createSender(async (action) => {
   try {
     switch (action.name) {
       case 'noop': {
-        const { sight } = Games['CookieClicker'];
+        const { sight } = CookieClicker;
         const [state, selectedText] = await Promise.all([
           browser.evaluate(sight),
           browser.evaluate(() => document.getSelection()?.toString()),

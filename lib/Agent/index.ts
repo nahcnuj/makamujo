@@ -1,4 +1,4 @@
-import { Action, type State } from "automated-gameplay-transmitter";
+import { Action, CookieClicker, type State } from "automated-gameplay-transmitter";
 import { createReceiver } from "../Browser/socket";
 import { Games, type GameName } from "./games";
 import type { StreamState } from "./states";
@@ -27,7 +27,7 @@ export class MakaMujo {
   #browserState?: State;
   #playing?: {
     name: GameName
-    state: ReturnType<typeof Games[GameName]['sight']>
+    state: ReturnType<typeof CookieClicker.sight>
   }
 
   #streamState: {
