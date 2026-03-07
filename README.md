@@ -9,8 +9,8 @@ MAKA Mujo: an AI‑VTuber
 - Game‑playing solvers (currently cookie‑clicker) and agent logic
 - Front‑end UI that stitches together shared components and app‑specific panels
 
-This repository consumes **[automated-gameplay-transmitter](../automated-gameplay-transmitter)** as a local dependency (see `package.json`).
-The shared library provides browser automation helpers, IPC utilities, and a set of common React components/contexts used by the UI.
+This project depends on **[automated-gameplay-transmitter](https://github.com/nahcnuj/automated-gameplay-transmitter)**.
+The library provides browser automation helpers, IPC utilities, and a set of common React components/contexts used by the UI.
 
 Responsibilities are intentionally separated:
 
