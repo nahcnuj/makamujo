@@ -13,9 +13,11 @@ beforeAll(async () => {
     writeFileSync("./var/cookieclicker.txt", "");
   }
 
-  server = Bun.spawn(["bun", "--port", String(PORT), "index.ts"], {
+  server = Bun.spawn(["bun", "start", "--port", String(PORT)], {
     stdout: "pipe",
     stderr: "pipe",
+    // NODE_ENV=production is already set by the start script, but we keep it
+    // explicit here to ensure tests always run in a production-like environment.
     env: { ...process.env, NODE_ENV: "production" },
   });
 

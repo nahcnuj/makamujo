@@ -17,6 +17,7 @@ process.on('uncaughtException', exitHandler.bind(null, { exit: true }));
 const { values: {
   model: modelFile,
   data: dataFile,
+  port,
 } } = parseArgs({
   options: {
     model: {
@@ -28,6 +29,12 @@ const { values: {
       short: 'd',
       type: 'string',
       default: './var/cookieclicker.txt',
+    },
+    port: {
+      short: 'p',
+      // parseArgs only supports 'string' and 'boolean'; convert to Number when using
+      type: 'string',
+      default: '7777',
     },
   },
 });
@@ -61,6 +68,7 @@ const streamer = new MakaMujo(model, tts)
 streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
 
 const server = serve({
+  port: Number(port),
   routes: {
     // Serve index.html for all unmatched routes.
     '/*': App,
