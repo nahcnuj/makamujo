@@ -1,3 +1,7 @@
+// NOTE: this solver is specific to the makamujo application and is
+// intentionally kept outside of the shared library.  It relies on
+// `Action`/`State` types defined by `automated-gameplay-transmitter`, but
+// the strategy logic here is unique to the AI agent's behaviour.
 import { Action, type State } from "automated-gameplay-transmitter";
 
 type GameState =
