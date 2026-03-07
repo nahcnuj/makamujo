@@ -1,6 +1,6 @@
 import { Action, type State } from "automated-gameplay-transmitter";
 import { createReceiver } from "../Browser/socket";
-import { Games, type GameName } from "./games";
+import { ServerGames as Games, type GameName } from "./games/server";
 import type { StreamState } from "./states";
 import { writeFileSync } from "node:fs";
 
