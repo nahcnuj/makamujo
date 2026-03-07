@@ -1,4 +1,4 @@
-import { Box, Container } from "automated-gameplay-transmitter";
+import { Box, Container } from "../lib/agt";
 import { useAgentContext } from "../contexts/AgentContext";
 import { CharacterSprite } from "./CharacterSprite";
 
