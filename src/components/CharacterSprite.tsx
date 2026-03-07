@@ -1,15 +1,8 @@
-import makamujo from "../public/nc433974.png";
+import { CharacterSprite as GenericSprite } from "automated-gameplay-transmitter";
 
-const faces = {
-  default: makamujo,
-} as const;
-
-type Props = {
-  // expression?: keyof typeof faces,
-};
-
-export function CharacterSprite({}: Props) {
-  return (
-    <img src={faces['default']} height="50" className="transform-[scale(-1,1)]" />
-  );
+// simple wrapper that hard-codes the mascot image used by makamujo
+export function CharacterSprite(props: Omit<React.ComponentProps<typeof GenericSprite>, 'src'>) {
+  // NOTE: the public directory contains nc433974.png
+  return <GenericSprite src="/nc433974.png" height="50" className="transform-[scale(-1,1)]" {...props} />;
 }
+

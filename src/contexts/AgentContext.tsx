@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, type PropsWithChildren } from "react";
 import type { Games } from "../../lib/Agent/games";
 import type { StreamState } from "../../lib/Agent/states";
-import { useInterval } from "../hooks/useInterval";
+import { useInterval } from "automated-gameplay-transmitter";
 
 type Data = {
   speech: string
