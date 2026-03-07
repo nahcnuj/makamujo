@@ -4,9 +4,6 @@ on:
   pull_request:
     branches: ['main']
 
-# push builds are intentionally disabled; allow manual workflow dispatch if needed
-  workflow_dispatch: {}
-
 jobs:
   test:
     runs-on: ubuntu-latest
