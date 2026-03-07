@@ -26,9 +26,9 @@ describe("server startup", () => {
       createdDataFile = true;
     }
 
-    // Start the production server using the same command as `bun start`
+    // Start the production server using `bun start`
     server = Bun.spawn(
-      ["bun", "run", "start"],
+      ["bun", "start"],
       {
         cwd: ROOT_DIR,
         stdout: "pipe",
