@@ -3,10 +3,10 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "bun-react-template",
+      "name": "@nahcnuj/makamujo",
       "dependencies": {
         "@playwright/browser-chromium": "^1.57.0",
-        "automated-gameplay-transmitter": "link:automated-gameplay-transmitter",
+        "automated-gameplay-transmitter": "file:./automated-gameplay-transmitter",
         "bun-plugin-tailwind": "^0.1.2",
         "playwright": "^1.57.0",
         "playwright-extra": "^4.3.6",
@@ -62,7 +62,7 @@
 
     "arr-union": ["arr-union@3.1.0", "", {}, "sha512-sKpyeERZ02v1FeCZT8lrfJq5u6goHCtpTAzPwJYe7c8SPFOboNjNg1vz2L4VTn9T4PQxEx13TbXLmYUcS6Ug7Q=="],
 
-    "automated-gameplay-transmitter": ["automated-gameplay-transmitter@link:automated-gameplay-transmitter", {}],
+    "automated-gameplay-transmitter": ["automated-gameplay-transmitter@file:./automated-gameplay-transmitter", {}],
 
     "balanced-match": ["balanced-match@1.0.2", "", {}, "sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw=="],
 
