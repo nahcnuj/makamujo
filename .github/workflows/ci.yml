@@ -16,6 +16,8 @@ jobs:
           git clone https://github.com/nahcnuj/automated-gameplay-transmitter.git ../automated-gameplay-transmitter
           (cd ../automated-gameplay-transmitter && bun link)
       - name: Install dependencies
-        run: bun install
+        run: |
+          bun install
+          bun link automated-gameplay-transmitter
       - name: Run tests
         run: bun test
