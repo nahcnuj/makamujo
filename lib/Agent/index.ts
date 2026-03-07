@@ -1,6 +1,7 @@
-import { Action, CookieClicker, type State } from "automated-gameplay-transmitter";
+import { Action, type State } from "automated-gameplay-transmitter";
 import { createReceiver } from "../Browser/socket";
 import { Games, type GameName } from "./games";
+import { ServerGames } from "./games/server";
 import type { StreamState } from "./states";
 import { writeFileSync } from "node:fs";
 
@@ -26,9 +27,8 @@ export class MakaMujo {
 
   #browserState?: State;
   #playing?: {
-    name: GameName
-    state: ReturnType<typeof CookieClicker.sight>
-  }
+    [K in GameName]: { name: K; state: ReturnType<(typeof ServerGames)[K]['sight']> }
+  }[GameName]
 
   #streamState: {
     niconama?: StreamState
@@ -40,7 +40,7 @@ export class MakaMujo {
   }
 
   play(name: GameName, data?: string) {
-    const solver = Games[name].solver({
+    const solver = ServerGames[name].solver({
       type: 'initialize',
       data,
     }, {

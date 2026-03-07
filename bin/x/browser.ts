@@ -1,18 +1,26 @@
 #!/usr/bin/env bun
 
-import { ActionResult, CookieClicker } from "automated-gameplay-transmitter";
+import { ActionResult } from "automated-gameplay-transmitter";
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
+import type { GameName } from "../../lib/Agent/games";
+import { ServerGames } from "../../lib/Agent/games/server";
 import { create } from "../../lib/Browser/chromium";
 import { createSender } from "../../lib/Browser/socket";
 
 const { values: {
+  game: gameName,
   file,
   browser: executablePath,
   lang,
   timeout: timeoutStr,
 } } = parseArgs({
   options: {
+    game: {
+      short: 'g',
+      type: 'string',
+      default: 'CookieClicker',
+    },
     file: {
       short: 'f',
       type: 'string',
@@ -33,6 +41,13 @@ const { values: {
   },
 });
 
+if (!(gameName in ServerGames)) {
+  console.error(`[ERROR] Unknown game: ${gameName}`);
+  process.exit(1);
+}
+
+const game = gameName as GameName;
+
 const timeout = Number.parseInt(timeoutStr, 10);
 
 const browser = await create(executablePath, {
@@ -46,7 +61,7 @@ const send = await createSender(async (action) => {
   try {
     switch (action.name) {
       case 'noop': {
-        const { sight } = CookieClicker;
+        const { sight } = ServerGames[game];
         const [state, selectedText] = await Promise.all([
           browser.evaluate(sight),
           browser.evaluate(() => document.getSelection()?.toString()),

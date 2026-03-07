@@ -1,4 +1,4 @@
-import { Box, Container, Layout } from "automated-gameplay-transmitter";
+import { Box, Container, Layout } from "./lib/agt";
 import { GamePanel } from "./components/GamePanel";
 import { StreamerPanel } from "./components/StreamerPanel";
 import { AgentProvider } from "./contexts/AgentContext";
