@@ -81,6 +81,12 @@ describe("server", () => {
     expect(res.ok).toBeTrue();
   });
 
+  it("serves /nc433974.png", async () => {
+    const res = await fetch(`${BASE_URL}/nc433974.png`);
+    expect(res.ok).toBeTrue();
+    expect(res.headers.get("content-type")).toStartWith("image/png");
+  });
+
   it("renders the app in a browser", async () => {
     // Verify the server is still running
     expect(server.exitCode).toBeNull();
