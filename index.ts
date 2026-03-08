@@ -65,8 +65,14 @@ const streamer = new MakaMujo(model, tts)
   });
 streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
 
+const portNumber = parseInt(port ?? "7777", 10);
+if (!Number.isFinite(portNumber) || portNumber < 1 || portNumber > 65535) {
+  console.error(`Invalid port: ${port}. Must be an integer between 1 and 65535.`);
+  process.exit(1);
+}
+
 const server = serve({
-  port: Number(port),
+  port: portNumber,
   routes: {
     // Serve index.html for all unmatched routes.
     '/*': App,

@@ -26,22 +26,28 @@ beforeAll(async () => {
   const decoder = new TextDecoder();
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("Server startup timed out")), SERVER_STARTUP_TIMEOUT_MS);
-    const read = async () => {
-      const { value, done } = await reader.read();
-      if (done) {
+    let buffer = "";
+    const read = async (): Promise<void> => {
+      try {
+        const { value, done } = await reader.read();
+        if (done) {
+          clearTimeout(timeout);
+          reject(new Error("Server process ended unexpectedly"));
+          return;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        if (buffer.includes("Server running")) {
+          clearTimeout(timeout);
+          resolve();
+        } else {
+          return read();
+        }
+      } catch (error) {
         clearTimeout(timeout);
-        reject(new Error("Server process ended unexpectedly"));
-        return;
-      }
-      const text = decoder.decode(value);
-      if (text.includes("Server running")) {
-        clearTimeout(timeout);
-        resolve();
-      } else {
-        read();
+        reject(error instanceof Error ? error : new Error(String(error)));
       }
     };
-    read();
+    void read();
   });
 });
 
