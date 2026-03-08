@@ -5,7 +5,7 @@ import playwright from "playwright";
 import { chromium as $_ } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
-const chromium = $_.use(StealthPlugin());
+export const chromium = $_.use(StealthPlugin());
 
 export const create = async (
   executablePath?: string,
