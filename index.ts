@@ -74,7 +74,7 @@ if (!Number.isFinite(portNumber) || portNumber < 1 || portNumber > 65535) {
 const server = serve({
   port: portNumber,
   routes: {
-    // Serve static assets from the public directory.
+    // Serve nc433974.png from the public directory.
     '/nc433974.png': new Response(Bun.file('./src/public/nc433974.png')),
 
     // Serve index.html for all unmatched routes.
