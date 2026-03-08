@@ -2,9 +2,7 @@ import { serve } from "bun";
 import { readFileSync, writeFileSync } from "node:fs";
 import { setInterval } from "node:timers/promises";
 import { parseArgs } from "node:util";
-import { MakaMujo } from "./lib/Agent";
-import { MarkovChainModel } from "./lib/MarkovChainModel";
-import TTS, { FallbackTTS } from "./lib/TTS";
+import { MakaMujo, MarkovChainModel, TTS, FallbackTTS } from "./lib/server";
 import * as index from "./routes/index";
 import App from "./src/index.html";
 
