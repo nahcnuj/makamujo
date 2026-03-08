@@ -2,9 +2,7 @@ import { serve } from "bun";
 import { readFileSync, writeFileSync } from "node:fs";
 import { setInterval } from "node:timers/promises";
 import { parseArgs } from "node:util";
-import { MakaMujo } from "./lib/Agent";
-import { MarkovChainModel } from "./lib/MarkovChainModel";
-import TTS, { FallbackTTS } from "./lib/TTS";
+import { MakaMujo, MarkovChainModel, TTS, FallbackTTS } from "./lib/server";
 import * as index from "./routes/index";
 import App from "./src/index.html";
 
@@ -17,6 +15,7 @@ process.on('uncaughtException', exitHandler.bind(null, { exit: true }));
 const { values: {
   model: modelFile,
   data: dataFile,
+  port,
 } } = parseArgs({
   options: {
     model: {
@@ -28,6 +27,12 @@ const { values: {
       short: 'd',
       type: 'string',
       default: './var/cookieclicker.txt',
+    },
+    port: {
+      short: 'p',
+      // parseArgs only supports 'string' and 'boolean'; convert to Number when using
+      type: 'string',
+      default: '7777',
     },
   },
 });
@@ -60,7 +65,14 @@ const streamer = new MakaMujo(model, tts)
   });
 streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
 
+const portNumber = parseInt(port ?? "7777", 10);
+if (!Number.isFinite(portNumber) || portNumber < 1 || portNumber > 65535) {
+  console.error(`Invalid port: ${port}. Must be an integer between 1 and 65535.`);
+  process.exit(1);
+}
+
 const server = serve({
+  port: portNumber,
   routes: {
     // Serve index.html for all unmatched routes.
     '/*': App,
