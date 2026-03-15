@@ -16,4 +16,4 @@ jobs:
       - name: Install dependencies
         run: bun install
       - name: Run tests
-        run: bun test lib/ src/
+        run: bun run test
