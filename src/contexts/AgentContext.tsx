@@ -4,6 +4,7 @@ import { createContext, useContext, useState, type PropsWithChildren } from "rea
 import type { Games } from "../../lib/Agent/games";
 import type { StreamState } from "../../lib/Agent/states";
 import { useInterval } from "automated-gameplay-transmitter";
+import { processSpeechResponse } from "./speechState";
 
 type Data = {
   speech: string
@@ -35,11 +36,10 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
         console.warn('[WARN]', err);
         return { speech: '', silent: false };
       });
-    // Always track the latest silent state; only update speech when non-empty
-    // to avoid blanking the display between speech generations.
-    setSilent(!!res.silent);
-    if (res.speech) {
-      setSpeech(res.speech);
+    const next = processSpeechResponse(res, speech);
+    setSilent(next.silent);
+    if (next.speech !== speech) {
+      setSpeech(next.speech);
     }
   });
 
