@@ -109,8 +109,10 @@ export class MakaMujo {
       const comment = data.comment.normalize('NFC').trim();
       console.debug('[DEBUG]', 'comment', JSON.stringify(data, null, 0));
 
+      // Update last comment timestamp for any received comment that counts as activity.
+      this.#lastCommentAt = new Date(Date.now());
+
       if (data.no || data.isOwner) {
-        this.#lastCommentAt = new Date(Date.now());
         this.#learn(`${comment}。`);
       }
 
