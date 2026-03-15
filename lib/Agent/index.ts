@@ -202,6 +202,11 @@ export class MakaMujo {
   }
 
   get speechable() {
+    const { niconama } = this.#streamState;
+    if (niconama?.total !== undefined && niconama.total.listeners === 0) {
+      return false;
+    }
+
     return [
       'idle',
       'result',
