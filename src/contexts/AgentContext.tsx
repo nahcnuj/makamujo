@@ -4,7 +4,7 @@ import { createContext, useContext, useState, type PropsWithChildren } from "rea
 import type { Games } from "../../lib/Agent/games";
 import type { StreamState } from "../../lib/Agent/states";
 import { useInterval } from "automated-gameplay-transmitter";
-import { applyResponse } from "./speechState";
+import { updateSpeechState } from "./speechState";
 
 type Data = {
   speech: string
@@ -36,7 +36,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
         console.warn('[WARN]', err);
         return { speech: '', silent: false };
       });
-    const { speech: newSpeech, silent: newSilent } = applyResponse(res, speech);
+    const { speech: newSpeech, silent: newSilent } = updateSpeechState(res, speech);
     setSilent(newSilent);
     if (newSpeech !== speech) {
       setSpeech(newSpeech);
