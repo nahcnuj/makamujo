@@ -110,6 +110,7 @@ const server = serve({
     '/api/speech': async () => {
       return Response.json({
         speech,
+        silent: !streamer.speechable,
       });
     },
 

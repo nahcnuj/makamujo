@@ -4,6 +4,8 @@ import { ServerGames as Games, type GameName } from "./games/server";
 import type { StreamState } from "./states";
 import { writeFileSync } from "node:fs";
 
+export const SILENCE_THRESHOLD_MS = 5 * 60 * 1_000; // 5 minutes
+
 const jaJP = new Intl.Locale('ja-JP');
 const pickTopic = (text: string) => {
   const words = Array.from(new Intl.Segmenter(jaJP, { granularity: 'word' }).segment(text)).map(({ segment }) => segment);
@@ -33,6 +35,10 @@ export class MakaMujo {
   #streamState: {
     niconama?: StreamState
   } = {}
+
+  #lastListenerCount?: number;
+  #listenersStaleSince?: Date;
+  #lastCommentAt?: Date;
 
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
@@ -102,6 +108,9 @@ export class MakaMujo {
     for (const { data } of comments) {
       const comment = data.comment.normalize('NFC').trim();
       console.debug('[DEBUG]', 'comment', JSON.stringify(data, null, 0));
+
+      // Update last comment timestamp for any received comment that counts as activity.
+      this.#lastCommentAt = new Date(Date.now());
 
       if (data.no || data.isOwner) {
         this.#learn(`${comment}。`);
@@ -185,6 +194,15 @@ export class MakaMujo {
     switch (state?.type) {
       case 'niconama': {
         const { isLive, title, startTime: start, url, total: listeners, points } = state.data;
+        if (isLive) {
+          if (this.#lastListenerCount !== listeners) {
+            this.#lastListenerCount = listeners;
+            this.#listenersStaleSince = new Date(Date.now());
+          }
+        } else {
+          this.#lastListenerCount = undefined;
+          this.#listenersStaleSince = undefined;
+        }
         this.#streamState[state.type] = isLive ? {
           type: 'live',
           title,
@@ -202,6 +220,18 @@ export class MakaMujo {
   }
 
   get speechable() {
+    const { niconama } = this.#streamState;
+    if (niconama !== undefined) {
+      const now = Date.now();
+      const listenersStale = this.#listenersStaleSince !== undefined &&
+        (now - this.#listenersStaleSince.getTime()) >= SILENCE_THRESHOLD_MS;
+      const commentsStale = this.#lastCommentAt === undefined ||
+        (now - this.#lastCommentAt.getTime()) >= SILENCE_THRESHOLD_MS;
+      if (listenersStale && commentsStale) {
+        return false;
+      }
+    }
+
     return [
       'idle',
       'result',

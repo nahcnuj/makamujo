@@ -4,9 +4,11 @@ import { createContext, useContext, useState, type PropsWithChildren } from "rea
 import type { Games } from "../../lib/Agent/games";
 import type { StreamState } from "../../lib/Agent/states";
 import { useInterval } from "automated-gameplay-transmitter";
+import { updateSpeechState } from "./speechState";
 
 type Data = {
   speech: string
+  silent: boolean
   playing?: {
     name: keyof typeof Games
     state: any
@@ -16,25 +18,25 @@ type Data = {
 
 const AgentContext = createContext<Data>({
   speech: '',
+  silent: false,
 });
 
 export const useAgentContext = () => useContext(AgentContext);
 
 export const AgentProvider = ({ children }: PropsWithChildren) => {
   const [speech, setSpeech] = useState('');
+  const [silent, setSilent] = useState(false);
   const [playing, setPlaying] = useState<Data['playing']>();
   const [streamState, setStreamState] = useState<StreamState>();
 
   useInterval(100, async () => {
-    const { speech } = await fetch('/api/speech', { unix: './var/api-speech.sock' })
-      .then(res => res.ok ? res.json() : { speech: '' })
+    const res = await fetch('/api/speech', { unix: './var/api-speech.sock' })
+      .then(res => res.ok ? res.json() : { speech: '', silent: false })
       .catch(err => {
         console.warn('[WARN]', err);
-        return { speech: '' };
+        return { speech: '', silent: false };
       });
-    if (speech) {
-      setSpeech(speech);
-    }
+    updateSpeechState(res, speech, setSpeech, setSilent);
   });
 
   useInterval(100, async () => {
@@ -55,7 +57,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
   });
 
   return (
-    <AgentContext.Provider value={{ speech, streamState, playing }}>
+    <AgentContext.Provider value={{ speech, silent, streamState, playing }}>
       {children}
     </AgentContext.Provider>
   );
