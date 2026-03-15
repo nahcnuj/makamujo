@@ -36,10 +36,10 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
         console.warn('[WARN]', err);
         return { speech: '', silent: false };
       });
-    const { speech: newSpeech, silent: newSilent } = updateSpeechState(res, speech);
-    setSilent(newSilent);
-    if (newSpeech !== speech) {
-      setSpeech(newSpeech);
+    const next = updateSpeechState(res, speech);
+    setSilent(next.silent);
+    if (next.speech !== speech) {
+      setSpeech(next.speech);
     }
   });
 

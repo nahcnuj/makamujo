@@ -4,11 +4,11 @@
  * the display never goes blank between speech generations.
  */
 export function updateSpeechState(
-  response: { speech?: string; silent?: boolean },
+  res: { speech?: string; silent?: boolean },
   currentSpeech: string,
 ): { speech: string; silent: boolean } {
   return {
-    speech: response.speech ? response.speech : currentSpeech,
-    silent: !!response.silent,
+    speech: res.speech ? res.speech : currentSpeech,
+    silent: !!res.silent,
   };
 }
