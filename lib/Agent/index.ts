@@ -37,8 +37,8 @@ export class MakaMujo {
   } = {}
 
   #lastListenerCount?: number;
-  #listenersStaleSince?: number;
-  #lastCommentAt?: number;
+  #listenersStaleSince?: Date;
+  #lastCommentAt?: Date;
 
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
@@ -110,7 +110,7 @@ export class MakaMujo {
       console.debug('[DEBUG]', 'comment', JSON.stringify(data, null, 0));
 
       if (data.no || data.isOwner) {
-        this.#lastCommentAt = Date.now();
+        this.#lastCommentAt = new Date(Date.now());
         this.#learn(`${comment}。`);
       }
 
@@ -193,10 +193,9 @@ export class MakaMujo {
       case 'niconama': {
         const { isLive, title, startTime: start, url, total: listeners, points } = state.data;
         if (isLive) {
-          const now = Date.now();
           if (this.#lastListenerCount !== listeners) {
             this.#lastListenerCount = listeners;
-            this.#listenersStaleSince = now;
+            this.#listenersStaleSince = new Date(Date.now());
           }
         } else {
           this.#lastListenerCount = undefined;
@@ -223,9 +222,9 @@ export class MakaMujo {
     if (niconama !== undefined) {
       const now = Date.now();
       const listenersStale = this.#listenersStaleSince !== undefined &&
-        (now - this.#listenersStaleSince) >= SILENCE_THRESHOLD_MS;
+        (now - this.#listenersStaleSince.getTime()) >= SILENCE_THRESHOLD_MS;
       const commentsStale = this.#lastCommentAt === undefined ||
-        (now - this.#lastCommentAt) >= SILENCE_THRESHOLD_MS;
+        (now - this.#lastCommentAt.getTime()) >= SILENCE_THRESHOLD_MS;
       if (listenersStale && commentsStale) {
         return false;
       }
