@@ -1,57 +1,75 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, mock } from "bun:test";
 import { updateSpeechState } from "./speechState";
 
 describe('updateSpeechState', () => {
   describe('silent', () => {
-    it('is false by default when response has no silent field', () => {
-      const { silent } = updateSpeechState({}, '');
-      expect(silent).toBe(false);
+    it('calls setSilent(false) when response has no silent field', () => {
+      const setSpeech = mock((_: string) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState({}, '', setSpeech, setSilent);
+      expect(setSilent).toHaveBeenCalledWith(false);
     });
 
-    it('is false when API returns silent:false', () => {
-      const { silent } = updateSpeechState({ silent: false }, '');
-      expect(silent).toBe(false);
+    it('calls setSilent(false) when API returns silent:false', () => {
+      const setSpeech = mock((_: string) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState({ silent: false }, '', setSpeech, setSilent);
+      expect(setSilent).toHaveBeenCalledWith(false);
     });
 
-    it('is true when API returns silent:true', () => {
-      const { silent } = updateSpeechState({ silent: true }, '');
-      expect(silent).toBe(true);
+    it('calls setSilent(true) when API returns silent:true', () => {
+      const setSpeech = mock((_: string) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState({ silent: true }, '', setSpeech, setSilent);
+      expect(setSilent).toHaveBeenCalledWith(true);
     });
 
-    it('switches from true to false when silent flag clears', () => {
-      const a = updateSpeechState({ silent: true }, '');
-      expect(a.silent).toBe(true);
-      const b = updateSpeechState({ silent: false }, a.speech);
-      expect(b.silent).toBe(false);
+    it('calls setSilent(false) after previously being true', () => {
+      const setSpeech = mock((_: string) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState({ silent: true }, '', setSpeech, setSilent);
+      expect(setSilent).toHaveBeenLastCalledWith(true);
+      updateSpeechState({ silent: false }, '', setSpeech, setSilent);
+      expect(setSilent).toHaveBeenLastCalledWith(false);
     });
   });
 
   describe('speech', () => {
-    it('is updated when API returns a non-empty string', () => {
-      const { speech } = updateSpeechState({ speech: 'hello' }, '');
-      expect(speech).toBe('hello');
+    it('calls setSpeech when API returns a non-empty string', () => {
+      const setSpeech = mock((_: string) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState({ speech: 'hello' }, '', setSpeech, setSilent);
+      expect(setSpeech).toHaveBeenCalledWith('hello');
     });
 
-    it('retains current speech when API returns an empty string', () => {
-      const { speech } = updateSpeechState({ speech: '' }, 'old text');
-      expect(speech).toBe('old text');
+    it('does not call setSpeech when API returns an empty string', () => {
+      const setSpeech = mock((_: string) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState({ speech: '' }, 'old text', setSpeech, setSilent);
+      expect(setSpeech).not.toHaveBeenCalled();
     });
 
-    it('retains current speech when API response has no speech field', () => {
-      const { speech } = updateSpeechState({}, 'old text');
-      expect(speech).toBe('old text');
+    it('does not call setSpeech when API response has no speech field', () => {
+      const setSpeech = mock((_: string) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState({}, 'old text', setSpeech, setSilent);
+      expect(setSpeech).not.toHaveBeenCalled();
     });
 
-    it('retains current speech when agent is silent', () => {
-      const { speech, silent } = updateSpeechState({ speech: '', silent: true }, 'last spoken');
-      expect(silent).toBe(true);
-      expect(speech).toBe('last spoken');
+    it('does not call setSpeech when agent is silent', () => {
+      const setSpeech = mock((_: string) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState({ speech: '', silent: true }, 'last spoken', setSpeech, setSilent);
+      expect(setSilent).toHaveBeenCalledWith(true);
+      expect(setSpeech).not.toHaveBeenCalled();
     });
 
-    it('updates speech and clears silent together', () => {
-      const { speech, silent } = updateSpeechState({ speech: 'new line', silent: false }, 'last spoken');
-      expect(speech).toBe('new line');
-      expect(silent).toBe(false);
+    it('calls both setSpeech and setSilent when speech and silent change together', () => {
+      const setSpeech = mock((_: string) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState({ speech: 'new line', silent: false }, 'last spoken', setSpeech, setSilent);
+      expect(setSpeech).toHaveBeenCalledWith('new line');
+      expect(setSilent).toHaveBeenCalledWith(false);
     });
   });
 });
