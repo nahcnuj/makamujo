@@ -1,6 +1,4 @@
-import { CookieClicker } from "automated-gameplay-transmitter/server";
-
-export const { sight } = CookieClicker;
+export { sight } from "./sight";
 
 export { default as Component } from "./ReactComponent";
 export { solver } from "./solver";
