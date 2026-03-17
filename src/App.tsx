@@ -33,7 +33,7 @@ export function App() {
               </div>
             </div>
             <div className="flex-auto w-full max-h-full">
-              <Box>
+              <Box borderColor="border-emerald-300" borderWidth="border-4" borderStyle="border-double" rounded="rounded-xl">
                 <Container>
                   <GamePanel />
                 </Container>
