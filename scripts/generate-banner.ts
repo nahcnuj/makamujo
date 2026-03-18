@@ -135,6 +135,7 @@ const html = `<!doctype html>
     <div class="name-row">
       <div class="kanji">馬可無序</div>
       <div class="name-sub">
+        <div class="ruby">AI VTuberプロジェクト</div>
         <div class="ruby">まかむじょ</div>
         <div class="en-name">MAKA Mujo</div>
       </div>
