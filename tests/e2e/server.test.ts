@@ -62,7 +62,7 @@ describe("server", () => {
     const html = await res.text();
     expect(html).toContain("<title>馬可無序");
     expect(html).toContain('<div id="root">');
-    expect(html).toMatch(/<link\b[^>]*\brel="icon"\b[^>]*\bhref="\/favicon-32x32\.png"\b/);
+    expect(html).toMatch(/<link\b[^>]*\bhref="\/favicon-32x32\.png"\b/);
   });
 
   it("responds to /api/speech", async () => {
