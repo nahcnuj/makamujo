@@ -1,7 +1,7 @@
 /**
  * Banner image generator
  *
- * Renders an HTML template at 600×200 px using Playwright Chromium and writes
+ * Renders an HTML template at 320×100 px using Playwright Chromium and writes
  * the result to docs/banner.png.  The banner is intended for embedding on
  * external personal sites as a linked thumbnail.
  *
@@ -13,8 +13,8 @@ import { chromium } from "playwright";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-const WIDTH = 600;
-const HEIGHT = 200;
+const WIDTH = 320;
+const HEIGHT = 100;
 
 const root = path.resolve(import.meta.dir, "..");
 const characterImagePath = path.join(root, "src", "public", "nc433974.png");
@@ -42,8 +42,8 @@ const html = `<!doctype html>
     height: 100%;
     display: flex;
     align-items: center;
-    padding: 0 24px;
-    gap: 24px;
+    padding: 0 12px;
+    gap: 12px;
     position: relative;
   }
   .bg-glow {
@@ -55,10 +55,10 @@ const html = `<!doctype html>
   }
   .character {
     flex-shrink: 0;
-    width: 148px;
-    height: 148px;
+    width: 76px;
+    height: 76px;
     border-radius: 9999px;
-    border: 4px double #6ee7b7;
+    border: 2px double #6ee7b7;
     background: #0d1a12;
     overflow: hidden;
     display: flex;
@@ -75,33 +75,36 @@ const html = `<!doctype html>
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 3px;
   }
   .name {
-    font-size: 48px;
+    font-size: 24px;
     font-weight: 700;
     color: #6ee7b7;
     line-height: 1.1;
     ruby-position: under;
-    text-shadow: 0 0 20px #6ee7b740;
+    text-shadow: 0 0 10px #6ee7b740;
   }
   .name ruby rt {
-    font-size: 12px;
+    font-size: 6px;
     color: #a7f3d0;
   }
   .en-name {
-    font-size: 13px;
+    font-size: 7px;
     color: #a7f3d0;
     font-weight: 400;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
   }
-  .tagline {
-    font-size: 12px;
-    line-height: 1.6;
-    color: #d1fae5;
-  }
-  .tagline-line {
+  .badge {
     display: inline-block;
+    padding: 2px 7px;
+    border: 1px solid #6ee7b7;
+    border-radius: 4px;
+    font-size: 8px;
+    color: #6ee7b7;
+    font-weight: 700;
+    align-self: flex-start;
+    background: #0d2d1c80;
   }
 </style>
 </head>
@@ -116,7 +119,7 @@ const html = `<!doctype html>
       <ruby>馬<rp>(</rp><rt>ま</rt><rp>)</rp></ruby><ruby>可<rp>(</rp><rt>か</rt><rp>)</rp></ruby><ruby>無<rp>(</rp><rt>む</rt><rp>)</rp></ruby><ruby>序<rp>(</rp><rt>じょ</rt><rp>)</rp></ruby>
     </div>
     <div class="en-name">MAKA Mujo — AI VTuber</div>
-    <div class="tagline"><span class="tagline-line">AIが自らゲームをプレイし、</span><span class="tagline-line">マルコフ連鎖によるトークとともにライブ配信。</span></div>
+    <div class="badge">🎮 ニコニコ生放送で配信中</div>
   </div>
 </div>
 </body>
