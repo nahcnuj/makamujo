@@ -83,6 +83,11 @@ const html = `<!doctype html>
   }
   .name-row {
     display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .name-main {
+    display: flex;
     align-items: center;
     gap: 8px;
   }
@@ -133,11 +138,13 @@ const html = `<!doctype html>
   </div>
   <div class="text">
     <div class="name-row">
-      <div class="kanji">馬可無序</div>
-      <div class="name-sub">
-        <div class="ruby">AI VTuberプロジェクト</div>
-        <div class="ruby">まかむじょ</div>
-        <div class="en-name">MAKA Mujo</div>
+      <div class="ruby">AI VTuberプロジェクト</div>
+      <div class="name-main">
+        <div class="kanji">馬可無序</div>
+        <div class="name-sub">
+          <div class="ruby">まかむじょ</div>
+          <div class="en-name">MAKA Mujo</div>
+        </div>
       </div>
     </div>
     <div class="badge">🎮 ニコニコ生放送で配信中</div>
@@ -150,6 +157,7 @@ const browser = await chromium.launch();
 const page = await browser.newPage();
 await page.setViewportSize({ width: WIDTH, height: HEIGHT });
 await page.setContent(html, { waitUntil: "networkidle" });
+await page.evaluate(() => document.fonts.ready);
 await page.screenshot({ path: outputPath, type: "png" });
 await browser.close();
 
