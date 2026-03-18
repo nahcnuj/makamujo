@@ -23,7 +23,8 @@ const outputPath = path.join(root, "docs", "banner.png");
 const characterImageBase64 = readFileSync(characterImagePath).toString("base64");
 const characterImageDataUrl = `data:image/png;base64,${characterImageBase64}`;
 
-const html = `<!doctype html>
+const html = `\
+<!doctype html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8" />
@@ -110,6 +111,9 @@ const html = `<!doctype html>
     color: #a7f3d0;
     letter-spacing: 0.12em;
   }
+  .ruby-bold {
+    font-weight: 700;
+  }
   .en-name {
     font-size: 9px;
     color: #a7f3d0;
@@ -138,7 +142,7 @@ const html = `<!doctype html>
   </div>
   <div class="text">
     <div class="name-row">
-      <div class="ruby">AI VTuberプロジェクト</div>
+      <div class="ruby ruby-bold">AI VTuberプロジェクト</div>
       <div class="name-main">
         <div class="kanji">馬可無序</div>
         <div class="name-sub">

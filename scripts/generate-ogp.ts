@@ -22,7 +22,8 @@ const outputPath = path.join(root, "docs", "ogp.png");
 const characterImageBase64 = readFileSync(characterImagePath).toString("base64");
 const characterImageDataUrl = `data:image/png;base64,${characterImageBase64}`;
 
-const html = `<!doctype html>
+const html = `\
+<!doctype html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8" />
