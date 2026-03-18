@@ -77,6 +77,9 @@ const server = serve({
     // Serve nc433974.png from the public directory.
     '/nc433974.png': new Response(Bun.file('./src/public/nc433974.png')),
 
+    // Serve favicon from the public directory.
+    '/favicon-32x32.png': new Response(Bun.file('./src/public/favicon-32x32.png')),
+
     // Serve index.html for all unmatched routes.
     '/*': App,
 
