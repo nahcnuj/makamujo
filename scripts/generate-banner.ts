@@ -1,7 +1,7 @@
 /**
  * Banner image generator
  *
- * Renders an HTML template at 320×120 px using Playwright Chromium and writes
+ * Renders an HTML template at 320×100 px using Playwright Chromium and writes
  * the result to docs/banner.png.  The banner is intended for embedding on
  * external personal sites as a linked thumbnail.
  *
@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const WIDTH = 320;
-const HEIGHT = 120;
+const HEIGHT = 100;
 
 const root = path.resolve(import.meta.dir, "..");
 const characterImagePath = path.join(root, "src", "public", "nc433974.png");
@@ -55,8 +55,8 @@ const html = `<!doctype html>
   }
   .character {
     flex-shrink: 0;
-    width: 94px;
-    height: 94px;
+    width: 76px;
+    height: 76px;
     border-radius: 9999px;
     border: 2px double #6ee7b7;
     background: #0d1a12;
@@ -73,6 +73,7 @@ const html = `<!doctype html>
   }
   .text {
     flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 5px;
@@ -83,10 +84,11 @@ const html = `<!doctype html>
     gap: 8px;
   }
   .kanji {
-    font-size: 36px;
+    font-size: 28px;
     font-weight: 700;
     color: #6ee7b7;
     line-height: 1;
+    white-space: nowrap;
     text-shadow: 0 0 12px #6ee7b740;
   }
   .name-sub {
@@ -108,14 +110,14 @@ const html = `<!doctype html>
     white-space: nowrap;
   }
   .badge {
-    display: inline-block;
+    display: block;
     padding: 3px 8px;
     border: 1px solid #6ee7b7;
     border-radius: 4px;
     font-size: 9px;
     color: #6ee7b7;
     font-weight: 700;
-    align-self: flex-start;
+    text-align: center;
     background: #0d2d1c80;
   }
 </style>
@@ -131,7 +133,7 @@ const html = `<!doctype html>
       <div class="kanji">馬可無序</div>
       <div class="name-sub">
         <div class="ruby">まかむじょ</div>
-        <div class="en-name">MAKA Mujo — AI VTuber</div>
+        <div class="en-name">MAKA Mujo</div>
       </div>
     </div>
     <div class="badge">🎮 ニコニコ生放送で配信中</div>
