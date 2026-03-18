@@ -48,15 +48,16 @@ const html = `<!doctype html>
   .bg-glow {
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse 60% 80% at 20% 50%, #065f4640 0%, transparent 70%);
+    background: radial-gradient(ellipse 70% 90% at 18% 50%, #065f4660 0%, transparent 65%),
+                radial-gradient(ellipse 50% 60% at 75% 50%, #0d2d1c40 0%, transparent 70%);
     pointer-events: none;
   }
   .character {
     flex-shrink: 0;
-    width: 300px;
-    height: 300px;
+    width: 340px;
+    height: 340px;
     border-radius: 9999px;
-    border: 6px double #6ee7b7;
+    border: 7px double #6ee7b7;
     background: #0d1a12;
     overflow: hidden;
     display: flex;
@@ -76,14 +77,15 @@ const html = `<!doctype html>
     gap: 20px;
   }
   .name {
-    font-size: 96px;
+    font-size: 104px;
     font-weight: 700;
     color: #6ee7b7;
     line-height: 1.1;
     ruby-position: under;
+    text-shadow: 0 0 30px #6ee7b740;
   }
   .name ruby rt {
-    font-size: 24px;
+    font-size: 26px;
     color: #a7f3d0;
   }
   .en-name {
@@ -93,22 +95,23 @@ const html = `<!doctype html>
     letter-spacing: 0.06em;
   }
   .tagline {
-    font-size: 22px;
+    font-size: 24px;
     line-height: 1.7;
-    color: #ecfdf5;
+    color: #d1fae5;
   }
   .tagline-line {
     display: inline-block;
   }
   .badge {
     display: inline-block;
-    padding: 6px 20px;
-    border: 2px solid #6ee7b7;
-    border-radius: 8px;
-    font-size: 18px;
+    padding: 14px 32px;
+    border: 3px solid #6ee7b7;
+    border-radius: 10px;
+    font-size: 28px;
     color: #6ee7b7;
     font-weight: 700;
     align-self: flex-start;
+    background: #0d2d1c80;
   }
 </style>
 </head>
