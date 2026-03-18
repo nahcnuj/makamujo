@@ -141,6 +141,7 @@ const browser = await chromium.launch();
 const page = await browser.newPage();
 await page.setViewportSize({ width: WIDTH, height: HEIGHT });
 await page.setContent(html, { waitUntil: "networkidle" });
+await page.evaluate(() => document.fonts.ready);
 await page.screenshot({ path: outputPath, type: "png" });
 await browser.close();
 
