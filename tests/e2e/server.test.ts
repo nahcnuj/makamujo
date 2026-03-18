@@ -62,7 +62,7 @@ describe("server", () => {
     const html = await res.text();
     expect(html).toContain("<title>馬可無序");
     expect(html).toContain('<div id="root">');
-    expect(html).toContain('<link rel="shortcut icon" href="/nc433974.png"');
+    expect(html).toMatch(/<link\b[^>]*\brel="icon"\b[^>]*\bhref="\/favicon-32x32\.png"\b/);
   });
 
   it("responds to /api/speech", async () => {
@@ -84,6 +84,12 @@ describe("server", () => {
 
   it("serves /nc433974.png", async () => {
     const res = await fetch(`${BASE_URL}/nc433974.png`);
+    expect(res.ok).toBeTrue();
+    expect(res.headers.get("content-type")).toStartWith("image/png");
+  });
+
+  it("serves /favicon-32x32.png", async () => {
+    const res = await fetch(`${BASE_URL}/favicon-32x32.png`);
     expect(res.ok).toBeTrue();
     expect(res.headers.get("content-type")).toStartWith("image/png");
   });
