@@ -62,6 +62,7 @@ describe("server", () => {
     const html = await res.text();
     expect(html).toContain("<title>馬可無序");
     expect(html).toContain('<div id="root">');
+    expect(html).toContain('<link rel="shortcut icon" href="/nc433974.png"');
   });
 
   it("responds to /api/speech", async () => {
