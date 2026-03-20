@@ -204,14 +204,16 @@ export class MakaMujo {
           this.#listenersStaleSince = undefined;
         }
         this.#streamState[state.type] = isLive ? {
-          type: 'live',
-          title,
-          start,
-          url,
-          total: {
-            listeners,
-            gift: typeof points?.gift === 'string' ? Number.parseFloat(points.gift) : points?.gift,
-            ad: typeof points?.ad === 'string' ? Number.parseFloat(points.ad) : points?.ad,
+          agt: { type: 'live' },
+          meta: {
+            title,
+            start,
+            url,
+            total: {
+              listeners,
+              gift: typeof points?.gift === 'string' ? Number.parseFloat(points.gift) : points?.gift,
+              ad: typeof points?.ad === 'string' ? Number.parseFloat(points.ad) : points?.ad,
+            },
           },
         } : undefined;
         break;

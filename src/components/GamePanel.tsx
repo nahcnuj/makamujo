@@ -23,7 +23,7 @@ export function GamePanel() {
   const { playing, streamState } = useAgentContext();
 
   const now = new Date();
-  const duration = new Date(now.getTime() - (streamState?.start ?? 0) + now.getTimezoneOffset() * 60_000);
+  const duration = new Date(now.getTime() - (streamState?.meta?.start ?? 0) + now.getTimezoneOffset() * 60_000);
 
   // console.log(playing);
   const Component = playing ? Games[playing.name].Component : () => undefined;
@@ -34,30 +34,30 @@ export function GamePanel() {
         {playing && <Component state={playing.state} />}
       </div>
       <div className="flex-none">
-        {streamState?.total && (
+        {streamState?.meta?.total && (
           <div className="text-right">
-            {streamState.total.listeners > 0 && (
+            {streamState.meta.total.listeners > 0 && (
               <div>
                 <HighlightOnChange timeout={5_000} classNameOnChanged="text-yellow-300">
                   {`${formatNumber(streamState.total.listeners)}🙎`}
                 </HighlightOnChange>
               </div>
             )}
-            {streamState.total.ad > 0 && (
+            {streamState.meta.total.ad > 0 && (
               <div>
                 <HighlightOnChange timeout={60_000} classNameOnChanged="text-yellow-300">
-                  {`${formatNumber(streamState.total.ad)}📣`}
+                  {`${formatNumber(streamState.meta.total.ad)}📣`}
                 </HighlightOnChange>
               </div>
             )}
-            {streamState.total.gift > 0 && (
+            {streamState.meta.total.gift > 0 && (
               <div>
                 <HighlightOnChange timeout={30_000} classNameOnChanged="text-yellow-300">
-                  {`${formatNumber(streamState.total.gift)}🎁`}
+                  {`${formatNumber(streamState.meta.total.gift)}🎁`}
                 </HighlightOnChange>
               </div>
             )}
-            {streamState.start && (
+            {streamState.meta.start && (
               <div>
                 {`${formatDuration(duration)}⏱️`}
               </div>

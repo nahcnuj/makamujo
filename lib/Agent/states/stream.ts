@@ -1,12 +1,17 @@
-export type StreamState =
-  | {
-    type: 'live'
-    title: string
-    url: string
-    start: number
-    total?: {
-        listeners: number
-        gift: number
-        ad: number
-    }
+import type { StreamState as AGTStreamState } from "automated-gameplay-transmitter";
+
+export type StreamMeta = {
+  title: string
+  url: string
+  start: number
+  total?: {
+    listeners: number
+    gift: number
+    ad: number
   }
+};
+
+export type StreamState = {
+  agt: AGTStreamState
+  meta?: StreamMeta
+};
