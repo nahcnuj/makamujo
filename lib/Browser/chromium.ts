@@ -14,7 +14,7 @@ export const create = async (
     height: 720,
   },
 ): Promise<Browser> => {
-  const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '600000', 10);
+  const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '60000', 10);
   const launchOpts = {
     ...(executablePath ? { executablePath } : { channel: 'chromium' }),
     headless: false,
