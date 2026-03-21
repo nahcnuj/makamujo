@@ -1,1 +1,1 @@
-export type { StreamState } from "./stream"
+export type { StreamState, AgentState } from "../State"
