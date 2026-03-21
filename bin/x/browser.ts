@@ -5,7 +5,7 @@ if (typeof Bun !== "undefined" && process.env.RUN_BROWSER_SCRIPT !== "1") {
   const { spawn } = await import("node:child_process");
   const { fileURLToPath } = await import("node:url");
   const script = fileURLToPath(import.meta.url);
-  const child = spawn("node", [script, ...process.argv.slice(2)], {
+  const child = spawn("node", ["--import", "tsx", script, ...process.argv.slice(2)], {
     stdio: "inherit",
     env: { ...process.env, RUN_BROWSER_SCRIPT: "1" },
   });
