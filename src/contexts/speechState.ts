@@ -9,7 +9,18 @@ export function updateSpeechState(
   setSpeech: (speech: string) => void,
   setSilent: (silent: boolean) => void,
 ): void {
-  setSilent(!!res.silent);
+  const isSilent = !!res.silent;
+
+  setSilent(isSilent);
+
+  if (isSilent) {
+    // When silent, hide prior speech so old text does not persist after silence ends.
+    if (currentSpeech !== '') {
+      setSpeech('');
+    }
+    return;
+  }
+
   const newSpeech = res.speech ? res.speech : currentSpeech;
   if (newSpeech !== currentSpeech) {
     setSpeech(newSpeech);
