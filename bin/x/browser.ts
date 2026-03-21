@@ -6,10 +6,11 @@ import { parseArgs } from "node:util";
 import { ServerGames as Games } from "../../lib/Agent/games/server";
 import { create } from "../../lib/Browser/chromium";
 import { createSender } from "../../lib/Browser/socket";
+import { getDefaultBrowserPath } from "../../lib/Browser/getDefaultBrowserPath";
 
 const { values: {
   file,
-  browser: executablePath,
+  browser: browserArg,
   lang,
   timeout: timeoutStr,
 } } = parseArgs({
@@ -21,7 +22,7 @@ const { values: {
     },
     browser: {
       type: 'string',
-      default: '/usr/bin/chromium',
+      default: getDefaultBrowserPath(),
     },
     lang: {
       type: 'string',
@@ -35,6 +36,7 @@ const { values: {
 });
 
 const timeout = Number.parseInt(timeoutStr, 10);
+const executablePath = (browserArg?.toString() ?? "").trim() || undefined;
 
 const browser = await create(executablePath, {
   width: 1280,

@@ -1,8 +1,8 @@
-import { Action, type State } from "automated-gameplay-transmitter";
+import { Action, type State, type AgentComment } from "automated-gameplay-transmitter";
+import { writeFileSync } from "node:fs";
 import { createReceiver } from "../Browser/socket";
 import { ServerGames as Games, type GameName } from "./games/server";
-import type { StreamState } from "./states";
-import { writeFileSync } from "node:fs";
+import type { AgentState } from "./State";
 
 export const SILENCE_THRESHOLD_MS = 5 * 60 * 1_000; // 5 minutes
 
@@ -32,9 +32,7 @@ export class MakaMujo {
     state: ReturnType<typeof Games[GameName]['sight']>
   }
 
-  #streamState: {
-    niconama?: StreamState
-  } = {}
+  #streamState?: AgentState;
 
   #lastListenerCount?: number;
   #listenersStaleSince?: Date;
@@ -104,9 +102,10 @@ export class MakaMujo {
     return this;
   }
 
-  listen(comments: Array<{ data: CommentData }>) {
+  listen(comments: AgentComment[]) {
     for (const { data } of comments) {
-      const comment = data.comment.normalize('NFC').trim();
+      const commentData = data as CommentData;
+      const comment = commentData.comment.normalize('NFC').trim();
       console.debug('[DEBUG]', 'comment', JSON.stringify(data, null, 0));
 
       // Update last comment timestamp for any received comment that counts as activity.
@@ -129,7 +128,7 @@ export class MakaMujo {
       let isAd = false; // FIXME
 
       if (data.userId === 'onecomme.system') {
-        if (data.comment === '「生放送クルーズさん」が引用を開始しました') {
+        if (commentData.comment === '「生放送クルーズさん」が引用を開始しました') {
           console.log('[INFO]', `niconama cruise is coming`);
           for (const text of [
             '生放送クルーズのみなさん、こんにちは',
@@ -142,16 +141,16 @@ export class MakaMujo {
           continue;
         }
 
-        if (data.comment.endsWith('広告しました')) {
+        if (commentData.comment.endsWith('広告しました')) {
           isAd = true;
-          const name = data.comment.slice(data.comment.indexOf('】') + '】'.length, data.comment.lastIndexOf('さんが'));
+          const name = commentData.comment.slice(commentData.comment.indexOf('】') + '】'.length, commentData.comment.lastIndexOf('さんが'));
 
           console.log('[INFO]', `AD ${name}`);
           this.speech(`${name}さん、広告ありがとうございます！`);
           continue;
         }
 
-        if (data.comment === '配信終了1分前です') {
+        if (commentData.comment === '配信終了1分前です') {
           console.log('[INFO]', 'announce the end of a stream...');
           for (const text of [
             'そろそろお別れのお時間です',
@@ -190,10 +189,11 @@ export class MakaMujo {
     this.#talkModel.learn(text);
   }
 
-  onAir(state?: StreamData) {
-    switch (state?.type) {
+  onAir(state: StreamData | unknown) {
+    const streamData = state as StreamData | undefined;
+    switch (streamData?.type) {
       case 'niconama': {
-        const { isLive, title, startTime: start, url, total: listeners, points } = state.data;
+        const { isLive, title, startTime: start, url, total: listeners, points } = streamData.data;
         if (isLive) {
           if (this.#lastListenerCount !== listeners) {
             this.#lastListenerCount = listeners;
@@ -203,15 +203,17 @@ export class MakaMujo {
           this.#lastListenerCount = undefined;
           this.#listenersStaleSince = undefined;
         }
-        this.#streamState[state.type] = isLive ? {
+        this.#streamState = isLive ? {
           type: 'live',
-          title,
-          start,
-          url,
-          total: {
-            listeners,
-            gift: typeof points?.gift === 'string' ? Number.parseFloat(points.gift) : points?.gift,
-            ad: typeof points?.ad === 'string' ? Number.parseFloat(points.ad) : points?.ad,
+          meta: {
+            title,
+            start,
+            url,
+            total: {
+              listeners,
+              gift: typeof points?.gift === 'string' ? Number.parseFloat(points.gift) : points?.gift,
+              ad: typeof points?.ad === 'string' ? Number.parseFloat(points.ad) : points?.ad,
+            },
           },
         } : undefined;
         break;
@@ -220,8 +222,8 @@ export class MakaMujo {
   }
 
   get speechable() {
-    const { niconama } = this.#streamState;
-    if (niconama !== undefined) {
+    const streamState = this.#streamState;
+    if (streamState !== undefined) {
       const now = Date.now();
       const listenersStale = this.#listenersStaleSince !== undefined &&
         (now - this.#listenersStaleSince.getTime()) >= SILENCE_THRESHOLD_MS;
@@ -240,6 +242,14 @@ export class MakaMujo {
   }
 
   get playing() {
+    return this.#playing;
+  }
+
+  get canSpeak() {
+    return this.speechable;
+  }
+
+  get currentGame() {
     return this.#playing;
   }
 

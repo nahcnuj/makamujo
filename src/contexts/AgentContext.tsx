@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, type PropsWithChildren } from "react";
 import type { Games } from "../../lib/Agent/games";
-import type { StreamState } from "../../lib/Agent/states";
+import type { StreamState } from "../../lib/Agent/State";
 import { useInterval } from "automated-gameplay-transmitter";
 import { updateSpeechState } from "./speechState";
 

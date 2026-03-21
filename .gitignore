@@ -141,3 +141,4 @@ vite.config.ts.timestamp-*
 # npm lock file (project uses bun)
 package-lock.json
 
+test-results

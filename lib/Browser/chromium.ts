@@ -14,23 +14,49 @@ export const create = async (
     height: 720,
   },
 ): Promise<Browser> => {
-  const browser = await chromium.launch({
-    ...(executablePath ?
-      {
-        executablePath,
-      } :
-      {
-        channel: 'chromium',
-      }),
+  const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '60000', 10);
+  const launchOpts = {
+    ...(executablePath ? { executablePath } : { channel: 'chromium' }),
     headless: false,
-
+    timeout: launchTimeout,
     // https://peter.sh/experiments/chromium-command-line-switches/
     args: [
       '--hide-scrollbars',
       '--window-size=1024,576', // It may be required by `--window-position`.
       '--window-position=1280,600',
     ],
+  };
+
+  const fallbackTimeout = 300000;
+
+  const cloneLaunchOpts = (base: typeof launchOpts) => ({
+    ...base,
+    args: [...base.args],
   });
+
+  const launchWith = async (baseOpts: typeof launchOpts) => {
+    const firstTryOpts = cloneLaunchOpts(baseOpts);
+    try {
+      return await chromium.launch(firstTryOpts);
+    } catch (firstErr) {
+      console.warn('[WARN]', 'chromium-extra launch failed, retrying with playwright.chromium', firstErr);
+      const fallbackOpts = cloneLaunchOpts(baseOpts);
+      return await playwright.chromium.launch(fallbackOpts);
+    }
+  };
+
+  let browser;
+  try {
+    browser = await launchWith(launchOpts);
+  } catch (err) {
+    if (launchTimeout < fallbackTimeout && err instanceof Error && /Timeout/.test(err.message)) {
+      console.warn('[WARN]', `launch timeout ${launchTimeout}ms exceeded, retrying with ${fallbackTimeout}ms`);
+      const fallbackOpts = { ...launchOpts, timeout: fallbackTimeout };
+      browser = await launchWith(fallbackOpts);
+    } else {
+      throw err;
+    }
+  }
 
   const ctx = await browser.newContext({
     viewport,
