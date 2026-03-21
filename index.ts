@@ -1,8 +1,9 @@
+import { createAgentApi } from "automated-gameplay-transmitter";
 import { serve } from "bun";
 import { readFileSync, writeFileSync } from "node:fs";
 import { setInterval } from "node:timers/promises";
 import { parseArgs } from "node:util";
-import { MakaMujo, MarkovChainModel, TTS, FallbackTTS } from "./lib/server";
+import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import * as index from "./routes/index";
 import App from "./src/index.html";
 
@@ -57,12 +58,13 @@ const tts = process.platform !== 'win32' ?
   })() :
   new FallbackTTS();
 
-let speech: string = '';
+const streamer = new MakaMujo(model, tts);
+const api = createAgentApi(streamer, { speech: '', silent: !streamer.speechable });
 
-const streamer = new MakaMujo(model, tts)
-  .onSpeech(async (text) => {
-    speech = text;
-  });
+streamer.onSpeech(async (text) => {
+  api.setSpeech(text);
+});
+
 streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
 
 const portNumber = parseInt(port ?? "7777", 10);
@@ -96,7 +98,7 @@ const server = serve({
           console.error('response data was unprocessed', comments);
           return Response.json({}, { status: 500 });
         }
-        streamer.listen(comments);
+        api.postComments(comments);
 
         if (modelFile) {
           try {
@@ -111,22 +113,18 @@ const server = serve({
     },
 
     '/api/speech': async () => {
-      return Response.json({
-        speech,
-        silent: !streamer.speechable,
-      });
+      return Response.json(api.getSpeech());
     },
 
     '/api/game': async () => {
-      // if (streamer.playing) console.debug('[DEBUG]', '/api/game', streamer.playing);
-      return Response.json(streamer.playing ?? {});
+      return Response.json(api.getGame() ?? {});
     },
 
     '/api/meta': {
-      GET: () => Response.json(streamer.streamState),
+      GET: () => Response.json(api.getStreamState()),
       POST: async (req) => {
         const body = await req.json();
-        streamer.onAir(body.data); // TODO
+        api.publishStreamState(body.data ?? body);
         return Response.json({});
       },
     },
