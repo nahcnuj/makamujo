@@ -172,8 +172,9 @@ test.describe("server", () => {
     const metaJson = await metaRes.json();
     expect(metaJson).toHaveProperty('niconama');
 
-    // agent.getStreamState returns nested { agt: { type:'live', ... }}
-    expect(metaJson.niconama).toHaveProperty('agt.type', 'live');
+    // agent.getStreamState returns { type:'live', meta:{...} }
+    expect(metaJson.niconama).toHaveProperty('type', 'live');
+    expect(metaJson.niconama).toHaveProperty('meta.title', 'IPC integration test');
 
     if (!process.platform.startsWith("win") && existsSync(ipcPath)) {
       unlinkSync(ipcPath);
