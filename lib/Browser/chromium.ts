@@ -27,12 +27,28 @@ export const create = async (
     ],
   };
 
+  const fallbackTimeout = 300000;
+
+  const launchWith = async (options: typeof launchOpts) => {
+    try {
+      return await chromium.launch(options);
+    } catch (firstErr) {
+      console.warn('[WARN]', 'chromium-extra launch failed, retrying with playwright.chromium', firstErr);
+      return await playwright.chromium.launch(options);
+    }
+  };
+
   let browser;
   try {
-    browser = await chromium.launch(launchOpts);
+    browser = await launchWith(launchOpts);
   } catch (err) {
-    console.warn('[WARN]', 'chromium-extra launch failed, retrying with playwright.chromium', err);
-    browser = await playwright.chromium.launch(launchOpts);
+    if (launchTimeout < fallbackTimeout && err instanceof Error && /Timeout/.test(err.message)) {
+      console.warn('[WARN]', `launch timeout ${launchTimeout}ms exceeded, retrying with ${fallbackTimeout}ms`);
+      const fallbackOpts = { ...launchOpts, timeout: fallbackTimeout };
+      browser = await launchWith(fallbackOpts);
+    } else {
+      throw err;
+    }
   }
 
   const ctx = await browser.newContext({
