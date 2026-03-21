@@ -14,23 +14,26 @@ export const create = async (
     height: 720,
   },
 ): Promise<Browser> => {
-  const browser = await chromium.launch({
-    ...(executablePath ?
-      {
-        executablePath,
-      } :
-      {
-        channel: 'chromium',
-      }),
+  const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '600000', 10);
+  const launchOpts = {
+    ...(executablePath ? { executablePath } : { channel: 'chromium' }),
     headless: false,
-
+    timeout: launchTimeout,
     // https://peter.sh/experiments/chromium-command-line-switches/
     args: [
       '--hide-scrollbars',
       '--window-size=1024,576', // It may be required by `--window-position`.
       '--window-position=1280,600',
     ],
-  });
+  };
+
+  let browser;
+  try {
+    browser = await chromium.launch(launchOpts);
+  } catch (err) {
+    console.warn('[WARN]', 'chromium-extra launch failed, retrying with playwright.chromium', err);
+    browser = await playwright.chromium.launch(launchOpts);
+  }
 
   const ctx = await browser.newContext({
     viewport,
