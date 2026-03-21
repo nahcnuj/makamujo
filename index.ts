@@ -59,10 +59,10 @@ const tts = process.platform !== 'win32' ?
   new FallbackTTS();
 
 const streamer = new MakaMujo(model, tts);
-const api = createAgentApi(streamer, { speech: '', silent: !streamer.speechable });
+const agent = createAgentApi(streamer);
 
 streamer.onSpeech(async (text) => {
-  api.setSpeech(text);
+  agent.setSpeech(text);
 });
 
 streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
@@ -98,7 +98,7 @@ const server = serve({
           console.error('response data was unprocessed', comments);
           return Response.json({}, { status: 500 });
         }
-        api.postComments(comments);
+        agent.postComments(comments);
 
         if (modelFile) {
           try {
@@ -113,18 +113,18 @@ const server = serve({
     },
 
     '/api/speech': async () => {
-      return Response.json(api.getSpeech());
+      return Response.json(agent.getSpeech());
     },
 
     '/api/game': async () => {
-      return Response.json(api.getGame() ?? {});
+      return Response.json(agent.getGame() ?? {});
     },
 
     '/api/meta': {
-      GET: () => Response.json(api.getStreamState()),
+      GET: () => Response.json(agent.getStreamState()),
       POST: async (req) => {
         const body = await req.json();
-        api.publishStreamState(body.data ?? body);
+        agent.publishStreamState(body.data ?? body);
         return Response.json({});
       },
     },
