@@ -121,7 +121,10 @@ const server = serve({
     },
 
     '/api/meta': {
-      GET: () => Response.json(agent.getStreamState()),
+      GET: () => {
+        const streamState = agent.getStreamState();
+        return Response.json({ niconama: streamState ?? {} });
+      },
       POST: async (req) => {
         const body = await req.json();
         agent.publishStreamState(body.data ?? body);

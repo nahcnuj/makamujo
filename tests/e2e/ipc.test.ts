@@ -2,19 +2,22 @@ import { test, expect } from "@playwright/test";
 import type { State } from "automated-gameplay-transmitter";
 import { join } from "node:path";
 import { unlinkSync, existsSync } from "node:fs";
-import { createReceiver as createReceiverFactory, createSender as createSenderFactory } from "../../lib/Browser/socket";
+import { createReceiverWithPath, createSenderWithPath } from "../../lib/Browser/socket";
 
-const TEST_SOCKET_PATH = join(process.cwd(), "var", "ipc-test.sock");
+const randomId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+const TEST_SOCKET_PATH = process.platform === "win32"
+  ? `\\\\.\\pipe\\makamujo-ipc-${randomId}`
+  : join(process.cwd(), "var", `ipc-test-${randomId}.sock`);
 
 test.describe("Browser IPC", () => {
   test.beforeEach(() => {
-    if (existsSync(TEST_SOCKET_PATH)) {
+    if (!process.platform.startsWith("win") && existsSync(TEST_SOCKET_PATH)) {
       unlinkSync(TEST_SOCKET_PATH);
     }
   });
 
   test.afterEach(() => {
-    if (existsSync(TEST_SOCKET_PATH)) {
+    if (!process.platform.startsWith("win") && existsSync(TEST_SOCKET_PATH)) {
       unlinkSync(TEST_SOCKET_PATH);
     }
   });
@@ -23,13 +26,13 @@ test.describe("Browser IPC", () => {
     let receivedAction: unknown = null;
     let receivedState: State | null = null;
 
-    const receiverFn = createReceiverFactory;
-    await receiverFn((state) => {
+    const receiver = await createReceiverWithPath(TEST_SOCKET_PATH);
+    await receiver((state) => {
       receivedState = state;
       return { name: 'noop' };
     });
 
-    const senderFn = await createSenderFactory;
+    const senderFn = await createSenderWithPath(TEST_SOCKET_PATH);
     const sender = await senderFn(async (action) => {
       receivedAction = action;
     });
