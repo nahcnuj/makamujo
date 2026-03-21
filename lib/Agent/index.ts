@@ -32,9 +32,7 @@ export class MakaMujo {
     state: ReturnType<typeof Games[GameName]['sight']>
   }
 
-  #streamState: {
-    niconama?: AgentState
-  } = {}
+  #streamState?: AgentState;
 
   #lastListenerCount?: number;
   #listenersStaleSince?: Date;
@@ -203,7 +201,7 @@ export class MakaMujo {
           this.#lastListenerCount = undefined;
           this.#listenersStaleSince = undefined;
         }
-        this.#streamState[state.type] = isLive ? {
+        this.#streamState = isLive ? {
           agtStreamState: { type: 'live' },
           meta: {
             title,
@@ -222,8 +220,8 @@ export class MakaMujo {
   }
 
   get speechable() {
-    const { niconama } = this.#streamState;
-    if (niconama !== undefined) {
+    const streamState = this.#streamState;
+    if (streamState !== undefined) {
       const now = Date.now();
       const listenersStale = this.#listenersStaleSince !== undefined &&
         (now - this.#listenersStaleSince.getTime()) >= SILENCE_THRESHOLD_MS;

@@ -39,7 +39,7 @@ export function GamePanel() {
             {streamState.meta.total.listeners > 0 && (
               <div>
                 <HighlightOnChange timeout={5_000} classNameOnChanged="text-yellow-300">
-                  {`${formatNumber(streamState.total.listeners)}🙎`}
+                  {`${formatNumber(streamState.meta.total.listeners)}🙎`}
                 </HighlightOnChange>
               </div>
             )}
