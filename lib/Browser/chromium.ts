@@ -29,12 +29,19 @@ export const create = async (
 
   const fallbackTimeout = 300000;
 
-  const launchWith = async (options: typeof launchOpts) => {
+  const cloneLaunchOpts = (base: typeof launchOpts) => ({
+    ...base,
+    args: [...base.args],
+  });
+
+  const launchWith = async (baseOpts: typeof launchOpts) => {
+    const firstTryOpts = cloneLaunchOpts(baseOpts);
     try {
-      return await chromium.launch(options);
+      return await chromium.launch(firstTryOpts);
     } catch (firstErr) {
       console.warn('[WARN]', 'chromium-extra launch failed, retrying with playwright.chromium', firstErr);
-      return await playwright.chromium.launch(options);
+      const fallbackOpts = cloneLaunchOpts(baseOpts);
+      return await playwright.chromium.launch(fallbackOpts);
     }
   };
 

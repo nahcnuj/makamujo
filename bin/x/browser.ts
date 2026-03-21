@@ -1,5 +1,27 @@
 #!/usr/bin/env bun
 
+if (typeof Bun !== "undefined" && process.env.RUN_BROWSER_SCRIPT !== "1") {
+  console.warn("[WARN] bun environment detected: re-launching under node for Playwright compatibility...");
+  const { spawn } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const script = fileURLToPath(import.meta.url);
+  const child = spawn("node", [script, ...process.argv.slice(2)], {
+    stdio: "inherit",
+    env: { ...process.env, RUN_BROWSER_SCRIPT: "1" },
+  });
+  const result = await new Promise<number>((resolve, reject) => {
+    child.on("exit", (code) => {
+      if (typeof code === "number") {
+        resolve(code);
+      } else {
+        resolve(0);
+      }
+    });
+    child.on("error", (err) => reject(err));
+  });
+  process.exit(result);
+}
+
 import { ActionResult } from "automated-gameplay-transmitter";
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
