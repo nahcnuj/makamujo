@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { spawn } from "child_process";
-import { existsSync, writeFileSync } from "fs";
+import { existsSync, writeFileSync, unlinkSync } from "fs";
+import { join } from "path";
+import { createReceiverWithPath, createSenderWithPath } from "../../lib/Browser/socket";
 
 const PORT = 17777;
 const BASE_URL = `http://localhost:${PORT}`;
@@ -119,6 +121,63 @@ test.describe("server", () => {
     const res = await request.get(`${BASE_URL}/favicon-32x32.png`);
     expect(res.ok()).toBeTruthy();
     expect(res.headers()['content-type']).toContain('image/png');
+  });
+
+  test("connects browser IPC to stream server and publishes /api/meta", async ({ request }) => {
+    const randomId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const ipcPath = process.platform === "win32"
+      ? `\\\\.\\pipe\\makamujo-ipc-${randomId}`
+      : join(process.cwd(), "var", `ipc-test-${randomId}.sock`);
+
+    if (!process.platform.startsWith("win") && existsSync(ipcPath)) {
+      unlinkSync(ipcPath);
+    }
+
+    let receivedState: unknown = null;
+    const receiver = createReceiverWithPath(ipcPath);
+    receiver((state) => {
+      receivedState = state;
+      // Mirror stream status into the running server via /api/meta (fire and forget)
+      void request.post(`${BASE_URL}/api/meta`, {
+        data: {
+          data: {
+            type: 'niconama',
+            data: {
+              isLive: true,
+              title: 'IPC integration test',
+              startTime: 0,
+              total: 0,
+              points: { gift: 0, ad: 0 },
+              url: (state as any)?.url ?? 'https://example.com',
+            },
+          },
+        },
+      }).catch(() => undefined);
+      return { name: 'noop' };
+    });
+
+    const senderFn = createSenderWithPath(ipcPath);
+    const sender = await senderFn(async () => {
+      // noop receiving from browser-side action
+    });
+
+    sender({ name: 'idle', url: 'https://example.com', state: { foo: 'bar' } });
+    await new Promise((r) => setTimeout(r, 400));
+
+    expect(receivedState).toEqual({ name: 'idle', url: 'https://example.com', state: { foo: 'bar' } });
+
+    const metaRes = await request.get(`${BASE_URL}/api/meta`);
+    expect(metaRes.ok()).toBeTruthy();
+
+    const metaJson = await metaRes.json();
+    expect(metaJson).toHaveProperty('niconama');
+
+    // agent.getStreamState returns nested { agt: { type:'live', ... }}
+    expect(metaJson.niconama).toHaveProperty('agt.type', 'live');
+
+    if (!process.platform.startsWith("win") && existsSync(ipcPath)) {
+      unlinkSync(ipcPath);
+    }
   });
 
   test("renders the app in a browser", async ({ page }) => {
