@@ -104,7 +104,7 @@ export class MakaMujo {
     return this;
   }
 
-  onSpeechComplete(cb: () => Promise<void> | void): MakaMujo {
+  onSpeechComplete(cb: () => Promise<void>): MakaMujo {
     this.#speechCompleteListeners.push(cb);
     return this;
   }

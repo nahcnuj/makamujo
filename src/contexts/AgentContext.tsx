@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, type PropsWithChildren } from "react";
 import type { Games } from "../../lib/Agent/games";
-import type { StreamState } from "../../lib/Agent/State";
+import type { AgentState } from "../../lib/Agent/State";
 import { useInterval } from "automated-gameplay-transmitter";
 import { updateSpeechState } from "./speechState";
 
@@ -13,7 +13,7 @@ type Data = {
     name: keyof typeof Games
     state: any
   }
-  streamState?: StreamState
+  streamState?: AgentState
 };
 
 const AgentContext = createContext<Data>({
@@ -27,7 +27,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
   const [speech, setSpeech] = useState('');
   const [silent, setSilent] = useState(false);
   const [playing, setPlaying] = useState<Data['playing']>();
-  const [streamState, setStreamState] = useState<StreamState>();
+  const [streamState, setStreamState] = useState<AgentState>();
 
   useInterval(100, async () => {
     const res = await fetch('/api/speech', { unix: './var/api-speech.sock' })
