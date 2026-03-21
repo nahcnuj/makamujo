@@ -156,3 +156,19 @@ describe('speechable', () => {
     expect(agent.speechable).toBeTrue();
   });
 });
+
+describe('speech completion hooks', () => {
+  it('calls onSpeechComplete after speech playback finishes', async () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    const speechListener = jest.fn(async () => {});
+    const completeListener = jest.fn(async () => {});
+
+    agent.onSpeech(speechListener);
+    agent.onSpeechComplete(completeListener);
+
+    await agent.speech('hello');
+
+    expect(speechListener).toHaveBeenCalledWith('hello');
+    expect(completeListener).toHaveBeenCalled();
+  });
+});

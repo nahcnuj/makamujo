@@ -61,8 +61,27 @@ const tts = process.platform !== 'win32' ?
 const streamer = new MakaMujo(model, tts);
 const agent = createAgentApi(streamer);
 
+let clearSpeechTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+
 streamer.onSpeech(async (text) => {
+  if (clearSpeechTimer) {
+    clearTimeout(clearSpeechTimer);
+    clearSpeechTimer = undefined;
+  }
   agent.setSpeech(text);
+});
+
+streamer.onSpeechComplete(async () => {
+  if (clearSpeechTimer) {
+    clearTimeout(clearSpeechTimer);
+  }
+  clearSpeechTimer = setTimeout(() => {
+    const speechState = agent.getSpeech();
+    if (!speechState.silent) {
+      agent.setSpeech('');
+    }
+    clearSpeechTimer = undefined;
+  }, 1000);
 });
 
 streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));

@@ -42,11 +42,11 @@ describe('updateSpeechState', () => {
       expect(setSpeech).toHaveBeenCalledWith('hello');
     });
 
-    it('does not call setSpeech when API returns an empty string', () => {
+    it('clears speech when API returns an empty string', () => {
       const setSpeech = mock((_: string) => {});
       const setSilent = mock((_: boolean) => {});
       updateSpeechState({ speech: '' }, 'old text', setSpeech, setSilent);
-      expect(setSpeech).not.toHaveBeenCalled();
+      expect(setSpeech).toHaveBeenCalledWith('');
     });
 
     it('does not call setSpeech when API response has no speech field', () => {

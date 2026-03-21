@@ -21,8 +21,10 @@ export function updateSpeechState(
     return;
   }
 
-  const newSpeech = res.speech ? res.speech : currentSpeech;
-  if (newSpeech !== currentSpeech) {
-    setSpeech(newSpeech);
+  if ('speech' in res) {
+    const newSpeech = res.speech;
+    if (newSpeech !== currentSpeech) {
+      setSpeech(newSpeech);
+    }
   }
 }

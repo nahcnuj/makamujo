@@ -25,6 +25,7 @@ export class MakaMujo {
 
   #speechPromise = Promise.resolve();
   #speechListeners: Array<(text: string) => Promise<void>> = [];
+  #speechCompleteListeners: Array<() => Promise<void>> = [];
 
   #browserState?: State;
   #playing?: {
@@ -92,6 +93,7 @@ export class MakaMujo {
         this.#tts.speech(text, { additionalHalfTone: 3, speakingRate: 1.2 }),
         ...this.#speechListeners.map(f => f(text)),
       ]);
+      await Promise.all(this.#speechCompleteListeners.map(f => Promise.resolve(f())));
     }).catch(() => Promise.resolve());
 
     await this.#speechPromise;
@@ -99,6 +101,11 @@ export class MakaMujo {
 
   onSpeech(cb: (text: string) => Promise<void>): MakaMujo {
     this.#speechListeners.push(cb);
+    return this;
+  }
+
+  onSpeechComplete(cb: () => Promise<void> | void): MakaMujo {
+    this.#speechCompleteListeners.push(cb);
     return this;
   }
 
