@@ -204,7 +204,7 @@ export class MakaMujo {
           this.#listenersStaleSince = undefined;
         }
         this.#streamState = isLive ? {
-          agtStreamState: { type: 'live' },
+          type: 'live',
           meta: {
             title,
             start,

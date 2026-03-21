@@ -11,9 +11,8 @@ export type StreamMeta = {
   }
 };
 
-export type AgentState = {
-  agtStreamState: AGTStreamState
+export type StreamState = AGTStreamState;
+
+export type AgentState = StreamState & {
   meta?: StreamMeta
 };
-
-export type StreamState = AgentState;
