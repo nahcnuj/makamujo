@@ -56,12 +56,12 @@ describe('updateSpeechState', () => {
       expect(setSpeech).not.toHaveBeenCalled();
     });
 
-    it('does not call setSpeech when agent is silent', () => {
+    it('resets speech when agent is silent', () => {
       const setSpeech = mock((_: string) => {});
       const setSilent = mock((_: boolean) => {});
       updateSpeechState({ speech: '', silent: true }, 'last spoken', setSpeech, setSilent);
       expect(setSilent).toHaveBeenCalledWith(true);
-      expect(setSpeech).not.toHaveBeenCalled();
+      expect(setSpeech).toHaveBeenCalledWith('');
     });
 
     it('calls both setSpeech and setSilent when speech and silent change together', () => {
