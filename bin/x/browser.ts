@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
 if (typeof Bun !== "undefined" && process.env.RUN_BROWSER_SCRIPT !== "1") {
   console.warn("[WARN] bun environment detected: re-launching under node for Playwright compatibility...");
