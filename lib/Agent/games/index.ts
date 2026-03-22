@@ -1,4 +1,4 @@
-import * as CookieClicker from "./org.dashnet.orteil/cookieclicker/server";
+import * as CookieClicker from "./org.dashnet.orteil/cookieclicker";
 
 export const Games = {
   CookieClicker,

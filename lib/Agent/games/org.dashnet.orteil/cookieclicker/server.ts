@@ -68,6 +68,3 @@ export const sight = (document: Document) => {
     timestamp: Date.now(),
   };
 };
-
-export { default as Component } from "./ReactComponent";
-export { solver } from "./solver";
