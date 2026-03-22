@@ -1,4 +1,4 @@
-import { Action, type State, type AgentComment } from "automated-gameplay-transmitter";
+import { Action, type AgentComment, type State } from "automated-gameplay-transmitter";
 import { writeFileSync } from "node:fs";
 import { createReceiver } from "../Browser/socket";
 import { Games, type GameName } from "./games";

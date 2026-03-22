@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createChromiumBrowser } from "../../lib/Browser/chromium";
+import { createChromiumBrowser } from "../../lib/Browser";
 
 test.describe("chromium Browser evaluate", () => {
   test("browser create evaluate() works with document", async () => {
