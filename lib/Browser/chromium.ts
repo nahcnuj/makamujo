@@ -7,7 +7,7 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
 export const chromium = $_.use(StealthPlugin());
 
-export const create = async (
+export const createChromiumBrowser = async (
   executablePath?: string,
   viewport: ViewportSize = {
     width: 1280,

@@ -3,7 +3,7 @@ import { spawn } from "child_process";
 import { existsSync, writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
 import { createReceiverWithPath, createSenderWithPath } from "../../lib/Browser/socket";
-import { create as createBrowser } from "../../lib/Browser/chromium";
+import { createChromiumBrowser as createBrowser } from "../../lib/Browser/chromium";
 
 const PORT = 17777;
 const BASE_URL = `http://localhost:${PORT}`;

@@ -3,9 +3,8 @@
 import { ActionResult } from "automated-gameplay-transmitter";
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
-import { Games } from "../../lib/Agent/games";
-import { create } from "../../lib/Browser/chromium";
-import { createSender } from "../../lib/Browser/socket";
+import { Games } from "../../lib/Agent";
+import { createChromiumBrowser, createSender } from "../../lib/Browser";
 import { getDefaultBrowserPath } from "../../lib/Browser/getDefaultBrowserPath";
 
 const { values: {
@@ -38,7 +37,7 @@ const { values: {
 const timeout = Number.parseInt(timeoutStr, 10);
 const executablePath = (browserArg?.toString() ?? "").trim() || undefined;
 
-const browser = await create(executablePath, {
+const browser = await createChromiumBrowser(executablePath, {
   width: 1280,
   height: 720 + 32 /* top bar */,
 });

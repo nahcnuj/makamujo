@@ -4,6 +4,8 @@ import { createReceiver } from "../Browser/socket";
 import { Games, type GameName } from "./games";
 import type { AgentState } from "./State";
 
+export { Games, type GameName };
+
 export const SILENCE_THRESHOLD_MS = 5 * 60 * 1_000; // 5 minutes
 
 const jaJP = new Intl.Locale('ja-JP');
