@@ -17,15 +17,24 @@ export const createChromiumBrowser = async (
 ): Promise<Browser> => {
   const path = executablePath ?? getDefaultBrowserPath();
   const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '60000', 10);
+
+  const envHeadless = process.env.CHROMIUM_HEADLESS ?? process.env.PLAYWRIGHT_HEADLESS;
+  const headless = envHeadless
+    ? /^(1|true)$/i.test(envHeadless)
+    : Boolean(process.env.CI || process.env.GITHUB_ACTIONS);
+
   const launchOpts = {
     ...(path ? { executablePath: path } : { channel: 'chromium' }),
-    headless: false,
+    headless,
     timeout: launchTimeout,
     // https://peter.sh/experiments/chromium-command-line-switches/
     args: [
       '--hide-scrollbars',
       '--window-size=1024,576', // It may be required by `--window-position`.
       '--window-position=1280,600',
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
     ],
   };
 
