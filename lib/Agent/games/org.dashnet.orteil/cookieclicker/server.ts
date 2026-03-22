@@ -1,18 +1,18 @@
-export const sight = (doc: Document) => {
+export const sight = (document: Document) => {
   const parseNumber = (text?: string): number =>
     text ? Number.parseFloat(text.replaceAll(',', '')) : Number.NaN;
 
-  const cookiesPerSecond = doc.getElementById('cookiesPerSecond');
+  const cookiesPerSecond = document.getElementById('cookiesPerSecond');
 
   const common = {
-    cookies: parseNumber(doc.getElementById('cookies')?.innerText.replaceAll(',', '')),
+    cookies: parseNumber(document.getElementById('cookies')?.innerText.replaceAll(',', '')),
     cps: parseNumber(cookiesPerSecond?.innerText.replaceAll(/[^0-9.e+]/g, '')),
     isWrinkled: cookiesPerSecond?.classList.contains('wrinkled') ?? false,
-    ascendNumber: parseNumber(doc.getElementById('ascendNumber')?.innerText.replaceAll(',', '')),
-    commentsText: doc.getElementById('commentsText')?.innerText,
+    ascendNumber: parseNumber(document.getElementById('ascendNumber')?.innerText.replaceAll(',', '')),
+    commentsText: document.getElementById('commentsText')?.innerText,
     store: {
       products: {
-        bulkMode: Array.from(doc.getElementsByClassName('storeBulkMode')).filter(({ classList }) =>
+        bulkMode: Array.from(document.getElementsByClassName('storeBulkMode')).filter(({ classList }) =>
           classList.contains('selected'),
         ).at(0)?.id.substring('storeBulk'.length).toLowerCase() as 'buy' | 'sell',
         items: [],
@@ -23,13 +23,13 @@ export const sight = (doc: Document) => {
     },
   };
 
-  const menu = doc.getElementById('menu');
+  const menu = document.getElementById('menu');
   if (!menu) {
     return {
       ...common,
-      url: doc.location.href,
-      title: doc.title,
-      selectedText: doc.getSelection()?.toString() ?? '',
+      url: document.location.href,
+      title: document.title,
+      selectedText: document.getSelection()?.toString() ?? '',
       timestamp: Date.now(),
     };
   }
@@ -62,9 +62,9 @@ export const sight = (doc: Document) => {
   return {
     ...common,
     statistics,
-    url: doc.location.href,
-    title: doc.title,
-    selectedText: doc.getSelection()?.toString() ?? '',
+    url: document.location.href,
+    title: document.title,
+    selectedText: document.getSelection()?.toString() ?? '',
     timestamp: Date.now(),
   };
 };
