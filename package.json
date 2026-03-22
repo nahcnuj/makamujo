@@ -11,7 +11,8 @@
     "test:e2e": "bunx playwright test tests/e2e --timeout=60000",
     "browser": "node --import tsx ./bin/x/browser.ts",
     "generate-ogp": "bun run scripts/generate-ogp.ts",
-    "generate-banner": "bun run scripts/generate-banner.ts"
+    "generate-banner": "bun run scripts/generate-banner.ts",
+    "png2svg": "bun run scripts/png2svg/index.ts"
   },
   "dependencies": {
     "@playwright/browser-chromium": "^1.57.0",
