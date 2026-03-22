@@ -54,8 +54,8 @@ const send = await createSender(async (action) => {
         let selectedText: string | undefined;
 
         try {
-          state = await browser.evaluate(sight);
-          selectedText = await browser.evaluate((doc: Document) => doc.getSelection()?.toString());
+          state = await browser.evaluate(() => sight(document));
+          selectedText = await browser.evaluate(() => document.getSelection()?.toString());
         } catch (err) {
           console.warn(err);
           state = undefined;

@@ -106,12 +106,8 @@ export const create = async (
       await page.locator(selector).getByRole(role as any).fill(value);
     },
 
-    evaluate: async <T>(f: (document: Document) => T): Promise<T | undefined> => {
-      const result = await page.evaluate(
-        (fn: (document: Document) => unknown) => fn(document),
-        f,
-      );
-      return result as T | undefined;
+    evaluate: async <T>(f: () => T): Promise<T | undefined> => {
+      return await page.evaluate(f as any) as T | undefined;
     },
 
     get url() { return page.url() },
