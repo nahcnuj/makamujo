@@ -4,6 +4,7 @@ import type { ViewportSize } from "playwright";
 import playwright from "playwright";
 import { chromium as $_ } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import { getDefaultBrowserPath } from "./getDefaultBrowserPath";
 
 export const chromium = $_.use(StealthPlugin());
 
@@ -14,9 +15,10 @@ export const createChromiumBrowser = async (
     height: 720,
   },
 ): Promise<Browser> => {
+  const path = executablePath ?? getDefaultBrowserPath();
   const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '60000', 10);
   const launchOpts = {
-    ...(executablePath ? { executablePath } : { channel: 'chromium' }),
+    ...(path ? { executablePath: path } : { channel: 'chromium' }),
     headless: false,
     timeout: launchTimeout,
     // https://peter.sh/experiments/chromium-command-line-switches/

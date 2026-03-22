@@ -5,7 +5,6 @@ import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { Games } from "../../lib/Agent";
 import { createChromiumBrowser, createSender } from "../../lib/Browser";
-import { getDefaultBrowserPath } from "../../lib/Browser/getDefaultBrowserPath";
 
 const { values: {
   file,
@@ -21,7 +20,7 @@ const { values: {
     },
     browser: {
       type: 'string',
-      default: getDefaultBrowserPath(),
+      default: undefined,
     },
     lang: {
       type: 'string',
