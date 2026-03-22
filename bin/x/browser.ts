@@ -3,7 +3,7 @@
 import { ActionResult } from "automated-gameplay-transmitter";
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
-import { ServerGames as Games } from "../../lib/Agent/games/server";
+import { Games } from "../../lib/Agent/games";
 import { create } from "../../lib/Browser/chromium";
 import { createSender } from "../../lib/Browser/socket";
 import { getDefaultBrowserPath } from "../../lib/Browser/getDefaultBrowserPath";
