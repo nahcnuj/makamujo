@@ -38,10 +38,21 @@ const { values: {
 const timeout = Number.parseInt(timeoutStr, 10);
 const executablePath = (browserArg?.toString() ?? "").trim() || undefined;
 
+type BrowserWithDocumentEval = {
+  open(url: string): Promise<void>;
+  close(): Promise<void>;
+  clickByText(text: string): Promise<void>;
+  clickByElementId(id: string): Promise<void>;
+  press(key: string, selector: string): Promise<void>;
+  fillByRole(value: string, role: string, selector: string): Promise<void>;
+  evaluate<T>(f: (doc: Document) => T): Promise<T | undefined>;
+  get url(): string;
+};
+
 const browser = await create(executablePath, {
   width: 1280,
   height: 720 + 32 /* top bar */,
-});
+}) as unknown as BrowserWithDocumentEval;
 
 const send = await createSender(async (action) => {
   // console.log('[DEBUG]', 'runner got', action);
@@ -50,13 +61,18 @@ const send = await createSender(async (action) => {
     switch (action.name) {
       case 'noop': {
         const { sight } = Games['CookieClicker'];
-        const [state, selectedText] = await Promise.all([
-          browser.evaluate(sight),
-          browser.evaluate(() => document.getSelection()?.toString()),
-        ]).catch((err) => {
+        let state: any;
+        let selectedText: string | undefined;
+
+        try {
+          state = await browser.evaluate(sight);
+          selectedText = await browser.evaluate((doc: Document) => doc.getSelection()?.toString());
+        } catch (err) {
           console.warn(err);
-          return [];
-        });
+          state = undefined;
+          selectedText = undefined;
+        }
+
         send({
           name: 'idle',
           url: browser.url,

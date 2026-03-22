@@ -107,7 +107,17 @@ export const create = async (
     },
 
     evaluate: async (f) => {
-      return await page.evaluate(f);
+      const fnString = f.toString();
+      return await page.evaluate(
+        (fn) => {
+          const evaluator = eval(`(${fn})`);
+          if (typeof evaluator !== 'function') {
+            return undefined;
+          }
+          return evaluator.length > 0 ? evaluator(document) : evaluator();
+        },
+        fnString,
+      );
     },
 
     get url() { return page.url() },

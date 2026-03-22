@@ -22,7 +22,10 @@
     "noImplicitOverride": true,
 
     "baseUrl": ".",
-    "paths": {},
+    "paths": {
+      "automated-gameplay-transmitter": ["../automated-gameplay-transmitter/src/index.ts"],
+      "automated-gameplay-transmitter/*": ["../automated-gameplay-transmitter/src/*"]
+    },
 
     // Some stricter flags (disabled by default)
     "noUnusedLocals": false,
