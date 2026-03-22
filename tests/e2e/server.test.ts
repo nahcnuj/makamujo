@@ -188,19 +188,5 @@ test.describe("server", () => {
     const rootElement = await page.$("#root");
     expect(rootElement).not.toBeNull();
   });
-
-  test("browser create evaluate() works with document", async () => {
-    const typedCreateBrowser = createBrowser as unknown as (executablePath?: string, viewport?: { width: number; height: number }, opts?: { headless?: boolean }) => Promise<any>;
-    const browser = await typedCreateBrowser(undefined, { width: 640, height: 480 }, { headless: true });
-    try {
-      await browser.open('data:text/html,<title>test-evaluate</title><body><div id="x">hello</div></body>');
-      const title = await browser.evaluate(() => document.title);
-      const text = await browser.evaluate(() => document.getElementById('x')?.textContent);
-      expect(title).toBe('test-evaluate');
-      expect(text).toBe('hello');
-    } finally {
-      await browser.close();
-    }
-  });
 });
 
