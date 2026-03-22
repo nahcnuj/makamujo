@@ -1,4 +1,4 @@
-import { ServerGames } from "./server";
+import { ServerGames, type GameName } from "./server";
 
 export const Games = ServerGames;
-export type GameName = keyof typeof Games;
+export type { GameName };
