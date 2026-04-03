@@ -1,6 +1,7 @@
 import { Games } from "../../lib/Agent/games";
 import { useAgentContext } from "../contexts/AgentContext";
 import { HighlightOnChange } from "automated-gameplay-transmitter";
+import { AnalogClock } from "./AnalogClock";
 
 const formatDuration = (d: Date) =>
   `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
@@ -29,7 +30,16 @@ export function GamePanel() {
   const Component = playing ? Games[playing.name].Component : () => undefined;
 
   return (
-    <div className="h-full flex flex-col justify-between text-2xl/8">
+    <div className="relative h-full flex flex-col justify-between text-2xl/8">
+      <div className="absolute top-0 right-0 w-20 h-20 z-50">
+        <AnalogClock
+          backgroundColor="bg-emerald-950"
+          dialColor="#6ee7b7"
+          hourHandColor="#6ee7b7"
+          minuteHandColor="#a7f3d0"
+          secondHandColor="#f59e0b"
+        />
+      </div>
       <div className="flex-none">
         {playing && <Component state={playing.state} />}
       </div>
