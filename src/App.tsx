@@ -2,6 +2,7 @@ import { Box, Container, Layout } from "automated-gameplay-transmitter";
 import { GamePanel } from "./components/GamePanel";
 import { StreamerPanel } from "./components/StreamerPanel";
 import { AgentProvider } from "./contexts/AgentContext";
+import { AnalogClock } from "./components/AnalogClock";
 import "./index.css";
 
 export function App() {
@@ -9,8 +10,19 @@ export function App() {
     <AgentProvider>
       <Layout count={10} span={8} className="bg-emerald-950/30 text-emerald-50 font-[Noto_Sans_CJK_JP] font-bold">
         <Container>
-          <div className="text-xs opacity-25">
-            {new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
+          <div className="relative h-full">
+            <div className="text-xs opacity-25">
+              {new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
+            </div>
+            <div className="absolute top-0 right-0 w-20 h-20 z-50">
+              <AnalogClock
+                backgroundColor="bg-emerald-950"
+                dialColor="#6ee7b7"
+                hourHandColor="#6ee7b7"
+                minuteHandColor="#a7f3d0"
+                secondHandColor="#f59e0b"
+              />
+            </div>
           </div>
         </Container>
         <Container>
