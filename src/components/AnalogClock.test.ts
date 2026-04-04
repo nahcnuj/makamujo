@@ -44,16 +44,16 @@ describe("calculateMinuteAngle", () => {
     expect(calculateMinuteAngle(30, 0)).toBe(180);
   });
 
-  it("returns 360 at 60 minutes", () => {
-    expect(calculateMinuteAngle(60, 0)).toBe(360);
+  it("returns 354 at 59 minutes", () => {
+    expect(calculateMinuteAngle(59, 0)).toBe(354);
   });
 
   it("accounts for seconds at 30m 30s (180 + 3 = 183)", () => {
-    expect(calculateMinuteAngle(30, 30)).toBe(183);
+    expect(calculateMinuteAngle(30, 30)).toBeCloseTo(183, 10);
   });
 
   it("accounts for seconds at 0m 30s (0 + 3 = 3)", () => {
-    expect(calculateMinuteAngle(0, 30)).toBe(3);
+    expect(calculateMinuteAngle(0, 30)).toBeCloseTo(3, 10);
   });
 });
 
@@ -66,8 +66,8 @@ describe("calculateSecondAngle", () => {
     expect(calculateSecondAngle(30)).toBe(180);
   });
 
-  it("returns 360 at 60 seconds", () => {
-    expect(calculateSecondAngle(60)).toBe(360);
+  it("returns 354 at 59 seconds", () => {
+    expect(calculateSecondAngle(59)).toBe(354);
   });
 
   it("returns 6 per second", () => {

@@ -67,7 +67,7 @@ export function AnalogClock({
   const secondAngle = calculateSecondAngle(seconds);
 
   return (
-    <div className={`w-full aspect-square z-50 ${backgroundColor}`}>
+    <div className={`relative w-full aspect-square z-50 ${backgroundColor}`}>
       <svg viewBox="0 0 100 100" className="w-full h-full">
         {/* Clock dial */}
         <circle cx="50" cy="50" r="48" fill="none" stroke={dialColor} strokeWidth="2" />
