@@ -4,6 +4,9 @@ export const sight = () => {
 
   const cookiesPerSecond = document.getElementById('cookiesPerSecond');
 
+  // Collects IDs of clickable elements only, because the Action API supports
+  // clicking by element ID (clickByElementId) or by text (clickByText),
+  // but not by arbitrary CSS selector.
   const clickableElementIds = (() => {
     const gameEl = document.getElementById('game');
     if (!gameEl) return [];
