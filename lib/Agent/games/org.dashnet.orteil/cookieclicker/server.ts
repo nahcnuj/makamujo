@@ -5,14 +5,13 @@ export const sight = () => {
   const cookiesPerSecond = document.getElementById('cookiesPerSecond');
 
   const clickableElementIds = (() => {
+    const gameEl = document.getElementById('game');
+    if (!gameEl) return [];
     const ids: string[] = [];
-    if (document.getElementById('bigCookie')) {
-      ids.push('bigCookie');
-    }
-    const shimmers = document.querySelectorAll('#shimmers .shimmer');
-    for (const shimmer of shimmers) {
-      if (shimmer.id) {
-        ids.push(shimmer.id);
+    for (const el of gameEl.querySelectorAll<HTMLElement>('[id]')) {
+      if (!el.id) continue;
+      if (window.getComputedStyle(el).cursor === 'pointer') {
+        ids.push(el.id);
       }
     }
     return ids;
