@@ -59,10 +59,56 @@ describe('solver', () => {
     expect(solve.next().done).toBeTrue();
   });
 
-  it('should click the big cookie in the idle state', () => {
+  it('should click a random clickable element in the idle state', () => {
+    const idleState = {
+      name: 'idle' as const,
+      url: 'https://orteil.dashnet.org/cookieclicker/',
+      state: { clickableElementIds: ['bigCookie'] },
+    };
+
     const solve = solver({ type: 'idle', count: 0 });
 
-    expectOk(solve, undefined).toEqual(Action.noop);
-    expectOk(solve, Action.noop).toEqual(Action.clickByElementId('bigCookie'));
+    expect(solve.next().value).toEqual(Action.noop);
+    expect(solve.next(idleState as any).value).toEqual(Action.clickByElementId('bigCookie'));
+  });
+
+  it('should click one of the available clickable elements', () => {
+    const idleState = {
+      name: 'idle' as const,
+      url: 'https://orteil.dashnet.org/cookieclicker/',
+      state: { clickableElementIds: ['bigCookie', 'shimmer1', 'shimmer2'] },
+    };
+
+    const solve = solver({ type: 'idle', count: 0 });
+
+    expect(solve.next().value).toEqual(Action.noop);
+    const clickAction = solve.next(idleState as any).value as any;
+    expect(clickAction).toHaveProperty('name', 'click');
+    expect(['bigCookie', 'shimmer1', 'shimmer2']).toContain(clickAction.target.id);
+  });
+
+  it('should fall back to clicking bigCookie when no clickable elements in state', () => {
+    const idleState = {
+      name: 'idle' as const,
+      url: 'https://orteil.dashnet.org/cookieclicker/',
+      state: { clickableElementIds: [] },
+    };
+
+    const solve = solver({ type: 'idle', count: 0 });
+
+    expect(solve.next().value).toEqual(Action.noop);
+    expect(solve.next(idleState as any).value).toEqual(Action.clickByElementId('bigCookie'));
+  });
+
+  it('should redirect to cookie clicker when navigated to another page', () => {
+    const wrongUrlState = {
+      name: 'idle' as const,
+      url: 'https://example.com/',
+    };
+
+    const solve = solver({ type: 'idle', count: 0 });
+
+    expect(solve.next().value).toEqual(Action.noop);
+    expect(solve.next(wrongUrlState as any).value).toEqual(Action.open('https://orteil.dashnet.org/cookieclicker/'));
   });
 });

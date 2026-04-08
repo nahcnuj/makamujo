@@ -4,7 +4,22 @@ export const sight = () => {
 
   const cookiesPerSecond = document.getElementById('cookiesPerSecond');
 
+  const clickableElementIds = (() => {
+    const ids: string[] = [];
+    if (document.getElementById('bigCookie')) {
+      ids.push('bigCookie');
+    }
+    const shimmers = document.querySelectorAll('#shimmers .shimmer');
+    for (const shimmer of shimmers) {
+      if (shimmer.id) {
+        ids.push(shimmer.id);
+      }
+    }
+    return ids;
+  })();
+
   const common = {
+    clickableElementIds,
     cookies: parseNumber(document.getElementById('cookies')?.innerText.replaceAll(',', '')),
     cps: parseNumber(cookiesPerSecond?.innerText.replaceAll(/[^0-9.e+]/g, '')),
     isWrinkled: cookiesPerSecond?.classList.contains('wrinkled') ?? false,
