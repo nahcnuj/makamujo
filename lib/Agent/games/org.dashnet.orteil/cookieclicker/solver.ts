@@ -80,12 +80,25 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
         break;
       }
       case 'idle': {
-        const actions = [
-          Action.noop,
-          Action.clickByElementId('bigCookie'),
-        ];
+        const noopResult = yield Action.noop;
+        if (noopResult.name === 'closed') {
+          state = { type: 'closed' };
+          break;
+        }
 
-        if (!(yield* runActions(actions))) break;
+        if (noopResult.name === 'idle' && !noopResult.url.startsWith('https://orteil.dashnet.org/cookieclicker/')) {
+          if (!(yield* runActions([Action.open('https://orteil.dashnet.org/cookieclicker/')]))) break;
+          break;
+        }
+
+        const sightData = noopResult.name === 'idle' ? noopResult.state : undefined;
+        const clickableElementIds = Array.isArray((sightData as any)?.clickableElementIds)
+          ? (sightData as any).clickableElementIds as string[]
+          : ['bigCookie'];
+        const candidateIds = clickableElementIds.length > 0 ? clickableElementIds : ['bigCookie'];
+        const targetId = candidateIds[Math.floor(Math.random() * candidateIds.length)]!;
+
+        if (!(yield* runActions([Action.clickByElementId(targetId)]))) break;
 
         state = state.count >= 1_000 ?
           {

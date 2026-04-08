@@ -4,7 +4,24 @@ export const sight = () => {
 
   const cookiesPerSecond = document.getElementById('cookiesPerSecond');
 
+  // Collects IDs of clickable elements only, because the Action API supports
+  // clicking by element ID (clickByElementId) or by text (clickByText),
+  // but not by arbitrary CSS selector.
+  const clickableElementIds = (() => {
+    const gameEl = document.getElementById('game');
+    if (!gameEl) return [];
+    const ids: string[] = [];
+    for (const el of gameEl.querySelectorAll<HTMLElement>('[id]')) {
+      if (!el.id) continue;
+      if (window.getComputedStyle(el).cursor === 'pointer') {
+        ids.push(el.id);
+      }
+    }
+    return ids;
+  })();
+
   const common = {
+    clickableElementIds,
     cookies: parseNumber(document.getElementById('cookies')?.innerText.replaceAll(',', '')),
     cps: parseNumber(cookiesPerSecond?.innerText.replaceAll(/[^0-9.e+]/g, '')),
     isWrinkled: cookiesPerSecond?.classList.contains('wrinkled') ?? false,
