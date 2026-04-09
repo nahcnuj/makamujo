@@ -125,4 +125,55 @@ describe('solver', () => {
     expect(solve.next().value).toEqual(Action.noop);
     expect(solve.next(wrongUrlState as any).value).toEqual(Action.open('https://orteil.dashnet.org/cookieclicker/'));
   });
+
+  it('should press ESC after a click fails in the idle state', () => {
+    const idleState = {
+      name: 'idle' as const,
+      url: 'https://orteil.dashnet.org/cookieclicker/',
+      state: { clickableElementIds: ['bigCookie'] },
+    };
+    const clickAction = Action.clickByElementId('bigCookie');
+
+    const solve = solver({ type: 'idle', count: 0 });
+
+    expect(solve.next().value).toEqual(Action.noop);
+    expect(solve.next(idleState as any).value).toEqual(clickAction);
+    expect(solve.next(ActionResult.error(clickAction) as any).value).toEqual({ name: 'press', key: 'Escape' });
+  });
+
+  it('should press ESC after the first click in save sequence fails', () => {
+    const optionsAction = Action.clickByText('オプション');
+
+    const solve = solver({ type: 'save' });
+
+    expect(solve.next().value).toEqual(optionsAction);
+    expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual({ name: 'press', key: 'Escape' });
+  });
+
+  it('should press ESC after the second click in save sequence fails', () => {
+    const optionsAction = Action.clickByText('オプション');
+    const exportAction = Action.clickByText('セーブをエクスポート');
+
+    const solve = solver({ type: 'save' });
+
+    expect(solve.next().value).toEqual(optionsAction);
+    expect(solve.next(ActionResult.ok(optionsAction) as any).value).toEqual(exportAction);
+    expect(solve.next(ActionResult.error(exportAction) as any).value).toEqual({ name: 'press', key: 'Escape' });
+  });
+
+  it('should set closed state when browser closes during ESC press after a click fails', () => {
+    const idleState = {
+      name: 'idle' as const,
+      url: 'https://orteil.dashnet.org/cookieclicker/',
+      state: { clickableElementIds: ['bigCookie'] },
+    };
+    const clickAction = Action.clickByElementId('bigCookie');
+
+    const solve = solver({ type: 'idle', count: 0 });
+
+    expect(solve.next().value).toEqual(Action.noop);
+    expect(solve.next(idleState as any).value).toEqual(clickAction);
+    expect(solve.next(ActionResult.error(clickAction) as any).value).toEqual({ name: 'press', key: 'Escape' });
+    expect(solve.next({ name: 'closed' } as any).done).toBeTrue();
+  });
 });
