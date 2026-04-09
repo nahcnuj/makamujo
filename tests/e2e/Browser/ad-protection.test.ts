@@ -4,6 +4,7 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { createPopupPageHandler, createRedirectToHomeHandler } from "../../../lib/Browser/chromium";
 
+/** Starts a minimal HTTP server on a random port and returns the server and its base URL. */
 function startLocalServer(): Promise<{ server: Server; baseUrl: string }> {
   return new Promise((resolve) => {
     const server = createServer((_req, res) => {
@@ -17,6 +18,7 @@ function startLocalServer(): Promise<{ server: Server; baseUrl: string }> {
   });
 }
 
+/** Stops the given HTTP server, returning a promise that resolves when the server is closed. */
 function stopLocalServer(server: Server): Promise<void> {
   return new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
 }
