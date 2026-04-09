@@ -31,6 +31,7 @@
 - 識別子の最初の単語はその性質によって以下の品詞の単語で始めること
   - 関数・メソッド: 動詞
   - 変数: 名詞句
+- Use only `as const` or `satisfies T` for narrowing types
 
 ## バージョン管理
 - コミットメッセージは Conventional Commit 形式
