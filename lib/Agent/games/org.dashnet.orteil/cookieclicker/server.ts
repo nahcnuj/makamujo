@@ -13,6 +13,7 @@ export const sight = () => {
     const ids: string[] = [];
     for (const el of gameEl.querySelectorAll<HTMLElement>('[id]')) {
       if (!el.id) continue;
+      if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true })) continue;
       const style = window.getComputedStyle(el);
       if (style.cursor !== 'pointer') continue;
       if (style.pointerEvents === 'none') continue;
