@@ -8,6 +8,7 @@ export type ElementLike = {
  * Collects the IDs of elements from `elements` that are eligible for click selection.
  * An element is eligible when it:
  *   - has a non-empty `id`,
+ *   - does not have an `id` starting with `ariaReader-` (ARIA live regions, not interactive),
  *   - is visible (passes `checkVisibility`),
  *   - has `cursor: pointer` computed style,
  *   - does not have `pointer-events: none`, and
@@ -21,6 +22,7 @@ export const collectClickableElementIds = (
   const ids: string[] = [];
   for (const el of elements) {
     if (!el.id) continue;
+    if (el.id.startsWith('ariaReader-')) continue;
     // checkVisibility is not available in some older browser builds; fall back to treating as visible.
     if (el.checkVisibility?.({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true }) === false) continue;
     const style = getComputedStyle(el);
@@ -140,6 +142,7 @@ export const sight = () => {
     const ids: string[] = [];
     for (const el of gameEl.querySelectorAll<HTMLElement>('[id]')) {
       if (!el.id) continue;
+      if (el.id.startsWith('ariaReader-')) continue;
       if (!isVisible(el)) continue;
       const style = window.getComputedStyle(el);
       if (style.cursor !== 'pointer') continue;
