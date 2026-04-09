@@ -4,6 +4,7 @@ import { solver } from "./solver";
 
 beforeAll(() => {
   console.debug = () => { };
+  console.error = () => { };
 });
 
 const expectOk = (solve: Generator, action: any) => expect(solve.next(ActionResult.ok(action)).value);
