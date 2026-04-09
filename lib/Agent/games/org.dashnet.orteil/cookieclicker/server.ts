@@ -1,3 +1,49 @@
+type ElementLike = {
+  readonly id: string;
+  readonly parentElement: ElementLike | null;
+  checkVisibility(opts: { opacityProperty?: boolean; visibilityProperty?: boolean; contentVisibilityAuto?: boolean }): boolean;
+};
+
+/**
+ * Collects the IDs of elements within `gameEl` that are eligible for click selection.
+ * An element is eligible when it:
+ *   - has a non-empty `id`,
+ *   - is visible (passes `checkVisibility`),
+ *   - has `cursor: pointer` computed style,
+ *   - does not have `pointer-events: none`, and
+ *   - has no clickable ancestor with an `id` (to avoid selecting decorative children).
+ */
+export const collectClickableElementIds = (
+  gameEl: { querySelectorAll(selector: string): Iterable<ElementLike> } & ElementLike,
+  getComputedStyle: (el: ElementLike) => Pick<CSSStyleDeclaration, 'cursor' | 'pointerEvents'>,
+): string[] => {
+  const ids: string[] = [];
+  for (const el of gameEl.querySelectorAll('[id]')) {
+    if (!el.id) continue;
+    if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true })) continue;
+    const style = getComputedStyle(el);
+    if (style.cursor !== 'pointer') continue;
+    if (style.pointerEvents === 'none') continue;
+
+    // Skip elements that merely inherit cursor:pointer from a clickable ancestor.
+    // Such elements (e.g. gardenTileIcon inside gardenTile, productPrice inside product)
+    // are decorative children of the true click target and would cause false positives.
+    let hasClickableAncestorWithId = false;
+    let ancestor = el.parentElement;
+    while (ancestor && ancestor !== gameEl) {
+      if (ancestor.id && getComputedStyle(ancestor).cursor === 'pointer') {
+        hasClickableAncestorWithId = true;
+        break;
+      }
+      ancestor = ancestor.parentElement;
+    }
+    if (hasClickableAncestorWithId) continue;
+
+    ids.push(el.id);
+  }
+  return ids;
+};
+
 export const sight = () => {
   const parseNumber = (text?: string): number =>
     text ? Number.parseFloat(text.replaceAll(',', '')) : Number.NaN;
@@ -10,31 +56,7 @@ export const sight = () => {
   const clickableElementIds = (() => {
     const gameEl = document.getElementById('game');
     if (!gameEl) return [];
-    const ids: string[] = [];
-    for (const el of gameEl.querySelectorAll<HTMLElement>('[id]')) {
-      if (!el.id) continue;
-      if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true })) continue;
-      const style = window.getComputedStyle(el);
-      if (style.cursor !== 'pointer') continue;
-      if (style.pointerEvents === 'none') continue;
-
-      // Skip elements that merely inherit cursor:pointer from a clickable ancestor.
-      // Such elements (e.g. gardenTileIcon inside gardenTile, productPrice inside product)
-      // are decorative children of the true click target and would cause false positives.
-      let hasClickableAncestorWithId = false;
-      let ancestor = el.parentElement;
-      while (ancestor && ancestor !== gameEl) {
-        if (ancestor.id && window.getComputedStyle(ancestor).cursor === 'pointer') {
-          hasClickableAncestorWithId = true;
-          break;
-        }
-        ancestor = ancestor.parentElement;
-      }
-      if (hasClickableAncestorWithId) continue;
-
-      ids.push(el.id);
-    }
-    return ids;
+    return collectClickableElementIds(gameEl as unknown as Parameters<typeof collectClickableElementIds>[0], window.getComputedStyle);
   })();
 
   const common = {
