@@ -92,6 +92,17 @@ describe('collectClickableElementIds', () => {
     collectClickableElementIds([el], boundary, makeGetComputedStyle(styles));
     expect(receivedOpts).toEqual([{ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true }]);
   });
+
+  it('includes an element when checkVisibility is not available (older browser fallback)', () => {
+    const boundary = makeBoundary();
+    const el: ElementLike = {
+      id: 'el',
+      parentElement: null,
+    };
+    const styles = new Map([[el, { cursor: 'pointer', pointerEvents: 'auto' }] as const]);
+    const result = collectClickableElementIds([el], boundary, makeGetComputedStyle(styles));
+    expect(result).toEqual(['el']);
+  });
 });
 
 const baseSightRawData: SightRawData = {

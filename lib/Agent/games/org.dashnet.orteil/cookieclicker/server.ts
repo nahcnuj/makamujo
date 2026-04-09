@@ -1,7 +1,7 @@
 export type ElementLike = {
   readonly id: string;
   readonly parentElement: ElementLike | null;
-  checkVisibility(opts: { opacityProperty?: boolean; visibilityProperty?: boolean; contentVisibilityAuto?: boolean }): boolean;
+  checkVisibility?(opts: { opacityProperty?: boolean; visibilityProperty?: boolean; contentVisibilityAuto?: boolean }): boolean;
 };
 
 /**
@@ -21,7 +21,8 @@ export const collectClickableElementIds = (
   const ids: string[] = [];
   for (const el of elements) {
     if (!el.id) continue;
-    if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true })) continue;
+    // checkVisibility is not available in some older browser builds; fall back to treating as visible.
+    if (el.checkVisibility?.({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true }) === false) continue;
     const style = getComputedStyle(el);
     if (style.cursor !== 'pointer') continue;
     if (style.pointerEvents === 'none') continue;
@@ -132,10 +133,14 @@ export const sight = () => {
   const clickableElementIds = (() => {
     const gameEl = document.getElementById('game');
     if (!gameEl) return [];
+    // checkVisibility is not available in some older browser builds; fall back to treating as visible.
+    const isVisible = (el: HTMLElement): boolean =>
+      typeof el.checkVisibility !== 'function'
+      || el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true });
     const ids: string[] = [];
     for (const el of gameEl.querySelectorAll<HTMLElement>('[id]')) {
       if (!el.id) continue;
-      if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true })) continue;
+      if (!isVisible(el)) continue;
       const style = window.getComputedStyle(el);
       if (style.cursor !== 'pointer') continue;
       if (style.pointerEvents === 'none') continue;
