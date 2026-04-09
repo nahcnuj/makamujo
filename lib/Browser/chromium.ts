@@ -4,26 +4,37 @@ import type { ViewportSize } from "playwright";
 import playwright from "playwright";
 import { chromium as $_ } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import { getDefaultBrowserPath } from "./getDefaultBrowserPath";
 
 export const chromium = $_.use(StealthPlugin());
 
-export const create = async (
+export const createChromiumBrowser = async (
   executablePath?: string,
   viewport: ViewportSize = {
     width: 1280,
     height: 720,
   },
 ): Promise<Browser> => {
+  const path = executablePath ?? getDefaultBrowserPath();
   const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '60000', 10);
+
+  const envHeadless = process.env.CHROMIUM_HEADLESS ?? process.env.PLAYWRIGHT_HEADLESS;
+  const headless = envHeadless
+    ? /^(1|true)$/i.test(envHeadless)
+    : Boolean(process.env.CI || process.env.GITHUB_ACTIONS);
+
   const launchOpts = {
-    ...(executablePath ? { executablePath } : { channel: 'chromium' }),
-    headless: false,
+    ...(path ? { executablePath: path } : { channel: 'chromium' }),
+    headless,
     timeout: launchTimeout,
     // https://peter.sh/experiments/chromium-command-line-switches/
     args: [
       '--hide-scrollbars',
       '--window-size=1024,576', // It may be required by `--window-position`.
       '--window-position=1280,600',
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
     ],
   };
 
@@ -106,8 +117,13 @@ export const create = async (
       await page.locator(selector).getByRole(role as any).fill(value);
     },
 
-    evaluate: async (f) => {
-      return await page.evaluate(f);
+    evaluate: async <T>(f: (document: Document) => T): Promise<T | undefined> => {
+      const documentHandle = await page.evaluateHandle(() => document);
+      try {
+        return await documentHandle.evaluate(f);
+      } finally {
+        await documentHandle.dispose();
+      }
     },
 
     get url() { return page.url() },

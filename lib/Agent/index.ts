@@ -1,8 +1,10 @@
-import { Action, type State, type AgentComment } from "automated-gameplay-transmitter";
+import { Action, type AgentComment, type State } from "automated-gameplay-transmitter";
 import { writeFileSync } from "node:fs";
 import { createReceiver } from "../Browser/socket";
-import { ServerGames as Games, type GameName } from "./games/server";
+import { Games, type GameName } from "./games";
 import type { AgentState } from "./State";
+
+export { Games };
 
 export const SILENCE_THRESHOLD_MS = 5 * 60 * 1_000; // 5 minutes
 

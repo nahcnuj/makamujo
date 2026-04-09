@@ -1,4 +1,4 @@
-export const sight = () => {
+export const sight = (document: Document) => {
   const parseNumber = (text?: string): number =>
     text ? Number.parseFloat(text.replaceAll(',', '')) : Number.NaN;
 
@@ -44,7 +44,7 @@ export const sight = () => {
   if (!menu) {
     return {
       ...common,
-      url: location.href,
+      url: document.location.href,
       title: document.title,
       selectedText: document.getSelection()?.toString() ?? '',
       timestamp: Date.now(),
@@ -79,12 +79,9 @@ export const sight = () => {
   return {
     ...common,
     statistics,
-    url: location.href,
+    url: document.location.href,
     title: document.title,
     selectedText: document.getSelection()?.toString() ?? '',
     timestamp: Date.now(),
   };
 };
-
-export { default as Component } from "./ReactComponent";
-export { solver } from "./solver";

@@ -16,4 +16,6 @@ jobs:
       - name: Install dependencies
         run: bun ci
       - name: Run E2E tests
+        env:
+          CHROMIUM_HEADLESS: 'true'
         run: bun run test:e2e

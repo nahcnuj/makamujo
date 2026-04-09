@@ -1,4 +1,4 @@
-{
+﻿{
   "compilerOptions": {
     // Environment setup & latest features
     "lib": ["ESNext", "DOM"],

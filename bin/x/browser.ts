@@ -3,10 +3,8 @@
 import { ActionResult } from "automated-gameplay-transmitter";
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
-import { ServerGames as Games } from "../../lib/Agent/games/server";
-import { create } from "../../lib/Browser/chromium";
-import { createSender } from "../../lib/Browser/socket";
-import { getDefaultBrowserPath } from "../../lib/Browser/getDefaultBrowserPath";
+import { Games } from "../../lib/Agent";
+import { createChromiumBrowser, createSender } from "../../lib/Browser";
 
 const { values: {
   file,
@@ -22,7 +20,7 @@ const { values: {
     },
     browser: {
       type: 'string',
-      default: getDefaultBrowserPath(),
+      default: undefined,
     },
     lang: {
       type: 'string',
@@ -38,7 +36,7 @@ const { values: {
 const timeout = Number.parseInt(timeoutStr, 10);
 const executablePath = (browserArg?.toString() ?? "").trim() || undefined;
 
-const browser = await create(executablePath, {
+const browser = await createChromiumBrowser(executablePath, {
   width: 1280,
   height: 720 + 32 /* top bar */,
 });
@@ -50,13 +48,18 @@ const send = await createSender(async (action) => {
     switch (action.name) {
       case 'noop': {
         const { sight } = Games['CookieClicker'];
-        const [state, selectedText] = await Promise.all([
-          browser.evaluate(sight),
-          browser.evaluate(() => document.getSelection()?.toString()),
-        ]).catch((err) => {
+        let state: any;
+        let selectedText: string | undefined;
+
+        try {
+          state = await browser.evaluate(() => sight(document));
+          selectedText = await browser.evaluate(() => document.getSelection()?.toString());
+        } catch (err) {
           console.warn(err);
-          return [];
-        });
+          state = undefined;
+          selectedText = undefined;
+        }
+
         send({
           name: 'idle',
           url: browser.url,
