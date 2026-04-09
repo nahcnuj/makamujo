@@ -77,7 +77,13 @@ export const create = async (
     clickByText: async (text) => {
       const ls = page.getByText(text, { exact: true }).or(page.getByText(text));
       let retry = true;
+      let attempts = 0;
+      const maxAttempts = 5;
       do {
+        if (attempts >= maxAttempts) {
+          throw new Error(`clickByText: "${text}" not found or not clickable after ${maxAttempts} attempt(s)`);
+        }
+        attempts++;
         if (await ls.count() > 0) {
           console.debug('[DEBUG]', 'clickByText targets:', await ls.allInnerTexts());
           for (const l of await ls.all()) {
@@ -89,13 +95,16 @@ export const create = async (
               console.warn('[WARN]', err);
             }
           }
+          if (retry) {
+            await setTimeout(1_000);
+          }
         } else {
           await setTimeout(1_000);
         }
       } while (retry);
     },
     clickByElementId: async (id) => {
-      await page.locator(`#${id}`).click();
+      await page.locator(`#${id}`).click({ timeout: 5_000 });
     },
 
     press: async (key, selector) => {
