@@ -65,6 +65,18 @@ export const create = async (
 
   const page = await ctx.newPage();
 
+  const cookieclickerUrl = 'https://orteil.dashnet.org/cookieclicker/';
+
+  // Close any new tabs (e.g. ad popups) that open in the browser context.
+  ctx.on('page', createPopupPageHandler(page));
+
+  // If the main page navigates away from Cookie Clicker, redirect it back.
+  page.on('framenavigated', createRedirectToHomeHandler(
+    page.mainFrame(),
+    cookieclickerUrl,
+    (url) => page.goto(url, { waitUntil: 'domcontentloaded' }),
+  ));
+
   return {
     open: async (url: string) => {
       await page.goto(url, { waitUntil: 'domcontentloaded' });
@@ -121,4 +133,49 @@ export const create = async (
 
     get url() { return page.url() },
   } satisfies Browser;
+};
+
+type PageLike = { url(): string; close(): Promise<void> };
+
+/**
+ * Returns an event handler for the BrowserContext `page` event that immediately
+ * closes any page other than the designated main page (e.g. ad popup tabs).
+ */
+export const createPopupPageHandler = (mainPage: PageLike) =>
+  async (newPage: PageLike): Promise<void> => {
+    if (newPage !== mainPage) {
+      console.warn('[WARN]', 'Closing unexpected new tab:', newPage.url());
+      await newPage.close();
+    }
+  };
+
+type FrameLike = { url(): string };
+
+/**
+ * Returns an event handler for the Page `framenavigated` event that redirects
+ * the main frame back to `homeUrl` whenever it navigates to any other URL.
+ * A guard flag prevents multiple concurrent redirects from being queued.
+ */
+export const createRedirectToHomeHandler = (
+  mainFrame: FrameLike,
+  homeUrl: string,
+  redirectTo: (url: string) => Promise<void>,
+) => {
+  let isRedirecting = false;
+  return (frame: FrameLike): void => {
+    if (frame !== mainFrame) return;
+    const url = frame.url();
+    if (url === 'about:blank') return;
+    if (url.startsWith(homeUrl)) {
+      isRedirecting = false;
+      return;
+    }
+    if (isRedirecting) return;
+    isRedirecting = true;
+    console.warn('[WARN]', 'Main page navigated away from home, redirecting back:', url);
+    redirectTo(homeUrl).catch((redirectError) => {
+      isRedirecting = false;
+      console.warn('[WARN]', 'Failed to redirect back to home:', redirectError);
+    });
+  };
 };
