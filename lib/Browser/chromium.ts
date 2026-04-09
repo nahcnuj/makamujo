@@ -65,6 +65,35 @@ export const create = async (
 
   const page = await ctx.newPage();
 
+  const cookieclickerUrl = 'https://orteil.dashnet.org/cookieclicker/';
+
+  // Close any new tabs (e.g. ad popups) that open in the browser context.
+  ctx.on('page', async (newPage) => {
+    if (newPage !== page) {
+      console.warn('[WARN]', 'Closing unexpected new tab:', newPage.url());
+      await newPage.close();
+    }
+  });
+
+  // If the main page navigates away from Cookie Clicker, redirect it back.
+  let isRedirectingToCookieClicker = false;
+  page.on('framenavigated', (frame) => {
+    if (frame !== page.mainFrame()) return;
+    const url = frame.url();
+    if (url === 'about:blank') return;
+    if (url.startsWith(cookieclickerUrl)) {
+      isRedirectingToCookieClicker = false;
+      return;
+    }
+    if (isRedirectingToCookieClicker) return;
+    isRedirectingToCookieClicker = true;
+    console.warn('[WARN]', 'Main page navigated away from Cookie Clicker, redirecting back:', url);
+    page.goto(cookieclickerUrl, { waitUntil: 'domcontentloaded' }).catch((redirectError) => {
+      isRedirectingToCookieClicker = false;
+      console.warn('[WARN]', 'Failed to redirect back to Cookie Clicker:', redirectError);
+    });
+  });
+
   return {
     open: async (url: string) => {
       await page.goto(url, { waitUntil: 'domcontentloaded' });
