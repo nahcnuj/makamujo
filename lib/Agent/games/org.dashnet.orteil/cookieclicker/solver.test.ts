@@ -54,6 +54,20 @@ describe('solver', () => {
     }
   });
 
+  it('should continue initialization when optional steps fail', () => {
+    const solve = solver();
+
+    expect(solve.next().value).toHaveProperty('name', 'open');
+
+    // open succeeds
+    expect(solve.next(ActionResult.ok(undefined) as any).value).toEqual(Action.clickByText('日本語'));
+
+    // optional steps fail (e.g. dialogs not present) — initialization should continue
+    expect(solve.next(ActionResult.error(Action.clickByText('日本語')) as any).value).toEqual(Action.clickByText('Got it'));
+    expect(solve.next(ActionResult.error(Action.clickByText('Got it')) as any).value).toEqual(Action.clickByText('次回から表示しない'));
+    expect(solve.next(ActionResult.error(Action.clickByText('次回から表示しない')) as any).value).toEqual(Action.noop);
+  });
+
   it('should be done when got closed state', () => {
     const solve = solver({ type: 'closed' });
     expect(solve.next().done).toBeTrue();

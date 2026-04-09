@@ -52,15 +52,26 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
   while (state.type !== 'closed') {
     switch (state.type) {
       case 'initialize': {
-        const actions = [
-          Action.open('https://orteil.dashnet.org/cookieclicker/'),
+        if (!(yield* runActions([Action.open('https://orteil.dashnet.org/cookieclicker/')]))) break;
+
+        // These dialogs may not always appear (e.g. when already set or dismissed).
+        // Treat each as optional: continue initialization even if a step fails.
+        for (const action of [
           Action.clickByText('日本語'),
           Action.clickByText('Got it'),
           Action.clickByText('次回から表示しない'),
-        ];
+        ]) {
+          const result = yield action;
+          if (result.name === 'closed') {
+            state = { type: 'closed' };
+            break;
+          }
+        }
+
+        if (state.type === 'closed') break;
 
         if (state.data) {
-          actions.push(
+          if (!(yield* runActions([
             { name: 'press', key: 'Control+O' },
             {
               name: 'fill',
@@ -68,10 +79,8 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
               on: { selector: '#game', role: 'textbox' },
             },
             { name: 'press', key: 'Enter' },
-          );
+          ]))) break;
         }
-
-        if (!(yield* runActions(actions))) break;
 
         state = {
           type: 'idle',
