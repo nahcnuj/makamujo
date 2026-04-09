@@ -78,10 +78,10 @@ export const create = async (
       const ls = page.getByText(text, { exact: true }).or(page.getByText(text));
       let retry = true;
       let attempts = 0;
-      const maxAttempts = 30;
+      const maxAttempts = 5;
       do {
         if (attempts >= maxAttempts) {
-          throw new Error(`clickByText: "${text}" not found or not clickable after ${maxAttempts} attempts`);
+          throw new Error(`clickByText: "${text}" not found or not clickable after ${maxAttempts} attempt(s)`);
         }
         attempts++;
         if (await ls.count() > 0) {
