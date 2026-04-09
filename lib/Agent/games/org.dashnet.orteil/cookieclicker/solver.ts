@@ -39,6 +39,10 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
         if (result.name === 'result') {
           if (!result.succeeded) {
             console.error(`failed to`, result.action);
+            const escapeKeyPressResult = yield { name: 'press', key: 'Escape' } as const;
+            if (escapeKeyPressResult.name === 'closed') {
+              state = { type: 'closed' };
+            }
             return false;
           }
         } else {
