@@ -17,7 +17,7 @@ export const create = async (
   const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '60000', 10);
   const launchOpts = {
     ...(executablePath ? { executablePath } : { channel: 'chromium' }),
-    headless: false,
+    headless: process.env.CHROMIUM_HEADLESS === '1',
     timeout: launchTimeout,
     // https://peter.sh/experiments/chromium-command-line-switches/
     args: [

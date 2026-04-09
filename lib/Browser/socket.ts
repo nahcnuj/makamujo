@@ -9,9 +9,10 @@ if (!existsSync(unixSocketDir)) {
   mkdirSync(unixSocketDir, { recursive: true });
 }
 
-export const defaultSocketPath = process.platform === "win32"
-  ? "\\\\.\\pipe\\makamujo-ipc"
-  : join(unixSocketDir, "unix.sock");
+export const defaultSocketPath = process.env.MAKAMUJO_IPC_PATH
+  ?? (process.platform === "win32"
+    ? '\\\\.\\pipe\\makamujo-ipc'
+    : join(unixSocketDir, "unix.sock"));
 
 export const createSender = sender<State, Action.Action>(defaultSocketPath);
 export const createReceiver = receiver<State, Action.Action>(defaultSocketPath);
