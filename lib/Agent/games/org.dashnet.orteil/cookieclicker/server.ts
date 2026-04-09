@@ -13,9 +13,24 @@ export const sight = () => {
     const ids: string[] = [];
     for (const el of gameEl.querySelectorAll<HTMLElement>('[id]')) {
       if (!el.id) continue;
-      if (window.getComputedStyle(el).cursor === 'pointer') {
-        ids.push(el.id);
+      if (window.getComputedStyle(el).cursor !== 'pointer') continue;
+      if (window.getComputedStyle(el).pointerEvents === 'none') continue;
+
+      // Skip elements that merely inherit cursor:pointer from a clickable ancestor.
+      // Such elements (e.g. gardenTileIcon inside gardenTile, productPrice inside product)
+      // are decorative children of the true click target and would cause false positives.
+      let hasClickableAncestorWithId = false;
+      let ancestor = el.parentElement;
+      while (ancestor && ancestor !== gameEl) {
+        if (ancestor.id && window.getComputedStyle(ancestor).cursor === 'pointer') {
+          hasClickableAncestorWithId = true;
+          break;
+        }
+        ancestor = ancestor.parentElement;
       }
+      if (hasClickableAncestorWithId) continue;
+
+      ids.push(el.id);
     }
     return ids;
   })();
