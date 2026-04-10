@@ -17,17 +17,4 @@ jobs:
       - name: Install dependencies
         run: bun ci
       - name: Run E2E tests
-        shell: bash
-        run: |
-          for attempt in 1 2 3; do
-            if bun run test:e2e; then
-              exit 0
-            fi
-
-            if [ "$attempt" -lt 3 ]; then
-              echo "E2E tests failed on attempt $attempt. Retrying..."
-            fi
-          done
-
-          echo "E2E tests failed after 3 attempts."
-          exit 1
+        run: bun run test:e2e
