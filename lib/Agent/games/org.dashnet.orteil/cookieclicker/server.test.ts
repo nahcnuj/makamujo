@@ -151,7 +151,7 @@ describe('collectClickableElementIds', () => {
     expect(result).toEqual(['promptClose']);
   });
 
-  it('excludes elements not within the prompt boundary even if they are otherwise clickable', () => {
+  it('excludes clickable elements outside prompt boundary', () => {
     const promptBoundary = makeBoundary('prompt');
     const outsidePrompt = makeElement('bigCookie', { parentElement: null });
     const styles = new Map([
