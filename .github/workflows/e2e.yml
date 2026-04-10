@@ -21,14 +21,14 @@ jobs:
         id: e2e-1
         continue-on-error: true
         timeout-minutes: 3
-        run: bunx playwright test tests/e2e --timeout=60000
+        run: bun run test:e2e:ci
       - name: Run E2E tests (2/3)
         id: e2e-2
         if: steps.e2e-1.outcome != 'success'
         continue-on-error: true
         timeout-minutes: 3
-        run: bunx playwright test tests/e2e --timeout=60000
+        run: bun run test:e2e:ci
       - name: Run E2E tests (3/3)
         if: steps.e2e-1.outcome != 'success' && steps.e2e-2.outcome != 'success'
         timeout-minutes: 3
-        run: bunx playwright test tests/e2e --timeout=60000
+        run: bun run test:e2e:ci

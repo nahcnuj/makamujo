@@ -9,6 +9,7 @@
     "test": "bun test lib/ src/",
     "pretest:e2e": "bunx playwright install --with-deps chromium",
     "test:e2e": "bunx playwright test tests/e2e --timeout=60000",
+    "test:e2e:ci": "bunx playwright test tests/e2e --timeout=60000",
     "browser": "node --import tsx ./bin/x/browser.ts",
     "generate-ogp": "bun run scripts/generate-ogp.ts",
     "generate-banner": "bun run scripts/generate-banner.ts"
