@@ -16,13 +16,11 @@ jobs:
         uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: bun ci
-      - name: Install Playwright browsers
-        run: bunx playwright install --with-deps chromium
       - name: Run E2E tests
         shell: bash
         run: |
           for attempt in 1 2 3; do
-            if timeout 3m bun run test:e2e; then
+            if timeout 3m bash -c 'bunx playwright install --with-deps chromium && bun run test:e2e'; then
               exit 0
             fi
 
