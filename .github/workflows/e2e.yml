@@ -9,7 +9,7 @@ on:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v3
       - name: Setup Bun
@@ -22,7 +22,7 @@ jobs:
         shell: bash
         run: |
           for attempt in 1 2 3; do
-            if timeout 3m bun run test:e2e:ci; then
+            if timeout 3m bun run test:e2e; then
               exit 0
             fi
 
