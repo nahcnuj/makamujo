@@ -9,7 +9,7 @@ on:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v3
       - name: Setup Bun
@@ -20,7 +20,7 @@ jobs:
         shell: bash
         run: |
           for attempt in 1 2 3; do
-            if timeout 3m bash -c 'bunx playwright install --with-deps chromium && bun run test:e2e'; then
+            if bun run test:e2e; then
               exit 0
             fi
 
