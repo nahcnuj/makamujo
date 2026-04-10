@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from "bun:test";
 import { updateSpeechState } from "./speechState";
-import { applySpeechApiResponse, applyMetaApiResponse } from "./AgentContext";
+import { processSpeechApiResponse, processMetaApiResponse } from "./AgentContext";
 import type { AgentState } from "../../lib/Agent/State";
 
 describe('updateSpeechState', () => {
@@ -76,11 +76,11 @@ describe('updateSpeechState', () => {
   });
 });
 
-describe('applySpeechApiResponse', () => {
+describe('processSpeechApiResponse', () => {
   it('does not update state when res is null (fetch error)', () => {
     const setSpeech = mock((_: string) => {});
     const setSilent = mock((_: boolean) => {});
-    applySpeechApiResponse(null, 'currently displayed text', setSpeech, setSilent);
+    processSpeechApiResponse(null, 'currently displayed text', setSpeech, setSilent);
     expect(setSpeech).not.toHaveBeenCalled();
     expect(setSilent).not.toHaveBeenCalled();
   });
@@ -88,29 +88,29 @@ describe('applySpeechApiResponse', () => {
   it('updates speech state when res is a valid response', () => {
     const setSpeech = mock((_: string) => {});
     const setSilent = mock((_: boolean) => {});
-    applySpeechApiResponse({ speech: 'new speech', silent: false }, '', setSpeech, setSilent);
+    processSpeechApiResponse({ speech: 'new speech', silent: false }, '', setSpeech, setSilent);
     expect(setSpeech).toHaveBeenCalledWith('new speech');
     expect(setSilent).toHaveBeenCalledWith(false);
   });
 });
 
-describe('applyMetaApiResponse', () => {
+describe('processMetaApiResponse', () => {
   it('does not update state when res is null (fetch error)', () => {
     const setStreamState = mock((_: AgentState | undefined) => {});
-    applyMetaApiResponse(null, setStreamState);
+    processMetaApiResponse(null, setStreamState);
     expect(setStreamState).not.toHaveBeenCalled();
   });
 
   it('updates stream state when res contains niconama', () => {
     const setStreamState = mock((_: AgentState | undefined) => {});
     const niconama: AgentState = { type: 'live', meta: { title: 'test', url: 'https://example.com', start: 0 } };
-    applyMetaApiResponse({ niconama }, setStreamState);
+    processMetaApiResponse({ niconama }, setStreamState);
     expect(setStreamState).toHaveBeenCalledWith(niconama);
   });
 
   it('updates stream state to undefined when niconama is absent in res', () => {
     const setStreamState = mock((_: AgentState | undefined) => {});
-    applyMetaApiResponse({}, setStreamState);
+    processMetaApiResponse({}, setStreamState);
     expect(setStreamState).toHaveBeenCalledWith(undefined);
   });
 });

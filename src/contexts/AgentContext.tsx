@@ -28,7 +28,7 @@ export const useAgentContext = () => useContext(AgentContext);
  * When `res` is `null` (fetch failed), no state update is performed so that
  * the last displayed speech text is preserved across transient API errors.
  */
-export const applySpeechApiResponse = (
+export const processSpeechApiResponse = (
   res: { speech?: string; silent?: boolean } | null,
   currentSpeech: string,
   setSpeech: (speech: string) => void,
@@ -45,7 +45,7 @@ export const applySpeechApiResponse = (
  * When `res` is `null` (fetch failed), no state update is performed so that
  * the last displayed stream state is preserved across transient API errors.
  */
-export const applyMetaApiResponse = (
+export const processMetaApiResponse = (
   res: { niconama?: AgentState } | null,
   setStreamState: (state: AgentState | undefined) => void,
 ): void => {
@@ -68,7 +68,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
         console.warn('[WARN]', err);
         return null;
       });
-    applySpeechApiResponse(res, speech, setSpeech, setSilent);
+    processSpeechApiResponse(res, speech, setSpeech, setSilent);
   });
 
   useInterval(100, async () => {
@@ -87,7 +87,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
         console.warn('[WARN]', error);
         return null;
       });
-    applyMetaApiResponse(res, setStreamState);
+    processMetaApiResponse(res, setStreamState);
   });
 
   return (
