@@ -125,6 +125,30 @@ describe('collectClickableElementIds', () => {
     expect(result).toEqual([]);
   });
 
+  it('excludes elements inside #support', () => {
+    const boundary = makeBoundary();
+    const support = makeElement('support', { parentElement: boundary });
+    const child = makeElement('supportChild', { parentElement: support });
+    const styles = new Map([
+      [support, { cursor: 'pointer', pointerEvents: 'auto' }] as const,
+      [child, { cursor: 'pointer', pointerEvents: 'auto' }] as const,
+    ]);
+    const result = collectClickableElementIds([support, child], boundary, makeGetComputedStyle(styles));
+    expect(result).toEqual([]);
+  });
+
+  it('excludes elements inside #smallSupport', () => {
+    const boundary = makeBoundary();
+    const smallSupport = makeElement('smallSupport', { parentElement: boundary });
+    const child = makeElement('smallSupportChild', { parentElement: smallSupport });
+    const styles = new Map([
+      [smallSupport, { cursor: 'pointer', pointerEvents: 'auto' }] as const,
+      [child, { cursor: 'pointer', pointerEvents: 'auto' }] as const,
+    ]);
+    const result = collectClickableElementIds([smallSupport, child], boundary, makeGetComputedStyle(styles));
+    expect(result).toEqual([]);
+  });
+
   it('includes an element when checkVisibility is not available (older browser fallback)', () => {
     const boundary = makeBoundary();
     const el: ElementLike = {

@@ -10,6 +10,7 @@ export type ElementLike = {
  *   - has a non-empty `id`,
  *   - does not have an `id` starting with `ariaReader-` (ARIA live regions, not interactive),
  *   - does not have the `id` `httpsSwitch`, `prefsButton`, or `bakeryName` (settings-related UI, not gameplay),
+ *   - does not have the `id` `support` or `smallSupport`, and is not a descendant of either (ad/sponsor sections, not gameplay),
  *   - is a descendant of `boundary` (when `boundary` is non-null),
  *   - is visible (passes `checkVisibility`),
  *   - has `cursor: pointer` computed style,
@@ -28,6 +29,8 @@ export const collectClickableElementIds = (
     if (el.id === 'httpsSwitch') continue;
     if (el.id === 'prefsButton') continue;
     if (el.id === 'bakeryName') continue;
+    if (el.id === 'support') continue;
+    if (el.id === 'smallSupport') continue;
 
     // Skip elements that are not within the boundary.
     if (boundary !== null) {
@@ -41,6 +44,20 @@ export const collectClickableElementIds = (
         node = node.parentElement;
       }
       if (!isWithinBoundary) continue;
+    }
+
+    // Skip elements inside #support or #smallSupport (ad/sponsor sections, not gameplay).
+    {
+      let isInSupportSection = false;
+      let node: ElementLike | null = el.parentElement;
+      while (node !== null && node !== boundary) {
+        if (node.id === 'support' || node.id === 'smallSupport') {
+          isInSupportSection = true;
+          break;
+        }
+        node = node.parentElement;
+      }
+      if (isInSupportSection) continue;
     }
 
     // checkVisibility is not available in some older browser builds; fall back to treating as visible.
@@ -171,10 +188,25 @@ export const sight = () => {
       if (el.id === 'httpsSwitch') continue;
       if (el.id === 'prefsButton') continue;
       if (el.id === 'bakeryName') continue;
+      if (el.id === 'support') continue;
+      if (el.id === 'smallSupport') continue;
       if (!isVisible(el)) continue;
       const style = window.getComputedStyle(el);
       if (style.cursor !== 'pointer') continue;
       if (style.pointerEvents === 'none') continue;
+      // Skip elements inside #support or #smallSupport (ad/sponsor sections, not gameplay).
+      {
+        let isInSupportSection = false;
+        let node = el.parentElement;
+        while (node && node !== searchRoot) {
+          if (node.id === 'support' || node.id === 'smallSupport') {
+            isInSupportSection = true;
+            break;
+          }
+          node = node.parentElement;
+        }
+        if (isInSupportSection) continue;
+      }
       let hasClickableAncestorWithId = false;
       let ancestor = el.parentElement;
       while (ancestor && ancestor !== searchRoot) {
