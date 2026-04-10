@@ -31,12 +31,14 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
 
   useInterval(100, async () => {
     const res = await fetch('/api/speech', { unix: './var/api-speech.sock' })
-      .then(res => res.ok ? res.json() : { speech: '', silent: false })
+      .then(res => res.ok ? res.json() : null)
       .catch(err => {
         console.warn('[WARN]', err);
-        return { speech: '', silent: false };
+        return null;
       });
-    updateSpeechState(res, speech, setSpeech, setSilent);
+    if (res !== null) {
+      updateSpeechState(res, speech, setSpeech, setSilent);
+    }
   });
 
   useInterval(100, async () => {
@@ -49,11 +51,17 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
   });
 
   useInterval(100, async () => {
-    const { niconama } = await fetch('/api/meta', { unix: './var/api-meta.sock' })
-      .then(res => res.ok ? res.json() : { error: 'not ok' })
-      .catch(error => ({ error }));
-    // console.log(JSON.stringify(niconama, null, 2));
-    setStreamState(niconama);
+    const res = await fetch('/api/meta', { unix: './var/api-meta.sock' })
+      .then(res => res.ok ? res.json() : null)
+      .catch(error => {
+        console.warn('[WARN]', error);
+        return null;
+      });
+    if (res !== null) {
+      const { niconama } = res;
+      // console.log(JSON.stringify(niconama, null, 2));
+      setStreamState(niconama);
+    }
   });
 
   return (
