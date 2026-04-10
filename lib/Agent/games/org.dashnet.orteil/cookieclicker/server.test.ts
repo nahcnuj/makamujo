@@ -135,6 +135,33 @@ describe('collectClickableElementIds', () => {
     const result = collectClickableElementIds([el], boundary, makeGetComputedStyle(styles));
     expect(result).toEqual(['el']);
   });
+
+  // When a modal popup (#prompt) is open it is used as boundary instead of #game,
+  // so only elements inside the popup are collected.
+  it('includes only elements within the prompt boundary when a modal popup is open', () => {
+    const promptBoundary = makeBoundary('prompt');
+    const insidePrompt = makeElement('promptClose', { parentElement: promptBoundary });
+    const outsidePrompt = makeElement('bigCookie', { parentElement: null });
+    const styles = new Map([
+      [insidePrompt, { cursor: 'pointer', pointerEvents: 'auto' }] as const,
+      [outsidePrompt, { cursor: 'pointer', pointerEvents: 'auto' }] as const,
+    ]);
+    // Only insidePrompt is passed; sight() passes searchRoot.querySelectorAll elements
+    const result = collectClickableElementIds([insidePrompt], promptBoundary, makeGetComputedStyle(styles));
+    expect(result).toEqual(['promptClose']);
+  });
+
+  it('does not include elements outside the prompt boundary even if they are clickable', () => {
+    const promptBoundary = makeBoundary('prompt');
+    const outsidePrompt = makeElement('bigCookie', { parentElement: null });
+    const styles = new Map([
+      [outsidePrompt, { cursor: 'pointer', pointerEvents: 'auto' }] as const,
+    ]);
+    // sight() only passes elements from searchRoot.querySelectorAll, so outsidePrompt
+    // would never be in the iterable when the modal is open.
+    const result = collectClickableElementIds([], promptBoundary, makeGetComputedStyle(styles));
+    expect(result).toEqual([]);
+  });
 });
 
 const baseSightRawData: SightRawData = {
