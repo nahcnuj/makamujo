@@ -101,6 +101,22 @@ describe('collectClickableElementIds', () => {
     expect(result).toEqual([]);
   });
 
+  it('excludes httpsSwitch', () => {
+    const boundary = makeBoundary();
+    const el = makeElement('httpsSwitch');
+    const styles = new Map([[el, { cursor: 'pointer', pointerEvents: 'auto' }] as const]);
+    const result = collectClickableElementIds([el], boundary, makeGetComputedStyle(styles));
+    expect(result).toEqual([]);
+  });
+
+  it('excludes prefsButton', () => {
+    const boundary = makeBoundary();
+    const el = makeElement('prefsButton');
+    const styles = new Map([[el, { cursor: 'pointer', pointerEvents: 'auto' }] as const]);
+    const result = collectClickableElementIds([el], boundary, makeGetComputedStyle(styles));
+    expect(result).toEqual([]);
+  });
+
   it('includes an element when checkVisibility is not available (older browser fallback)', () => {
     const boundary = makeBoundary();
     const el: ElementLike = {
