@@ -100,7 +100,7 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
         }
 
         if (noopResult.name === 'idle' && !noopResult.url.startsWith('https://orteil.dashnet.org/cookieclicker/')) {
-          if (!(yield* runActions([Action.open('https://orteil.dashnet.org/cookieclicker/')]))) break;
+          state = { type: 'initialize' };
           break;
         }
 

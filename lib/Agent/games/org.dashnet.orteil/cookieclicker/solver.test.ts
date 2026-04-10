@@ -115,16 +115,20 @@ describe('solver', () => {
     expect(solve.next(idleState as any).value).toEqual(Action.clickByElementId('bigCookie'));
   });
 
-  it('should redirect to cookie clicker when navigated to another page', () => {
+  it('should restart from initialize when navigated to another page', () => {
     const wrongUrlState = {
       name: 'idle' as const,
       url: 'https://example.com/',
     };
+    const openAction = Action.open('https://orteil.dashnet.org/cookieclicker/');
 
     const solve = solver({ type: 'idle', count: 0 });
 
     expect(solve.next().value).toEqual(Action.noop);
-    expect(solve.next(wrongUrlState as any).value).toEqual(Action.open('https://orteil.dashnet.org/cookieclicker/'));
+    // When at wrong URL, transition to initialize state and open Cookie Clicker
+    expect(solve.next(wrongUrlState as any).value).toEqual(openAction);
+    // After opening, should proceed with initialization steps (not idle clicking)
+    expect(solve.next(ActionResult.ok(openAction) as any).value).toEqual(Action.clickByText('日本語'));
   });
 
   it('should press ESC after a click fails in the idle state', () => {
