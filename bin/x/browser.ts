@@ -49,6 +49,7 @@ const send = await createSender(async (action) => {
   try {
     switch (action.name) {
       case 'noop': {
+        await setTimeout(100);
         const { sight } = Games['CookieClicker'];
         const [state, selectedText] = await Promise.all([
           browser.evaluate(sight),
