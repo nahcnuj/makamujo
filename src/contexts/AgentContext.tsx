@@ -24,11 +24,11 @@ const AgentContext = createContext<Data>({
 export const useAgentContext = () => useContext(AgentContext);
 
 /**
- * Applies a speech API response to state.
+ * Updates speech state from an `/api/speech` response.
  * When `res` is `null` (fetch failed), no state update is performed so that
  * the last displayed speech text is preserved across transient API errors.
  */
-export const processSpeechApiResponse = (
+export const updateSpeechStateFromSpeechApiResponse = (
   res: { speech?: string; silent?: boolean } | null,
   currentSpeech: string,
   setSpeech: (speech: string) => void,
@@ -41,11 +41,11 @@ export const processSpeechApiResponse = (
 };
 
 /**
- * Applies a meta API response to state.
+ * Updates stream state from an `/api/meta` response.
  * When `res` is `null` (fetch failed), no state update is performed so that
  * the last displayed stream state is preserved across transient API errors.
  */
-export const processMetaApiResponse = (
+export const setStreamStateFromMetaApiResponse = (
   res: { niconama?: AgentState } | null,
   setStreamState: (state: AgentState | undefined) => void,
 ): void => {
@@ -68,7 +68,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
         console.warn('[WARN]', err);
         return null;
       });
-    processSpeechApiResponse(res, speech, setSpeech, setSilent);
+    updateSpeechStateFromSpeechApiResponse(res, speech, setSpeech, setSilent);
   });
 
   useInterval(100, async () => {
@@ -87,7 +87,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
         console.warn('[WARN]', error);
         return null;
       });
-    processMetaApiResponse(res, setStreamState);
+    setStreamStateFromMetaApiResponse(res, setStreamState);
   });
 
   return (
