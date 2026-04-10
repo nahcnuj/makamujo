@@ -38,7 +38,7 @@ describe('collectClickableElementIds', () => {
 
   it('includes a visible element with cursor:pointer', () => {
     const boundary = makeBoundary();
-    const el = makeElement('bigCookie');
+    const el = makeElement('bigCookie', { parentElement: boundary });
     const styles = new Map([[el, { cursor: 'pointer', pointerEvents: 'auto' }] as const]);
     const result = collectClickableElementIds([el], boundary, makeGetComputedStyle(styles));
     expect(result).toEqual(['bigCookie']);
@@ -46,7 +46,7 @@ describe('collectClickableElementIds', () => {
 
   it('excludes an element that fails checkVisibility (invisible)', () => {
     const boundary = makeBoundary();
-    const el = makeElement('hidden', { visible: false });
+    const el = makeElement('hidden', { visible: false, parentElement: boundary });
     const styles = new Map([[el, { cursor: 'pointer', pointerEvents: 'auto' }] as const]);
     const result = collectClickableElementIds([el], boundary, makeGetComputedStyle(styles));
     expect(result).toEqual([]);
@@ -54,7 +54,7 @@ describe('collectClickableElementIds', () => {
 
   it('excludes an element with pointer-events:none', () => {
     const boundary = makeBoundary();
-    const el = makeElement('noPE');
+    const el = makeElement('noPE', { parentElement: boundary });
     const styles = new Map([[el, { cursor: 'pointer', pointerEvents: 'none' }] as const]);
     const result = collectClickableElementIds([el], boundary, makeGetComputedStyle(styles));
     expect(result).toEqual([]);
@@ -62,7 +62,7 @@ describe('collectClickableElementIds', () => {
 
   it('excludes an element without cursor:pointer', () => {
     const boundary = makeBoundary();
-    const el = makeElement('noCursor');
+    const el = makeElement('noCursor', { parentElement: boundary });
     const styles = new Map([[el, { cursor: 'default', pointerEvents: 'auto' }] as const]);
     const result = collectClickableElementIds([el], boundary, makeGetComputedStyle(styles));
     expect(result).toEqual([]);
@@ -85,7 +85,7 @@ describe('collectClickableElementIds', () => {
     const boundary = makeBoundary();
     const el: ElementLike = {
       id: 'el',
-      parentElement: null,
+      parentElement: boundary,
       checkVisibility: (opts) => { receivedOpts.push(opts); return true; },
     };
     const styles = new Map([[el, { cursor: 'pointer', pointerEvents: 'auto' }] as const]);
@@ -129,11 +129,36 @@ describe('collectClickableElementIds', () => {
     const boundary = makeBoundary();
     const el: ElementLike = {
       id: 'el',
-      parentElement: null,
+      parentElement: boundary,
     };
     const styles = new Map([[el, { cursor: 'pointer', pointerEvents: 'auto' }] as const]);
     const result = collectClickableElementIds([el], boundary, makeGetComputedStyle(styles));
     expect(result).toEqual(['el']);
+  });
+
+  // When a modal popup (#prompt) is open it is used as boundary instead of #game,
+  // so only elements inside the popup are collected.
+  it('includes only elements within the prompt boundary when a modal popup is open', () => {
+    const promptBoundary = makeBoundary('prompt');
+    const insidePrompt = makeElement('promptClose', { parentElement: promptBoundary });
+    const outsidePrompt = makeElement('bigCookie', { parentElement: null });
+    const styles = new Map([
+      [insidePrompt, { cursor: 'pointer', pointerEvents: 'auto' }] as const,
+      [outsidePrompt, { cursor: 'pointer', pointerEvents: 'auto' }] as const,
+    ]);
+    // Pass both inside/outside candidates; only the descendant of the prompt boundary should be kept.
+    const result = collectClickableElementIds([insidePrompt, outsidePrompt], promptBoundary, makeGetComputedStyle(styles));
+    expect(result).toEqual(['promptClose']);
+  });
+
+  it('excludes clickable elements outside prompt boundary', () => {
+    const promptBoundary = makeBoundary('prompt');
+    const outsidePrompt = makeElement('bigCookie', { parentElement: null });
+    const styles = new Map([
+      [outsidePrompt, { cursor: 'pointer', pointerEvents: 'auto' }] as const,
+    ]);
+    const result = collectClickableElementIds([outsidePrompt], promptBoundary, makeGetComputedStyle(styles));
+    expect(result).toEqual([]);
   });
 });
 

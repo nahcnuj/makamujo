@@ -10,6 +10,7 @@ export type ElementLike = {
  *   - has a non-empty `id`,
  *   - does not have an `id` starting with `ariaReader-` (ARIA live regions, not interactive),
  *   - does not have the `id` `httpsSwitch`, `prefsButton`, or `bakeryName` (settings-related UI, not gameplay),
+ *   - is a descendant of `boundary` (when `boundary` is non-null),
  *   - is visible (passes `checkVisibility`),
  *   - has `cursor: pointer` computed style,
  *   - does not have `pointer-events: none`, and
@@ -27,6 +28,21 @@ export const collectClickableElementIds = (
     if (el.id === 'httpsSwitch') continue;
     if (el.id === 'prefsButton') continue;
     if (el.id === 'bakeryName') continue;
+
+    // Skip elements that are not within the boundary.
+    if (boundary !== null) {
+      let isWithinBoundary = false;
+      let node: ElementLike | null = el.parentElement;
+      while (node !== null) {
+        if (node === boundary) {
+          isWithinBoundary = true;
+          break;
+        }
+        node = node.parentElement;
+      }
+      if (!isWithinBoundary) continue;
+    }
+
     // checkVisibility is not available in some older browser builds; fall back to treating as visible.
     if (el.checkVisibility?.({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true }) === false) continue;
     const style = getComputedStyle(el);
@@ -139,12 +155,17 @@ export const sight = () => {
   const clickableElementIds = (() => {
     const gameEl = document.getElementById('game');
     if (!gameEl) return [];
-    // checkVisibility is not available in some older browser builds; fall back to treating as visible.
     const isVisible = (el: HTMLElement): boolean =>
-      typeof el.checkVisibility !== 'function'
-      || el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true });
+      typeof el.checkVisibility === 'function'
+        ? el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true })
+        // checkVisibility is not available in some older browser builds; fall back to bounding-rect check.
+        : el.getClientRects().length > 0;
+    // When a modal popup is open, restrict click targets to elements within the popup only.
+    // Elements outside an open popup are covered by the overlay and cannot actually be clicked.
+    const promptEl = document.getElementById('prompt');
+    const searchRoot = (promptEl !== null && isVisible(promptEl)) ? promptEl : gameEl;
     const ids: string[] = [];
-    for (const el of gameEl.querySelectorAll<HTMLElement>('[id]')) {
+    for (const el of searchRoot.querySelectorAll<HTMLElement>('[id]')) {
       if (!el.id) continue;
       if (el.id.startsWith('ariaReader-')) continue;
       if (el.id === 'httpsSwitch') continue;
@@ -156,7 +177,7 @@ export const sight = () => {
       if (style.pointerEvents === 'none') continue;
       let hasClickableAncestorWithId = false;
       let ancestor = el.parentElement;
-      while (ancestor && ancestor !== gameEl) {
+      while (ancestor && ancestor !== searchRoot) {
         if (ancestor.id && window.getComputedStyle(ancestor).cursor === 'pointer') {
           hasClickableAncestorWithId = true;
           break;
