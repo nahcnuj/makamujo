@@ -143,8 +143,12 @@ export const sight = () => {
     const isVisible = (el: HTMLElement): boolean =>
       typeof el.checkVisibility !== 'function'
       || el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true });
+    // When a modal popup is open, restrict click targets to elements within the popup only.
+    // Elements outside an open popup are covered by the overlay and cannot actually be clicked.
+    const promptEl = document.getElementById('prompt');
+    const searchRoot = (promptEl !== null && isVisible(promptEl)) ? promptEl : gameEl;
     const ids: string[] = [];
-    for (const el of gameEl.querySelectorAll<HTMLElement>('[id]')) {
+    for (const el of searchRoot.querySelectorAll<HTMLElement>('[id]')) {
       if (!el.id) continue;
       if (el.id.startsWith('ariaReader-')) continue;
       if (el.id === 'httpsSwitch') continue;
@@ -156,7 +160,7 @@ export const sight = () => {
       if (style.pointerEvents === 'none') continue;
       let hasClickableAncestorWithId = false;
       let ancestor = el.parentElement;
-      while (ancestor && ancestor !== gameEl) {
+      while (ancestor && ancestor !== searchRoot) {
         if (ancestor.id && window.getComputedStyle(ancestor).cursor === 'pointer') {
           hasClickableAncestorWithId = true;
           break;
