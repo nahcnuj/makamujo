@@ -23,6 +23,38 @@ const AgentContext = createContext<Data>({
 
 export const useAgentContext = () => useContext(AgentContext);
 
+/**
+ * Updates speech state from an `/api/speech` response.
+ * When `res` is `null` (fetch failed), no state update is performed so that
+ * the last displayed speech text is preserved across transient API errors.
+ */
+export const updateSpeechStateFromSpeechApiResponse = (
+  res: { speech?: string; silent?: boolean } | null,
+  currentSpeech: string,
+  setSpeech: (speech: string) => void,
+  setSilent: (silent: boolean) => void,
+): void => {
+  if (res === null) {
+    return;
+  }
+  updateSpeechState(res, currentSpeech, setSpeech, setSilent);
+};
+
+/**
+ * Updates stream state from an `/api/meta` response.
+ * When `res` is `null` (fetch failed), no state update is performed so that
+ * the last displayed stream state is preserved across transient API errors.
+ */
+export const setStreamStateFromMetaApiResponse = (
+  res: { niconama?: AgentState } | null,
+  setStreamState: (state: AgentState | undefined) => void,
+): void => {
+  if (res === null) {
+    return;
+  }
+  setStreamState(res.niconama);
+};
+
 export const AgentProvider = ({ children }: PropsWithChildren) => {
   const [speech, setSpeech] = useState('');
   const [silent, setSilent] = useState(false);
@@ -31,12 +63,12 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
 
   useInterval(100, async () => {
     const res = await fetch('/api/speech', { unix: './var/api-speech.sock' })
-      .then(res => res.ok ? res.json() : { speech: '', silent: false })
+      .then(res => res.ok ? res.json() : null)
       .catch(err => {
         console.warn('[WARN]', err);
-        return { speech: '', silent: false };
+        return null;
       });
-    updateSpeechState(res, speech, setSpeech, setSilent);
+    updateSpeechStateFromSpeechApiResponse(res, speech, setSpeech, setSilent);
   });
 
   useInterval(100, async () => {
@@ -49,11 +81,13 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
   });
 
   useInterval(100, async () => {
-    const { niconama } = await fetch('/api/meta', { unix: './var/api-meta.sock' })
-      .then(res => res.ok ? res.json() : { error: 'not ok' })
-      .catch(error => ({ error }));
-    // console.log(JSON.stringify(niconama, null, 2));
-    setStreamState(niconama);
+    const res = await fetch('/api/meta', { unix: './var/api-meta.sock' })
+      .then(res => res.ok ? res.json() : null)
+      .catch(error => {
+        console.warn('[WARN]', error);
+        return null;
+      });
+    setStreamStateFromMetaApiResponse(res, setStreamState);
   });
 
   return (
