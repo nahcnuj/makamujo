@@ -13,6 +13,7 @@ const { values: {
   browser: browserArg,
   lang,
   timeout: timeoutStr,
+  display,
 } } = parseArgs({
   options: {
     file: {
@@ -32,8 +33,15 @@ const { values: {
       type: 'string',
       default: (2 ** 31 - 1).toFixed(0),
     },
+    display: {
+      type: 'string',
+    },
   },
 });
+
+if (display) {
+  process.env.DISPLAY = display;
+}
 
 const timeout = Number.parseInt(timeoutStr, 10);
 const executablePath = (browserArg?.toString() ?? "").trim() || undefined;

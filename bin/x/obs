@@ -5,6 +5,18 @@ set -eu
 SCRIPT_PATH=$(dirname "$0")
 OBS_STUDIO="${SCRIPT_PATH}/../obs-studio"
 
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --display)
+      export DISPLAY="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
 "${OBS_STUDIO}" \
     --startstreaming \
     --disable-shutdown-check \
