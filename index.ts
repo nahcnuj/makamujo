@@ -18,6 +18,7 @@ const { values: {
   model: modelFile,
   data: dataFile,
   port,
+  'console-port': consolePort,
 } } = parseArgs({
   options: {
     model: {
@@ -35,6 +36,10 @@ const { values: {
       // parseArgs only supports 'string' and 'boolean'; convert to Number when using
       type: 'string',
       default: '7777',
+    },
+    'console-port': {
+      // parseArgs only supports 'string' and 'boolean'; convert to Number when using
+      type: 'string',
     },
   },
 });
@@ -167,6 +172,7 @@ console.log(`🚀 Server running at ${server.url}`);
 const consoleServer = serve(
   process.env.NODE_ENV !== "production" ?
     {
+      ...(consolePort !== undefined ? { port: parseInt(consolePort, 10) } : {}),
       routes: consoleRoutes.routes,
       development: {
         // Enable browser hot reloading in development

@@ -1,11 +1,11 @@
 import ConsoleApp from "../../console/src/index.html";
 
 export const routes = {
-  '/*': ConsoleApp,
+  '/console/*': ConsoleApp,
 
-  '/robots.txt': new Response('User-agent: *\nDisallow: /\n'),
+  '/console/robots.txt': new Response('User-agent: *\nDisallow: /\n'),
 
-  "/api/hello": {
+  "/console/api/hello": {
     async GET(req: Request) {
       console.debug(await req.text());
       return Response.json({
@@ -22,7 +22,7 @@ export const routes = {
     },
   },
 
-  "/api/hello/:name": async (req: Bun.BunRequest<"/api/hello/:name">) => {
+  "/console/api/hello/:name": async (req: Bun.BunRequest<"/console/api/hello/:name">) => {
     console.debug(await req.text());
     const name = req.params.name;
     return Response.json({
