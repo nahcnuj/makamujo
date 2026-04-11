@@ -16,6 +16,8 @@ jobs:
         uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: bun ci
+      - name: Allow binding to port 443 without root
+        run: sudo sysctl -w net.ipv4.ip_unprivileged_port_start=443
       - name: Generate self-signed TLS cert for console E2E tests
         run: |
           mkdir -p /tmp/certs

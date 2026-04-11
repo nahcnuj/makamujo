@@ -164,14 +164,13 @@ const server = serve({
 
 console.log(`🚀 Server running at ${server.url}`);
 
-const consolePort = parseInt(process.env.CONSOLE_PORT ?? "443");
 const consoleCertPath = process.env.CONSOLE_TLS_CERT ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem';
 const consoleKeyPath = process.env.CONSOLE_TLS_KEY ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem';
 
 let consoleServer: ReturnType<typeof serve> | null = null;
 try {
   consoleServer = serve({
-    port: consolePort,
+    port: 443,
     routes: consoleRoutes.routes,
     tls: {
       cert: Bun.file(consoleCertPath),
