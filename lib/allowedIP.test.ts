@@ -43,43 +43,43 @@ describe("AllowedIP", () => {
 describe("isIPAllowed", () => {
   beforeEach(() => {
     // Reset state before each test by setting an address that no real test case will match.
-    setAllowedIP(new AllowedIP("__reset__", "__reset__"));
+    setAllowedIP({ family: "__reset__", address: "__reset__" });
   });
 
   it("returns false when ip is null", () => {
-    setAllowedIP(new AllowedIP("IPv4", "10.0.0.1"));
+    setAllowedIP({ family: "IPv4", address: "10.0.0.1" });
     expect(isIPAllowed(null)).toBe(false);
   });
 
   it("returns false when ip is undefined", () => {
-    setAllowedIP(new AllowedIP("IPv4", "10.0.0.1"));
+    setAllowedIP({ family: "IPv4", address: "10.0.0.1" });
     expect(isIPAllowed(undefined)).toBe(false);
   });
 
   it("returns true when ip matches the allowed IP", () => {
-    setAllowedIP(new AllowedIP("IPv4", "10.0.0.1"));
-    expect(isIPAllowed(new AllowedIP("IPv4", "10.0.0.1"))).toBe(true);
+    setAllowedIP({ family: "IPv4", address: "10.0.0.1" });
+    expect(isIPAllowed({ family: "IPv4", address: "10.0.0.1" })).toBe(true);
   });
 
   it("returns false when address differs", () => {
-    setAllowedIP(new AllowedIP("IPv4", "10.0.0.1"));
-    expect(isIPAllowed(new AllowedIP("IPv4", "10.0.0.2"))).toBe(false);
+    setAllowedIP({ family: "IPv4", address: "10.0.0.1" });
+    expect(isIPAllowed({ family: "IPv4", address: "10.0.0.2" })).toBe(false);
   });
 
   it("returns false when family differs", () => {
-    setAllowedIP(new AllowedIP("IPv4", "::1"));
-    expect(isIPAllowed(new AllowedIP("IPv6", "::1"))).toBe(false);
+    setAllowedIP({ family: "IPv4", address: "::1" });
+    expect(isIPAllowed({ family: "IPv6", address: "::1" })).toBe(false);
   });
 
   it("returns true for IPv6 address when it matches", () => {
-    setAllowedIP(new AllowedIP("IPv6", "::1"));
-    expect(isIPAllowed(new AllowedIP("IPv6", "::1"))).toBe(true);
+    setAllowedIP({ family: "IPv6", address: "::1" });
+    expect(isIPAllowed({ family: "IPv6", address: "::1" })).toBe(true);
   });
 
   it("returns false for the old IP after setAllowedIP is called with a new IP", () => {
-    setAllowedIP(new AllowedIP("IPv4", "10.0.0.1"));
-    setAllowedIP(new AllowedIP("IPv4", "10.0.0.2"));
-    expect(isIPAllowed(new AllowedIP("IPv4", "10.0.0.1"))).toBe(false);
-    expect(isIPAllowed(new AllowedIP("IPv4", "10.0.0.2"))).toBe(true);
+    setAllowedIP({ family: "IPv4", address: "10.0.0.1" });
+    setAllowedIP({ family: "IPv4", address: "10.0.0.2" });
+    expect(isIPAllowed({ family: "IPv4", address: "10.0.0.1" })).toBe(false);
+    expect(isIPAllowed({ family: "IPv4", address: "10.0.0.2" })).toBe(true);
   });
 });

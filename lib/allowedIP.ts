@@ -30,17 +30,19 @@ export class AllowedIP {
 let allowedIP: AllowedIP | null = null;
 
 /**
- * Set the allowed IP address.
+ * Set the allowed IP address from a Bun `requestIP()` result.
+ * @param ip - An object with `family` and `address` properties, as returned by `server.requestIP()`.
  */
-export function setAllowedIP(ip: AllowedIP): void {
-  allowedIP = ip;
+export function setAllowedIP(ip: { family: string; address: string }): void {
+  allowedIP = AllowedIP.from(ip);
 }
 
 /**
  * Check if the given IP address is the currently allowed IP.
- * Returns false if no IP has been set yet or if the IP does not match.
+ * @param ip - An object with `family` and `address` properties, as returned by `server.requestIP()`, or null/undefined.
+ * @returns `false` if no IP has been set yet, if `ip` is null/undefined, or if the IP does not match; `true` otherwise.
  */
-export function isIPAllowed(ip: AllowedIP | null | undefined): boolean {
+export function isIPAllowed(ip: { family: string; address: string } | null | undefined): boolean {
   if (!allowedIP || !ip) return false;
-  return allowedIP.equals(ip);
+  return allowedIP.equals(new AllowedIP(ip.family, ip.address));
 }

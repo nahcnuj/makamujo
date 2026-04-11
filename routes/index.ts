@@ -1,4 +1,4 @@
-import { AllowedIP, setAllowedIP, isIPAllowed } from "../lib/allowedIP";
+import { setAllowedIP, isIPAllowed } from "../lib/allowedIP";
 
 export const POST: Bun.Serve.Handler<Bun.BunRequest, Bun.Server<unknown>, Response> = (req, server) => {
   const ip = server.requestIP(req);
@@ -6,7 +6,7 @@ export const POST: Bun.Serve.Handler<Bun.BunRequest, Bun.Server<unknown>, Respon
     console.error('[ERROR]', `No IP address is available in the request:`, JSON.stringify(req));
     return Response.json(undefined, { status: 404 });
   }
-  setAllowedIP(new AllowedIP(ip.family, ip.address));
+  setAllowedIP(ip);
   // console.debug('[DEBUG]', 'Connected from', client, 'at', new Date().toISOString());
   return new Response();
 };
@@ -16,7 +16,7 @@ export const PUT: Bun.Serve.Handler<Bun.BunRequest, Bun.Server<unknown>, Respons
   if (!ip) {
     return Response.json(undefined, { status: 404 });
   }
-  if (!isIPAllowed(AllowedIP.from(ip))) {
+  if (!isIPAllowed(ip)) {
     console.error('[ERROR]', `rejected request from ${ip.family}/${ip.address}`);
     return Response.json(undefined, { status: 404 });
   }
