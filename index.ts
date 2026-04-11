@@ -167,20 +167,17 @@ console.log(`🚀 Server running at ${server.url}`);
 const consoleServer = serve({
   port: 443,
   routes: consoleRoutes.routes,
-  ...(process.env.NODE_ENV === "production" ? {
-    tls: {
-      cert: Bun.file('/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem'),
-      key: Bun.file('/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem'),
-    },
-  } : {
-    development: {
-      // Enable browser hot reloading in development
-      hmr: true,
+  tls: {
+    cert: Bun.file('/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem'),
+    key: Bun.file('/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem'),
+  },
+  development: process.env.NODE_ENV !== "production" && {
+    // Enable browser hot reloading in development
+    hmr: true,
 
-      // Echo console logs from the browser to the server
-      console: true,
-    },
-  }),
+    // Echo console logs from the browser to the server
+    console: true,
+  },
 });
 
 console.log(`🚀 Console running at ${consoleServer.url}`);
