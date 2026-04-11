@@ -31,4 +31,9 @@ export class AllowedIP {
     if (!allowedIP) return false;
     return allowedIP.family === ip.family && allowedIP.address === ip.address;
   }
+
+  /** Clear the allowed IP, returning to the initial unset state. */
+  static clear(): void {
+    allowedIP = null;
+  }
 }

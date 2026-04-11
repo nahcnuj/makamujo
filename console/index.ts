@@ -40,44 +40,43 @@ export function startConsoleServer(): ConsoleServer {
 
   // Outer console server: exposed publicly on port 443.
   // Checks the client IP against the shared allowlist before proxying to the loopback server.
-  const outerServer = serve({
-    port: 443,
-    async fetch(req, server) {
-      const ip = server.requestIP(req);
-      if (!ip || !AllowedIP.equals(ip)) {
-        return Response.redirect(consoleRedirectURL, 302);
-      }
+  let outerServer: ReturnType<typeof serve>;
+  try {
+    outerServer = serve({
+      port: 443,
+      async fetch(req, server) {
+        const ip = server.requestIP(req);
+        if (!ip || !AllowedIP.equals(ip)) {
+          return Response.redirect(consoleRedirectURL, 302);
+        }
 
-      // Proxy to the loopback console server, which handles HTML bundling and routing.
-      const proxyURL = new URL(req.url);
-      proxyURL.protocol = 'http:';
-      proxyURL.hostname = '127.0.0.1';
-      proxyURL.port = String(loopbackConsolePort);
+        // Proxy to the loopback console server, which handles HTML bundling and routing.
+        const proxyURL = new URL(req.url);
+        proxyURL.protocol = 'http:';
+        proxyURL.hostname = '127.0.0.1';
+        proxyURL.port = String(loopbackConsolePort);
 
-      // Strip hop-by-hop and origin-specific headers that should not be forwarded as-is.
-      const proxyHeaders = new Headers(req.headers);
-      proxyHeaders.delete('host');
-      proxyHeaders.delete('origin');
-      proxyHeaders.delete('referer');
+        // Strip hop-by-hop and origin-specific headers that should not be forwarded as-is.
+        const proxyHeaders = new Headers(req.headers);
+        proxyHeaders.delete('host');
+        proxyHeaders.delete('origin');
+        proxyHeaders.delete('referer');
 
-      return fetch(proxyURL.toString(), {
-        method: req.method,
-        headers: proxyHeaders,
-        body: req.body,
-      });
-    },
-    tls: {
-      cert: Bun.file(consoleCertPath),
-      key: Bun.file(consoleKeyPath),
-    },
-    development: process.env.NODE_ENV !== "production" && {
-      // Enable browser hot reloading in development
-      hmr: true,
-
-      // Echo console logs from the browser to the server
-      console: true,
-    },
-  });
+        return fetch(proxyURL.toString(), {
+          method: req.method,
+          headers: proxyHeaders,
+          body: req.body,
+        });
+      },
+      tls: {
+        cert: Bun.file(consoleCertPath),
+        key: Bun.file(consoleKeyPath),
+      },
+    });
+  } catch (err) {
+    loopbackServer.stop(true);
+    throw err;
+  }
 
   return {
     get url() { return outerServer.url; },
