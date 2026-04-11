@@ -3,6 +3,7 @@ import { serve } from "bun";
 import { readFileSync, writeFileSync } from "node:fs";
 import { setInterval } from "node:timers/promises";
 import { parseArgs } from "node:util";
+import { isIPAllowed } from "./lib/allowedIP";
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import * as index from "./routes/index";
 import * as consoleRoutes from "./routes/console/index";
@@ -167,11 +168,50 @@ console.log(`🚀 Server running at ${server.url}`);
 const consoleCertPath = process.env.CONSOLE_TLS_CERT ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem';
 const consoleKeyPath = process.env.CONSOLE_TLS_KEY ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem';
 
+const consoleRedirectURL = 'https://live.nicovideo.jp/watch/user/14171889';
+
+// Inner console server: binds to loopback only and serves all console routes
+// (including HTML bundling). Not exposed to the public network.
+let innerConsoleServer: ReturnType<typeof serve> | null = null;
+
+// Outer console server: exposed publicly on port 443.
+// Checks the client IP against the shared allowlist before proxying to the inner server.
 let consoleServer: ReturnType<typeof serve> | null = null;
 try {
+  innerConsoleServer = serve({
+    port: 0, // OS assigns a random available port
+    hostname: '127.0.0.1',
+    routes: consoleRoutes.routes,
+    development: process.env.NODE_ENV !== "production" && {
+      // Enable browser hot reloading in development
+      hmr: true,
+
+      // Echo console logs from the browser to the server
+      console: true,
+    },
+  });
+
+  const innerConsolePort = innerConsoleServer.port;
+
   consoleServer = serve({
     port: 443,
-    routes: consoleRoutes.routes,
+    async fetch(req, server) {
+      const ip = server.requestIP(req);
+      if (!isIPAllowed(ip)) {
+        return Response.redirect(consoleRedirectURL, 302);
+      }
+
+      // Proxy to the inner console server, which handles HTML bundling and routing.
+      const proxyURL = new URL(req.url);
+      proxyURL.protocol = 'http:';
+      proxyURL.hostname = '127.0.0.1';
+      proxyURL.port = String(innerConsolePort);
+      return fetch(proxyURL.toString(), {
+        method: req.method,
+        headers: req.headers,
+        body: req.body,
+      });
+    },
     tls: {
       cert: Bun.file(consoleCertPath),
       key: Bun.file(consoleKeyPath),
@@ -209,6 +249,9 @@ function exitHandler(options: { cleanup: true; exit?: never } | { cleanup?: neve
     console.log('[INFO]', 'server stopping...');
     if (server) {
       server.stop(options.exit);
+    }
+    if (innerConsoleServer) {
+      innerConsoleServer.stop(options.exit);
     }
     if (consoleServer) {
       consoleServer.stop(options.exit);
