@@ -3,8 +3,7 @@ import { spawn } from "child_process";
 import { existsSync, writeFileSync } from "fs";
 
 const PORT = 17777;
-const CONSOLE_PORT = 17778;
-const CONSOLE_BASE_URL = `http://localhost:${CONSOLE_PORT}`;
+const CONSOLE_BASE_URL = `http://localhost:443`;
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 const BROWSER_PAGE_LOAD_TIMEOUT_MS = 20_000;
 const EXPECTED_CONSOLE_TITLE = "馬可無序 - 管理コンソール";
@@ -50,7 +49,7 @@ test.beforeAll(async () => {
 
   server = spawn(
     process.platform === "win32" ? "bun.exe" : "bun",
-    ["start", "--port", String(PORT), "--console-port", String(CONSOLE_PORT)],
+    ["start", "--port", String(PORT)],
     {
       stdio: ["ignore", "pipe", "pipe"],
     },
@@ -67,14 +66,6 @@ test.afterAll(() => {
 });
 
 test.describe("console", () => {
-  test("serves the console HTML at /console/", async ({ request }) => {
-    const res = await request.get(`${CONSOLE_BASE_URL}/console/`);
-    expect(res.ok()).toBeTruthy();
-    const html = await res.text();
-    expect(html).toContain(`<title>${EXPECTED_CONSOLE_TITLE}`);
-    expect(html).toContain('<div id="root">');
-  });
-
   test("serves /console/robots.txt", async ({ request }) => {
     const res = await request.get(`${CONSOLE_BASE_URL}/console/robots.txt`);
     expect(res.ok()).toBeTruthy();

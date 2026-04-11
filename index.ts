@@ -18,7 +18,6 @@ const { values: {
   model: modelFile,
   data: dataFile,
   port,
-  'console-port': consolePort,
 } } = parseArgs({
   options: {
     model: {
@@ -36,10 +35,6 @@ const { values: {
       // parseArgs only supports 'string' and 'boolean'; convert to Number when using
       type: 'string',
       default: '7777',
-    },
-    'console-port': {
-      // parseArgs only supports 'string' and 'boolean'; convert to Number when using
-      type: 'string',
     },
   },
 });
@@ -169,28 +164,24 @@ const server = serve({
 
 console.log(`🚀 Server running at ${server.url}`);
 
-const consoleServer = serve(
-  process.env.NODE_ENV !== "production" ?
-    {
-      ...(consolePort !== undefined ? { port: parseInt(consolePort, 10) } : {}),
-      routes: consoleRoutes.routes,
-      development: {
-        // Enable browser hot reloading in development
-        hmr: true,
-
-        // Echo console logs from the browser to the server
-        console: true,
-      },
-    } :
-    {
-      port: 443,
-      tls: {
-        cert: Bun.file('/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem'),
-        key: Bun.file('/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem'),
-      },
-      routes: consoleRoutes.routes,
+const consoleServer = serve({
+  port: 443,
+  routes: consoleRoutes.routes,
+  ...(process.env.NODE_ENV === "production" ? {
+    tls: {
+      cert: Bun.file('/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem'),
+      key: Bun.file('/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem'),
     },
-);
+  } : {
+    development: {
+      // Enable browser hot reloading in development
+      hmr: true,
+
+      // Echo console logs from the browser to the server
+      console: true,
+    },
+  }),
+});
 
 console.log(`🚀 Console running at ${consoleServer.url}`);
 
