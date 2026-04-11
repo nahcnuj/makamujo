@@ -6,19 +6,21 @@ const consoleCertPath = process.env.CONSOLE_TLS_CERT ?? '/etc/letsencrypt/live/x
 const consoleKeyPath = process.env.CONSOLE_TLS_KEY ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem';
 const consoleRedirectURL = process.env.CONSOLE_REDIRECT_URL ?? 'https://live.nicovideo.jp/watch/user/14171889';
 
-export type ConsoleServers = {
-  loopbackServer: ReturnType<typeof serve>;
-  outerServer: ReturnType<typeof serve>;
+export type ConsoleServer = {
+  readonly url: URL;
+  stop(closeActiveConnections?: boolean): void;
 };
 
 /**
- * Start the console servers.
+ * Start the console server.
  *
- * Two servers are used:
+ * Internally uses two servers:
  * - A loopback server that serves all console routes (including HTML bundling) on 127.0.0.1.
  * - An outer server on port 443 that enforces IP allowlist and proxies permitted requests to the loopback server.
+ *
+ * The returned handle exposes only the outer server's URL and a unified `stop()` method.
  */
-export function startConsoleServers(): ConsoleServers {
+export function startConsoleServer(): ConsoleServer {
   // Loopback console server: binds to 127.0.0.1 only and serves all console routes
   // (including HTML bundling). Not exposed to the public network.
   const loopbackServer = serve({
@@ -77,5 +79,11 @@ export function startConsoleServers(): ConsoleServers {
     },
   });
 
-  return { loopbackServer, outerServer };
+  return {
+    get url() { return outerServer.url; },
+    stop(closeActiveConnections?: boolean) {
+      loopbackServer.stop(closeActiveConnections);
+      outerServer.stop(closeActiveConnections);
+    },
+  };
 }

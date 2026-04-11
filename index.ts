@@ -3,7 +3,7 @@ import { serve } from "bun";
 import { readFileSync, writeFileSync } from "node:fs";
 import { setInterval } from "node:timers/promises";
 import { parseArgs } from "node:util";
-import { startConsoleServers } from "./console/index";
+import { startConsoleServer } from "./console/index";
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import * as index from "./routes/index";
 import App from "./src/index.html";
@@ -164,10 +164,10 @@ const server = serve({
 
 console.log(`🚀 Server running at ${server.url}`);
 
-let consoleServers: ReturnType<typeof startConsoleServers> | null = null;
+let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 try {
-  consoleServers = startConsoleServers();
-  console.log(`🚀 Console running at ${consoleServers.outerServer.url}`);
+  consoleServer = startConsoleServer();
+  console.log(`🚀 Console running at ${consoleServer.url}`);
 } catch (err) {
   throw err instanceof Error ? err : new Error(String(err));
 }
@@ -193,9 +193,8 @@ function exitHandler(options: { cleanup: true; exit?: never } | { cleanup?: neve
     if (server) {
       server.stop(options.exit);
     }
-    if (consoleServers) {
-      consoleServers.loopbackServer.stop(options.exit);
-      consoleServers.outerServer.stop(options.exit);
+    if (consoleServer) {
+      consoleServer.stop(options.exit);
     }
   }
 
