@@ -143,7 +143,6 @@ describe('solver', () => {
     expect(['bigCookie', 'shimmer1', 'shimmer2']).toContain(clickAction.target.id);
   });
 
-
   it('should restart from initialize when navigated to another page', () => {
     const wrongUrlState = {
       name: 'idle' as const,
