@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { ActionResult } from "automated-gameplay-transmitter";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { ServerGames as Games } from "../../lib/Agent/games/server";
@@ -48,6 +49,28 @@ if (display) {
 }
 if (xauthority) {
   process.env.XAUTHORITY = xauthority;
+} else if (display !== undefined) {
+  // When --display is given without --xauthority, try to auto-detect the
+  // Xauthority file from the owner of the X11 socket so that connections from
+  // a different login session (e.g. serial console as root) can authenticate.
+  const displayNum = display.replace(/^:/, '').replace(/\..*$/, '');
+  const socketPath = `/tmp/.X11-unix/X${displayNum}`;
+  try {
+    const { uid } = statSync(socketPath);
+    const passwdEntry = readFileSync('/etc/passwd', 'utf8')
+      .split('\n')
+      .find(line => {
+        const fields = line.split(':');
+        return fields.length >= 4 && parseInt(fields[2], 10) === uid;
+      });
+    if (passwdEntry !== undefined) {
+      const home = passwdEntry.split(':')[5];
+      const detectedXauth = `${home}/.Xauthority`;
+      if (existsSync(detectedXauth)) {
+        process.env.XAUTHORITY = detectedXauth;
+      }
+    }
+  } catch { /* auto-detection is best-effort */ }
 }
 
 const timeout = Number.parseInt(timeoutStr, 10);
