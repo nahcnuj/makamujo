@@ -167,18 +167,17 @@ console.log(`🚀 Server running at ${server.url}`);
 
 const consoleCertPath = process.env.CONSOLE_TLS_CERT ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem';
 const consoleKeyPath = process.env.CONSOLE_TLS_KEY ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem';
+const consoleRedirectURL = process.env.CONSOLE_REDIRECT_URL ?? 'https://live.nicovideo.jp/watch/user/14171889';
 
-const consoleRedirectURL = 'https://live.nicovideo.jp/watch/user/14171889';
-
-// Inner console server: binds to loopback only and serves all console routes
+// Loopback console server: binds to 127.0.0.1 only and serves all console routes
 // (including HTML bundling). Not exposed to the public network.
-let innerConsoleServer: ReturnType<typeof serve> | null = null;
+let loopbackConsoleServer: ReturnType<typeof serve> | null = null;
 
 // Outer console server: exposed publicly on port 443.
-// Checks the client IP against the shared allowlist before proxying to the inner server.
+// Checks the client IP against the shared allowlist before proxying to the loopback server.
 let consoleServer: ReturnType<typeof serve> | null = null;
 try {
-  innerConsoleServer = serve({
+  loopbackConsoleServer = serve({
     port: 0, // OS assigns a random available port
     hostname: '127.0.0.1',
     routes: consoleRoutes.routes,
@@ -191,7 +190,7 @@ try {
     },
   });
 
-  const innerConsolePort = innerConsoleServer.port;
+  const loopbackConsolePort = loopbackConsoleServer.port;
 
   consoleServer = serve({
     port: 443,
@@ -201,14 +200,21 @@ try {
         return Response.redirect(consoleRedirectURL, 302);
       }
 
-      // Proxy to the inner console server, which handles HTML bundling and routing.
+      // Proxy to the loopback console server, which handles HTML bundling and routing.
       const proxyURL = new URL(req.url);
       proxyURL.protocol = 'http:';
       proxyURL.hostname = '127.0.0.1';
-      proxyURL.port = String(innerConsolePort);
+      proxyURL.port = String(loopbackConsolePort);
+
+      // Strip hop-by-hop and origin-specific headers that should not be forwarded as-is.
+      const proxyHeaders = new Headers(req.headers);
+      proxyHeaders.delete('host');
+      proxyHeaders.delete('origin');
+      proxyHeaders.delete('referer');
+
       return fetch(proxyURL.toString(), {
         method: req.method,
-        headers: req.headers,
+        headers: proxyHeaders,
         body: req.body,
       });
     },
@@ -250,8 +256,8 @@ function exitHandler(options: { cleanup: true; exit?: never } | { cleanup?: neve
     if (server) {
       server.stop(options.exit);
     }
-    if (innerConsoleServer) {
-      innerConsoleServer.stop(options.exit);
+    if (loopbackConsoleServer) {
+      loopbackConsoleServer.stop(options.exit);
     }
     if (consoleServer) {
       consoleServer.stop(options.exit);

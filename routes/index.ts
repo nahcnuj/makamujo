@@ -14,10 +14,11 @@ export const POST: Bun.Serve.Handler<Bun.BunRequest, Bun.Server<unknown>, Respon
 
 export const PUT: Bun.Serve.Handler<Bun.BunRequest, Bun.Server<unknown>, Response> = async (req, server) => {
   const ip = server.requestIP(req);
+  if (!ip) {
+    return Response.json(undefined, { status: 404 });
+  }
   if (!isIPAllowed(ip)) {
-    if (ip) {
-      console.error('[ERROR]', `rejected request from ${ip.family}/${ip.address}`);
-    }
+    console.error('[ERROR]', `rejected request from ${ip.family}/${ip.address}`);
     return Response.json(undefined, { status: 404 });
   }
 
