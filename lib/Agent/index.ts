@@ -52,6 +52,7 @@ export class MakaMujo {
       onSave: [
         (text) => writeFileSync('./var/cookieclicker.txt', text),
       ],
+      isSilent: () => !this.speechable,
     });
     createReceiver((state) => {
       this.#browserState = state;
