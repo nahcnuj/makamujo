@@ -2,7 +2,6 @@ import { expect, test } from "@playwright/test";
 import { spawn } from "child_process";
 import { existsSync, writeFileSync } from "fs";
 
-const PORT = 17778;
 const CONSOLE_BASE_URL = `https://localhost`;
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 const BROWSER_PAGE_LOAD_TIMEOUT_MS = 20_000;
@@ -49,7 +48,7 @@ test.beforeAll(async () => {
 
   server = spawn(
     process.platform === "win32" ? "bun.exe" : "bun",
-    ["start", "--port", String(PORT)],
+    ["start"],
     {
       stdio: ["ignore", "pipe", "pipe"],
     },
