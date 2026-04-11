@@ -1,5 +1,5 @@
 import { serve } from "bun";
-import { isIPAllowed } from "../lib/allowedIP";
+import { AllowedIP } from "../lib/allowedIP";
 import * as consoleRoutes from "../routes/console/index";
 
 const consoleCertPath = process.env.CONSOLE_TLS_CERT ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem';
@@ -44,7 +44,7 @@ export function startConsoleServer(): ConsoleServer {
     port: 443,
     async fetch(req, server) {
       const ip = server.requestIP(req);
-      if (!isIPAllowed(ip)) {
+      if (!ip || !AllowedIP.equals(ip)) {
         return Response.redirect(consoleRedirectURL, 302);
       }
 
