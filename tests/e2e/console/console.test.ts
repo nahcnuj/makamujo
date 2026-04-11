@@ -16,28 +16,55 @@ const waitForServerReady = async () => {
       return;
     }
 
-    const timeout = setTimeout(() => {
-      reject(new Error("Server startup timed out"));
-    }, SERVER_STARTUP_TIMEOUT_MS);
-
-    let buffer = "";
     if (!server.stdout || !server.stderr) {
       reject(new Error("Server stdout/stderr stream not available"));
       return;
     }
 
-    server.stdout.on("data", (chunk) => {
+    let settled = false;
+    let buffer = "";
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      server?.stdout?.off("data", onData);
+      server?.off("exit", onExit);
+    };
+
+    const resolveOnce = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      resolve();
+    };
+
+    const rejectOnce = (error: Error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+
+    const onData = (chunk: Buffer | string) => {
       buffer += chunk.toString();
       if (buffer.includes("Console running")) {
-        clearTimeout(timeout);
-        resolve();
+        resolveOnce();
       }
-    });
+    };
 
-    server.on("exit", (code) => {
-      clearTimeout(timeout);
-      reject(new Error(`Server process exited early with code ${code}`));
-    });
+    const onExit = (code: number | null) => {
+      rejectOnce(new Error(`Server process exited early with code ${code}`));
+    };
+
+    const timeout = setTimeout(() => {
+      rejectOnce(new Error("Server startup timed out"));
+    }, SERVER_STARTUP_TIMEOUT_MS);
+
+    server.stdout.on("data", onData);
+    server.on("exit", onExit);
   });
 };
 

@@ -186,7 +186,7 @@ try {
   });
   console.log(`🚀 Console running at ${consoleServer.url}`);
 } catch (err) {
-  console.error(`⚠️ Console server failed to start: ${err}`);
+  throw err instanceof Error ? err : new Error(String(err));
 }
 
 let running = false;
