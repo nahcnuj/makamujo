@@ -19,7 +19,7 @@ jobs:
       - name: Generate self-signed TLS cert for console E2E tests
         run: |
           mkdir -p /tmp/certs
-          openssl req -x509 -newkey rsa:2048 -keyout /tmp/certs/key.pem -out /tmp/certs/cert.pem -days 1 -nodes -subj '/CN=localhost'
+          openssl req -x509 -newkey rsa:2048 -keyout /tmp/certs/key.pem -out /tmp/certs/cert.pem -days 7 -nodes -subj '/CN=localhost'
           echo "CONSOLE_TLS_CERT=/tmp/certs/cert.pem" >> $GITHUB_ENV
           echo "CONSOLE_TLS_KEY=/tmp/certs/key.pem" >> $GITHUB_ENV
       - name: Run E2E tests
