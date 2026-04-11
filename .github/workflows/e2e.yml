@@ -20,7 +20,8 @@ jobs:
         run: sudo sysctl -w net.ipv4.ip_unprivileged_port_start=443
       - name: Generate self-signed TLS cert for console E2E tests
         run: |
-          mkdir -p /etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp
-          openssl req -x509 -newkey rsa:2048 -keyout /etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem -out /etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem -days 7 -nodes -subj '/CN=localhost'
+          sudo mkdir -p /etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp
+          sudo openssl req -x509 -newkey rsa:2048 -keyout /etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem -out /etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem -days 7 -nodes -subj '/CN=localhost'
+          sudo chmod -R a+r /etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp
       - name: Run E2E tests
         run: bun run test:e2e
