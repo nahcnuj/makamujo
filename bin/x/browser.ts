@@ -30,7 +30,7 @@ const { values: {
     },
     timeout: {
       type: 'string',
-      default: Number.MAX_SAFE_INTEGER.toFixed(0),
+      default: (2 ** 31 - 1).toFixed(0),
     },
   },
 });
