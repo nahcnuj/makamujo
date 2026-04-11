@@ -1,4 +1,4 @@
-export default async function (req: Bun.BunRequest<"/console/api/hello/:name">) {
+export default async function handleHelloName(req: Bun.BunRequest<"/console/api/hello/:name">) {
   console.debug(await req.text());
   const name = req.params.name;
   return Response.json({
