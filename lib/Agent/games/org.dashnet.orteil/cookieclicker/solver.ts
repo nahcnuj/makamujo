@@ -26,9 +26,11 @@ type SolverEventListeners = {
 };
 
 export function* solver(state: GameState = { type: 'initialize' }, eventListeners: Partial<SolverEventListeners> = {}): Generator<Action.Action, undefined, State> {
-  const listeners = { ...(eventListeners as SolverEventListeners) } as SolverEventListeners;
-  listeners.onSave = listeners.onSave ?? [];
-  listeners.isSilent = listeners.isSilent ?? (() => false);
+  const listeners: SolverEventListeners = {
+    onSave: [],
+    isSilent: () => false,
+    ...eventListeners,
+  };
 
   function* runActions(actions: readonly Action.Action[]): Generator<Action.Action, boolean, State> {
     for (const action of actions) {
