@@ -22,11 +22,15 @@ type GameState =
 
 type SolverEventListeners = {
   onSave: Array<(text: string) => void>
+  isSilent: () => boolean
 };
 
 export function* solver(state: GameState = { type: 'initialize' }, eventListeners: Partial<SolverEventListeners> = {}): Generator<Action.Action, undefined, State> {
-  const listeners = { ...(eventListeners as SolverEventListeners) } as SolverEventListeners;
-  listeners.onSave = listeners.onSave ?? [];
+  const listeners: SolverEventListeners = {
+    onSave: [],
+    isSilent: () => false,
+    ...eventListeners,
+  };
 
   function* runActions(actions: readonly Action.Action[]): Generator<Action.Action, boolean, State> {
     for (const action of actions) {
@@ -108,7 +112,9 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
         const clickableElementIds = Array.isArray((sightData as any)?.clickableElementIds)
           ? (sightData as any).clickableElementIds as string[]
           : ['bigCookie'];
-        const candidateIds = clickableElementIds.length > 0 ? clickableElementIds : ['bigCookie'];
+        const candidateIds = listeners.isSilent()
+          ? ['bigCookie']
+          : clickableElementIds.length > 0 ? clickableElementIds : ['bigCookie'];
         const targetId = candidateIds[Math.floor(Math.random() * candidateIds.length)]!;
 
         if (!(yield* runActions([Action.clickByElementId(targetId)]))) break;

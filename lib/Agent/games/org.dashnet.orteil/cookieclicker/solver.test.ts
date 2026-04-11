@@ -115,6 +115,34 @@ describe('solver', () => {
     expect(solve.next(idleState as any).value).toEqual(Action.clickByElementId('bigCookie'));
   });
 
+  it('should click bigCookie only when isSilent returns true, even if other elements are available', () => {
+    const idleState = {
+      name: 'idle' as const,
+      url: 'https://orteil.dashnet.org/cookieclicker/',
+      state: { clickableElementIds: ['bigCookie', 'shimmer1', 'shimmer2'] },
+    };
+
+    const solve = solver({ type: 'idle', count: 0 }, { isSilent: () => true });
+
+    expect(solve.next().value).toEqual(Action.noop);
+    expect(solve.next(idleState as any).value).toEqual(Action.clickByElementId('bigCookie'));
+  });
+
+  it('should click a random element when isSilent returns false', () => {
+    const idleState = {
+      name: 'idle' as const,
+      url: 'https://orteil.dashnet.org/cookieclicker/',
+      state: { clickableElementIds: ['bigCookie', 'shimmer1', 'shimmer2'] },
+    };
+
+    const solve = solver({ type: 'idle', count: 0 }, { isSilent: () => false });
+
+    expect(solve.next().value).toEqual(Action.noop);
+    const clickAction = solve.next(idleState as any).value as any;
+    expect(clickAction).toHaveProperty('name', 'click');
+    expect(['bigCookie', 'shimmer1', 'shimmer2']).toContain(clickAction.target.id);
+  });
+
   it('should restart from initialize when navigated to another page', () => {
     const wrongUrlState = {
       name: 'idle' as const,
