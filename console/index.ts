@@ -47,7 +47,7 @@ export function startConsoleServer(): ConsoleServer {
       async fetch(req, server) {
         const ip = server.requestIP(req);
         if (!ip || !AllowedIP.equals(ip)) {
-          console.error(`got ${ip ? `${ip.family}/${ip.address}` : 'unknown'}, want ${AllowedIP.get()?.toString() ?? 'none'}`);
+          console.error(`got ${ip ? `${ip.family}/${ip.address}` : 'unknown'}, want ${AllowedIP.toString() ?? 'none'}`);
           return Response.redirect(consoleRedirectURL, 302);
         }
 

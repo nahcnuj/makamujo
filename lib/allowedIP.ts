@@ -32,21 +32,14 @@ export class AllowedIP {
     return allowedIP.family === ip.family && allowedIP.address === ip.address;
   }
 
-  /**
-   * Get the currently allowed IP.
-   * @returns The current `AllowedIP` instance, or `null` if no IP has been set.
-   */
-  static get(): AllowedIP | null {
-    return allowedIP;
-  }
-
   /** Clear the allowed IP, returning to the initial unset state. */
   static clear(): void {
     allowedIP = null;
   }
 
-  /** Returns a string representation in the form `{family}/{address}`. */
-  toString(): string {
-    return `${this.family}/${this.address}`;
+  /** Returns a string representation of the current allowed IP in the form `{family}/{address}`, or `null` if no IP has been set. */
+  static toString(): string | null {
+    if (!allowedIP) return null;
+    return `${allowedIP.family}/${allowedIP.address}`;
   }
 }

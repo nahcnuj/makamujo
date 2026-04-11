@@ -45,38 +45,31 @@ describe("AllowedIP", () => {
     });
   });
 
-  describe("get", () => {
+  describe("toString", () => {
     it("returns null when no IP has been set", () => {
-      expect(AllowedIP.get()).toBeNull();
+      expect(AllowedIP.toString()).toBeNull();
     });
 
     it("returns null after clear is called", () => {
       AllowedIP.set({ family: "IPv4", address: "10.0.0.1" });
       AllowedIP.clear();
-      expect(AllowedIP.get()).toBeNull();
+      expect(AllowedIP.toString()).toBeNull();
     });
 
-    it("returns an object whose toString() matches the set IP", () => {
+    it("formats IPv4 address as family/address", () => {
       AllowedIP.set({ family: "IPv4", address: "10.0.0.1" });
-      expect(AllowedIP.get()?.toString()).toBe("IPv4/10.0.0.1");
+      expect(AllowedIP.toString()).toBe("IPv4/10.0.0.1");
+    });
+
+    it("formats IPv6 address as family/address", () => {
+      AllowedIP.set({ family: "IPv6", address: "::1" });
+      expect(AllowedIP.toString()).toBe("IPv6/::1");
     });
 
     it("returns the latest IP after set is called multiple times", () => {
       AllowedIP.set({ family: "IPv4", address: "10.0.0.1" });
       AllowedIP.set({ family: "IPv4", address: "10.0.0.2" });
-      expect(AllowedIP.get()?.toString()).toBe("IPv4/10.0.0.2");
-    });
-  });
-
-  describe("toString", () => {
-    it("formats IPv4 address as family/address", () => {
-      AllowedIP.set({ family: "IPv4", address: "10.0.0.1" });
-      expect(String(AllowedIP.get())).toBe("IPv4/10.0.0.1");
-    });
-
-    it("formats IPv6 address as family/address", () => {
-      AllowedIP.set({ family: "IPv6", address: "::1" });
-      expect(String(AllowedIP.get())).toBe("IPv6/::1");
+      expect(AllowedIP.toString()).toBe("IPv4/10.0.0.2");
     });
   });
 });
