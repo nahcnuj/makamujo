@@ -46,14 +46,14 @@ describe("AllowedIP", () => {
   });
 
   describe("toString", () => {
-    it("returns null when no IP has been set", () => {
-      expect(AllowedIP.toString()).toBeNull();
+    it("returns '(none)' when no IP has been set", () => {
+      expect(AllowedIP.toString()).toBe('(none)');
     });
 
-    it("returns null after clear is called", () => {
+    it("returns '(none)' after clear is called", () => {
       AllowedIP.set({ family: "IPv4", address: "10.0.0.1" });
       AllowedIP.clear();
-      expect(AllowedIP.toString()).toBeNull();
+      expect(AllowedIP.toString()).toBe('(none)');
     });
 
     it("formats IPv4 address as family/address", () => {
