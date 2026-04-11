@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { ActionResult } from "automated-gameplay-transmitter";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { ServerGames as Games } from "../../lib/Agent/games/server";
@@ -13,6 +14,8 @@ const { values: {
   browser: browserArg,
   lang,
   timeout: timeoutStr,
+  display,
+  xauthority,
 } } = parseArgs({
   options: {
     file: {
@@ -32,8 +35,57 @@ const { values: {
       type: 'string',
       default: (2 ** 31 - 1).toFixed(0),
     },
+    display: {
+      type: 'string',
+    },
+    xauthority: {
+      type: 'string',
+    },
   },
 });
+
+// When --display is not given, auto-detect the display from the first X11
+// socket found in /tmp/.X11-unix/ (e.g. xrdp uses :10, not :0).
+const resolvedDisplay = display ?? (() => {
+  try {
+    const x11UnixDir = '/tmp/.X11-unix';
+    const socketName = readdirSync(x11UnixDir).find(name => /^X\d+$/.test(name));
+    if (socketName !== undefined) {
+      return `:${socketName.slice(1)}`;
+    }
+  } catch { /* auto-detection is best-effort */ }
+  return undefined;
+})();
+
+if (resolvedDisplay) {
+  process.env.DISPLAY = resolvedDisplay;
+}
+if (xauthority) {
+  process.env.XAUTHORITY = xauthority;
+} else if (resolvedDisplay !== undefined) {
+  // When --display is given (or auto-detected) without --xauthority, try to
+  // auto-detect the Xauthority file from the owner of the X11 socket so that
+  // connections from a different login session (e.g. serial console as root)
+  // can authenticate.
+  const displayNum = resolvedDisplay.replace(/^:/, '').replace(/\..*$/, '');
+  const socketPath = `/tmp/.X11-unix/X${displayNum}`;
+  try {
+    const { uid } = statSync(socketPath);
+    const passwdEntry = readFileSync('/etc/passwd', 'utf8')
+      .split('\n')
+      .find(line => {
+        const fields = line.split(':');
+        return fields.length >= 4 && parseInt(fields[2], 10) === uid;
+      });
+    if (passwdEntry !== undefined) {
+      const home = passwdEntry.split(':')[5];
+      const detectedXauth = `${home}/.Xauthority`;
+      if (existsSync(detectedXauth)) {
+        process.env.XAUTHORITY = detectedXauth;
+      }
+    }
+  } catch { /* auto-detection is best-effort */ }
+}
 
 const timeout = Number.parseInt(timeoutStr, 10);
 const executablePath = (browserArg?.toString() ?? "").trim() || undefined;
