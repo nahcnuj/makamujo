@@ -44,4 +44,32 @@ describe("AllowedIP", () => {
       expect(AllowedIP.equals({ family: "IPv4", address: "10.0.0.2" })).toBe(true);
     });
   });
+
+  describe("toString", () => {
+    it("returns '(none)' when no IP has been set", () => {
+      expect(AllowedIP.toString()).toBe('(none)');
+    });
+
+    it("returns '(none)' after clear is called", () => {
+      AllowedIP.set({ family: "IPv4", address: "10.0.0.1" });
+      AllowedIP.clear();
+      expect(AllowedIP.toString()).toBe('(none)');
+    });
+
+    it("formats IPv4 address as family/address", () => {
+      AllowedIP.set({ family: "IPv4", address: "10.0.0.1" });
+      expect(AllowedIP.toString()).toBe("IPv4/10.0.0.1");
+    });
+
+    it("formats IPv6 address as family/address", () => {
+      AllowedIP.set({ family: "IPv6", address: "::1" });
+      expect(AllowedIP.toString()).toBe("IPv6/::1");
+    });
+
+    it("returns the latest IP after set is called multiple times", () => {
+      AllowedIP.set({ family: "IPv4", address: "10.0.0.1" });
+      AllowedIP.set({ family: "IPv4", address: "10.0.0.2" });
+      expect(AllowedIP.toString()).toBe("IPv4/10.0.0.2");
+    });
+  });
 });
