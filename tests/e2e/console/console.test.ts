@@ -6,6 +6,8 @@ const PORT = 17777;
 const CONSOLE_PORT = 17778;
 const CONSOLE_BASE_URL = `http://localhost:${CONSOLE_PORT}`;
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
+const BROWSER_PAGE_LOAD_TIMEOUT_MS = 20_000;
+const EXPECTED_CONSOLE_TITLE = "馬可無序 - 管理コンソール";
 
 let server: ReturnType<typeof spawn> | null = null;
 
@@ -69,7 +71,7 @@ test.describe("console", () => {
     const res = await request.get(`${CONSOLE_BASE_URL}/console/`);
     expect(res.ok()).toBeTruthy();
     const html = await res.text();
-    expect(html).toContain("<title>馬可無序 - 管理コンソール");
+    expect(html).toContain(`<title>${EXPECTED_CONSOLE_TITLE}`);
     expect(html).toContain('<div id="root">');
   });
 
@@ -104,8 +106,8 @@ test.describe("console", () => {
   });
 
   test("renders the console app in a browser", async ({ page }) => {
-    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: "domcontentloaded", timeout: 20000 });
-    expect(await page.title()).toContain("馬可無序 - 管理コンソール");
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    expect(await page.title()).toContain(EXPECTED_CONSOLE_TITLE);
     const rootElement = await page.$("#root");
     expect(rootElement).not.toBeNull();
   });
