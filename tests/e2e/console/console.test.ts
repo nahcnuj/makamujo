@@ -2,8 +2,9 @@ import { expect, test } from "@playwright/test";
 import { spawn } from "child_process";
 import { existsSync, writeFileSync } from "fs";
 
-const PORT = 17777;
-const CONSOLE_BASE_URL = `https://localhost`;
+const PORT = 17778;
+const CONSOLE_PORT = parseInt(process.env.CONSOLE_PORT ?? "44443");
+const CONSOLE_BASE_URL = `https://localhost:${CONSOLE_PORT}`;
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 const BROWSER_PAGE_LOAD_TIMEOUT_MS = 20_000;
 const EXPECTED_CONSOLE_TITLE = "馬可無序 - 管理コンソール";
@@ -51,6 +52,10 @@ test.beforeAll(async () => {
     process.platform === "win32" ? "bun.exe" : "bun",
     ["start", "--port", String(PORT)],
     {
+      env: {
+        ...process.env,
+        CONSOLE_PORT: String(CONSOLE_PORT),
+      },
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
@@ -66,7 +71,6 @@ test.afterAll(() => {
 });
 
 test.describe("console", () => {
-  test.use({ ignoreHTTPSErrors: true });
   test("serves /console/robots.txt", async ({ request }) => {
     const res = await request.get(`${CONSOLE_BASE_URL}/console/robots.txt`);
     expect(res.ok()).toBeTruthy();

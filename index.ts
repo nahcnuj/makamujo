@@ -164,23 +164,31 @@ const server = serve({
 
 console.log(`🚀 Server running at ${server.url}`);
 
-const consoleServer = serve({
-  port: 443,
-  routes: consoleRoutes.routes,
-  tls: {
-    cert: Bun.file('/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem'),
-    key: Bun.file('/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem'),
-  },
-  development: process.env.NODE_ENV !== "production" && {
-    // Enable browser hot reloading in development
-    hmr: true,
+const CONSOLE_PORT = parseInt(process.env.CONSOLE_PORT ?? "443");
+const consoleCertPath = process.env.CONSOLE_TLS_CERT ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem';
+const consoleKeyPath = process.env.CONSOLE_TLS_KEY ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem';
 
-    // Echo console logs from the browser to the server
-    console: true,
-  },
-});
+let consoleServer: ReturnType<typeof serve> | null = null;
+try {
+  consoleServer = serve({
+    port: CONSOLE_PORT,
+    routes: consoleRoutes.routes,
+    tls: {
+      cert: Bun.file(consoleCertPath),
+      key: Bun.file(consoleKeyPath),
+    },
+    development: process.env.NODE_ENV !== "production" && {
+      // Enable browser hot reloading in development
+      hmr: true,
 
-console.log(`🚀 Console running at ${consoleServer.url}`);
+      // Echo console logs from the browser to the server
+      console: true,
+    },
+  });
+  console.log(`🚀 Console running at ${consoleServer.url}`);
+} catch (err) {
+  console.error(`⚠️ Console server failed to start: ${err}`);
+}
 
 let running = false;
 for await (const _ of setInterval(1_000)) {
