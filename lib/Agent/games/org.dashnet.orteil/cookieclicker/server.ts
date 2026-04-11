@@ -191,9 +191,6 @@ export const sight = () => {
       if (el.id === 'support') continue;
       if (el.id === 'smallSupport') continue;
       if (!isVisible(el)) continue;
-      const style = window.getComputedStyle(el);
-      if (style.cursor !== 'pointer') continue;
-      if (style.pointerEvents === 'none') continue;
       // Skip elements inside #support or #smallSupport (ad/sponsor sections, not gameplay).
       {
         let isInSupportSection = false;
@@ -207,6 +204,9 @@ export const sight = () => {
         }
         if (isInSupportSection) continue;
       }
+      const style = window.getComputedStyle(el);
+      if (style.cursor !== 'pointer') continue;
+      if (style.pointerEvents === 'none') continue;
       let hasClickableAncestorWithId = false;
       let ancestor = el.parentElement;
       while (ancestor && ancestor !== searchRoot) {
