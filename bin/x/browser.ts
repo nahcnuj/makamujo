@@ -14,6 +14,7 @@ const { values: {
   lang,
   timeout: timeoutStr,
   display,
+  xauthority,
 } } = parseArgs({
   options: {
     file: {
@@ -36,11 +37,17 @@ const { values: {
     display: {
       type: 'string',
     },
+    xauthority: {
+      type: 'string',
+    },
   },
 });
 
 if (display) {
   process.env.DISPLAY = display;
+}
+if (xauthority) {
+  process.env.XAUTHORITY = xauthority;
 }
 
 const timeout = Number.parseInt(timeoutStr, 10);

@@ -11,6 +11,10 @@ while [ $# -gt 0 ]; do
       export DISPLAY="$2"
       shift 2
       ;;
+    --xauthority)
+      export XAUTHORITY="$2"
+      shift 2
+      ;;
     *)
       shift
       ;;
