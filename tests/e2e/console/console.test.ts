@@ -2,7 +2,8 @@ import { expect, test } from "@playwright/test";
 import { spawn } from "child_process";
 import { existsSync, writeFileSync } from "fs";
 
-const CONSOLE_BASE_URL = `https://localhost`;
+const CONSOLE_BASE_URL = `https://127.0.0.1`;
+const BROADCASTING_BASE_URL = `http://127.0.0.1:7777`;
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 const BROWSER_PAGE_LOAD_TIMEOUT_MS = 20_000;
 const EXPECTED_CONSOLE_TITLE = "馬可無序 - 管理コンソール";
@@ -68,7 +69,7 @@ const waitForServerReady = async () => {
   });
 };
 
-test.beforeAll(async () => {
+test.beforeAll(async ({ request }) => {
   if (!existsSync("./var/cookieclicker.txt")) {
     writeFileSync("./var/cookieclicker.txt", "");
   }
@@ -82,6 +83,15 @@ test.beforeAll(async () => {
   );
 
   await waitForServerReady();
+
+  // Register the test runner's IP as the allowed IP so that subsequent
+  // requests to the IP-restricted console server are permitted.
+  const allowlistRegistrationResponse = await request.post(`${BROADCASTING_BASE_URL}/`);
+  const allowlistRegistrationResponseText = await allowlistRegistrationResponse.text();
+  expect(
+    allowlistRegistrationResponse.ok(),
+    `Allowlist registration failed with status ${allowlistRegistrationResponse.status()} ${allowlistRegistrationResponse.statusText()}: ${allowlistRegistrationResponseText}`,
+  ).toBeTruthy();
 });
 
 test.afterAll(() => {
