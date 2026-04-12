@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: bun ci
       - name: Save node_modules to cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: node_modules
           key: node-modules-${{ github.run_id }}
@@ -48,7 +48,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
       - name: Restore node_modules from cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: node_modules
           key: node-modules-${{ github.run_id }}
