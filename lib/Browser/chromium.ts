@@ -126,10 +126,13 @@ export const create = async (
     },
 
     evaluate: async (f) => {
-      // Playwright's evaluate() expects (arg: void) => T but the Browser interface
-      // uses (document: Document) => T as a convention; callers always use globals,
-      // so casting here is safe.
-      return await page.evaluate(f as unknown as () => ReturnType<typeof f>);
+      return await page.evaluate(
+        (fnSource) => {
+          const evaluated = globalThis.eval(`(${fnSource})`) as (document: Document) => ReturnType<typeof f>;
+          return evaluated(document);
+        },
+        f.toString(),
+      );
     },
 
     get url() { return page.url() },

@@ -44,6 +44,7 @@ jobs:
         with:
           path: node_modules
           key: node-modules-${{ github.run_id }}
+          fail-on-cache-miss: true
       - name: Run tsc --noEmit
         run: bun run typecheck
 
