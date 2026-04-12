@@ -116,7 +116,7 @@ export const create = async (
       } while (retry);
     },
     clickByElementId: async (id) => {
-      await page.locator(`#${id}`).click({ timeout: 5_000 });
+      await page.locator(`#${id}`).first().click({ timeout: 5_000 });
     },
 
     press: async (key, selector) => {
