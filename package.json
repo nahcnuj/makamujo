@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "bun --hot index.ts --port=8777",
     "start": "NODE_ENV=production bun index.ts --port=7777",
-    "test": "bun test lib/ src/ routes/ tests/integration/",
+    "test": "bun test lib/ src/ routes/",
+    "test:integration": "bun test tests/integration/",
     "pretest:e2e": "bunx playwright install --with-deps chromium",
     "test:e2e": "bunx playwright test tests/e2e --timeout=60000",
     "browser": "node --import tsx ./bin/x/browser.ts",
