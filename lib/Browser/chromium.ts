@@ -126,7 +126,13 @@ export const create = async (
     },
 
     evaluate: async (f) => {
-      return await page.evaluate(f);
+      return await page.evaluate(
+        (fnSource) => {
+          const evaluated = globalThis.eval(`(${fnSource})`) as (document: Document) => ReturnType<typeof f>;
+          return evaluated(document);
+        },
+        f.toString(),
+      );
     },
 
     get url() { return page.url() },
@@ -157,7 +163,7 @@ type FrameLike = { url(): string };
 export const createRedirectToHomeHandler = (
   mainFrame: FrameLike,
   homeUrl: string,
-  redirectTo: (url: string) => Promise<void>,
+  redirectTo: (url: string) => Promise<unknown>,
 ) => {
   let isRedirecting = false;
   return (frame: FrameLike): void => {

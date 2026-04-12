@@ -189,7 +189,7 @@ describe('createClickByElementId', () => {
   };
 
   it('should click the element matching the given ID', async () => {
-    let clickedSelector: string | null = null;
+    let clickedSelector = '';
     let clicked = false;
     const page = {
       locator: (selector: string) => {
@@ -210,11 +210,8 @@ describe('createClickByElementId', () => {
       locator: (_selector: string) => ({
         first: () => {
           firstCalled = true;
-          return {
-            click: async (_opts?: { timeout?: number }) => {},
-          };
+          return makeLocatorLike(() => {});
         },
-        click: async (_opts?: { timeout?: number }) => {},
         click: async (_opts?: { timeout?: number }) => {},
       }),
     };
