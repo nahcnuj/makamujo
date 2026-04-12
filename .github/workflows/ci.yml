@@ -32,42 +32,17 @@ jobs:
           name: node-modules
           path: node_modules/
 
-  unit-test:
+  test:
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 3
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-      - name: Download node_modules
-        uses: actions/download-artifact@v4
-        with:
-          name: node-modules
-          path: node_modules/
-      - name: Run unit tests
-        run: bun run test
-
-  integration-test:
-    needs: setup
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-      - name: Download node_modules
-        uses: actions/download-artifact@v4
-        with:
-          name: node-modules
-          path: node_modules/
-      - name: Run integration tests
-        run: bun run test:integration
-
-  e2e-test:
-    needs: setup
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
+    strategy:
+      matrix:
+        suite:
+          - { script: test, label: unit }
+          - { script: test:integration, label: integration }
+          - { script: test:e2e, label: e2e }
+    name: test (${{ matrix.suite.label }})
     steps:
       - uses: actions/checkout@v3
       - name: Setup Bun
@@ -78,13 +53,15 @@ jobs:
           name: node-modules
           path: node_modules/
       - name: Allow binding to port 443 without root
+        if: matrix.suite.label == 'e2e'
         run: sudo sysctl -w net.ipv4.ip_unprivileged_port_start=443
       - name: Generate self-signed TLS cert for console E2E tests
+        if: matrix.suite.label == 'e2e'
         run: |
           sudo mkdir -p /etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp
           sudo openssl req -x509 -newkey rsa:2048 -keyout /etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem -out /etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem -days 7 -nodes -subj '/CN=localhost'
           sudo chown -R "$USER:$USER" /etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp
           chmod 600 /etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem
           chmod 644 /etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem
-      - name: Run E2E tests
-        run: bun run test:e2e
+      - name: Run ${{ matrix.suite.label }} tests
+        run: bun run ${{ matrix.suite.script }}
