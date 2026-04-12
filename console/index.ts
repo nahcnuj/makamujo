@@ -26,6 +26,15 @@ export type ConsoleServer = {
  * @returns A handle with the outer server's URL and a unified `stop()` method.
  */
 export function startConsoleServer(certPath: string = consoleCertPath, keyPath: string = consoleKeyPath): ConsoleServer {
+  // Fail fast if TLS cert/key files are missing before starting any servers.
+  if (!existsSync(certPath) || !existsSync(keyPath)) {
+    throw new Error(
+      `TLS certificate files not found at the resolved paths. ` +
+      `certPath=${JSON.stringify(certPath)}, keyPath=${JSON.stringify(keyPath)}. ` +
+      `Provide valid certPath/keyPath arguments or set CONSOLE_TLS_CERT and CONSOLE_TLS_KEY env vars to the correct paths.`
+    );
+  }
+
   // Loopback console server: binds to 127.0.0.1 only and serves all console routes
   // (including HTML bundling). Not exposed to the public network.
   const loopbackServer = serve({
@@ -45,15 +54,6 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
 
   // Outer console server: exposed publicly on port 443.
   // Checks the client IP against the shared allowlist before proxying to the loopback server.
-  if (!existsSync(certPath) || !existsSync(keyPath)) {
-    loopbackServer.stop(true);
-    throw new Error(
-      `TLS certificate files not found at the resolved paths. ` +
-      `certPath=${JSON.stringify(certPath)}, keyPath=${JSON.stringify(keyPath)}. ` +
-      `Provide valid certPath/keyPath arguments or set CONSOLE_TLS_CERT and CONSOLE_TLS_KEY env vars to the correct paths.`
-    );
-  }
-
   let outerServer: ReturnType<typeof serve>;
   try {
     outerServer = serve({

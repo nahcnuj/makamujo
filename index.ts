@@ -169,8 +169,8 @@ try {
   consoleServer = startConsoleServer();
   console.log(`🚀 Console running at ${consoleServer.url}`);
 } catch (err) {
-  const consoleStartupError = err instanceof Error ? err.message : String(err);
-  console.error(`[ERROR] CONSOLE_STARTUP_FAILED ${consoleStartupError}`);
+  const consoleStartupError = err instanceof Error ? (err.stack ?? err.message) : String(err);
+  console.error(`[ERROR] CONSOLE_STARTUP_FAILED ${JSON.stringify(consoleStartupError)}`);
 }
 
 let running = false;

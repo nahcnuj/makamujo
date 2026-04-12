@@ -51,7 +51,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-modules
-          path: node_modules/
+          path: .
       - name: Allow binding to port 443 without root
         if: matrix.suite.label == 'e2e'
         run: sudo sysctl -w net.ipv4.ip_unprivileged_port_start=443
