@@ -215,6 +215,7 @@ describe('createClickByElementId', () => {
           };
         },
         click: async (_opts?: { timeout?: number }) => {},
+        click: async (_opts?: { timeout?: number }) => {},
       }),
     };
 
