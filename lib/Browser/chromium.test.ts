@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { createPopupPageHandler, createRedirectToHomeHandler } from "./chromium";
+import { createClickByElementId, createPopupPageHandler, createRedirectToHomeHandler } from "./chromium";
 
 const HOME_URL = 'https://orteil.dashnet.org/cookieclicker/';
 
@@ -176,5 +176,49 @@ describe('createRedirectToHomeHandler', () => {
     handler(arrivedMainFrame);
 
     expect(redirectedUrls.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('createClickByElementId', () => {
+  const makeLocatorLike = (onClick: () => void) => {
+    const locator = {
+      first: () => locator,
+      click: async (_opts?: { timeout?: number }) => { onClick(); },
+    };
+    return locator;
+  };
+
+  it('should click the element matching the given ID', async () => {
+    let clickedSelector: string | null = null;
+    let clicked = false;
+    const page = {
+      locator: (selector: string) => {
+        clickedSelector = selector;
+        return makeLocatorLike(() => { clicked = true; });
+      },
+    };
+
+    await createClickByElementId(page)('bigCookie');
+
+    expect(clickedSelector).toBe('#bigCookie');
+    expect(clicked).toBeTrue();
+  });
+
+  it('should use first() so that duplicate IDs do not cause a strict mode error', async () => {
+    let firstCalled = false;
+    const page = {
+      locator: (_selector: string) => ({
+        first: () => {
+          firstCalled = true;
+          return {
+            click: async (_opts?: { timeout?: number }) => {},
+          };
+        },
+      }),
+    };
+
+    await createClickByElementId(page)('promptOption0');
+
+    expect(firstCalled).toBeTrue();
   });
 });

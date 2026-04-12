@@ -115,9 +115,7 @@ export const create = async (
         }
       } while (retry);
     },
-    clickByElementId: async (id) => {
-      await page.locator(`#${id}`).first().click({ timeout: 5_000 });
-    },
+    clickByElementId: createClickByElementId(page),
 
     press: async (key, selector) => {
       await page.locator(selector).press(key);
@@ -179,3 +177,21 @@ export const createRedirectToHomeHandler = (
     });
   };
 };
+
+type LocatorLike = {
+  first(): LocatorLike;
+  click(options?: { timeout?: number }): Promise<void>;
+};
+
+type ClickablePageLike = {
+  locator(selector: string): LocatorLike;
+};
+
+/**
+ * Returns a function that clicks the first element matching the given ID selector,
+ * even when multiple elements in the DOM share the same `id` attribute.
+ */
+export const createClickByElementId = (page: ClickablePageLike) =>
+  async (id: string): Promise<void> => {
+    await page.locator(`#${id}`).first().click({ timeout: 5_000 });
+  };
