@@ -18,7 +18,7 @@ jobs:
         with:
           scandir: './bin'
 
-  test:
+  setup:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -26,5 +26,34 @@ jobs:
         uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: bun ci
-      - name: Run tests
-        run: bun run test
+      - name: Save node_modules to cache
+        uses: actions/cache/save@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ github.run_id }}
+
+  test:
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    strategy:
+      matrix:
+        suite:
+          - { script: test, label: unit }
+          - { script: test:integration, label: integration }
+          - { script: test:e2e, label: e2e }
+    name: test (${{ matrix.suite.label }})
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Restore node_modules from cache
+        uses: actions/cache/restore@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ github.run_id }}
+      - name: Allow binding to port 443 without root
+        if: matrix.suite.label == 'e2e'
+        run: sudo sysctl -w net.ipv4.ip_unprivileged_port_start=443
+      - name: Run ${{ matrix.suite.label }} tests
+        run: bun run ${{ matrix.suite.script }}

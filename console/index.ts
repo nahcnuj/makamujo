@@ -1,4 +1,5 @@
 import { serve } from "bun";
+import { existsSync } from "node:fs";
 import { AllowedIP } from "../lib/allowedIP";
 import * as consoleRoutes from "../routes/console/index";
 
@@ -19,8 +20,21 @@ export type ConsoleServer = {
  * - An outer server on port 443 that enforces IP allowlist and proxies permitted requests to the loopback server.
  *
  * The returned handle exposes only the outer server's URL and a unified `stop()` method.
+ *
+ * @param certPath - Path to the TLS certificate file. Defaults to the `CONSOLE_TLS_CERT` env var.
+ * @param keyPath  - Path to the TLS private key file. Defaults to the `CONSOLE_TLS_KEY` env var.
+ * @returns A handle with the outer server's URL and a unified `stop()` method.
  */
-export function startConsoleServer(): ConsoleServer {
+export function startConsoleServer(certPath: string = consoleCertPath, keyPath: string = consoleKeyPath): ConsoleServer {
+  // Fail fast if TLS cert/key files are missing before starting any servers.
+  if (!existsSync(certPath) || !existsSync(keyPath)) {
+    throw new Error(
+      `TLS certificate files not found at the resolved paths. ` +
+      `certPath=${JSON.stringify(certPath)}, keyPath=${JSON.stringify(keyPath)}. ` +
+      `Provide valid certPath/keyPath arguments or set CONSOLE_TLS_CERT and CONSOLE_TLS_KEY env vars to the correct paths.`
+    );
+  }
+
   // Loopback console server: binds to 127.0.0.1 only and serves all console routes
   // (including HTML bundling). Not exposed to the public network.
   const loopbackServer = serve({
@@ -70,8 +84,8 @@ export function startConsoleServer(): ConsoleServer {
         });
       },
       tls: {
-        cert: Bun.file(consoleCertPath),
-        key: Bun.file(consoleKeyPath),
+        cert: Bun.file(certPath),
+        key: Bun.file(keyPath),
       },
     });
   } catch (err) {
