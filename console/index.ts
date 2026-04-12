@@ -47,7 +47,11 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
   // Checks the client IP against the shared allowlist before proxying to the loopback server.
   if (!existsSync(certPath) || !existsSync(keyPath)) {
     loopbackServer.stop(true);
-    throw new Error('TLS certificate files not found. Set CONSOLE_TLS_CERT and CONSOLE_TLS_KEY env vars to the correct paths.');
+    throw new Error(
+      `TLS certificate files not found at the resolved paths. ` +
+      `certPath=${JSON.stringify(certPath)}, keyPath=${JSON.stringify(keyPath)}. ` +
+      `Provide valid certPath/keyPath arguments or set CONSOLE_TLS_CERT and CONSOLE_TLS_KEY env vars to the correct paths.`
+    );
   }
 
   let outerServer: ReturnType<typeof serve>;
