@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { createServer } from "node:net";
-import { existsSync, unlinkSync } from "node:fs";
+import { createServer, createConnection } from "node:net";
+import { existsSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { createRetrySenderWithPath } from "./socket";
+import { createRetrySenderWithPath, createReceiverWithPath } from "./socket";
 
 const generateSocketPath = () =>
   process.platform === "win32"
@@ -115,5 +115,38 @@ describe("createRetrySenderWithPath", () => {
     } finally {
       server.close();
     }
+  });
+});
+
+describe("createReceiverWithPath", () => {
+  let socketPath: string;
+
+  beforeEach(() => {
+    socketPath = generateSocketPath();
+    cleanupSocket(socketPath);
+  });
+
+  afterEach(() => {
+    cleanupSocket(socketPath);
+  });
+
+  test("removes a stale socket file before listening so EADDRINUSE does not occur", async () => {
+    if (process.platform === "win32") return; // named pipes do not leave stale files
+
+    // Simulate a stale socket file left by a previous process.
+    writeFileSync(socketPath, "");
+    expect(existsSync(socketPath)).toBe(true);
+
+    const receive = createReceiverWithPath(socketPath);
+
+    // Should not throw despite the stale file.
+    await expect(receive((_state) => ({ name: "noop" } as const))).resolves.toBeUndefined();
+
+    // Verify the server is accepting connections.
+    await new Promise<void>((resolve, reject) => {
+      const conn = createConnection(socketPath);
+      conn.once("connect", () => { conn.destroy(); resolve(); });
+      conn.once("error", reject);
+    });
   });
 });

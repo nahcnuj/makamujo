@@ -1,7 +1,7 @@
 import { Action, type State } from "automated-gameplay-transmitter";
 import { createReceiver as receiver, createSender as sender } from "automated-gameplay-transmitter/server";
 
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import type { Socket } from "node:net";
 import { join } from "node:path";
 
@@ -16,10 +16,39 @@ export const defaultSocketPath = process.env.MAKAMUJO_IPC_PATH
     : join(unixSocketDir, "unix.sock"));
 
 export const createSender = sender<State, Action.Action>(defaultSocketPath);
-export const createReceiver = receiver<State, Action.Action>(defaultSocketPath);
-
 export const createSenderWithPath = (path: string) => sender<State, Action.Action>(path);
-export const createReceiverWithPath = (path: string) => receiver<State, Action.Action>(path);
+
+/**
+ * Removes a stale Unix socket file so that the next `server.listen()` call
+ * succeeds even when the previous process exited without cleaning up.
+ * On Windows named pipes do not leave a file on disk, so this is a no-op.
+ */
+const removeStaleSocketFile = (path: string) => {
+  if (process.platform !== "win32" && existsSync(path)) {
+    try {
+      unlinkSync(path);
+    } catch { /* best-effort */ }
+  }
+};
+
+const rawCreateReceiver = receiver<State, Action.Action>(defaultSocketPath);
+/**
+ * Starts the IPC receiver on the default socket path, removing any stale
+ * socket file left by a previous process first so that `server.listen()`
+ * does not throw EADDRINUSE.
+ */
+export const createReceiver = (solve: (state: State) => Action.Action) => {
+  removeStaleSocketFile(defaultSocketPath);
+  return rawCreateReceiver(solve);
+};
+
+export const createReceiverWithPath = (path: string) => {
+  const fn = receiver<State, Action.Action>(path);
+  return (solve: (state: State) => Action.Action) => {
+    removeStaleSocketFile(path);
+    return fn(solve);
+  };
+};
 
 /**
  * Creates a sender that automatically retries the connection on failure and
