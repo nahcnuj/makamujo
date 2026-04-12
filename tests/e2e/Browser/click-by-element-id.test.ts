@@ -33,18 +33,21 @@ test.describe("createClickByElementId (real browser)", () => {
     </body></html>`;
 
     const { server, baseUrl } = await startLocalServer(html);
-    const ctx = await browser.newContext();
-    const page = await ctx.newPage();
-
     try {
-      await page.goto(baseUrl);
+      const ctx = await browser.newContext();
+      const page = await ctx.newPage();
 
-      await createClickByElementId(page)("promptOption0");
+      try {
+        await page.goto(baseUrl);
 
-      const clicked = await page.evaluate(() => (window as any)._clicked);
-      expect(clicked).toBe("first");
+        await createClickByElementId(page)("promptOption0");
+
+        const clicked = await page.evaluate(() => (window as any)._clicked);
+        expect(clicked).toBe("first");
+      } finally {
+        await ctx.close();
+      }
     } finally {
-      await ctx.close();
       await stopLocalServer(server);
     }
   });
