@@ -6,7 +6,7 @@ import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { ServerGames as Games } from "../../lib/Agent/games/server";
 import { create } from "../../lib/Browser/chromium";
-import { createSender } from "../../lib/Browser/socket";
+import { createRetrySender } from "../../lib/Browser/socket";
 import { getDefaultBrowserPath } from "../../lib/Browser/getDefaultBrowserPath";
 
 const { values: {
@@ -95,7 +95,7 @@ const browser = await create(executablePath, {
   height: 720 + 32 /* top bar */,
 });
 
-const send = await createSender(async (action) => {
+const send = await createRetrySender(async (action) => {
   // console.log('[DEBUG]', 'runner got', action);
 
   try {
@@ -159,9 +159,9 @@ const send = await createSender(async (action) => {
     console.error(err);
     send(ActionResult.error(action));
   }
+}, (send) => {
+  send({ name: 'initialized' });
 });
-
-send({ name: 'initialized' });
 
 try {
   await setTimeout(timeout);
