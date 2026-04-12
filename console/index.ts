@@ -23,6 +23,7 @@ export type ConsoleServer = {
  *
  * @param certPath - Path to the TLS certificate file. Defaults to the `CONSOLE_TLS_CERT` env var.
  * @param keyPath  - Path to the TLS private key file. Defaults to the `CONSOLE_TLS_KEY` env var.
+ * @returns A handle with the outer server's URL and a unified `stop()` method.
  */
 export function startConsoleServer(certPath: string = consoleCertPath, keyPath: string = consoleKeyPath): ConsoleServer {
   // Loopback console server: binds to 127.0.0.1 only and serves all console routes

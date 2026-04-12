@@ -1,4 +1,5 @@
 import { test, expect } from "bun:test";
+import { unlinkSync, writeFileSync, existsSync } from "node:fs";
 import { startConsoleServer } from "./index";
 
 test("throws when TLS certificate file is missing", () => {
@@ -6,14 +7,16 @@ test("throws when TLS certificate file is missing", () => {
     .toThrow('TLS certificate files not found');
 });
 
-test("throws when TLS certificate file exists but key file is missing", async () => {
-  const certFile = Bun.file('/tmp/test-console-cert.pem');
-  await Bun.write(certFile, 'placeholder');
+test("throws when TLS certificate file exists but key file is missing", () => {
+  const certFilePath = '/tmp/test-console-cert.pem';
+  writeFileSync(certFilePath, 'placeholder');
 
   try {
-    expect(() => startConsoleServer('/tmp/test-console-cert.pem', '/tmp/nonexistent-key.pem'))
+    expect(() => startConsoleServer(certFilePath, '/tmp/nonexistent-key.pem'))
       .toThrow('TLS certificate files not found');
   } finally {
-    await certFile.unlink?.();
+    if (existsSync(certFilePath)) {
+      unlinkSync(certFilePath);
+    }
   }
 });
