@@ -32,6 +32,21 @@ jobs:
           path: node_modules
           key: node-modules-${{ github.run_id }}
 
+  typecheck:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Restore node_modules from cache
+        uses: actions/cache/restore@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ github.run_id }}
+      - name: Run tsc --noEmit
+        run: bun run typecheck
+
   test:
     needs: setup
     runs-on: ubuntu-latest

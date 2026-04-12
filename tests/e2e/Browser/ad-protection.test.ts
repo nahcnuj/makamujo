@@ -37,7 +37,7 @@ test.describe("Ad protection (real browser)", () => {
     // Open a new page in the same context to simulate an ad popup tab.
     // This fires the BrowserContext 'page' event, which createPopupPageHandler will close.
     const newPageClosed = new Promise<void>((resolve) => {
-      ctx.once("page", (p) => p.once("close", resolve));
+      ctx.once("page", (p) => p.once("close", () => resolve()));
     });
     void ctx.newPage(); // not awaited — handler closes it immediately
 

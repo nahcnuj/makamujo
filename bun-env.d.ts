@@ -18,6 +18,8 @@ declare module "*.module.css" {
 
 // Added manually
 
+declare module "*.css" {}
+
 declare module "*.png" {
   /**
    * A path to the PNG file

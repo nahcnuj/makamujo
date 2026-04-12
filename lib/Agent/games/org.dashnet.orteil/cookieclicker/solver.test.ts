@@ -61,7 +61,7 @@ describe('solver', () => {
     expect(solve.next().value).toHaveProperty('name', 'open');
 
     // open succeeds
-    expect(solve.next(ActionResult.ok(undefined) as any).value).toEqual(Action.clickByText('日本語'));
+    expect(solve.next(ActionResult.ok(undefined as any)).value).toEqual(Action.clickByText('日本語'));
 
     // optional steps fail (e.g. dialogs not present) — initialization should continue
     expect(solve.next(ActionResult.error(Action.clickByText('日本語')) as any).value).toEqual(Action.clickByText('Got it'));

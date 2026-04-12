@@ -75,7 +75,7 @@ if (xauthority) {
       .split('\n')
       .find(line => {
         const fields = line.split(':');
-        return fields.length >= 4 && parseInt(fields[2], 10) === uid;
+        return fields.length >= 4 && parseInt(fields[2] ?? '', 10) === uid;
       });
     if (passwdEntry !== undefined) {
       const home = passwdEntry.split(':')[5];
