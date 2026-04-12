@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 import { unlinkSync, writeFileSync, existsSync } from "node:fs";
-import { startConsoleServer } from "./index";
+import { startConsoleServer } from "../../../console/index";
 
 test("throws when TLS certificate file is missing", () => {
   expect(() => startConsoleServer('/tmp/nonexistent-cert.pem', '/tmp/nonexistent-key.pem'))
