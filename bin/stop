@@ -1,0 +1,27 @@
+#!/usr/bin/env sh
+
+set -eu
+
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+PROJECT_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+
+PID_DIR="${PROJECT_ROOT}/var/pid"
+
+kill_tree() {
+  pid=$1
+  children=$(pgrep -P "$pid" 2>/dev/null || true)
+  for child in $children; do
+    kill_tree "$child"
+  done
+  kill -KILL "$pid" 2>/dev/null || true
+}
+
+for pid_file in "${PID_DIR}/obs" "${PID_DIR}/browser" "${PID_DIR}/screen"; do
+  if [ -f "$pid_file" ]; then
+    pid=$(cat "$pid_file")
+    if [ -n "$pid" ]; then
+      kill_tree "$pid"
+    fi
+    rm -f "$pid_file"
+  fi
+done
