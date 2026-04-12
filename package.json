@@ -8,8 +8,8 @@
     "start": "NODE_ENV=production bun index.ts --port=7777",
     "test": "bun test lib/ src/ routes/",
     "test:integration": "bun test tests/integration/",
-    "pretest:e2e": "playwright install --with-deps chromium",
-    "test:e2e": "if [ -n \"${CI:-}\" ]; then bash scripts/setup-e2e-tls.sh; fi && CONSOLE_TLS_CERT=var/e2e-tls/fullchain.pem CONSOLE_TLS_KEY=var/e2e-tls/privkey.pem playwright test tests/e2e --timeout=60000",
+    "pretest:e2e": "playwright install --with-deps chromium && if [ -n \"${CI:-}\" ]; then bash scripts/setup-e2e-tls.sh; fi",
+    "test:e2e": "CONSOLE_TLS_CERT=var/e2e-tls/fullchain.pem CONSOLE_TLS_KEY=var/e2e-tls/privkey.pem playwright test tests/e2e --timeout=60000",
     "browser": "node --import tsx ./bin/x/browser.ts",
     "generate-ogp": "bun run scripts/generate-ogp.ts",
     "generate-banner": "bun run scripts/generate-banner.ts"
