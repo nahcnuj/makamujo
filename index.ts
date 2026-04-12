@@ -169,7 +169,7 @@ try {
   consoleServer = startConsoleServer();
   console.log(`🚀 Console running at ${consoleServer.url}`);
 } catch (err) {
-  throw err instanceof Error ? err : new Error(String(err));
+  console.warn('Failed to start console server; continuing without it.');
 }
 
 let running = false;
