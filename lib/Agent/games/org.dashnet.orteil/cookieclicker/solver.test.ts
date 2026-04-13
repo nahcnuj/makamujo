@@ -225,15 +225,7 @@ describe('solver', () => {
     expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(escapeAction);
     expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(optionsAction);
 
-    // Third failure: failureCount 2 → 3, stays in save
-    expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(escapeAction);
-    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(optionsAction);
-
-    // Fourth failure: failureCount 3 → 4, stays in save (3 > 3 is false)
-    expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(escapeAction);
-    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(optionsAction);
-
-    // Fifth failure: failureCount 4 > MAX_CONSECUTIVE_FAILURES → transitions to idle
+    // Third failure: failureCount 2 → 3 >= MAX_CONSECUTIVE_FAILURES → transitions to idle
     expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(escapeAction);
     expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(Action.noop);
   });
@@ -253,15 +245,7 @@ describe('solver', () => {
     expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(escapeAction);
     expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(statsAction);
 
-    // Third failure: failureCount 2 → 3, stays in seeStats
-    expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(escapeAction);
-    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(statsAction);
-
-    // Fourth failure: failureCount 3 → 4, stays in seeStats (3 > 3 is false)
-    expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(escapeAction);
-    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(statsAction);
-
-    // Fifth failure: failureCount 4 > MAX_CONSECUTIVE_FAILURES → transitions to idle
+    // Third failure: failureCount 2 → 3 >= MAX_CONSECUTIVE_FAILURES → transitions to idle
     expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(escapeAction);
     expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(Action.noop);
   });
