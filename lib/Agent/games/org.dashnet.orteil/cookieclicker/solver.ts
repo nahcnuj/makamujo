@@ -28,6 +28,14 @@ type SolverEventListeners = {
 
 const MAX_CONSECUTIVE_FAILURES = 3;
 
+function bumpFailureCount<T extends { failureCount: number }>(state: T): T | { type: 'idle'; count: number } {
+  const next = { ...state, failureCount: state.failureCount + 1 };
+  if (next.failureCount >= MAX_CONSECUTIVE_FAILURES) {
+    return { type: 'idle', count: 0 };
+  }
+  return next;
+}
+
 export function* solver(state: GameState = { type: 'initialize' }, eventListeners: Partial<SolverEventListeners> = {}): Generator<Action.Action, undefined, State> {
   const listeners: SolverEventListeners = {
     onSave: [],
@@ -142,14 +150,7 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
 
           if (!(yield* runActions(actions))) {
             if (state.type === 'save') {
-              state = {
-                ...state,
-                failureCount: state.failureCount + 1,
-              };
-
-              if (state.failureCount >= MAX_CONSECUTIVE_FAILURES) {
-                state = { type: 'idle', count: 0 };
-              }
+              state = bumpFailureCount(state);
             }
             break;
           }
@@ -170,14 +171,7 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
 
           if (!(yield* runActions(actions))) {
             if (state.type === 'save') {
-              state = {
-                ...state,
-                failureCount: state.failureCount + 1,
-              };
-
-              if (state.failureCount >= MAX_CONSECUTIVE_FAILURES) {
-                state = { type: 'idle', count: 0 };
-              }
+              state = bumpFailureCount(state);
             }
             break;
           }
@@ -193,14 +187,7 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
 
         if (!(yield* runActions(actions))) {
           if (state.type === 'seeStats') {
-            state = {
-              ...state,
-              failureCount: state.failureCount + 1,
-            };
-
-            if (state.failureCount >= MAX_CONSECUTIVE_FAILURES) {
-              state = { type: 'idle', count: 0 };
-            }
+            state = bumpFailureCount(state);
           }
           break;
         }
