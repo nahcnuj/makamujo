@@ -142,10 +142,14 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
 
           if (!(yield* runActions(actions))) {
             if (state.type === 'save') {
-              const newFailureCount = state.failureCount + 1;
-              state = newFailureCount >= MAX_CONSECUTIVE_FAILURES
-                ? { type: 'idle', count: 0 }
-                : { type: 'save', failureCount: newFailureCount };
+              state = {
+                ...state,
+                failureCount: state.failureCount + 1,
+              };
+
+              if (state.failureCount >= MAX_CONSECUTIVE_FAILURES) {
+                state = { type: 'idle', count: 0 };
+              }
             }
             break;
           }
@@ -166,10 +170,14 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
 
           if (!(yield* runActions(actions))) {
             if (state.type === 'save') {
-              const newFailureCount = state.failureCount + 1;
-              state = newFailureCount >= MAX_CONSECUTIVE_FAILURES
-                ? { type: 'idle', count: 0 }
-                : { type: 'save', failureCount: newFailureCount };
+              state = {
+                ...state,
+                failureCount: state.failureCount + 1,
+              };
+
+              if (state.failureCount >= MAX_CONSECUTIVE_FAILURES) {
+                state = { type: 'idle', count: 0 };
+              }
             }
             break;
           }
@@ -185,10 +193,14 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
 
         if (!(yield* runActions(actions))) {
           if (state.type === 'seeStats') {
-            const newFailureCount = state.failureCount + 1;
-            state = newFailureCount >= MAX_CONSECUTIVE_FAILURES
-              ? { type: 'idle', count: 0 }
-              : { type: 'seeStats', failureCount: newFailureCount };
+            state = {
+              ...state,
+              failureCount: state.failureCount + 1,
+            };
+
+            if (state.failureCount >= MAX_CONSECUTIVE_FAILURES) {
+              state = { type: 'idle', count: 0 };
+            }
           }
           break;
         }
