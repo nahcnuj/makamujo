@@ -28,6 +28,10 @@ type SolverEventListeners = {
 
 const MAX_CONSECUTIVE_FAILURES = 3;
 
+/**
+ * Increments the `failureCount` of the given state by one.
+ * If the updated count reaches {@link MAX_CONSECUTIVE_FAILURES}, returns an `idle` state instead.
+ */
 function bumpFailureCount<T extends { failureCount: number }>(state: T): T | { type: 'idle'; count: number } {
   const next = { ...state, failureCount: state.failureCount + 1 };
   if (next.failureCount >= MAX_CONSECUTIVE_FAILURES) {
