@@ -142,7 +142,7 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
 
           if (!(yield* runActions(actions))) {
             if (state.type === 'save') {
-              state = state.failureCount + 1 > MAX_CONSECUTIVE_FAILURES
+              state = state.failureCount > MAX_CONSECUTIVE_FAILURES
                 ? { type: 'idle', count: 0 }
                 : { type: 'save', failureCount: state.failureCount + 1 };
             }
@@ -165,7 +165,7 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
 
           if (!(yield* runActions(actions))) {
             if (state.type === 'save') {
-              state = state.failureCount + 1 > MAX_CONSECUTIVE_FAILURES
+              state = state.failureCount > MAX_CONSECUTIVE_FAILURES
                 ? { type: 'idle', count: 0 }
                 : { type: 'save', failureCount: state.failureCount + 1 };
             }
@@ -183,7 +183,7 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
 
         if (!(yield* runActions(actions))) {
           if (state.type === 'seeStats') {
-            state = state.failureCount + 1 > MAX_CONSECUTIVE_FAILURES
+            state = state.failureCount > MAX_CONSECUTIVE_FAILURES
               ? { type: 'idle', count: 0 }
               : { type: 'seeStats', failureCount: state.failureCount + 1 };
           }
