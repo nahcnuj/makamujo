@@ -225,7 +225,11 @@ describe('solver', () => {
     expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(escapeAction);
     expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(optionsAction);
 
-    // Third failure: failureCount 2 + 1 = 3 >= maxConsecutiveFailures → transitions to idle
+    // Third failure: failureCount 2 → 3, stays in save (3 > 3 is false)
+    expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(escapeAction);
+    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(optionsAction);
+
+    // Fourth failure: failureCount 3 + 1 = 4 > MAX_CONSECUTIVE_FAILURES → transitions to idle
     expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(escapeAction);
     expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(Action.noop);
   });
@@ -245,7 +249,11 @@ describe('solver', () => {
     expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(escapeAction);
     expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(statsAction);
 
-    // Third failure: failureCount 2 + 1 = 3 >= maxConsecutiveFailures → transitions to idle
+    // Third failure: failureCount 2 → 3, stays in seeStats (3 > 3 is false)
+    expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(escapeAction);
+    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(statsAction);
+
+    // Fourth failure: failureCount 3 + 1 = 4 > MAX_CONSECUTIVE_FAILURES → transitions to idle
     expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(escapeAction);
     expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(Action.noop);
   });
