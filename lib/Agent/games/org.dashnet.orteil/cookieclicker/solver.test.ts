@@ -177,7 +177,7 @@ describe('solver', () => {
   it('should press ESC after the first click in save sequence fails', () => {
     const optionsAction = Action.clickByText('オプション');
 
-    const solve = solver({ type: 'save' });
+    const solve = solver({ type: 'save', failureCount: 0 });
 
     expect(solve.next().value).toEqual(optionsAction);
     expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual({ name: 'press', key: 'Escape' });
@@ -187,7 +187,7 @@ describe('solver', () => {
     const optionsAction = Action.clickByText('オプション');
     const exportAction = Action.clickByText('セーブをエクスポート');
 
-    const solve = solver({ type: 'save' });
+    const solve = solver({ type: 'save', failureCount: 0 });
 
     expect(solve.next().value).toEqual(optionsAction);
     expect(solve.next(ActionResult.ok(optionsAction) as any).value).toEqual(exportAction);
@@ -208,5 +208,45 @@ describe('solver', () => {
     expect(solve.next(idleState as any).value).toEqual(clickAction);
     expect(solve.next(ActionResult.error(clickAction) as any).value).toEqual({ name: 'press', key: 'Escape' });
     expect(solve.next({ name: 'closed' } as any).done).toBeTrue();
+  });
+
+  it('should return to idle after consecutive failures in save state', () => {
+    const optionsAction = Action.clickByText('オプション');
+    const escapeAction = { name: 'press', key: 'Escape' } as const;
+
+    const solve = solver({ type: 'save', failureCount: 0 });
+
+    // First failure: failureCount 0 → 1, stays in save
+    expect(solve.next().value).toEqual(optionsAction);
+    expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(escapeAction);
+    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(optionsAction);
+
+    // Second failure: failureCount 1 → 2, stays in save
+    expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(escapeAction);
+    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(optionsAction);
+
+    // Third failure: failureCount 2 + 1 = 3 >= maxConsecutiveFailures → transitions to idle
+    expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(escapeAction);
+    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(Action.noop);
+  });
+
+  it('should return to idle after consecutive failures in seeStats state', () => {
+    const statsAction = Action.clickByText('記録');
+    const escapeAction = { name: 'press', key: 'Escape' } as const;
+
+    const solve = solver({ type: 'seeStats', failureCount: 0 });
+
+    // First failure: failureCount 0 → 1, stays in seeStats
+    expect(solve.next().value).toEqual(statsAction);
+    expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(escapeAction);
+    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(statsAction);
+
+    // Second failure: failureCount 1 → 2, stays in seeStats
+    expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(escapeAction);
+    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(statsAction);
+
+    // Third failure: failureCount 2 + 1 = 3 >= maxConsecutiveFailures → transitions to idle
+    expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(escapeAction);
+    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(Action.noop);
   });
 });

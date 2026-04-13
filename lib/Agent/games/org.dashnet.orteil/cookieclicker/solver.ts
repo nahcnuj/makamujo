@@ -16,14 +16,17 @@ type GameState =
   }
   | {
     type: 'seeStats'
+    failureCount: number
   }
-  | { type: 'save' }
+  | { type: 'save'; failureCount: number }
   | { type: 'closed' };
 
 type SolverEventListeners = {
   onSave: Array<(text: string) => void>
   isSilent: () => boolean
 };
+
+const MAX_CONSECUTIVE_FAILURES = 3;
 
 export function* solver(state: GameState = { type: 'initialize' }, eventListeners: Partial<SolverEventListeners> = {}): Generator<Action.Action, undefined, State> {
   const listeners: SolverEventListeners = {
@@ -122,6 +125,7 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
         state = state.count >= 1_000 ?
           {
             type: 'save',
+            failureCount: 0,
           } :
           {
             ...state,
@@ -136,7 +140,14 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
             Action.clickByText('セーブをエクスポート'),
           ];
 
-          if (!(yield* runActions(actions))) break;
+          if (!(yield* runActions(actions))) {
+            if (state.type === 'save') {
+              state = state.failureCount + 1 >= MAX_CONSECUTIVE_FAILURES
+                ? { type: 'idle', count: 0 }
+                : { type: 'save', failureCount: state.failureCount + 1 };
+            }
+            break;
+          }
         }
 
         {
@@ -152,9 +163,16 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
             { name: 'press', key: 'Escape' },
           ] as const;
 
-          if (!(yield* runActions(actions))) break;
+          if (!(yield* runActions(actions))) {
+            if (state.type === 'save') {
+              state = state.failureCount + 1 >= MAX_CONSECUTIVE_FAILURES
+                ? { type: 'idle', count: 0 }
+                : { type: 'save', failureCount: state.failureCount + 1 };
+            }
+            break;
+          }
         }
-        state = { type: 'seeStats' };
+        state = { type: 'seeStats', failureCount: 0 };
         break;
       }
       case 'seeStats': {
@@ -163,7 +181,14 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
           Action.noop,
         ];
 
-        if (!(yield* runActions(actions))) break;
+        if (!(yield* runActions(actions))) {
+          if (state.type === 'seeStats') {
+            state = state.failureCount + 1 >= MAX_CONSECUTIVE_FAILURES
+              ? { type: 'idle', count: 0 }
+              : { type: 'seeStats', failureCount: state.failureCount + 1 };
+          }
+          break;
+        }
 
         state = {
           type: 'idle',
