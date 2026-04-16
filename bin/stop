@@ -7,6 +7,18 @@ PROJECT_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
 
 PID_DIR="${PROJECT_ROOT}/var/pid"
 
+wait_until_process_exits() {
+  pid=$1
+  retries=0
+  while kill -0 "$pid" 2>/dev/null; do
+    retries=$((retries + 1))
+    if [ "$retries" -ge 50 ]; then
+      break
+    fi
+    sleep 0.1
+  done
+}
+
 kill_tree() {
   pid=$1
   children=$(pgrep -P "$pid" 2>/dev/null || true)
@@ -14,6 +26,7 @@ kill_tree() {
     kill_tree "$child"
   done
   kill -KILL "$pid" 2>/dev/null || true
+  wait_until_process_exits "$pid"
 }
 
 for pid_file in "${PID_DIR}/obs" "${PID_DIR}/browser" "${PID_DIR}/screen"; do
