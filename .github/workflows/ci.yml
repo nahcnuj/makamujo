@@ -57,6 +57,7 @@ jobs:
         suite:
           - { script: test, label: unit }
           - { script: test:integration, label: integration }
+          - { script: test:bin, label: bin }
           - { script: test:e2e, label: e2e }
     name: test (${{ matrix.suite.label }})
     steps:

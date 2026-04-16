@@ -2,7 +2,7 @@
 
 set -eu
 
-PROJECT_ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
+PROJECT_ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 
 tmp_project_root=$(mktemp -d)
 cleanup() {
