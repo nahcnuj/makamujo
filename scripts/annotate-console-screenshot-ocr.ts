@@ -5,6 +5,9 @@ import { mkdirSync } from "node:fs";
 const ROOT_DIR = path.resolve(import.meta.dir, "..");
 const DEFAULT_INPUT_PATH = path.join(ROOT_DIR, "var", "screenshots", "console-agent-status-mock.png");
 const DEFAULT_OUTPUT_PATH = path.join(ROOT_DIR, "var", "screenshots", "console-agent-status-mock-annotated.png");
+const TESSERACT_TSV_TEXT_COLUMN_INDEX = 11;
+const TESSERACT_TSV_MIN_COLUMN_COUNT = 12;
+const RECTANGLE_MARGIN_PX = 8;
 
 const TARGET_LABELS = [
   "配信エージェントの状態",
@@ -67,10 +70,11 @@ const tsvLines = tesseractResult.stdout
   .filter((line) => line.trim().length > 0);
 const words = tsvLines.slice(1).map((line): OcrWord | null => {
   const columns = line.split("\t");
-  if (columns.length < 12) {
+  // Tesseract TSV format: level/page/block/par/line/word/left/top/width/height/conf/text.
+  if (columns.length < TESSERACT_TSV_MIN_COLUMN_COUNT) {
     return null;
   }
-  const text = columns[11] ?? "";
+  const text = columns[TESSERACT_TSV_TEXT_COLUMN_INDEX] ?? "";
   if (!text.trim()) {
     return null;
   }
@@ -152,11 +156,10 @@ if (matchedRectangles.length === 0) {
 }
 
 const drawArguments = matchedRectangles.flatMap((rectangle) => {
-  const margin = 8;
-  const left = Math.max(rectangle.left - margin, 0);
-  const top = Math.max(rectangle.top - margin, 0);
-  const right = rectangle.right + margin;
-  const bottom = rectangle.bottom + margin;
+  const left = Math.max(rectangle.left - RECTANGLE_MARGIN_PX, 0);
+  const top = Math.max(rectangle.top - RECTANGLE_MARGIN_PX, 0);
+  const right = rectangle.right + RECTANGLE_MARGIN_PX;
+  const bottom = rectangle.bottom + RECTANGLE_MARGIN_PX;
   return ["-draw", `rectangle ${left},${top} ${right},${bottom}`];
 });
 

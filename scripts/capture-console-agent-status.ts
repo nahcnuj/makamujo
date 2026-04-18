@@ -9,6 +9,7 @@ const DEFAULT_OUTPUT_PATH = path.join(ROOT_DIR, "var", "screenshots", "console-a
 const CONSOLE_PATH = "/console/?agentStateMock=1";
 
 const ensureJapaneseFonts = () => {
+  // `grep -q` exits with 0 when a match is found.
   const fontCheckResult = spawnSync("bash", ["-lc", "fc-list :lang=ja | grep -qi 'Noto Sans CJK'"], {
     stdio: "ignore",
   });
