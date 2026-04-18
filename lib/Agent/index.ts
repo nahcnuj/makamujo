@@ -22,12 +22,18 @@ const pickTopic = (text: string) => {
 
 const inferNGramSize = (commentNumber: number): number => {
   const safeCommentNumber = Math.max(1, commentNumber);
-  const normalizedCommentNumber = Math.max(1, safeCommentNumber / 100);
-  const inferredNGramSize = Math.ceil(N_GRAM_LOG_SCALE * Math.log10(safeCommentNumber));
-  const additionalNGramSize = Math.floor(Math.log10(normalizedCommentNumber));
-  const shouldReduceNGramSize = safeCommentNumber < 500 && safeCommentNumber !== 100;
-  const nGramSize = inferredNGramSize + additionalNGramSize - (shouldReduceNGramSize ? 1 : 0);
-  return Math.max(1, nGramSize);
+  const logarithmicNGramSize = Math.ceil(N_GRAM_LOG_SCALE * Math.log10(safeCommentNumber));
+
+  if (safeCommentNumber < 100) {
+    return 1;
+  }
+  if (safeCommentNumber < 1_000) {
+    return Math.max(2, logarithmicNGramSize);
+  }
+  if (safeCommentNumber < 10_000) {
+    return Math.max(4, logarithmicNGramSize);
+  }
+  return Math.max(5, logarithmicNGramSize);
 };
 
 export class MakaMujo {

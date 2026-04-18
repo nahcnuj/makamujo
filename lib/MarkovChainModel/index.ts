@@ -11,25 +11,10 @@ type Distribution = {
   [k: string]: WeightedCandidates
 };
 const DEFAULT_MAX_LEARN_CONTEXT = 8;
-const LEGACY_CONTEXT_SEPARATOR = '\u0001';
-const AGT_CONTEXT_SEPARATOR = '\u0000';
 
 /** Ensures text passed to AGT learn API is always a single Japanese sentence terminator suffix. */
 const normalizeLearnText = (text: string): `${string}。` => (
   `${text.replace(/。+$/u, '')}。` satisfies `${string}。`
-);
-
-/** Converts legacy context keys (`\u0001`) in saved model files to AGT v0.6.1 separator (`\u0000`). */
-const migrateLegacyDistribution = (dist: Distribution): Distribution => (
-  Object.entries(dist).reduce<Distribution>((migrated, [key, cands]) => {
-    const migratedKey = key.replaceAll(LEGACY_CONTEXT_SEPARATOR, AGT_CONTEXT_SEPARATOR);
-    const merged = migrated[migratedKey] ?? {};
-    for (const [word, weight] of Object.entries(cands)) {
-      merged[word] = (merged[word] ?? 0) + weight;
-    }
-    migrated[migratedKey] = merged;
-    return migrated;
-  }, { '': {} })
 );
 
 /**
@@ -61,7 +46,7 @@ export class MarkovChainModel implements TalkModel {
     maxLearnContext = DEFAULT_MAX_LEARN_CONTEXT,
   ): MarkovChainModel {
     const validatedMaxLearnContext = Math.max(1, Math.floor(maxLearnContext));
-    const dist = migrateLegacyDistribution(json.model ?? { '': { '。': 1 } });
+    const dist = json.model ?? { '': { '。': 1 } };
     const instance = new MarkovChainModel(dist, { maxLearnContext: validatedMaxLearnContext });
     instance.#model = MarkovModel.create(
       dist,
@@ -81,7 +66,7 @@ export class MarkovChainModel implements TalkModel {
   ) {
     this.#maxLearnContext = Math.max(1, Math.floor(maxLearnContext));
     this.#model = MarkovModel.create(
-      migrateLegacyDistribution(dist),
+      dist,
       [],
       this.#maxLearnContext,
     );

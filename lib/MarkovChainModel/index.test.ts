@@ -114,22 +114,6 @@ describe('fromFile', () => {
     expect(loaded.generate()).toBe('こんにちは。');
   });
 
-  it('migrates legacy context separator from old model files', () => {
-    const path = join(tmpdir(), `legacy-markov-model-${Date.now()}.json`);
-    temporaryModelFilePaths.push(path);
-    writeFileSync(path, JSON.stringify({
-      model: {
-        '': { 'A': 1 },
-        'A': { 'B': 1 },
-        'A\u0001B': { 'C': 1 },
-        'B\u0001C': { '。': 1 },
-      },
-      corpus: [],
-    }));
-
-    const loaded = MarkovChainModel.fromFile(path);
-    expect(loaded.generate('', 2)).toBe('ABC。');
-  });
 });
 
 describe('n-gram contexts', () => {
