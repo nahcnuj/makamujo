@@ -274,6 +274,10 @@ export class MakaMujo {
     return this.#playing;
   }
 
+  get currentNGramSize() {
+    return this.#currentNGramSize;
+  }
+
   get streamState() {
     return this.#streamState;
   }

@@ -147,6 +147,7 @@ const server = serve({
           niconama: streamState ?? {},
           canSpeak: streamer.canSpeak,
           currentGame: streamer.currentGame ?? null,
+          nGram: streamer.currentNGramSize,
           speech: agent.getSpeech(),
         });
       },

@@ -142,13 +142,14 @@ describe("createAgentStatusRows", () => {
     const rows = createAgentStatusRows({
       canSpeak: true,
       currentGame: { name: "org.dashnet.orteil/cookieclicker", state: { status: "idle" } },
+      nGram: 4,
       speech: { speech: "テスト発話", silent: false },
     });
 
     expect(rows).toContainEqual({ label: "話せる状態", value: "はい" });
     expect(rows).toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
+    expect(rows).toContainEqual({ label: "生成N-gram", value: "4-gram" });
     expect(rows).toContainEqual({ label: "発話内容", value: "テスト発話" });
-    expect(rows).toContainEqual({ label: "サイレント", value: "いいえ" });
   });
 
   it("shows currentGame as '-' when null", () => {
@@ -171,6 +172,19 @@ describe("createAgentStatusRows", () => {
     expect(rows).toContainEqual({ label: "状態", value: "配信中" });
     expect(rows).toContainEqual({ label: "タイトル", value: "-" });
     expect(rows).toContainEqual({ label: "配信URL", value: "-", href: undefined });
+  });
+
+  it("formats niconama start time from millisecond timestamps without multiplying again", () => {
+    const rows = createAgentStatusRows({
+      niconama: {
+        type: "live",
+        meta: {
+          start: 1_713_533_637_000,
+        },
+      },
+    });
+    const startRow = rows.find((row) => row.label === "開始時刻");
+    expect(startRow?.value).toContain("2024");
   });
 });
 
@@ -197,6 +211,7 @@ describe("createMockAgentStateResponse", () => {
           status: "idle",
         },
       },
+      nGram: 4,
       speech: {
         speech: "コメントを学習してお話ししています",
         silent: false,

@@ -92,6 +92,8 @@ test.describe("server", () => {
   test("responds to /api/meta", async ({ request }) => {
     const res = await request.get(`${BASE_URL}/api/meta`);
     expect(res.ok()).toBeTruthy();
+    const data = await res.json();
+    expect(data).toHaveProperty("nGram");
   });
 
   test("accepts POST /api/meta", async ({ request }) => {
@@ -188,4 +190,3 @@ test.describe("server", () => {
     expect(rootElement).not.toBeNull();
   });
 });
-
