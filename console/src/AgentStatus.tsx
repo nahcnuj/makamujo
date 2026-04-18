@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
+const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
+
 export function AgentStatus() {
   const [agentStatusDisplay, setAgentStatusDisplay] = useState("読み込み中...");
   const [isLoadingAgentState, setIsLoadingAgentState] = useState(false);
@@ -19,6 +21,12 @@ export function AgentStatus() {
 
   useEffect(() => {
     void fetchAgentState();
+    const intervalId = setInterval(() => {
+      void fetchAgentState();
+    }, AGENT_STATE_REFRESH_INTERVAL_MS);
+    return () => {
+      clearInterval(intervalId);
+    };
   }, [fetchAgentState]);
 
   return (
