@@ -75,7 +75,7 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
         let statusCode = 500;
         if (!ip || !AllowedIP.equals(ip)) {
           statusCode = 302;
-          safeWriteLog(errorLogger, {
+          errorLogger.write({
             event: 'console_access_denied',
             clientIp: clientIpAddress,
             allowedIp: AllowedIP.toString(),
@@ -85,7 +85,7 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
             userAgent,
             referer,
           });
-          safeWriteLog(accessLogger, {
+          accessLogger.write({
             event: 'console_access',
             clientIp: clientIpAddress,
             method: req.method,
@@ -122,7 +122,7 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
           return response;
         } catch (err) {
           statusCode = 502;
-          safeWriteLog(errorLogger, {
+          errorLogger.write({
             event: 'console_proxy_failed',
             clientIp: clientIpAddress,
             method: req.method,
@@ -134,7 +134,7 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
           });
           return new Response('Bad Gateway', { status: 502 });
         } finally {
-          safeWriteLog(accessLogger, {
+          accessLogger.write({
             event: 'console_access',
             clientIp: clientIpAddress,
             method: req.method,
@@ -164,12 +164,4 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
       outerServer.stop(closeActiveConnections);
     },
   };
-}
-
-function safeWriteLog(logger: { write(record: Record<string, unknown>): void }, record: Record<string, unknown>): void {
-  try {
-    logger.write(record);
-  } catch (err) {
-    console.error(`[ERROR] CONSOLE_LOG_WRITE_FAILED ${formatUnknownError(err)}`);
-  }
 }

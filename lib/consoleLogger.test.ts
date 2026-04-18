@@ -120,14 +120,14 @@ test("rotates stale startup log based on file mtime", () => {
   }
 });
 
-test("does not throw when logger initialization fails", () => {
+test("throws when logger initialization fails", () => {
   const { tempDirectoryPath, logFilePath } = createTempLogPath();
   const invalidDirectoryPath = join(tempDirectoryPath, "not-a-directory");
   const invalidLogFilePath = join(invalidDirectoryPath, "access.log");
 
   try {
     writeFileSync(invalidDirectoryPath, "file");
-    expect(() => createDailyRotatingJsonLogger(invalidLogFilePath)).not.toThrow();
+    expect(() => createDailyRotatingJsonLogger(invalidLogFilePath)).toThrow();
   } finally {
     rmSync(tempDirectoryPath, { recursive: true, force: true });
   }

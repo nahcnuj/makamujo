@@ -11,12 +11,9 @@ export function createDailyRotatingJsonLogger(logFilePath: string, options: Logg
   const now = options.now ?? (() => new Date());
   const currentDate = formatLogDate(now());
 
-  try {
-    ensureLogDirectory(logFilePath);
-    rotateExistingFileOnStartup(logFilePath, currentDate);
-  } catch (error) {
-    writeStderr(`Failed to initialize log file ${logFilePath}: ${formatUnknownError(error)}\n`);
-  }
+  ensureLogDirectory(logFilePath);
+  rotateExistingFileOnStartup(logFilePath, currentDate);
+  assertLogWritable(logFilePath);
 
   let activeDate = currentDate;
 
@@ -49,6 +46,10 @@ function writeStderr(message: string): void {
 
 function ensureLogDirectory(logFilePath: string): void {
   mkdirSync(dirname(logFilePath), { recursive: true });
+}
+
+function assertLogWritable(logFilePath: string): void {
+  appendFileSync(logFilePath, "");
 }
 
 function rotateExistingFileOnStartup(logFilePath: string, currentDate: string): void {
