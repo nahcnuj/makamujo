@@ -125,6 +125,7 @@ test.describe("console", () => {
     await expect(page.getByText("最終更新:", { exact: false })).toBeVisible();
     await expect(page.getByTestId("agent-status-mock-notice")).toContainText("モック表示中");
     await expect(page.getByTestId("agent-status-details")).toContainText("配信エージェント状態モック");
-    await expect(page.getByTestId("agent-status-json")).toContainText("\"canSpeak\": true");
+    await expect(page.getByTestId("agent-status-details")).toContainText("話せる状態");
+    await expect(page.getByTestId("agent-status-details")).toContainText("はい");
   });
 });

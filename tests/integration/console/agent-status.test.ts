@@ -138,6 +138,29 @@ describe("createAgentStatusRows", () => {
     expect(rows).toContainEqual({ label: "広告", value: "789" });
   });
 
+  it("includes canSpeak, currentGame and speech rows when present", () => {
+    const rows = createAgentStatusRows({
+      canSpeak: true,
+      currentGame: { name: "org.dashnet.orteil/cookieclicker", state: { status: "idle" } },
+      speech: { speech: "テスト発話", silent: false },
+    });
+
+    expect(rows).toContainEqual({ label: "話せる状態", value: "はい" });
+    expect(rows).toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
+    expect(rows).toContainEqual({ label: "発話内容", value: "テスト発話" });
+    expect(rows).toContainEqual({ label: "サイレント", value: "いいえ" });
+  });
+
+  it("shows currentGame as '-' when null", () => {
+    const rows = createAgentStatusRows({ currentGame: null });
+    expect(rows).toContainEqual({ label: "現在のゲーム", value: "-" });
+  });
+
+  it("shows canSpeak as 'いいえ' when false", () => {
+    const rows = createAgentStatusRows({ canSpeak: false });
+    expect(rows).toContainEqual({ label: "話せる状態", value: "いいえ" });
+  });
+
   it("returns empty rows when niconama state is absent", () => {
     expect(createAgentStatusRows({})).toEqual([]);
     expect(createAgentStatusRows(null)).toEqual([]);

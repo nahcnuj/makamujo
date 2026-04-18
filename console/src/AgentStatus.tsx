@@ -137,20 +137,35 @@ const formatMetricValue = (metricValue: number | undefined): string => {
  * Converts agent-state payload into user-facing rows for the status details UI.
  */
 export const createAgentStatusRows = (stateResponse: AgentStateResponse | null): AgentStatusRow[] => {
+  const rows: AgentStatusRow[] = [];
+
   const niconamaState = stateResponse?.niconama;
-  if (!niconamaState || Object.keys(niconamaState).length === 0) {
-    return [];
+  if (niconamaState && Object.keys(niconamaState).length > 0) {
+    rows.push(
+      { label: "状態", value: formatStateLabel(niconamaState.type) },
+      { label: "タイトル", value: niconamaState.meta?.title ?? "-" },
+      { label: "配信URL", value: niconamaState.meta?.url ?? "-", href: niconamaState.meta?.url },
+      { label: "開始時刻", value: formatStartDate(niconamaState.meta?.start) },
+      { label: "視聴者数", value: formatMetricValue(niconamaState.meta?.total?.listeners) },
+      { label: "ギフト", value: formatMetricValue(niconamaState.meta?.total?.gift) },
+      { label: "広告", value: formatMetricValue(niconamaState.meta?.total?.ad) },
+    );
   }
 
-  return [
-    { label: "状態", value: formatStateLabel(niconamaState.type) },
-    { label: "タイトル", value: niconamaState.meta?.title ?? "-" },
-    { label: "配信URL", value: niconamaState.meta?.url ?? "-", href: niconamaState.meta?.url },
-    { label: "開始時刻", value: formatStartDate(niconamaState.meta?.start) },
-    { label: "視聴者数", value: formatMetricValue(niconamaState.meta?.total?.listeners) },
-    { label: "ギフト", value: formatMetricValue(niconamaState.meta?.total?.gift) },
-    { label: "広告", value: formatMetricValue(niconamaState.meta?.total?.ad) },
-  ];
+  if (stateResponse?.canSpeak !== undefined) {
+    rows.push({ label: "話せる状態", value: stateResponse.canSpeak ? "はい" : "いいえ" });
+  }
+
+  if (stateResponse !== null && stateResponse !== undefined && "currentGame" in stateResponse) {
+    rows.push({ label: "現在のゲーム", value: stateResponse.currentGame?.name ?? "-" });
+  }
+
+  if (stateResponse?.speech !== undefined) {
+    rows.push({ label: "発話内容", value: stateResponse.speech.speech ?? "-" });
+    rows.push({ label: "サイレント", value: stateResponse.speech.silent ? "はい" : "いいえ" });
+  }
+
+  return rows;
 };
 
 export function AgentStatus() {
@@ -272,17 +287,6 @@ export function AgentStatus() {
           ))}
         </dl>
       )}
-      {agentStateResponse ? (
-        <details
-          data-testid="agent-status-json"
-          className="w-full bg-[#1a1a1a] border-2 border-[#fbf0df] rounded-xl p-3 text-[#fbf0df]"
-        >
-          <summary className="font-bold cursor-pointer">Agent情報（JSON）</summary>
-          <pre className="mt-3 mb-0 overflow-x-auto whitespace-pre-wrap break-all">
-            {JSON.stringify(agentStateResponse, null, 2)}
-          </pre>
-        </details>
-      ) : null}
     </div>
   );
 }
