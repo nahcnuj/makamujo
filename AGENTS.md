@@ -24,6 +24,16 @@
 
 その他、package.jsonのscriptsに書かれているスクリプトが実行できます。
 
+## Agent実行時の注意点
+- `bun` 実行で詰まるケースが多いため、作業開始時に `bun --version` で利用可否を確認する
+  - `bun` が使えない場合は実行を繰り返さず、まず原因（環境初期化不足）を解消する
+- 依存関係未インストールで `bun run test` に進まないよう、最初に `bun ci`（lockfile準拠で更新せず、CIと同じ手順）を実行する
+- 検証コマンドは次の順で実行する
+  1. `bun run typecheck`
+  2. `bun run test`
+  3. `bun run test:integration`
+- シェルスクリプトの挙動確認が必要な変更では `bun run test:bin` も実行する
+
 ## コーディングスタイル
 - TypeScript strict モードを使用
 - React は関数コンポーネント優先
