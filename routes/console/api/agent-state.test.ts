@@ -27,4 +27,28 @@ describe("GET /console/api/agent-state", () => {
       },
     });
   });
+
+  it("returns 502 when /api/meta responds with non-ok status", async () => {
+    globalThis.fetch = (async () => new Response("internal error", { status: 500, statusText: "Internal Server Error" })) as unknown as typeof fetch;
+
+    const res = await GET();
+    expect(res.status).toBe(502);
+    const data = await res.json();
+    expect(data).toEqual({
+      error: "failed to fetch /api/meta: 500 Internal Server Error",
+    });
+  });
+
+  it("returns 502 when fetch throws", async () => {
+    globalThis.fetch = (async () => {
+      throw new Error("connection refused");
+    }) as unknown as typeof fetch;
+
+    const res = await GET();
+    expect(res.status).toBe(502);
+    const data = await res.json();
+    expect(data).toEqual({
+      error: "failed to fetch /api/meta: connection refused",
+    });
+  });
 });
