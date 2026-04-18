@@ -1,11 +1,15 @@
 import { serve } from "bun";
 import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { AllowedIP } from "../lib/allowedIP";
+import { createDailyRotatingJsonLogger } from "../lib/consoleLogger";
 import * as consoleRoutes from "../routes/console/index";
 
 const consoleCertPath = process.env.CONSOLE_TLS_CERT ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem';
 const consoleKeyPath = process.env.CONSOLE_TLS_KEY ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem';
 const consoleRedirectURL = process.env.CONSOLE_REDIRECT_URL ?? 'https://live.nicovideo.jp/watch/user/14171889';
+const consoleAccessLogPath = resolve(process.cwd(), 'var/log/console/access.log');
+const consoleErrorLogPath = resolve(process.cwd(), 'var/log/console/error.log');
 
 export type ConsoleServer = {
   readonly url: URL;
@@ -35,6 +39,9 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
     );
   }
 
+  const accessLogger = createDailyRotatingJsonLogger(consoleAccessLogPath);
+  const errorLogger = createDailyRotatingJsonLogger(consoleErrorLogPath);
+
   // Loopback console server: binds to 127.0.0.1 only and serves all console routes
   // (including HTML bundling). Not exposed to the public network.
   const loopbackServer = serve({
@@ -59,29 +66,76 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
     outerServer = serve({
       port: 443,
       async fetch(req, server) {
+        const requestedAt = Date.now();
+        const requestURL = new URL(req.url);
+        const userAgent = req.headers.get('user-agent');
+        const referer = req.headers.get('referer');
         const ip = server.requestIP(req);
+        let statusCode = 500;
         if (!ip || !AllowedIP.equals(ip)) {
-          console.error(`got ${ip ? `${ip.family}/${ip.address}` : 'unknown'}, want ${AllowedIP.toString()}`);
+          statusCode = 302;
+          const deniedClientAddress = ip ? `${ip.family}/${ip.address}` : 'unknown';
+          errorLogger.write({
+            event: 'console_access_denied',
+            clientIp: deniedClientAddress,
+            allowedIp: AllowedIP.toString(),
+            method: req.method,
+            path: requestURL.pathname,
+            query: requestURL.search,
+            userAgent,
+            referer,
+          });
+          console.error(`got ${deniedClientAddress}, want ${AllowedIP.toString()}`);
           return Response.redirect(consoleRedirectURL, 302);
         }
 
-        // Proxy to the loopback console server, which handles HTML bundling and routing.
-        const proxyURL = new URL(req.url);
-        proxyURL.protocol = 'http:';
-        proxyURL.hostname = '127.0.0.1';
-        proxyURL.port = String(loopbackConsolePort);
+        try {
+          // Proxy to the loopback console server, which handles HTML bundling and routing.
+          const proxyURL = new URL(req.url);
+          proxyURL.protocol = 'http:';
+          proxyURL.hostname = '127.0.0.1';
+          proxyURL.port = String(loopbackConsolePort);
 
-        // Strip hop-by-hop and origin-specific headers that should not be forwarded as-is.
-        const proxyHeaders = new Headers(req.headers);
-        proxyHeaders.delete('host');
-        proxyHeaders.delete('origin');
-        proxyHeaders.delete('referer');
+          // Strip hop-by-hop and origin-specific headers that should not be forwarded as-is.
+          const proxyHeaders = new Headers(req.headers);
+          proxyHeaders.delete('host');
+          proxyHeaders.delete('origin');
+          proxyHeaders.delete('referer');
 
-        return fetch(proxyURL.toString(), {
-          method: req.method,
-          headers: proxyHeaders,
-          body: req.body,
-        });
+          const response = await fetch(proxyURL.toString(), {
+            method: req.method,
+            headers: proxyHeaders,
+            body: req.body,
+          });
+          statusCode = response.status;
+          return response;
+        } catch (err) {
+          statusCode = 502;
+          const errorMessage = err instanceof Error ? (err.stack ?? err.message) : String(err);
+          errorLogger.write({
+            event: 'console_proxy_failed',
+            clientIp: `${ip.family}/${ip.address}`,
+            method: req.method,
+            path: requestURL.pathname,
+            query: requestURL.search,
+            error: errorMessage,
+            userAgent,
+            referer,
+          });
+          return new Response('Bad Gateway', { status: 502 });
+        } finally {
+          accessLogger.write({
+            event: 'console_access',
+            clientIp: `${ip.family}/${ip.address}`,
+            method: req.method,
+            path: requestURL.pathname,
+            query: requestURL.search,
+            status: statusCode,
+            responseTimeMs: Date.now() - requestedAt,
+            userAgent,
+            referer,
+          });
+        }
       },
       tls: {
         cert: Bun.file(certPath),
