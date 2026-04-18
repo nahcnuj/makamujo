@@ -1,4 +1,4 @@
-import { APITester } from "./APITester";
+import { AgentStatus } from "./AgentStatus";
 import "./index.css";
 
 export function App() {
@@ -9,7 +9,7 @@ export function App() {
           馬可無序
         </a>
       </h1>
-      <APITester />
+      <AgentStatus />
     </div>
   );
 }
