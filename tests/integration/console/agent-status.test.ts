@@ -70,6 +70,42 @@ describe("startAgentStateAutoRefresh", () => {
     await Promise.resolve();
     expect(fetchAgentState).toHaveBeenCalledTimes(1);
   });
+
+  it("does not start a new refresh while previous refresh is still in-flight", async () => {
+    let registeredCallback: TimerHandler | null = null;
+    let resolveFetch: () => void = () => {};
+    const fetchAgentState = mock(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+
+    globalThis.setInterval = mock((handler: TimerHandler) => {
+      if (typeof handler === "function") {
+        registeredCallback = handler;
+      }
+      return { token: "interval" } as unknown as ReturnType<typeof setInterval>;
+    }) as unknown as typeof setInterval;
+
+    startAgentStateAutoRefresh(fetchAgentState, 100);
+    expect(typeof registeredCallback).toBe("function");
+    if (typeof registeredCallback !== "function") {
+      throw new Error("registered callback is not a function");
+    }
+    const invokeRegisteredCallback = registeredCallback as () => void;
+
+    invokeRegisteredCallback();
+    invokeRegisteredCallback();
+    expect(fetchAgentState).toHaveBeenCalledTimes(1);
+
+    resolveFetch();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    invokeRegisteredCallback();
+    expect(fetchAgentState).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("createAgentStatusRows", () => {
@@ -138,7 +174,10 @@ describe("createMockAgentStateResponse", () => {
           status: "idle",
         },
       },
-      speech: "コメントを学習してお話ししています",
+      speech: {
+        speech: "コメントを学習してお話ししています",
+        silent: false,
+      },
     });
   });
 });

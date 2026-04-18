@@ -24,7 +24,10 @@ type AgentStateResponse = {
     name?: string
     state?: Record<string, unknown>
   } | null
-  speech?: string
+  speech?: {
+    speech?: string
+    silent?: boolean
+  }
 };
 
 type AgentStatusRow = {
@@ -58,7 +61,10 @@ export const createMockAgentStateResponse = (): AgentStateResponse => ({
       status: "idle",
     },
   },
-  speech: "コメントを学習してお話ししています",
+  speech: {
+    speech: "コメントを学習してお話ししています",
+    silent: false,
+  },
 });
 
 export const isAgentStateMockQueryEnabled = (searchParams: string): boolean => {
@@ -80,8 +86,18 @@ export const startAgentStateAutoRefresh = (
   fetchAgentState: () => Promise<void>,
   refreshIntervalMs = AGENT_STATE_REFRESH_INTERVAL_MS,
 ) => {
+  let isFetching = false;
   const intervalId = setInterval(() => {
-    void fetchAgentState().catch(() => undefined);
+    if (isFetching) {
+      return;
+    }
+
+    isFetching = true;
+    void fetchAgentState()
+      .catch(() => undefined)
+      .finally(() => {
+        isFetching = false;
+      });
   }, refreshIntervalMs);
   return () => {
     clearInterval(intervalId);
