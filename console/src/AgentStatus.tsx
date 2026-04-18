@@ -31,13 +31,14 @@ export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
 
 /**
  * Starts periodic refresh polling and returns a cleanup function.
+ * `refreshIntervalMs` is overrideable for tests.
  */
 export const startAgentStateAutoRefresh = (
   fetchAgentState: () => Promise<void>,
   refreshIntervalMs = AGENT_STATE_REFRESH_INTERVAL_MS,
 ) => {
   const intervalId = setInterval(() => {
-    void fetchAgentState();
+    void fetchAgentState().catch(() => undefined);
   }, refreshIntervalMs);
   return () => {
     clearInterval(intervalId);
@@ -61,6 +62,10 @@ const formatStartDate = (startAtUnixTimeSeconds: number | undefined): string => 
   return new Date(startAtUnixTimeSeconds * 1000).toLocaleString("ja-JP");
 };
 
+const formatMetricValue = (metricValue: number | undefined): string => {
+  return metricValue === undefined ? "-" : String(metricValue);
+};
+
 /**
  * Converts agent-state payload into user-facing rows for the status details UI.
  */
@@ -75,9 +80,9 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
     { label: "タイトル", value: niconamaState.meta?.title ?? "-" },
     { label: "配信URL", value: niconamaState.meta?.url ?? "-", href: niconamaState.meta?.url },
     { label: "開始時刻", value: formatStartDate(niconamaState.meta?.start) },
-    { label: "視聴者数", value: String(niconamaState.meta?.total?.listeners ?? "-") },
-    { label: "ギフト", value: String(niconamaState.meta?.total?.gift ?? "-") },
-    { label: "広告", value: String(niconamaState.meta?.total?.ad ?? "-") },
+    { label: "視聴者数", value: formatMetricValue(niconamaState.meta?.total?.listeners) },
+    { label: "ギフト", value: formatMetricValue(niconamaState.meta?.total?.gift) },
+    { label: "広告", value: formatMetricValue(niconamaState.meta?.total?.ad) },
   ];
 };
 

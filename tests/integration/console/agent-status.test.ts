@@ -43,6 +43,29 @@ describe("startAgentStateAutoRefresh", () => {
     stopAutoRefresh();
     expect(clearIntervalMock).toHaveBeenCalledWith(intervalToken);
   });
+
+  it("swallows polling callback rejection", async () => {
+    const fetchAgentState = mock(async () => {
+      throw new Error("temporary failure");
+    });
+    let registeredCallback: TimerHandler | null = null;
+
+    globalThis.setInterval = mock((handler: TimerHandler) => {
+      if (typeof handler === "function") {
+        registeredCallback = handler;
+      }
+      return { token: "interval" } as unknown as ReturnType<typeof setInterval>;
+    }) as unknown as typeof setInterval;
+
+    startAgentStateAutoRefresh(fetchAgentState, 100);
+    expect(typeof registeredCallback).toBe("function");
+    if (typeof registeredCallback === "function") {
+      const invokeRegisteredCallback = registeredCallback as () => void;
+      expect(() => invokeRegisteredCallback()).not.toThrow();
+    }
+    await Promise.resolve();
+    expect(fetchAgentState).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("createAgentStatusRows", () => {
