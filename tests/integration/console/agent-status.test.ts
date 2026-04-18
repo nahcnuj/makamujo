@@ -58,7 +58,7 @@ describe("startAgentStateAutoRefresh", () => {
       if (typeof handler === "function") {
         registeredCallback = handler;
       }
-      return { token: "interval" } as unknown as ReturnType<typeof setInterval>;
+      return 1 as unknown as ReturnType<typeof setInterval>;
     }) as unknown as typeof setInterval;
 
     startAgentStateAutoRefresh(fetchAgentState, 100);
@@ -85,7 +85,7 @@ describe("startAgentStateAutoRefresh", () => {
       if (typeof handler === "function") {
         registeredCallback = handler;
       }
-      return { token: "interval" } as unknown as ReturnType<typeof setInterval>;
+      return 1 as unknown as ReturnType<typeof setInterval>;
     }) as unknown as typeof setInterval;
 
     startAgentStateAutoRefresh(fetchAgentState, 100);

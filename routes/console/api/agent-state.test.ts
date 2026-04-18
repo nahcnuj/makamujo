@@ -1,12 +1,14 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, mock } from "bun:test";
 import { GET } from "./agent-state";
 
 const originalFetch = globalThis.fetch;
 const originalSetTimeout = globalThis.setTimeout;
+const originalClearTimeout = globalThis.clearTimeout;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
   globalThis.setTimeout = originalSetTimeout;
+  globalThis.clearTimeout = originalClearTimeout;
 });
 
 describe("GET /console/api/agent-state", () => {
@@ -67,6 +69,8 @@ describe("GET /console/api/agent-state", () => {
       }
       return 1;
     }) as unknown) as typeof setTimeout;
+    const mockClearTimeout = mock((id: ReturnType<typeof setTimeout>) => id);
+    globalThis.clearTimeout = mockClearTimeout as unknown as typeof clearTimeout;
 
     const res = await GET();
     expect(res.status).toBe(502);
@@ -74,5 +78,6 @@ describe("GET /console/api/agent-state", () => {
     expect(data).toEqual({
       error: "failed to fetch /api/meta: request timed out (5000ms)",
     });
+    expect(mockClearTimeout).toHaveBeenCalledWith(1);
   });
 });

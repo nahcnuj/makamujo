@@ -9,9 +9,7 @@ const AGENT_STATE_TIMEOUT_ERROR_MESSAGE = `failed to fetch /api/meta: request ti
 
 export async function GET() {
   const abortController = new AbortController();
-  let didTimeout = false;
   const timeoutId = setTimeout(() => {
-    didTimeout = true;
     abortController.abort();
   }, AGENT_STATE_TIMEOUT_MS);
 
@@ -27,7 +25,7 @@ export async function GET() {
     }
     return Response.json(await response.json());
   } catch (error) {
-    if (didTimeout) {
+    if (error instanceof DOMException && error.name === "AbortError") {
       return Response.json({ error: AGENT_STATE_TIMEOUT_ERROR_MESSAGE }, { status: 502 });
     }
     return Response.json(
