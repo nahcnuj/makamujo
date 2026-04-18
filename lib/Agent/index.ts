@@ -19,6 +19,19 @@ const pickTopic = (text: string) => {
   return topic;
 };
 
+const inferNGramSize = (commentNumber: number): number => {
+  if (commentNumber < 100) {
+    return 1;
+  }
+  if (commentNumber < 500) {
+    return 2;
+  }
+  if (commentNumber < 1_000) {
+    return 3;
+  }
+  return Math.max(1, Math.floor(Math.log10(commentNumber)));
+};
+
 export class MakaMujo {
   #talkModel: TalkModel;
   #tts: TTS;
@@ -120,7 +133,10 @@ export class MakaMujo {
       this.#lastCommentAt = new Date(Date.now());
 
       if (data.no || data.isOwner) {
-        this.#learn(`${comment}。`);
+        this.#learn(
+          `${comment}。`,
+          typeof data.no === 'number' ? inferNGramSize(data.no) : 1,
+        );
       }
 
       if (data.no || (data.userId === 'onecomme.system' && data.name === '生放送クルーズ')) {
@@ -193,8 +209,8 @@ export class MakaMujo {
     }
   }
 
-  #learn(text: `${string}。`) {
-    this.#talkModel.learn(text);
+  #learn(text: `${string}。`, n: number) {
+    this.#talkModel.learn(text, n);
   }
 
   onAir(state: StreamData | unknown) {
@@ -277,7 +293,7 @@ export class MakaMujo {
 
 export interface TalkModel {
   generate(start?: string): string
-  learn(text: string): void
+  learn(text: string, n?: number): void
   toJSON(): string
 }
 

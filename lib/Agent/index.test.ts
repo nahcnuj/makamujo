@@ -172,3 +172,36 @@ describe('speech completion hooks', () => {
     expect(completeListener).toHaveBeenCalled();
   });
 });
+
+describe('comment learning n-gram size', () => {
+  const comment = (no: number) => ({
+    data: {
+      comment: 'こんにちは',
+      no,
+      anonymity: false,
+      hasGift: false,
+    },
+  });
+
+  it.each([
+    { no: 99, expected: 1 },
+    { no: 100, expected: 2 },
+    { no: 499, expected: 2 },
+    { no: 500, expected: 3 },
+    { no: 999, expected: 3 },
+    { no: 1_000, expected: 3 },
+    { no: 10_000, expected: 4 },
+  ])('learns with n=$expected for comment no=$no', ({ no, expected }) => {
+    const learn = jest.fn();
+    const talkModel: TalkModel = {
+      generate: () => '',
+      learn,
+      toJSON: () => '{}',
+    };
+    const agent = new MakaMujo(talkModel, stubTts);
+
+    agent.listen([comment(no)]);
+
+    expect(learn).toHaveBeenCalledWith('こんにちは。', expected);
+  });
+});

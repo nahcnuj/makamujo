@@ -137,3 +137,16 @@ describe('toJSON', () => {
     }
   });
 });
+
+describe('n-gram contexts', () => {
+  it('uses higher-order context when available', () => {
+    const model = new MarkovChainModel({
+      '': { 'A': 1 },
+      'A': { 'B': 1 },
+      'A\u0001B': { 'C': 1 },
+      'B\u0001C': { '。': 1 },
+    });
+
+    expect(model.generate()).toBe('ABC。');
+  });
+});

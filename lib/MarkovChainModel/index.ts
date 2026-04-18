@@ -3,6 +3,7 @@ import type { TalkModel } from "../Agent";
 import { choose } from "./choose";
 
 type WeightedCandidates = Record<string, number>;
+const CONTEXT_SEPARATOR = '\u0001';
 
 type Distribution = {
   /** initial word candidates */
@@ -50,6 +51,7 @@ const lengthInUtf8 = (text: string): number => textEncoder.encode(text).byteLeng
 export class MarkovChainModel implements TalkModel {
   #dist: Distribution;
   #corpus: string[] = [];
+  #maxContextSize = 1;
   #wordSegmenter;
   #sentenceSegmenter;
   #graphemeSegmenter;
@@ -66,18 +68,45 @@ export class MarkovChainModel implements TalkModel {
     this.#wordSegmenter = new Intl.Segmenter(locale, { granularity: 'word' });
     this.#sentenceSegmenter = new Intl.Segmenter(locale, { granularity: 'sentence' });
     this.#graphemeSegmenter = new Intl.Segmenter(locale, { granularity: 'grapheme' });
+    this.#maxContextSize = this.#measureMaxContextSize();
+  }
+
+  #measureMaxContextSize(): number {
+    return Math.max(1, ...Object.keys(this.#dist).map((key) => key === '' ? 0 : key.split(CONTEXT_SEPARATOR).length));
+  }
+
+  #wordSegments(text: string): string[] {
+    return Array.from(this.#wordSegmenter.segment(text)).map(({ segment }) => segment);
+  }
+
+  #contextKey(words: string[]): string {
+    return words.length <= 0 ? '' : words.join(CONTEXT_SEPARATOR);
+  }
+
+  #pickCandidates(history: string[], allowEmptyContext = true): WeightedCandidates | undefined {
+    for (let contextSize = Math.min(this.#maxContextSize, history.length); contextSize > 0; contextSize--) {
+      const cands = this.#dist[this.#contextKey(history.slice(-contextSize))];
+      if (cands && Object.keys(cands).length > 0) {
+        return cands;
+      }
+    }
+    return allowEmptyContext ? this.#dist[''] : undefined;
   }
 
   *#generator(start: string) {
+    let history = start === '' ? [] : [start];
     let word = start;
     let byteLength = lengthInUtf8(word);
+    let firstStep = true;
     do {
-      const cands = this.#dist[word];
+      const cands = this.#pickCandidates(history, !(firstStep && start !== ''));
       if (!cands || Object.keys(cands).length <= 0) {
         console.warn(`No candidates after "${word}"`);
         break;
       }
+      firstStep = false;
       word = pick(cands);
+      history = [...history, word].slice(-this.#maxContextSize);
 
       if (byteLength > 0 && Array.from(this.#graphemeSegmenter.segment(word)).map(({ segment }) => segment).length === 1 && word.match(/[\p{Script=Hiragana}]/u)) {
         // breathe after the word
@@ -105,23 +134,31 @@ export class MarkovChainModel implements TalkModel {
     return start + this.#generator(start).take(limit).toArray().join('');
   }
 
-  learn(text: string): void {
+  learn(text: string, n = 1): void {
+    const contextSize = Math.max(1, Math.floor(n));
+    this.#maxContextSize = Math.max(this.#maxContextSize, contextSize);
+
     for (const { segment: sentence } of this.#sentenceSegmenter.segment(text)) {
       console.debug('[DEBUG]', 'learn a sentence', sentence);
 
       this.#corpus.push(sentence);
 
-      Array.from(this.#wordSegmenter.segment(sentence)).map(({ segment }) => segment)
-        .reduce<string>((prev, next) => {
-          if (prev !== '' || acceptBeginning(next)) {
-            this.#dist[prev] = {
-              [next]: 0,
-              ...(this.#dist[prev] ?? {}),
-            };
-            this.#dist[prev][next] = (this.#dist[prev][next] ?? 0) + 1;
-          }
-          return next;
-        }, '');
+      const context: string[] = [];
+      for (const next of this.#wordSegments(sentence)) {
+        const previous = this.#contextKey(context);
+        if (previous !== '' || acceptBeginning(next)) {
+          this.#dist[previous] = {
+            [next]: 0,
+            ...(this.#dist[previous] ?? {}),
+          };
+          this.#dist[previous][next] = (this.#dist[previous][next] ?? 0) + 1;
+        }
+
+        context.push(next);
+        if (context.length > contextSize) {
+          context.shift();
+        }
+      }
     }
   }
 
