@@ -8,7 +8,7 @@ export const SILENCE_THRESHOLD_MS = 5 * 60 * 1_000; // 5 minutes
 
 const jaJP = new Intl.Locale('ja-JP');
 const N_GRAM_LOG_SCALE = 1.5;
-const N_GRAM_ROUNDING_OFFSET = 0.5;
+const N_GRAM_LOG_BASELINE = 1;
 const pickTopic = (text: string) => {
   const words = Array.from(new Intl.Segmenter(jaJP, { granularity: 'word' }).segment(text)).map(({ segment }) => segment);
   const cands = words.reduce<string[]>((prev, s) => {
@@ -23,7 +23,7 @@ const pickTopic = (text: string) => {
 
 const inferNGramSize = (commentNumber: number): number => {
   const safeCommentNumber = Math.max(1, commentNumber);
-  const calculatedNGramSize = Math.floor((N_GRAM_LOG_SCALE * Math.log10(safeCommentNumber)) - N_GRAM_ROUNDING_OFFSET);
+  const calculatedNGramSize = Math.round((N_GRAM_LOG_SCALE * Math.log10(safeCommentNumber)) - N_GRAM_LOG_BASELINE);
 
   if (safeCommentNumber < 100) {
     return 1;
