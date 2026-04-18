@@ -22,7 +22,7 @@ const pickTopic = (text: string) => {
 };
 
 const inferNGramSize = (commentNumber: number): number => {
-  const safeCommentNumber = Math.max(1, commentNumber);
+  const safeCommentNumber = Math.max(10, commentNumber);
   return Math.round((N_GRAM_LOG_SCALE * Math.log10(safeCommentNumber)) - N_GRAM_LOG_BASELINE);
 };
 
