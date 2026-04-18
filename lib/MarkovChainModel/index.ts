@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
+import { MarkovModel } from "automated-gameplay-transmitter";
 import type { TalkModel } from "../Agent";
-import { choose } from "./choose";
 
 type WeightedCandidates = Record<string, number>;
 
@@ -10,24 +10,12 @@ type Distribution = {
 
   [k: string]: WeightedCandidates
 };
+const DEFAULT_MAX_LEARN_CONTEXT = 8;
 
-declare global {
-  interface Math {
-    /** @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/sumPrecise */
-    sumPrecise(args: number[]): number;
-  }
-}
-
-const pick = (cands: WeightedCandidates) => {
-  const total = Math.sumPrecise(Object.values(cands));
-  const rnd = Math.floor(Math.random() * total);
-  return choose(Object.entries(cands), rnd);
-};
-
-const acceptBeginning = (text: string) => [...text].length > 1 || !text.match(/[\p{Script=Hiragana}\p{Script=Katakana}\p{Punctuation}\p{Modifier_Letter}\p{Other_Symbol}]/u);
-
-const textEncoder = new TextEncoder();
-const lengthInUtf8 = (text: string): number => textEncoder.encode(text).byteLength;
+/** Ensures text passed to AGT learn API is always a single Japanese sentence terminator suffix. */
+const normalizeLearnText = (text: string): `${string}。` => (
+  `${text.replace(/。+$/u, '')}。` satisfies `${string}。`
+);
 
 /**
  * A word-level Markov chain model.
@@ -42,104 +30,74 @@ const lengthInUtf8 = (text: string): number => textEncoder.encode(text).byteLeng
  * model.learn('こんにちは。');
  * console.log(JSON.stringify(model.json, null, 2));
  * 
- * const text = model.generate();
- * 
- * const reply = model.reply('元気ですか？');
- * console.log(reply);
+ * const text = model.generate('', 2);
+ * console.log(text);
  */
 export class MarkovChainModel implements TalkModel {
-  #dist: Distribution;
-  #corpus: string[] = [];
-  #wordSegmenter;
-  #sentenceSegmenter;
-  #graphemeSegmenter;
+  #model: ReturnType<typeof MarkovModel.create>;
+  /** Effective learn-context limit used when creating/deriving AGT MarkovModel instances. */
+  #maxLearnContext: number;
+  /** Rehydrates MarkovChainModel from AGT JSON snapshot with validated context limit. */
+  static #fromJson(
+    json: {
+      model?: Distribution
+      corpus?: string[]
+    },
+    maxLearnContext = DEFAULT_MAX_LEARN_CONTEXT,
+  ): MarkovChainModel {
+    const validatedMaxLearnContext = Math.max(1, Math.floor(maxLearnContext));
+    const dist = json.model ?? { '': { '。': 1 } };
+    const instance = new MarkovChainModel(dist, { maxLearnContext: validatedMaxLearnContext });
+    instance.#model = MarkovModel.create(
+      dist,
+      json.corpus ?? [],
+      validatedMaxLearnContext,
+    );
+    return instance;
+  }
 
   constructor(
     dist: Distribution = { '': { '。': 1 } },
     {
-      locale,
+      maxLearnContext,
     } = {
-      locale: new Intl.Locale('ja-JP'),
+      maxLearnContext: DEFAULT_MAX_LEARN_CONTEXT,
     },
   ) {
-    this.#dist = dist;
-    this.#wordSegmenter = new Intl.Segmenter(locale, { granularity: 'word' });
-    this.#sentenceSegmenter = new Intl.Segmenter(locale, { granularity: 'sentence' });
-    this.#graphemeSegmenter = new Intl.Segmenter(locale, { granularity: 'grapheme' });
+    this.#maxLearnContext = Math.max(1, Math.floor(maxLearnContext));
+    this.#model = MarkovModel.create(
+      dist,
+      [],
+      this.#maxLearnContext,
+    );
   }
 
-  *#generator(start: string) {
-    let word = start;
-    let byteLength = lengthInUtf8(word);
-    do {
-      const cands = this.#dist[word];
-      if (!cands || Object.keys(cands).length <= 0) {
-        console.warn(`No candidates after "${word}"`);
-        break;
-      }
-      word = pick(cands);
-
-      if (byteLength > 0 && Array.from(this.#graphemeSegmenter.segment(word)).map(({ segment }) => segment).length === 1 && word.match(/[\p{Script=Hiragana}]/u)) {
-        // breathe after the word
-        yield `${word} `;
-        byteLength = 0;
-      } else {
-        if (word.match(/[\s\p{Punctuation}]/u)) {
-          byteLength = 0;
-        } else {
-          byteLength += lengthInUtf8(word);
-        }
-
-        if (byteLength >= 17) {
-          // the phrase seems too long
-          yield `${word} `;
-          byteLength = 0;
-        } else {
-          yield word;
-        }
-      }
-    } while (word !== '。');
-  }
-
-  generate(start: string = '', limit = Number.POSITIVE_INFINITY): string {
-    return start + this.#generator(start).take(limit).toArray().join('');
+  generate(
+    start: string = '',
+    nGram = 1,
+  ): string {
+    // Delegates n-gram generation to AGT's MarkovModel implementation.
+    return this.#model.gen(start, nGram);
   }
 
   learn(text: string): void {
-    for (const { segment: sentence } of this.#sentenceSegmenter.segment(text)) {
-      console.debug('[DEBUG]', 'learn a sentence', sentence);
-
-      this.#corpus.push(sentence);
-
-      Array.from(this.#wordSegmenter.segment(sentence)).map(({ segment }) => segment)
-        .reduce<string>((prev, next) => {
-          if (prev !== '' || acceptBeginning(next)) {
-            this.#dist[prev] = {
-              [next]: 0,
-              ...(this.#dist[prev] ?? {}),
-            };
-            this.#dist[prev][next] = (this.#dist[prev][next] ?? 0) + 1;
-          }
-          return next;
-        }, '');
-    }
+    this.#model.learn(normalizeLearnText(text));
   }
 
   toLearned(text: string): MarkovChainModel {
-    const model = new MarkovChainModel(this.#dist);
-    model.learn(text);
-    return model;
+    const copied = this.#model.toLearned(normalizeLearnText(text)).json;
+    return MarkovChainModel.#fromJson(copied, this.#maxLearnContext);
   }
 
   static fromFile(path: string): MarkovChainModel {
-    const { model = undefined } = JSON.parse(readFileSync(path, { encoding: 'utf-8' }));
-    return new MarkovChainModel(model);
+    const {
+      model = { '': { '。': 1 } },
+      corpus = [],
+    } = JSON.parse(readFileSync(path, { encoding: 'utf-8' }));
+    return MarkovChainModel.#fromJson({ model, corpus }, DEFAULT_MAX_LEARN_CONTEXT);
   }
 
   toJSON(): string {
-    const obj = {
-      model: this.#dist,
-    };
-    return JSON.stringify(obj, null, 0);
+    return JSON.stringify(this.#model.json, null, 0);
   }
 };

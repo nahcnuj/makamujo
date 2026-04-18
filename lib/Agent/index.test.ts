@@ -172,3 +172,71 @@ describe('speech completion hooks', () => {
     expect(completeListener).toHaveBeenCalled();
   });
 });
+
+describe('comment learning n-gram size', () => {
+  const comment = (no: number) => ({
+    data: {
+      comment: 'こんにちは',
+      no,
+      anonymity: false,
+      hasGift: false,
+    },
+  });
+
+  it.each([
+    { no: 1, expected: 1 },
+    { no: 10, expected: 1 },
+    { no: 99, expected: 1 },
+    { no: 100, expected: 2 },
+    { no: 999, expected: 3 },
+    { no: 1_000, expected: 4 },
+    { no: 5_000, expected: 5 },
+    { no: 9_999, expected: 5 },
+    { no: 10_000, expected: 6 },
+  ])('generates with n=$expected for comment no=$no', ({ no, expected }) => {
+    const generate = jest.fn(() => '');
+    const learn = jest.fn();
+    const talkModel: TalkModel = {
+      generate,
+      learn,
+      toJSON: () => '{}',
+    };
+    const agent = new MakaMujo(talkModel, stubTts);
+
+    agent.listen([comment(no)]);
+
+    expect(learn).toHaveBeenCalledWith('こんにちは。');
+    expect(generate).toHaveBeenCalledWith('こんにちは', expected);
+  });
+
+  it('uses latest inferred n when generating default speech', async () => {
+    const generate = jest.fn(() => '');
+    const talkModel: TalkModel = {
+      generate,
+      learn: () => {},
+      toJSON: () => '{}',
+    };
+    const agent = new MakaMujo(talkModel, stubTts);
+
+    agent.listen([comment(1_000)]);
+    await agent.speech();
+
+    expect(generate).toHaveBeenLastCalledWith('', 4);
+  });
+
+  it('does not learn comment when no is 0', () => {
+    const generate = jest.fn(() => '');
+    const learn = jest.fn();
+    const talkModel: TalkModel = {
+      generate,
+      learn,
+      toJSON: () => '{}',
+    };
+    const agent = new MakaMujo(talkModel, stubTts);
+
+    agent.listen([comment(0)]);
+
+    expect(learn).not.toHaveBeenCalled();
+    expect(generate).not.toHaveBeenCalled();
+  });
+});

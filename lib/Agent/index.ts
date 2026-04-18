@@ -7,6 +7,8 @@ import type { AgentState } from "./State";
 export const SILENCE_THRESHOLD_MS = 5 * 60 * 1_000; // 5 minutes
 
 const jaJP = new Intl.Locale('ja-JP');
+const N_GRAM_LOG_SCALE = 2;
+const N_GRAM_LOG_BASELINE = 2;
 const pickTopic = (text: string) => {
   const words = Array.from(new Intl.Segmenter(jaJP, { granularity: 'word' }).segment(text)).map(({ segment }) => segment);
   const cands = words.reduce<string[]>((prev, s) => {
@@ -17,6 +19,11 @@ const pickTopic = (text: string) => {
   }, ['']);
   const topic = cands.at(Math.floor(Math.random() * cands.length));
   return topic;
+};
+
+const inferNGramSize = (commentNumber: number): number => {
+  const safeCommentNumber = Math.max(1, commentNumber);
+  return Math.max(1, Math.floor((N_GRAM_LOG_SCALE * Math.log10(safeCommentNumber)) - N_GRAM_LOG_BASELINE));
 };
 
 export class MakaMujo {
@@ -38,6 +45,7 @@ export class MakaMujo {
   #lastListenerCount?: number;
   #listenersStaleSince?: Date;
   #lastCommentAt?: Date;
+  #currentNGramSize = 1;
 
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
@@ -86,7 +94,7 @@ export class MakaMujo {
     });
   }
 
-  async speech(text: string = this.#talkModel.generate()) {
+  async speech(text: string = this.#talkModel.generate('', this.#currentNGramSize)) {
     // console.log('[DEBUG]', 'speech', text);
 
     this.#speechPromise = this.#speechPromise.then(async () => {
@@ -119,6 +127,11 @@ export class MakaMujo {
       // Update last comment timestamp for any received comment that counts as activity.
       this.#lastCommentAt = new Date(Date.now());
 
+      if (typeof data.no === 'number') {
+        const commentNumber = data.no;
+        this.#currentNGramSize = inferNGramSize(commentNumber);
+      }
+
       if (data.no || data.isOwner) {
         this.#learn(`${comment}。`);
       }
@@ -129,7 +142,7 @@ export class MakaMujo {
         const topic = pickTopic(comment);
         if (topic) {
           // console.debug('[DEBUG]', 'picked a word', `"${topic}"`, 'from', `"${comment}"`);
-          this.speech(this.#talkModel.generate(topic));
+          this.speech(this.#talkModel.generate(topic, this.#currentNGramSize));
         }
       }
 
@@ -276,7 +289,7 @@ export class MakaMujo {
 }
 
 export interface TalkModel {
-  generate(start?: string): string
+  generate(start?: string, nGram?: number): string
   learn(text: string): void
   toJSON(): string
 }
