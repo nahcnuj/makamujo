@@ -143,7 +143,12 @@ const server = serve({
     '/api/meta': {
       GET: () => {
         const streamState = agent.getStreamState();
-        return Response.json({ niconama: streamState ?? {} });
+        return Response.json({
+          niconama: streamState ?? {},
+          canSpeak: streamer.canSpeak,
+          currentGame: streamer.currentGame ?? null,
+          speech: agent.getSpeech(),
+        });
       },
       POST: async (req) => {
         const body = await req.json();

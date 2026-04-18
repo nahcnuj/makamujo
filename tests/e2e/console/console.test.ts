@@ -109,33 +109,23 @@ test.describe("console", () => {
     expect(text).toContain("Disallow: /");
   });
 
-  test("responds to GET /console/api/hello", async ({ request }) => {
-    const res = await request.get(`${CONSOLE_BASE_URL}/console/api/hello`);
+  test("responds to GET /console/api/agent-state", async ({ request }) => {
+    const res = await request.get(`${CONSOLE_BASE_URL}/console/api/agent-state`);
     expect(res.ok()).toBeTruthy();
     const data = await res.json();
-    expect(data).toHaveProperty("message", "Hello, world!");
-    expect(data).toHaveProperty("method", "GET");
-  });
-
-  test("responds to PUT /console/api/hello", async ({ request }) => {
-    const res = await request.put(`${CONSOLE_BASE_URL}/console/api/hello`);
-    expect(res.ok()).toBeTruthy();
-    const data = await res.json();
-    expect(data).toHaveProperty("message", "Hello, world!");
-    expect(data).toHaveProperty("method", "PUT");
-  });
-
-  test("responds to GET /console/api/hello/:name", async ({ request }) => {
-    const res = await request.get(`${CONSOLE_BASE_URL}/console/api/hello/world`);
-    expect(res.ok()).toBeTruthy();
-    const data = await res.json();
-    expect(data).toHaveProperty("message", "Hello, world!");
+    expect(data).toHaveProperty("niconama");
   });
 
   test("renders the console app in a browser", async ({ page }) => {
-    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await page.goto(`${CONSOLE_BASE_URL}/console/?agentStateMock=1`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
     expect(await page.title()).toContain(EXPECTED_CONSOLE_TITLE);
     const rootElement = await page.$("#root");
     expect(rootElement).not.toBeNull();
+    await expect(page.getByRole("heading", { name: "配信エージェントの状態" })).toBeVisible();
+    await expect(page.getByText("最終更新:", { exact: false })).toBeVisible();
+    await expect(page.getByTestId("agent-status-mock-notice")).toContainText("モック表示中");
+    await expect(page.getByTestId("agent-status-details")).toContainText("配信エージェント状態モック");
+    await expect(page.getByTestId("agent-status-details")).toContainText("話せる状態");
+    await expect(page.getByTestId("agent-status-details")).toContainText("はい");
   });
 });
