@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 
+/**
+ * Response schema returned by `/console/api/agent-state`.
+ * `error` is populated when the proxy endpoint returns a non-200 response.
+ */
 type AgentStateResponse = {
   error?: string
   niconama?: {
@@ -25,6 +29,9 @@ type AgentStatusRow = {
 
 export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
 
+/**
+ * Starts periodic refresh polling and returns a cleanup function.
+ */
 export const startAgentStateAutoRefresh = (
   fetchAgentState: () => Promise<void>,
   refreshIntervalMs = AGENT_STATE_REFRESH_INTERVAL_MS,
@@ -54,6 +61,9 @@ const formatStartDate = (startAtUnixTimeSeconds: number | undefined): string => 
   return new Date(startAtUnixTimeSeconds * 1000).toLocaleString("ja-JP");
 };
 
+/**
+ * Converts agent-state payload into user-facing rows for the status details UI.
+ */
 export const createAgentStatusRows = (stateResponse: AgentStateResponse | null): AgentStatusRow[] => {
   const niconamaState = stateResponse?.niconama;
   if (!niconamaState || Object.keys(niconamaState).length === 0) {

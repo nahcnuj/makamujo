@@ -79,4 +79,11 @@ describe("createAgentStatusRows", () => {
     expect(createAgentStatusRows({})).toEqual([]);
     expect(createAgentStatusRows(null)).toEqual([]);
   });
+
+  it("returns fallback rows when niconama exists without metadata", () => {
+    const rows = createAgentStatusRows({ niconama: { type: "live" } });
+    expect(rows).toContainEqual({ label: "状態", value: "配信中" });
+    expect(rows).toContainEqual({ label: "タイトル", value: "-" });
+    expect(rows).toContainEqual({ label: "配信URL", value: "-", href: undefined });
+  });
 });
