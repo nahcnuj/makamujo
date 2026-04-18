@@ -24,7 +24,7 @@ test("writes structured JSON logs", () => {
     const logLine = readFileSync(logFilePath, "utf8").trim();
     const entry = JSON.parse(logLine) as Record<string, unknown>;
 
-    expect(entry.timestamp).toBe("2026-04-18T12:00:00.000Z");
+    expect(entry.timestamp).toBe("2026-04-18T21:00:00.000+09:00");
     expect(entry.event).toBe("console_access");
     expect(entry.status).toBe(200);
   } finally {
@@ -32,7 +32,7 @@ test("writes structured JSON logs", () => {
   }
 });
 
-test("overrides caller-provided timestamp with write-time timestamp", () => {
+test("replaces caller timestamp field with logger write-time timestamp", () => {
   const { tempDirectoryPath, logFilePath } = createTempLogPath();
   try {
     const logger = createDailyRotatingJsonLogger(logFilePath, {
@@ -43,7 +43,7 @@ test("overrides caller-provided timestamp with write-time timestamp", () => {
 
     const logLine = readFileSync(logFilePath, "utf8").trim();
     const entry = JSON.parse(logLine) as Record<string, unknown>;
-    expect(entry.timestamp).toBe("2026-04-18T12:00:00.000Z");
+    expect(entry.timestamp).toBe("2026-04-18T21:00:00.000+09:00");
   } finally {
     rmSync(tempDirectoryPath, { recursive: true, force: true });
   }
@@ -115,6 +115,41 @@ test("rotates stale startup log based on file mtime", () => {
 
     logger.write({ event: "fresh" });
     expect(readFileSync(logFilePath, "utf8")).toContain('"event":"fresh"');
+  } finally {
+    rmSync(tempDirectoryPath, { recursive: true, force: true });
+  }
+});
+
+test("does not throw when logger initialization fails", () => {
+  const { tempDirectoryPath, logFilePath } = createTempLogPath();
+  const invalidDirectoryPath = join(tempDirectoryPath, "not-a-directory");
+  const invalidLogFilePath = join(invalidDirectoryPath, "access.log");
+
+  try {
+    writeFileSync(invalidDirectoryPath, "file");
+    expect(() => createDailyRotatingJsonLogger(invalidLogFilePath)).not.toThrow();
+  } finally {
+    rmSync(tempDirectoryPath, { recursive: true, force: true });
+  }
+});
+
+test("rotates by JST date boundary", () => {
+  const { tempDirectoryPath, logFilePath } = createTempLogPath();
+  const beforeJstMidnight = new Date("2026-04-18T14:59:59.999Z");
+  const afterJstMidnight = new Date("2026-04-18T15:00:00.000Z");
+  let currentDate = beforeJstMidnight;
+
+  try {
+    const logger = createDailyRotatingJsonLogger(logFilePath, {
+      now: () => currentDate,
+    });
+    logger.write({ event: "before-midnight" });
+    currentDate = afterJstMidnight;
+    logger.write({ event: "after-midnight" });
+
+    const rotatedLogPath = `${logFilePath}.2026-04-18`;
+    expect(existsSync(rotatedLogPath)).toBe(true);
+    expect(readFileSync(logFilePath, "utf8")).toContain('"timestamp":"2026-04-19T00:00:00.000+09:00"');
   } finally {
     rmSync(tempDirectoryPath, { recursive: true, force: true });
   }

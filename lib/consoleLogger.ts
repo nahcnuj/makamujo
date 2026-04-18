@@ -11,8 +11,12 @@ export function createDailyRotatingJsonLogger(logFilePath: string, options: Logg
   const now = options.now ?? (() => new Date());
   const currentDate = formatLogDate(now());
 
-  ensureLogDirectory(logFilePath);
-  rotateExistingFileOnStartup(logFilePath, currentDate);
+  try {
+    ensureLogDirectory(logFilePath);
+    rotateExistingFileOnStartup(logFilePath, currentDate);
+  } catch (error) {
+    writeStderr(`Failed to initialize log file ${logFilePath}: ${formatUnknownError(error)}\n`);
+  }
 
   let activeDate = currentDate;
 
@@ -27,7 +31,7 @@ export function createDailyRotatingJsonLogger(logFilePath: string, options: Logg
         }
 
         const { timestamp: _ignoredTimestamp, ...recordWithoutTimestamp } = record;
-        appendFileSync(logFilePath, `${JSON.stringify({ timestamp: currentTime.toISOString(), ...recordWithoutTimestamp })}\n`);
+        appendFileSync(logFilePath, `${JSON.stringify({ timestamp: formatJstTimestamp(currentTime), ...recordWithoutTimestamp })}\n`);
       } catch (error) {
         writeStderr(`Failed to write log entry to ${logFilePath}: ${formatUnknownError(error)}\n`);
       }
@@ -82,14 +86,32 @@ function rotateLogFile(logFilePath: string, rotationDate: string): void {
 }
 
 function formatLogDate(date: Date): string {
-  const year = String(date.getFullYear());
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const jstDate = toJstDate(date);
+  const year = String(jstDate.getUTCFullYear());
+  const month = String(jstDate.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(jstDate.getUTCDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 }
 
-function formatUnknownError(error: unknown): string {
+function formatJstTimestamp(date: Date): string {
+  const jstDate = toJstDate(date);
+  const year = String(jstDate.getUTCFullYear());
+  const month = String(jstDate.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(jstDate.getUTCDate()).padStart(2, "0");
+  const hours = String(jstDate.getUTCHours()).padStart(2, "0");
+  const minutes = String(jstDate.getUTCMinutes()).padStart(2, "0");
+  const seconds = String(jstDate.getUTCSeconds()).padStart(2, "0");
+  const milliseconds = String(jstDate.getUTCMilliseconds()).padStart(3, "0");
+
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}+09:00`;
+}
+
+function toJstDate(date: Date): Date {
+  return new Date(date.getTime() + 9 * 60 * 60 * 1000);
+}
+
+export function formatUnknownError(error: unknown): string {
   if (error instanceof Error) {
     return error.stack ?? error.message;
   }

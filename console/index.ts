@@ -2,7 +2,7 @@ import { serve } from "bun";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { AllowedIP } from "../lib/allowedIP";
-import { createDailyRotatingJsonLogger } from "../lib/consoleLogger";
+import { createDailyRotatingJsonLogger, formatUnknownError } from "../lib/consoleLogger";
 import * as consoleRoutes from "../routes/console/index";
 
 const consoleCertPath = process.env.CONSOLE_TLS_CERT ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem';
@@ -172,12 +172,4 @@ function safeWriteLog(logger: { write(record: Record<string, unknown>): void }, 
   } catch (err) {
     console.error(`[ERROR] CONSOLE_LOG_WRITE_FAILED ${formatUnknownError(err)}`);
   }
-}
-
-function formatUnknownError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.stack ?? error.message;
-  }
-
-  return String(error);
 }
