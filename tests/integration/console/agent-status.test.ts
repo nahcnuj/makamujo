@@ -3,6 +3,8 @@ import {
   AGENT_STATE_REFRESH_INTERVAL_MS,
   createMockAgentStateResponse,
   createAgentStatusRows,
+  isAgentStateMockQueryEnabled,
+  shouldUseMockAgentState,
   startAgentStateAutoRefresh,
 } from "../../../console/src/AgentStatus";
 
@@ -129,5 +131,43 @@ describe("createMockAgentStateResponse", () => {
         },
       },
     });
+  });
+});
+
+describe("isAgentStateMockQueryEnabled", () => {
+  it("returns true when the query includes agentStateMock=1", () => {
+    expect(isAgentStateMockQueryEnabled("?agentStateMock=1")).toBe(true);
+  });
+
+  it("returns false when the query omits or changes the flag value", () => {
+    expect(isAgentStateMockQueryEnabled("")).toBe(false);
+    expect(isAgentStateMockQueryEnabled("?agentStateMock=0")).toBe(false);
+  });
+});
+
+describe("shouldUseMockAgentState", () => {
+  const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
+
+  afterEach(() => {
+    if (originalWindowDescriptor) {
+      Object.defineProperty(globalThis, "window", originalWindowDescriptor);
+      return;
+    }
+    // @ts-expect-error test cleanup for Node-like runtime
+    delete globalThis.window;
+  });
+
+  it("returns false when window is unavailable", () => {
+    // @ts-expect-error test setup for Node-like runtime
+    delete globalThis.window;
+    expect(shouldUseMockAgentState()).toBe(false);
+  });
+
+  it("returns true when browser query enables mock mode", () => {
+    Object.defineProperty(globalThis, "window", {
+      value: { location: { search: "?agentStateMock=1" } },
+      configurable: true,
+    });
+    expect(shouldUseMockAgentState()).toBe(true);
   });
 });

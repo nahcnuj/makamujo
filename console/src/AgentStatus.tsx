@@ -46,11 +46,15 @@ export const createMockAgentStateResponse = (): AgentStateResponse => ({
   },
 });
 
-const shouldUseMockAgentState = (): boolean => {
+export const isAgentStateMockQueryEnabled = (searchParams: string): boolean => {
+  return new URLSearchParams(searchParams).get(AGENT_STATE_MOCK_QUERY_KEY) === "1";
+};
+
+export const shouldUseMockAgentState = (): boolean => {
   if (typeof window === "undefined") {
     return false;
   }
-  return new URLSearchParams(window.location.search).get(AGENT_STATE_MOCK_QUERY_KEY) === "1";
+  return isAgentStateMockQueryEnabled(window.location.search);
 };
 
 /**
