@@ -40,6 +40,7 @@ type AgentStatusRow = {
 export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
 const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
 const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正です。";
+// Distinguishes unix seconds from unix milliseconds by treating 13-digit values as milliseconds.
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 
 export const createMockAgentStateResponse = (): AgentStateResponse => ({
@@ -125,13 +126,13 @@ const formatStateLabel = (type: string | undefined): string => {
   return type ?? "-";
 };
 
-const formatStartDate = (startAtUnixTimeSeconds: number | undefined): string => {
-  if (typeof startAtUnixTimeSeconds !== "number" || !Number.isFinite(startAtUnixTimeSeconds) || startAtUnixTimeSeconds <= 0) {
+const formatStartDate = (startAtUnixTime: number | undefined): string => {
+  if (typeof startAtUnixTime !== "number" || !Number.isFinite(startAtUnixTime) || startAtUnixTime <= 0) {
     return "-";
   }
-  const startAtUnixTimeMilliseconds = startAtUnixTimeSeconds >= UNIX_MILLISECONDS_THRESHOLD
-    ? startAtUnixTimeSeconds
-    : startAtUnixTimeSeconds * 1000;
+  const startAtUnixTimeMilliseconds = startAtUnixTime >= UNIX_MILLISECONDS_THRESHOLD
+    ? startAtUnixTime
+    : startAtUnixTime * 1000;
   return new Date(startAtUnixTimeMilliseconds).toLocaleString("ja-JP");
 };
 

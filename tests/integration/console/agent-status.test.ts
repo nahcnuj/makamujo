@@ -162,6 +162,13 @@ describe("createAgentStatusRows", () => {
     expect(rows).toContainEqual({ label: "話せる状態", value: "いいえ" });
   });
 
+  it("formats n-gram row with fallback for invalid numbers", () => {
+    expect(createAgentStatusRows({ nGram: Infinity })).toContainEqual({ label: "生成N-gram", value: "-" });
+    expect(createAgentStatusRows({ nGram: 0 })).toContainEqual({ label: "生成N-gram", value: "-" });
+    expect(createAgentStatusRows({ nGram: 4.8 })).toContainEqual({ label: "生成N-gram", value: "4-gram" });
+    expect(createAgentStatusRows({})).not.toContainEqual({ label: "生成N-gram", value: "-" });
+  });
+
   it("returns empty rows when niconama state is absent", () => {
     expect(createAgentStatusRows({})).toEqual([]);
     expect(createAgentStatusRows(null)).toEqual([]);
