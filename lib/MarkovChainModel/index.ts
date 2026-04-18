@@ -11,6 +11,26 @@ type Distribution = {
   [k: string]: WeightedCandidates
 };
 const DEFAULT_MAX_LEARN_CONTEXT = 8;
+const LEGACY_CONTEXT_SEPARATOR = '\u0001';
+const AGT_CONTEXT_SEPARATOR = '\u0000';
+
+/** Ensures text passed to AGT learn API is always a single Japanese sentence terminator suffix. */
+const normalizeLearnText = (text: string): `${string}。` => (
+  `${text.replace(/。+$/u, '')}。` satisfies `${string}。`
+);
+
+/** Converts legacy context keys (`\u0001`) in saved model files to AGT v0.6.1 separator (`\u0000`). */
+const migrateLegacyDistribution = (dist: Distribution): Distribution => (
+  Object.entries(dist).reduce<Distribution>((migrated, [key, cands]) => {
+    const migratedKey = key.replaceAll(LEGACY_CONTEXT_SEPARATOR, AGT_CONTEXT_SEPARATOR);
+    const merged = migrated[migratedKey] ?? {};
+    for (const [word, weight] of Object.entries(cands)) {
+      merged[word] = (merged[word] ?? 0) + weight;
+    }
+    migrated[migratedKey] = merged;
+    return migrated;
+  }, { '': {} })
+);
 
 /**
  * A word-level Markov chain model.
@@ -25,10 +45,8 @@ const DEFAULT_MAX_LEARN_CONTEXT = 8;
  * model.learn('こんにちは。');
  * console.log(JSON.stringify(model.json, null, 2));
  * 
- * const text = model.generate();
- * 
- * const reply = model.reply('元気ですか？');
- * console.log(reply);
+ * const text = model.generate('', 2);
+ * console.log(text);
  */
 export class MarkovChainModel implements TalkModel {
   #model: ReturnType<typeof MarkovModel.create>;
@@ -44,7 +62,7 @@ export class MarkovChainModel implements TalkModel {
     },
   ) {
     this.#model = MarkovModel.create(
-      dist,
+      migrateLegacyDistribution(dist),
       [],
       Math.max(1, Math.floor(maxLearnContext)),
     );
@@ -54,25 +72,26 @@ export class MarkovChainModel implements TalkModel {
     start: string = '',
     nGram = 1,
   ): string {
+    // Delegates n-gram generation to AGT's MarkovModel implementation.
     return this.#model.gen(start, nGram);
   }
 
   learn(text: string): void {
-    this.#model.learn(text as `${string}。`);
+    this.#model.learn(normalizeLearnText(text));
   }
 
   toLearned(text: string): MarkovChainModel {
-    const copied = this.#model.toLearned(text as `${string}。`).json;
+    const copied = this.#model.toLearned(normalizeLearnText(text)).json;
     return new MarkovChainModel(copied.model);
   }
 
   static fromFile(path: string): MarkovChainModel {
     const {
-      model = undefined,
+      model = { '': { '。': 1 } },
       corpus = [],
     } = JSON.parse(readFileSync(path, { encoding: 'utf-8' }));
     const instance = new MarkovChainModel();
-    instance.#model = MarkovModel.create(model, corpus);
+    instance.#model = MarkovModel.create(migrateLegacyDistribution(model), corpus);
     return instance;
   }
 
