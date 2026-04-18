@@ -1,0 +1,162 @@
+import { test, expect } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createDailyRotatingJsonLogger } from "./consoleLogger";
+
+function createTempLogPath() {
+  const tempDirectoryPath = mkdtempSync(join(tmpdir(), "console-logger-test-"));
+  return {
+    tempDirectoryPath,
+    logFilePath: join(tempDirectoryPath, "access.log"),
+  };
+}
+
+test("writes structured JSON logs", async () => {
+  const { tempDirectoryPath, logFilePath } = createTempLogPath();
+  try {
+    const logger = createDailyRotatingJsonLogger(logFilePath, {
+      now: () => new Date("2026-04-18T12:00:00.000Z"),
+    });
+
+    logger.write({ event: "console_access", status: 200 });
+    await logger.flush();
+
+    const logLine = readFileSync(logFilePath, "utf8").trim();
+    const entry = JSON.parse(logLine) as Record<string, unknown>;
+
+    expect(entry.timestamp).toBe("2026-04-18T21:00:00.000+09:00");
+    expect(entry.event).toBe("console_access");
+    expect(entry.status).toBe(200);
+  } finally {
+    rmSync(tempDirectoryPath, { recursive: true, force: true });
+  }
+});
+
+test("replaces caller timestamp field with logger write-time timestamp", async () => {
+  const { tempDirectoryPath, logFilePath } = createTempLogPath();
+  try {
+    const logger = createDailyRotatingJsonLogger(logFilePath, {
+      now: () => new Date("2026-04-18T12:00:00.000Z"),
+    });
+
+    logger.write({ event: "console_access", timestamp: "caller-provided" });
+    await logger.flush();
+
+    const logLine = readFileSync(logFilePath, "utf8").trim();
+    const entry = JSON.parse(logLine) as Record<string, unknown>;
+    expect(entry.timestamp).toBe("2026-04-18T21:00:00.000+09:00");
+  } finally {
+    rmSync(tempDirectoryPath, { recursive: true, force: true });
+  }
+});
+
+test("rotates to dated file when date changes", async () => {
+  const { tempDirectoryPath, logFilePath } = createTempLogPath();
+  const firstDate = new Date("2026-04-18T12:00:00.000Z");
+  const secondDate = new Date("2026-04-19T12:00:00.000Z");
+  let currentDate = firstDate;
+
+  try {
+    const logger = createDailyRotatingJsonLogger(logFilePath, {
+      now: () => currentDate,
+    });
+
+    logger.write({ event: "first" });
+    currentDate = secondDate;
+    logger.write({ event: "second" });
+    await logger.flush();
+
+    const rotatedLogPath = `${logFilePath}.2026-04-18`;
+    expect(existsSync(rotatedLogPath)).toBe(true);
+    expect(readFileSync(rotatedLogPath, "utf8")).toContain('"event":"first"');
+    expect(readFileSync(logFilePath, "utf8")).toContain('"event":"second"');
+  } finally {
+    rmSync(tempDirectoryPath, { recursive: true, force: true });
+  }
+});
+
+test("rotates to next suffixed path when rotated file already exists", async () => {
+  const { tempDirectoryPath, logFilePath } = createTempLogPath();
+  const firstDate = new Date("2026-04-18T12:00:00.000Z");
+  const secondDate = new Date("2026-04-19T12:00:00.000Z");
+  let currentDate = firstDate;
+
+  try {
+    writeFileSync(`${logFilePath}.2026-04-18`, '{"event":"existing"}\n');
+    writeFileSync(`${logFilePath}.2026-04-18.1`, '{"event":"existing1"}\n');
+    const logger = createDailyRotatingJsonLogger(logFilePath, {
+      now: () => currentDate,
+    });
+
+    logger.write({ event: "first" });
+    currentDate = secondDate;
+    logger.write({ event: "second" });
+    await logger.flush();
+
+    const rotatedLogPath = `${logFilePath}.2026-04-18.2`;
+    expect(existsSync(rotatedLogPath)).toBe(true);
+    expect(readFileSync(rotatedLogPath, "utf8")).toContain('"event":"first"');
+  } finally {
+    rmSync(tempDirectoryPath, { recursive: true, force: true });
+  }
+});
+
+test("rotates stale startup log based on file mtime", async () => {
+  const { tempDirectoryPath, logFilePath } = createTempLogPath();
+
+  try {
+    writeFileSync(logFilePath, '{"event":"stale"}\n');
+    utimesSync(logFilePath, new Date("2026-04-17T12:00:00.000Z"), new Date("2026-04-17T12:00:00.000Z"));
+
+    const logger = createDailyRotatingJsonLogger(logFilePath, {
+      now: () => new Date("2026-04-18T12:00:00.000Z"),
+    });
+
+    const rotatedLogPath = `${logFilePath}.2026-04-17`;
+    expect(existsSync(rotatedLogPath)).toBe(true);
+    expect(readFileSync(rotatedLogPath, "utf8")).toContain('"event":"stale"');
+
+    logger.write({ event: "fresh" });
+    await logger.flush();
+    expect(readFileSync(logFilePath, "utf8")).toContain('"event":"fresh"');
+  } finally {
+    rmSync(tempDirectoryPath, { recursive: true, force: true });
+  }
+});
+
+test("throws when logger initialization fails", () => {
+  const { tempDirectoryPath, logFilePath } = createTempLogPath();
+  const invalidDirectoryPath = join(tempDirectoryPath, "not-a-directory");
+  const invalidLogFilePath = join(invalidDirectoryPath, "access.log");
+
+  try {
+    writeFileSync(invalidDirectoryPath, "file");
+    expect(() => createDailyRotatingJsonLogger(invalidLogFilePath)).toThrow();
+  } finally {
+    rmSync(tempDirectoryPath, { recursive: true, force: true });
+  }
+});
+
+test("rotates by JST date boundary", async () => {
+  const { tempDirectoryPath, logFilePath } = createTempLogPath();
+  const beforeJstMidnight = new Date("2026-04-18T14:59:59.999Z");
+  const afterJstMidnight = new Date("2026-04-18T15:00:00.000Z");
+  let currentDate = beforeJstMidnight;
+
+  try {
+    const logger = createDailyRotatingJsonLogger(logFilePath, {
+      now: () => currentDate,
+    });
+    logger.write({ event: "before-midnight" });
+    currentDate = afterJstMidnight;
+    logger.write({ event: "after-midnight" });
+    await logger.flush();
+
+    const rotatedLogPath = `${logFilePath}.2026-04-18`;
+    expect(existsSync(rotatedLogPath)).toBe(true);
+    expect(readFileSync(logFilePath, "utf8")).toContain('"timestamp":"2026-04-19T00:00:00.000+09:00"');
+  } finally {
+    rmSync(tempDirectoryPath, { recursive: true, force: true });
+  }
+});
