@@ -186,13 +186,13 @@ describe('comment learning n-gram size', () => {
   it.each([
     { no: 1, expected: 1 },
     { no: 10, expected: 1 },
-    { no: 99, expected: 2 },
+    { no: 99, expected: 1 },
     { no: 100, expected: 2 },
     { no: 999, expected: 3 },
     { no: 1_000, expected: 4 },
     { no: 5_000, expected: 5 },
     { no: 9_999, expected: 5 },
-    { no: 10_000, expected: 5 },
+    { no: 10_000, expected: 6 },
   ])('generates with n=$expected for comment no=$no', ({ no, expected }) => {
     const generate = jest.fn(() => '');
     const learn = jest.fn();
