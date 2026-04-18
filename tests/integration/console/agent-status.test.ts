@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import {
   AGENT_STATE_REFRESH_INTERVAL_MS,
+  createMockAgentStateResponse,
   createAgentStatusRows,
   startAgentStateAutoRefresh,
 } from "../../../console/src/AgentStatus";
@@ -108,5 +109,25 @@ describe("createAgentStatusRows", () => {
     expect(rows).toContainEqual({ label: "状態", value: "配信中" });
     expect(rows).toContainEqual({ label: "タイトル", value: "-" });
     expect(rows).toContainEqual({ label: "配信URL", value: "-", href: undefined });
+  });
+});
+
+describe("createMockAgentStateResponse", () => {
+  it("returns deterministic mock state for screenshot capture", () => {
+    expect(createMockAgentStateResponse()).toEqual({
+      niconama: {
+        type: "live",
+        meta: {
+          title: "配信エージェント状態モック",
+          url: "https://example.com/watch/mock",
+          start: 1_717_000_000,
+          total: {
+            listeners: 123,
+            gift: 456,
+            ad: 789,
+          },
+        },
+      },
+    });
   });
 });

@@ -117,12 +117,12 @@ test.describe("console", () => {
   });
 
   test("renders the console app in a browser", async ({ page }) => {
-    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await page.goto(`${CONSOLE_BASE_URL}/console/?agentStateMock=1`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
     expect(await page.title()).toContain(EXPECTED_CONSOLE_TITLE);
     const rootElement = await page.$("#root");
     expect(rootElement).not.toBeNull();
     await expect(page.getByRole("heading", { name: "配信エージェントの状態" })).toBeVisible();
     await expect(page.getByText("最終更新:", { exact: false })).toBeVisible();
-    await expect(page.getByTestId("agent-status-empty")).toContainText("配信情報はありません。");
+    await expect(page.getByTestId("agent-status-details")).toContainText("配信エージェント状態モック");
   });
 });

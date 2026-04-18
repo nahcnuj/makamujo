@@ -28,6 +28,30 @@ type AgentStatusRow = {
 };
 
 export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
+const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
+
+export const createMockAgentStateResponse = (): AgentStateResponse => ({
+  niconama: {
+    type: "live",
+    meta: {
+      title: "配信エージェント状態モック",
+      url: "https://example.com/watch/mock",
+      start: 1_717_000_000,
+      total: {
+        listeners: 123,
+        gift: 456,
+        ad: 789,
+      },
+    },
+  },
+});
+
+const shouldUseMockAgentState = (): boolean => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return new URLSearchParams(window.location.search).get(AGENT_STATE_MOCK_QUERY_KEY) === "1";
+};
 
 /**
  * Starts periodic refresh polling and returns a cleanup function.
@@ -95,6 +119,13 @@ export function AgentStatus() {
   const fetchAgentState = useCallback(async () => {
     setIsLoadingAgentState(true);
     try {
+      if (shouldUseMockAgentState()) {
+        setAgentStateResponse(createMockAgentStateResponse());
+        setAgentStatusError(null);
+        setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
+        return;
+      }
+
       const response = await fetch("/console/api/agent-state");
       const responseData = await response.json() as AgentStateResponse;
 
@@ -106,7 +137,13 @@ export function AgentStatus() {
       setAgentStatusError(null);
       setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
     } catch (error) {
-      setAgentStatusError(error instanceof Error ? error.message : String(error));
+      setAgentStatusError(
+        error instanceof SyntaxError
+          ? "配信状態の応答形式が不正です。"
+          : error instanceof Error
+            ? error.message
+            : String(error),
+      );
     } finally {
       setIsLoadingAgentState(false);
     }
