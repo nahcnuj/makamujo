@@ -146,11 +146,12 @@ export function AgentStatus() {
 
       const response = await fetch("/console/api/agent-state");
       const responseText = await response.text();
+      const responseContentType = response.headers.get("content-type") ?? "(none)";
       let responseData: AgentStateResponse;
       try {
         responseData = JSON.parse(responseText) as AgentStateResponse;
       } catch {
-        throw new SyntaxError("配信状態の応答形式が不正です。");
+        throw new SyntaxError(`配信状態の応答形式が不正です（content-type: ${responseContentType}）`);
       }
 
       if (!response.ok) {
@@ -205,7 +206,7 @@ export function AgentStatus() {
           data-testid="agent-status-mock-notice"
           className="w-full bg-[#2c2c18] border-2 border-[#f3d5a3] rounded-xl p-3 text-[#fbf0df]"
         >
-          実配信状態が取得できないため、モック表示中です。
+          実配信状態が取得できないため、モック表示中
         </div>
       ) : null}
       {agentStatusError ? (
@@ -246,7 +247,6 @@ export function AgentStatus() {
       )}
       {agentStateResponse ? (
         <details
-          open
           data-testid="agent-status-json"
           className="w-full bg-[#1a1a1a] border-2 border-[#fbf0df] rounded-xl p-3 text-[#fbf0df]"
         >
