@@ -186,9 +186,9 @@ describe('comment learning n-gram size', () => {
   it.each([
     { no: 99, expected: 1 },
     { no: 100, expected: 2 },
-    { no: 499, expected: 2 },
-    { no: 500, expected: 2 },
-    { no: 999, expected: 2 },
+    { no: 499, expected: 3 },
+    { no: 500, expected: 3 },
+    { no: 999, expected: 3 },
     { no: 1_000, expected: 3 },
     { no: 10_000, expected: 4 },
   ])('generates with n=$expected for comment no=$no', ({ no, expected }) => {
@@ -220,5 +220,21 @@ describe('comment learning n-gram size', () => {
     await agent.speech();
 
     expect(generate).toHaveBeenLastCalledWith('', 3);
+  });
+
+  it('learns comment even when no is 0', () => {
+    const generate = jest.fn(() => '');
+    const learn = jest.fn();
+    const talkModel: TalkModel = {
+      generate,
+      learn,
+      toJSON: () => '{}',
+    };
+    const agent = new MakaMujo(talkModel, stubTts);
+
+    agent.listen([comment(0)]);
+
+    expect(learn).toHaveBeenCalledWith('こんにちは。');
+    expect(generate).not.toHaveBeenCalled();
   });
 });

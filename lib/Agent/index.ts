@@ -24,7 +24,7 @@ const inferNGramSize = (commentNumber: number): number => {
   if (commentNumber < 100) {
     return 1;
   }
-  return Math.max(2, Math.floor(N_GRAM_LOG_SCALE * Math.log10(commentNumber)));
+  return Math.max(2, Math.ceil(N_GRAM_LOG_SCALE * Math.log10(commentNumber)));
 };
 
 export class MakaMujo {
@@ -128,10 +128,13 @@ export class MakaMujo {
       // Update last comment timestamp for any received comment that counts as activity.
       this.#lastCommentAt = new Date(Date.now());
 
-      if (data.no || data.isOwner) {
-        if (typeof data.no === 'number') {
-          this.#currentNGramSize = inferNGramSize(data.no);
-        }
+      const commentNumber = commentData.no;
+      const hasCommentNumber = typeof commentNumber === 'number';
+      if (hasCommentNumber) {
+        this.#currentNGramSize = inferNGramSize(commentNumber);
+      }
+
+      if (hasCommentNumber || commentData.isOwner) {
         this.#learn(`${comment}。`);
       }
 
