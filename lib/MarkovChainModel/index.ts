@@ -24,6 +24,7 @@ const pick = (cands: WeightedCandidates) => {
   const rnd = Math.floor(Math.random() * total);
   return choose(Object.entries(cands), rnd);
 };
+const DEFAULT_MAX_LEARN_CONTEXT = 8;
 
 const acceptBeginning = (text: string) => [...text].length > 1 || !text.match(/[\p{Script=Hiragana}\p{Script=Katakana}\p{Punctuation}\p{Modifier_Letter}\p{Other_Symbol}]/u);
 
@@ -52,6 +53,7 @@ export class MarkovChainModel implements TalkModel {
   #dist: Distribution;
   #corpus: string[] = [];
   #maxContextSize = 1;
+  #maxLearnContext;
   #wordSegmenter;
   #sentenceSegmenter;
   #graphemeSegmenter;
@@ -60,11 +62,14 @@ export class MarkovChainModel implements TalkModel {
     dist: Distribution = { '': { '。': 1 } },
     {
       locale,
+      maxLearnContext,
     } = {
       locale: new Intl.Locale('ja-JP'),
+      maxLearnContext: DEFAULT_MAX_LEARN_CONTEXT,
     },
   ) {
     this.#dist = dist;
+    this.#maxLearnContext = Math.max(1, Math.floor(maxLearnContext));
     this.#wordSegmenter = new Intl.Segmenter(locale, { granularity: 'word' });
     this.#sentenceSegmenter = new Intl.Segmenter(locale, { granularity: 'sentence' });
     this.#graphemeSegmenter = new Intl.Segmenter(locale, { granularity: 'grapheme' });
@@ -83,8 +88,8 @@ export class MarkovChainModel implements TalkModel {
     return words.length <= 0 ? '' : words.join(CONTEXT_SEPARATOR);
   }
 
-  #pickCandidates(history: string[], allowEmptyContext = true): WeightedCandidates | undefined {
-    for (let contextSize = Math.min(this.#maxContextSize, history.length); contextSize > 0; contextSize--) {
+  #pickCandidates(history: string[], maxContextSize: number, allowEmptyContext = true): WeightedCandidates | undefined {
+    for (let contextSize = Math.min(this.#maxContextSize, maxContextSize, history.length); contextSize > 0; contextSize--) {
       const cands = this.#dist[this.#contextKey(history.slice(-contextSize))];
       if (cands && Object.keys(cands).length > 0) {
         return cands;
@@ -93,13 +98,14 @@ export class MarkovChainModel implements TalkModel {
     return allowEmptyContext ? this.#dist[''] : undefined;
   }
 
-  *#generator(start: string) {
+  *#generator(start: string, nGram: number) {
+    const maxContextSize = Math.max(1, Math.floor(nGram));
     let history = start === '' ? [] : [start];
     let word = start;
     let byteLength = lengthInUtf8(word);
     let firstStep = true;
     do {
-      const cands = this.#pickCandidates(history, !(firstStep && start !== ''));
+      const cands = this.#pickCandidates(history, maxContextSize, !(firstStep && start !== ''));
       if (!cands || Object.keys(cands).length <= 0) {
         console.warn(`No candidates after "${word}"`);
         break;
@@ -130,14 +136,15 @@ export class MarkovChainModel implements TalkModel {
     } while (word !== '。');
   }
 
-  generate(start: string = '', limit = Number.POSITIVE_INFINITY): string {
-    return start + this.#generator(start).take(limit).toArray().join('');
+  generate(
+    start: string = '',
+    nGram = 1,
+    limit = Number.POSITIVE_INFINITY,
+  ): string {
+    return start + this.#generator(start, nGram).take(limit).toArray().join('');
   }
 
-  learn(text: string, n = 1): void {
-    const contextSize = Math.max(1, Math.floor(n));
-    this.#maxContextSize = Math.max(this.#maxContextSize, contextSize);
-
+  learn(text: string): void {
     for (const { segment: sentence } of this.#sentenceSegmenter.segment(text)) {
       console.debug('[DEBUG]', 'learn a sentence', sentence);
 
@@ -145,21 +152,25 @@ export class MarkovChainModel implements TalkModel {
 
       const context: string[] = [];
       for (const next of this.#wordSegments(sentence)) {
-        const previous = this.#contextKey(context);
-        if (previous !== '' || acceptBeginning(next)) {
-          this.#dist[previous] = {
-            [next]: 0,
-            ...(this.#dist[previous] ?? {}),
-          };
-          this.#dist[previous][next] = (this.#dist[previous][next] ?? 0) + 1;
+        for (let contextSize = Math.min(context.length, this.#maxLearnContext); contextSize >= 0; contextSize--) {
+          const previous = this.#contextKey(context.slice(-contextSize));
+          if (previous !== '' || acceptBeginning(next)) {
+            this.#dist[previous] = {
+              [next]: 0,
+              ...(this.#dist[previous] ?? {}),
+            };
+            this.#dist[previous][next] = (this.#dist[previous][next] ?? 0) + 1;
+          }
         }
 
         context.push(next);
-        if (context.length > contextSize) {
+        if (context.length > this.#maxLearnContext) {
           context.shift();
         }
       }
     }
+
+    this.#maxContextSize = this.#measureMaxContextSize();
   }
 
   toLearned(text: string): MarkovChainModel {

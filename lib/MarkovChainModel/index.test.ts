@@ -29,11 +29,11 @@ describe('a no-branch model', () => {
       }
     });
     expect(model.generate()).toBe('こんにちは 。');
-    expect(model.generate('', 0)).toBe('');
-    expect(model.generate('', 1)).toBe('こん');
-    expect(model.generate('', 2)).toBe('こんにち');
-    expect(model.generate('', 3)).toBe('こんにちは ');
-    expect(model.generate('', 4)).toBe('こんにちは 。');
+    expect(model.generate('', 1, 0)).toBe('');
+    expect(model.generate('', 1, 1)).toBe('こん');
+    expect(model.generate('', 1, 2)).toBe('こんにち');
+    expect(model.generate('', 1, 3)).toBe('こんにちは ');
+    expect(model.generate('', 1, 4)).toBe('こんにちは 。');
 
     expect(model.generate('')).toBe('こんにちは 。');
     expect(model.generate('こん')).toBe('こんにちは 。');
@@ -147,6 +147,18 @@ describe('n-gram contexts', () => {
       'B\u0001C': { '。': 1 },
     });
 
-    expect(model.generate()).toBe('ABC。');
+    expect(model.generate('', 2)).toBe('ABC。');
+  });
+
+  it('falls back to lower-order context when n is smaller', () => {
+    const model = new MarkovChainModel({
+      '': { 'A': 1 },
+      'A': { 'B': 1 },
+      'A\u0001B': { 'C': 1 },
+      'B': { '。': 1 },
+      'C': { '。': 1 },
+    });
+
+    expect(model.generate('', 1)).toBe('AB。');
   });
 });
