@@ -18,16 +18,28 @@ export function createDailyRotatingJsonLogger(logFilePath: string, options: Logg
 
   return {
     write(record: JsonLogRecord): void {
-      const currentTime = now();
-      const logDate = formatLogDate(currentTime);
-      if (logDate !== activeDate) {
-        rotateLogFile(logFilePath, activeDate);
-        activeDate = logDate;
-      }
+      try {
+        const currentTime = now();
+        const logDate = formatLogDate(currentTime);
+        if (logDate !== activeDate) {
+          rotateLogFile(logFilePath, activeDate);
+          activeDate = logDate;
+        }
 
-      appendFileSync(logFilePath, `${JSON.stringify({ timestamp: currentTime.toISOString(), ...record })}\n`);
+        appendFileSync(logFilePath, `${JSON.stringify({ ...record, timestamp: currentTime.toISOString() })}\n`);
+      } catch (error) {
+        writeStderr(`Failed to write log entry to ${logFilePath}: ${formatUnknownError(error)}\n`);
+      }
     },
   };
+}
+
+function writeStderr(message: string): void {
+  try {
+    process.stderr.write(message);
+  } catch {
+    // Best-effort logger: ignore stderr failures.
+  }
 }
 
 function ensureLogDirectory(logFilePath: string): void {
@@ -74,4 +86,11 @@ function formatLogDate(date: Date): string {
   const day = String(date.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
+}
+
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.stack ?? error.message;
+  }
+  return String(error);
 }

@@ -75,13 +75,24 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
         let statusCode = 500;
         if (!ip || !AllowedIP.equals(ip)) {
           statusCode = 302;
-          errorLogger.write({
+          safeWriteLog(errorLogger, {
             event: 'console_access_denied',
             clientIp: clientIpAddress,
             allowedIp: AllowedIP.toString(),
             method: req.method,
             path: requestURL.pathname,
             query: requestURL.search,
+            userAgent,
+            referer,
+          });
+          safeWriteLog(accessLogger, {
+            event: 'console_access',
+            clientIp: clientIpAddress,
+            method: req.method,
+            path: requestURL.pathname,
+            query: requestURL.search,
+            status: statusCode,
+            responseTimeMs: Date.now() - requestStartTime,
             userAgent,
             referer,
           });
@@ -111,20 +122,19 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
           return response;
         } catch (err) {
           statusCode = 502;
-          const errorMessage = err instanceof Error ? (err.stack ?? err.message) : String(err);
-          errorLogger.write({
+          safeWriteLog(errorLogger, {
             event: 'console_proxy_failed',
             clientIp: clientIpAddress,
             method: req.method,
             path: requestURL.pathname,
             query: requestURL.search,
-            error: errorMessage,
+            error: formatUnknownError(err),
             userAgent,
             referer,
           });
           return new Response('Bad Gateway', { status: 502 });
         } finally {
-          accessLogger.write({
+          safeWriteLog(accessLogger, {
             event: 'console_access',
             clientIp: clientIpAddress,
             method: req.method,
@@ -154,4 +164,20 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
       outerServer.stop(closeActiveConnections);
     },
   };
+}
+
+function safeWriteLog(logger: { write(record: Record<string, unknown>): void }, record: Record<string, unknown>): void {
+  try {
+    logger.write(record);
+  } catch (err) {
+    console.error(`[ERROR] CONSOLE_LOG_WRITE_FAILED ${JSON.stringify(formatUnknownError(err))}`);
+  }
+}
+
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.stack ?? error.message;
+  }
+
+  return String(error);
 }

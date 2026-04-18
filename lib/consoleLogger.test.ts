@@ -32,6 +32,23 @@ test("writes structured JSON logs", () => {
   }
 });
 
+test("overrides caller-provided timestamp with write-time timestamp", () => {
+  const { tempDirectoryPath, logFilePath } = createTempLogPath();
+  try {
+    const logger = createDailyRotatingJsonLogger(logFilePath, {
+      now: () => new Date("2026-04-18T12:00:00.000Z"),
+    });
+
+    logger.write({ event: "console_access", timestamp: "caller-provided" });
+
+    const logLine = readFileSync(logFilePath, "utf8").trim();
+    const entry = JSON.parse(logLine) as Record<string, unknown>;
+    expect(entry.timestamp).toBe("2026-04-18T12:00:00.000Z");
+  } finally {
+    rmSync(tempDirectoryPath, { recursive: true, force: true });
+  }
+});
+
 test("rotates to dated file when date changes", () => {
   const { tempDirectoryPath, logFilePath } = createTempLogPath();
   const firstDate = new Date("2026-04-18T12:00:00.000Z");
@@ -51,6 +68,31 @@ test("rotates to dated file when date changes", () => {
     expect(existsSync(rotatedLogPath)).toBe(true);
     expect(readFileSync(rotatedLogPath, "utf8")).toContain('"event":"first"');
     expect(readFileSync(logFilePath, "utf8")).toContain('"event":"second"');
+  } finally {
+    rmSync(tempDirectoryPath, { recursive: true, force: true });
+  }
+});
+
+test("rotates to next suffixed path when rotated file already exists", () => {
+  const { tempDirectoryPath, logFilePath } = createTempLogPath();
+  const firstDate = new Date("2026-04-18T12:00:00.000Z");
+  const secondDate = new Date("2026-04-19T12:00:00.000Z");
+  let currentDate = firstDate;
+
+  try {
+    writeFileSync(`${logFilePath}.2026-04-18`, '{"event":"existing"}\n');
+    writeFileSync(`${logFilePath}.2026-04-18.1`, '{"event":"existing1"}\n');
+    const logger = createDailyRotatingJsonLogger(logFilePath, {
+      now: () => currentDate,
+    });
+
+    logger.write({ event: "first" });
+    currentDate = secondDate;
+    logger.write({ event: "second" });
+
+    const rotatedLogPath = `${logFilePath}.2026-04-18.2`;
+    expect(existsSync(rotatedLogPath)).toBe(true);
+    expect(readFileSync(rotatedLogPath, "utf8")).toContain('"event":"first"');
   } finally {
     rmSync(tempDirectoryPath, { recursive: true, force: true });
   }
