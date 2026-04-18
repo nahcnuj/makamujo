@@ -222,7 +222,7 @@ describe('comment learning n-gram size', () => {
     expect(generate).toHaveBeenLastCalledWith('', 4);
   });
 
-  it('does not learn comment even when no is 0', () => {
+  it('does not learn comment when no is 0', () => {
     const generate = jest.fn(() => '');
     const learn = jest.fn();
     const talkModel: TalkModel = {

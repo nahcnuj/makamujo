@@ -25,7 +25,7 @@ const inferNGramSize = (commentNumber: number): number => {
   const normalizedCommentNumber = Math.max(1, safeCommentNumber / 100);
   const inferredNGramSize = Math.ceil(N_GRAM_LOG_SCALE * Math.log10(safeCommentNumber));
   const additionalNGramSize = Math.floor(Math.log10(normalizedCommentNumber));
-  const shouldReduceNGramSize = safeCommentNumber < 100 || (safeCommentNumber > 100 && safeCommentNumber < 500);
+  const shouldReduceNGramSize = safeCommentNumber < 500 && safeCommentNumber !== 100;
   const nGramSize = inferredNGramSize + additionalNGramSize - (shouldReduceNGramSize ? 1 : 0);
   return Math.max(1, nGramSize);
 };
