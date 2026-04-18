@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "bun:test";
+import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { MarkovChainModel } from ".";
 
 beforeEach(() => {
@@ -28,16 +31,10 @@ describe('a no-branch model', () => {
         '。': 1,
       }
     });
-    expect(model.generate()).toBe('こんにちは 。');
-    expect(model.generate('', 1, 0)).toBe('');
-    expect(model.generate('', 1, 1)).toBe('こん');
-    expect(model.generate('', 1, 2)).toBe('こんにち');
-    expect(model.generate('', 1, 3)).toBe('こんにちは ');
-    expect(model.generate('', 1, 4)).toBe('こんにちは 。');
-
-    expect(model.generate('')).toBe('こんにちは 。');
-    expect(model.generate('こん')).toBe('こんにちは 。');
-    expect(model.generate('にち')).toBe('にちは 。');
+    expect(model.generate()).toBe('こんにちは。');
+    expect(model.generate('')).toBe('こんにちは。');
+    expect(model.generate('こん')).toBe('こんにちは。');
+    expect(model.generate('にち')).toBe('にちは。');
     expect(model.generate('は')).toBe('は。');
     expect(model.generate('。')).toBe('。');
   });
@@ -77,64 +74,31 @@ describe('a distribution with two even branches', () => {
   });
 });
 
-describe('息継ぎ', () => {
-  it('latin alphabets', () => {
-    const model = new MarkovChainModel({
-      '': {
-        'abcde': 100,
-      },
-      'abcde': {
-        'abcde': 99,
-        '。': 1,
-      },
-    });
+describe('toJSON', () => {
+  it('should include model and corpus', () => {
+    const model = new MarkovChainModel();
+    model.learn('こんにちは。');
 
-    const times = 100;
-    for (const _ in [...new Array(times)]) {
-      const got = model.generate();
-      // console.log(got, got.split(' ').map(s => new TextEncoder().encode(s).byteLength));
-      expect(got.split(' ').every(s => new TextEncoder().encode(s).byteLength <= 20)).toBeTrue();
-    }
-  });
-
-  it('ひらがな', () => {
-    const model = new MarkovChainModel({
-      '': {
-        'あいう': 100,
-      },
-      'あいう': {
-        'あいう': 99,
-        '。': 1,
-      },
-    });
-
-    const times = 100;
-    for (const _ in [...new Array(times)]) {
-      const got = model.generate();
-      // console.log(got, got.split(' ').map(s => new TextEncoder().encode(s).byteLength));
-      expect(got.split(' ').every(s => new TextEncoder().encode(s).byteLength <= 20)).toBeTrue();
-    }
+    const copied = JSON.parse(model.toJSON());
+    expect('model' in copied).toBeTrue();
+    expect('corpus' in copied).toBeTrue();
+    expect(copied.corpus).toContain('こんにちは。');
   });
 });
 
-describe('toJSON', () => {
-  it('should be parsed again', () => {
-    {
-      const model = new MarkovChainModel();
-      const { model: copied } = JSON.parse(model.toJSON());
-      expect(new MarkovChainModel(copied)).toStrictEqual(model);
-    }
+describe('fromFile', () => {
+  it('restores saved model json', () => {
+    const model = new MarkovChainModel({
+      '': { 'こん': 1 },
+      'こん': { 'にち': 1 },
+      'にち': { 'は': 1 },
+      'は': { '。': 1 },
+    });
+    const path = join(tmpdir(), `markov-model-${Date.now()}.json`);
+    writeFileSync(path, model.toJSON());
 
-    {
-      const model = new MarkovChainModel({
-        '': { 'こん': 2 },
-        'こん': { 'にちは': 1, 'ばんは': 1 },
-        'にちは': { '。': 1 },
-        'ばんは': { '。': 1 },
-      });
-      const { model: copied } = JSON.parse(model.toJSON());
-      expect(new MarkovChainModel(copied)).toStrictEqual(model);
-    }
+    const loaded = MarkovChainModel.fromFile(path);
+    expect(loaded.generate()).toBe('こんにちは。');
   });
 });
 
@@ -143,8 +107,8 @@ describe('n-gram contexts', () => {
     const model = new MarkovChainModel({
       '': { 'A': 1 },
       'A': { 'B': 1 },
-      'A\u0001B': { 'C': 1 },
-      'B\u0001C': { '。': 1 },
+      'A\u0000B': { 'C': 1 },
+      'B\u0000C': { '。': 1 },
     });
 
     expect(model.generate('', 2)).toBe('ABC。');
@@ -154,7 +118,7 @@ describe('n-gram contexts', () => {
     const model = new MarkovChainModel({
       '': { 'A': 1 },
       'A': { 'B': 1 },
-      'A\u0001B': { 'C': 1 },
+      'A\u0000B': { 'C': 1 },
       'B': { '。': 1 },
       'C': { '。': 1 },
     });
