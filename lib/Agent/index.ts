@@ -21,7 +21,13 @@ const pickTopic = (text: string) => {
 };
 
 const inferNGramSize = (commentNumber: number): number => {
-  return Math.max(1, Math.ceil(N_GRAM_LOG_SCALE * Math.log10(Math.max(1, commentNumber))));
+  const safeCommentNumber = Math.max(1, commentNumber);
+  const normalizedCommentNumber = Math.max(1, safeCommentNumber / 100);
+  const inferredNGramSize = Math.ceil(N_GRAM_LOG_SCALE * Math.log10(safeCommentNumber));
+  const additionalNGramSize = Math.floor(Math.log10(normalizedCommentNumber));
+  const shouldReduceNGramSize = safeCommentNumber < 100 || (safeCommentNumber > 100 && safeCommentNumber < 500);
+  const nGramSize = inferredNGramSize + additionalNGramSize - (shouldReduceNGramSize ? 1 : 0);
+  return Math.max(1, nGramSize);
 };
 
 export class MakaMujo {
@@ -125,13 +131,12 @@ export class MakaMujo {
       // Update last comment timestamp for any received comment that counts as activity.
       this.#lastCommentAt = new Date(Date.now());
 
-      const commentNumber = commentData.no;
-      const hasCommentNumber = typeof commentNumber === 'number';
-      if (hasCommentNumber) {
+      if (typeof data.no === 'number') {
+        const commentNumber = data.no;
         this.#currentNGramSize = inferNGramSize(commentNumber);
       }
 
-      if (hasCommentNumber || commentData.isOwner) {
+      if (data.no || data.isOwner) {
         this.#learn(`${comment}。`);
       }
 

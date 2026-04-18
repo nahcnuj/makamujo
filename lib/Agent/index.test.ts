@@ -184,13 +184,13 @@ describe('comment learning n-gram size', () => {
   });
 
   it.each([
-    { no: 99, expected: 2 },
+    { no: 99, expected: 1 },
     { no: 100, expected: 2 },
-    { no: 499, expected: 3 },
+    { no: 499, expected: 2 },
     { no: 500, expected: 3 },
     { no: 999, expected: 3 },
-    { no: 1_000, expected: 3 },
-    { no: 10_000, expected: 4 },
+    { no: 1_000, expected: 4 },
+    { no: 10_000, expected: 6 },
   ])('generates with n=$expected for comment no=$no', ({ no, expected }) => {
     const generate = jest.fn(() => '');
     const learn = jest.fn();
@@ -219,10 +219,10 @@ describe('comment learning n-gram size', () => {
     agent.listen([comment(1_000)]);
     await agent.speech();
 
-    expect(generate).toHaveBeenLastCalledWith('', 3);
+    expect(generate).toHaveBeenLastCalledWith('', 4);
   });
 
-  it('learns comment even when no is 0', () => {
+  it('does not learn comment even when no is 0', () => {
     const generate = jest.fn(() => '');
     const learn = jest.fn();
     const talkModel: TalkModel = {
@@ -234,7 +234,7 @@ describe('comment learning n-gram size', () => {
 
     agent.listen([comment(0)]);
 
-    expect(learn).toHaveBeenCalledWith('こんにちは。');
+    expect(learn).not.toHaveBeenCalled();
     expect(generate).not.toHaveBeenCalled();
   });
 });
