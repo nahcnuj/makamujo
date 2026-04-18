@@ -26,7 +26,8 @@ export function createDailyRotatingJsonLogger(logFilePath: string, options: Logg
           activeDate = logDate;
         }
 
-        appendFileSync(logFilePath, `${JSON.stringify({ ...record, timestamp: currentTime.toISOString() })}\n`);
+        const { timestamp: _ignoredTimestamp, ...recordWithoutTimestamp } = record;
+        appendFileSync(logFilePath, `${JSON.stringify({ timestamp: currentTime.toISOString(), ...recordWithoutTimestamp })}\n`);
       } catch (error) {
         writeStderr(`Failed to write log entry to ${logFilePath}: ${formatUnknownError(error)}\n`);
       }

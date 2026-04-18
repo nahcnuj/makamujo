@@ -170,7 +170,7 @@ function safeWriteLog(logger: { write(record: Record<string, unknown>): void }, 
   try {
     logger.write(record);
   } catch (err) {
-    console.error(`[ERROR] CONSOLE_LOG_WRITE_FAILED ${JSON.stringify(formatUnknownError(err))}`);
+    console.error(`[ERROR] CONSOLE_LOG_WRITE_FAILED ${formatUnknownError(err)}`);
   }
 }
 
