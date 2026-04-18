@@ -88,7 +88,7 @@ export const startAgentStateAutoRefresh = (
   };
 };
 
-const parseAgentStateResponse = (responseText: string): AgentStateResponse => {
+export const parseAgentStateResponse = (responseText: string): AgentStateResponse => {
   try {
     return JSON.parse(responseText) as AgentStateResponse;
   } catch {
@@ -157,12 +157,18 @@ export function AgentStatus() {
 
       const response = await fetch("/console/api/agent-state");
       const responseText = await response.text();
-      const responseData = parseAgentStateResponse(responseText);
-
       if (!response.ok) {
-        throw new Error(responseData.error ?? `配信状態の取得に失敗しました (${response.status})`);
+        let errorMessageFromResponse: string | null = null;
+        try {
+          const responseData = parseAgentStateResponse(responseText);
+          errorMessageFromResponse = responseData.error ?? null;
+        } catch {
+          errorMessageFromResponse = null;
+        }
+        throw new Error(errorMessageFromResponse ?? `配信状態の取得に失敗しました (${response.status})`);
       }
 
+      const responseData = parseAgentStateResponse(responseText);
       setAgentStateResponse(responseData);
       setAgentStatusError(null);
       setIsShowingMockAgentState(false);

@@ -4,6 +4,7 @@ import {
   createMockAgentStateResponse,
   createAgentStatusRows,
   isAgentStateMockQueryEnabled,
+  parseAgentStateResponse,
   shouldUseMockAgentState,
   startAgentStateAutoRefresh,
 } from "../../../console/src/AgentStatus";
@@ -177,5 +178,19 @@ describe("shouldUseMockAgentState", () => {
       configurable: true,
     });
     expect(shouldUseMockAgentState()).toBe(true);
+  });
+});
+
+describe("parseAgentStateResponse", () => {
+  it("parses valid JSON payload", () => {
+    expect(parseAgentStateResponse("{\"niconama\":{\"type\":\"live\"}}")).toEqual({
+      niconama: { type: "live" },
+    });
+  });
+
+  it("throws user-facing syntax error for invalid JSON payload", () => {
+    expect(() => parseAgentStateResponse("<!doctype html>")).toThrow(
+      "配信状態の応答形式が不正です。",
+    );
   });
 });
