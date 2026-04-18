@@ -33,7 +33,7 @@ const inferNGramSize = (commentNumber: number): number => {
   if (safeCommentNumber < 10_000) {
     return Math.max(4, logarithmicNGramSize);
   }
-  return Math.max(5, logarithmicNGramSize);
+  return Math.max(6, logarithmicNGramSize);
 };
 
 export class MakaMujo {
