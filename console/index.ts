@@ -66,18 +66,18 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
     outerServer = serve({
       port: 443,
       async fetch(req, server) {
-        const requestedAt = Date.now();
+        const requestStartTime = Date.now();
         const requestURL = new URL(req.url);
         const userAgent = req.headers.get('user-agent');
         const referer = req.headers.get('referer');
         const ip = server.requestIP(req);
+        const clientIpAddress = ip ? `${ip.family}/${ip.address}` : 'unknown';
         let statusCode = 500;
         if (!ip || !AllowedIP.equals(ip)) {
           statusCode = 302;
-          const deniedClientAddress = ip ? `${ip.family}/${ip.address}` : 'unknown';
           errorLogger.write({
             event: 'console_access_denied',
-            clientIp: deniedClientAddress,
+            clientIp: clientIpAddress,
             allowedIp: AllowedIP.toString(),
             method: req.method,
             path: requestURL.pathname,
@@ -85,7 +85,7 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
             userAgent,
             referer,
           });
-          console.error(`got ${deniedClientAddress}, want ${AllowedIP.toString()}`);
+          console.error(`got ${clientIpAddress}, want ${AllowedIP.toString()}`);
           return Response.redirect(consoleRedirectURL, 302);
         }
 
@@ -114,7 +114,7 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
           const errorMessage = err instanceof Error ? (err.stack ?? err.message) : String(err);
           errorLogger.write({
             event: 'console_proxy_failed',
-            clientIp: `${ip.family}/${ip.address}`,
+            clientIp: clientIpAddress,
             method: req.method,
             path: requestURL.pathname,
             query: requestURL.search,
@@ -126,12 +126,12 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
         } finally {
           accessLogger.write({
             event: 'console_access',
-            clientIp: `${ip.family}/${ip.address}`,
+            clientIp: clientIpAddress,
             method: req.method,
             path: requestURL.pathname,
             query: requestURL.search,
             status: statusCode,
-            responseTimeMs: Date.now() - requestedAt,
+            responseTimeMs: Date.now() - requestStartTime,
             userAgent,
             referer,
           });
