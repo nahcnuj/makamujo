@@ -122,6 +122,7 @@ test.describe("console", () => {
     const rootElement = await page.$("#root");
     expect(rootElement).not.toBeNull();
     await expect(page.getByRole("heading", { name: "配信エージェントの状態" })).toBeVisible();
-    await expect(page.getByTestId("agent-status-json")).toContainText("niconama");
+    await expect(page.getByText("最終更新:", { exact: false })).toBeVisible();
+    await expect(page.getByTestId("agent-status-empty")).toContainText("配信情報はありません。");
   });
 });

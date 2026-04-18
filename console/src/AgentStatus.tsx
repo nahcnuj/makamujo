@@ -1,19 +1,97 @@
 import { useCallback, useEffect, useState } from "react";
 
-const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
+type AgentStateResponse = {
+  error?: string
+  niconama?: {
+    type?: string
+    meta?: {
+      title?: string
+      url?: string
+      start?: number
+      total?: {
+        listeners?: number
+        gift?: number
+        ad?: number
+      }
+    }
+  }
+};
+
+type AgentStatusRow = {
+  label: string
+  value: string
+  href?: string
+};
+
+export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
+
+export const startAgentStateAutoRefresh = (
+  fetchAgentState: () => Promise<void>,
+  refreshIntervalMs = AGENT_STATE_REFRESH_INTERVAL_MS,
+) => {
+  const intervalId = setInterval(() => {
+    void fetchAgentState();
+  }, refreshIntervalMs);
+  return () => {
+    clearInterval(intervalId);
+  };
+};
+
+const formatStateLabel = (type: string | undefined): string => {
+  if (type === "live") {
+    return "配信中";
+  }
+  if (type === "offline") {
+    return "停止中";
+  }
+  return type ?? "-";
+};
+
+const formatStartDate = (startAtUnixTimeSeconds: number | undefined): string => {
+  if (typeof startAtUnixTimeSeconds !== "number" || startAtUnixTimeSeconds <= 0) {
+    return "-";
+  }
+  return new Date(startAtUnixTimeSeconds * 1000).toLocaleString("ja-JP");
+};
+
+export const createAgentStatusRows = (stateResponse: AgentStateResponse | null): AgentStatusRow[] => {
+  const niconamaState = stateResponse?.niconama;
+  if (!niconamaState || Object.keys(niconamaState).length === 0) {
+    return [];
+  }
+
+  return [
+    { label: "状態", value: formatStateLabel(niconamaState.type) },
+    { label: "タイトル", value: niconamaState.meta?.title ?? "-" },
+    { label: "配信URL", value: niconamaState.meta?.url ?? "-", href: niconamaState.meta?.url },
+    { label: "開始時刻", value: formatStartDate(niconamaState.meta?.start) },
+    { label: "視聴者数", value: String(niconamaState.meta?.total?.listeners ?? "-") },
+    { label: "ギフト", value: String(niconamaState.meta?.total?.gift ?? "-") },
+    { label: "広告", value: String(niconamaState.meta?.total?.ad ?? "-") },
+  ];
+};
 
 export function AgentStatus() {
-  const [agentStatusDisplay, setAgentStatusDisplay] = useState("読み込み中...");
+  const [agentStateResponse, setAgentStateResponse] = useState<AgentStateResponse | null>(null);
+  const [agentStatusError, setAgentStatusError] = useState<string | null>(null);
+  const [lastUpdatedTime, setLastUpdatedTime] = useState("");
   const [isLoadingAgentState, setIsLoadingAgentState] = useState(false);
 
   const fetchAgentState = useCallback(async () => {
     setIsLoadingAgentState(true);
     try {
       const response = await fetch("/console/api/agent-state");
-      const data = await response.json();
-      setAgentStatusDisplay(JSON.stringify(data, null, 2));
+      const responseData = await response.json() as AgentStateResponse;
+
+      if (!response.ok) {
+        throw new Error(responseData.error ?? `配信状態の取得に失敗しました (${response.status})`);
+      }
+
+      setAgentStateResponse(responseData);
+      setAgentStatusError(null);
+      setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
     } catch (error) {
-      setAgentStatusDisplay(String(error));
+      setAgentStatusError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsLoadingAgentState(false);
     }
@@ -21,13 +99,10 @@ export function AgentStatus() {
 
   useEffect(() => {
     void fetchAgentState();
-    const intervalId = setInterval(() => {
-      void fetchAgentState();
-    }, AGENT_STATE_REFRESH_INTERVAL_MS);
-    return () => {
-      clearInterval(intervalId);
-    };
+    return startAgentStateAutoRefresh(fetchAgentState);
   }, [fetchAgentState]);
+
+  const agentStatusRows = createAgentStatusRows(agentStateResponse);
 
   return (
     <div className="mt-8 mx-auto w-full max-w-2xl text-left flex flex-col gap-4">
@@ -42,12 +117,44 @@ export function AgentStatus() {
           更新
         </button>
       </div>
-      <pre
-        data-testid="agent-status-json"
-        className="w-full min-h-[140px] bg-[#1a1a1a] border-2 border-[#fbf0df] rounded-xl p-3 text-[#fbf0df] font-mono overflow-x-auto"
-      >
-        {agentStatusDisplay}
-      </pre>
+      <p className="text-sm text-[#d9d0c1]">
+        最終更新: {lastUpdatedTime || "未取得"}（5秒ごとに自動更新）
+      </p>
+      {agentStatusError ? (
+        <div
+          data-testid="agent-status-error"
+          className="w-full min-h-[80px] bg-[#3c1f1f] border-2 border-[#d78787] rounded-xl p-3 text-[#ffd3d3]"
+        >
+          取得エラー: {agentStatusError}
+        </div>
+      ) : agentStatusRows.length === 0 ? (
+        <div
+          data-testid="agent-status-empty"
+          className="w-full min-h-[80px] bg-[#1a1a1a] border-2 border-[#fbf0df] rounded-xl p-3 text-[#fbf0df]"
+        >
+          {isLoadingAgentState ? "読み込み中..." : "配信情報はありません。"}
+        </div>
+      ) : (
+        <dl
+          data-testid="agent-status-details"
+          className="w-full bg-[#1a1a1a] border-2 border-[#fbf0df] rounded-xl p-3 text-[#fbf0df] grid grid-cols-[auto_1fr] gap-x-4 gap-y-2"
+        >
+          {agentStatusRows.map((row) => (
+            <div key={row.label} className="contents">
+              <dt className="font-bold whitespace-nowrap">{row.label}</dt>
+              <dd className="break-all">
+                {row.href ? (
+                  <a className="underline" href={row.href} target="_blank" rel="noreferrer">
+                    {row.value}
+                  </a>
+                ) : (
+                  row.value
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </div>
   );
 }
