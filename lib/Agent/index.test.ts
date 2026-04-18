@@ -184,7 +184,7 @@ describe('comment learning n-gram size', () => {
   });
 
   it.each([
-    { no: 99, expected: 1 },
+    { no: 99, expected: 2 },
     { no: 100, expected: 2 },
     { no: 499, expected: 3 },
     { no: 500, expected: 3 },

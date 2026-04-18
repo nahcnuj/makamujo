@@ -21,10 +21,7 @@ const pickTopic = (text: string) => {
 };
 
 const inferNGramSize = (commentNumber: number): number => {
-  if (commentNumber < 100) {
-    return 1;
-  }
-  return Math.max(2, Math.ceil(N_GRAM_LOG_SCALE * Math.log10(commentNumber)));
+  return Math.max(1, Math.ceil(N_GRAM_LOG_SCALE * Math.log10(Math.max(1, commentNumber))));
 };
 
 export class MakaMujo {
