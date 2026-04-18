@@ -25,7 +25,6 @@ type AgentStateResponse = {
     state?: Record<string, unknown>
   } | null
   speech?: string
-  [key: string]: unknown
 };
 
 type AgentStatusRow = {
@@ -36,6 +35,7 @@ type AgentStatusRow = {
 
 export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
 const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
+const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正です。";
 
 export const createMockAgentStateResponse = (): AgentStateResponse => ({
   niconama: {
@@ -86,6 +86,14 @@ export const startAgentStateAutoRefresh = (
   return () => {
     clearInterval(intervalId);
   };
+};
+
+const parseAgentStateResponse = (responseText: string): AgentStateResponse => {
+  try {
+    return JSON.parse(responseText) as AgentStateResponse;
+  } catch {
+    throw new SyntaxError(INVALID_AGENT_STATE_RESPONSE_ERROR);
+  }
 };
 
 const formatStateLabel = (type: string | undefined): string => {
@@ -149,12 +157,7 @@ export function AgentStatus() {
 
       const response = await fetch("/console/api/agent-state");
       const responseText = await response.text();
-      let responseData: AgentStateResponse;
-      try {
-        responseData = JSON.parse(responseText) as AgentStateResponse;
-      } catch {
-        throw new SyntaxError("配信状態の応答形式が不正です。");
-      }
+      const responseData = parseAgentStateResponse(responseText);
 
       if (!response.ok) {
         throw new Error(responseData.error ?? `配信状態の取得に失敗しました (${response.status})`);
@@ -167,7 +170,7 @@ export function AgentStatus() {
     } catch (error) {
       const errorMessage =
         error instanceof SyntaxError
-          ? "配信状態の応答形式が不正です。"
+          ? INVALID_AGENT_STATE_RESPONSE_ERROR
           : error instanceof Error
             ? error.message
             : String(error);
