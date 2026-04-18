@@ -40,6 +40,7 @@ type AgentStatusRow = {
 export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
 const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
 const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正です。";
+const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 
 export const createMockAgentStateResponse = (): AgentStateResponse => ({
   niconama: {
@@ -128,7 +129,7 @@ const formatStartDate = (startAtUnixTimeSeconds: number | undefined): string => 
   if (typeof startAtUnixTimeSeconds !== "number" || !Number.isFinite(startAtUnixTimeSeconds) || startAtUnixTimeSeconds <= 0) {
     return "-";
   }
-  const startAtUnixTimeMilliseconds = startAtUnixTimeSeconds >= 1_000_000_000_000
+  const startAtUnixTimeMilliseconds = startAtUnixTimeSeconds >= UNIX_MILLISECONDS_THRESHOLD
     ? startAtUnixTimeSeconds
     : startAtUnixTimeSeconds * 1000;
   return new Date(startAtUnixTimeMilliseconds).toLocaleString("ja-JP");
