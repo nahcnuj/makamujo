@@ -28,20 +28,24 @@ export function createDailyRotatingJsonLogger(logFilePath: string, options: Logg
     write(record: JsonLogRecord): void {
       try {
         const currentTime = now();
-        const logDate = formatLogDate(currentTime);
         const { timestamp: _ignoredTimestamp, ...recordWithoutTimestamp } = record;
         const logLine = `${JSON.stringify({ timestamp: formatJstTimestamp(currentTime), ...recordWithoutTimestamp })}\n`;
-        pendingWrite = pendingWrite.then(async () => {
-          try {
-            if (logDate !== activeDate) {
-              rotateLogFile(logFilePath, activeDate);
-              activeDate = logDate;
+        pendingWrite = pendingWrite
+          .then(async () => {
+            try {
+              const currentLogDate = formatLogDate(currentTime);
+              if (currentLogDate !== activeDate) {
+                rotateLogFile(logFilePath, activeDate);
+                activeDate = currentLogDate;
+              }
+              await appendFile(logFilePath, logLine);
+            } catch (error) {
+              writeStderr(`Failed to write log entry to ${logFilePath}: ${formatUnknownError(error)}\n`);
             }
-            await appendFile(logFilePath, logLine);
-          } catch (error) {
-            writeStderr(`Failed to write log entry to ${logFilePath}: ${formatUnknownError(error)}\n`);
-          }
-        });
+          })
+          .catch((error) => {
+            writeStderr(`Unexpected log pipeline failure for ${logFilePath}: ${formatUnknownError(error)}\n`);
+          });
       } catch (error) {
         writeStderr(`Failed to write log entry to ${logFilePath}: ${formatUnknownError(error)}\n`);
       }
