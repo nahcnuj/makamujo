@@ -50,21 +50,40 @@ const migrateLegacyDistribution = (dist: Distribution): Distribution => (
  */
 export class MarkovChainModel implements TalkModel {
   #model: ReturnType<typeof MarkovModel.create>;
+  /** Effective learn-context limit used when creating/deriving AGT MarkovModel instances. */
+  #maxLearnContext: number;
+  /** Rehydrates MarkovChainModel from AGT JSON snapshot with validated context limit. */
+  static #fromJson(
+    json: {
+      model?: Distribution
+      corpus?: string[]
+    },
+    maxLearnContext = DEFAULT_MAX_LEARN_CONTEXT,
+  ): MarkovChainModel {
+    const validatedMaxLearnContext = Math.max(1, Math.floor(maxLearnContext));
+    const dist = migrateLegacyDistribution(json.model ?? { '': { '。': 1 } });
+    const instance = new MarkovChainModel(dist, { maxLearnContext: validatedMaxLearnContext });
+    instance.#model = MarkovModel.create(
+      dist,
+      json.corpus ?? [],
+      validatedMaxLearnContext,
+    );
+    return instance;
+  }
 
   constructor(
     dist: Distribution = { '': { '。': 1 } },
     {
-      locale,
       maxLearnContext,
     } = {
-      locale: new Intl.Locale('ja-JP'),
       maxLearnContext: DEFAULT_MAX_LEARN_CONTEXT,
     },
   ) {
+    this.#maxLearnContext = Math.max(1, Math.floor(maxLearnContext));
     this.#model = MarkovModel.create(
       migrateLegacyDistribution(dist),
       [],
-      Math.max(1, Math.floor(maxLearnContext)),
+      this.#maxLearnContext,
     );
   }
 
@@ -82,7 +101,7 @@ export class MarkovChainModel implements TalkModel {
 
   toLearned(text: string): MarkovChainModel {
     const copied = this.#model.toLearned(normalizeLearnText(text)).json;
-    return new MarkovChainModel(copied.model);
+    return MarkovChainModel.#fromJson(copied, this.#maxLearnContext);
   }
 
   static fromFile(path: string): MarkovChainModel {
@@ -90,9 +109,7 @@ export class MarkovChainModel implements TalkModel {
       model = { '': { '。': 1 } },
       corpus = [],
     } = JSON.parse(readFileSync(path, { encoding: 'utf-8' }));
-    const instance = new MarkovChainModel();
-    instance.#model = MarkovModel.create(migrateLegacyDistribution(model), corpus);
-    return instance;
+    return MarkovChainModel.#fromJson({ model, corpus }, DEFAULT_MAX_LEARN_CONTEXT);
   }
 
   toJSON(): string {

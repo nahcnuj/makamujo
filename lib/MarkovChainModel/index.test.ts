@@ -6,6 +6,7 @@ import { MarkovChainModel } from ".";
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.restoreAllMocks();
 });
 
 const temporaryModelFilePaths: string[] = [];
@@ -74,8 +75,9 @@ describe('a distribution with two even branches', () => {
   };
 
   it('should choose each branch evenly', () => {
+    const randomSpy = jest.spyOn(Math, 'random');
     for (const i in [...new Array(times)]) {
-      jest.spyOn(Math, 'random').mockReturnValue(Number.parseInt(i) / times);
+      randomSpy.mockReturnValue(Number.parseInt(i) / times);
       const got = model.generate() as 'こんにちは。' | 'こんばんは。';
       expect(got).toBeOneOf(['こんにちは。', 'こんばんは。']);
       counts[got]++;
@@ -168,5 +170,14 @@ describe('learn', () => {
     model.learn('こんにちは。。。');
     const copied = JSON.parse(model.toJSON());
     expect(copied.corpus).toContain('こんにちは。');
+  });
+
+  it('toLearned keeps learned corpus', () => {
+    const model = new MarkovChainModel();
+    model.learn('こんにちは。');
+    const learned = model.toLearned('こんばんは');
+    const copied = JSON.parse(learned.toJSON());
+    expect(copied.corpus).toContain('こんにちは。');
+    expect(copied.corpus).toContain('こんばんは。');
   });
 });
