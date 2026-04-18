@@ -12,7 +12,7 @@ function createTempLogPath() {
   };
 }
 
-test("writes structured JSON logs", () => {
+test("writes structured JSON logs", async () => {
   const { tempDirectoryPath, logFilePath } = createTempLogPath();
   try {
     const logger = createDailyRotatingJsonLogger(logFilePath, {
@@ -20,6 +20,7 @@ test("writes structured JSON logs", () => {
     });
 
     logger.write({ event: "console_access", status: 200 });
+    await logger.flush();
 
     const logLine = readFileSync(logFilePath, "utf8").trim();
     const entry = JSON.parse(logLine) as Record<string, unknown>;
@@ -32,7 +33,7 @@ test("writes structured JSON logs", () => {
   }
 });
 
-test("replaces caller timestamp field with logger write-time timestamp", () => {
+test("replaces caller timestamp field with logger write-time timestamp", async () => {
   const { tempDirectoryPath, logFilePath } = createTempLogPath();
   try {
     const logger = createDailyRotatingJsonLogger(logFilePath, {
@@ -40,6 +41,7 @@ test("replaces caller timestamp field with logger write-time timestamp", () => {
     });
 
     logger.write({ event: "console_access", timestamp: "caller-provided" });
+    await logger.flush();
 
     const logLine = readFileSync(logFilePath, "utf8").trim();
     const entry = JSON.parse(logLine) as Record<string, unknown>;
@@ -49,7 +51,7 @@ test("replaces caller timestamp field with logger write-time timestamp", () => {
   }
 });
 
-test("rotates to dated file when date changes", () => {
+test("rotates to dated file when date changes", async () => {
   const { tempDirectoryPath, logFilePath } = createTempLogPath();
   const firstDate = new Date("2026-04-18T12:00:00.000Z");
   const secondDate = new Date("2026-04-19T12:00:00.000Z");
@@ -63,6 +65,7 @@ test("rotates to dated file when date changes", () => {
     logger.write({ event: "first" });
     currentDate = secondDate;
     logger.write({ event: "second" });
+    await logger.flush();
 
     const rotatedLogPath = `${logFilePath}.2026-04-18`;
     expect(existsSync(rotatedLogPath)).toBe(true);
@@ -73,7 +76,7 @@ test("rotates to dated file when date changes", () => {
   }
 });
 
-test("rotates to next suffixed path when rotated file already exists", () => {
+test("rotates to next suffixed path when rotated file already exists", async () => {
   const { tempDirectoryPath, logFilePath } = createTempLogPath();
   const firstDate = new Date("2026-04-18T12:00:00.000Z");
   const secondDate = new Date("2026-04-19T12:00:00.000Z");
@@ -89,6 +92,7 @@ test("rotates to next suffixed path when rotated file already exists", () => {
     logger.write({ event: "first" });
     currentDate = secondDate;
     logger.write({ event: "second" });
+    await logger.flush();
 
     const rotatedLogPath = `${logFilePath}.2026-04-18.2`;
     expect(existsSync(rotatedLogPath)).toBe(true);
@@ -98,7 +102,7 @@ test("rotates to next suffixed path when rotated file already exists", () => {
   }
 });
 
-test("rotates stale startup log based on file mtime", () => {
+test("rotates stale startup log based on file mtime", async () => {
   const { tempDirectoryPath, logFilePath } = createTempLogPath();
 
   try {
@@ -114,6 +118,7 @@ test("rotates stale startup log based on file mtime", () => {
     expect(readFileSync(rotatedLogPath, "utf8")).toContain('"event":"stale"');
 
     logger.write({ event: "fresh" });
+    await logger.flush();
     expect(readFileSync(logFilePath, "utf8")).toContain('"event":"fresh"');
   } finally {
     rmSync(tempDirectoryPath, { recursive: true, force: true });
@@ -133,7 +138,7 @@ test("throws when logger initialization fails", () => {
   }
 });
 
-test("rotates by JST date boundary", () => {
+test("rotates by JST date boundary", async () => {
   const { tempDirectoryPath, logFilePath } = createTempLogPath();
   const beforeJstMidnight = new Date("2026-04-18T14:59:59.999Z");
   const afterJstMidnight = new Date("2026-04-18T15:00:00.000Z");
@@ -146,6 +151,7 @@ test("rotates by JST date boundary", () => {
     logger.write({ event: "before-midnight" });
     currentDate = afterJstMidnight;
     logger.write({ event: "after-midnight" });
+    await logger.flush();
 
     const rotatedLogPath = `${logFilePath}.2026-04-18`;
     expect(existsSync(rotatedLogPath)).toBe(true);

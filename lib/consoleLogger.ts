@@ -1,4 +1,5 @@
 import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from "node:fs";
+import { appendFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 type LoggerOptions = {
@@ -7,7 +8,12 @@ type LoggerOptions = {
 
 export type JsonLogRecord = Record<string, unknown>;
 
-export function createDailyRotatingJsonLogger(logFilePath: string, options: LoggerOptions = {}) {
+export type DailyRotatingJsonLogger = {
+  write(record: JsonLogRecord): void;
+  flush(): Promise<void>;
+};
+
+export function createDailyRotatingJsonLogger(logFilePath: string, options: LoggerOptions = {}): DailyRotatingJsonLogger {
   const now = options.now ?? (() => new Date());
   const currentDate = formatLogDate(now());
 
@@ -16,22 +22,32 @@ export function createDailyRotatingJsonLogger(logFilePath: string, options: Logg
   ensureLogWritable(logFilePath);
 
   let activeDate = currentDate;
+  let pendingWrite = Promise.resolve();
 
   return {
     write(record: JsonLogRecord): void {
       try {
         const currentTime = now();
         const logDate = formatLogDate(currentTime);
-        if (logDate !== activeDate) {
-          rotateLogFile(logFilePath, activeDate);
-          activeDate = logDate;
-        }
-
         const { timestamp: _ignoredTimestamp, ...recordWithoutTimestamp } = record;
-        appendFileSync(logFilePath, `${JSON.stringify({ timestamp: formatJstTimestamp(currentTime), ...recordWithoutTimestamp })}\n`);
+        const logLine = `${JSON.stringify({ timestamp: formatJstTimestamp(currentTime), ...recordWithoutTimestamp })}\n`;
+        pendingWrite = pendingWrite.then(async () => {
+          try {
+            if (logDate !== activeDate) {
+              rotateLogFile(logFilePath, activeDate);
+              activeDate = logDate;
+            }
+            await appendFile(logFilePath, logLine);
+          } catch (error) {
+            writeStderr(`Failed to write log entry to ${logFilePath}: ${formatUnknownError(error)}\n`);
+          }
+        });
       } catch (error) {
         writeStderr(`Failed to write log entry to ${logFilePath}: ${formatUnknownError(error)}\n`);
       }
+    },
+    async flush(): Promise<void> {
+      await pendingWrite;
     },
   };
 }
