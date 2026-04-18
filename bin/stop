@@ -20,13 +20,13 @@ wait_until_process_exits() {
 }
 
 kill_tree() {
-  pid=$1
-  children=$(pgrep -P "$pid" 2>/dev/null || true)
-  for child in $children; do
-    kill_tree "$child"
+  children=$(pgrep -P "$1" 2>/dev/null || true)
+  for child_pid in $children; do
+    kill_tree "$child_pid"
   done
-  kill -KILL "$pid" 2>/dev/null || true
-  wait_until_process_exits "$pid"
+  kill -KILL -- "-$1" 2>/dev/null || true
+  kill -KILL "$1" 2>/dev/null || true
+  wait_until_process_exits "$1"
 }
 
 for pid_file in "${PID_DIR}/obs" "${PID_DIR}/browser" "${PID_DIR}/screen"; do
