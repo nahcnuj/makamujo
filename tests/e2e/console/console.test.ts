@@ -123,6 +123,8 @@ test.describe("console", () => {
     expect(rootElement).not.toBeNull();
     await expect(page.getByRole("heading", { name: "配信エージェントの状態" })).toBeVisible();
     await expect(page.getByText("最終更新:", { exact: false })).toBeVisible();
+    await expect(page.getByTestId("agent-status-mock-notice")).toContainText("モック表示中");
     await expect(page.getByTestId("agent-status-details")).toContainText("配信エージェント状態モック");
+    await expect(page.getByTestId("agent-status-json")).toContainText("\"canSpeak\": true");
   });
 });

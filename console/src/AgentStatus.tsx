@@ -19,6 +19,10 @@ type AgentStateResponse = {
       }
     }
   }
+  canSpeak?: boolean
+  currentGame?: unknown
+  speech?: string
+  [key: string]: unknown
 };
 
 type AgentStatusRow = {
@@ -44,6 +48,14 @@ export const createMockAgentStateResponse = (): AgentStateResponse => ({
       },
     },
   },
+  canSpeak: true,
+  currentGame: {
+    name: "org.dashnet.orteil/cookieclicker",
+    state: {
+      status: "idle",
+    },
+  },
+  speech: "コメントを学習してお話ししています",
 });
 
 export const isAgentStateMockQueryEnabled = (searchParams: string): boolean => {
@@ -119,6 +131,7 @@ export function AgentStatus() {
   const [agentStatusError, setAgentStatusError] = useState<string | null>(null);
   const [lastUpdatedTime, setLastUpdatedTime] = useState("");
   const [isLoadingAgentState, setIsLoadingAgentState] = useState(false);
+  const [isShowingMockAgentState, setIsShowingMockAgentState] = useState(false);
 
   const fetchAgentState = useCallback(async () => {
     setIsLoadingAgentState(true);
@@ -126,12 +139,19 @@ export function AgentStatus() {
       if (shouldUseMockAgentState()) {
         setAgentStateResponse(createMockAgentStateResponse());
         setAgentStatusError(null);
+        setIsShowingMockAgentState(true);
         setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
         return;
       }
 
       const response = await fetch("/console/api/agent-state");
-      const responseData = await response.json() as AgentStateResponse;
+      const responseText = await response.text();
+      let responseData: AgentStateResponse;
+      try {
+        responseData = JSON.parse(responseText) as AgentStateResponse;
+      } catch {
+        throw new SyntaxError("配信状態の応答形式が不正です。");
+      }
 
       if (!response.ok) {
         throw new Error(responseData.error ?? `配信状態の取得に失敗しました (${response.status})`);
@@ -139,15 +159,19 @@ export function AgentStatus() {
 
       setAgentStateResponse(responseData);
       setAgentStatusError(null);
+      setIsShowingMockAgentState(false);
       setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
     } catch (error) {
-      setAgentStatusError(
+      const errorMessage =
         error instanceof SyntaxError
           ? "配信状態の応答形式が不正です。"
           : error instanceof Error
             ? error.message
-            : String(error),
-      );
+            : String(error);
+      setAgentStatusError(`${errorMessage} モック表示に切り替えます。`);
+      setAgentStateResponse(createMockAgentStateResponse());
+      setIsShowingMockAgentState(true);
+      setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
     } finally {
       setIsLoadingAgentState(false);
     }
@@ -176,6 +200,14 @@ export function AgentStatus() {
       <p className="text-sm text-[#d9d0c1]">
         最終更新: {lastUpdatedTime || "未取得"}（5秒ごとに自動更新）
       </p>
+      {isShowingMockAgentState ? (
+        <div
+          data-testid="agent-status-mock-notice"
+          className="w-full bg-[#2c2c18] border-2 border-[#f3d5a3] rounded-xl p-3 text-[#fbf0df]"
+        >
+          実配信状態が取得できないため、モック表示中です。
+        </div>
+      ) : null}
       {agentStatusError ? (
         <div
           data-testid="agent-status-error"
@@ -183,7 +215,8 @@ export function AgentStatus() {
         >
           取得エラー: {agentStatusError}
         </div>
-      ) : agentStatusRows.length === 0 ? (
+      ) : null}
+      {agentStatusRows.length === 0 ? (
         <div
           data-testid="agent-status-empty"
           className="w-full min-h-[80px] bg-[#1a1a1a] border-2 border-[#fbf0df] rounded-xl p-3 text-[#fbf0df]"
@@ -211,6 +244,18 @@ export function AgentStatus() {
           ))}
         </dl>
       )}
+      {agentStateResponse ? (
+        <details
+          open
+          data-testid="agent-status-json"
+          className="w-full bg-[#1a1a1a] border-2 border-[#fbf0df] rounded-xl p-3 text-[#fbf0df]"
+        >
+          <summary className="font-bold cursor-pointer">Agent情報（JSON）</summary>
+          <pre className="mt-3 mb-0 overflow-x-auto whitespace-pre-wrap break-all">
+            {JSON.stringify(agentStateResponse, null, 2)}
+          </pre>
+        </details>
+      ) : null}
     </div>
   );
 }

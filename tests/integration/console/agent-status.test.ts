@@ -130,6 +130,14 @@ describe("createMockAgentStateResponse", () => {
           },
         },
       },
+      canSpeak: true,
+      currentGame: {
+        name: "org.dashnet.orteil/cookieclicker",
+        state: {
+          status: "idle",
+        },
+      },
+      speech: "コメントを学習してお話ししています",
     });
   });
 });
