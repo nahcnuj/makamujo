@@ -30,6 +30,11 @@
 - 依存関係未インストールで `bun run test` に進まないよう、最初に `bun ci`（lockfile準拠で更新せず、CIと同じ手順）を実行する
 - スクリーンショットを撮る前に日本語フォントをインストールする（例: `sudo apt-get update && sudo apt-get install -y fonts-noto-cjk`）
 - 配信状態を取得できない環境で管理コンソールのスクリーンショットを撮る場合は、`/console/?agentStateMock=1` を利用してモック表示する
+- OCRでスクリーンショット確認する場合は、次の順で再現する
+  1. `bun run screenshot:console-agent-status --output /tmp/makamujo/console-agent-status-mock.png`
+  2. `bun run screenshot:annotate-ocr --input /tmp/makamujo/console-agent-status-mock.png --output /tmp/makamujo/console-agent-status-mock-annotated.png`
+  3. OCR結果に `配信エージェントの状態` / `実配信状態が取得できないため、モック表示中` / `配信エージェント状態モック` / `Agent情報` が含まれることを確認する
+  - `screenshot:annotate-ocr` 実行に `tesseract` と `convert`（ImageMagick）が必要。未導入なら `sudo apt-get install -y tesseract-ocr tesseract-ocr-jpn imagemagick`
 - 検証コマンドは次の順で実行する
   1. `bun run typecheck`
   2. `bun run test`
