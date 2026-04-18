@@ -20,7 +20,10 @@ type AgentStateResponse = {
     }
   }
   canSpeak?: boolean
-  currentGame?: unknown
+  currentGame?: {
+    name?: string
+    state?: Record<string, unknown>
+  } | null
   speech?: string
   [key: string]: unknown
 };
@@ -146,12 +149,11 @@ export function AgentStatus() {
 
       const response = await fetch("/console/api/agent-state");
       const responseText = await response.text();
-      const responseContentType = response.headers.get("content-type") ?? "(none)";
       let responseData: AgentStateResponse;
       try {
         responseData = JSON.parse(responseText) as AgentStateResponse;
       } catch {
-        throw new SyntaxError(`配信状態の応答形式が不正です（content-type: ${responseContentType}）`);
+        throw new SyntaxError("配信状態の応答形式が不正です。");
       }
 
       if (!response.ok) {
@@ -169,7 +171,7 @@ export function AgentStatus() {
           : error instanceof Error
             ? error.message
             : String(error);
-      setAgentStatusError(`${errorMessage} モック表示に切り替えます。`);
+      setAgentStatusError(errorMessage);
       setAgentStateResponse(createMockAgentStateResponse());
       setIsShowingMockAgentState(true);
       setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
