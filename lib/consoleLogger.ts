@@ -13,7 +13,7 @@ export function createDailyRotatingJsonLogger(logFilePath: string, options: Logg
 
   ensureLogDirectory(logFilePath);
   rotateExistingFileOnStartup(logFilePath, currentDate);
-  assertLogWritable(logFilePath);
+  ensureLogWritable(logFilePath);
 
   let activeDate = currentDate;
 
@@ -48,7 +48,11 @@ function ensureLogDirectory(logFilePath: string): void {
   mkdirSync(dirname(logFilePath), { recursive: true });
 }
 
-function assertLogWritable(logFilePath: string): void {
+/**
+ * Ensure the log file is writable during startup.
+ * Throws when append open/create is not permitted.
+ */
+function ensureLogWritable(logFilePath: string): void {
   appendFileSync(logFilePath, "");
 }
 
