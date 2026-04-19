@@ -152,6 +152,6 @@ test.describe("console", () => {
     const widthAfterLongSpeechBoundingBox = await agentStatusDetails.boundingBox();
     expect(widthAfterLongSpeechBoundingBox).not.toBeNull();
     const finalWidth = widthAfterLongSpeechBoundingBox?.width ?? 0;
-    expect(finalWidth).toBeCloseTo(initialWidth, 0);
+    expect(finalWidth).toBeCloseTo(initialWidth);
   });
 });
