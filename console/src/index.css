@@ -8,4 +8,8 @@
   body {
     @apply grid place-items-center min-w-[320px] min-h-screen overflow-y-scroll relative m-0 bg-gradient-to-b from-emerald-950 via-emerald-900 to-emerald-950;
   }
+
+  #root {
+    @apply w-full justify-self-stretch;
+  }
 }
