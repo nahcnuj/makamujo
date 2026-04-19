@@ -24,6 +24,7 @@ type AgentStateResponse = {
     name?: string
     state?: Record<string, unknown>
   } | null
+  nGram?: number
   speech?: {
     speech?: string
     silent?: boolean
@@ -39,6 +40,8 @@ type AgentStatusRow = {
 export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
 const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
 const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正です。";
+// Distinguishes unix seconds from unix milliseconds by treating 13-digit values as milliseconds.
+const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 
 export const createMockAgentStateResponse = (): AgentStateResponse => ({
   niconama: {
@@ -61,6 +64,7 @@ export const createMockAgentStateResponse = (): AgentStateResponse => ({
       status: "idle",
     },
   },
+  nGram: 4,
   speech: {
     speech: "コメントを学習してお話ししています",
     silent: false,
@@ -122,15 +126,25 @@ const formatStateLabel = (type: string | undefined): string => {
   return type ?? "-";
 };
 
-const formatStartDate = (startAtUnixTimeSeconds: number | undefined): string => {
-  if (typeof startAtUnixTimeSeconds !== "number" || startAtUnixTimeSeconds <= 0) {
+const formatStartDate = (startAtUnixTime: number | undefined): string => {
+  if (typeof startAtUnixTime !== "number" || !Number.isFinite(startAtUnixTime) || startAtUnixTime <= 0) {
     return "-";
   }
-  return new Date(startAtUnixTimeSeconds * 1000).toLocaleString("ja-JP");
+  const startAtUnixTimeMilliseconds = startAtUnixTime >= UNIX_MILLISECONDS_THRESHOLD
+    ? startAtUnixTime
+    : startAtUnixTime * 1000;
+  return new Date(startAtUnixTimeMilliseconds).toLocaleString("ja-JP");
 };
 
 const formatMetricValue = (metricValue: number | undefined): string => {
   return metricValue === undefined ? "-" : String(metricValue);
+};
+
+const formatNGramValue = (nGram: number | undefined): string => {
+  if (nGram === undefined || !Number.isFinite(nGram) || nGram < 1) {
+    return "-";
+  }
+  return `${Math.floor(nGram)}-gram`;
 };
 
 /**
@@ -160,9 +174,12 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
     rows.push({ label: "現在のゲーム", value: stateResponse.currentGame?.name ?? "-" });
   }
 
+  if (stateResponse?.nGram !== undefined) {
+    rows.push({ label: "生成N-gram", value: formatNGramValue(stateResponse.nGram) });
+  }
+
   if (stateResponse?.speech !== undefined) {
     rows.push({ label: "発話内容", value: stateResponse.speech.speech ?? "-" });
-    rows.push({ label: "サイレント", value: stateResponse.speech.silent ? "はい" : "いいえ" });
   }
 
   return rows;
@@ -228,25 +245,25 @@ export function AgentStatus() {
   const agentStatusRows = createAgentStatusRows(agentStateResponse);
 
   return (
-    <div className="mt-8 mx-auto w-full max-w-2xl text-left flex flex-col gap-4">
+    <div className="mt-8 mx-auto w-full max-w-5xl text-left flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-2xl font-bold">配信エージェントの状態</h2>
         <button
           type="button"
           onClick={fetchAgentState}
           disabled={isLoadingAgentState}
-          className="bg-[#fbf0df] text-[#1a1a1a] border-0 px-5 py-1.5 rounded-lg font-bold transition-all duration-100 hover:bg-[#f3d5a3] hover:-translate-y-px cursor-pointer whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
+          className="bg-emerald-300 text-emerald-950 border-0 px-5 py-1.5 rounded-lg font-bold transition-all duration-100 hover:bg-emerald-200 hover:-translate-y-px cursor-pointer whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
         >
           更新
         </button>
       </div>
-      <p className="text-sm text-[#d9d0c1]">
+      <p className="text-sm text-emerald-200">
         最終更新: {lastUpdatedTime || "未取得"}（5秒ごとに自動更新）
       </p>
       {isShowingMockAgentState ? (
         <div
           data-testid="agent-status-mock-notice"
-          className="w-full bg-[#2c2c18] border-2 border-[#f3d5a3] rounded-xl p-3 text-[#fbf0df]"
+          className="w-full bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50"
         >
           実配信状態が取得できないため、モック表示中
         </div>
@@ -254,7 +271,7 @@ export function AgentStatus() {
       {agentStatusError ? (
         <div
           data-testid="agent-status-error"
-          className="w-full min-h-[80px] bg-[#3c1f1f] border-2 border-[#d78787] rounded-xl p-3 text-[#ffd3d3]"
+          className="w-full min-h-[80px] bg-red-950/60 border-2 border-red-300 rounded-xl p-3 text-red-100"
         >
           取得エラー: {agentStatusError}
         </div>
@@ -262,14 +279,14 @@ export function AgentStatus() {
       {agentStatusRows.length === 0 ? (
         <div
           data-testid="agent-status-empty"
-          className="w-full min-h-[80px] bg-[#1a1a1a] border-2 border-[#fbf0df] rounded-xl p-3 text-[#fbf0df]"
+          className="w-full min-h-[80px] bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50"
         >
           {isLoadingAgentState ? "読み込み中..." : "配信情報はありません。"}
         </div>
       ) : (
         <dl
           data-testid="agent-status-details"
-          className="w-full bg-[#1a1a1a] border-2 border-[#fbf0df] rounded-xl p-3 text-[#fbf0df] grid grid-cols-[auto_1fr] gap-x-4 gap-y-2"
+          className="w-full bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50 grid grid-cols-[10rem_minmax(0,1fr)] gap-x-4 gap-y-2"
         >
           {agentStatusRows.map((row) => (
             <div key={row.label} className="contents">

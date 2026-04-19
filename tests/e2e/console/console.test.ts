@@ -127,5 +127,7 @@ test.describe("console", () => {
     await expect(page.getByTestId("agent-status-details")).toContainText("配信エージェント状態モック");
     await expect(page.getByTestId("agent-status-details")).toContainText("話せる状態");
     await expect(page.getByTestId("agent-status-details")).toContainText("はい");
+    await expect(page.getByTestId("agent-status-details")).toContainText("生成N-gram");
+    await expect(page.getByTestId("agent-status-details")).toContainText("4-gram");
   });
 });
