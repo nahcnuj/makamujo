@@ -3,7 +3,7 @@ import "./index.css";
 
 export function App() {
   return (
-    <div className="w-[100svw] max-w-[100svw] mx-auto p-8 text-center relative z-10">
+    <div className="w-full max-w-[100svw] mx-auto p-8 text-center relative z-10 justify-self-stretch">
       <h1 className="text-5xl font-bold my-4 leading-tight">
         <a href="https://live.nicovideo.jp/watch/user/14171889" target="_blank">
           馬可無序
