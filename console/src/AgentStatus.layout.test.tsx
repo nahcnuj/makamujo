@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AgentStatus } from "../../../console/src/AgentStatus";
+import { AgentStatus } from "./AgentStatus";
 
 describe("AgentStatus layout", () => {
   it("uses a wider default max width for the status container", () => {
