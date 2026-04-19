@@ -245,7 +245,7 @@ export function AgentStatus() {
   const agentStatusRows = createAgentStatusRows(agentStateResponse);
 
   return (
-    <div className="mt-8 mx-auto w-full max-w-5xl text-left flex flex-col gap-4">
+    <div className="mt-8 mx-auto w-full max-w-7xl text-left flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-2xl font-bold">配信エージェントの状態</h2>
         <button
