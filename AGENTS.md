@@ -40,6 +40,7 @@
   1. `bun run typecheck`
   2. `bun run test`
   3. `bun run test:integration`
+- 作業完了は、CIのcheckがすべて通っていることを確認して判断する
 - シェルスクリプトの挙動確認が必要な変更では `bun run test:bin` も実行する
 
 ## コーディングスタイル
