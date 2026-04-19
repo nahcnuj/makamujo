@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, mock } from "bun:test";
 import {
   AGENT_STATE_REFRESH_INTERVAL_MS,
   createMockAgentStateResponse,
+  createAgentStatusSections,
   createAgentStatusRows,
   isAgentStateMockQueryEnabled,
   parseAgentStateResponse,
@@ -192,6 +193,53 @@ describe("createAgentStatusRows", () => {
     });
     const startRow = rows.find((row) => row.label === "開始時刻");
     expect(startRow?.value).toContain("2024");
+  });
+});
+
+describe("createAgentStatusSections", () => {
+  it("categorizes rows into delivery, markov-model, and game sections", () => {
+    const sections = createAgentStatusSections(createMockAgentStateResponse());
+
+    expect(sections).toEqual([
+      {
+        title: "配信状況",
+        rows: [
+          { label: "状態", value: "配信中" },
+          { label: "タイトル", value: "配信エージェント状態モック" },
+          {
+            label: "配信URL",
+            value: "https://example.com/watch/mock",
+            href: "https://example.com/watch/mock",
+          },
+          { label: "開始時刻", value: new Date(1_717_000_000_000).toLocaleString("ja-JP") },
+          { label: "視聴者数", value: "123" },
+          { label: "ギフト", value: "456" },
+          { label: "広告", value: "789" },
+        ],
+      },
+      {
+        title: "マルコフ連鎖モデルの状態",
+        rows: [
+          { label: "話せる状態", value: "はい" },
+          { label: "生成N-gram", value: "4-gram" },
+          { label: "発話内容", value: "コメントを学習してお話ししています" },
+        ],
+      },
+      {
+        title: "ゲームの状態",
+        rows: [{ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" }],
+      },
+    ]);
+  });
+
+  it("returns only sections that have rows", () => {
+    const sections = createAgentStatusSections({ nGram: 4 });
+    expect(sections).toEqual([
+      {
+        title: "マルコフ連鎖モデルの状態",
+        rows: [{ label: "生成N-gram", value: "4-gram" }],
+      },
+    ]);
   });
 });
 
