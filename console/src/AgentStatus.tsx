@@ -50,9 +50,10 @@ const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 const LIVE_DELIVERY_ROW_LABELS = ["状態", "タイトル", "配信URL", "開始時刻", "視聴者数", "ギフト", "広告"] as const;
 const MARKOV_MODEL_ROW_LABELS = ["話せる状態", "生成N-gram", "発話内容"] as const;
 const GAME_ROW_LABELS = ["現在のゲーム"] as const;
-const LIVE_DELIVERY_ROW_LABEL_SET = new Set<string>(LIVE_DELIVERY_ROW_LABELS);
-const MARKOV_MODEL_ROW_LABEL_SET = new Set<string>(MARKOV_MODEL_ROW_LABELS);
-const GAME_ROW_LABEL_SET = new Set<string>(GAME_ROW_LABELS);
+const createLabelSet = (labels: readonly string[]) => new Set<string>(labels);
+const LIVE_DELIVERY_ROW_LABEL_SET = createLabelSet(LIVE_DELIVERY_ROW_LABELS);
+const MARKOV_MODEL_ROW_LABEL_SET = createLabelSet(MARKOV_MODEL_ROW_LABELS);
+const GAME_ROW_LABEL_SET = createLabelSet(GAME_ROW_LABELS);
 
 export const createMockAgentStateResponse = (): AgentStateResponse => ({
   niconama: {
