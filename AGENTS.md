@@ -29,6 +29,7 @@
   - `bun` が使えない場合は実行を繰り返さず、まず原因（環境初期化不足）を解消する
 - 依存関係未インストールで `bun run test` に進まないよう、最初に `bun ci`（lockfile準拠で更新せず、CIと同じ手順）を実行する
 - スクリーンショットを撮る前に日本語フォントをインストールする（例: `sudo apt-get update && sudo apt-get install -y fonts-noto-cjk`）
+- スクリプトを実行して得られた成果物（スクリーンショットなど）はリポジトリにコミットしない
 - 配信状態を取得できない環境で管理コンソールのスクリーンショットを撮る場合は、`/console/?agentStateMock=1` を利用してモック表示する
 - OCRでスクリーンショット確認する場合は、次の順で再現する
   1. `bun run screenshot:console-agent-status --output /tmp/makamujo/console-agent-status-mock.png`
@@ -39,6 +40,7 @@
   1. `bun run typecheck`
   2. `bun run test`
   3. `bun run test:integration`
+- 作業完了は、CIのcheckがすべて通っていることを確認して判断する
 - シェルスクリプトの挙動確認が必要な変更では `bun run test:bin` も実行する
 
 ## コーディングスタイル

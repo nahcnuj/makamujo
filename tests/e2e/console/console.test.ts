@@ -129,5 +129,29 @@ test.describe("console", () => {
     await expect(page.getByTestId("agent-status-details")).toContainText("はい");
     await expect(page.getByTestId("agent-status-details")).toContainText("生成N-gram");
     await expect(page.getByTestId("agent-status-details")).toContainText("4-gram");
+
+    const agentStatusDetails = page.getByTestId("agent-status-details");
+    const initialAgentStatusDetailsBoundingBox = await agentStatusDetails.boundingBox();
+    expect(initialAgentStatusDetailsBoundingBox).not.toBeNull();
+    const initialWidth = initialAgentStatusDetailsBoundingBox?.width ?? 0;
+
+    await page.evaluate((veryLongSpeechText) => {
+      const agentStatusDetailsElement = document.querySelector("[data-testid='agent-status-details']");
+      if (!(agentStatusDetailsElement instanceof HTMLElement)) {
+        throw new Error("agent status details element not found");
+      }
+      const speechLabelElement = Array.from(agentStatusDetailsElement.querySelectorAll("dt"))
+        .find((definitionTermElement) => definitionTermElement.textContent?.trim() === "発話内容");
+      const speechValueElement = speechLabelElement?.nextElementSibling;
+      if (!(speechValueElement instanceof HTMLElement)) {
+        throw new Error("speech value element not found");
+      }
+      speechValueElement.textContent = veryLongSpeechText;
+    }, "あ".repeat(8_000));
+
+    const widthAfterLongSpeechBoundingBox = await agentStatusDetails.boundingBox();
+    expect(widthAfterLongSpeechBoundingBox).not.toBeNull();
+    const finalWidth = widthAfterLongSpeechBoundingBox?.width ?? 0;
+    expect(finalWidth).toBeCloseTo(initialWidth);
   });
 });
