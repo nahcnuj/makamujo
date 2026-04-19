@@ -6,6 +6,7 @@ const CONSOLE_BASE_URL = `https://127.0.0.1`;
 const BROADCASTING_BASE_URL = `http://127.0.0.1:7777`;
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 const BROWSER_PAGE_LOAD_TIMEOUT_MS = 20_000;
+const MAX_LAYOUT_WIDTH_DIFFERENCE_PX = 0.5;
 const EXPECTED_CONSOLE_TITLE = "馬可無序 - 管理コンソール";
 
 let server: ReturnType<typeof spawn> | null = null;
@@ -133,7 +134,7 @@ test.describe("console", () => {
     const agentStatusDetails = page.getByTestId("agent-status-details");
     const initialAgentStatusDetailsBoundingBox = await agentStatusDetails.boundingBox();
     expect(initialAgentStatusDetailsBoundingBox).not.toBeNull();
-    const initialAgentStatusDetailsWidth = initialAgentStatusDetailsBoundingBox?.width ?? 0;
+    const initialWidth = initialAgentStatusDetailsBoundingBox?.width ?? 0;
 
     await page.evaluate((veryLongSpeechText) => {
       const agentStatusDetailsElement = document.querySelector("[data-testid='agent-status-details']");
@@ -151,7 +152,7 @@ test.describe("console", () => {
 
     const widthAfterLongSpeechBoundingBox = await agentStatusDetails.boundingBox();
     expect(widthAfterLongSpeechBoundingBox).not.toBeNull();
-    const widthAfterLongSpeech = widthAfterLongSpeechBoundingBox?.width ?? 0;
-    expect(Math.abs(widthAfterLongSpeech - initialAgentStatusDetailsWidth)).toBeLessThan(0.5);
+    const finalWidth = widthAfterLongSpeechBoundingBox?.width ?? 0;
+    expect(Math.abs(finalWidth - initialWidth)).toBeLessThan(MAX_LAYOUT_WIDTH_DIFFERENCE_PX);
   });
 });
