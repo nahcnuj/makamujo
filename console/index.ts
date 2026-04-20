@@ -7,14 +7,34 @@ import * as consoleRoutes from "../routes/console/index";
 
 const consoleCertPath = process.env.CONSOLE_TLS_CERT ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem';
 const consoleKeyPath = process.env.CONSOLE_TLS_KEY ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem';
-const consoleRedirectURL = process.env.CONSOLE_REDIRECT_URL ?? 'https://live.nicovideo.jp/watch/user/14171889';
+export const consoleRedirectURL = process.env.CONSOLE_REDIRECT_URL ?? 'https://live.nicovideo.jp/watch/user/14171889';
 const consoleAccessLogPath = resolve(process.cwd(), 'var/log/console/access.log');
 const consoleErrorLogPath = resolve(process.cwd(), 'var/log/console/error.log');
+export const consoleBasePath = '/console/';
 
 export type ConsoleServer = {
   readonly url: URL;
   stop(closeActiveConnections?: boolean): void;
 };
+
+/**
+ * Build the redirect response used when an access to the outer console server is denied.
+ *
+ * - Requests to `/console/` (including descendants) are redirected to the configured watch page.
+ * - Requests to all other paths are permanently redirected to `/console/`.
+ *
+ * @param requestURL - Original request URL.
+ * @returns Redirect response with status and location based on the request path.
+ */
+export function createAccessDeniedRedirectResponse(requestURL: URL): Response {
+  if (requestURL.pathname.startsWith(consoleBasePath)) {
+    return Response.redirect(consoleRedirectURL, 303);
+  }
+  return new Response(null, {
+    status: 308,
+    headers: { location: consoleBasePath },
+  });
+}
 
 /**
  * Start the console server.
@@ -74,7 +94,8 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
         const clientIpAddress = ip ? `${ip.family}/${ip.address}` : 'unknown';
         let statusCode = 500;
         if (!ip || !AllowedIP.equals(ip)) {
-          statusCode = 302;
+          const redirectResponse = createAccessDeniedRedirectResponse(requestURL);
+          statusCode = redirectResponse.status;
           errorLogger.write({
             event: 'console_access_denied',
             clientIp: clientIpAddress,
@@ -97,7 +118,7 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
             referer,
           });
           console.error(`got ${clientIpAddress}, want ${AllowedIP.toString()}`);
-          return Response.redirect(consoleRedirectURL, 302);
+          return redirectResponse;
         }
 
         try {
