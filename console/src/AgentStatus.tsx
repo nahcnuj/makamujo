@@ -45,6 +45,7 @@ export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
 export const AGENT_STATE_MOCK_NOTICE_MESSAGE = "配信エージェント状態モックを表示中";
 const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
 const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正です。";
+const SPEECH_UNAVAILABLE_INDICATOR = "・・・";
 // Distinguishes unix seconds from unix milliseconds by treating 13-digit values as milliseconds.
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 const LIVE_DELIVERY_ROW_LABELS = ["状態", "タイトル", "配信URL", "開始時刻", "視聴者数", "ギフト", "広告"] as const;
@@ -192,7 +193,7 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
   }
 
   if (stateResponse?.canSpeak === false) {
-    rows.push({ label: "発話内容", value: "・・・" });
+    rows.push({ label: "発話内容", value: SPEECH_UNAVAILABLE_INDICATOR });
   } else if (stateResponse?.speech !== undefined) {
     rows.push({ label: "発話内容", value: stateResponse.speech.speech ?? "-" });
   }
