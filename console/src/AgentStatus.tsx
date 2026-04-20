@@ -41,6 +41,7 @@ type AgentStatusSection = {
 };
 
 export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
+export const AGENT_STATE_MOCK_NOTICE_MESSAGE = "配信エージェント状態モックを表示中";
 const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
 const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正です。";
 // Distinguishes unix seconds from unix milliseconds by treating 13-digit values as milliseconds.
@@ -254,8 +255,8 @@ export function AgentStatus() {
             ? error.message
             : String(error);
       setAgentStatusError(errorMessage);
-      setAgentStateResponse(createMockAgentStateResponse());
-      setIsShowingMockAgentState(true);
+      setAgentStateResponse(null);
+      setIsShowingMockAgentState(false);
       setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
     } finally {
       setIsLoadingAgentState(false);
@@ -300,7 +301,7 @@ export function AgentStatus() {
           data-testid="agent-status-mock-notice"
           className="w-full bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50"
         >
-          実配信状態が取得できないため、モック表示中
+          {AGENT_STATE_MOCK_NOTICE_MESSAGE}
         </div>
       ) : null}
       {agentStatusError ? (
