@@ -49,13 +49,13 @@ const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 const LIVE_DELIVERY_ROW_LABELS = ["状態", "タイトル", "配信URL", "開始時刻", "視聴者数", "ギフト", "広告"] as const;
 const MARKOV_MODEL_ROW_LABELS = ["話せる状態", "生成N-gram", "発話内容"] as const;
 const GAME_ROW_LABELS = ["現在のゲーム", "ゲーム情報"] as const;
+const GAME_STATE_DISPLAY_INDENT_UNIT = "  ";
+const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
+const GAME_STATE_EMPTY_OBJECT_LABEL = "(空のオブジェクト)";
 const createLabelSet = (labels: readonly string[]) => new Set<string>(labels);
 const LIVE_DELIVERY_ROW_LABEL_SET = createLabelSet(LIVE_DELIVERY_ROW_LABELS);
 const MARKOV_MODEL_ROW_LABEL_SET = createLabelSet(MARKOV_MODEL_ROW_LABELS);
 const GAME_ROW_LABEL_SET = createLabelSet(GAME_ROW_LABELS);
-const GAME_INFO_ROW_LABEL_PREFIX = "ゲーム情報.";
-const isGameRowLabel = (rowLabel: string): boolean =>
-  GAME_ROW_LABEL_SET.has(rowLabel) || rowLabel.startsWith(GAME_INFO_ROW_LABEL_PREFIX);
 
 export const createMockAgentStateResponse = (): AgentStateResponse => ({
   niconama: {
@@ -171,60 +171,72 @@ const formatCurrentGameStateLeafValue = (stateValue: unknown): string => {
   return String(stateValue);
 };
 
-type GameStateDisplayEntry = {
-  keyPath: string
-  value: string
-};
-
-const flattenCurrentGameStateEntries = (
+const formatCurrentGameStateDisplayLines = (
   currentGameStateValue: unknown,
-  keyPath = "",
+  depth = 0,
   visitedObjects = new WeakSet<object>(),
-): GameStateDisplayEntry[] => {
+): string[] => {
+  /**
+   * Human-oriented structured formatter:
+   * - primitives: value line
+   * - objects: `key:` line followed by indented child lines
+   * - arrays: `- value` for primitives, `-` followed by indented child lines for objects/arrays
+   */
   if (currentGameStateValue === null || typeof currentGameStateValue !== "object") {
-    return keyPath
-      ? [{ keyPath, value: formatCurrentGameStateLeafValue(currentGameStateValue) }]
-      : [];
+    return [`${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${formatCurrentGameStateLeafValue(currentGameStateValue)}`];
   }
 
   if (visitedObjects.has(currentGameStateValue)) {
-    throw new TypeError("currentGame.state contains circular references");
+    throw new TypeError("Cannot display currentGame.state because circular references were detected.");
   }
 
   visitedObjects.add(currentGameStateValue);
   try {
     if (Array.isArray(currentGameStateValue)) {
-      return currentGameStateValue.flatMap((arrayItem, arrayIndex) =>
-        flattenCurrentGameStateEntries(arrayItem, `${keyPath}[${arrayIndex}]`, visitedObjects)
-      );
+      if (currentGameStateValue.length === 0) {
+        return [`${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${GAME_STATE_EMPTY_ARRAY_LABEL}`];
+      }
+      return currentGameStateValue.flatMap((arrayItem) => {
+        if (arrayItem !== null && typeof arrayItem === "object") {
+          return [
+            `${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}-`,
+            ...formatCurrentGameStateDisplayLines(arrayItem, depth + 1, visitedObjects),
+          ];
+        }
+        return [`${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}- ${formatCurrentGameStateLeafValue(arrayItem)}`];
+      });
     }
 
     const entries = Object.entries(currentGameStateValue);
+    if (entries.length === 0) {
+      return [`${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${GAME_STATE_EMPTY_OBJECT_LABEL}`];
+    }
     return entries.flatMap(([stateKey, stateValue]) => {
-      const nextKeyPath = keyPath ? `${keyPath}.${stateKey}` : stateKey;
-      return flattenCurrentGameStateEntries(stateValue, nextKeyPath, visitedObjects);
+      if (stateValue !== null && typeof stateValue === "object") {
+        return [
+          `${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${stateKey}:`,
+          ...formatCurrentGameStateDisplayLines(stateValue, depth + 1, visitedObjects),
+        ];
+      }
+      return [
+        `${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${stateKey}: ${formatCurrentGameStateLeafValue(stateValue)}`,
+      ];
     });
   } finally {
     visitedObjects.delete(currentGameStateValue);
   }
 };
 
-const createCurrentGameInfoRows = (currentGameState: Record<string, unknown> | undefined): AgentStatusRow[] => {
+const formatCurrentGameStateDisplayValue = (currentGameState: Record<string, unknown> | undefined): string => {
   if (currentGameState === undefined) {
-    return [{ label: "ゲーム情報", value: "-" }];
+    return "-";
   }
 
   try {
-    const currentGameStateEntries = flattenCurrentGameStateEntries(currentGameState);
-    if (currentGameStateEntries.length === 0) {
-      return [{ label: "ゲーム情報", value: "-" }];
-    }
-    return currentGameStateEntries.map((currentGameStateEntry) => ({
-      label: `${GAME_INFO_ROW_LABEL_PREFIX}${currentGameStateEntry.keyPath}`,
-      value: currentGameStateEntry.value,
-    }));
+    const displayLines = formatCurrentGameStateDisplayLines(currentGameState);
+    return displayLines.length === 0 ? "-" : displayLines.join("\n");
   } catch {
-    return [{ label: "ゲーム情報", value: "-" }];
+    return "-";
   }
 };
 
@@ -253,7 +265,11 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
 
   if (stateResponse !== null && stateResponse !== undefined && "currentGame" in stateResponse) {
     rows.push({ label: "現在のゲーム", value: stateResponse.currentGame?.name ?? "-" });
-    rows.push(...createCurrentGameInfoRows(stateResponse.currentGame?.state));
+    rows.push({
+      label: "ゲーム情報",
+      value: formatCurrentGameStateDisplayValue(stateResponse.currentGame?.state),
+      preformatted: true,
+    });
   }
 
   if (stateResponse?.nGram !== undefined) {
@@ -271,7 +287,7 @@ export const createAgentStatusSections = (stateResponse: AgentStateResponse | nu
   const rows = createAgentStatusRows(stateResponse);
   const liveDeliveryRows = rows.filter((row) => LIVE_DELIVERY_ROW_LABEL_SET.has(row.label));
   const markovModelRows = rows.filter((row) => MARKOV_MODEL_ROW_LABEL_SET.has(row.label));
-  const gameRows = rows.filter((row) => isGameRowLabel(row.label));
+  const gameRows = rows.filter((row) => GAME_ROW_LABEL_SET.has(row.label));
 
   const sections = [
     { title: LIVE_DELIVERY_SECTION_TITLE, rows: liveDeliveryRows },

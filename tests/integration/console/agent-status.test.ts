@@ -150,17 +150,58 @@ describe("createAgentStatusRows", () => {
     expect(rows).toContainEqual({ label: "話せる状態", value: "はい" });
     expect(rows).toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
     expect(rows).toContainEqual({
-      label: "ゲーム情報.status",
-      value: "idle",
+      label: "ゲーム情報",
+      value: "status: idle",
+      preformatted: true,
     });
     expect(rows).toContainEqual({ label: "生成N-gram", value: "4-gram" });
     expect(rows).toContainEqual({ label: "発話内容", value: "テスト発話" });
   });
 
+  it("formats currentGame.state as structured, human-friendly lines", () => {
+    const rows = createAgentStatusRows({
+      currentGame: {
+        name: "game",
+        state: {
+          stage: {
+            level: 3,
+          },
+          effects: ["boost", "shield"],
+        },
+      },
+    });
+
+    expect(rows).toContainEqual({
+      label: "ゲーム情報",
+      value: "stage:\n  level: 3\neffects:\n  - boost\n  - shield",
+      preformatted: true,
+    });
+  });
+
+  it("formats nested objects and empty collections in structured display", () => {
+    const rows = createAgentStatusRows({
+      currentGame: {
+        name: "game",
+        state: {
+          profile: {
+            stats: {},
+            inventory: [],
+          },
+        },
+      },
+    });
+
+    expect(rows).toContainEqual({
+      label: "ゲーム情報",
+      value: "profile:\n  stats:\n    (空のオブジェクト)\n  inventory:\n    (空の配列)",
+      preformatted: true,
+    });
+  });
+
   it("shows currentGame as '-' when null", () => {
     const rows = createAgentStatusRows({ currentGame: null });
     expect(rows).toContainEqual({ label: "現在のゲーム", value: "-" });
-    expect(rows).toContainEqual({ label: "ゲーム情報", value: "-" });
+    expect(rows).toContainEqual({ label: "ゲーム情報", value: "-", preformatted: true });
   });
 
   it("falls back solver state row to '-' when currentGame.state is not serializable", () => {
@@ -172,7 +213,7 @@ describe("createAgentStatusRows", () => {
         state: circularState,
       },
     });
-    expect(rows).toContainEqual({ label: "ゲーム情報", value: "-" });
+    expect(rows).toContainEqual({ label: "ゲーム情報", value: "-", preformatted: true });
   });
 
   it("shows canSpeak as 'いいえ' when false", () => {
@@ -246,7 +287,7 @@ describe("createAgentStatusSections", () => {
         title: "ゲームの状態",
         rows: [
           { label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" },
-          { label: "ゲーム情報.status", value: "idle" },
+          { label: "ゲーム情報", value: "status: idle", preformatted: true },
         ],
       },
     ]);

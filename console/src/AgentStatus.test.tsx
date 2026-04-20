@@ -47,7 +47,7 @@ describe("AgentStatus category sections", () => {
         <GameStatusSection
           gameRows={[
             { label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" },
-            { label: "ゲーム情報.status", value: "idle" },
+            { label: "ゲーム情報", value: "status: idle", preformatted: true },
           ]}
         />,
       );
