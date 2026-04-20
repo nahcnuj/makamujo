@@ -1,4 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
+import { GameStatusSection } from "./agentStatusSections/GameStatusSection";
+import { LiveDeliveryStatusSection } from "./agentStatusSections/LiveDeliveryStatusSection";
+import { MarkovModelStatusSection } from "./agentStatusSections/MarkovModelStatusSection";
+import {
+  GAME_SECTION_TITLE,
+  LIVE_DELIVERY_SECTION_TITLE,
+  MARKOV_MODEL_SECTION_TITLE,
+} from "./agentStatusSections/constants";
+import type { AgentStatusRow, AgentStatusSection } from "./agentStatusSections/types";
 
 /**
  * Response schema returned by `/console/api/agent-state`.
@@ -31,29 +40,11 @@ type AgentStateResponse = {
   }
 };
 
-type AgentStatusRow = {
-  label: string
-  value: string
-  href?: string
-};
-
-type AgentStatusSection = {
-  title: string
-  rows: AgentStatusRow[]
-};
-
-type AgentStatusSectionRowsProps = {
-  rows: AgentStatusRow[]
-};
-
 export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
 const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
 const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正です。";
 // Distinguishes unix seconds from unix milliseconds by treating 13-digit values as milliseconds.
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
-const LIVE_DELIVERY_SECTION_TITLE = "配信状況";
-const MARKOV_MODEL_SECTION_TITLE = "マルコフ連鎖モデルの状態";
-const GAME_SECTION_TITLE = "ゲームの状態";
 const LIVE_DELIVERY_ROW_LABELS = ["状態", "タイトル", "配信URL", "開始時刻", "視聴者数", "ギフト", "広告"] as const;
 const MARKOV_MODEL_ROW_LABELS = ["話せる状態", "生成N-gram", "発話内容"] as const;
 const GAME_ROW_LABELS = ["現在のゲーム"] as const;
@@ -219,42 +210,6 @@ export const createAgentStatusSections = (stateResponse: AgentStateResponse | nu
   return sections.filter((section) => section.rows.length > 0);
 };
 
-const AgentStatusSectionCard = ({ title, rows }: AgentStatusSection) => {
-  return (
-    <section className="bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50">
-      <h3 className="text-lg font-bold mb-2">{title}</h3>
-      <dl className="grid grid-cols-[10rem_minmax(0,1fr)] gap-x-4 gap-y-2">
-        {rows.map((row) => (
-          <div key={`${title}:${row.label}`} className="contents">
-            <dt className="font-bold whitespace-nowrap">{row.label}</dt>
-            <dd className="break-all">
-              {row.href ? (
-                <a className="underline" href={row.href} target="_blank" rel="noreferrer">
-                  {row.value}
-                </a>
-              ) : (
-                row.value
-              )}
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </section>
-  );
-};
-
-const LiveDeliveryStatusSection = ({ rows }: AgentStatusSectionRowsProps) => {
-  return <AgentStatusSectionCard title={LIVE_DELIVERY_SECTION_TITLE} rows={rows} />;
-};
-
-const MarkovModelStatusSection = ({ rows }: AgentStatusSectionRowsProps) => {
-  return <AgentStatusSectionCard title={MARKOV_MODEL_SECTION_TITLE} rows={rows} />;
-};
-
-const GameStatusSection = ({ rows }: AgentStatusSectionRowsProps) => {
-  return <AgentStatusSectionCard title={GAME_SECTION_TITLE} rows={rows} />;
-};
-
 export function AgentStatus() {
   const [agentStateResponse, setAgentStateResponse] = useState<AgentStateResponse | null>(null);
   const [agentStatusError, setAgentStatusError] = useState<string | null>(null);
@@ -368,9 +323,9 @@ export function AgentStatus() {
           data-testid="agent-status-details"
           className="w-full flex flex-col gap-4"
         >
-          {liveDeliverySection ? <LiveDeliveryStatusSection rows={liveDeliverySection.rows} /> : null}
-          {markovModelSection ? <MarkovModelStatusSection rows={markovModelSection.rows} /> : null}
-          {gameSection ? <GameStatusSection rows={gameSection.rows} /> : null}
+          {liveDeliverySection ? <LiveDeliveryStatusSection liveDeliveryRows={liveDeliverySection.rows} /> : null}
+          {markovModelSection ? <MarkovModelStatusSection markovModelRows={markovModelSection.rows} /> : null}
+          {gameSection ? <GameStatusSection gameRows={gameSection.rows} /> : null}
         </div>
       )}
     </div>
