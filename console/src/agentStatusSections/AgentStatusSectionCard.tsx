@@ -1,6 +1,15 @@
-import type { AgentStatusSection } from "./types";
+export type AgentStatusRow = {
+  label: string
+  value: string
+  href?: string
+};
 
-export const AgentStatusSectionCard = ({ title, rows }: AgentStatusSection) => {
+type AgentStatusSectionCardProps = {
+  title: string
+  rows: AgentStatusRow[]
+};
+
+export const AgentStatusSectionCard = ({ title, rows }: AgentStatusSectionCardProps) => {
   return (
     <section className="bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50">
       <h3 className="text-lg font-bold mb-2">{title}</h3>

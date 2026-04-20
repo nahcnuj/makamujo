@@ -1,6 +1,11 @@
-import { LIVE_DELIVERY_SECTION_TITLE } from "./constants";
-import type { LiveDeliveryStatusSectionProps } from "./types";
 import { AgentStatusSectionCard } from "./AgentStatusSectionCard";
+import type { AgentStatusRow } from "./AgentStatusSectionCard";
+
+export const LIVE_DELIVERY_SECTION_TITLE = "配信状況";
+
+type LiveDeliveryStatusSectionProps = {
+  liveDeliveryRows: AgentStatusRow[]
+};
 
 export const LiveDeliveryStatusSection = ({ liveDeliveryRows }: LiveDeliveryStatusSectionProps) => {
   return <AgentStatusSectionCard title={LIVE_DELIVERY_SECTION_TITLE} rows={liveDeliveryRows} />;

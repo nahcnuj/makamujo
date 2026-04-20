@@ -1,13 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { GameStatusSection } from "./agentStatusSections/GameStatusSection";
-import { LiveDeliveryStatusSection } from "./agentStatusSections/LiveDeliveryStatusSection";
-import { MarkovModelStatusSection } from "./agentStatusSections/MarkovModelStatusSection";
-import {
-  GAME_SECTION_TITLE,
-  LIVE_DELIVERY_SECTION_TITLE,
-  MARKOV_MODEL_SECTION_TITLE,
-} from "./agentStatusSections/constants";
-import type { AgentStatusRow, AgentStatusSection } from "./agentStatusSections/types";
+import { GAME_SECTION_TITLE, GameStatusSection } from "./agentStatusSections/GameStatusSection";
+import { LIVE_DELIVERY_SECTION_TITLE, LiveDeliveryStatusSection } from "./agentStatusSections/LiveDeliveryStatusSection";
+import { MARKOV_MODEL_SECTION_TITLE, MarkovModelStatusSection } from "./agentStatusSections/MarkovModelStatusSection";
+import type { AgentStatusRow } from "./agentStatusSections/AgentStatusSectionCard";
 
 /**
  * Response schema returned by `/console/api/agent-state`.
@@ -38,6 +33,11 @@ type AgentStateResponse = {
     speech?: string
     silent?: boolean
   }
+};
+
+type AgentStatusSection = {
+  title: string
+  rows: AgentStatusRow[]
 };
 
 export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
