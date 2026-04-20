@@ -42,11 +42,6 @@ type AgentStatusSection = {
   rows: AgentStatusRow[]
 };
 
-type AgentStatusSectionCardProps = {
-  title: string
-  rows: AgentStatusRow[]
-};
-
 export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
 const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
 const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正です。";
@@ -217,13 +212,13 @@ export const createAgentStatusSections = (stateResponse: AgentStateResponse | nu
   return sections.filter((section) => section.rows.length > 0);
 };
 
-const AgentStatusSectionCard = ({ title, rows }: AgentStatusSectionCardProps) => {
+const AgentStatusSectionCard = ({ title, rows }: AgentStatusSection) => {
   return (
     <section className="bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50">
       <h3 className="text-lg font-bold mb-2">{title}</h3>
       <dl className="grid grid-cols-[10rem_minmax(0,1fr)] gap-x-4 gap-y-2">
         {rows.map((row) => (
-          <div key={[title, row.label].join(":")} className="contents">
+          <div key={`${title}:${row.label}`} className="contents">
             <dt className="font-bold whitespace-nowrap">{row.label}</dt>
             <dd className="break-all">
               {row.href ? (
