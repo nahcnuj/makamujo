@@ -2,6 +2,7 @@ export type AgentStatusRow = {
   label: string
   value: string
   href?: string
+  preformatted?: boolean
 };
 
 type AgentStatusSectionCardProps = {
@@ -17,7 +18,7 @@ export const AgentStatusSectionCard = ({ title, rows }: AgentStatusSectionCardPr
         {rows.map((row) => (
           <div key={`${title}:${row.label}`} className="contents">
             <dt className="font-bold whitespace-nowrap">{row.label}</dt>
-            <dd className="break-all">
+            <dd className={row.preformatted ? "font-mono text-xs whitespace-pre-wrap break-words" : "break-all"}>
               {row.href ? (
                 <a className="underline" href={row.href} target="_blank" rel="noreferrer">
                   {row.value}

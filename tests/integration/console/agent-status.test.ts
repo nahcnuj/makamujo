@@ -149,6 +149,11 @@ describe("createAgentStatusRows", () => {
 
     expect(rows).toContainEqual({ label: "話せる状態", value: "はい" });
     expect(rows).toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
+    expect(rows).toContainEqual({
+      label: "ソルバーに渡す状態",
+      value: "{\n  \"status\": \"idle\"\n}",
+      preformatted: true,
+    });
     expect(rows).toContainEqual({ label: "生成N-gram", value: "4-gram" });
     expect(rows).toContainEqual({ label: "発話内容", value: "テスト発話" });
   });
@@ -156,6 +161,7 @@ describe("createAgentStatusRows", () => {
   it("shows currentGame as '-' when null", () => {
     const rows = createAgentStatusRows({ currentGame: null });
     expect(rows).toContainEqual({ label: "現在のゲーム", value: "-" });
+    expect(rows).toContainEqual({ label: "ソルバーに渡す状態", value: "-", preformatted: true });
   });
 
   it("shows canSpeak as 'いいえ' when false", () => {
@@ -227,7 +233,10 @@ describe("createAgentStatusSections", () => {
       },
       {
         title: "ゲームの状態",
-        rows: [{ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" }],
+        rows: [
+          { label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" },
+          { label: "ソルバーに渡す状態", value: "{\n  \"status\": \"idle\"\n}", preformatted: true },
+        ],
       },
     ]);
   });
