@@ -505,7 +505,7 @@ export function AgentStatus() {
       ) : (
         <div
           data-testid="agent-status-details"
-          className="w-full min-h-0 overflow-y-auto pr-1 grid grid-cols-1 2xl:grid-cols-2 auto-rows-min gap-4"
+          className="w-full min-h-0 overflow-y-auto pr-1 grid grid-cols-1 lg:grid-cols-2 auto-rows-min gap-4"
         >
           {liveDeliverySection ? <LiveDeliveryStatusSection liveDeliveryRows={liveDeliverySection.rows} /> : null}
           {markovModelSection ? <MarkovModelStatusSection markovModelRows={markovModelSection.rows} /> : null}
