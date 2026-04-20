@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import {
   AGENT_STATE_REFRESH_INTERVAL_MS,
+  AGENT_STATE_MOCK_NOTICE_MESSAGE,
   createMockAgentStateResponse,
   createAgentStatusSections,
   createAgentStatusRows,
@@ -310,6 +311,13 @@ describe("shouldUseMockAgentState", () => {
       configurable: true,
     });
     expect(shouldUseMockAgentState()).toBe(true);
+  });
+});
+
+describe("AGENT_STATE_MOCK_NOTICE_MESSAGE", () => {
+  it("describes mock mode without error wording", () => {
+    expect(AGENT_STATE_MOCK_NOTICE_MESSAGE).toBe("配信エージェント状態モックを表示中");
+    expect(AGENT_STATE_MOCK_NOTICE_MESSAGE).not.toContain("取得できない");
   });
 });
 

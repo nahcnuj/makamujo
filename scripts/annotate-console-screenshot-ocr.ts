@@ -11,7 +11,7 @@ const RECTANGLE_MARGIN_PX = 8;
 
 const TARGET_LABELS = [
   "配信エージェントの状態",
-  "実配信状態が取得できないため、モック表示中",
+  "配信エージェント状態モックを表示中",
   "配信エージェント状態モック",
   "Agent情報",
 ] as const;
