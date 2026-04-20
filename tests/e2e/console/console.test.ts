@@ -129,6 +129,9 @@ test.describe("console", () => {
     await expect(page.getByTestId("agent-status-details")).toContainText("はい");
     await expect(page.getByTestId("agent-status-details")).toContainText("生成N-gram");
     await expect(page.getByTestId("agent-status-details")).toContainText("4-gram");
+    await expect(page.getByRole("heading", { level: 3, name: "配信状況" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 3, name: "マルコフ連鎖モデルの状態" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 3, name: "ゲームの状態" })).toBeVisible();
 
     const agentStatusDetails = page.getByTestId("agent-status-details");
     const initialAgentStatusDetailsBoundingBox = await agentStatusDetails.boundingBox();

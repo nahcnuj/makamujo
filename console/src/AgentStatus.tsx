@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import { GAME_SECTION_TITLE, GameStatusSection } from "./agentStatusSections/GameStatusSection";
+import { LIVE_DELIVERY_SECTION_TITLE, LiveDeliveryStatusSection } from "./agentStatusSections/LiveDeliveryStatusSection";
+import { MARKOV_MODEL_SECTION_TITLE, MarkovModelStatusSection } from "./agentStatusSections/MarkovModelStatusSection";
+import type { AgentStatusRow } from "./agentStatusSections/AgentStatusSectionCard";
 
 /**
  * Response schema returned by `/console/api/agent-state`.
@@ -31,10 +35,9 @@ type AgentStateResponse = {
   }
 };
 
-type AgentStatusRow = {
-  label: string
-  value: string
-  href?: string
+type AgentStatusSection = {
+  title: string
+  rows: AgentStatusRow[]
 };
 
 export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
@@ -42,6 +45,13 @@ const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
 const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正です。";
 // Distinguishes unix seconds from unix milliseconds by treating 13-digit values as milliseconds.
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
+const LIVE_DELIVERY_ROW_LABELS = ["状態", "タイトル", "配信URL", "開始時刻", "視聴者数", "ギフト", "広告"] as const;
+const MARKOV_MODEL_ROW_LABELS = ["話せる状態", "生成N-gram", "発話内容"] as const;
+const GAME_ROW_LABELS = ["現在のゲーム"] as const;
+const createLabelSet = (labels: readonly string[]) => new Set<string>(labels);
+const LIVE_DELIVERY_ROW_LABEL_SET = createLabelSet(LIVE_DELIVERY_ROW_LABELS);
+const MARKOV_MODEL_ROW_LABEL_SET = createLabelSet(MARKOV_MODEL_ROW_LABELS);
+const GAME_ROW_LABEL_SET = createLabelSet(GAME_ROW_LABELS);
 
 export const createMockAgentStateResponse = (): AgentStateResponse => ({
   niconama: {
@@ -185,6 +195,21 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
   return rows;
 };
 
+export const createAgentStatusSections = (stateResponse: AgentStateResponse | null): AgentStatusSection[] => {
+  const rows = createAgentStatusRows(stateResponse);
+  const liveDeliveryRows = rows.filter((row) => LIVE_DELIVERY_ROW_LABEL_SET.has(row.label));
+  const markovModelRows = rows.filter((row) => MARKOV_MODEL_ROW_LABEL_SET.has(row.label));
+  const gameRows = rows.filter((row) => GAME_ROW_LABEL_SET.has(row.label));
+
+  const sections = [
+    { title: LIVE_DELIVERY_SECTION_TITLE, rows: liveDeliveryRows },
+    { title: MARKOV_MODEL_SECTION_TITLE, rows: markovModelRows },
+    { title: GAME_SECTION_TITLE, rows: gameRows },
+  ];
+
+  return sections.filter((section) => section.rows.length > 0);
+};
+
 export function AgentStatus() {
   const [agentStateResponse, setAgentStateResponse] = useState<AgentStateResponse | null>(null);
   const [agentStatusError, setAgentStatusError] = useState<string | null>(null);
@@ -242,7 +267,17 @@ export function AgentStatus() {
     return startAgentStateAutoRefresh(fetchAgentState);
   }, [fetchAgentState]);
 
-  const agentStatusRows = createAgentStatusRows(agentStateResponse);
+  const agentStatusSections = createAgentStatusSections(agentStateResponse);
+  const sectionMap = agentStatusSections.reduce<Partial<Record<AgentStatusSection["title"], AgentStatusSection>>>(
+    (accumulatedSections, section) => {
+      accumulatedSections[section.title] = section;
+      return accumulatedSections;
+    },
+    {},
+  );
+  const liveDeliverySection = sectionMap[LIVE_DELIVERY_SECTION_TITLE];
+  const markovModelSection = sectionMap[MARKOV_MODEL_SECTION_TITLE];
+  const gameSection = sectionMap[GAME_SECTION_TITLE];
 
   return (
     <div className="mt-8 mx-auto w-full max-w-7xl text-left flex flex-col gap-4">
@@ -276,7 +311,7 @@ export function AgentStatus() {
           取得エラー: {agentStatusError}
         </div>
       ) : null}
-      {agentStatusRows.length === 0 ? (
+      {agentStatusSections.length === 0 ? (
         <div
           data-testid="agent-status-empty"
           className="w-full min-h-[80px] bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50"
@@ -284,25 +319,14 @@ export function AgentStatus() {
           {isLoadingAgentState ? "読み込み中..." : "配信情報はありません。"}
         </div>
       ) : (
-        <dl
+        <div
           data-testid="agent-status-details"
-          className="w-full bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50 grid grid-cols-[10rem_minmax(0,1fr)] gap-x-4 gap-y-2"
+          className="w-full flex flex-col gap-4"
         >
-          {agentStatusRows.map((row) => (
-            <div key={row.label} className="contents">
-              <dt className="font-bold whitespace-nowrap">{row.label}</dt>
-              <dd className="break-all">
-                {row.href ? (
-                  <a className="underline" href={row.href} target="_blank" rel="noreferrer">
-                    {row.value}
-                  </a>
-                ) : (
-                  row.value
-                )}
-              </dd>
-            </div>
-          ))}
-        </dl>
+          {liveDeliverySection ? <LiveDeliveryStatusSection liveDeliveryRows={liveDeliverySection.rows} /> : null}
+          {markovModelSection ? <MarkovModelStatusSection markovModelRows={markovModelSection.rows} /> : null}
+          {gameSection ? <GameStatusSection gameRows={gameSection.rows} /> : null}
+        </div>
       )}
     </div>
   );
