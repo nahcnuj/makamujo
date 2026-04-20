@@ -42,7 +42,7 @@ type AgentStatusSection = {
   rows: AgentStatusRow[]
 };
 
-export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
+export const AGENT_STATE_REFRESH_INTERVAL_MS = 1_000;
 export const AGENT_STATE_MOCK_NOTICE_MESSAGE = "配信エージェント状態モックを表示中";
 const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
 const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正です。";
@@ -475,7 +475,7 @@ export function AgentStatus() {
         </button>
       </div>
       <p className="text-sm text-emerald-200">
-        最終更新: {lastUpdatedTime || "未取得"}（5秒ごとに自動更新）
+        最終更新: {lastUpdatedTime || "未取得"}
       </p>
       {isShowingMockAgentState ? (
         <div
