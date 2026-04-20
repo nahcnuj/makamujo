@@ -29,6 +29,7 @@ type AgentStateResponse = {
     state?: Record<string, unknown>
   } | null
   nGram?: number
+  nGramRaw?: number
   speech?: {
     speech?: string
     silent?: boolean
@@ -44,10 +45,11 @@ export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
 export const AGENT_STATE_MOCK_NOTICE_MESSAGE = "配信エージェント状態モックを表示中";
 const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
 const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正です。";
+const SPEECH_UNAVAILABLE_INDICATOR = "・・・";
 // Distinguishes unix seconds from unix milliseconds by treating 13-digit values as milliseconds.
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 const LIVE_DELIVERY_ROW_LABELS = ["状態", "タイトル", "配信URL", "開始時刻", "視聴者数", "ギフト", "広告"] as const;
-const MARKOV_MODEL_ROW_LABELS = ["話せる状態", "生成N-gram", "発話内容"] as const;
+const MARKOV_MODEL_ROW_LABELS = ["生成N-gram", "発話内容"] as const;
 const GAME_ROW_LABELS = ["現在のゲーム"] as const;
 const createLabelSet = (labels: readonly string[]) => new Set<string>(labels);
 const LIVE_DELIVERY_ROW_LABEL_SET = createLabelSet(LIVE_DELIVERY_ROW_LABELS);
@@ -76,6 +78,7 @@ export const createMockAgentStateResponse = (): AgentStateResponse => ({
     },
   },
   nGram: 4,
+  nGramRaw: 4,
   speech: {
     speech: "コメントを学習してお話ししています",
     silent: false,
@@ -151,11 +154,15 @@ const formatMetricValue = (metricValue: number | undefined): string => {
   return metricValue === undefined ? "-" : String(metricValue);
 };
 
-const formatNGramValue = (nGram: number | undefined): string => {
+const formatNGramValue = (nGram: number | undefined, nGramRaw: number | undefined): string => {
   if (nGram === undefined || !Number.isFinite(nGram) || nGram < 1) {
     return "-";
   }
-  return `${Math.floor(nGram)}-gram`;
+  const nGramValue = `${Math.floor(nGram)}-gram`;
+  if (nGramRaw === undefined || !Number.isFinite(nGramRaw) || nGramRaw < 1) {
+    return nGramValue;
+  }
+  return `${nGramValue} (${nGramRaw})`;
 };
 
 /**
@@ -177,19 +184,17 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
     );
   }
 
-  if (stateResponse?.canSpeak !== undefined) {
-    rows.push({ label: "話せる状態", value: stateResponse.canSpeak ? "はい" : "いいえ" });
-  }
-
   if (stateResponse !== null && stateResponse !== undefined && "currentGame" in stateResponse) {
     rows.push({ label: "現在のゲーム", value: stateResponse.currentGame?.name ?? "-" });
   }
 
   if (stateResponse?.nGram !== undefined) {
-    rows.push({ label: "生成N-gram", value: formatNGramValue(stateResponse.nGram) });
+    rows.push({ label: "生成N-gram", value: formatNGramValue(stateResponse.nGram, stateResponse.nGramRaw) });
   }
 
-  if (stateResponse?.speech !== undefined) {
+  if (stateResponse?.canSpeak === false) {
+    rows.push({ label: "発話内容", value: SPEECH_UNAVAILABLE_INDICATOR });
+  } else if (stateResponse?.speech !== undefined) {
     rows.push({ label: "発話内容", value: stateResponse.speech.speech ?? "-" });
   }
 

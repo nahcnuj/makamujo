@@ -148,6 +148,7 @@ const server = serve({
           canSpeak: streamer.canSpeak,
           currentGame: streamer.currentGame ?? null,
           nGram: streamer.currentNGramSize,
+          nGramRaw: streamer.currentNGramSizeRaw,
           speech: agent.getSpeech(),
         });
       },

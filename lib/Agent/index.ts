@@ -9,6 +9,7 @@ export const SILENCE_THRESHOLD_MS = 5 * 60 * 1_000; // 5 minutes
 const jaJP = new Intl.Locale('ja-JP');
 const N_GRAM_LOG_SCALE = 2;
 const N_GRAM_LOG_BASELINE = 2;
+const INITIAL_COMMENT_NUMBER = 1;
 const pickTopic = (text: string) => {
   const words = Array.from(new Intl.Segmenter(jaJP, { granularity: 'word' }).segment(text)).map(({ segment }) => segment);
   const cands = words.reduce<string[]>((prev, s) => {
@@ -21,9 +22,13 @@ const pickTopic = (text: string) => {
   return topic;
 };
 
-const inferNGramSize = (commentNumber: number): number => {
+const inferNGramSizeRaw = (commentNumber: number): number => {
   const safeCommentNumber = Math.max(1, commentNumber);
-  return Math.max(1, Math.floor((N_GRAM_LOG_SCALE * Math.log10(safeCommentNumber)) - N_GRAM_LOG_BASELINE));
+  return (N_GRAM_LOG_SCALE * Math.log10(safeCommentNumber)) - N_GRAM_LOG_BASELINE;
+};
+
+const inferNGramSize = (commentNumber: number): number => {
+  return Math.max(1, Math.floor(inferNGramSizeRaw(commentNumber)));
 };
 
 export class MakaMujo {
@@ -45,7 +50,8 @@ export class MakaMujo {
   #lastListenerCount?: number;
   #listenersStaleSince?: Date;
   #lastCommentAt?: Date;
-  #currentNGramSize = 1;
+  #currentNGramSize = inferNGramSize(INITIAL_COMMENT_NUMBER);
+  #currentNGramSizeRaw = inferNGramSizeRaw(INITIAL_COMMENT_NUMBER);
 
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
@@ -127,8 +133,9 @@ export class MakaMujo {
       // Update last comment timestamp for any received comment that counts as activity.
       this.#lastCommentAt = new Date(Date.now());
 
-      if (typeof data.no === 'number') {
+      if (typeof data.no === 'number' && data.no > 0) {
         const commentNumber = data.no;
+        this.#currentNGramSizeRaw = inferNGramSizeRaw(commentNumber);
         this.#currentNGramSize = inferNGramSize(commentNumber);
       }
 
@@ -276,6 +283,10 @@ export class MakaMujo {
 
   get currentNGramSize() {
     return this.#currentNGramSize;
+  }
+
+  get currentNGramSizeRaw() {
+    return this.#currentNGramSizeRaw;
   }
 
   get streamState() {
