@@ -248,8 +248,18 @@ const formatCurrentGameStateDisplayValue = (currentGameState: Record<string, unk
   }
 };
 
+/**
+ * Renders `currentGame.state` as nested list components so users can visually
+ * understand object/array structure. Circular references are detected via WeakSet
+ * and treated as display failures by callers.
+ *
+ * @param currentGameStateValue - State value to render (object, array, primitive).
+ * @param visitedObjects - WeakSet used to detect circular references during recursion.
+ * @throws {TypeError} When a circular reference is found in the current traversal path.
+ */
 const renderCurrentGameStateValueComponent = (
   currentGameStateValue: unknown,
+  // Uses a fresh WeakSet per top-level render to keep cycle detection scoped to one tree walk.
   visitedObjects = new WeakSet<object>(),
 ): ReactNode => {
   if (currentGameStateValue === null || typeof currentGameStateValue !== "object") {
@@ -257,7 +267,7 @@ const renderCurrentGameStateValueComponent = (
   }
 
   if (visitedObjects.has(currentGameStateValue)) {
-    throw new TypeError("Cannot render currentGame.state because circular references were detected.");
+    throw new TypeError("Cannot render currentGame.state because circular references were detected (will display '-').");
   }
 
   visitedObjects.add(currentGameStateValue);
@@ -268,9 +278,13 @@ const renderCurrentGameStateValueComponent = (
       }
       return (
         <ul className="list-disc pl-5 space-y-1">
-          {currentGameStateValue.map((arrayItem, arrayIndex) => (
-            <li key={`array-item-${arrayIndex}`}>{renderCurrentGameStateValueComponent(arrayItem, visitedObjects)}</li>
-          ))}
+          {currentGameStateValue.map((arrayItem, arrayIndex) => {
+            const arrayItemKey =
+              arrayItem !== null && typeof arrayItem === "object"
+                ? `array-item-object-${arrayIndex}`
+                : `array-item-${formatCurrentGameStateLeafValue(arrayItem)}-${arrayIndex}`;
+            return <li key={arrayItemKey}>{renderCurrentGameStateValueComponent(arrayItem, visitedObjects)}</li>;
+          })}
         </ul>
       );
     }
@@ -306,6 +320,10 @@ const renderCurrentGameStateValueComponent = (
   }
 };
 
+/**
+ * Creates a safe UI value component for the game info row.
+ * Returns `-` component when state is missing or cannot be rendered.
+ */
 const createCurrentGameInfoValueComponent = (currentGameState: Record<string, unknown> | undefined): ReactNode => {
   if (currentGameState === undefined) {
     return <span>-</span>;

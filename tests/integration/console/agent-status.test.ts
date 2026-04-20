@@ -233,6 +233,12 @@ describe("createAgentStatusRows", () => {
     expect(rows).not.toContainEqual({ label: "話せる状態", value: "いいえ" });
   });
 
+  it("prioritizes speech unavailable indicator when canSpeak is false even if speech exists", () => {
+    const rows = createAgentStatusRows({ canSpeak: false, speech: { speech: "発話テキスト", silent: false } });
+    expect(rows).toContainEqual({ label: "発話内容", value: "・・・" });
+    expect(rows).not.toContainEqual({ label: "発話内容", value: "発話テキスト" });
+  });
+
   it("formats n-gram row with fallback for invalid numbers", () => {
     expect(createAgentStatusRows({ nGram: Infinity })).toContainEqual({ label: "生成N-gram", value: "-" });
     expect(createAgentStatusRows({ nGram: 0 })).toContainEqual({ label: "生成N-gram", value: "-" });
