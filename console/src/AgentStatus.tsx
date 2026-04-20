@@ -158,6 +158,9 @@ const formatNGramValue = (nGram: number | undefined): string => {
   return `${Math.floor(nGram)}-gram`;
 };
 
+/**
+ * Formats the solver input state into a readable JSON string for the game section.
+ */
 const formatCurrentGameStateValue = (currentGameState: Record<string, unknown> | undefined): string => {
   if (currentGameState === undefined) {
     return "-";

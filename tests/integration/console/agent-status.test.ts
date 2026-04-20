@@ -164,6 +164,18 @@ describe("createAgentStatusRows", () => {
     expect(rows).toContainEqual({ label: "ソルバーに渡す状態", value: "-", preformatted: true });
   });
 
+  it("falls back solver state row to '-' when currentGame.state is not serializable", () => {
+    const circularState: Record<string, unknown> = {};
+    circularState.self = circularState;
+    const rows = createAgentStatusRows({
+      currentGame: {
+        name: "org.dashnet.orteil/cookieclicker",
+        state: circularState,
+      },
+    });
+    expect(rows).toContainEqual({ label: "ソルバーに渡す状態", value: "-", preformatted: true });
+  });
+
   it("shows canSpeak as 'いいえ' when false", () => {
     const rows = createAgentStatusRows({ canSpeak: false });
     expect(rows).toContainEqual({ label: "話せる状態", value: "いいえ" });
