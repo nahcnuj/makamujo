@@ -48,7 +48,7 @@ const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 const LIVE_DELIVERY_ROW_LABELS = ["状態", "タイトル", "配信URL", "開始時刻", "視聴者数", "ギフト", "広告"] as const;
 const MARKOV_MODEL_ROW_LABELS = ["話せる状態", "生成N-gram", "発話内容"] as const;
-const GAME_ROW_LABELS = ["現在のゲーム", "ソルバーに渡す状態"] as const;
+const GAME_ROW_LABELS = ["現在のゲーム", "ゲーム情報"] as const;
 const createLabelSet = (labels: readonly string[]) => new Set<string>(labels);
 const LIVE_DELIVERY_ROW_LABEL_SET = createLabelSet(LIVE_DELIVERY_ROW_LABELS);
 const MARKOV_MODEL_ROW_LABEL_SET = createLabelSet(MARKOV_MODEL_ROW_LABELS);
@@ -198,7 +198,7 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
   if (stateResponse !== null && stateResponse !== undefined && "currentGame" in stateResponse) {
     rows.push({ label: "現在のゲーム", value: stateResponse.currentGame?.name ?? "-" });
     rows.push({
-      label: "ソルバーに渡す状態",
+      label: "ゲーム情報",
       value: formatCurrentGameStateValue(stateResponse.currentGame?.state),
       preformatted: true,
     });

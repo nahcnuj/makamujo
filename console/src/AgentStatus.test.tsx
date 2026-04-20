@@ -47,13 +47,13 @@ describe("AgentStatus category sections", () => {
         <GameStatusSection
           gameRows={[
             { label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" },
-            { label: "ソルバーに渡す状態", value: "{\n  \"status\": \"idle\"\n}", preformatted: true },
+            { label: "ゲーム情報", value: "{\n  \"status\": \"idle\"\n}", preformatted: true },
           ]}
         />,
       );
     expect(html).toContain("ゲームの状態");
     expect(html).toContain("現在のゲーム");
     expect(html).toContain("org.dashnet.orteil/cookieclicker");
-    expect(html).toContain("ソルバーに渡す状態");
+    expect(html).toContain("ゲーム情報");
   });
 });

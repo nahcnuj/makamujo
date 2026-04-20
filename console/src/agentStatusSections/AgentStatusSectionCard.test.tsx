@@ -10,7 +10,7 @@ describe("AgentStatusSectionCard", () => {
         rows={[
           { label: "状態", value: "配信中" },
           { label: "配信URL", value: "https://example.com/live", href: "https://example.com/live" },
-          { label: "ソルバーに渡す状態", value: "{\n  \"status\": \"idle\"\n}", preformatted: true },
+          { label: "ゲーム情報", value: "{\n  \"status\": \"idle\"\n}", preformatted: true },
         ]}
       />,
     );

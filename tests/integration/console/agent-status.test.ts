@@ -150,7 +150,7 @@ describe("createAgentStatusRows", () => {
     expect(rows).toContainEqual({ label: "話せる状態", value: "はい" });
     expect(rows).toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
     expect(rows).toContainEqual({
-      label: "ソルバーに渡す状態",
+      label: "ゲーム情報",
       value: "{\n  \"status\": \"idle\"\n}",
       preformatted: true,
     });
@@ -161,7 +161,7 @@ describe("createAgentStatusRows", () => {
   it("shows currentGame as '-' when null", () => {
     const rows = createAgentStatusRows({ currentGame: null });
     expect(rows).toContainEqual({ label: "現在のゲーム", value: "-" });
-    expect(rows).toContainEqual({ label: "ソルバーに渡す状態", value: "-", preformatted: true });
+    expect(rows).toContainEqual({ label: "ゲーム情報", value: "-", preformatted: true });
   });
 
   it("falls back solver state row to '-' when currentGame.state is not serializable", () => {
@@ -173,7 +173,7 @@ describe("createAgentStatusRows", () => {
         state: circularState,
       },
     });
-    expect(rows).toContainEqual({ label: "ソルバーに渡す状態", value: "-", preformatted: true });
+    expect(rows).toContainEqual({ label: "ゲーム情報", value: "-", preformatted: true });
   });
 
   it("shows canSpeak as 'いいえ' when false", () => {
@@ -247,7 +247,7 @@ describe("createAgentStatusSections", () => {
         title: "ゲームの状態",
         rows: [
           { label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" },
-          { label: "ソルバーに渡す状態", value: "{\n  \"status\": \"idle\"\n}", preformatted: true },
+          { label: "ゲーム情報", value: "{\n  \"status\": \"idle\"\n}", preformatted: true },
         ],
       },
     ]);
