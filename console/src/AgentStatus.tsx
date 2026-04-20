@@ -55,6 +55,8 @@ const GAME_ROW_LABELS = ["現在のゲーム", "ゲーム情報"] as const;
 const GAME_STATE_DISPLAY_INDENT_UNIT = "  ";
 const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
 const GAME_STATE_EMPTY_OBJECT_LABEL = "(空のオブジェクト)";
+// Rows: header / last-updated / mock-notice / error-or-empty / details
+const AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS = "grid-rows-[auto_auto_auto_auto_minmax(0,1fr)]";
 const createLabelSet = (labels: readonly string[]) => new Set<string>(labels);
 const LIVE_DELIVERY_ROW_LABEL_SET = createLabelSet(LIVE_DELIVERY_ROW_LABELS);
 const MARKOV_MODEL_ROW_LABEL_SET = createLabelSet(MARKOV_MODEL_ROW_LABELS);
@@ -462,7 +464,7 @@ export function AgentStatus() {
   const gameSection = sectionMap[GAME_SECTION_TITLE];
 
   return (
-    <div className="mx-auto w-full max-w-7xl h-full min-h-0 text-left grid grid-rows-[auto_auto_auto_auto_minmax(0,1fr)] gap-4">
+    <div className={`mx-auto w-full max-w-7xl h-full min-h-0 text-left grid ${AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS} gap-4`}>
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-2xl font-bold">配信エージェントの状態</h2>
         <button
