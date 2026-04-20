@@ -255,6 +255,7 @@ export function AgentStatus() {
             ? error.message
             : String(error);
       setAgentStatusError(errorMessage);
+      setAgentStateResponse(null);
       setIsShowingMockAgentState(false);
       setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
     } finally {
