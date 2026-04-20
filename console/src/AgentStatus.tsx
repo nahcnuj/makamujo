@@ -462,7 +462,7 @@ export function AgentStatus() {
   const gameSection = sectionMap[GAME_SECTION_TITLE];
 
   return (
-    <div className="mt-8 mx-auto w-full max-w-7xl text-left flex flex-col gap-4">
+    <div className="mx-auto w-full max-w-7xl h-full min-h-0 text-left grid grid-rows-[auto_auto_auto_auto_minmax(0,1fr)] gap-4">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-2xl font-bold">配信エージェントの状態</h2>
         <button
@@ -503,7 +503,7 @@ export function AgentStatus() {
       ) : (
         <div
           data-testid="agent-status-details"
-          className="w-full flex flex-col gap-4"
+          className="w-full min-h-0 overflow-y-auto pr-1 grid grid-cols-1 2xl:grid-cols-2 auto-rows-min gap-4"
         >
           {liveDeliverySection ? <LiveDeliveryStatusSection liveDeliveryRows={liveDeliverySection.rows} /> : null}
           {markovModelSection ? <MarkovModelStatusSection markovModelRows={markovModelSection.rows} /> : null}
