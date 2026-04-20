@@ -2,6 +2,7 @@ export type AgentStatusRow = {
   label: string
   value: string
   href?: string
+  isPreformatted?: boolean
 };
 
 type AgentStatusSectionCardProps = {
@@ -22,6 +23,10 @@ export const AgentStatusSectionCard = ({ title, rows }: AgentStatusSectionCardPr
                 <a className="underline" href={row.href} target="_blank" rel="noreferrer">
                   {row.value}
                 </a>
+              ) : row.isPreformatted ? (
+                <pre className="whitespace-pre-wrap break-words rounded-md bg-emerald-900/60 px-2 py-1 font-mono text-xs leading-relaxed">
+                  {row.value}
+                </pre>
               ) : (
                 row.value
               )}

@@ -10,6 +10,7 @@ describe("AgentStatusSectionCard", () => {
         rows={[
           { label: "状態", value: "配信中" },
           { label: "配信URL", value: "https://example.com/live", href: "https://example.com/live" },
+          { label: "ソルバー状態", value: "{\n  \"status\": \"idle\"\n}", isPreformatted: true },
         ]}
       />,
     );
@@ -18,5 +19,6 @@ describe("AgentStatusSectionCard", () => {
     expect(html).toContain("状態");
     expect(html).toContain("配信中");
     expect(html).toContain("href=\"https://example.com/live\"");
+    expect(html).toContain("font-mono");
   });
 });
