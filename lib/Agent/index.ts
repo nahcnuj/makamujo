@@ -50,7 +50,7 @@ export class MakaMujo {
   #lastListenerCount?: number;
   #listenersStaleSince?: Date;
   #lastCommentAt?: Date;
-  #currentNGramSize = INITIAL_COMMENT_NUMBER;
+  #currentNGramSize = inferNGramSize(INITIAL_COMMENT_NUMBER);
   #currentNGramSizeRaw = inferNGramSizeRaw(INITIAL_COMMENT_NUMBER);
 
   constructor(talkModel: TalkModel, tts: TTS) {

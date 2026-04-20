@@ -191,9 +191,10 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
     rows.push({ label: "生成N-gram", value: formatNGramValue(stateResponse.nGram, stateResponse.nGramRaw) });
   }
 
-  if (stateResponse?.canSpeak === false || stateResponse?.speech !== undefined) {
-    const speechValue = stateResponse?.canSpeak === false ? "・・・" : stateResponse?.speech?.speech ?? "-";
-    rows.push({ label: "発話内容", value: speechValue });
+  if (stateResponse?.canSpeak === false) {
+    rows.push({ label: "発話内容", value: "・・・" });
+  } else if (stateResponse?.speech !== undefined) {
+    rows.push({ label: "発話内容", value: stateResponse.speech.speech ?? "-" });
   }
 
   return rows;
