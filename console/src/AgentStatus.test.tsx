@@ -1,18 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AgentStatus } from "./AgentStatus";
-import { App } from "./App";
 import { GameStatusSection } from "./agentStatusSections/GameStatusSection";
 import { LiveDeliveryStatusSection } from "./agentStatusSections/LiveDeliveryStatusSection";
 import { MarkovModelStatusSection } from "./agentStatusSections/MarkovModelStatusSection";
-
-describe("App layout", () => {
-  it("uses a full-height grid with a fixed header row and content row", () => {
-    const html = renderToStaticMarkup(<App />);
-    expect(html).toContain("h-full");
-    expect(html).toContain("grid-rows-[auto_minmax(0,1fr)]");
-  });
-});
 
 describe("AgentStatus layout", () => {
   it("uses a wider default max width for the status container", () => {

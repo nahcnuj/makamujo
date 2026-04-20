@@ -55,7 +55,7 @@ const GAME_ROW_LABELS = ["現在のゲーム", "ゲーム情報"] as const;
 const GAME_STATE_DISPLAY_INDENT_UNIT = "  ";
 const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
 const GAME_STATE_EMPTY_OBJECT_LABEL = "(空のオブジェクト)";
-// Rows: header / last-updated / mock-notice / error-or-empty / details
+// 上から順に: 見出し / 最終更新時刻 / モック通知 / エラーまたは空状態 / 詳細一覧(残り高さをすべて使用)
 const AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS = "grid-rows-[auto_auto_auto_auto_minmax(0,1fr)]";
 const createLabelSet = (labels: readonly string[]) => new Set<string>(labels);
 const LIVE_DELIVERY_ROW_LABEL_SET = createLabelSet(LIVE_DELIVERY_ROW_LABELS);
