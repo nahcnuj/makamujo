@@ -42,11 +42,18 @@ type AgentStatusSection = {
   rows: AgentStatusRow[]
 };
 
+type AgentStatusSectionRowsProps = {
+  rows: AgentStatusRow[]
+};
+
 export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
 const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
 const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正です。";
 // Distinguishes unix seconds from unix milliseconds by treating 13-digit values as milliseconds.
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
+const LIVE_DELIVERY_SECTION_TITLE = "配信状況";
+const MARKOV_MODEL_SECTION_TITLE = "マルコフ連鎖モデルの状態";
+const GAME_SECTION_TITLE = "ゲームの状態";
 const LIVE_DELIVERY_ROW_LABELS = ["状態", "タイトル", "配信URL", "開始時刻", "視聴者数", "ギフト", "広告"] as const;
 const MARKOV_MODEL_ROW_LABELS = ["話せる状態", "生成N-gram", "発話内容"] as const;
 const GAME_ROW_LABELS = ["現在のゲーム"] as const;
@@ -204,9 +211,9 @@ export const createAgentStatusSections = (stateResponse: AgentStateResponse | nu
   const gameRows = rows.filter((row) => GAME_ROW_LABEL_SET.has(row.label));
 
   const sections = [
-    { title: "配信状況", rows: liveDeliveryRows },
-    { title: "マルコフ連鎖モデルの状態", rows: markovModelRows },
-    { title: "ゲームの状態", rows: gameRows },
+    { title: LIVE_DELIVERY_SECTION_TITLE, rows: liveDeliveryRows },
+    { title: MARKOV_MODEL_SECTION_TITLE, rows: markovModelRows },
+    { title: GAME_SECTION_TITLE, rows: gameRows },
   ];
 
   return sections.filter((section) => section.rows.length > 0);
@@ -234,6 +241,18 @@ const AgentStatusSectionCard = ({ title, rows }: AgentStatusSection) => {
       </dl>
     </section>
   );
+};
+
+const LiveDeliveryStatusSection = ({ rows }: AgentStatusSectionRowsProps) => {
+  return <AgentStatusSectionCard title={LIVE_DELIVERY_SECTION_TITLE} rows={rows} />;
+};
+
+const MarkovModelStatusSection = ({ rows }: AgentStatusSectionRowsProps) => {
+  return <AgentStatusSectionCard title={MARKOV_MODEL_SECTION_TITLE} rows={rows} />;
+};
+
+const GameStatusSection = ({ rows }: AgentStatusSectionRowsProps) => {
+  return <AgentStatusSectionCard title={GAME_SECTION_TITLE} rows={rows} />;
 };
 
 export function AgentStatus() {
@@ -294,6 +313,9 @@ export function AgentStatus() {
   }, [fetchAgentState]);
 
   const agentStatusSections = createAgentStatusSections(agentStateResponse);
+  const liveDeliverySection = agentStatusSections.find((section) => section.title === LIVE_DELIVERY_SECTION_TITLE);
+  const markovModelSection = agentStatusSections.find((section) => section.title === MARKOV_MODEL_SECTION_TITLE);
+  const gameSection = agentStatusSections.find((section) => section.title === GAME_SECTION_TITLE);
 
   return (
     <div className="mt-8 mx-auto w-full max-w-7xl text-left flex flex-col gap-4">
@@ -339,9 +361,9 @@ export function AgentStatus() {
           data-testid="agent-status-details"
           className="w-full flex flex-col gap-4"
         >
-          {agentStatusSections.map((section) => (
-            <AgentStatusSectionCard key={section.title} title={section.title} rows={section.rows} />
-          ))}
+          {liveDeliverySection ? <LiveDeliveryStatusSection rows={liveDeliverySection.rows} /> : null}
+          {markovModelSection ? <MarkovModelStatusSection rows={markovModelSection.rows} /> : null}
+          {gameSection ? <GameStatusSection rows={gameSection.rows} /> : null}
         </div>
       )}
     </div>
