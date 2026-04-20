@@ -7,16 +7,25 @@ import * as consoleRoutes from "../routes/console/index";
 
 const consoleCertPath = process.env.CONSOLE_TLS_CERT ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem';
 const consoleKeyPath = process.env.CONSOLE_TLS_KEY ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem';
-const consoleRedirectURL = process.env.CONSOLE_REDIRECT_URL ?? 'https://live.nicovideo.jp/watch/user/14171889';
+export const consoleRedirectURL = process.env.CONSOLE_REDIRECT_URL ?? 'https://live.nicovideo.jp/watch/user/14171889';
 const consoleAccessLogPath = resolve(process.cwd(), 'var/log/console/access.log');
 const consoleErrorLogPath = resolve(process.cwd(), 'var/log/console/error.log');
-const consoleBasePath = '/console/';
+export const consoleBasePath = '/console/';
 
 export type ConsoleServer = {
   readonly url: URL;
   stop(closeActiveConnections?: boolean): void;
 };
 
+/**
+ * Build the redirect response used when an access to the outer console server is denied.
+ *
+ * - Requests to `/console/` (including descendants) are redirected to the configured watch page.
+ * - Requests to all other paths are permanently redirected to `/console/`.
+ *
+ * @param requestURL - Original request URL.
+ * @returns Redirect response with status and location based on the request path.
+ */
 export function createAccessDeniedRedirectResponse(requestURL: URL): Response {
   if (requestURL.pathname.startsWith(consoleBasePath)) {
     return Response.redirect(consoleRedirectURL, 303);

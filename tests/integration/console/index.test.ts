@@ -2,7 +2,7 @@ import { test, expect } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createAccessDeniedRedirectResponse, startConsoleServer } from "../../../console/index";
+import { consoleBasePath, consoleRedirectURL, createAccessDeniedRedirectResponse, startConsoleServer } from "../../../console/index";
 
 test("throws when TLS certificate file is missing", () => {
   const tmpDir = mkdtempSync(join(tmpdir(), 'console-test-'));
@@ -30,11 +30,11 @@ test("throws when TLS certificate file exists but key file is missing", () => {
 test("returns 303 to watch page for denied /console/ access", () => {
   const response = createAccessDeniedRedirectResponse(new URL('https://example.com/console/?q=1'));
   expect(response.status).toBe(303);
-  expect(response.headers.get('location')).toBe('https://live.nicovideo.jp/watch/user/14171889');
+  expect(response.headers.get('location')).toBe(consoleRedirectURL);
 });
 
 test("returns 308 to /console/ for denied non-console access", () => {
   const response = createAccessDeniedRedirectResponse(new URL('https://example.com/other/path'));
   expect(response.status).toBe(308);
-  expect(response.headers.get('location')).toBe('/console/');
+  expect(response.headers.get('location')).toBe(consoleBasePath);
 });
