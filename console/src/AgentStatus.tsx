@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { GAME_SECTION_TITLE, GameStatusSection } from "./agentStatusSections/GameStatusSection";
 import { LIVE_DELIVERY_SECTION_TITLE, LiveDeliveryStatusSection } from "./agentStatusSections/LiveDeliveryStatusSection";
 import { MARKOV_MODEL_SECTION_TITLE, MarkovModelStatusSection } from "./agentStatusSections/MarkovModelStatusSection";
@@ -29,6 +30,7 @@ type AgentStateResponse = {
     state?: Record<string, unknown>
   } | null
   nGram?: number
+  nGramRaw?: number
   speech?: {
     speech?: string
     silent?: boolean
@@ -44,10 +46,11 @@ export const AGENT_STATE_REFRESH_INTERVAL_MS = 5_000;
 export const AGENT_STATE_MOCK_NOTICE_MESSAGE = "配信エージェント状態モックを表示中";
 const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
 const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正です。";
+const SPEECH_UNAVAILABLE_INDICATOR = "・・・";
 // Distinguishes unix seconds from unix milliseconds by treating 13-digit values as milliseconds.
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 const LIVE_DELIVERY_ROW_LABELS = ["状態", "タイトル", "配信URL", "開始時刻", "視聴者数", "ギフト", "広告"] as const;
-const MARKOV_MODEL_ROW_LABELS = ["話せる状態", "生成N-gram", "発話内容"] as const;
+const MARKOV_MODEL_ROW_LABELS = ["生成N-gram", "発話内容"] as const;
 const GAME_ROW_LABELS = ["現在のゲーム", "ゲーム情報"] as const;
 const GAME_STATE_DISPLAY_INDENT_UNIT = "  ";
 const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
@@ -79,6 +82,7 @@ export const createMockAgentStateResponse = (): AgentStateResponse => ({
     },
   },
   nGram: 4,
+  nGramRaw: 4,
   speech: {
     speech: "コメントを学習してお話ししています",
     silent: false,
@@ -154,11 +158,15 @@ const formatMetricValue = (metricValue: number | undefined): string => {
   return metricValue === undefined ? "-" : String(metricValue);
 };
 
-const formatNGramValue = (nGram: number | undefined): string => {
+const formatNGramValue = (nGram: number | undefined, nGramRaw: number | undefined): string => {
   if (nGram === undefined || !Number.isFinite(nGram) || nGram < 1) {
     return "-";
   }
-  return `${Math.floor(nGram)}-gram`;
+  const nGramValue = `${Math.floor(nGram)}-gram`;
+  if (nGramRaw === undefined || !Number.isFinite(nGramRaw) || nGramRaw < 1) {
+    return nGramValue;
+  }
+  return `${nGramValue} (${nGramRaw})`;
 };
 
 const formatCurrentGameStateLeafValue = (stateValue: unknown): string => {
@@ -240,6 +248,76 @@ const formatCurrentGameStateDisplayValue = (currentGameState: Record<string, unk
   }
 };
 
+const renderCurrentGameStateValueComponent = (
+  currentGameStateValue: unknown,
+  visitedObjects = new WeakSet<object>(),
+): ReactNode => {
+  if (currentGameStateValue === null || typeof currentGameStateValue !== "object") {
+    return <span>{formatCurrentGameStateLeafValue(currentGameStateValue)}</span>;
+  }
+
+  if (visitedObjects.has(currentGameStateValue)) {
+    throw new TypeError("Cannot render currentGame.state because circular references were detected.");
+  }
+
+  visitedObjects.add(currentGameStateValue);
+  try {
+    if (Array.isArray(currentGameStateValue)) {
+      if (currentGameStateValue.length === 0) {
+        return <span>{GAME_STATE_EMPTY_ARRAY_LABEL}</span>;
+      }
+      return (
+        <ul className="list-disc pl-5 space-y-1">
+          {currentGameStateValue.map((arrayItem, arrayIndex) => (
+            <li key={`array-item-${arrayIndex}`}>{renderCurrentGameStateValueComponent(arrayItem, visitedObjects)}</li>
+          ))}
+        </ul>
+      );
+    }
+
+    const objectEntries = Object.entries(currentGameStateValue);
+    if (objectEntries.length === 0) {
+      return <span>{GAME_STATE_EMPTY_OBJECT_LABEL}</span>;
+    }
+    return (
+      <ul className="space-y-1">
+        {objectEntries.map(([stateKey, stateValue]) => {
+          if (stateValue !== null && typeof stateValue === "object") {
+            return (
+              <li key={stateKey}>
+                <div className="font-semibold">{stateKey}</div>
+                <div className="pl-4 border-l border-emerald-300/40">
+                  {renderCurrentGameStateValueComponent(stateValue, visitedObjects)}
+                </div>
+              </li>
+            );
+          }
+          return (
+            <li key={stateKey}>
+              <span className="font-semibold">{stateKey}</span>
+              <span>: {formatCurrentGameStateLeafValue(stateValue)}</span>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  } finally {
+    visitedObjects.delete(currentGameStateValue);
+  }
+};
+
+const createCurrentGameInfoValueComponent = (currentGameState: Record<string, unknown> | undefined): ReactNode => {
+  if (currentGameState === undefined) {
+    return <span>-</span>;
+  }
+
+  try {
+    return renderCurrentGameStateValueComponent(currentGameState);
+  } catch {
+    return <span>-</span>;
+  }
+};
+
 /**
  * Converts agent-state payload into user-facing rows for the status details UI.
  */
@@ -259,24 +337,22 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
     );
   }
 
-  if (stateResponse?.canSpeak !== undefined) {
-    rows.push({ label: "話せる状態", value: stateResponse.canSpeak ? "はい" : "いいえ" });
-  }
-
   if (stateResponse !== null && stateResponse !== undefined && "currentGame" in stateResponse) {
     rows.push({ label: "現在のゲーム", value: stateResponse.currentGame?.name ?? "-" });
     rows.push({
       label: "ゲーム情報",
       value: formatCurrentGameStateDisplayValue(stateResponse.currentGame?.state),
-      preformatted: true,
+      valueComponent: createCurrentGameInfoValueComponent(stateResponse.currentGame?.state),
     });
   }
 
   if (stateResponse?.nGram !== undefined) {
-    rows.push({ label: "生成N-gram", value: formatNGramValue(stateResponse.nGram) });
+    rows.push({ label: "生成N-gram", value: formatNGramValue(stateResponse.nGram, stateResponse.nGramRaw) });
   }
 
-  if (stateResponse?.speech !== undefined) {
+  if (stateResponse?.canSpeak === false) {
+    rows.push({ label: "発話内容", value: SPEECH_UNAVAILABLE_INDICATOR });
+  } else if (stateResponse?.speech !== undefined) {
     rows.push({ label: "発話内容", value: stateResponse.speech.speech ?? "-" });
   }
 

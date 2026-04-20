@@ -224,6 +224,26 @@ describe('comment learning n-gram size', () => {
     expect(generate).toHaveBeenLastCalledWith('', 4);
   });
 
+  it('initializes currentNGramSizeRaw from initial comment number', () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    expect(agent.currentNGramSizeRaw).toBe(-2);
+  });
+
+  it('updates currentNGramSizeRaw from comment number before flooring', () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    agent.listen([comment(5_000)]);
+    expect(agent.currentNGramSizeRaw).toBeCloseTo(5.3979400086720375);
+  });
+
+  it('does not update n-gram raw state when no is 0', () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    const initialRaw = agent.currentNGramSizeRaw;
+
+    agent.listen([comment(0)]);
+
+    expect(agent.currentNGramSizeRaw).toBe(initialRaw);
+  });
+
   it('does not learn comment when no is 0', () => {
     const generate = jest.fn(() => '');
     const learn = jest.fn();
