@@ -313,9 +313,16 @@ export function AgentStatus() {
   }, [fetchAgentState]);
 
   const agentStatusSections = createAgentStatusSections(agentStateResponse);
-  const liveDeliverySection = agentStatusSections.find((section) => section.title === LIVE_DELIVERY_SECTION_TITLE);
-  const markovModelSection = agentStatusSections.find((section) => section.title === MARKOV_MODEL_SECTION_TITLE);
-  const gameSection = agentStatusSections.find((section) => section.title === GAME_SECTION_TITLE);
+  const sectionMap = agentStatusSections.reduce<Partial<Record<AgentStatusSection["title"], AgentStatusSection>>>(
+    (accumulatedSections, section) => {
+      accumulatedSections[section.title] = section;
+      return accumulatedSections;
+    },
+    {},
+  );
+  const liveDeliverySection = sectionMap[LIVE_DELIVERY_SECTION_TITLE];
+  const markovModelSection = sectionMap[MARKOV_MODEL_SECTION_TITLE];
+  const gameSection = sectionMap[GAME_SECTION_TITLE];
 
   return (
     <div className="mt-8 mx-auto w-full max-w-7xl text-left flex flex-col gap-4">
