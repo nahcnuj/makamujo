@@ -139,17 +139,17 @@ describe("createAgentStatusRows", () => {
     expect(rows).toContainEqual({ label: "広告", value: "789" });
   });
 
-  it("includes canSpeak, currentGame and speech rows when present", () => {
+  it("includes currentGame and speech rows when present", () => {
     const rows = createAgentStatusRows({
       canSpeak: true,
       currentGame: { name: "org.dashnet.orteil/cookieclicker", state: { status: "idle" } },
       nGram: 4,
+      nGramRaw: 4,
       speech: { speech: "テスト発話", silent: false },
     });
 
-    expect(rows).toContainEqual({ label: "話せる状態", value: "はい" });
     expect(rows).toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
-    expect(rows).toContainEqual({ label: "生成N-gram", value: "4-gram" });
+    expect(rows).toContainEqual({ label: "生成N-gram", value: "4-gram (4)" });
     expect(rows).toContainEqual({ label: "発話内容", value: "テスト発話" });
   });
 
@@ -158,15 +158,17 @@ describe("createAgentStatusRows", () => {
     expect(rows).toContainEqual({ label: "現在のゲーム", value: "-" });
   });
 
-  it("shows canSpeak as 'いいえ' when false", () => {
+  it("shows speech as '・・・' when canSpeak is false", () => {
     const rows = createAgentStatusRows({ canSpeak: false });
-    expect(rows).toContainEqual({ label: "話せる状態", value: "いいえ" });
+    expect(rows).toContainEqual({ label: "発話内容", value: "・・・" });
+    expect(rows).not.toContainEqual({ label: "話せる状態", value: "いいえ" });
   });
 
   it("formats n-gram row with fallback for invalid numbers", () => {
     expect(createAgentStatusRows({ nGram: Infinity })).toContainEqual({ label: "生成N-gram", value: "-" });
     expect(createAgentStatusRows({ nGram: 0 })).toContainEqual({ label: "生成N-gram", value: "-" });
     expect(createAgentStatusRows({ nGram: 4.8 })).toContainEqual({ label: "生成N-gram", value: "4-gram" });
+    expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: 4.8 })).toContainEqual({ label: "生成N-gram", value: "4-gram (4.8)" });
     expect(createAgentStatusRows({})).not.toContainEqual({ label: "生成N-gram", value: "-" });
   });
 
@@ -220,8 +222,7 @@ describe("createAgentStatusSections", () => {
       {
         title: "マルコフ連鎖モデルの状態",
         rows: [
-          { label: "話せる状態", value: "はい" },
-          { label: "生成N-gram", value: "4-gram" },
+          { label: "生成N-gram", value: "4-gram (4)" },
           { label: "発話内容", value: "コメントを学習してお話ししています" },
         ],
       },
@@ -267,6 +268,7 @@ describe("createMockAgentStateResponse", () => {
         },
       },
       nGram: 4,
+      nGramRaw: 4,
       speech: {
         speech: "コメントを学習してお話ししています",
         silent: false,

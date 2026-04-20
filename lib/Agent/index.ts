@@ -21,9 +21,13 @@ const pickTopic = (text: string) => {
   return topic;
 };
 
-const inferNGramSize = (commentNumber: number): number => {
+const inferNGramSizeRaw = (commentNumber: number): number => {
   const safeCommentNumber = Math.max(1, commentNumber);
-  return Math.max(1, Math.floor((N_GRAM_LOG_SCALE * Math.log10(safeCommentNumber)) - N_GRAM_LOG_BASELINE));
+  return (N_GRAM_LOG_SCALE * Math.log10(safeCommentNumber)) - N_GRAM_LOG_BASELINE;
+};
+
+const inferNGramSize = (commentNumber: number): number => {
+  return Math.max(1, Math.floor(inferNGramSizeRaw(commentNumber)));
 };
 
 export class MakaMujo {
@@ -46,6 +50,7 @@ export class MakaMujo {
   #listenersStaleSince?: Date;
   #lastCommentAt?: Date;
   #currentNGramSize = 1;
+  #currentNGramSizeRaw = inferNGramSizeRaw(1);
 
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
@@ -129,6 +134,7 @@ export class MakaMujo {
 
       if (typeof data.no === 'number') {
         const commentNumber = data.no;
+        this.#currentNGramSizeRaw = inferNGramSizeRaw(commentNumber);
         this.#currentNGramSize = inferNGramSize(commentNumber);
       }
 
@@ -276,6 +282,10 @@ export class MakaMujo {
 
   get currentNGramSize() {
     return this.#currentNGramSize;
+  }
+
+  get currentNGramSizeRaw() {
+    return this.#currentNGramSizeRaw;
   }
 
   get streamState() {
