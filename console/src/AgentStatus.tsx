@@ -192,7 +192,8 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
   }
 
   if (stateResponse?.canSpeak === false || stateResponse?.speech !== undefined) {
-    rows.push({ label: "発話内容", value: stateResponse?.canSpeak === false ? "・・・" : stateResponse?.speech?.speech ?? "-" });
+    const speechValue = stateResponse?.canSpeak === false ? "・・・" : stateResponse?.speech?.speech ?? "-";
+    rows.push({ label: "発話内容", value: speechValue });
   }
 
   return rows;

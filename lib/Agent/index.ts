@@ -9,6 +9,7 @@ export const SILENCE_THRESHOLD_MS = 5 * 60 * 1_000; // 5 minutes
 const jaJP = new Intl.Locale('ja-JP');
 const N_GRAM_LOG_SCALE = 2;
 const N_GRAM_LOG_BASELINE = 2;
+const INITIAL_COMMENT_NUMBER = 1;
 const pickTopic = (text: string) => {
   const words = Array.from(new Intl.Segmenter(jaJP, { granularity: 'word' }).segment(text)).map(({ segment }) => segment);
   const cands = words.reduce<string[]>((prev, s) => {
@@ -49,8 +50,8 @@ export class MakaMujo {
   #lastListenerCount?: number;
   #listenersStaleSince?: Date;
   #lastCommentAt?: Date;
-  #currentNGramSize = 1;
-  #currentNGramSizeRaw = inferNGramSizeRaw(1);
+  #currentNGramSize = INITIAL_COMMENT_NUMBER;
+  #currentNGramSizeRaw = inferNGramSizeRaw(INITIAL_COMMENT_NUMBER);
 
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
