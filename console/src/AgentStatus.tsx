@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { GAME_SECTION_TITLE, GameStatusSection } from "./agentStatusSections/GameStatusSection";
 import { LIVE_DELIVERY_SECTION_TITLE, LiveDeliveryStatusSection } from "./agentStatusSections/LiveDeliveryStatusSection";
 import { MARKOV_MODEL_SECTION_TITLE, MarkovModelStatusSection } from "./agentStatusSections/MarkovModelStatusSection";
@@ -50,7 +51,10 @@ const SPEECH_UNAVAILABLE_INDICATOR = "・・・";
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 const LIVE_DELIVERY_ROW_LABELS = ["状態", "タイトル", "配信URL", "開始時刻", "視聴者数", "ギフト", "広告"] as const;
 const MARKOV_MODEL_ROW_LABELS = ["生成N-gram", "発話内容"] as const;
-const GAME_ROW_LABELS = ["現在のゲーム"] as const;
+const GAME_ROW_LABELS = ["現在のゲーム", "ゲーム情報"] as const;
+const GAME_STATE_DISPLAY_INDENT_UNIT = "  ";
+const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
+const GAME_STATE_EMPTY_OBJECT_LABEL = "(空のオブジェクト)";
 const createLabelSet = (labels: readonly string[]) => new Set<string>(labels);
 const LIVE_DELIVERY_ROW_LABEL_SET = createLabelSet(LIVE_DELIVERY_ROW_LABELS);
 const MARKOV_MODEL_ROW_LABEL_SET = createLabelSet(MARKOV_MODEL_ROW_LABELS);
@@ -165,6 +169,173 @@ const formatNGramValue = (nGram: number | undefined, nGramRaw: number | undefine
   return `${nGramValue} (${nGramRaw})`;
 };
 
+const formatCurrentGameStateLeafValue = (stateValue: unknown): string => {
+  if (stateValue === null) {
+    return "null";
+  }
+  if (stateValue === undefined) {
+    return "-";
+  }
+  return String(stateValue);
+};
+
+const formatCurrentGameStateDisplayLines = (
+  currentGameStateValue: unknown,
+  depth = 0,
+  visitedObjects = new WeakSet<object>(),
+): string[] => {
+  /**
+   * Human-oriented structured formatter:
+   * - primitives: value line
+   * - objects: `key:` line followed by indented child lines
+   * - arrays: `- value` for primitives, `-` followed by indented child lines for objects/arrays
+   */
+  if (currentGameStateValue === null || typeof currentGameStateValue !== "object") {
+    return [`${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${formatCurrentGameStateLeafValue(currentGameStateValue)}`];
+  }
+
+  if (visitedObjects.has(currentGameStateValue)) {
+    throw new TypeError("Cannot display currentGame.state because circular references were detected.");
+  }
+
+  visitedObjects.add(currentGameStateValue);
+  try {
+    if (Array.isArray(currentGameStateValue)) {
+      if (currentGameStateValue.length === 0) {
+        return [`${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${GAME_STATE_EMPTY_ARRAY_LABEL}`];
+      }
+      return currentGameStateValue.flatMap((arrayItem) => {
+        if (arrayItem !== null && typeof arrayItem === "object") {
+          return [
+            `${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}-`,
+            ...formatCurrentGameStateDisplayLines(arrayItem, depth + 1, visitedObjects),
+          ];
+        }
+        return [`${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}- ${formatCurrentGameStateLeafValue(arrayItem)}`];
+      });
+    }
+
+    const entries = Object.entries(currentGameStateValue);
+    if (entries.length === 0) {
+      return [`${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${GAME_STATE_EMPTY_OBJECT_LABEL}`];
+    }
+    return entries.flatMap(([stateKey, stateValue]) => {
+      if (stateValue !== null && typeof stateValue === "object") {
+        return [
+          `${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${stateKey}:`,
+          ...formatCurrentGameStateDisplayLines(stateValue, depth + 1, visitedObjects),
+        ];
+      }
+      return [
+        `${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${stateKey}: ${formatCurrentGameStateLeafValue(stateValue)}`,
+      ];
+    });
+  } finally {
+    visitedObjects.delete(currentGameStateValue);
+  }
+};
+
+const formatCurrentGameStateDisplayValue = (currentGameState: Record<string, unknown> | undefined): string => {
+  if (currentGameState === undefined) {
+    return "-";
+  }
+
+  try {
+    const displayLines = formatCurrentGameStateDisplayLines(currentGameState);
+    return displayLines.length === 0 ? "-" : displayLines.join("\n");
+  } catch {
+    return "-";
+  }
+};
+
+/**
+ * Renders `currentGame.state` as nested list components so users can visually
+ * understand object/array structure. Circular references are detected via WeakSet
+ * and treated as display failures by callers.
+ *
+ * @param currentGameStateValue - State value to render (object, array, primitive).
+ * @param visitedObjects - WeakSet used to detect circular references during recursion.
+ * @throws {TypeError} When a circular reference is found in the current traversal path.
+ */
+const renderCurrentGameStateValueComponent = (
+  currentGameStateValue: unknown,
+  // Uses a fresh WeakSet per top-level render to keep cycle detection scoped to one tree walk.
+  visitedObjects = new WeakSet<object>(),
+): ReactNode => {
+  if (currentGameStateValue === null || typeof currentGameStateValue !== "object") {
+    return <span>{formatCurrentGameStateLeafValue(currentGameStateValue)}</span>;
+  }
+
+  if (visitedObjects.has(currentGameStateValue)) {
+    throw new TypeError("Cannot render currentGame.state because circular references were detected (will display '-').");
+  }
+
+  visitedObjects.add(currentGameStateValue);
+  try {
+    if (Array.isArray(currentGameStateValue)) {
+      if (currentGameStateValue.length === 0) {
+        return <span>{GAME_STATE_EMPTY_ARRAY_LABEL}</span>;
+      }
+      return (
+        <ul className="list-disc pl-5 space-y-1">
+          {currentGameStateValue.map((arrayItem, arrayIndex) => {
+            const arrayItemKey =
+              arrayItem !== null && typeof arrayItem === "object"
+                ? `array-item-object-${arrayIndex}`
+                : `array-item-${formatCurrentGameStateLeafValue(arrayItem)}-${arrayIndex}`;
+            return <li key={arrayItemKey}>{renderCurrentGameStateValueComponent(arrayItem, visitedObjects)}</li>;
+          })}
+        </ul>
+      );
+    }
+
+    const objectEntries = Object.entries(currentGameStateValue);
+    if (objectEntries.length === 0) {
+      return <span>{GAME_STATE_EMPTY_OBJECT_LABEL}</span>;
+    }
+    return (
+      <ul className="space-y-1">
+        {objectEntries.map(([stateKey, stateValue]) => {
+          if (stateValue !== null && typeof stateValue === "object") {
+            return (
+              <li key={stateKey}>
+                <div className="font-semibold">{stateKey}</div>
+                <div className="pl-4 border-l border-emerald-300/40">
+                  {renderCurrentGameStateValueComponent(stateValue, visitedObjects)}
+                </div>
+              </li>
+            );
+          }
+          return (
+            <li key={stateKey}>
+              <span className="font-semibold">{stateKey}</span>
+              <span>: {formatCurrentGameStateLeafValue(stateValue)}</span>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  } finally {
+    visitedObjects.delete(currentGameStateValue);
+  }
+};
+
+/**
+ * Creates a safe UI value component for the game info row.
+ * Returns `-` component when state is missing or cannot be rendered.
+ */
+const createCurrentGameInfoValueComponent = (currentGameState: Record<string, unknown> | undefined): ReactNode => {
+  if (currentGameState === undefined) {
+    return <span>-</span>;
+  }
+
+  try {
+    return renderCurrentGameStateValueComponent(currentGameState);
+  } catch {
+    return <span>-</span>;
+  }
+};
+
 /**
  * Converts agent-state payload into user-facing rows for the status details UI.
  */
@@ -186,6 +357,11 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
 
   if (stateResponse !== null && stateResponse !== undefined && "currentGame" in stateResponse) {
     rows.push({ label: "現在のゲーム", value: stateResponse.currentGame?.name ?? "-" });
+    rows.push({
+      label: "ゲーム情報",
+      value: formatCurrentGameStateDisplayValue(stateResponse.currentGame?.state),
+      valueComponent: createCurrentGameInfoValueComponent(stateResponse.currentGame?.state),
+    });
   }
 
   if (stateResponse?.nGram !== undefined) {

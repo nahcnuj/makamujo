@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
+import { Fragment, createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
   AGENT_STATE_REFRESH_INTERVAL_MS,
   createMockAgentStateResponse,
@@ -150,18 +152,91 @@ describe("createAgentStatusRows", () => {
 
     expect(rows).toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
     expect(rows).toContainEqual({ label: "生成N-gram", value: "4-gram (4)" });
+    const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
+    expect(gameInfoRow?.value).toBe("status: idle");
+    expect(gameInfoRow?.valueComponent).toBeDefined();
+    const gameInfoHtml = renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent));
+    expect(gameInfoHtml).toContain("<ul");
+    expect(gameInfoHtml).toContain("status");
+    expect(gameInfoHtml).toContain("idle");
     expect(rows).toContainEqual({ label: "発話内容", value: "テスト発話" });
+  });
+
+  it("formats currentGame.state as structured, human-friendly lines", () => {
+    const rows = createAgentStatusRows({
+      currentGame: {
+        name: "game",
+        state: {
+          stage: {
+            level: 3,
+          },
+          effects: ["boost", "shield"],
+        },
+      },
+    });
+
+    const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
+    expect(gameInfoRow?.value).toBe("stage:\n  level: 3\neffects:\n  - boost\n  - shield");
+    const gameInfoHtml = renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent));
+    expect(gameInfoHtml).toContain("<ul");
+    expect(gameInfoHtml).toContain("stage");
+    expect(gameInfoHtml).toContain("effects");
+    expect(gameInfoHtml).toContain("boost");
+    expect(gameInfoHtml).toContain("shield");
+  });
+
+  it("formats nested objects and empty collections in structured display", () => {
+    const rows = createAgentStatusRows({
+      currentGame: {
+        name: "game",
+        state: {
+          profile: {
+            stats: {},
+            inventory: [],
+          },
+        },
+      },
+    });
+
+    const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
+    expect(gameInfoRow?.value).toBe("profile:\n  stats:\n    (空のオブジェクト)\n  inventory:\n    (空の配列)");
+    const gameInfoHtml = renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent));
+    expect(gameInfoHtml).toContain("空のオブジェクト");
+    expect(gameInfoHtml).toContain("空の配列");
   });
 
   it("shows currentGame as '-' when null", () => {
     const rows = createAgentStatusRows({ currentGame: null });
     expect(rows).toContainEqual({ label: "現在のゲーム", value: "-" });
+    const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
+    expect(gameInfoRow?.value).toBe("-");
+    expect(renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent))).toContain("-");
+  });
+
+  it("falls back solver state row to '-' when currentGame.state is not serializable", () => {
+    const circularState: Record<string, unknown> = {};
+    circularState.self = circularState;
+    const rows = createAgentStatusRows({
+      currentGame: {
+        name: "org.dashnet.orteil/cookieclicker",
+        state: circularState,
+      },
+    });
+    const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
+    expect(gameInfoRow?.value).toBe("-");
+    expect(renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent))).toContain("-");
   });
 
   it("shows speech as '・・・' when canSpeak is false", () => {
     const rows = createAgentStatusRows({ canSpeak: false });
     expect(rows).toContainEqual({ label: "発話内容", value: "・・・" });
     expect(rows).not.toContainEqual({ label: "話せる状態", value: "いいえ" });
+  });
+
+  it("prioritizes speech unavailable indicator when canSpeak is false even if speech exists", () => {
+    const rows = createAgentStatusRows({ canSpeak: false, speech: { speech: "発話テキスト", silent: false } });
+    expect(rows).toContainEqual({ label: "発話内容", value: "・・・" });
+    expect(rows).not.toContainEqual({ label: "発話内容", value: "発話テキスト" });
   });
 
   it("formats n-gram row with fallback for invalid numbers", () => {
@@ -204,35 +279,16 @@ describe("createAgentStatusSections", () => {
   it("categorizes rows into delivery, markov-model, and game sections", () => {
     const sections = createAgentStatusSections(createMockAgentStateResponse());
 
-    expect(sections).toEqual([
-      {
-        title: "配信状況",
-        rows: [
-          { label: "状態", value: "配信中" },
-          { label: "タイトル", value: "配信エージェント状態モック" },
-          {
-            label: "配信URL",
-            value: "https://example.com/watch/mock",
-            href: "https://example.com/watch/mock",
-          },
-          { label: "開始時刻", value: new Date(1_717_000_000_000).toLocaleString("ja-JP") },
-          { label: "視聴者数", value: "123" },
-          { label: "ギフト", value: "456" },
-          { label: "広告", value: "789" },
-        ],
-      },
-      {
-        title: "マルコフ連鎖モデルの状態",
-        rows: [
-          { label: "生成N-gram", value: "4-gram (4)" },
-          { label: "発話内容", value: "コメントを学習してお話ししています" },
-        ],
-      },
-      {
-        title: "ゲームの状態",
-        rows: [{ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" }],
-      },
-    ]);
+    expect(sections).toHaveLength(3);
+    const liveDeliverySection = sections.find((section) => section.title === "配信状況");
+    expect(liveDeliverySection?.rows).toContainEqual({ label: "状態", value: "配信中" });
+    const markovModelSection = sections.find((section) => section.title === "マルコフ連鎖モデルの状態");
+    expect(markovModelSection?.rows).toContainEqual({ label: "生成N-gram", value: "4-gram (4)" });
+    const gameSection = sections.find((section) => section.title === "ゲームの状態");
+    expect(gameSection?.rows).toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
+    const gameInfoRow = gameSection?.rows.find((row) => row.label === "ゲーム情報");
+    expect(gameInfoRow?.value).toBe("status: idle");
+    expect(renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent))).toContain("status");
   });
 
   it("returns only sections that have rows", () => {

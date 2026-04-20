@@ -1,7 +1,10 @@
+import type { ReactNode } from "react";
+
 export type AgentStatusRow = {
   label: string
   value: string
   href?: string
+  valueComponent?: ReactNode
 };
 
 type AgentStatusSectionCardProps = {
@@ -17,14 +20,14 @@ export const AgentStatusSectionCard = ({ title, rows }: AgentStatusSectionCardPr
         {rows.map((row) => (
           <div key={`${title}:${row.label}`} className="contents">
             <dt className="font-bold whitespace-nowrap">{row.label}</dt>
-            <dd className="break-all">
-              {row.href ? (
+            <dd className={row.valueComponent ? "break-words" : "break-all"}>
+              {row.valueComponent ?? (row.href ? (
                 <a className="underline" href={row.href} target="_blank" rel="noreferrer">
                   {row.value}
                 </a>
               ) : (
                 row.value
-              )}
+              ))}
             </dd>
           </div>
         ))}

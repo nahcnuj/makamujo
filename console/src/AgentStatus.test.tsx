@@ -44,14 +44,25 @@ describe("AgentStatus category sections", () => {
 
   it("renders game rows", () => {
     const html = renderToStaticMarkup(
-      <GameStatusSection
-        gameRows={[
-          { label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" },
-        ]}
-      />,
-    );
+        <GameStatusSection
+          gameRows={[
+            { label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" },
+            {
+              label: "ゲーム情報",
+              value: "status: idle",
+              valueComponent: (
+                <ul>
+                  <li>status: idle</li>
+                </ul>
+              ),
+            },
+          ]}
+        />,
+      );
     expect(html).toContain("ゲームの状態");
     expect(html).toContain("現在のゲーム");
     expect(html).toContain("org.dashnet.orteil/cookieclicker");
+    expect(html).toContain("ゲーム情報");
+    expect(html).toContain("<ul");
   });
 });
