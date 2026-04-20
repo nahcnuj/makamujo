@@ -159,7 +159,7 @@ const formatNGramValue = (nGram: number | undefined, nGramRaw: number | undefine
     return "-";
   }
   const nGramValue = `${Math.floor(nGram)}-gram`;
-  if (nGramRaw === undefined || !Number.isFinite(nGramRaw)) {
+  if (nGramRaw === undefined || !Number.isFinite(nGramRaw) || nGramRaw < 1) {
     return nGramValue;
   }
   return `${nGramValue} (${nGramRaw})`;

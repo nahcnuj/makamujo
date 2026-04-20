@@ -235,6 +235,15 @@ describe('comment learning n-gram size', () => {
     expect(agent.currentNGramSizeRaw).toBeCloseTo(5.3979400086720375);
   });
 
+  it('does not update n-gram raw state when no is 0', () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    const initialRaw = agent.currentNGramSizeRaw;
+
+    agent.listen([comment(0)]);
+
+    expect(agent.currentNGramSizeRaw).toBe(initialRaw);
+  });
+
   it('does not learn comment when no is 0', () => {
     const generate = jest.fn(() => '');
     const learn = jest.fn();

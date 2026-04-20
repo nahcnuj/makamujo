@@ -133,7 +133,7 @@ export class MakaMujo {
       // Update last comment timestamp for any received comment that counts as activity.
       this.#lastCommentAt = new Date(Date.now());
 
-      if (typeof data.no === 'number') {
+      if (typeof data.no === 'number' && data.no > 0) {
         const commentNumber = data.no;
         this.#currentNGramSizeRaw = inferNGramSizeRaw(commentNumber);
         this.#currentNGramSize = inferNGramSize(commentNumber);
