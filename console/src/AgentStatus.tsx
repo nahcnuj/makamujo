@@ -35,6 +35,11 @@ type AgentStateResponse = {
     speech?: string
     silent?: boolean
   }
+  speechHistory?: Array<{
+    speech?: string
+    nGram?: number
+    nGramRaw?: number
+  }>
 };
 
 type AgentStatusSection = {
@@ -50,7 +55,7 @@ const SPEECH_UNAVAILABLE_INDICATOR = "・・・";
 // Distinguishes unix seconds from unix milliseconds by treating 13-digit values as milliseconds.
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 const LIVE_DELIVERY_ROW_LABELS = ["状態", "タイトル", "配信URL", "開始時刻", "視聴者数", "ギフト", "広告"] as const;
-const MARKOV_MODEL_ROW_LABELS = ["生成N-gram", "発話内容"] as const;
+const MARKOV_MODEL_ROW_LABELS = ["生成N-gram", "発話内容", "これまでの発話"] as const;
 const GAME_ROW_LABELS = ["現在のゲーム", "ゲーム情報"] as const;
 const GAME_STATE_DISPLAY_INDENT_UNIT = "  ";
 const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
@@ -89,6 +94,10 @@ export const createMockAgentStateResponse = (): AgentStateResponse => ({
     speech: "コメントを学習してお話ししています",
     silent: false,
   },
+  speechHistory: [
+    { speech: "コメントを学習してお話ししています", nGram: 4, nGramRaw: 4 },
+    { speech: "ぜひ上のリンクから遊びに来てね", nGram: 3, nGramRaw: 3.2 },
+  ],
 });
 
 export const isAgentStateMockQueryEnabled = (searchParams: string): boolean => {
@@ -169,6 +178,69 @@ const formatNGramValue = (nGram: number | undefined, nGramRaw: number | undefine
     return nGramValue;
   }
   return `${nGramValue} (${nGramRaw})`;
+};
+
+const formatSpeechHistoryValue = (
+  speechHistory: AgentStateResponse["speechHistory"] | undefined,
+): string | null => {
+  if (!Array.isArray(speechHistory)) {
+    return null;
+  }
+  const speechHistoryLines = speechHistory
+    .map((speechHistoryItem, index) => {
+      const speechText = speechHistoryItem.speech?.trim();
+      if (!speechText) {
+        return null;
+      }
+      const nGramText = formatNGramValue(speechHistoryItem.nGram, speechHistoryItem.nGramRaw);
+      return `${index + 1}. ${speechText} (生成時N-gram: ${nGramText})`;
+    })
+    .filter((speechHistoryLine): speechHistoryLine is string => speechHistoryLine !== null);
+  if (speechHistoryLines.length === 0) {
+    return null;
+  }
+  return speechHistoryLines.join("\n");
+};
+
+const createSpeechHistoryValueComponent = (
+  speechHistory: AgentStateResponse["speechHistory"] | undefined,
+): ReactNode => {
+  if (!Array.isArray(speechHistory)) {
+    return <span>-</span>;
+  }
+  const speechHistoryItems = speechHistory
+    .map((speechHistoryItem, index) => {
+      const speechText = speechHistoryItem.speech?.trim();
+      if (!speechText) {
+        return null;
+      }
+      return {
+        index,
+        speechText,
+        nGramText: formatNGramValue(speechHistoryItem.nGram, speechHistoryItem.nGramRaw),
+      };
+    })
+    .filter((speechHistoryItem): speechHistoryItem is { index: number; speechText: string; nGramText: string } => speechHistoryItem !== null);
+  if (speechHistoryItems.length === 0) {
+    return <span>-</span>;
+  }
+  return (
+    <ul className="space-y-2">
+      {speechHistoryItems.map((speechHistoryItem) => (
+        <li key={`${speechHistoryItem.speechText}-${speechHistoryItem.index}`} className="rounded-md border border-emerald-300/30 p-2 space-y-1">
+          <p className="break-words">{speechHistoryItem.speechText}</p>
+          <p className="text-xs text-emerald-200">生成時N-gram: {speechHistoryItem.nGramText}</p>
+          <button
+            type="button"
+            disabled
+            className="text-xs px-2 py-1 rounded border border-emerald-300/50 text-emerald-200 opacity-70 cursor-not-allowed"
+          >
+            発話をキャンセル（仮）
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
 };
 
 const formatCurrentGameStateLeafValue = (stateValue: unknown): string => {
@@ -368,6 +440,15 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
 
   if (stateResponse?.nGram !== undefined) {
     rows.push({ label: "生成N-gram", value: formatNGramValue(stateResponse.nGram, stateResponse.nGramRaw) });
+  }
+
+  const speechHistoryValue = formatSpeechHistoryValue(stateResponse?.speechHistory);
+  if (speechHistoryValue !== null) {
+    rows.push({
+      label: "これまでの発話",
+      value: speechHistoryValue,
+      valueComponent: createSpeechHistoryValueComponent(stateResponse?.speechHistory),
+    });
   }
 
   if (stateResponse?.canSpeak === false) {

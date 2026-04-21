@@ -147,6 +147,10 @@ describe("createAgentStatusRows", () => {
       currentGame: { name: "org.dashnet.orteil/cookieclicker", state: { status: "idle" } },
       nGram: 4,
       nGramRaw: 4,
+      speechHistory: [
+        { speech: "テスト発話その1", nGram: 4, nGramRaw: 4 },
+        { speech: "テスト発話その2", nGram: 3, nGramRaw: 3.2 },
+      ],
       speech: { speech: "テスト発話", silent: false },
     });
 
@@ -159,6 +163,13 @@ describe("createAgentStatusRows", () => {
     expect(gameInfoHtml).toContain("<ul");
     expect(gameInfoHtml).toContain("status");
     expect(gameInfoHtml).toContain("idle");
+    const speechHistoryRow = rows.find((row) => row.label === "これまでの発話");
+    expect(speechHistoryRow?.value).toBe("1. テスト発話その1 (生成時N-gram: 4-gram (4))\n2. テスト発話その2 (生成時N-gram: 3-gram (3.2))");
+    const speechHistoryHtml = renderToStaticMarkup(createElement(Fragment, null, speechHistoryRow?.valueComponent));
+    expect(speechHistoryHtml).toContain("<ul");
+    expect(speechHistoryHtml).toContain("テスト発話その1");
+    expect(speechHistoryHtml).toContain("テスト発話その2");
+    expect(speechHistoryHtml).toContain("発話をキャンセル（仮）");
     expect(rows).toContainEqual({ label: "発話内容", value: "テスト発話" });
   });
 
@@ -300,6 +311,22 @@ describe("createAgentStatusSections", () => {
       },
     ]);
   });
+
+  it("includes speech history row in markov model section", () => {
+    const sections = createAgentStatusSections({
+      speechHistory: [{ speech: "過去発話", nGram: 4, nGramRaw: 4 }],
+    });
+    expect(sections).toEqual([
+      {
+        title: "マルコフ連鎖モデルの状態",
+        rows: [{
+          label: "これまでの発話",
+          value: "1. 過去発話 (生成時N-gram: 4-gram (4))",
+          valueComponent: expect.anything(),
+        }],
+      },
+    ]);
+  });
 });
 
 describe("createMockAgentStateResponse", () => {
@@ -331,6 +358,10 @@ describe("createMockAgentStateResponse", () => {
         speech: "コメントを学習してお話ししています",
         silent: false,
       },
+      speechHistory: [
+        { speech: "コメントを学習してお話ししています", nGram: 4, nGramRaw: 4 },
+        { speech: "ぜひ上のリンクから遊びに来てね", nGram: 3, nGramRaw: 3.2 },
+      ],
     });
   });
 });

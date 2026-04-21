@@ -61,10 +61,20 @@ const tts = process.platform !== 'win32' ?
 
 const streamer = new MakaMujo(model, tts);
 const agent = createAgentApi(streamer);
+const GENERATED_SPEECH_HISTORY_MAX_LENGTH = 20;
+const generatedSpeechHistory: Array<{ speech: string; nGram: number; nGramRaw: number }> = [];
 
 let clearSpeechTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
 streamer.onSpeech(async (text) => {
+  generatedSpeechHistory.unshift({
+    speech: text,
+    nGram: streamer.currentNGramSize,
+    nGramRaw: streamer.currentNGramSizeRaw,
+  });
+  if (generatedSpeechHistory.length > GENERATED_SPEECH_HISTORY_MAX_LENGTH) {
+    generatedSpeechHistory.length = GENERATED_SPEECH_HISTORY_MAX_LENGTH;
+  }
   if (clearSpeechTimer) {
     clearTimeout(clearSpeechTimer);
     clearSpeechTimer = undefined;
@@ -150,6 +160,7 @@ const server = serve({
           nGram: streamer.currentNGramSize,
           nGramRaw: streamer.currentNGramSizeRaw,
           speech: agent.getSpeech(),
+          speechHistory: generatedSpeechHistory,
         });
       },
       POST: async (req) => {

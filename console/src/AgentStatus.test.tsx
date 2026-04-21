@@ -37,12 +37,27 @@ describe("AgentStatus category sections", () => {
         markovModelRows={[
           { label: "生成N-gram", value: "4-gram" },
           { label: "発話内容", value: "テスト発話" },
+          {
+            label: "これまでの発話",
+            value: "1. テスト発話 (生成時N-gram: 4-gram (4))",
+            valueComponent: (
+              <ul>
+                <li>
+                  <p>テスト発話</p>
+                  <p>生成時N-gram: 4-gram (4)</p>
+                  <button type="button" disabled>発話をキャンセル（仮）</button>
+                </li>
+              </ul>
+            ),
+          },
         ]}
       />,
     );
     expect(html).toContain("マルコフ連鎖モデルの状態");
     expect(html).toContain("4-gram");
     expect(html).toContain("テスト発話");
+    expect(html).toContain("これまでの発話");
+    expect(html).toContain("発話をキャンセル（仮）");
   });
 
   it("renders game rows", () => {
