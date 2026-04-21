@@ -30,7 +30,8 @@
 - 依存関係未インストールで `bun run test` に進まないよう、最初に `bun ci`（lockfile準拠で更新せず、CIと同じ手順）を実行する
 - スクリーンショットを撮る前に日本語フォントをインストールする（例: `sudo apt-get update && sudo apt-get install -y fonts-noto-cjk`）
 - スクリプトを実行して得られた成果物（スクリーンショットなど）はリポジトリにコミットしない
-- スクリーンショットはPRのDescription（本文）に添付し、変更する場合は置き換える
+- スクリーンショットはGitHubにアップロードしてURLを取得し、PRのDescription（本文）にGFM画像記法（`![代替テキスト](URL)`）で埋め込む。変更する場合は古い画像を新しいURLで置き換える
+  - GitHubへのアップロードは、PRのDescription編集欄やコメント欄の添付ファイル機能（ドラッグ＆ドロップまたはファイル選択）を使う
 - 配信状態を取得できない環境で管理コンソールのスクリーンショットを撮る場合は、`/console/?agentStateMock=1` を利用してモック表示する
 - OCRでスクリーンショット確認する場合は、次の順で再現する
   1. `bun run screenshot:console-agent-status --output /tmp/makamujo/console-agent-status-mock.png`

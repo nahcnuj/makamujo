@@ -121,7 +121,7 @@ test.describe("console", () => {
     expect(await page.title()).toContain(EXPECTED_CONSOLE_TITLE);
     const rootElement = await page.$("#root");
     expect(rootElement).not.toBeNull();
-    await expect(page.getByRole("heading", { name: "配信エージェントの状態" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "馬可無序" })).toBeVisible();
     await expect(page.getByText("最終更新:", { exact: false })).toBeVisible();
     await expect(page.getByTestId("agent-status-mock-notice")).toContainText(/モック(?:を)?表示中/u);
     await expect(page.getByTestId("agent-status-details")).toContainText("配信エージェント状態モック");
