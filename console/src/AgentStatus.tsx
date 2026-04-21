@@ -55,8 +55,8 @@ const GAME_ROW_LABELS = ["現在のゲーム", "ゲーム情報"] as const;
 const GAME_STATE_DISPLAY_INDENT_UNIT = "  ";
 const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
 const GAME_STATE_EMPTY_OBJECT_LABEL = "(空のオブジェクト)";
-// 上から順に: 見出し / 最終更新時刻 / モック通知 / エラーまたは空状態 / 詳細一覧(残り高さをすべて使用)
-const AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS = "grid-rows-[auto_auto_auto_auto_minmax(0,1fr)]";
+// 上から順に: 上部固定領域（見出し・更新時刻・通知類）/ 詳細一覧（残り高さをすべて使用）
+const AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS = "grid-rows-[auto_minmax(0,1fr)]";
 const createLabelSet = (labels: readonly string[]) => new Set<string>(labels);
 const LIVE_DELIVERY_ROW_LABEL_SET = createLabelSet(LIVE_DELIVERY_ROW_LABELS);
 const MARKOV_MODEL_ROW_LABEL_SET = createLabelSet(MARKOV_MODEL_ROW_LABELS);
@@ -465,36 +465,42 @@ export function AgentStatus() {
 
   return (
     <div className={`mx-auto w-full max-w-7xl h-full min-h-0 text-left grid ${AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS} gap-4`}>
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-2xl font-bold">配信エージェントの状態</h2>
-        <button
-          type="button"
-          onClick={fetchAgentState}
-          disabled={isLoadingAgentState}
-          className="bg-emerald-300 text-emerald-950 border-0 px-5 py-1.5 rounded-lg font-bold transition-all duration-100 hover:bg-emerald-200 hover:-translate-y-px cursor-pointer whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          更新
-        </button>
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="text-2xl font-bold">
+            <a href="https://live.nicovideo.jp/watch/user/14171889" target="_blank">
+              馬可無序
+            </a>
+          </h1>
+          <button
+            type="button"
+            onClick={fetchAgentState}
+            disabled={isLoadingAgentState}
+            className="bg-emerald-300 text-emerald-950 border-0 px-5 py-1.5 rounded-lg font-bold transition-all duration-100 hover:bg-emerald-200 hover:-translate-y-px cursor-pointer whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            更新
+          </button>
+        </div>
+        <p className="text-sm text-emerald-200">
+          最終更新: {lastUpdatedTime || "未取得"}
+        </p>
+        {isShowingMockAgentState ? (
+          <div
+            data-testid="agent-status-mock-notice"
+            className="w-full bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50"
+          >
+            {AGENT_STATE_MOCK_NOTICE_MESSAGE}
+          </div>
+        ) : null}
+        {agentStatusError ? (
+          <div
+            data-testid="agent-status-error"
+            className="w-full min-h-[80px] bg-red-950/60 border-2 border-red-300 rounded-xl p-3 text-red-100"
+          >
+            取得エラー: {agentStatusError}
+          </div>
+        ) : null}
       </div>
-      <p className="text-sm text-emerald-200">
-        最終更新: {lastUpdatedTime || "未取得"}
-      </p>
-      {isShowingMockAgentState ? (
-        <div
-          data-testid="agent-status-mock-notice"
-          className="w-full bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50"
-        >
-          {AGENT_STATE_MOCK_NOTICE_MESSAGE}
-        </div>
-      ) : null}
-      {agentStatusError ? (
-        <div
-          data-testid="agent-status-error"
-          className="w-full min-h-[80px] bg-red-950/60 border-2 border-red-300 rounded-xl p-3 text-red-100"
-        >
-          取得エラー: {agentStatusError}
-        </div>
-      ) : null}
       {agentStatusSections.length === 0 ? (
         <div
           data-testid="agent-status-empty"

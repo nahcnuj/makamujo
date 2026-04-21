@@ -10,7 +10,7 @@ const TESSERACT_TSV_MIN_COLUMN_COUNT = 12;
 const RECTANGLE_MARGIN_PX = 8;
 
 const TARGET_LABELS = [
-  "配信エージェントの状態",
+  "馬可無序",
   "配信エージェント状態モックを表示中",
   "配信エージェント状態モック",
   "Agent情報",

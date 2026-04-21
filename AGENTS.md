@@ -35,7 +35,7 @@
 - OCRでスクリーンショット確認する場合は、次の順で再現する
   1. `bun run screenshot:console-agent-status --output /tmp/makamujo/console-agent-status-mock.png`
   2. `bun run screenshot:annotate-ocr --input /tmp/makamujo/console-agent-status-mock.png --output /tmp/makamujo/console-agent-status-mock-annotated.png`
-  3. OCR結果に `配信エージェントの状態` / `実配信状態が取得できないため、モック表示中` / `配信エージェント状態モック` が含まれることを確認する
+  3. OCR結果に `馬可無序` / `配信エージェント状態モックを表示中` / `配信エージェント状態モック` が含まれることを確認する
   - `screenshot:annotate-ocr` 実行に `tesseract` と `convert`（ImageMagick）が必要。Debian/Ubuntu系では `sudo apt-get install -y tesseract-ocr tesseract-ocr-jpn imagemagick` でインストール可能
 - 検証コマンドは次の順で実行する
   1. `bun run typecheck`
