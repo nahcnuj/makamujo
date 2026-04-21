@@ -9,6 +9,9 @@ describe("AgentStatus layout", () => {
   it("uses a wider default max width for the status container", () => {
     const html = renderToStaticMarkup(<AgentStatus />);
     expect(html).toContain("max-w-7xl");
+    expect(html).toContain("h-full");
+    expect(html).toContain("min-h-0");
+    expect(html).toContain("grid-rows-[auto_minmax(0,1fr)]");
   });
 });
 
