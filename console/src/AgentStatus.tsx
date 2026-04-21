@@ -4,6 +4,7 @@ import { GAME_SECTION_TITLE, GameStatusSection } from "./agentStatusSections/Gam
 import { LIVE_DELIVERY_SECTION_TITLE, LiveDeliveryStatusSection } from "./agentStatusSections/LiveDeliveryStatusSection";
 import { MARKOV_MODEL_SECTION_TITLE, MarkovModelStatusSection } from "./agentStatusSections/MarkovModelStatusSection";
 import type { AgentStatusRow } from "./agentStatusSections/AgentStatusSectionCard";
+import { AGENT_STATE_RESPONSE_MOCK_FIXTURE } from "../../tests/fixtures/agentStateResponseMock";
 
 /**
  * Response schema returned by `/console/api/agent-state`.
@@ -58,7 +59,6 @@ const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 const LIVE_DELIVERY_ROW_LABELS = ["状態", "タイトル", "配信URL", "開始時刻", "視聴者数", "ギフト", "広告"] as const;
 const MARKOV_MODEL_ROW_LABELS = ["生成N-gram", "発話内容", "これまでの発話"] as const;
 const GAME_ROW_LABELS = ["現在のゲーム", "ゲーム情報"] as const;
-const GAME_STATE_DISPLAY_INDENT_UNIT = "  ";
 const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
 const GAME_STATE_EMPTY_OBJECT_LABEL = "(空のオブジェクト)";
 // 上から順に: 上部固定領域（見出し・更新時刻・通知類）/ 詳細一覧（残り高さをすべて使用）
@@ -69,36 +69,26 @@ const MARKOV_MODEL_ROW_LABEL_SET = createLabelSet(MARKOV_MODEL_ROW_LABELS);
 const GAME_ROW_LABEL_SET = createLabelSet(GAME_ROW_LABELS);
 
 export const createMockAgentStateResponse = (): AgentStateResponse => ({
+  ...AGENT_STATE_RESPONSE_MOCK_FIXTURE,
   niconama: {
-    type: "live",
+    ...AGENT_STATE_RESPONSE_MOCK_FIXTURE.niconama,
     meta: {
-      title: "配信エージェント状態モック",
-      url: "https://example.com/watch/mock",
-      start: 1_717_000_000,
+      ...AGENT_STATE_RESPONSE_MOCK_FIXTURE.niconama.meta,
       total: {
-        listeners: 123,
-        gift: 456,
-        ad: 789,
+        ...AGENT_STATE_RESPONSE_MOCK_FIXTURE.niconama.meta.total,
       },
     },
   },
-  canSpeak: true,
   currentGame: {
-    name: "org.dashnet.orteil/cookieclicker",
+    ...AGENT_STATE_RESPONSE_MOCK_FIXTURE.currentGame,
     state: {
-      status: "idle",
+      ...AGENT_STATE_RESPONSE_MOCK_FIXTURE.currentGame.state,
     },
   },
-  nGram: 4,
-  nGramRaw: 4,
   speech: {
-    speech: "コメントを学習してお話ししています",
-    silent: false,
+    ...AGENT_STATE_RESPONSE_MOCK_FIXTURE.speech,
   },
-  speechHistory: [
-    { id: "speech-history-1", speech: "コメントを学習してお話ししています", nGram: 4, nGramRaw: 4 },
-    { id: "speech-history-2", speech: "ぜひ上のリンクから遊びに来てね", nGram: 3, nGramRaw: 3.2 },
-  ],
+  speechHistory: AGENT_STATE_RESPONSE_MOCK_FIXTURE.speechHistory.map((historyItem) => ({ ...historyItem })),
 });
 
 export const isAgentStateMockQueryEnabled = (searchParams: string): boolean => {
@@ -191,7 +181,7 @@ const formatSpeechHistoryItemLine = (
 };
 
 const formatSpeechHistoryNGramLabel = (nGram: number | undefined, nGramRaw: number | undefined): string => {
-  return `生成時N-gram: ${formatNGramValue(nGram, nGramRaw)}`;
+  return `生成時N-gram: ${formatNGramValue(nGram, undefined)}`;
 };
 
 const createSpeechHistoryDisplayItems = (
@@ -219,16 +209,6 @@ const createSpeechHistoryDisplayItems = (
   );
 };
 
-const formatSpeechHistoryValue = (
-  speechHistory: AgentStateResponse["speechHistory"] | undefined,
-): string | null => {
-  const speechHistoryLines = createSpeechHistoryDisplayItems(speechHistory).map((speechHistoryItem) => speechHistoryItem.displayLine);
-  if (speechHistoryLines.length === 0) {
-    return null;
-  }
-  return speechHistoryLines.join("\n");
-};
-
 const createSpeechHistoryValueComponent = (
   speechHistory: AgentStateResponse["speechHistory"] | undefined,
 ): ReactNode => {
@@ -247,7 +227,7 @@ const createSpeechHistoryValueComponent = (
             disabled
             className="text-xs px-2 py-1 rounded border border-emerald-300/50 text-emerald-200 opacity-70 cursor-not-allowed"
           >
-            発話をキャンセル（仮）
+            学習の取り消し
           </button>
         </li>
       ))}
@@ -263,75 +243,6 @@ const formatCurrentGameStateLeafValue = (stateValue: unknown): string => {
     return "-";
   }
   return String(stateValue);
-};
-
-const formatCurrentGameStateDisplayLines = (
-  currentGameStateValue: unknown,
-  depth = 0,
-  visitedObjects = new WeakSet<object>(),
-): string[] => {
-  /**
-   * Human-oriented structured formatter:
-   * - primitives: value line
-   * - objects: `key:` line followed by indented child lines
-   * - arrays: `- value` for primitives, `-` followed by indented child lines for objects/arrays
-   */
-  if (currentGameStateValue === null || typeof currentGameStateValue !== "object") {
-    return [`${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${formatCurrentGameStateLeafValue(currentGameStateValue)}`];
-  }
-
-  if (visitedObjects.has(currentGameStateValue)) {
-    throw new TypeError("Cannot display currentGame.state because circular references were detected.");
-  }
-
-  visitedObjects.add(currentGameStateValue);
-  try {
-    if (Array.isArray(currentGameStateValue)) {
-      if (currentGameStateValue.length === 0) {
-        return [`${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${GAME_STATE_EMPTY_ARRAY_LABEL}`];
-      }
-      return currentGameStateValue.flatMap((arrayItem) => {
-        if (arrayItem !== null && typeof arrayItem === "object") {
-          return [
-            `${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}-`,
-            ...formatCurrentGameStateDisplayLines(arrayItem, depth + 1, visitedObjects),
-          ];
-        }
-        return [`${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}- ${formatCurrentGameStateLeafValue(arrayItem)}`];
-      });
-    }
-
-    const entries = Object.entries(currentGameStateValue);
-    if (entries.length === 0) {
-      return [`${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${GAME_STATE_EMPTY_OBJECT_LABEL}`];
-    }
-    return entries.flatMap(([stateKey, stateValue]) => {
-      if (stateValue !== null && typeof stateValue === "object") {
-        return [
-          `${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${stateKey}:`,
-          ...formatCurrentGameStateDisplayLines(stateValue, depth + 1, visitedObjects),
-        ];
-      }
-      return [
-        `${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${stateKey}: ${formatCurrentGameStateLeafValue(stateValue)}`,
-      ];
-    });
-  } finally {
-    visitedObjects.delete(currentGameStateValue);
-  }
-};
-
-const formatCurrentGameStateDisplayValue = (currentGameState: Record<string, unknown> | undefined): string => {
-  if (currentGameState === undefined) {
-    return "-";
-  }
-
-  try {
-    const displayLines = formatCurrentGameStateDisplayLines(currentGameState);
-    return displayLines.length === 0 ? "-" : displayLines.join("\n");
-  } catch {
-    return "-";
-  }
 };
 
 /**
@@ -445,7 +356,6 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
     rows.push({ label: "現在のゲーム", value: stateResponse.currentGame?.name ?? "-" });
     rows.push({
       label: "ゲーム情報",
-      value: formatCurrentGameStateDisplayValue(stateResponse.currentGame?.state),
       valueComponent: createCurrentGameInfoValueComponent(stateResponse.currentGame?.state),
     });
   }
@@ -454,11 +364,9 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
     rows.push({ label: "生成N-gram", value: formatNGramValue(stateResponse.nGram, stateResponse.nGramRaw) });
   }
 
-  const speechHistoryValue = formatSpeechHistoryValue(stateResponse?.speechHistory);
-  if (speechHistoryValue !== null) {
+  if (createSpeechHistoryDisplayItems(stateResponse?.speechHistory).length > 0) {
     rows.push({
       label: "これまでの発話",
-      value: speechHistoryValue,
       valueComponent: createSpeechHistoryValueComponent(stateResponse?.speechHistory),
     });
   }

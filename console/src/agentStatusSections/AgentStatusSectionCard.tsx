@@ -2,10 +2,17 @@ import type { ReactNode } from "react";
 
 export type AgentStatusRow = {
   label: string
-  value: string
   href?: string
-  valueComponent?: ReactNode
-};
+} & (
+  | {
+    value: string
+    valueComponent?: never
+  }
+  | {
+    value?: never
+    valueComponent: ReactNode
+  }
+);
 
 type AgentStatusSectionCardProps = {
   title: string

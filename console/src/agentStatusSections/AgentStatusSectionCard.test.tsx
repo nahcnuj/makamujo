@@ -12,7 +12,6 @@ describe("AgentStatusSectionCard", () => {
           { label: "配信URL", value: "https://example.com/live", href: "https://example.com/live" },
           {
             label: "ゲーム情報",
-            value: "status: idle",
             valueComponent: (
               <ul>
                 <li>status: idle</li>

@@ -39,13 +39,12 @@ describe("AgentStatus category sections", () => {
           { label: "発話内容", value: "テスト発話" },
           {
             label: "これまでの発話",
-            value: "1. テスト発話 (生成時N-gram: 4-gram (4))",
             valueComponent: (
               <ul>
                 <li>
                   <p>テスト発話</p>
-                  <p>生成時N-gram: 4-gram (4)</p>
-                  <button type="button" disabled>発話をキャンセル（仮）</button>
+                  <p>生成時N-gram: 4-gram</p>
+                  <button type="button" disabled>学習の取り消し</button>
                 </li>
               </ul>
             ),
@@ -57,7 +56,7 @@ describe("AgentStatus category sections", () => {
     expect(html).toContain("4-gram");
     expect(html).toContain("テスト発話");
     expect(html).toContain("これまでの発話");
-    expect(html).toContain("発話をキャンセル（仮）");
+    expect(html).toContain("学習の取り消し");
   });
 
   it("renders game rows", () => {
@@ -67,7 +66,6 @@ describe("AgentStatus category sections", () => {
             { label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" },
             {
               label: "ゲーム情報",
-              value: "status: idle",
               valueComponent: (
                 <ul>
                   <li>status: idle</li>
