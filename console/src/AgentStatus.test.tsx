@@ -11,7 +11,7 @@ describe("AgentStatus layout", () => {
     expect(html).toContain("max-w-7xl");
     expect(html).toContain("h-full");
     expect(html).toContain("min-h-0");
-    expect(html).toContain("grid-rows-[auto_auto_auto_auto_minmax(0,1fr)]");
+    expect(html).toContain("grid-rows-[auto_minmax(0,1fr)]");
   });
 });
 
