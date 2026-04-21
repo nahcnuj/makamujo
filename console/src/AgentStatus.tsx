@@ -468,7 +468,7 @@ export function AgentStatus() {
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-2">
           <h1 className="text-2xl font-bold">
-            <a href="https://live.nicovideo.jp/watch/user/14171889" target="_blank">
+            <a href="https://live.nicovideo.jp/watch/user/14171889" target="_blank" rel="noopener noreferrer">
               馬可無序
             </a>
           </h1>
