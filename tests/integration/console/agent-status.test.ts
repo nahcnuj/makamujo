@@ -11,7 +11,7 @@ import {
   shouldUseMockAgentState,
   startAgentStateAutoRefresh,
 } from "../../../console/src/AgentStatus";
-import { AGENT_STATE_RESPONSE_MOCK_FIXTURE } from "../../fixtures/agentStateResponseMock";
+import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
 
 const originalSetInterval = globalThis.setInterval;
 const originalClearInterval = globalThis.clearInterval;
@@ -333,10 +333,7 @@ describe("createAgentStatusSections", () => {
 
 describe("createMockAgentStateResponse", () => {
   it("returns deterministic mock state for screenshot capture", () => {
-    expect(createMockAgentStateResponse()).toEqual({
-      ...AGENT_STATE_RESPONSE_MOCK_FIXTURE,
-      speechHistory: AGENT_STATE_RESPONSE_MOCK_FIXTURE.speechHistory.map((historyItem) => ({ ...historyItem })),
-    });
+    expect(createMockAgentStateResponse()).toEqual(cloneAgentStateResponseMockFixture());
   });
 });
 

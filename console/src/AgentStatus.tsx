@@ -4,7 +4,7 @@ import { GAME_SECTION_TITLE, GameStatusSection } from "./agentStatusSections/Gam
 import { LIVE_DELIVERY_SECTION_TITLE, LiveDeliveryStatusSection } from "./agentStatusSections/LiveDeliveryStatusSection";
 import { MARKOV_MODEL_SECTION_TITLE, MarkovModelStatusSection } from "./agentStatusSections/MarkovModelStatusSection";
 import type { AgentStatusRow } from "./agentStatusSections/AgentStatusSectionCard";
-import { AGENT_STATE_RESPONSE_MOCK_FIXTURE } from "../../tests/fixtures/agentStateResponseMock";
+import { cloneAgentStateResponseMockFixture } from "../../tests/fixtures/agentStateResponseMock";
 
 /**
  * Response schema returned by `/console/api/agent-state`.
@@ -68,28 +68,7 @@ const LIVE_DELIVERY_ROW_LABEL_SET = createLabelSet(LIVE_DELIVERY_ROW_LABELS);
 const MARKOV_MODEL_ROW_LABEL_SET = createLabelSet(MARKOV_MODEL_ROW_LABELS);
 const GAME_ROW_LABEL_SET = createLabelSet(GAME_ROW_LABELS);
 
-export const createMockAgentStateResponse = (): AgentStateResponse => ({
-  ...AGENT_STATE_RESPONSE_MOCK_FIXTURE,
-  niconama: {
-    ...AGENT_STATE_RESPONSE_MOCK_FIXTURE.niconama,
-    meta: {
-      ...AGENT_STATE_RESPONSE_MOCK_FIXTURE.niconama.meta,
-      total: {
-        ...AGENT_STATE_RESPONSE_MOCK_FIXTURE.niconama.meta.total,
-      },
-    },
-  },
-  currentGame: {
-    ...AGENT_STATE_RESPONSE_MOCK_FIXTURE.currentGame,
-    state: {
-      ...AGENT_STATE_RESPONSE_MOCK_FIXTURE.currentGame.state,
-    },
-  },
-  speech: {
-    ...AGENT_STATE_RESPONSE_MOCK_FIXTURE.speech,
-  },
-  speechHistory: AGENT_STATE_RESPONSE_MOCK_FIXTURE.speechHistory.map((historyItem) => ({ ...historyItem })),
-});
+export const createMockAgentStateResponse = (): AgentStateResponse => cloneAgentStateResponseMockFixture();
 
 export const isAgentStateMockQueryEnabled = (searchParams: string): boolean => {
   return new URLSearchParams(searchParams).get(AGENT_STATE_MOCK_QUERY_KEY) === "1";
@@ -174,14 +153,16 @@ const formatNGramValue = (nGram: number | undefined, nGramRaw: number | undefine
 const formatSpeechHistoryItemLine = (
   speechText: string,
   nGram: number | undefined,
-  nGramRaw: number | undefined,
   displayOrder: number,
 ): string => {
-  return `${displayOrder}. ${speechText} (${formatSpeechHistoryNGramLabel(nGram, nGramRaw)})`;
+  return `${displayOrder}. ${speechText} (${formatSpeechHistoryNGramLabel(nGram)})`;
 };
 
-const formatSpeechHistoryNGramLabel = (nGram: number | undefined, nGramRaw: number | undefined): string => {
-  return `生成時N-gram: ${formatNGramValue(nGram, undefined)}`;
+const formatSpeechHistoryNGramLabel = (nGram: number | undefined): string => {
+  if (nGram === undefined || !Number.isFinite(nGram) || nGram < 1) {
+    return "生成時N-gram: -";
+  }
+  return `生成時N-gram: ${Math.floor(nGram)}-gram`;
 };
 
 const createSpeechHistoryDisplayItems = (
@@ -200,8 +181,8 @@ const createSpeechHistoryDisplayItems = (
       accumulatedItems.push({
         id: speechHistoryItem.id ?? `speech-history-${displayOrder}`,
         speechText,
-        displayLine: formatSpeechHistoryItemLine(speechText, speechHistoryItem.nGram, speechHistoryItem.nGramRaw, displayOrder),
-        nGramLabel: formatSpeechHistoryNGramLabel(speechHistoryItem.nGram, speechHistoryItem.nGramRaw),
+        displayLine: formatSpeechHistoryItemLine(speechText, speechHistoryItem.nGram, displayOrder),
+        nGramLabel: formatSpeechHistoryNGramLabel(speechHistoryItem.nGram),
       });
       return accumulatedItems;
     },
