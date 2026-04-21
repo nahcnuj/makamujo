@@ -36,6 +36,7 @@ type AgentStateResponse = {
     silent?: boolean
   }
   speechHistory?: Array<{
+    id?: string
     speech?: string
     nGram?: number
     nGramRaw?: number
@@ -95,8 +96,8 @@ export const createMockAgentStateResponse = (): AgentStateResponse => ({
     silent: false,
   },
   speechHistory: [
-    { speech: "コメントを学習してお話ししています", nGram: 4, nGramRaw: 4 },
-    { speech: "ぜひ上のリンクから遊びに来てね", nGram: 3, nGramRaw: 3.2 },
+    { id: "speech-history-1", speech: "コメントを学習してお話ししています", nGram: 4, nGramRaw: 4 },
+    { id: "speech-history-2", speech: "ぜひ上のリンクから遊びに来てね", nGram: 3, nGramRaw: 3.2 },
   ],
 });
 
@@ -180,22 +181,48 @@ const formatNGramValue = (nGram: number | undefined, nGramRaw: number | undefine
   return `${nGramValue} (${nGramRaw})`;
 };
 
+const formatSpeechHistoryItemLine = (
+  speechText: string,
+  nGram: number | undefined,
+  nGramRaw: number | undefined,
+  displayOrder: number,
+): string => {
+  return `${displayOrder}. ${speechText} (${formatSpeechHistoryNGramLabel(nGram, nGramRaw)})`;
+};
+
+const formatSpeechHistoryNGramLabel = (nGram: number | undefined, nGramRaw: number | undefined): string => {
+  return `生成時N-gram: ${formatNGramValue(nGram, nGramRaw)}`;
+};
+
+const createSpeechHistoryDisplayItems = (
+  speechHistory: AgentStateResponse["speechHistory"] | undefined,
+): Array<{ id: string; speechText: string; displayLine: string; nGramLabel: string }> => {
+  if (!Array.isArray(speechHistory)) {
+    return [];
+  }
+  return speechHistory.reduce<Array<{ id: string; speechText: string; displayLine: string; nGramLabel: string }>>(
+    (accumulatedItems, speechHistoryItem) => {
+      const speechText = speechHistoryItem.speech?.trim();
+      if (!speechText) {
+        return accumulatedItems;
+      }
+      const displayOrder = accumulatedItems.length + 1;
+      accumulatedItems.push({
+        id: speechHistoryItem.id ?? `speech-history-${displayOrder}`,
+        speechText,
+        displayLine: formatSpeechHistoryItemLine(speechText, speechHistoryItem.nGram, speechHistoryItem.nGramRaw, displayOrder),
+        nGramLabel: formatSpeechHistoryNGramLabel(speechHistoryItem.nGram, speechHistoryItem.nGramRaw),
+      });
+      return accumulatedItems;
+    },
+    [],
+  );
+};
+
 const formatSpeechHistoryValue = (
   speechHistory: AgentStateResponse["speechHistory"] | undefined,
 ): string | null => {
-  if (!Array.isArray(speechHistory)) {
-    return null;
-  }
-  const speechHistoryLines = speechHistory
-    .map((speechHistoryItem, index) => {
-      const speechText = speechHistoryItem.speech?.trim();
-      if (!speechText) {
-        return null;
-      }
-      const nGramText = formatNGramValue(speechHistoryItem.nGram, speechHistoryItem.nGramRaw);
-      return `${index + 1}. ${speechText} (生成時N-gram: ${nGramText})`;
-    })
-    .filter((speechHistoryLine): speechHistoryLine is string => speechHistoryLine !== null);
+  const speechHistoryLines = createSpeechHistoryDisplayItems(speechHistory).map((speechHistoryItem) => speechHistoryItem.displayLine);
   if (speechHistoryLines.length === 0) {
     return null;
   }
@@ -205,31 +232,16 @@ const formatSpeechHistoryValue = (
 const createSpeechHistoryValueComponent = (
   speechHistory: AgentStateResponse["speechHistory"] | undefined,
 ): ReactNode => {
-  if (!Array.isArray(speechHistory)) {
-    return <span>-</span>;
-  }
-  const speechHistoryItems = speechHistory
-    .map((speechHistoryItem, index) => {
-      const speechText = speechHistoryItem.speech?.trim();
-      if (!speechText) {
-        return null;
-      }
-      return {
-        index,
-        speechText,
-        nGramText: formatNGramValue(speechHistoryItem.nGram, speechHistoryItem.nGramRaw),
-      };
-    })
-    .filter((speechHistoryItem): speechHistoryItem is { index: number; speechText: string; nGramText: string } => speechHistoryItem !== null);
+  const speechHistoryItems = createSpeechHistoryDisplayItems(speechHistory);
   if (speechHistoryItems.length === 0) {
     return <span>-</span>;
   }
   return (
     <ul className="space-y-2">
       {speechHistoryItems.map((speechHistoryItem) => (
-        <li key={`${speechHistoryItem.speechText}-${speechHistoryItem.index}`} className="rounded-md border border-emerald-300/30 p-2 space-y-1">
+        <li key={speechHistoryItem.id} className="rounded-md border border-emerald-300/30 p-2 space-y-1">
           <p className="break-words">{speechHistoryItem.speechText}</p>
-          <p className="text-xs text-emerald-200">生成時N-gram: {speechHistoryItem.nGramText}</p>
+          <p className="text-xs text-emerald-200">{speechHistoryItem.nGramLabel}</p>
           <button
             type="button"
             disabled

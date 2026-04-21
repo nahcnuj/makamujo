@@ -148,8 +148,8 @@ describe("createAgentStatusRows", () => {
       nGram: 4,
       nGramRaw: 4,
       speechHistory: [
-        { speech: "テスト発話その1", nGram: 4, nGramRaw: 4 },
-        { speech: "テスト発話その2", nGram: 3, nGramRaw: 3.2 },
+        { id: "history-1", speech: "テスト発話その1", nGram: 4, nGramRaw: 4 },
+        { id: "history-2", speech: "テスト発話その2", nGram: 3, nGramRaw: 3.2 },
       ],
       speech: { speech: "テスト発話", silent: false },
     });
@@ -359,8 +359,8 @@ describe("createMockAgentStateResponse", () => {
         silent: false,
       },
       speechHistory: [
-        { speech: "コメントを学習してお話ししています", nGram: 4, nGramRaw: 4 },
-        { speech: "ぜひ上のリンクから遊びに来てね", nGram: 3, nGramRaw: 3.2 },
+        { id: "speech-history-1", speech: "コメントを学習してお話ししています", nGram: 4, nGramRaw: 4 },
+        { id: "speech-history-2", speech: "ぜひ上のリンクから遊びに来てね", nGram: 3, nGramRaw: 3.2 },
       ],
     });
   });
