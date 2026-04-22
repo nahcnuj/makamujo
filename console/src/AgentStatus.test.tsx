@@ -20,12 +20,21 @@ describe("AgentStatus category sections", () => {
     const html = renderToStaticMarkup(
       <LiveDeliveryStatusSection
         liveDeliveryRows={[
-          { label: "状態", value: "配信中" },
+          {
+            label: "配信指標",
+            valueComponent: (
+              <div>
+                <p>状態</p>
+                <p>配信中</p>
+              </div>
+            ),
+          },
           { label: "配信URL", value: "https://example.com/live", href: "https://example.com/live" },
         ]}
       />,
     );
     expect(html).toContain("配信状況");
+    expect(html).toContain("配信指標");
     expect(html).toContain("状態");
     expect(html).toContain("配信中");
     expect(html).toContain("https://example.com/live");
@@ -43,8 +52,8 @@ describe("AgentStatus category sections", () => {
               <ul>
                 <li>
                   <p>テスト発話</p>
-                  <p>生成時N-gram: 4-gram</p>
-                  <button type="button" disabled>学習の取り消し</button>
+                  <p>4g</p>
+                  <button type="button" disabled aria-label="学習の取り消し">↩</button>
                 </li>
               </ul>
             ),
@@ -56,7 +65,7 @@ describe("AgentStatus category sections", () => {
     expect(html).toContain("4-gram");
     expect(html).toContain("テスト発話");
     expect(html).toContain("これまでの発話");
-    expect(html).toContain("学習の取り消し");
+    expect(html).toContain("aria-label=\"学習の取り消し\"");
   });
 
   it("renders game rows", () => {

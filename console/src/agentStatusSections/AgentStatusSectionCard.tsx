@@ -19,7 +19,7 @@ type AgentStatusSectionCardProps = {
   rows: AgentStatusRow[]
 };
 
-const SECTION_CONTENT_MAX_HEIGHT_SVH = 32;
+const SECTION_CONTENT_MAX_HEIGHT_SVH = 42;
 
 export const AgentStatusSectionCard = ({ title, rows }: AgentStatusSectionCardProps) => {
   return (

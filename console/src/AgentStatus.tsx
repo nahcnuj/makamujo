@@ -22,6 +22,7 @@ type AgentStateResponse = {
         listeners?: number
         gift?: number
         ad?: number
+        comments?: number
       }
     }
   }
@@ -56,7 +57,7 @@ const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正
 const SPEECH_UNAVAILABLE_INDICATOR = "・・・";
 // Distinguishes unix seconds from unix milliseconds by treating 13-digit values as milliseconds.
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
-const LIVE_DELIVERY_ROW_LABELS = ["状態", "タイトル", "配信URL", "開始時刻", "視聴者数", "ギフト", "広告"] as const;
+const LIVE_DELIVERY_ROW_LABELS = ["配信指標", "タイトル", "配信URL", "開始時刻"] as const;
 const MARKOV_MODEL_ROW_LABELS = ["生成N-gram", "発話内容", "これまでの発話"] as const;
 const GAME_ROW_LABELS = ["現在のゲーム", "ゲーム情報"] as const;
 const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
@@ -153,16 +154,15 @@ const formatNGramValue = (nGram: number | undefined, nGramRaw: number | undefine
 const formatSpeechHistoryItemLine = (
   speechText: string,
   nGram: number | undefined,
-  displayOrder: number,
 ): string => {
-  return `${displayOrder}. ${speechText} (${formatSpeechHistoryNGramLabel(nGram)})`;
+  return `${speechText} (${formatSpeechHistoryNGramLabel(nGram)})`;
 };
 
 const formatSpeechHistoryNGramLabel = (nGram: number | undefined): string => {
   if (nGram === undefined || !Number.isFinite(nGram) || nGram < 1) {
-    return "生成時N-gram: -";
+    return "-";
   }
-  return `生成時N-gram: ${Math.floor(nGram)}-gram`;
+  return `${Math.floor(nGram)}g`;
 };
 
 const createSpeechHistoryDisplayItems = (
@@ -181,7 +181,7 @@ const createSpeechHistoryDisplayItems = (
       accumulatedItems.push({
         id: speechHistoryItem.id ?? `speech-history-${displayOrder}`,
         speechText,
-        displayLine: formatSpeechHistoryItemLine(speechText, speechHistoryItem.nGram, displayOrder),
+        displayLine: formatSpeechHistoryItemLine(speechText, speechHistoryItem.nGram),
         nGramLabel: formatSpeechHistoryNGramLabel(speechHistoryItem.nGram),
       });
       return accumulatedItems;
@@ -200,19 +200,44 @@ const createSpeechHistoryValueComponent = (
   return (
     <ul className="space-y-2">
       {speechHistoryItems.map((speechHistoryItem) => (
-        <li key={speechHistoryItem.id} className="rounded-md border border-emerald-300/30 p-2 space-y-1">
-          <p className="break-words">{speechHistoryItem.speechText}</p>
-          <p className="text-xs text-emerald-200">{speechHistoryItem.nGramLabel}</p>
-          <button
-            type="button"
-            disabled
-            className="text-xs px-2 py-1 rounded border border-emerald-300/50 text-emerald-200 opacity-70 cursor-not-allowed"
-          >
-            学習の取り消し
-          </button>
+        <li key={speechHistoryItem.id} className="rounded-md border border-emerald-300/30 p-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-2">
+            <p className="break-words">{speechHistoryItem.speechText}</p>
+            <span className="text-xs text-emerald-200 whitespace-nowrap">{speechHistoryItem.nGramLabel}</span>
+            <button
+              type="button"
+              disabled
+              aria-label="学習の取り消し"
+              title="学習の取り消し"
+              className="text-base leading-none h-7 w-7 rounded border border-emerald-300/50 text-emerald-200 opacity-70 cursor-not-allowed flex items-center justify-center"
+            >
+              ↩
+            </button>
+          </div>
         </li>
       ))}
     </ul>
+  );
+};
+
+const renderLiveMetricValue = (label: string, value: string): ReactNode => {
+  return (
+    <div className="rounded-md border border-emerald-300/30 p-2">
+      <p className="font-bold">{label}</p>
+      <p>{value}</p>
+    </div>
+  );
+};
+
+const createLiveDeliveryMetricsValueComponent = (niconamaState: AgentStateResponse["niconama"]): ReactNode => {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
+      {renderLiveMetricValue("状態", formatStateLabel(niconamaState?.type))}
+      {renderLiveMetricValue("視聴者数", formatMetricValue(niconamaState?.meta?.total?.listeners))}
+      {renderLiveMetricValue("ギフト", formatMetricValue(niconamaState?.meta?.total?.gift))}
+      {renderLiveMetricValue("広告", formatMetricValue(niconamaState?.meta?.total?.ad))}
+      {renderLiveMetricValue("コメント数", formatMetricValue(niconamaState?.meta?.total?.comments))}
+    </div>
   );
 };
 
@@ -323,13 +348,10 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
   const niconamaState = stateResponse?.niconama;
   if (niconamaState && Object.keys(niconamaState).length > 0) {
     rows.push(
-      { label: "状態", value: formatStateLabel(niconamaState.type) },
+      { label: "配信指標", valueComponent: createLiveDeliveryMetricsValueComponent(niconamaState) },
       { label: "タイトル", value: niconamaState.meta?.title ?? "-" },
       { label: "配信URL", value: niconamaState.meta?.url ?? "-", href: niconamaState.meta?.url },
       { label: "開始時刻", value: formatStartDate(niconamaState.meta?.start) },
-      { label: "視聴者数", value: formatMetricValue(niconamaState.meta?.total?.listeners) },
-      { label: "ギフト", value: formatMetricValue(niconamaState.meta?.total?.gift) },
-      { label: "広告", value: formatMetricValue(niconamaState.meta?.total?.ad) },
     );
   }
 
@@ -448,12 +470,15 @@ export function AgentStatus() {
   return (
     <div className={`mx-auto w-full max-w-7xl h-full min-h-0 text-left grid ${AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS} gap-4`}>
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold">
             <a href="https://live.nicovideo.jp/watch/user/14171889" target="_blank" rel="noopener noreferrer">
               馬可無序
             </a>
           </h1>
+          <p className="text-sm text-emerald-200 whitespace-nowrap">
+            最終更新: {lastUpdatedTime || "未取得"}
+          </p>
           <button
             type="button"
             onClick={fetchAgentState}
@@ -463,9 +488,6 @@ export function AgentStatus() {
             更新
           </button>
         </div>
-        <p className="text-sm text-emerald-200">
-          最終更新: {lastUpdatedTime || "未取得"}
-        </p>
         {isShowingMockAgentState ? (
           <div
             data-testid="agent-status-mock-notice"

@@ -13,6 +13,7 @@ export const AGENT_STATE_RESPONSE_MOCK_FIXTURE = {
         listeners: 123,
         gift: 456,
         ad: 789,
+        comments: 321,
       },
     },
   },
@@ -32,6 +33,10 @@ export const AGENT_STATE_RESPONSE_MOCK_FIXTURE = {
   speechHistory: [
     { id: "speech-history-1", speech: "コメントを学習してお話ししています", nGram: 4, nGramRaw: 4 },
     { id: "speech-history-2", speech: "ぜひ上のリンクから遊びに来てね", nGram: 3, nGramRaw: 3.2 },
+    { id: "speech-history-3", speech: "ゲーム情報も画面に表示しています", nGram: 4, nGramRaw: 4 },
+    { id: "speech-history-4", speech: "コメント数の推移も追っています", nGram: 2, nGramRaw: 2.4 },
+    { id: "speech-history-5", speech: "配信状況は定期的に自動更新されます", nGram: 3, nGramRaw: 3 },
+    { id: "speech-history-6", speech: "UIを見やすく整理しています", nGram: 4, nGramRaw: 4 },
   ],
 } as const;
 
@@ -46,6 +51,7 @@ export const cloneAgentStateResponseMockFixture = () => ({
         listeners: AGENT_STATE_RESPONSE_MOCK_FIXTURE.niconama.meta.total.listeners,
         gift: AGENT_STATE_RESPONSE_MOCK_FIXTURE.niconama.meta.total.gift,
         ad: AGENT_STATE_RESPONSE_MOCK_FIXTURE.niconama.meta.total.ad,
+        comments: AGENT_STATE_RESPONSE_MOCK_FIXTURE.niconama.meta.total.comments,
       },
     },
   },

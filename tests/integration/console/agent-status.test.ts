@@ -130,16 +130,20 @@ describe("createAgentStatusRows", () => {
       },
     });
 
-    expect(rows).toContainEqual({ label: "状態", value: "配信中" });
+    const liveMetricRow = rows.find((row) => row.label === "配信指標");
+    expect(liveMetricRow?.value).toBeUndefined();
+    const liveMetricHtml = renderToStaticMarkup(createElement(Fragment, null, liveMetricRow?.valueComponent));
+    expect(liveMetricHtml).toContain("状態");
+    expect(liveMetricHtml).toContain("配信中");
+    expect(liveMetricHtml).toContain("視聴者数");
+    expect(liveMetricHtml).toContain("123");
+    expect(liveMetricHtml).toContain("コメント数");
     expect(rows).toContainEqual({ label: "タイトル", value: "テスト配信" });
     expect(rows).toContainEqual({
       label: "配信URL",
       value: "https://example.com/live",
       href: "https://example.com/live",
     });
-    expect(rows).toContainEqual({ label: "視聴者数", value: "123" });
-    expect(rows).toContainEqual({ label: "ギフト", value: "456" });
-    expect(rows).toContainEqual({ label: "広告", value: "789" });
   });
 
   it("includes currentGame and speech rows when present", () => {
@@ -170,9 +174,9 @@ describe("createAgentStatusRows", () => {
     expect(speechHistoryHtml).toContain("<ul");
     expect(speechHistoryHtml).toContain("テスト発話その1");
     expect(speechHistoryHtml).toContain("テスト発話その2");
-    expect(speechHistoryHtml).toContain("生成時N-gram: 4-gram");
-    expect(speechHistoryHtml).toContain("生成時N-gram: 3-gram");
-    expect(speechHistoryHtml).toContain("学習の取り消し");
+    expect(speechHistoryHtml).toContain("4g");
+    expect(speechHistoryHtml).toContain("3g");
+    expect(speechHistoryHtml).toContain("aria-label=\"学習の取り消し\"");
     expect(rows).toContainEqual({ label: "発話内容", value: "テスト発話" });
   });
 
@@ -270,7 +274,9 @@ describe("createAgentStatusRows", () => {
 
   it("returns fallback rows when niconama exists without metadata", () => {
     const rows = createAgentStatusRows({ niconama: { type: "live" } });
-    expect(rows).toContainEqual({ label: "状態", value: "配信中" });
+    const liveMetricRow = rows.find((row) => row.label === "配信指標");
+    expect(liveMetricRow?.value).toBeUndefined();
+    expect(renderToStaticMarkup(createElement(Fragment, null, liveMetricRow?.valueComponent))).toContain("配信中");
     expect(rows).toContainEqual({ label: "タイトル", value: "-" });
     expect(rows).toContainEqual({ label: "配信URL", value: "-", href: undefined });
   });
@@ -295,7 +301,7 @@ describe("createAgentStatusSections", () => {
 
     expect(sections).toHaveLength(3);
     const liveDeliverySection = sections.find((section) => section.title === "配信状況");
-    expect(liveDeliverySection?.rows).toContainEqual({ label: "状態", value: "配信中" });
+    expect(liveDeliverySection?.rows).toContainEqual({ label: "配信指標", valueComponent: expect.anything() });
     const markovModelSection = sections.find((section) => section.title === "マルコフ連鎖モデルの状態");
     expect(markovModelSection?.rows).toContainEqual({ label: "生成N-gram", value: "4-gram (4)" });
     const gameSection = sections.find((section) => section.title === "ゲームの状態");
