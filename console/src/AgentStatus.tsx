@@ -203,8 +203,8 @@ const createSpeechHistoryValueComponent = (
     <ul className="grid grid-cols-10 gap-2">
       {speechHistoryItems.map((speechHistoryItem) => (
         <li key={speechHistoryItem.id} className="rounded-md border border-emerald-300/30 p-2">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2">
-            <p className="truncate" aria-label={speechHistoryItem.speechText}>{speechHistoryItem.speechText}</p>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-2">
+            <p className="truncate">{speechHistoryItem.speechText}</p>
             <span className="text-xs text-emerald-200 whitespace-nowrap">{speechHistoryItem.nGramLabel}</span>
             <button
               type="button"
