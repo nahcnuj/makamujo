@@ -284,9 +284,16 @@ describe("createAgentStatusRows", () => {
     expect(speechHistoryHtml).toContain(">テスト発話1<");
     expect(speechHistoryHtml).toContain(">テスト発話12<");
     expect((speechHistoryHtml.match(/aria-label="学習の取り消し"/g) ?? []).length).toBe(12);
-    const latestSpeechIndex = speechHistoryHtml.indexOf(">テスト発話12<");
-    const oldestSpeechIndex = speechHistoryHtml.indexOf(">テスト発話1<");
-    expect(latestSpeechIndex).toBeLessThan(oldestSpeechIndex);
+    const speechIndicesDescending = Array.from({ length: 12 }, (_, index) => {
+      const speechNumber = 12 - index;
+      return speechHistoryHtml.indexOf(`>テスト発話${speechNumber}<`);
+    });
+    expect(speechIndicesDescending.every((speechIndex) => speechIndex >= 0)).toBe(true);
+    for (let index = 1; index < speechIndicesDescending.length; index += 1) {
+      const previousSpeechIndex = speechIndicesDescending[index - 1] ?? -1;
+      const currentSpeechIndex = speechIndicesDescending[index] ?? -1;
+      expect(previousSpeechIndex).toBeLessThan(currentSpeechIndex);
+    }
   });
 
   it("returns empty rows when niconama state is absent", () => {
