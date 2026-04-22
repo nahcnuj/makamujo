@@ -57,9 +57,8 @@ const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正
 const SPEECH_UNAVAILABLE_INDICATOR = "・・・";
 // Distinguishes unix seconds from unix milliseconds by treating 13-digit values as milliseconds.
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
-const MAX_SPEECH_HISTORY_ITEMS = 10;
-const LIVE_DELIVERY_ROW_LABELS = ["配信指標", "タイトル", "配信URL", "開始時刻"] as const;
-const MARKOV_MODEL_ROW_LABELS = ["生成N-gram", "発話内容", "これまでの発話"] as const;
+const LIVE_DELIVERY_ROW_LABELS = ["配信指標", "タイトル", "配信URL", "開始時刻", "発話内容"] as const;
+const MARKOV_MODEL_ROW_LABELS = ["生成N-gram", "これまでの発話"] as const;
 const GAME_ROW_LABELS = ["現在のゲーム", "ゲーム情報"] as const;
 const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
 const GAME_STATE_EMPTY_OBJECT_LABEL = "(空のオブジェクト)";
@@ -189,7 +188,7 @@ const createSpeechHistoryDisplayItems = (
     },
     [],
   );
-  return speechHistoryItems.slice(-MAX_SPEECH_HISTORY_ITEMS);
+  return [...speechHistoryItems].reverse();
 };
 
 const createSpeechHistoryValueComponent = (

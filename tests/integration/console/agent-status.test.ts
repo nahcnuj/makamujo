@@ -270,7 +270,7 @@ describe("createAgentStatusRows", () => {
     expect(createAgentStatusRows({})).not.toContainEqual({ label: "生成N-gram", value: "-" });
   });
 
-  it("shows only the latest 10 speech history items", () => {
+  it("shows all speech history items in descending order", () => {
     const speechHistory = Array.from({ length: 12 }, (_, index) => ({
       id: `history-${index + 1}`,
       speech: `テスト発話${index + 1}`,
@@ -281,11 +281,18 @@ describe("createAgentStatusRows", () => {
     const speechHistoryRow = rows.find((row) => row.label === "これまでの発話");
     expect(speechHistoryRow?.value).toBeUndefined();
     const speechHistoryHtml = renderToStaticMarkup(createElement(Fragment, null, speechHistoryRow?.valueComponent));
-    expect(speechHistoryHtml).not.toContain(">テスト発話1<");
-    expect(speechHistoryHtml).not.toContain(">テスト発話2<");
-    expect(speechHistoryHtml).toContain(">テスト発話3<");
+    expect(speechHistoryHtml).toContain(">テスト発話1<");
     expect(speechHistoryHtml).toContain(">テスト発話12<");
-    expect((speechHistoryHtml.match(/aria-label="学習の取り消し"/g) ?? []).length).toBe(10);
+    expect((speechHistoryHtml.match(/aria-label="学習の取り消し"/g) ?? []).length).toBe(12);
+    const speechIndicesDescending = Array.from({ length: 12 }, (_, index) => {
+      const speechNumber = 12 - index;
+      return speechHistoryHtml.indexOf(`>テスト発話${speechNumber}<`);
+    });
+    expect(speechIndicesDescending.every((speechIndex) => speechIndex >= 0)).toBe(true);
+    speechIndicesDescending.slice(1).forEach((currentSpeechIndex, index) => {
+      const previousSpeechIndex = speechIndicesDescending[index] as number;
+      expect(previousSpeechIndex).toBeLessThan(currentSpeechIndex);
+    });
   });
 
   it("returns empty rows when niconama state is absent", () => {
@@ -327,8 +334,10 @@ describe("createAgentStatusSections", () => {
       hideLabel: true,
       valueComponent: expect.anything(),
     });
+    expect(liveDeliverySection?.rows).toContainEqual({ label: "発話内容", value: "コメントを学習してお話ししています" });
     const markovModelSection = sections.find((section) => section.title === "マルコフ連鎖モデルの状態");
     expect(markovModelSection?.rows).toContainEqual({ label: "生成N-gram", value: "4-gram (4)" });
+    expect(markovModelSection?.rows).not.toContainEqual({ label: "発話内容", value: "コメントを学習してお話ししています" });
     const gameSection = sections.find((section) => section.title === "ゲームの状態");
     expect(gameSection?.rows).toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
     const gameInfoRow = gameSection?.rows.find((row) => row.label === "ゲーム情報");
@@ -359,6 +368,17 @@ describe("createAgentStatusSections", () => {
         }],
       },
     ]);
+  });
+
+  it("includes current speech row in live delivery section", () => {
+    const sections = createAgentStatusSections({
+      niconama: { type: "live" },
+      speech: { speech: "最新発話", silent: false },
+    });
+    const liveDeliverySection = sections.find((section) => section.title === "配信状況");
+    expect(liveDeliverySection?.rows).toContainEqual({ label: "発話内容", value: "最新発話" });
+    const markovModelSection = sections.find((section) => section.title === "マルコフ連鎖モデルの状態");
+    expect(markovModelSection).toBeUndefined();
   });
 });
 
