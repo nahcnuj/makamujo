@@ -469,6 +469,7 @@ export function AgentStatus() {
   const liveDeliverySection = sectionMap[LIVE_DELIVERY_SECTION_TITLE];
   const markovModelSection = sectionMap[MARKOV_MODEL_SECTION_TITLE];
   const gameSection = sectionMap[GAME_SECTION_TITLE];
+  const hasPrimaryColumnSections = liveDeliverySection !== undefined || gameSection !== undefined;
 
   return (
     <div className={`mx-auto w-full max-w-7xl h-full min-h-0 text-left grid ${AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS} gap-4`}>
@@ -518,11 +519,19 @@ export function AgentStatus() {
       ) : (
         <div
           data-testid="agent-status-details"
-          className="w-full min-h-0 overflow-y-auto pr-1 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 auto-rows-min gap-4"
+          className="w-full min-h-0 overflow-y-auto pr-1 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] auto-rows-min gap-4"
         >
-          {liveDeliverySection ? <LiveDeliveryStatusSection liveDeliveryRows={liveDeliverySection.rows} /> : null}
-          {markovModelSection ? <MarkovModelStatusSection markovModelRows={markovModelSection.rows} /> : null}
-          {gameSection ? <GameStatusSection gameRows={gameSection.rows} /> : null}
+          {hasPrimaryColumnSections ? (
+            <div className="min-w-0 flex flex-col gap-4">
+              {liveDeliverySection ? <LiveDeliveryStatusSection liveDeliveryRows={liveDeliverySection.rows} /> : null}
+              {gameSection ? <GameStatusSection gameRows={gameSection.rows} /> : null}
+            </div>
+          ) : null}
+          {markovModelSection ? (
+            <div className={hasPrimaryColumnSections ? "min-w-0 xl:col-start-2" : "min-w-0"}>
+              <MarkovModelStatusSection markovModelRows={markovModelSection.rows} />
+            </div>
+          ) : null}
         </div>
       )}
     </div>
