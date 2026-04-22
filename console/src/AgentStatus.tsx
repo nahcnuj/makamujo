@@ -204,8 +204,8 @@ const createSpeechHistoryValueComponent = (
       {speechHistoryItems.map((speechHistoryItem) => (
         <li key={speechHistoryItem.id} className="rounded-md border border-emerald-300/30 p-2">
           <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2">
-            <p className="truncate" title={speechHistoryItem.speechText}>{speechHistoryItem.speechText}</p>
-            <span className="text-xs text-emerald-200 whitespace-nowrap" title={speechHistoryItem.nGramLabel}>{speechHistoryItem.nGramLabel}</span>
+            <p className="truncate" aria-label={speechHistoryItem.speechText}>{speechHistoryItem.speechText}</p>
+            <span className="text-xs text-emerald-200 whitespace-nowrap">{speechHistoryItem.nGramLabel}</span>
             <button
               type="button"
               disabled
@@ -234,7 +234,7 @@ const createLiveDeliveryMetricsValueComponent = (niconamaState: AgentStateRespon
     <div className="rounded-md border border-emerald-300/30 p-2">
       <div className="grid grid-cols-5 gap-x-2 gap-y-1">
         {liveMetricItems.map((liveMetricItem) => (
-          <p key={`${liveMetricItem.label}-label`} className="font-bold text-center whitespace-nowrap">{liveMetricItem.label}</p>
+          <p key={liveMetricItem.label} className="font-bold text-center whitespace-nowrap">{liveMetricItem.label}</p>
         ))}
         {liveMetricItems.map((liveMetricItem) => (
           <p key={`${liveMetricItem.label}-value`} className="text-center whitespace-nowrap">{liveMetricItem.value}</p>
