@@ -200,12 +200,12 @@ const createSpeechHistoryValueComponent = (
     return <span>-</span>;
   }
   return (
-    <ul className="grid grid-cols-2 gap-2">
+    <ul className="grid grid-cols-10 gap-2">
       {speechHistoryItems.map((speechHistoryItem) => (
         <li key={speechHistoryItem.id} className="rounded-md border border-emerald-300/30 p-2">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-2">
-            <p className="break-words">{speechHistoryItem.speechText}</p>
-            <span className="text-xs text-emerald-200 whitespace-nowrap">{speechHistoryItem.nGramLabel}</span>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2">
+            <p className="truncate" title={speechHistoryItem.speechText}>{speechHistoryItem.speechText}</p>
+            <span className="text-xs text-emerald-200 whitespace-nowrap" title={speechHistoryItem.nGramLabel}>{speechHistoryItem.nGramLabel}</span>
             <button
               type="button"
               disabled
@@ -222,24 +222,24 @@ const createSpeechHistoryValueComponent = (
   );
 };
 
-const createLiveMetricItemComponent = (label: string, value: string): ReactNode => {
+const createLiveDeliveryMetricsValueComponent = (niconamaState: AgentStateResponse["niconama"]): ReactNode => {
+  const liveMetricItems = [
+    { label: "状態", value: formatStateLabel(niconamaState?.type) },
+    { label: "視聴者数", value: formatMetricValue(niconamaState?.meta?.total?.listeners) },
+    { label: "コメント数", value: formatMetricValue(niconamaState?.meta?.total?.comments) },
+    { label: "ギフト", value: formatMetricValue(niconamaState?.meta?.total?.gift) },
+    { label: "広告", value: formatMetricValue(niconamaState?.meta?.total?.ad) },
+  ];
   return (
     <div className="rounded-md border border-emerald-300/30 p-2">
-      <p>
-        <span className="font-bold">{label}:</span> {value}
-      </p>
-    </div>
-  );
-};
-
-const createLiveDeliveryMetricsValueComponent = (niconamaState: AgentStateResponse["niconama"]): ReactNode => {
-  return (
-    <div className="grid grid-cols-3 gap-2">
-      {createLiveMetricItemComponent("状態", formatStateLabel(niconamaState?.type))}
-      {createLiveMetricItemComponent("視聴者数", formatMetricValue(niconamaState?.meta?.total?.listeners))}
-      {createLiveMetricItemComponent("ギフト", formatMetricValue(niconamaState?.meta?.total?.gift))}
-      {createLiveMetricItemComponent("広告", formatMetricValue(niconamaState?.meta?.total?.ad))}
-      {createLiveMetricItemComponent("コメント数", formatMetricValue(niconamaState?.meta?.total?.comments))}
+      <div className="grid grid-cols-5 gap-x-2 gap-y-1">
+        {liveMetricItems.map((liveMetricItem) => (
+          <p key={`${liveMetricItem.label}-label`} className="font-bold text-center whitespace-nowrap">{liveMetricItem.label}</p>
+        ))}
+        {liveMetricItems.map((liveMetricItem) => (
+          <p key={`${liveMetricItem.label}-value`} className="text-center whitespace-nowrap">{liveMetricItem.value}</p>
+        ))}
+      </div>
     </div>
   );
 };

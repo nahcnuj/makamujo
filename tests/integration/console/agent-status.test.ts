@@ -135,12 +135,11 @@ describe("createAgentStatusRows", () => {
     expect(liveMetricRow?.hideLabel).toBeTrue();
     const liveMetricHtml = renderToStaticMarkup(createElement(Fragment, null, liveMetricRow?.valueComponent));
     expect(liveMetricHtml).toContain("状態");
-    expect(liveMetricHtml).toContain("状態:</span>");
     expect(liveMetricHtml).toContain("配信中");
     expect(liveMetricHtml).toContain("視聴者数");
     expect(liveMetricHtml).toContain("123");
     expect(liveMetricHtml).toContain("コメント数");
-    expect(liveMetricHtml).toContain("grid-cols-3");
+    expect(liveMetricHtml).toContain("grid-cols-5");
     expect(rows).toContainEqual({ label: "タイトル", value: "テスト配信" });
     expect(rows).toContainEqual({
       label: "配信URL",
@@ -175,7 +174,7 @@ describe("createAgentStatusRows", () => {
     expect(speechHistoryRow?.value).toBeUndefined();
     const speechHistoryHtml = renderToStaticMarkup(createElement(Fragment, null, speechHistoryRow?.valueComponent));
     expect(speechHistoryHtml).toContain("<ul");
-    expect(speechHistoryHtml).toContain("grid-cols-2");
+    expect(speechHistoryHtml).toContain("grid-cols-10");
     expect(speechHistoryHtml).toContain("テスト発話その1");
     expect(speechHistoryHtml).toContain("テスト発話その2");
     expect(speechHistoryHtml).toContain("4g");
