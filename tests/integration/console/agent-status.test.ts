@@ -289,11 +289,10 @@ describe("createAgentStatusRows", () => {
       return speechHistoryHtml.indexOf(`>テスト発話${speechNumber}<`);
     });
     expect(speechIndicesDescending.every((speechIndex) => speechIndex >= 0)).toBe(true);
-    for (let index = 1; index < speechIndicesDescending.length; index += 1) {
-      const previousSpeechIndex = speechIndicesDescending[index - 1] ?? -1;
-      const currentSpeechIndex = speechIndicesDescending[index] ?? -1;
+    speechIndicesDescending.slice(1).forEach((currentSpeechIndex, index) => {
+      const previousSpeechIndex = speechIndicesDescending[index] as number;
       expect(previousSpeechIndex).toBeLessThan(currentSpeechIndex);
-    }
+    });
   });
 
   it("returns empty rows when niconama state is absent", () => {
