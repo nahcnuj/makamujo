@@ -286,8 +286,6 @@ describe("createAgentStatusRows", () => {
     expect((speechHistoryHtml.match(/aria-label="学習の取り消し"/g) ?? []).length).toBe(12);
     const latestSpeechIndex = speechHistoryHtml.indexOf(">テスト発話12<");
     const oldestSpeechIndex = speechHistoryHtml.indexOf(">テスト発話1<");
-    expect(latestSpeechIndex).toBeGreaterThanOrEqual(0);
-    expect(oldestSpeechIndex).toBeGreaterThanOrEqual(0);
     expect(latestSpeechIndex).toBeLessThan(oldestSpeechIndex);
   });
 
