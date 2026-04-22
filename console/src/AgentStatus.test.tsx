@@ -12,6 +12,8 @@ describe("AgentStatus layout", () => {
     expect(html).toContain("h-full");
     expect(html).toContain("min-h-0");
     expect(html).toContain("grid-rows-[auto_minmax(0,1fr)]");
+    expect(html).toContain("flex flex-wrap items-center gap-3");
+    expect(html).not.toContain("justify-between");
   });
 });
 
