@@ -188,7 +188,7 @@ const createSpeechHistoryDisplayItems = (
     },
     [],
   );
-  return speechHistoryItems.reverse();
+  return [...speechHistoryItems].reverse();
 };
 
 const createSpeechHistoryValueComponent = (
