@@ -132,8 +132,10 @@ describe("createAgentStatusRows", () => {
 
     const liveMetricRow = rows.find((row) => row.label === "配信指標");
     expect(liveMetricRow?.value).toBeUndefined();
+    expect(liveMetricRow?.hideLabel).toBeTrue();
     const liveMetricHtml = renderToStaticMarkup(createElement(Fragment, null, liveMetricRow?.valueComponent));
     expect(liveMetricHtml).toContain("状態");
+    expect(liveMetricHtml).toContain("状態:</span>");
     expect(liveMetricHtml).toContain("配信中");
     expect(liveMetricHtml).toContain("視聴者数");
     expect(liveMetricHtml).toContain("123");
@@ -173,6 +175,7 @@ describe("createAgentStatusRows", () => {
     expect(speechHistoryRow?.value).toBeUndefined();
     const speechHistoryHtml = renderToStaticMarkup(createElement(Fragment, null, speechHistoryRow?.valueComponent));
     expect(speechHistoryHtml).toContain("<ul");
+    expect(speechHistoryHtml).toContain("grid-cols-2");
     expect(speechHistoryHtml).toContain("テスト発話その1");
     expect(speechHistoryHtml).toContain("テスト発話その2");
     expect(speechHistoryHtml).toContain("4g");
@@ -320,7 +323,11 @@ describe("createAgentStatusSections", () => {
 
     expect(sections).toHaveLength(3);
     const liveDeliverySection = sections.find((section) => section.title === "配信状況");
-    expect(liveDeliverySection?.rows).toContainEqual({ label: "配信指標", valueComponent: expect.anything() });
+    expect(liveDeliverySection?.rows).toContainEqual({
+      label: "配信指標",
+      hideLabel: true,
+      valueComponent: expect.anything(),
+    });
     const markovModelSection = sections.find((section) => section.title === "マルコフ連鎖モデルの状態");
     expect(markovModelSection?.rows).toContainEqual({ label: "生成N-gram", value: "4-gram (4)" });
     const gameSection = sections.find((section) => section.title === "ゲームの状態");

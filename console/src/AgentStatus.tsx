@@ -200,7 +200,7 @@ const createSpeechHistoryValueComponent = (
     return <span>-</span>;
   }
   return (
-    <ul className="space-y-2">
+    <ul className="grid grid-cols-2 gap-2">
       {speechHistoryItems.map((speechHistoryItem) => (
         <li key={speechHistoryItem.id} className="rounded-md border border-emerald-300/30 p-2">
           <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-2">
@@ -225,8 +225,9 @@ const createSpeechHistoryValueComponent = (
 const createLiveMetricItemComponent = (label: string, value: string): ReactNode => {
   return (
     <div className="rounded-md border border-emerald-300/30 p-2">
-      <p className="font-bold">{label}</p>
-      <p>{value}</p>
+      <p>
+        <span className="font-bold">{label}:</span> {value}
+      </p>
     </div>
   );
 };
@@ -350,7 +351,7 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
   const niconamaState = stateResponse?.niconama;
   if (niconamaState && Object.keys(niconamaState).length > 0) {
     rows.push(
-      { label: "配信指標", valueComponent: createLiveDeliveryMetricsValueComponent(niconamaState) },
+      { label: "配信指標", hideLabel: true, valueComponent: createLiveDeliveryMetricsValueComponent(niconamaState) },
       { label: "タイトル", value: niconamaState.meta?.title ?? "-" },
       { label: "配信URL", value: niconamaState.meta?.url ?? "-", href: niconamaState.meta?.url },
       { label: "開始時刻", value: formatStartDate(niconamaState.meta?.start) },
