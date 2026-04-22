@@ -32,6 +32,14 @@
 - スクリプトを実行して得られた成果物（スクリーンショットなど）はリポジトリにコミットしない
 - スクリーンショットはGitHubにアップロードしてURLを取得し、PRのDescription（本文）にGFM画像記法（`![代替テキスト](URL)`）で埋め込む。変更する場合は古い画像を新しいURLで置き換える
   - GitHubへのアップロードは、PRのDescription編集欄やコメント欄の添付ファイル機能（ドラッグ＆ドロップまたはファイル選択）を使う
+  - 作業完了前に、貼り付けた画像URLを必ず取得して開き、HTTPエラー（404/403/500 など）が出ないことと画像内容が想定どおり表示されることを確認する
+  - 貼り付けた画像URLをOCR確認する場合は、次を実行して想定文言が検出されることを確認する
+    1. `mkdir -p /tmp/makamujo`
+    2. `TIMESTAMP=$(date +%Y%m%d%H%M%S)` で実値を作り、同じ `TIMESTAMP` を後続手順で使い回す
+    3. `BASE_NAME="console-agent-status-from-url-${TIMESTAMP}"`
+    4. `curl -fsSL "https://github.com/user-attachments/files/{ATTACHMENT_ID}/{UPLOADED_FILENAME}" -o "/tmp/makamujo/${BASE_NAME}.png"`（`{ATTACHMENT_ID}` と `{UPLOADED_FILENAME}` は実際の値に置き換える）
+    5. `bun run screenshot:annotate-ocr --input "/tmp/makamujo/${BASE_NAME}.png" --output "/tmp/makamujo/${BASE_NAME}-annotated.png"`
+    6. OCR結果に `馬可無序` / `配信エージェント状態モックを表示中` / `配信エージェント状態モック` が含まれることを確認する
 - 配信状態を取得できない環境で管理コンソールのスクリーンショットを撮る場合は、`/console/?agentStateMock=1` を利用してモック表示する
 - OCRでスクリーンショット確認する場合は、次の順で再現する
   1. `bun run screenshot:console-agent-status --output /tmp/makamujo/console-agent-status-mock.png`

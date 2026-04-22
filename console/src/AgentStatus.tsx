@@ -4,6 +4,7 @@ import { GAME_SECTION_TITLE, GameStatusSection } from "./agentStatusSections/Gam
 import { LIVE_DELIVERY_SECTION_TITLE, LiveDeliveryStatusSection } from "./agentStatusSections/LiveDeliveryStatusSection";
 import { MARKOV_MODEL_SECTION_TITLE, MarkovModelStatusSection } from "./agentStatusSections/MarkovModelStatusSection";
 import type { AgentStatusRow } from "./agentStatusSections/AgentStatusSectionCard";
+import { cloneAgentStateResponseMockFixture } from "../../tests/fixtures/agentStateResponseMock";
 
 /**
  * Response schema returned by `/console/api/agent-state`.
@@ -21,6 +22,7 @@ type AgentStateResponse = {
         listeners?: number
         gift?: number
         ad?: number
+        comments?: number
       }
     }
   }
@@ -35,6 +37,12 @@ type AgentStateResponse = {
     speech?: string
     silent?: boolean
   }
+  speechHistory?: Array<{
+    id?: string
+    speech?: string
+    nGram?: number
+    nGramRaw?: number
+  }>
 };
 
 type AgentStatusSection = {
@@ -49,10 +57,10 @@ const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正
 const SPEECH_UNAVAILABLE_INDICATOR = "・・・";
 // Distinguishes unix seconds from unix milliseconds by treating 13-digit values as milliseconds.
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
-const LIVE_DELIVERY_ROW_LABELS = ["状態", "タイトル", "配信URL", "開始時刻", "視聴者数", "ギフト", "広告"] as const;
-const MARKOV_MODEL_ROW_LABELS = ["生成N-gram", "発話内容"] as const;
+const MAX_SPEECH_HISTORY_ITEMS = 10;
+const LIVE_DELIVERY_ROW_LABELS = ["配信指標", "タイトル", "配信URL", "開始時刻"] as const;
+const MARKOV_MODEL_ROW_LABELS = ["生成N-gram", "発話内容", "これまでの発話"] as const;
 const GAME_ROW_LABELS = ["現在のゲーム", "ゲーム情報"] as const;
-const GAME_STATE_DISPLAY_INDENT_UNIT = "  ";
 const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
 const GAME_STATE_EMPTY_OBJECT_LABEL = "(空のオブジェクト)";
 // 上から順に: 上部固定領域（見出し・更新時刻・通知類）/ 詳細一覧（残り高さをすべて使用）
@@ -62,34 +70,7 @@ const LIVE_DELIVERY_ROW_LABEL_SET = createLabelSet(LIVE_DELIVERY_ROW_LABELS);
 const MARKOV_MODEL_ROW_LABEL_SET = createLabelSet(MARKOV_MODEL_ROW_LABELS);
 const GAME_ROW_LABEL_SET = createLabelSet(GAME_ROW_LABELS);
 
-export const createMockAgentStateResponse = (): AgentStateResponse => ({
-  niconama: {
-    type: "live",
-    meta: {
-      title: "配信エージェント状態モック",
-      url: "https://example.com/watch/mock",
-      start: 1_717_000_000,
-      total: {
-        listeners: 123,
-        gift: 456,
-        ad: 789,
-      },
-    },
-  },
-  canSpeak: true,
-  currentGame: {
-    name: "org.dashnet.orteil/cookieclicker",
-    state: {
-      status: "idle",
-    },
-  },
-  nGram: 4,
-  nGramRaw: 4,
-  speech: {
-    speech: "コメントを学習してお話ししています",
-    silent: false,
-  },
-});
+export const createMockAgentStateResponse = (): AgentStateResponse => cloneAgentStateResponseMockFixture();
 
 export const isAgentStateMockQueryEnabled = (searchParams: string): boolean => {
   return new URLSearchParams(searchParams).get(AGENT_STATE_MOCK_QUERY_KEY) === "1";
@@ -171,6 +152,98 @@ const formatNGramValue = (nGram: number | undefined, nGramRaw: number | undefine
   return `${nGramValue} (${nGramRaw})`;
 };
 
+const formatSpeechHistoryItemText = (
+  speechText: string,
+  nGram: number | undefined,
+): string => {
+  return `${speechText} (${formatSpeechHistoryNGramLabel(nGram)})`;
+};
+
+const formatSpeechHistoryNGramLabel = (nGram: number | undefined): string => {
+  if (nGram === undefined || !Number.isFinite(nGram) || nGram < 1) {
+    return "-";
+  }
+  return `${Math.floor(nGram)}g`;
+};
+
+const createSpeechHistoryDisplayItems = (
+  speechHistory: AgentStateResponse["speechHistory"] | undefined,
+): Array<{ id: string; speechText: string; displayLine: string; nGramLabel: string }> => {
+  if (!Array.isArray(speechHistory)) {
+    return [];
+  }
+  const speechHistoryItems = speechHistory.reduce<Array<{ id: string; speechText: string; displayLine: string; nGramLabel: string }>>(
+    (accumulatedItems, speechHistoryItem) => {
+      const speechText = speechHistoryItem.speech?.trim();
+      if (!speechText) {
+        return accumulatedItems;
+      }
+      const displayOrder = accumulatedItems.length + 1;
+      accumulatedItems.push({
+        id: speechHistoryItem.id ?? `speech-history-${displayOrder}`,
+        speechText,
+        displayLine: formatSpeechHistoryItemText(speechText, speechHistoryItem.nGram),
+        nGramLabel: formatSpeechHistoryNGramLabel(speechHistoryItem.nGram),
+      });
+      return accumulatedItems;
+    },
+    [],
+  );
+  return speechHistoryItems.slice(-MAX_SPEECH_HISTORY_ITEMS);
+};
+
+const createSpeechHistoryValueComponent = (
+  speechHistory: AgentStateResponse["speechHistory"] | undefined,
+): ReactNode => {
+  const speechHistoryItems = createSpeechHistoryDisplayItems(speechHistory);
+  if (speechHistoryItems.length === 0) {
+    return <span>-</span>;
+  }
+  return (
+    <ul className="grid grid-cols-1 gap-2">
+      {speechHistoryItems.map((speechHistoryItem) => (
+        <li key={speechHistoryItem.id} className="rounded-md border border-emerald-300/30 p-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-2">
+            <p className="truncate">{speechHistoryItem.speechText}</p>
+            <span className="text-xs text-emerald-200 whitespace-nowrap">{speechHistoryItem.nGramLabel}</span>
+            <button
+              type="button"
+              disabled
+              aria-label="学習の取り消し"
+              title="学習の取り消し"
+              className="text-base leading-none h-7 w-7 rounded border border-emerald-300/50 text-emerald-200 opacity-70 cursor-not-allowed flex items-center justify-center"
+            >
+              ↩
+            </button>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+};
+
+const createLiveDeliveryMetricsValueComponent = (niconamaState: AgentStateResponse["niconama"]): ReactNode => {
+  const liveMetricItems = [
+    { label: "状態", value: formatStateLabel(niconamaState?.type) },
+    { label: "視聴者数", value: formatMetricValue(niconamaState?.meta?.total?.listeners) },
+    { label: "コメント数", value: formatMetricValue(niconamaState?.meta?.total?.comments) },
+    { label: "ギフト", value: formatMetricValue(niconamaState?.meta?.total?.gift) },
+    { label: "広告", value: formatMetricValue(niconamaState?.meta?.total?.ad) },
+  ];
+  return (
+    <div className="rounded-md border border-emerald-300/30 p-2">
+      <div className="grid grid-cols-5 gap-x-2 gap-y-1">
+        {liveMetricItems.map((liveMetricItem) => (
+          <p key={liveMetricItem.label} className="font-bold text-center whitespace-nowrap">{liveMetricItem.label}</p>
+        ))}
+        {liveMetricItems.map((liveMetricItem) => (
+          <p key={`${liveMetricItem.label}-value`} className="text-center whitespace-nowrap">{liveMetricItem.value}</p>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const formatCurrentGameStateLeafValue = (stateValue: unknown): string => {
   if (stateValue === null) {
     return "null";
@@ -179,75 +252,6 @@ const formatCurrentGameStateLeafValue = (stateValue: unknown): string => {
     return "-";
   }
   return String(stateValue);
-};
-
-const formatCurrentGameStateDisplayLines = (
-  currentGameStateValue: unknown,
-  depth = 0,
-  visitedObjects = new WeakSet<object>(),
-): string[] => {
-  /**
-   * Human-oriented structured formatter:
-   * - primitives: value line
-   * - objects: `key:` line followed by indented child lines
-   * - arrays: `- value` for primitives, `-` followed by indented child lines for objects/arrays
-   */
-  if (currentGameStateValue === null || typeof currentGameStateValue !== "object") {
-    return [`${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${formatCurrentGameStateLeafValue(currentGameStateValue)}`];
-  }
-
-  if (visitedObjects.has(currentGameStateValue)) {
-    throw new TypeError("Cannot display currentGame.state because circular references were detected.");
-  }
-
-  visitedObjects.add(currentGameStateValue);
-  try {
-    if (Array.isArray(currentGameStateValue)) {
-      if (currentGameStateValue.length === 0) {
-        return [`${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${GAME_STATE_EMPTY_ARRAY_LABEL}`];
-      }
-      return currentGameStateValue.flatMap((arrayItem) => {
-        if (arrayItem !== null && typeof arrayItem === "object") {
-          return [
-            `${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}-`,
-            ...formatCurrentGameStateDisplayLines(arrayItem, depth + 1, visitedObjects),
-          ];
-        }
-        return [`${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}- ${formatCurrentGameStateLeafValue(arrayItem)}`];
-      });
-    }
-
-    const entries = Object.entries(currentGameStateValue);
-    if (entries.length === 0) {
-      return [`${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${GAME_STATE_EMPTY_OBJECT_LABEL}`];
-    }
-    return entries.flatMap(([stateKey, stateValue]) => {
-      if (stateValue !== null && typeof stateValue === "object") {
-        return [
-          `${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${stateKey}:`,
-          ...formatCurrentGameStateDisplayLines(stateValue, depth + 1, visitedObjects),
-        ];
-      }
-      return [
-        `${GAME_STATE_DISPLAY_INDENT_UNIT.repeat(depth)}${stateKey}: ${formatCurrentGameStateLeafValue(stateValue)}`,
-      ];
-    });
-  } finally {
-    visitedObjects.delete(currentGameStateValue);
-  }
-};
-
-const formatCurrentGameStateDisplayValue = (currentGameState: Record<string, unknown> | undefined): string => {
-  if (currentGameState === undefined) {
-    return "-";
-  }
-
-  try {
-    const displayLines = formatCurrentGameStateDisplayLines(currentGameState);
-    return displayLines.length === 0 ? "-" : displayLines.join("\n");
-  } catch {
-    return "-";
-  }
 };
 
 /**
@@ -347,13 +351,10 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
   const niconamaState = stateResponse?.niconama;
   if (niconamaState && Object.keys(niconamaState).length > 0) {
     rows.push(
-      { label: "状態", value: formatStateLabel(niconamaState.type) },
+      { label: "配信指標", hideLabel: true, valueComponent: createLiveDeliveryMetricsValueComponent(niconamaState) },
       { label: "タイトル", value: niconamaState.meta?.title ?? "-" },
       { label: "配信URL", value: niconamaState.meta?.url ?? "-", href: niconamaState.meta?.url },
       { label: "開始時刻", value: formatStartDate(niconamaState.meta?.start) },
-      { label: "視聴者数", value: formatMetricValue(niconamaState.meta?.total?.listeners) },
-      { label: "ギフト", value: formatMetricValue(niconamaState.meta?.total?.gift) },
-      { label: "広告", value: formatMetricValue(niconamaState.meta?.total?.ad) },
     );
   }
 
@@ -361,13 +362,19 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
     rows.push({ label: "現在のゲーム", value: stateResponse.currentGame?.name ?? "-" });
     rows.push({
       label: "ゲーム情報",
-      value: formatCurrentGameStateDisplayValue(stateResponse.currentGame?.state),
       valueComponent: createCurrentGameInfoValueComponent(stateResponse.currentGame?.state),
     });
   }
 
   if (stateResponse?.nGram !== undefined) {
     rows.push({ label: "生成N-gram", value: formatNGramValue(stateResponse.nGram, stateResponse.nGramRaw) });
+  }
+
+  if (createSpeechHistoryDisplayItems(stateResponse?.speechHistory).length > 0) {
+    rows.push({
+      label: "これまでの発話",
+      valueComponent: createSpeechHistoryValueComponent(stateResponse?.speechHistory),
+    });
   }
 
   if (stateResponse?.canSpeak === false) {
@@ -462,16 +469,20 @@ export function AgentStatus() {
   const liveDeliverySection = sectionMap[LIVE_DELIVERY_SECTION_TITLE];
   const markovModelSection = sectionMap[MARKOV_MODEL_SECTION_TITLE];
   const gameSection = sectionMap[GAME_SECTION_TITLE];
+  const hasPrimaryColumnSections = liveDeliverySection !== undefined || gameSection !== undefined;
 
   return (
     <div className={`mx-auto w-full max-w-7xl h-full min-h-0 text-left grid ${AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS} gap-4`}>
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold">
             <a href="https://live.nicovideo.jp/watch/user/14171889" target="_blank" rel="noopener noreferrer">
               馬可無序
             </a>
           </h1>
+          <p className="text-sm text-emerald-200 whitespace-nowrap">
+            最終更新: {lastUpdatedTime || "未取得"}
+          </p>
           <button
             type="button"
             onClick={fetchAgentState}
@@ -481,9 +492,6 @@ export function AgentStatus() {
             更新
           </button>
         </div>
-        <p className="text-sm text-emerald-200">
-          最終更新: {lastUpdatedTime || "未取得"}
-        </p>
         {isShowingMockAgentState ? (
           <div
             data-testid="agent-status-mock-notice"
@@ -511,11 +519,19 @@ export function AgentStatus() {
       ) : (
         <div
           data-testid="agent-status-details"
-          className="w-full min-h-0 overflow-y-auto pr-1 grid grid-cols-1 lg:grid-cols-2 auto-rows-min gap-4"
+          className="w-full h-full min-h-0 overflow-y-auto pr-1 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] auto-rows-min xl:auto-rows-[minmax(0,1fr)] gap-4"
         >
-          {liveDeliverySection ? <LiveDeliveryStatusSection liveDeliveryRows={liveDeliverySection.rows} /> : null}
-          {markovModelSection ? <MarkovModelStatusSection markovModelRows={markovModelSection.rows} /> : null}
-          {gameSection ? <GameStatusSection gameRows={gameSection.rows} /> : null}
+          {hasPrimaryColumnSections ? (
+            <div className="min-w-0 min-h-0 h-full flex flex-col gap-4">
+              {liveDeliverySection ? <LiveDeliveryStatusSection liveDeliveryRows={liveDeliverySection.rows} /> : null}
+              {gameSection ? <GameStatusSection gameRows={gameSection.rows} /> : null}
+            </div>
+          ) : null}
+          {markovModelSection ? (
+            <div className={`min-w-0 min-h-0 h-full${hasPrimaryColumnSections ? " xl:col-start-2" : ""}`}>
+              <MarkovModelStatusSection markovModelRows={markovModelSection.rows} />
+            </div>
+          ) : null}
         </div>
       )}
     </div>

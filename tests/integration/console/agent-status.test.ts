@@ -11,6 +11,7 @@ import {
   shouldUseMockAgentState,
   startAgentStateAutoRefresh,
 } from "../../../console/src/AgentStatus";
+import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
 
 const originalSetInterval = globalThis.setInterval;
 const originalClearInterval = globalThis.clearInterval;
@@ -129,16 +130,22 @@ describe("createAgentStatusRows", () => {
       },
     });
 
-    expect(rows).toContainEqual({ label: "状態", value: "配信中" });
+    const liveMetricRow = rows.find((row) => row.label === "配信指標");
+    expect(liveMetricRow?.value).toBeUndefined();
+    expect(liveMetricRow?.hideLabel).toBeTrue();
+    const liveMetricHtml = renderToStaticMarkup(createElement(Fragment, null, liveMetricRow?.valueComponent));
+    expect(liveMetricHtml).toContain("状態");
+    expect(liveMetricHtml).toContain("配信中");
+    expect(liveMetricHtml).toContain("視聴者数");
+    expect(liveMetricHtml).toContain("123");
+    expect(liveMetricHtml).toContain("コメント数");
+    expect(liveMetricHtml).toContain("grid-cols-5");
     expect(rows).toContainEqual({ label: "タイトル", value: "テスト配信" });
     expect(rows).toContainEqual({
       label: "配信URL",
       value: "https://example.com/live",
       href: "https://example.com/live",
     });
-    expect(rows).toContainEqual({ label: "視聴者数", value: "123" });
-    expect(rows).toContainEqual({ label: "ギフト", value: "456" });
-    expect(rows).toContainEqual({ label: "広告", value: "789" });
   });
 
   it("includes currentGame and speech rows when present", () => {
@@ -147,18 +154,32 @@ describe("createAgentStatusRows", () => {
       currentGame: { name: "org.dashnet.orteil/cookieclicker", state: { status: "idle" } },
       nGram: 4,
       nGramRaw: 4,
+      speechHistory: [
+        { id: "history-1", speech: "テスト発話その1", nGram: 4, nGramRaw: 4 },
+        { id: "history-2", speech: "テスト発話その2", nGram: 3, nGramRaw: 3.2 },
+      ],
       speech: { speech: "テスト発話", silent: false },
     });
 
     expect(rows).toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
     expect(rows).toContainEqual({ label: "生成N-gram", value: "4-gram (4)" });
     const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
-    expect(gameInfoRow?.value).toBe("status: idle");
+    expect(gameInfoRow?.value).toBeUndefined();
     expect(gameInfoRow?.valueComponent).toBeDefined();
     const gameInfoHtml = renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent));
     expect(gameInfoHtml).toContain("<ul");
     expect(gameInfoHtml).toContain("status");
     expect(gameInfoHtml).toContain("idle");
+    const speechHistoryRow = rows.find((row) => row.label === "これまでの発話");
+    expect(speechHistoryRow?.value).toBeUndefined();
+    const speechHistoryHtml = renderToStaticMarkup(createElement(Fragment, null, speechHistoryRow?.valueComponent));
+    expect(speechHistoryHtml).toContain("<ul");
+    expect(speechHistoryHtml).toContain("grid-cols-1");
+    expect(speechHistoryHtml).toContain("テスト発話その1");
+    expect(speechHistoryHtml).toContain("テスト発話その2");
+    expect(speechHistoryHtml).toContain("4g");
+    expect(speechHistoryHtml).toContain("3g");
+    expect(speechHistoryHtml).toContain("aria-label=\"学習の取り消し\"");
     expect(rows).toContainEqual({ label: "発話内容", value: "テスト発話" });
   });
 
@@ -176,7 +197,7 @@ describe("createAgentStatusRows", () => {
     });
 
     const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
-    expect(gameInfoRow?.value).toBe("stage:\n  level: 3\neffects:\n  - boost\n  - shield");
+    expect(gameInfoRow?.value).toBeUndefined();
     const gameInfoHtml = renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent));
     expect(gameInfoHtml).toContain("<ul");
     expect(gameInfoHtml).toContain("stage");
@@ -199,7 +220,7 @@ describe("createAgentStatusRows", () => {
     });
 
     const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
-    expect(gameInfoRow?.value).toBe("profile:\n  stats:\n    (空のオブジェクト)\n  inventory:\n    (空の配列)");
+    expect(gameInfoRow?.value).toBeUndefined();
     const gameInfoHtml = renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent));
     expect(gameInfoHtml).toContain("空のオブジェクト");
     expect(gameInfoHtml).toContain("空の配列");
@@ -209,7 +230,7 @@ describe("createAgentStatusRows", () => {
     const rows = createAgentStatusRows({ currentGame: null });
     expect(rows).toContainEqual({ label: "現在のゲーム", value: "-" });
     const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
-    expect(gameInfoRow?.value).toBe("-");
+    expect(gameInfoRow?.value).toBeUndefined();
     expect(renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent))).toContain("-");
   });
 
@@ -223,7 +244,7 @@ describe("createAgentStatusRows", () => {
       },
     });
     const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
-    expect(gameInfoRow?.value).toBe("-");
+    expect(gameInfoRow?.value).toBeUndefined();
     expect(renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent))).toContain("-");
   });
 
@@ -249,6 +270,24 @@ describe("createAgentStatusRows", () => {
     expect(createAgentStatusRows({})).not.toContainEqual({ label: "生成N-gram", value: "-" });
   });
 
+  it("shows only the latest 10 speech history items", () => {
+    const speechHistory = Array.from({ length: 12 }, (_, index) => ({
+      id: `history-${index + 1}`,
+      speech: `テスト発話${index + 1}`,
+      nGram: 4,
+      nGramRaw: 4,
+    }));
+    const rows = createAgentStatusRows({ speechHistory });
+    const speechHistoryRow = rows.find((row) => row.label === "これまでの発話");
+    expect(speechHistoryRow?.value).toBeUndefined();
+    const speechHistoryHtml = renderToStaticMarkup(createElement(Fragment, null, speechHistoryRow?.valueComponent));
+    expect(speechHistoryHtml).not.toContain(">テスト発話1<");
+    expect(speechHistoryHtml).not.toContain(">テスト発話2<");
+    expect(speechHistoryHtml).toContain(">テスト発話3<");
+    expect(speechHistoryHtml).toContain(">テスト発話12<");
+    expect((speechHistoryHtml.match(/aria-label="学習の取り消し"/g) ?? []).length).toBe(10);
+  });
+
   it("returns empty rows when niconama state is absent", () => {
     expect(createAgentStatusRows({})).toEqual([]);
     expect(createAgentStatusRows(null)).toEqual([]);
@@ -256,7 +295,9 @@ describe("createAgentStatusRows", () => {
 
   it("returns fallback rows when niconama exists without metadata", () => {
     const rows = createAgentStatusRows({ niconama: { type: "live" } });
-    expect(rows).toContainEqual({ label: "状態", value: "配信中" });
+    const liveMetricRow = rows.find((row) => row.label === "配信指標");
+    expect(liveMetricRow?.value).toBeUndefined();
+    expect(renderToStaticMarkup(createElement(Fragment, null, liveMetricRow?.valueComponent))).toContain("配信中");
     expect(rows).toContainEqual({ label: "タイトル", value: "-" });
     expect(rows).toContainEqual({ label: "配信URL", value: "-", href: undefined });
   });
@@ -281,13 +322,17 @@ describe("createAgentStatusSections", () => {
 
     expect(sections).toHaveLength(3);
     const liveDeliverySection = sections.find((section) => section.title === "配信状況");
-    expect(liveDeliverySection?.rows).toContainEqual({ label: "状態", value: "配信中" });
+    expect(liveDeliverySection?.rows).toContainEqual({
+      label: "配信指標",
+      hideLabel: true,
+      valueComponent: expect.anything(),
+    });
     const markovModelSection = sections.find((section) => section.title === "マルコフ連鎖モデルの状態");
     expect(markovModelSection?.rows).toContainEqual({ label: "生成N-gram", value: "4-gram (4)" });
     const gameSection = sections.find((section) => section.title === "ゲームの状態");
     expect(gameSection?.rows).toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
     const gameInfoRow = gameSection?.rows.find((row) => row.label === "ゲーム情報");
-    expect(gameInfoRow?.value).toBe("status: idle");
+    expect(gameInfoRow?.value).toBeUndefined();
     expect(renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent))).toContain("status");
   });
 
@@ -300,38 +345,26 @@ describe("createAgentStatusSections", () => {
       },
     ]);
   });
+
+  it("includes speech history row in markov model section", () => {
+    const sections = createAgentStatusSections({
+      speechHistory: [{ speech: "過去発話", nGram: 4, nGramRaw: 4 }],
+    });
+    expect(sections).toEqual([
+      {
+        title: "マルコフ連鎖モデルの状態",
+        rows: [{
+          label: "これまでの発話",
+          valueComponent: expect.anything(),
+        }],
+      },
+    ]);
+  });
 });
 
 describe("createMockAgentStateResponse", () => {
   it("returns deterministic mock state for screenshot capture", () => {
-    expect(createMockAgentStateResponse()).toEqual({
-      niconama: {
-        type: "live",
-        meta: {
-          title: "配信エージェント状態モック",
-          url: "https://example.com/watch/mock",
-          start: 1_717_000_000,
-          total: {
-            listeners: 123,
-            gift: 456,
-            ad: 789,
-          },
-        },
-      },
-      canSpeak: true,
-      currentGame: {
-        name: "org.dashnet.orteil/cookieclicker",
-        state: {
-          status: "idle",
-        },
-      },
-      nGram: 4,
-      nGramRaw: 4,
-      speech: {
-        speech: "コメントを学習してお話ししています",
-        silent: false,
-      },
-    });
+    expect(createMockAgentStateResponse()).toEqual(cloneAgentStateResponseMockFixture());
   });
 });
 

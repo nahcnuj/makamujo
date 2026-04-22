@@ -7,6 +7,7 @@ import { routes as consoleRoutes } from "../routes/console/index";
 const ROOT_DIR = path.resolve(import.meta.dir, "..");
 const DEFAULT_OUTPUT_PATH = path.join(ROOT_DIR, "var", "screenshots", "console-agent-status-mock.png");
 const CONSOLE_PATH = "/console/?agentStateMock=1";
+const SCREENSHOT_VIEWPORT = { width: 1500, height: 980 } as const;
 
 const ensureJapaneseFonts = () => {
   // `grep -q` exits with 0 when a match is found.
@@ -29,13 +30,13 @@ const ensureJapaneseFonts = () => {
 
 const captureScreenshot = async (url: string, outputPath: string) => {
   const browser = await chromium.launch();
-  const page = await browser.newPage({ ignoreHTTPSErrors: true });
+  const page = await browser.newPage({ ignoreHTTPSErrors: true, viewport: SCREENSHOT_VIEWPORT });
   try {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20_000 });
     await page.getByRole("heading", { name: "馬可無序" }).waitFor();
     await page.getByTestId("agent-status-mock-notice").waitFor();
     mkdirSync(path.dirname(outputPath), { recursive: true });
-    await page.screenshot({ path: outputPath, type: "png", fullPage: true });
+    await page.screenshot({ path: outputPath, type: "png", fullPage: false });
   } finally {
     await browser.close();
   }
