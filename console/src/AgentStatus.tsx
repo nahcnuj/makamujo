@@ -519,16 +519,16 @@ export function AgentStatus() {
       ) : (
         <div
           data-testid="agent-status-details"
-          className="w-full min-h-0 overflow-y-auto pr-1 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] auto-rows-min gap-4"
+          className="w-full h-full min-h-0 overflow-y-auto pr-1 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] auto-rows-min xl:auto-rows-[minmax(0,1fr)] gap-4"
         >
           {hasPrimaryColumnSections ? (
-            <div className="min-w-0 flex flex-col gap-4">
+            <div className="min-w-0 min-h-0 h-full flex flex-col gap-4">
               {liveDeliverySection ? <LiveDeliveryStatusSection liveDeliveryRows={liveDeliverySection.rows} /> : null}
               {gameSection ? <GameStatusSection gameRows={gameSection.rows} /> : null}
             </div>
           ) : null}
           {markovModelSection ? (
-            <div className={hasPrimaryColumnSections ? "min-w-0 xl:col-start-2" : "min-w-0"}>
+            <div className={hasPrimaryColumnSections ? "min-w-0 min-h-0 h-full xl:col-start-2" : "min-w-0 min-h-0 h-full"}>
               <MarkovModelStatusSection markovModelRows={markovModelSection.rows} />
             </div>
           ) : null}
