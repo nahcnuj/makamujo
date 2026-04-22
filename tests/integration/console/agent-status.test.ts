@@ -174,7 +174,7 @@ describe("createAgentStatusRows", () => {
     expect(speechHistoryRow?.value).toBeUndefined();
     const speechHistoryHtml = renderToStaticMarkup(createElement(Fragment, null, speechHistoryRow?.valueComponent));
     expect(speechHistoryHtml).toContain("<ul");
-    expect(speechHistoryHtml).toContain("grid-cols-10");
+    expect(speechHistoryHtml).toContain("grid-cols-1");
     expect(speechHistoryHtml).toContain("テスト発話その1");
     expect(speechHistoryHtml).toContain("テスト発話その2");
     expect(speechHistoryHtml).toContain("4g");

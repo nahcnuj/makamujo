@@ -200,7 +200,7 @@ const createSpeechHistoryValueComponent = (
     return <span>-</span>;
   }
   return (
-    <ul className="grid grid-cols-10 gap-2">
+    <ul className="grid grid-cols-1 gap-2">
       {speechHistoryItems.map((speechHistoryItem) => (
         <li key={speechHistoryItem.id} className="rounded-md border border-emerald-300/30 p-2">
           <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-2">
