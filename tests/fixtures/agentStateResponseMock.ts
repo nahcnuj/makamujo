@@ -37,6 +37,12 @@ export const AGENT_STATE_RESPONSE_MOCK_FIXTURE = {
     { id: "speech-history-4", speech: "コメント数の推移も追っています", nGram: 2, nGramRaw: 2.4 },
     { id: "speech-history-5", speech: "配信状況は定期的に自動更新されます", nGram: 3, nGramRaw: 3 },
     { id: "speech-history-6", speech: "UIを見やすく整理しています", nGram: 4, nGramRaw: 4 },
+    { id: "speech-history-7", speech: "現在の状態を定期確認しています", nGram: 3, nGramRaw: 3 },
+    { id: "speech-history-8", speech: "反応の良い言い回しを学習中です", nGram: 4, nGramRaw: 4 },
+    { id: "speech-history-9", speech: "直近コメントの傾向を反映します", nGram: 2, nGramRaw: 2 },
+    { id: "speech-history-10", speech: "モデル更新を継続しています", nGram: 3, nGramRaw: 3 },
+    { id: "speech-history-11", speech: "配信メタデータも合わせて表示します", nGram: 4, nGramRaw: 4 },
+    { id: "speech-history-12", speech: "最新履歴を優先して一覧化しています", nGram: 3, nGramRaw: 3 },
   ],
 } as const;
 

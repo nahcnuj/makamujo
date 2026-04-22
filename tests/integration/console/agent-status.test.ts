@@ -138,6 +138,7 @@ describe("createAgentStatusRows", () => {
     expect(liveMetricHtml).toContain("視聴者数");
     expect(liveMetricHtml).toContain("123");
     expect(liveMetricHtml).toContain("コメント数");
+    expect(liveMetricHtml).toContain("grid-cols-3");
     expect(rows).toContainEqual({ label: "タイトル", value: "テスト配信" });
     expect(rows).toContainEqual({
       label: "配信URL",
@@ -265,6 +266,24 @@ describe("createAgentStatusRows", () => {
     expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: 0.5 })).toContainEqual({ label: "生成N-gram", value: "4-gram" });
     expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: -2 })).toContainEqual({ label: "生成N-gram", value: "4-gram" });
     expect(createAgentStatusRows({})).not.toContainEqual({ label: "生成N-gram", value: "-" });
+  });
+
+  it("shows only the latest 10 speech history items", () => {
+    const speechHistory = Array.from({ length: 12 }, (_, index) => ({
+      id: `history-${index + 1}`,
+      speech: `テスト発話${index + 1}`,
+      nGram: 4,
+      nGramRaw: 4,
+    }));
+    const rows = createAgentStatusRows({ speechHistory });
+    const speechHistoryRow = rows.find((row) => row.label === "これまでの発話");
+    expect(speechHistoryRow?.value).toBeUndefined();
+    const speechHistoryHtml = renderToStaticMarkup(createElement(Fragment, null, speechHistoryRow?.valueComponent));
+    expect(speechHistoryHtml).not.toContain(">テスト発話1<");
+    expect(speechHistoryHtml).not.toContain(">テスト発話2<");
+    expect(speechHistoryHtml).toContain(">テスト発話3<");
+    expect(speechHistoryHtml).toContain(">テスト発話12<");
+    expect((speechHistoryHtml.match(/aria-label="学習の取り消し"/g) ?? []).length).toBe(10);
   });
 
   it("returns empty rows when niconama state is absent", () => {

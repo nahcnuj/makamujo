@@ -57,6 +57,7 @@ const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正
 const SPEECH_UNAVAILABLE_INDICATOR = "・・・";
 // Distinguishes unix seconds from unix milliseconds by treating 13-digit values as milliseconds.
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
+const MAX_SPEECH_HISTORY_ITEMS = 10;
 const LIVE_DELIVERY_ROW_LABELS = ["配信指標", "タイトル", "配信URL", "開始時刻"] as const;
 const MARKOV_MODEL_ROW_LABELS = ["生成N-gram", "発話内容", "これまでの発話"] as const;
 const GAME_ROW_LABELS = ["現在のゲーム", "ゲーム情報"] as const;
@@ -171,7 +172,7 @@ const createSpeechHistoryDisplayItems = (
   if (!Array.isArray(speechHistory)) {
     return [];
   }
-  return speechHistory.reduce<Array<{ id: string; speechText: string; displayLine: string; nGramLabel: string }>>(
+  const speechHistoryItems = speechHistory.reduce<Array<{ id: string; speechText: string; displayLine: string; nGramLabel: string }>>(
     (accumulatedItems, speechHistoryItem) => {
       const speechText = speechHistoryItem.speech?.trim();
       if (!speechText) {
@@ -188,6 +189,7 @@ const createSpeechHistoryDisplayItems = (
     },
     [],
   );
+  return speechHistoryItems.slice(-MAX_SPEECH_HISTORY_ITEMS);
 };
 
 const createSpeechHistoryValueComponent = (
@@ -231,7 +233,7 @@ const createLiveMetricItemComponent = (label: string, value: string): ReactNode 
 
 const createLiveDeliveryMetricsValueComponent = (niconamaState: AgentStateResponse["niconama"]): ReactNode => {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
+    <div className="grid grid-cols-3 gap-2">
       {createLiveMetricItemComponent("状態", formatStateLabel(niconamaState?.type))}
       {createLiveMetricItemComponent("視聴者数", formatMetricValue(niconamaState?.meta?.total?.listeners))}
       {createLiveMetricItemComponent("ギフト", formatMetricValue(niconamaState?.meta?.total?.gift))}
