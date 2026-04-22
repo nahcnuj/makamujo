@@ -220,7 +220,7 @@ const createSpeechHistoryValueComponent = (
   );
 };
 
-const renderLiveMetricValue = (label: string, value: string): ReactNode => {
+const createLiveMetricValueComponent = (label: string, value: string): ReactNode => {
   return (
     <div className="rounded-md border border-emerald-300/30 p-2">
       <p className="font-bold">{label}</p>
@@ -232,11 +232,11 @@ const renderLiveMetricValue = (label: string, value: string): ReactNode => {
 const createLiveDeliveryMetricsValueComponent = (niconamaState: AgentStateResponse["niconama"]): ReactNode => {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
-      {renderLiveMetricValue("状態", formatStateLabel(niconamaState?.type))}
-      {renderLiveMetricValue("視聴者数", formatMetricValue(niconamaState?.meta?.total?.listeners))}
-      {renderLiveMetricValue("ギフト", formatMetricValue(niconamaState?.meta?.total?.gift))}
-      {renderLiveMetricValue("広告", formatMetricValue(niconamaState?.meta?.total?.ad))}
-      {renderLiveMetricValue("コメント数", formatMetricValue(niconamaState?.meta?.total?.comments))}
+      {createLiveMetricValueComponent("状態", formatStateLabel(niconamaState?.type))}
+      {createLiveMetricValueComponent("視聴者数", formatMetricValue(niconamaState?.meta?.total?.listeners))}
+      {createLiveMetricValueComponent("ギフト", formatMetricValue(niconamaState?.meta?.total?.gift))}
+      {createLiveMetricValueComponent("広告", formatMetricValue(niconamaState?.meta?.total?.ad))}
+      {createLiveMetricValueComponent("コメント数", formatMetricValue(niconamaState?.meta?.total?.comments))}
     </div>
   );
 };
