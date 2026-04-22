@@ -28,4 +28,19 @@ describe("AgentStatusSectionCard", () => {
     expect(html).toContain("href=\"https://example.com/live\"");
     expect(html).toContain("<ul");
   });
+
+  it("pins row layout to the top instead of stretching across card height", () => {
+    const html = renderToStaticMarkup(
+      <AgentStatusSectionCard
+        title="テストセクション"
+        rows={[
+          { label: "状態", value: "配信中" },
+          { label: "発話内容", value: "こんにちは" },
+        ]}
+      />,
+    );
+
+    expect(html).toContain("content-start");
+    expect(html).toContain("items-start");
+  });
 });
