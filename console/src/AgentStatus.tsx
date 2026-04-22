@@ -151,7 +151,7 @@ const formatNGramValue = (nGram: number | undefined, nGramRaw: number | undefine
   return `${nGramValue} (${nGramRaw})`;
 };
 
-const formatSpeechHistoryItemLine = (
+const formatSpeechHistoryItemText = (
   speechText: string,
   nGram: number | undefined,
 ): string => {
@@ -181,7 +181,7 @@ const createSpeechHistoryDisplayItems = (
       accumulatedItems.push({
         id: speechHistoryItem.id ?? `speech-history-${displayOrder}`,
         speechText,
-        displayLine: formatSpeechHistoryItemLine(speechText, speechHistoryItem.nGram),
+        displayLine: formatSpeechHistoryItemText(speechText, speechHistoryItem.nGram),
         nGramLabel: formatSpeechHistoryNGramLabel(speechHistoryItem.nGram),
       });
       return accumulatedItems;
@@ -220,7 +220,7 @@ const createSpeechHistoryValueComponent = (
   );
 };
 
-const createLiveMetricValueComponent = (label: string, value: string): ReactNode => {
+const createLiveMetricItemComponent = (label: string, value: string): ReactNode => {
   return (
     <div className="rounded-md border border-emerald-300/30 p-2">
       <p className="font-bold">{label}</p>
@@ -232,11 +232,11 @@ const createLiveMetricValueComponent = (label: string, value: string): ReactNode
 const createLiveDeliveryMetricsValueComponent = (niconamaState: AgentStateResponse["niconama"]): ReactNode => {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
-      {createLiveMetricValueComponent("状態", formatStateLabel(niconamaState?.type))}
-      {createLiveMetricValueComponent("視聴者数", formatMetricValue(niconamaState?.meta?.total?.listeners))}
-      {createLiveMetricValueComponent("ギフト", formatMetricValue(niconamaState?.meta?.total?.gift))}
-      {createLiveMetricValueComponent("広告", formatMetricValue(niconamaState?.meta?.total?.ad))}
-      {createLiveMetricValueComponent("コメント数", formatMetricValue(niconamaState?.meta?.total?.comments))}
+      {createLiveMetricItemComponent("状態", formatStateLabel(niconamaState?.type))}
+      {createLiveMetricItemComponent("視聴者数", formatMetricValue(niconamaState?.meta?.total?.listeners))}
+      {createLiveMetricItemComponent("ギフト", formatMetricValue(niconamaState?.meta?.total?.gift))}
+      {createLiveMetricItemComponent("広告", formatMetricValue(niconamaState?.meta?.total?.ad))}
+      {createLiveMetricItemComponent("コメント数", formatMetricValue(niconamaState?.meta?.total?.comments))}
     </div>
   );
 };
