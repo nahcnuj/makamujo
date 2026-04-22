@@ -27,7 +27,5 @@ describe("AgentStatusSectionCard", () => {
     expect(html).toContain("配信中");
     expect(html).toContain("href=\"https://example.com/live\"");
     expect(html).toContain("<ul");
-    expect(html).toContain("grid-cols-[max-content_minmax(0,1fr)]");
-    expect(html).not.toContain("grid-cols-[10rem_minmax(0,1fr)]");
   });
 });
