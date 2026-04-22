@@ -528,7 +528,7 @@ export function AgentStatus() {
             </div>
           ) : null}
           {markovModelSection ? (
-            <div className={hasPrimaryColumnSections ? "min-w-0 min-h-0 h-full xl:col-start-2" : "min-w-0 min-h-0 h-full"}>
+            <div className={`min-w-0 min-h-0 h-full${hasPrimaryColumnSections ? " xl:col-start-2" : ""}`}>
               <MarkovModelStatusSection markovModelRows={markovModelSection.rows} />
             </div>
           ) : null}
