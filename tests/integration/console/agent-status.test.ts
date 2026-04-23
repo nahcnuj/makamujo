@@ -162,7 +162,7 @@ describe("createAgentStatusRows", () => {
     });
 
     expect(rows).toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
-    expect(rows).toContainEqual({ label: "生成N-gram", value: "4-gram (4)" });
+    expect(rows).toContainEqual({ label: "生成N-gram", value: "4-gram (4.00)" });
     const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
     expect(gameInfoRow?.value).toBeUndefined();
     expect(gameInfoRow?.valueComponent).toBeDefined();
@@ -264,7 +264,7 @@ describe("createAgentStatusRows", () => {
     expect(createAgentStatusRows({ nGram: Infinity })).toContainEqual({ label: "生成N-gram", value: "-" });
     expect(createAgentStatusRows({ nGram: 0 })).toContainEqual({ label: "生成N-gram", value: "-" });
     expect(createAgentStatusRows({ nGram: 4.8 })).toContainEqual({ label: "生成N-gram", value: "4-gram" });
-    expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: 4.8 })).toContainEqual({ label: "生成N-gram", value: "4-gram (4.8)" });
+    expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: 4.8 })).toContainEqual({ label: "生成N-gram", value: "4-gram (4.80)" });
     expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: 0.5 })).toContainEqual({ label: "生成N-gram", value: "4-gram" });
     expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: -2 })).toContainEqual({ label: "生成N-gram", value: "4-gram" });
     expect(createAgentStatusRows({})).not.toContainEqual({ label: "生成N-gram", value: "-" });
@@ -336,7 +336,7 @@ describe("createAgentStatusSections", () => {
     });
     expect(liveDeliverySection?.rows).toContainEqual({ label: "発話内容", value: "コメントを学習してお話ししています" });
     const markovModelSection = sections.find((section) => section.title === "マルコフ連鎖モデルの状態");
-    expect(markovModelSection?.rows).toContainEqual({ label: "生成N-gram", value: "4-gram (4)" });
+    expect(markovModelSection?.rows).toContainEqual({ label: "生成N-gram", value: "4-gram (4.00)" });
     expect(markovModelSection?.rows).not.toContainEqual({ label: "発話内容", value: "コメントを学習してお話ししています" });
     const gameSection = sections.find((section) => section.title === "ゲームの状態");
     expect(gameSection?.rows).toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });

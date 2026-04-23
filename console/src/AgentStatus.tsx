@@ -148,7 +148,8 @@ const formatNGramValue = (nGram: number | undefined, nGramRaw: number | undefine
   if (nGramRaw === undefined || !Number.isFinite(nGramRaw) || nGramRaw < 1) {
     return nGramValue;
   }
-  return `${nGramValue} (${nGramRaw})`;
+  const formattedRaw = Number(nGramRaw).toFixed(2);
+  return `${nGramValue} (${formattedRaw})`;
 };
 
 const formatSpeechHistoryItemText = (
