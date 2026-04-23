@@ -127,7 +127,7 @@ test.describe("console", () => {
     await expect(page.getByTestId("agent-status-details")).toContainText("配信エージェント状態モック");
     await expect(page.getByTestId("agent-status-details")).not.toContainText("話せる状態");
     await expect(page.getByTestId("agent-status-details")).toContainText("生成N-gram");
-    await expect(page.getByTestId("agent-status-details")).toContainText("4-gram (4)");
+    await expect(page.getByTestId("agent-status-details")).toContainText("4-gram (4.00)");
     await expect(page.getByRole("heading", { level: 3, name: "配信状況" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 3, name: "マルコフ連鎖モデルの状態" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 3, name: "ゲームの状態" })).toBeVisible();
