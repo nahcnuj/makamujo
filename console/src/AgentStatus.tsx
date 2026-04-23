@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { Container } from "automated-gameplay-transmitter";
 import type { ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { cloneAgentStateResponseMockFixture } from "../../tests/fixtures/agentStateResponseMock";
+import type { AgentStatusRow } from "./agentStatusSections/AgentStatusSectionCard";
 import { GAME_SECTION_TITLE, GameStatusSection } from "./agentStatusSections/GameStatusSection";
 import { LIVE_DELIVERY_SECTION_TITLE, LiveDeliveryStatusSection } from "./agentStatusSections/LiveDeliveryStatusSection";
 import { MARKOV_MODEL_SECTION_TITLE, MarkovModelStatusSection } from "./agentStatusSections/MarkovModelStatusSection";
-import type { AgentStatusRow } from "./agentStatusSections/AgentStatusSectionCard";
-import { cloneAgentStateResponseMockFixture } from "../../tests/fixtures/agentStateResponseMock";
 
 /**
  * Response schema returned by `/console/api/agent-state`.
@@ -493,12 +494,14 @@ export function AgentStatus() {
           </button>
         </div>
         {isShowingMockAgentState ? (
-          <div
-            data-testid="agent-status-mock-notice"
-            className="w-full bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50"
-          >
-            {AGENT_STATE_MOCK_NOTICE_MESSAGE}
-          </div>
+          <Container>
+            <div
+              data-testid="agent-status-mock-notice"
+              className="w-full bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50"
+            >
+              {AGENT_STATE_MOCK_NOTICE_MESSAGE}
+            </div>
+          </Container>
         ) : null}
         {agentStatusError ? (
           <div
@@ -510,12 +513,14 @@ export function AgentStatus() {
         ) : null}
       </div>
       {agentStatusSections.length === 0 ? (
-        <div
-          data-testid="agent-status-empty"
-          className="w-full min-h-[80px] bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50"
-        >
-          {isLoadingAgentState ? "読み込み中..." : "配信情報はありません。"}
-        </div>
+        <Container>
+          <div
+            data-testid="agent-status-empty"
+            className="w-full min-h-[80px] bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50"
+          >
+            {isLoadingAgentState ? "読み込み中..." : "配信情報はありません。"}
+          </div>
+        </Container>
       ) : (
         <div
           data-testid="agent-status-details"
