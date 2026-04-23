@@ -44,6 +44,37 @@ const viewerComment = {
   },
 };
 
+describe('per-program comment counting', () => {
+  it('initializes comments to 0 and increments for user comments', () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    agent.onAir(niconamaLive(10));
+
+    expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(0);
+
+    agent.listen([viewerComment]);
+    expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(1);
+  });
+
+  it('does not count system messages as user comments', () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    agent.onAir(niconamaLive(10));
+
+    agent.listen([{ data: { comment: 'system', anonymity: false, hasGift: false, userId: 'onecomme.system' } } as any]);
+    expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(0);
+  });
+
+  it('resets comment count when the stream URL changes', () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    agent.onAir(niconamaLive(10));
+    agent.listen([viewerComment]);
+    expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(1);
+
+    // Simulate a new stream with a different URL
+    agent.onAir({ type: 'niconama', data: { title: 'test2', isLive: true, startTime: 0, total: 5, points: { gift: 0, ad: 0 }, url: 'https://example.com/other' } });
+    expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(0);
+  });
+});
+
 beforeEach(() => {
   jest.restoreAllMocks();
 });
