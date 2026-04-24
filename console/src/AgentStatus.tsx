@@ -190,7 +190,23 @@ const createSpeechHistoryDisplayItems = (
     },
     [],
   );
-  return [...speechHistoryItems].reverse();
+
+  // Normalize ordering so newest entries are presented first.
+  // If items include numeric suffix IDs (e.g. "speech-12"), use that
+  // numeric value to sort descending. Otherwise assume the backend
+  // already returns newest-first and preserve the given order.
+  const itemsWithSeq = speechHistoryItems.map((item) => {
+    const match = item.id.match(/(\d+)$/);
+    return { ...item, seq: match ? Number(match[1]) : undefined };
+  });
+
+  const seqCount = itemsWithSeq.reduce((c, it) => (it.seq !== undefined ? c + 1 : c), 0);
+  if (seqCount >= 2) {
+    itemsWithSeq.sort((a, b) => (b.seq ?? 0) - (a.seq ?? 0));
+    return itemsWithSeq.map(({ seq, ...rest }) => rest);
+  }
+
+  return itemsWithSeq.map(({ seq, ...rest }) => rest);
 };
 
 const createSpeechHistoryValueComponent = (
