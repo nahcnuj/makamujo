@@ -1,8 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { spawn } from "child_process";
-import { existsSync, writeFileSync, unlinkSync, createWriteStream, mkdirSync } from "fs";
+import { existsSync, writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
-import net from "net";
 
 const PORT = 17779;
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
@@ -33,27 +32,16 @@ test.describe("Full IPC operation", () => {
       // 1. Start `bun start`
       serverProcess = spawn(
         process.platform === "win32" ? "bun.exe" : "bun",
-        ["index.ts", "--port", String(PORT)],
+        ["start", "--port", String(PORT)],
         {
           env: {
             ...process.env,
             NODE_ENV: "production",
             MAKAMUJO_IPC_PATH: ipcPath,
-            CONSOLE_LOOPBACK_ONLY: '1',
           },
           stdio: ["ignore", "pipe", "pipe"],
         },
       );
-
-      // capture logs for debugging
-      try { mkdirSync('./var/test-logs', { recursive: true }); } catch {}
-      const ts = Date.now();
-      const outPath = `./var/test-logs/full-ipc-server-${ts}.log`;
-      const errPath = `./var/test-logs/full-ipc-server-${ts}.err.log`;
-      const outStream = createWriteStream(outPath);
-      const errStream = createWriteStream(errPath);
-      serverProcess.stdout?.pipe(outStream);
-      serverProcess.stderr?.pipe(errStream);
 
       // Wait for the server to be ready
       await new Promise<void>((resolve, reject) => {
@@ -83,30 +71,6 @@ test.describe("Full IPC operation", () => {
           reject(new Error(`Server exited early with code ${code}`));
         });
       });
-
-      // additionally poll TCP port to ensure the server is accepting connections
-      const start = Date.now();
-      const deadline = start + SERVER_STARTUP_TIMEOUT_MS;
-      let lastErr: Error | null = null;
-      while (Date.now() < deadline) {
-        try {
-          await new Promise<void>((resolve, reject) => {
-            const s = net.connect({ port: PORT, host: '127.0.0.1' }, () => {
-              s.end();
-              resolve();
-            });
-            s.on('error', (err) => {
-              reject(err);
-            });
-          });
-          lastErr = null;
-          break;
-        } catch (err) {
-          lastErr = err as Error;
-          await new Promise((r) => setTimeout(r, 200));
-        }
-      }
-      if (lastErr) throw new Error(`Server TCP port ${PORT} not accepting connections: ${String(lastErr)}`);
 
       // 2. Start `bun ./bin/x/browser.ts`
       browserProcess = spawn(
