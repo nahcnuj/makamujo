@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { createWebSocketConnector, createAgentStateWebSocketUrl, parseAgentStateResponse } from "./useAgentStateWebSocket";
+import { createWebSocketConnector, createAgentStateWebSocketUrl, parseAgentStateResponse } from "./useAgentState";
 
 // Ensure a `window` global exists for the connector (used by the implementation checks)
 if (typeof (globalThis as any).window === "undefined") {

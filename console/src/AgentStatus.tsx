@@ -1,7 +1,7 @@
 import { Container } from "automated-gameplay-transmitter";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AgentStateResponse } from "./hooks/useAgentStateWebSocket";
+import type { AgentStateResponse } from "./hooks/useAgentState";
 import { useAgentState } from "./hooks/useAgentState";
 import type { AgentStatusRow } from "./agentStatusSections/AgentStatusSectionCard";
 import { GAME_SECTION_TITLE, GameStatusSection } from "./agentStatusSections/GameStatusSection";

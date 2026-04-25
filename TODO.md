@@ -9,11 +9,12 @@
 
 ## 現在のチェックリスト
 
- - [x] Create `agentStateService.ts` (constants + URL helper)
- - [x] Create `hooks/useAgentState.ts` (fetch + state)
- - [x] Create `hooks/useAgentStateWebSocket.ts` (websocket logic)
- - [x] Refactor `AgentStatusContainer.tsx` to use hooks/service
- - [x] Update tests to import `createAgentStateWebSocketUrl` from service
- - [x] Run typecheck and tests
- - [x] Remove production mock helpers and move mocks to fixtures
+- [x] Create `agentStateService.ts` (constants + URL helper)
+- [x] Create `hooks/useAgentState.ts` (fetch + state; WS-backed)
+- [x] Create `hooks/useAgentStateWebSocket.ts` (websocket logic) — merged into `useAgentState.ts`
+- [x] Refactor `AgentStatusContainer.tsx` to use hooks/service
+- [x] Update tests to import helpers from `hooks/useAgentState.ts`
+- [x] Run typecheck and tests
+- [x] Remove production mock helpers and move mocks to fixtures
+- [ ] Refactor `useAgentState` API to return `{ state, setState }` or use `useReducer`
 このファイルを編集したら、対応する全てのタスクを `manage_todo_list` ツールに送ってください。
