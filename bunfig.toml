@@ -5,4 +5,3 @@ env = "BUN_PUBLIC_*"
 
 [test]
 coverage = true
-coverageSkipTestFiles = true
