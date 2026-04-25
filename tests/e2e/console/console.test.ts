@@ -123,9 +123,27 @@ test.describe("console", () => {
     expect(rootElement).not.toBeNull();
     await expect(page.getByRole("heading", { name: "馬可無序" })).toBeVisible();
     await expect(page.getByText("最終更新:", { exact: false })).toBeVisible();
-    await expect(page.getByTestId("agent-status-details")).not.toContainText("話せる状態");
-    await expect(page.getByTestId("agent-status-details")).toContainText("生成N-gram");
-    await expect(page.getByTestId("agent-status-details")).toContainText("4-gram");
+
+    // The agent status area may render either an empty placeholder or the details.
+    // Wait for either to appear so CI runs are more deterministic and provide
+    // clearer diagnostics when the details are not present.
+    const detailsLocator = page.getByTestId("agent-status-details");
+    const emptyLocator = page.getByTestId("agent-status-empty");
+    // Wait up to the browser page load timeout for one of the two to appear.
+    await Promise.race([
+      detailsLocator.waitFor({ timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS }),
+      emptyLocator.waitFor({ timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS }),
+    ]);
+
+    if (await emptyLocator.count() > 0) {
+      // Provide a helpful failure with current markup so CI logs are actionable.
+      const html = await page.content();
+      throw new Error(`Agent status empty in test; page snapshot:\n${html}`);
+    }
+
+    await expect(detailsLocator).not.toContainText("話せる状態");
+    await expect(detailsLocator).toContainText("生成N-gram");
+    await expect(detailsLocator).toContainText("4-gram");
     await expect(page.getByRole("heading", { level: 3, name: "配信状況" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 3, name: "マルコフ連鎖モデルの状態" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 3, name: "ゲームの状態" })).toBeVisible();
