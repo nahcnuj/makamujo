@@ -5,3 +5,4 @@ env = "BUN_PUBLIC_*"
 
 [test]
 coverage = true
+path-ignore-patterns = ["tests/**"]
