@@ -27,7 +27,12 @@ AIエージェントは必ずこのファイルを参照し、下記のルール
 ## 現在のチェックリスト
 
 ### MUST
-現在未完了のタスクはありません。
+- [x] [MUST] Inspect PR #177 and #188 — identify branches and commits for each PR
+- [x] [MUST] Create branch `combine/pr-177-188` from repository base (e.g., `origin/main`)
+- [x] [MUST] Merge PR #177 into `combine/pr-177-188` and resolve conflicts if any
+- [x] [MUST] Merge PR #188 into `combine/pr-177-188` and resolve conflicts if any
+- [x] [MUST] Run tests / typecheck and fix issues resulting from merges
+- [x] [MUST] Push `combine/pr-177-188` to `origin` and open a single PR combining both changes
 
 ### SHOULD
 現在未完了のタスクはありません。
