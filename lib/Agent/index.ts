@@ -266,17 +266,14 @@ export class MakaMujo {
             if (hadCommentBefore && commentsStale) {
               if (!this.#hasPromptedCommentForViewerIncrease) {
                 this.#hasPromptedCommentForViewerIncrease = true;
-                // Queue the prompt by chaining a direct TTS call onto the
-                // internal speech promise. This ensures the prompt runs in
-                // order with other queued speech, but lets us catch
-                // failures specifically for this prompt so we can reset the
-                // prompted flag when playback fails.
-                const ttsTask = this.#speechPromise.then(() => this.#tts.speech('コメントしていってね〜'));
-                this.#speechPromise = ttsTask.catch(() => Promise.resolve());
-                void ttsTask.catch((err) => {
+                // Call the prompt playback out-of-band so it doesn't wait on
+                // the main speech queue. If the prompt playback fails, clear
+                // the prompted flag so the agent can try again later.
+                const ttsTask = this.#tts.speech('コメントしていってね〜').catch((err) => {
                   console.error('[ERROR]', 'prompting comment failed', err);
                   this.#hasPromptedCommentForViewerIncrease = false;
                 });
+                void ttsTask;
               }
             }
           }

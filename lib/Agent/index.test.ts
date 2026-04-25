@@ -200,6 +200,60 @@ describe('speechable', () => {
     expect(agent.speechable).toBeTrue();
   });
 
+  it('prompts immediately even when main speech is blocked', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(0);
+    const called = jest.fn(async (text: string) => {
+      if (text === 'main-block') {
+        return new Promise<void>(() => {});
+      }
+      return;
+    });
+    const spyTts: TTS = { speech: called as any };
+    const agent = new MakaMujo(stubTalkModel, spyTts);
+    agent.onAir(niconamaLive(10));
+    agent.listen([viewerComment]);
+
+    jest.spyOn(Date, 'now').mockReturnValue(SILENCE_THRESHOLD_MS);
+    expect(agent.speechable).toBeFalse();
+
+    // Start a long-running main speech without awaiting it
+    agent.speech('main-block');
+    // viewer count changes — should prompt immediately even while main speech is pending
+    agent.onAir(niconamaLive(11));
+    // allow scheduled tasks to run
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(called).toHaveBeenCalledWith('コメントしていってね〜');
+    expect(agent.speechable).toBeFalse();
+  });
+
+  it('clears prompt-flag if prompt playback fails while main speech blocked', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(0);
+    const fail = jest.fn(async (text: string) => {
+      if (text === 'main-block') {
+        return new Promise<void>(() => {});
+      }
+      if (text === 'コメントしていってね〜') {
+        return Promise.reject(new Error('boom'));
+      }
+      return;
+    });
+    const failTts: TTS = { speech: fail as any };
+    const agent = new MakaMujo(stubTalkModel, failTts);
+    agent.onAir(niconamaLive(10));
+    agent.listen([viewerComment]);
+
+    jest.spyOn(Date, 'now').mockReturnValue(SILENCE_THRESHOLD_MS);
+    expect(agent.speechable).toBeFalse();
+
+    agent.speech('main-block');
+    agent.onAir(niconamaLive(11));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fail).toHaveBeenCalledWith('コメントしていってね〜');
+    expect(agent.speechable).toBeTrue();
+  });
+
   it('should be true again after stream goes offline following silence', () => {
     jest.spyOn(Date, 'now').mockReturnValue(0);
     const agent = new MakaMujo(stubTalkModel, stubTts);
