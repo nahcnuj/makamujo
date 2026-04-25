@@ -116,13 +116,17 @@ export class MakaMujo {
   }
 
   async speech(text: string = this.#talkModel.generate('', this.#currentNGramSize)) {
-    // console.log('[DEBUG]', 'speech', text);
-
+    // Queue speech work onto the internal chain. For empty text we avoid
+    // calling the underlying TTS implementation (some TalkModel generators
+    // return an empty string) but still notify speech listeners.
     this.#speechPromise = this.#speechPromise.then(async () => {
-      await Promise.all([
-        this.#tts.speech(text, { additionalHalfTone: 3, speakingRate: 1.2 }),
+      const tasks: Array<Promise<void>> = [
         ...this.#speechListeners.map(f => f(text)),
-      ]);
+      ];
+      if (typeof text === 'string' && text.trim().length > 0) {
+        tasks.unshift(this.#tts.speech(text, { additionalHalfTone: 3, speakingRate: 1.2 }));
+      }
+      await Promise.all(tasks);
       await Promise.all(this.#speechCompleteListeners.map(f => Promise.resolve(f())));
     }).catch(() => Promise.resolve());
 
@@ -272,9 +276,17 @@ export class MakaMujo {
             if (hadCommentBefore && commentsStale) {
               if (!this.#hasPromptedCommentForViewerIncrease) {
                 this.#hasPromptedCommentForViewerIncrease = true;
-                // Call TTS directly so the prompt is emitted immediately
-                // (don't affect the main speech queue used by `speech()`).
-                void this.#tts.speech('コメントしていってね〜');
+                // Queue the prompt by chaining a direct TTS call onto the
+                // internal speech promise. This ensures the prompt runs in
+                // order with other queued speech, but lets us catch
+                // failures specifically for this prompt so we can reset the
+                // prompted flag when playback fails.
+                const ttsTask = this.#speechPromise.then(() => this.#tts.speech('コメントしていってね〜'));
+                this.#speechPromise = ttsTask.catch(() => Promise.resolve());
+                void ttsTask.catch((err) => {
+                  console.error('[ERROR]', 'prompting comment failed', err);
+                  this.#hasPromptedCommentForViewerIncrease = false;
+                });
               }
             }
           }

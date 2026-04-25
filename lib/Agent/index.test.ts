@@ -160,7 +160,7 @@ describe('speechable', () => {
     expect(agent.speechable).toBeTrue();
   });
 
-  it('prompts once on viewer increase during silence but remains silent', () => {
+  it('prompts once on viewer increase during silence but remains silent', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(0);
     const called = jest.fn(async () => {});
     const spyTts: TTS = { speech: called };
@@ -173,8 +173,31 @@ describe('speechable', () => {
 
     // viewer count changes — should prompt once but remain speechable=false
     agent.onAir(niconamaLive(11));
+    // allow the speech task to be scheduled and run
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(agent.speechable).toBeFalse();
     expect(called).toHaveBeenCalledTimes(1);
+  });
+
+  it('resets prompted flag when direct TTS playback fails and allows speechable', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(0);
+    const fail = jest.fn(async () => { throw new Error('boom'); });
+    const failTts: TTS = { speech: fail };
+    const agent = new MakaMujo(stubTalkModel, failTts);
+    agent.onAir(niconamaLive(10));
+    agent.listen([viewerComment]);
+
+    jest.spyOn(Date, 'now').mockReturnValue(SILENCE_THRESHOLD_MS);
+    expect(agent.speechable).toBeFalse();
+
+    // viewer count changes — prompt attempted; wait for the speech task
+    agent.onAir(niconamaLive(11));
+    // allow microtasks/macrotasks to run so the speech task and rejection handler execute
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fail).toHaveBeenCalledTimes(1);
+    // after failed playback the prompt flag should be cleared and speechable true
+    expect(agent.speechable).toBeTrue();
   });
 
   it('should be true again after stream goes offline following silence', () => {
