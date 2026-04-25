@@ -25,7 +25,8 @@ const waitForServerReady = async (): Promise<string | null> => {
       return;
     }
 
-    const stdout = server.stdout!;
+    const proc = server!;
+    const stdout = proc.stdout!;
 
     let settled = false;
     let buffer = "";
@@ -33,7 +34,7 @@ const waitForServerReady = async (): Promise<string | null> => {
     const cleanup = () => {
       clearTimeout(timeout);
       stdout.off("data", onData);
-      server?.off("exit", onExit);
+      proc.off("exit", onExit);
     };
 
     const resolveOnce = (url?: string | null) => {
@@ -60,7 +61,7 @@ const waitForServerReady = async (): Promise<string | null> => {
       const idx = buffer.indexOf(marker);
       if (idx >= 0) {
         const rest = buffer.slice(idx + marker.length);
-        const line = rest.split(/\r?\n/)[0].trim();
+        const line = (rest.split(/\r?\n/)[0] || "").trim();
         resolveOnce(line || null);
       } else if (buffer.includes("Console running")) {
         resolveOnce(null);
@@ -76,7 +77,7 @@ const waitForServerReady = async (): Promise<string | null> => {
     }, SERVER_STARTUP_TIMEOUT_MS);
 
     stdout.on("data", onData);
-    server.on("exit", onExit);
+    proc.on("exit", onExit);
   });
 };
 
