@@ -1,6 +1,6 @@
 import { Container } from "automated-gameplay-transmitter";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { AgentStatusRow } from "./sections/AgentStatusSectionCard";
 import { GAME_SECTION_TITLE, GameStatusSection } from "./sections/GameStatusSection";
 import { LIVE_DELIVERY_SECTION_TITLE, LiveDeliveryStatusSection } from "./sections/LiveDeliveryStatusSection";
@@ -71,7 +71,7 @@ export const parseAgentStateResponse = (responseText: string): AgentStateRespons
     }
 };
 
-export const createAgentStateWebSocketUrl = (baseHref: `wss:${string}`) => {
+export const createAgentStateWebSocketUrl = (baseHref: string) => {
     const normalized = baseHref.endsWith("/") ? baseHref.slice(0, -1) : baseHref;
     return `${normalized}/api/ws`;
 };
@@ -491,6 +491,51 @@ export function AgentStatus() {
         // noop: networking is managed elsewhere; this keeps the component usable in tests
         return;
     };
+
+    // WebSocket connection to receive agent state updates in real time.
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        if (isQueryMockEnabled) return;
+
+        const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+        const baseHref = `${scheme}://${window.location.host}/console/`;
+        const url = createAgentStateWebSocketUrl(baseHref);
+
+        let ws: WebSocket | null = null;
+        try {
+            ws = new WebSocket(url);
+        } catch (err) {
+            setState((s) => ({ ...s, agentStatusError: String(err), isLoadingAgentState: false }));
+            return;
+        }
+
+        setState((s) => ({ ...s, isLoadingAgentState: true }));
+
+        ws.addEventListener("message", (ev) => {
+            try {
+                const parsed = parseAgentStateResponse(typeof ev.data === "string" ? ev.data : String(ev.data));
+                setState((s) => ({ ...s, agentStateResponse: parsed, agentStatusError: null, lastUpdatedTime: new Date().toLocaleString("ja-JP"), isLoadingAgentState: false }));
+            } catch (err) {
+                setState((s) => ({ ...s, agentStatusError: String(err), isLoadingAgentState: false }));
+            }
+        });
+
+        ws.addEventListener("error", () => {
+            setState((s) => ({ ...s, agentStatusError: "WebSocket エラー", isLoadingAgentState: false }));
+        });
+
+        ws.addEventListener("close", () => {
+            setState((s) => ({ ...s, isLoadingAgentState: false }));
+        });
+
+        return () => {
+            try {
+                ws?.close();
+            } catch {
+                // ignore
+            }
+        };
+    }, [isQueryMockEnabled]);
 
     const {
         agentStateResponse,
