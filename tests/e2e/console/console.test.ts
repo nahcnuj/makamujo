@@ -184,7 +184,10 @@ test.describe("console", () => {
 
     // The agent status area may render either an empty placeholder or the details.
     // Wait for either to appear so CI runs are more deterministic and provide
-    // clearer diagnostics when the details are not present.
+    // clearer diagnostics when the details are not present. If the empty
+    // placeholder appears first, give the app a short additional grace period
+    // to populate the details (e.g., when a WebSocket message arrives slightly
+    // after initial render) before failing.
     const detailsLocator = page.getByTestId("agent-status-details");
     const emptyLocator = page.getByTestId("agent-status-empty");
     // Wait up to the browser page load timeout for one of the two to appear.
@@ -194,9 +197,14 @@ test.describe("console", () => {
     ]);
 
     if (await emptyLocator.count() > 0) {
-      // Provide a helpful failure with current markup so CI logs are actionable.
-      const html = await page.content();
-      throw new Error(`Agent status empty in test; page snapshot:\n${html}`);
+      // Give the app an extra moment for live updates (WebSocket) to populate
+      // the details before failing the test.
+      try {
+        await detailsLocator.waitFor({ timeout: 5_000 });
+      } catch {
+        const html = await page.content();
+        throw new Error(`Agent status empty in test; page snapshot:\n${html}`);
+      }
     }
 
     await expect(detailsLocator).not.toContainText("話せる状態");
