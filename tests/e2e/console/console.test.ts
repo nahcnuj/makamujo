@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { spawn } from "child_process";
 import { existsSync, writeFileSync } from "fs";
+import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
 
 const CONSOLE_BASE_URL = `https://127.0.0.1`;
 const BROADCASTING_BASE_URL = `http://127.0.0.1:7777`;
@@ -117,7 +118,14 @@ test.describe("console", () => {
   });
 
   test("renders the console app in a browser", async ({ page }) => {
-    await page.goto(`${CONSOLE_BASE_URL}/console/?agentStateMock=1`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    // Intercept the agent-state API and return the deterministic mock fixture
+    // so the E2E test does not depend on runtime query parsing or network timing.
+    await page.route(`${CONSOLE_BASE_URL}/console/api/agent-state`, async (route) => {
+      const body = JSON.stringify(cloneAgentStateResponseMockFixture());
+      await route.fulfill({ status: 200, headers: { "Content-Type": "application/json" }, body });
+    });
+
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
     expect(await page.title()).toContain(EXPECTED_CONSOLE_TITLE);
     const rootElement = await page.$("#root");
     expect(rootElement).not.toBeNull();
