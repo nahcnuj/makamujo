@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { spawn } from "child_process";
-import { existsSync, writeFileSync, unlinkSync } from "fs";
+import { existsSync, writeFileSync, unlinkSync, mkdirSync, createWriteStream } from "fs";
 import { join } from "path";
 
 const PORT = 17779;
@@ -88,6 +88,7 @@ test.describe("Full IPC operation", () => {
 
       // capture browser logs for debugging
       try { mkdirSync('./var/test-logs', { recursive: true }); } catch {}
+      const ts = Date.now();
       const browserOutPath = `./var/test-logs/full-ipc-browser-${ts}.log`;
       const browserErrPath = `./var/test-logs/full-ipc-browser-${ts}.err.log`;
       const browserOutStream = createWriteStream(browserOutPath);

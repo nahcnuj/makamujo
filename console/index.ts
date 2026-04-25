@@ -50,15 +50,6 @@ export function createAccessDeniedRedirectResponse(requestURL: URL): Response {
  * @returns A handle with the outer server's URL and a unified `stop()` method.
  */
 export function startConsoleServer(certPath: string = consoleCertPath, keyPath: string = consoleKeyPath): ConsoleServer {
-  // Fail fast if TLS cert/key files are missing before starting any servers.
-  if (!existsSync(certPath) || !existsSync(keyPath)) {
-    throw new Error(
-      `TLS certificate files not found at the resolved paths. ` +
-      `certPath=${JSON.stringify(certPath)}, keyPath=${JSON.stringify(keyPath)}. ` +
-      `Provide valid certPath/keyPath arguments or set CONSOLE_TLS_CERT and CONSOLE_TLS_KEY env vars to the correct paths.`
-    );
-  }
-
   const accessLogger = createDailyRotatingJsonLogger(consoleAccessLogPath);
   const errorLogger = createDailyRotatingJsonLogger(consoleErrorLogPath);
 
@@ -78,6 +69,27 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
   });
 
   const loopbackConsolePort = loopbackServer.port;
+
+  // If running in loopback-only mode (used by tests), return the loopback
+  // server without attempting to start the outer TLS-enabled server.
+  if (process.env.CONSOLE_LOOPBACK_ONLY === '1') {
+    return {
+      get url() { return loopbackServer.url; },
+      stop(closeActiveConnections?: boolean) {
+        loopbackServer.stop(closeActiveConnections);
+      },
+    };
+  }
+
+  // Fail fast if TLS cert/key files are missing before starting the outer server.
+  if (!existsSync(certPath) || !existsSync(keyPath)) {
+    loopbackServer.stop(true);
+    throw new Error(
+      `TLS certificate files not found at the resolved paths. ` +
+      `certPath=${JSON.stringify(certPath)}, keyPath=${JSON.stringify(keyPath)}. ` +
+      `Provide valid certPath/keyPath arguments or set CONSOLE_TLS_CERT and CONSOLE_TLS_KEY env vars to the correct paths.`
+    );
+  }
 
   // Outer console server: exposed publicly on port 443.
   // Checks the client IP against the shared allowlist before proxying to the loopback server.
