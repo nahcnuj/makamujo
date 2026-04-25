@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { AgentStateResponse } from "../agentStateService";
+import type { AgentStateResponse } from "./useAgentStateWebSocket";
 
 type HookState = {
   agentStateResponse: AgentStateResponse | null;

@@ -7,7 +7,7 @@ import {
   createAgentStatusRows,
   startAgentStateAutoRefresh,
 } from "../../../console/src/AgentStatus";
-import { parseAgentStateResponse } from "../../../console/src/agentStateService";
+import { parseAgentStateResponse } from "../../../console/src/hooks/useAgentStateWebSocket";
 import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
 
 const createMockAgentStateResponse = () => cloneAgentStateResponseMockFixture();
