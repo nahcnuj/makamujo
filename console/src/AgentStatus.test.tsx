@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AgentStatus } from "./AgentStatus";
+import { AgentStatus, createAgentStateWebSocketUrl } from "./AgentStatus";
 import { GameStatusSection } from "./agentStatusSections/GameStatusSection";
 import { LiveDeliveryStatusSection } from "./agentStatusSections/LiveDeliveryStatusSection";
 import { MarkovModelStatusSection } from "./agentStatusSections/MarkovModelStatusSection";
@@ -89,5 +89,14 @@ describe("AgentStatus category sections", () => {
     expect(html).toContain("org.dashnet.orteil/cookieclicker");
     expect(html).toContain("ゲーム情報");
     expect(html).toContain("<ul");
+  });
+});
+
+describe("AgentStatus WebSocket URL", () => {
+  it("builds a wss URL from a wss base URL", () => {
+    expect(createAgentStateWebSocketUrl("wss://localhost/console/"))
+      .toBe("wss://localhost/console/api/ws");
+    expect(createAgentStateWebSocketUrl("wss://127.0.0.1/console/"))
+      .toBe("wss://127.0.0.1/console/api/ws");
   });
 });

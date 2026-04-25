@@ -17,6 +17,21 @@ export type ConsoleServer = {
   stop(closeActiveConnections?: boolean): void;
 };
 
+export type AgentStateProvider = () => unknown;
+
+export function startConsoleServer(certPath?: string, keyPath?: string): ConsoleServer;
+export function startConsoleServer(getAgentState: AgentStateProvider, certPath?: string, keyPath?: string): ConsoleServer;
+export function startConsoleServer(
+  arg1?: string | AgentStateProvider,
+  arg2?: string,
+  arg3?: string,
+): ConsoleServer {
+  if (typeof arg1 === "function") {
+    return startConsoleServerImpl(arg1, arg2 ?? consoleCertPath, arg3 ?? consoleKeyPath);
+  }
+  return startConsoleServerImpl(() => ({}), arg1 ?? consoleCertPath, arg2 ?? consoleKeyPath);
+}
+
 /**
  * Build the redirect response used when an access to the outer console server is denied.
  *
@@ -37,7 +52,7 @@ export function createAccessDeniedRedirectResponse(requestURL: URL): Response {
 }
 
 /**
- * Start the console server.
+ * Start the console server implementation.
  *
  * Internally uses two servers:
  * - A loopback server that serves all console routes (including HTML bundling) on 127.0.0.1.
@@ -45,11 +60,15 @@ export function createAccessDeniedRedirectResponse(requestURL: URL): Response {
  *
  * The returned handle exposes only the outer server's URL and a unified `stop()` method.
  *
- * @param certPath - Path to the TLS certificate file. Defaults to the `CONSOLE_TLS_CERT` env var.
- * @param keyPath  - Path to the TLS private key file. Defaults to the `CONSOLE_TLS_KEY` env var.
- * @returns A handle with the outer server's URL and a unified `stop()` method.
+ * @param getAgentState - Provider that returns the current agent state payload for WebSocket broadcasts.
+ * @param certPath - Path to the TLS certificate file.
+ * @param keyPath - Path to the TLS private key file.
  */
-export function startConsoleServer(certPath: string = consoleCertPath, keyPath: string = consoleKeyPath): ConsoleServer {
+function startConsoleServerImpl(
+  getAgentState: AgentStateProvider,
+  certPath: string,
+  keyPath: string,
+): ConsoleServer {
   // Fail fast if TLS cert/key files are missing before starting any servers.
   if (!existsSync(certPath) || !existsSync(keyPath)) {
     throw new Error(
@@ -61,6 +80,26 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
 
   const accessLogger = createDailyRotatingJsonLogger(consoleAccessLogPath);
   const errorLogger = createDailyRotatingJsonLogger(consoleErrorLogPath);
+  const consoleWebSocketPath = `${consoleBasePath}api/ws`;
+  const webSocketClients = new Set<WebSocket>();
+  let lastWebSocketAgentStatePayload = "";
+  const agentStateBroadcastInterval = setInterval(() => {
+    if (webSocketClients.size === 0) {
+      return;
+    }
+    const serializedState = JSON.stringify(getAgentState());
+    if (serializedState === lastWebSocketAgentStatePayload) {
+      return;
+    }
+    lastWebSocketAgentStatePayload = serializedState;
+    for (const client of webSocketClients) {
+      try {
+        client.send(serializedState);
+      } catch {
+        webSocketClients.delete(client);
+      }
+    }
+  }, 1_000);
 
   // Loopback console server: binds to 127.0.0.1 only and serves all console routes
   // (including HTML bundling). Not exposed to the public network.
@@ -134,6 +173,38 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
           proxyHeaders.delete('origin');
           proxyHeaders.delete('referer');
 
+          if (requestURL.pathname === consoleWebSocketPath && req.headers.get('upgrade')?.toLowerCase() === 'websocket') {
+            statusCode = 101;
+            const WebSocketPairConstructor = (globalThis as unknown as { WebSocketPair?: new () => unknown }).WebSocketPair;
+            if (WebSocketPairConstructor === undefined) {
+              throw new Error("WebSocketPair is not available in this runtime");
+            }
+            const webSocketPair = new WebSocketPairConstructor() as { [index: number]: any };
+            const serverSocket = webSocketPair[1];
+            if (!serverSocket) {
+              throw new Error("WebSocketPair did not provide a server socket");
+            }
+            serverSocket.accept();
+            serverSocket.addEventListener('open', () => {
+              webSocketClients.add(serverSocket);
+              try {
+                serverSocket.send(JSON.stringify(getAgentState()));
+              } catch {
+                // intentionally ignored
+              }
+            });
+            serverSocket.addEventListener('message', () => {
+              // no-op for client subscriptions
+            });
+            serverSocket.addEventListener('close', () => {
+              webSocketClients.delete(serverSocket);
+            });
+            serverSocket.addEventListener('error', () => {
+              webSocketClients.delete(serverSocket);
+            });
+            return new Response(null, { status: 101, webSocket: webSocketPair[0] } as any);
+          }
+
           const response = await fetch(proxyURL.toString(), {
             method: req.method,
             headers: proxyHeaders,
@@ -181,6 +252,10 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
   return {
     get url() { return outerServer.url; },
     stop(closeActiveConnections?: boolean) {
+      clearInterval(agentStateBroadcastInterval);
+      for (const client of webSocketClients) {
+        client.close();
+      }
       loopbackServer.stop(closeActiveConnections);
       outerServer.stop(closeActiveConnections);
     },

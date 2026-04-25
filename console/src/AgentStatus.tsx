@@ -1,6 +1,6 @@
 import { Container } from "automated-gameplay-transmitter";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cloneAgentStateResponseMockFixture } from "../../tests/fixtures/agentStateResponseMock";
 import type { AgentStatusRow } from "./agentStatusSections/AgentStatusSectionCard";
 import { GAME_SECTION_TITLE, GameStatusSection } from "./agentStatusSections/GameStatusSection";
@@ -56,6 +56,13 @@ export const AGENT_STATE_MOCK_NOTICE_MESSAGE = "配信エージェント状態�
 const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
 const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正です。";
 const SPEECH_UNAVAILABLE_INDICATOR = "・・・";
+export const AGENT_STATE_WEB_SOCKET_PATH = "/console/api/ws";
+export const AGENT_STATE_WEB_SOCKET_RECONNECT_DELAY_MS = 2_000;
+
+export const createAgentStateWebSocketUrl = (baseHref: `wss:${string}`): string => {
+  return new URL(AGENT_STATE_WEB_SOCKET_PATH, baseHref).toString();
+};
+
 // Distinguishes unix seconds from unix milliseconds by treating 13-digit values as milliseconds.
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 const LIVE_DELIVERY_ROW_LABELS = ["配信指標", "タイトル", "配信URL", "開始時刻", "発話内容"] as const;
@@ -418,63 +425,23 @@ export const createAgentStatusSections = (stateResponse: AgentStateResponse | nu
   return sections.filter((section) => section.rows.length > 0);
 };
 
-export function AgentStatus() {
-  const [agentStateResponse, setAgentStateResponse] = useState<AgentStateResponse | null>(null);
-  const [agentStatusError, setAgentStatusError] = useState<string | null>(null);
-  const [lastUpdatedTime, setLastUpdatedTime] = useState("");
-  const [isLoadingAgentState, setIsLoadingAgentState] = useState(false);
-  const [isShowingMockAgentState, setIsShowingMockAgentState] = useState(false);
+export type AgentStatusViewProps = {
+  agentStateResponse: AgentStateResponse | null;
+  agentStatusError: string | null;
+  lastUpdatedTime: string;
+  isLoadingAgentState: boolean;
+  isShowingMockAgentState: boolean;
+  fetchAgentState: () => Promise<void>;
+};
 
-  const fetchAgentState = useCallback(async () => {
-    setIsLoadingAgentState(true);
-    try {
-      if (shouldUseMockAgentState()) {
-        setAgentStateResponse(createMockAgentStateResponse());
-        setAgentStatusError(null);
-        setIsShowingMockAgentState(true);
-        setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
-        return;
-      }
-
-      const response = await fetch("/console/api/agent-state");
-      const responseText = await response.text();
-      if (!response.ok) {
-        let errorMessageFromResponse: string | null = null;
-        try {
-          const responseData = parseAgentStateResponse(responseText);
-          errorMessageFromResponse = responseData.error ?? null;
-        } catch {
-          errorMessageFromResponse = null;
-        }
-        throw new Error(errorMessageFromResponse ?? `配信状態の取得に失敗しました (${response.status})`);
-      }
-
-      const responseData = parseAgentStateResponse(responseText);
-      setAgentStateResponse(responseData);
-      setAgentStatusError(null);
-      setIsShowingMockAgentState(false);
-      setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
-    } catch (error) {
-      const errorMessage =
-        error instanceof SyntaxError
-          ? INVALID_AGENT_STATE_RESPONSE_ERROR
-          : error instanceof Error
-            ? error.message
-            : String(error);
-      setAgentStatusError(errorMessage);
-      setAgentStateResponse(null);
-      setIsShowingMockAgentState(false);
-      setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
-    } finally {
-      setIsLoadingAgentState(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchAgentState();
-    return startAgentStateAutoRefresh(fetchAgentState);
-  }, [fetchAgentState]);
-
+export function AgentStatusView({
+  agentStateResponse,
+  agentStatusError,
+  lastUpdatedTime,
+  isLoadingAgentState,
+  isShowingMockAgentState,
+  fetchAgentState,
+}: AgentStatusViewProps) {
   const agentStatusSections = createAgentStatusSections(agentStateResponse);
   const sectionMap = agentStatusSections.reduce<Partial<Record<AgentStatusSection["title"], AgentStatusSection>>>(
     (accumulatedSections, section) => {
@@ -558,3 +525,162 @@ export function AgentStatus() {
     </div>
   );
 }
+
+export function AgentStatusWebSocket() {
+  const [agentStateResponse, setAgentStateResponse] = useState<AgentStateResponse | null>(null);
+  const [agentStatusError, setAgentStatusError] = useState<string | null>(null);
+  const [lastUpdatedTime, setLastUpdatedTime] = useState("");
+  const [isLoadingAgentState, setIsLoadingAgentState] = useState(false);
+  const [isShowingMockAgentState, setIsShowingMockAgentState] = useState(false);
+  const websocketRef = useRef<WebSocket | null>(null);
+  const websocketReconnectTimeoutIdRef = useRef<number | undefined>(undefined);
+  const websocketActiveRef = useRef(true);
+  const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
+
+  const cleanupAgentStateWebSocket = useCallback(() => {
+    websocketActiveRef.current = false;
+    if (websocketReconnectTimeoutIdRef.current !== undefined) {
+      window.clearTimeout(websocketReconnectTimeoutIdRef.current);
+      websocketReconnectTimeoutIdRef.current = undefined;
+    }
+    if (websocketRef.current !== null) {
+      websocketRef.current.close();
+      websocketRef.current = null;
+    }
+  }, []);
+
+  const connectAgentStateWebSocket = useCallback(() => {
+    if (typeof window === "undefined" || !websocketActiveRef.current || websocketRef.current !== null) {
+      return;
+    }
+
+    const socket = new WebSocket(createAgentStateWebSocketUrl(`wss://${window.location.host}`));
+    websocketRef.current = socket;
+
+    const scheduleReconnect = () => {
+      if (!websocketActiveRef.current) {
+        return;
+      }
+      if (websocketReconnectTimeoutIdRef.current !== undefined) {
+        window.clearTimeout(websocketReconnectTimeoutIdRef.current);
+      }
+      websocketReconnectTimeoutIdRef.current = window.setTimeout(() => {
+        websocketReconnectTimeoutIdRef.current = undefined;
+        connectAgentStateWebSocket();
+      }, AGENT_STATE_WEB_SOCKET_RECONNECT_DELAY_MS);
+    };
+
+    socket.addEventListener("open", () => {
+      setIsWebSocketConnected(true);
+      setAgentStatusError(null);
+    });
+
+    socket.addEventListener("message", (event) => {
+      const payload = typeof event.data === "string" ? event.data : String(event.data);
+      try {
+        const responseData = parseAgentStateResponse(payload);
+        setAgentStateResponse(responseData);
+        setAgentStatusError(null);
+        setIsShowingMockAgentState(false);
+        setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
+      } catch (error) {
+        const errorMessage =
+          error instanceof SyntaxError
+            ? INVALID_AGENT_STATE_RESPONSE_ERROR
+            : error instanceof Error
+              ? error.message
+              : String(error);
+        setAgentStatusError(errorMessage);
+        setAgentStateResponse(null);
+        setIsShowingMockAgentState(false);
+        setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
+      }
+    });
+
+    const handleSocketClosed = () => {
+      setIsWebSocketConnected(false);
+      websocketRef.current = null;
+      scheduleReconnect();
+    };
+
+    socket.addEventListener("close", handleSocketClosed);
+    socket.addEventListener("error", handleSocketClosed);
+  }, []);
+
+  const fetchAgentState = useCallback(async () => {
+    setIsLoadingAgentState(true);
+    try {
+      if (shouldUseMockAgentState()) {
+        setAgentStateResponse(createMockAgentStateResponse());
+        setAgentStatusError(null);
+        setIsShowingMockAgentState(true);
+        setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
+        return;
+      }
+
+      const response = await fetch("/console/api/agent-state");
+      const responseText = await response.text();
+      if (!response.ok) {
+        let errorMessageFromResponse: string | null = null;
+        try {
+          const responseData = parseAgentStateResponse(responseText);
+          errorMessageFromResponse = responseData.error ?? null;
+        } catch {
+          errorMessageFromResponse = null;
+        }
+        throw new Error(errorMessageFromResponse ?? `配信状態の取得に失敗しました (${response.status})`);
+      }
+
+      const responseData = parseAgentStateResponse(responseText);
+      setAgentStateResponse(responseData);
+      setAgentStatusError(null);
+      setIsShowingMockAgentState(false);
+      setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
+    } catch (error) {
+      const errorMessage =
+        error instanceof SyntaxError
+          ? INVALID_AGENT_STATE_RESPONSE_ERROR
+          : error instanceof Error
+            ? error.message
+            : String(error);
+      setAgentStatusError(errorMessage);
+      setAgentStateResponse(null);
+      setIsShowingMockAgentState(false);
+      setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
+    } finally {
+      setIsLoadingAgentState(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchAgentState();
+  }, [fetchAgentState]);
+
+  useEffect(() => {
+    if (shouldUseMockAgentState()) {
+      return;
+    }
+    connectAgentStateWebSocket();
+    return cleanupAgentStateWebSocket;
+  }, [cleanupAgentStateWebSocket, connectAgentStateWebSocket]);
+
+  useEffect(() => {
+    if (shouldUseMockAgentState() || isWebSocketConnected) {
+      return;
+    }
+    return startAgentStateAutoRefresh(fetchAgentState);
+  }, [fetchAgentState, isWebSocketConnected]);
+
+  return (
+    <AgentStatusView
+      agentStateResponse={agentStateResponse}
+      agentStatusError={agentStatusError}
+      lastUpdatedTime={lastUpdatedTime}
+      isLoadingAgentState={isLoadingAgentState}
+      isShowingMockAgentState={isShowingMockAgentState}
+      fetchAgentState={fetchAgentState}
+    />
+  );
+}
+
+export const AgentStatus = AgentStatusWebSocket;
