@@ -122,6 +122,15 @@ test.describe("Full IPC operation", () => {
         },
       );
 
+      // capture browser logs for debugging
+      try { mkdirSync('./var/test-logs', { recursive: true }); } catch {}
+      const browserOutPath = `./var/test-logs/full-ipc-browser-${ts}.log`;
+      const browserErrPath = `./var/test-logs/full-ipc-browser-${ts}.err.log`;
+      const browserOutStream = createWriteStream(browserOutPath);
+      const browserErrStream = createWriteStream(browserErrPath);
+      browserProcess.stdout?.pipe(browserOutStream);
+      browserProcess.stderr?.pipe(browserErrStream);
+
       // 3. Monitor server stdout for the first 'noop' action.
       //    The solver emits `[DEBUG] next action {"name":"noop"}` when it
       //    transitions from the 'initialize' game-state to the 'idle' game-state.

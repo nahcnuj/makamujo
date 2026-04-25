@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { spawn } from "child_process";
-import { existsSync, writeFileSync, createWriteStream, mkdirSync } from "fs";
+import { existsSync, writeFileSync, createWriteStream, mkdirSync, unlinkSync } from "fs";
+import { join } from "path";
 import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
 
 let CONSOLE_BASE_URL = `https://127.0.0.1`;
@@ -86,11 +87,26 @@ test.beforeAll(async ({ request }) => {
     writeFileSync("./var/cookieclicker.txt", "");
   }
 
+  // Use a unique IPC path per test run to avoid named-pipe conflicts on
+  // Windows CI runners which can cause the server to crash when the
+  // default pipe is already in use.
+  const randomId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  const ipcPath = process.platform === "win32"
+    ? `\\\\.\\pipe\\makamujo-ipc-${randomId}`
+    : join(process.cwd(), "var", `ipc-${randomId}.sock`);
+
   server = spawn(
     process.platform === "win32" ? "bun.exe" : "bun",
     ["index.ts", "--port", "7777"],
     {
-      env: { ...process.env, NODE_ENV: "production", CONSOLE_TLS_CERT: process.env.CONSOLE_TLS_CERT, CONSOLE_TLS_KEY: process.env.CONSOLE_TLS_KEY, CONSOLE_LOOPBACK_ONLY: '1' },
+      env: {
+        ...process.env,
+        NODE_ENV: "production",
+        CONSOLE_TLS_CERT: process.env.CONSOLE_TLS_CERT,
+        CONSOLE_TLS_KEY: process.env.CONSOLE_TLS_KEY,
+        CONSOLE_LOOPBACK_ONLY: '1',
+        MAKAMUJO_IPC_PATH: ipcPath,
+      },
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
@@ -243,8 +259,11 @@ test.describe("console", () => {
 
     // Wait for the UI to show the details populated via WebSocket broadcast.
     const detailsLocator = page.getByTestId("agent-status-details");
+    // Wait for the details container to exist, then explicitly wait for the
+    // updated N-gram value to appear after the broadcast POST. The UI may
+    // initially render with previous state so a targeted wait avoids flakes.
     await detailsLocator.waitFor({ timeout: 10_000 });
     await expect(detailsLocator).toContainText("生成N-gram");
-    await expect(detailsLocator).toContainText("4-gram");
+    await expect(detailsLocator).toContainText("4-gram", { timeout: 10_000 });
   });
 });

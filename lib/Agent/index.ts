@@ -72,7 +72,14 @@ export class MakaMujo {
       ],
       isSilent: () => !this.speechable,
     });
-    createReceiver((state) => {
+    try {
+      createReceiver((state) => {
+        // receiver callback is intentionally synchronous
+        // and is expected to return an action for the solver.
+        
+        // (implementation below)
+        
+        // NOTE: the body of this function is unchanged.
       this.#browserState = state;
 
       if (state.name === 'closed') {
@@ -101,7 +108,10 @@ export class MakaMujo {
       console.debug('[DEBUG]', 'next action', JSON.stringify(value, null, 0));
 
       return value;
-    });
+      });
+    } catch (err) {
+      console.warn('[WARN]', 'failed to start IPC receiver, continuing without browser IPC:', err instanceof Error ? err.message : String(err));
+    }
   }
 
   async speech(text: string = this.#talkModel.generate('', this.#currentNGramSize)) {

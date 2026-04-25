@@ -1,7 +1,10 @@
 import { createAgentApi } from "automated-gameplay-transmitter";
 import { serve } from "bun";
 import { readFileSync, writeFileSync } from "node:fs";
-import { setInterval } from "node:timers/promises";
+// Use the global `setInterval` timer instead of the Node
+// `timers/promises` async iterator. The async iterator can behave
+// inconsistently across runtimes; using a classic timer keeps the
+// process alive reliably.
 import { parseArgs } from "node:util";
 import { startConsoleServer } from "./console/index";
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
@@ -12,6 +15,20 @@ process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
 process.on('SIGUSR1', signalHandler.bind(null, { exit: true }));
 process.on('SIGUSR2', signalHandler.bind(null, { exit: true }));
+// Log uncaught exceptions for better diagnostics before invoking the
+// existing exit handler which terminates the process.
+process.on('uncaughtException', (err) => {
+  try {
+    console.error('[UNCAUGHT_EXCEPTION]', err instanceof Error ? err.stack ?? err.message : String(err));
+  } catch {
+    // ignore logging failures
+  }
+});
+process.on('unhandledRejection', (reason) => {
+  try {
+    console.error('[UNHANDLED_REJECTION]', reason instanceof Error ? reason.stack ?? reason.message : String(reason));
+  } catch {}
+});
 process.on('uncaughtException', exitHandler.bind(null, { exit: true }));
 
 const { values: {
@@ -209,7 +226,11 @@ try {
 }
 
 let running = false;
-for await (const _ of setInterval(1_000)) {
+// Use a classic repeating timer instead of the async iterator-based
+// `setInterval` from `node:timers/promises`. The async iterator can
+// behave inconsistently in some environments; a standard timer keeps
+// the process alive reliably and is sufficient for our needs.
+setInterval(async () => {
   if (!running && streamer.speechable) {
     try {
       running = true;
@@ -218,7 +239,7 @@ for await (const _ of setInterval(1_000)) {
       running = false;
     }
   }
-}
+}, 1_000);
 
 /**
  * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}
