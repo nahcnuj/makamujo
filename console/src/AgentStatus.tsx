@@ -2,6 +2,9 @@ import { Container } from "automated-gameplay-transmitter";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentStateResponse } from "./agentStateService";
+import { fetchAgentStateFromApi } from "./agentStateService";
+import { useAgentState } from "./hooks/useAgentState";
+import { useAgentStateWebSocket } from "./hooks/useAgentStateWebSocket";
 import type { AgentStatusRow } from "./agentStatusSections/AgentStatusSectionCard";
 import { GAME_SECTION_TITLE, GameStatusSection } from "./agentStatusSections/GameStatusSection";
 import { LIVE_DELIVERY_SECTION_TITLE, LiveDeliveryStatusSection } from "./agentStatusSections/LiveDeliveryStatusSection";
@@ -463,6 +466,86 @@ export function AgentStatusView({
         </div>
       )}
     </div>
+  );
+}
+
+// Container: lifecycle and networking live here so the view stays presentational.
+export function AgentStatus() {
+  const { state, setState } = useAgentState();
+  const {
+    agentStateResponse,
+    agentStatusError,
+    lastUpdatedTime,
+    isLoadingAgentState,
+    isShowingMockAgentState,
+  } = state;
+
+  const fetchAgentState = useCallback(async () => {
+    setState({ isLoadingAgentState: true });
+    try {
+      const responseData = await fetchAgentStateFromApi(fetch);
+      setState((prev) => ({
+        ...prev,
+        agentStateResponse: responseData,
+        agentStatusError: null,
+        isShowingMockAgentState: false,
+        lastUpdatedTime: new Date().toLocaleTimeString("ja-JP"),
+      }));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setState((prev) => ({
+        ...prev,
+        agentStatusError: errorMessage,
+        agentStateResponse: null,
+        isShowingMockAgentState: false,
+        lastUpdatedTime: new Date().toLocaleTimeString("ja-JP"),
+      }));
+    } finally {
+      setState({ isLoadingAgentState: false });
+    }
+  }, [setState]);
+
+  const { isWebSocketConnected } = useAgentStateWebSocket({
+    onMessage: (response) => {
+      setState((prev) => ({
+        ...prev,
+        agentStateResponse: response,
+        agentStatusError: null,
+        isShowingMockAgentState: false,
+        lastUpdatedTime: new Date().toLocaleTimeString("ja-JP"),
+      }));
+    },
+    onError: (errorMessage) => {
+      setState((prev) => ({
+        ...prev,
+        agentStatusError: errorMessage,
+        agentStateResponse: null,
+        isShowingMockAgentState: false,
+        lastUpdatedTime: new Date().toLocaleTimeString("ja-JP"),
+      }));
+    },
+  });
+
+  useEffect(() => {
+    void fetchAgentState();
+  }, [fetchAgentState]);
+
+  useEffect(() => {
+    if (isWebSocketConnected) {
+      return;
+    }
+    return startAgentStateAutoRefresh(fetchAgentState);
+  }, [fetchAgentState, isWebSocketConnected]);
+
+  return (
+    <AgentStatusView
+      agentStateResponse={agentStateResponse}
+      agentStatusError={agentStatusError}
+      lastUpdatedTime={lastUpdatedTime}
+      isLoadingAgentState={isLoadingAgentState}
+      isShowingMockAgentState={isShowingMockAgentState}
+      onRefresh={fetchAgentState}
+    />
   );
 }
 
