@@ -120,7 +120,7 @@ test.describe("console", () => {
   test("renders the console app in a browser", async ({ page }) => {
     // Intercept the agent-state API and return the deterministic mock fixture
     // so the E2E test does not depend on runtime query parsing or network timing.
-    await page.route(`${CONSOLE_BASE_URL}/console/api/agent-state`, async (route) => {
+    await page.route("**/console/api/agent-state", async (route) => {
       const body = JSON.stringify(cloneAgentStateResponseMockFixture());
       await route.fulfill({ status: 200, headers: { "Content-Type": "application/json" }, body });
     });
