@@ -187,8 +187,21 @@ const server = serve({
 console.log(`🚀 Server running at ${server.url}`);
 
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
+const getConsoleAgentState = (): unknown => {
+  const streamState = agent.getStreamState();
+  return {
+    niconama: streamState ?? {},
+    canSpeak: streamer.canSpeak,
+    currentGame: streamer.currentGame ?? null,
+    nGram: streamer.currentNGramSize,
+    nGramRaw: streamer.currentNGramSizeRaw,
+    speech: agent.getSpeech(),
+    speechHistory: generatedSpeechHistory,
+  };
+};
+
 try {
-  consoleServer = startConsoleServer();
+  consoleServer = startConsoleServer(getConsoleAgentState);
   console.log(`🚀 Console running at ${consoleServer.url}`);
 } catch (err) {
   const consoleStartupError = err instanceof Error ? (err.stack ?? err.message) : String(err);
