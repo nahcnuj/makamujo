@@ -10,6 +10,8 @@ const BROWSER_PAGE_LOAD_TIMEOUT_MS = 20_000;
 const EXPECTED_CONSOLE_TITLE = "馬可無序 - 管理コンソール";
 
 let server: ReturnType<typeof spawn> | null = null;
+let outStream: import('fs').WriteStream | null = null;
+let errStream: import('fs').WriteStream | null = null;
 
 const waitForServerReady = async (): Promise<string | null> => {
   return new Promise<string | null>((resolve, reject) => {
@@ -23,12 +25,14 @@ const waitForServerReady = async (): Promise<string | null> => {
       return;
     }
 
+    const stdout = server.stdout!;
+
     let settled = false;
     let buffer = "";
 
     const cleanup = () => {
       clearTimeout(timeout);
-      server?.stdout?.off("data", onData);
+      stdout.off("data", onData);
       server?.off("exit", onExit);
     };
 
@@ -71,7 +75,7 @@ const waitForServerReady = async (): Promise<string | null> => {
       rejectOnce(new Error("Server startup timed out"));
     }, SERVER_STARTUP_TIMEOUT_MS);
 
-    server.stdout.on("data", onData);
+    stdout.on("data", onData);
     server.on("exit", onExit);
   });
 };
@@ -97,8 +101,8 @@ test.beforeAll(async ({ request }) => {
   const ts = Date.now();
   const outPath = `./var/test-logs/console-server-${ts}.log`;
   const errPath = `./var/test-logs/console-server-${ts}.err.log`;
-  const outStream = createWriteStream(outPath);
-  const errStream = createWriteStream(errPath);
+  outStream = createWriteStream(outPath);
+  errStream = createWriteStream(errPath);
   server.stdout?.pipe(outStream);
   server.stderr?.pipe(errStream);
 
@@ -143,8 +147,8 @@ test.afterAll(() => {
     server.kill();
   }
   server = null;
-  try { outStream.end(); } catch {}
-  try { errStream.end(); } catch {}
+  try { outStream?.end(); } catch {}
+  try { errStream?.end(); } catch {}
 });
 
 test.describe("console", () => {
