@@ -8,13 +8,10 @@
 - `- [ ] [SHOULD] タイトル — 完了済みの表示`
 
 ## 現在のチェックリスト
+以下のタスクはリポジトリ内での作業チェックリストです。完了済みはチェック済みになっています。
 
-- [x] Create `agentStateService.ts` (constants + URL helper)
-- [x] Create `hooks/useAgentState.ts` (fetch + state; WS-backed)
-- [x] Create `hooks/useAgentStateWebSocket.ts` (websocket logic) — merged into `useAgentState.ts`
-- [x] Refactor `AgentStatusContainer.tsx` to use hooks/service
-- [x] Update tests to import helpers from `hooks/useAgentState.ts`
-- [x] Run typecheck and tests
-- [x] Remove production mock helpers and move mocks to fixtures
-- [ ] Refactor `useAgentState` API to return `{ state, setState }` or use `useReducer`
+
+<!-- 対応すべきタスクは以上です。 -->
+
+## 注意
 このファイルを編集したら、対応する全てのタスクを `manage_todo_list` ツールに送ってください。

@@ -1,17 +1,14 @@
 import { expect, test } from "@playwright/test";
 import { spawn } from "child_process";
-import { existsSync, writeFileSync, unlinkSync, createWriteStream, mkdirSync } from "fs";
+import { existsSync, writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
 import { createReceiverWithPath, createSenderWithPath } from "../../lib/Browser/socket";
-import net from "net";
 
 const PORT = 17777;
 const BASE_URL = `http://localhost:${PORT}`;
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 
 let server: ReturnType<typeof spawn> | null = null;
-let outStream: import('fs').WriteStream | null = null;
-let errStream: import('fs').WriteStream | null = null;
 
 const waitForServerReady = async () => {
   return new Promise<void>((resolve, reject) => {
@@ -54,53 +51,18 @@ test.beforeAll(async () => {
   if (!existsSync("./var/cookieclicker.txt")) {
     writeFileSync("./var/cookieclicker.txt", "");
   }
-
   // Use a unique IPC path per server run to avoid conflicts on Windows.
   const randomId = Date.now().toString(36) + Math.random().toString(36).slice(2);
   const ipcPath = process.platform === "win32"
     ? `\\\\.\\pipe\\makamujo-ipc-${randomId}`
     : join(process.cwd(), "var", `ipc-${randomId}.sock`);
 
-  server = spawn(process.platform === "win32" ? "bun.exe" : "bun", ["index.ts", "--port", String(PORT)], {
+  server = spawn(process.platform === "win32" ? "bun.exe" : "bun", ["start", "--port", String(PORT)], {
     env: { ...process.env, NODE_ENV: "production", CONSOLE_LOOPBACK_ONLY: '1', MAKAMUJO_IPC_PATH: ipcPath },
     stdio: ["ignore", "pipe", "pipe"],
   });
 
-  // capture server logs for debugging
-  try { mkdirSync('./var/test-logs', { recursive: true }); } catch {}
-  const ts = Date.now();
-  const outPath = `./var/test-logs/server-${ts}.log`;
-  const errPath = `./var/test-logs/server-${ts}.err.log`;
-  outStream = createWriteStream(outPath);
-  errStream = createWriteStream(errPath);
-  server.stdout?.pipe(outStream);
-  server.stderr?.pipe(errStream);
-
   await waitForServerReady();
-
-  // additionally poll TCP port to ensure the server is accepting connections
-  const start = Date.now();
-  const deadline = start + SERVER_STARTUP_TIMEOUT_MS;
-  let lastErr: Error | null = null;
-  while (Date.now() < deadline) {
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const s = net.connect({ port: PORT, host: '127.0.0.1' }, () => {
-          s.end();
-          resolve();
-        });
-        s.on('error', (err) => {
-          reject(err);
-        });
-      });
-      lastErr = null;
-      break;
-    } catch (err) {
-      lastErr = err as Error;
-      await new Promise((r) => setTimeout(r, 200));
-    }
-  }
-  if (lastErr) throw new Error(`Server TCP port ${PORT} not accepting connections: ${String(lastErr)}`);
 });
 
 test.afterAll(() => {
@@ -108,8 +70,6 @@ test.afterAll(() => {
     server.kill();
   }
   server = null;
-  try { outStream?.end(); } catch {}
-  try { errStream?.end(); } catch {}
 });
 
 test.describe("server", () => {

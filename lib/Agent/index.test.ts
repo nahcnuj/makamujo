@@ -123,7 +123,7 @@ describe('speechable', () => {
     expect(agent.speechable).toBeTrue();
   });
 
-  it('should be true when a comment was received long ago but listener count just changed', () => {
+  it('should remain silent when a comment was received long ago and listener count just changed', () => {
     jest.spyOn(Date, 'now').mockReturnValue(0);
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.listen([viewerComment]);
@@ -132,7 +132,7 @@ describe('speechable', () => {
     // listener count just changed — resets listenersStaleSince
     agent.onAir(niconamaLive(10));
 
-    expect(agent.speechable).toBeTrue();
+    expect(agent.speechable).toBeFalse();
   });
 
   it('should be false when both listener count and last comment are stale', () => {
@@ -160,18 +160,21 @@ describe('speechable', () => {
     expect(agent.speechable).toBeTrue();
   });
 
-  it('should be true again after listener count changes following silence', () => {
+  it('prompts once on viewer increase during silence but remains silent', () => {
     jest.spyOn(Date, 'now').mockReturnValue(0);
-    const agent = new MakaMujo(stubTalkModel, stubTts);
+    const called = jest.fn(async () => {});
+    const spyTts: TTS = { speech: called };
+    const agent = new MakaMujo(stubTalkModel, spyTts);
     agent.onAir(niconamaLive(10));
     agent.listen([viewerComment]);
 
     jest.spyOn(Date, 'now').mockReturnValue(SILENCE_THRESHOLD_MS);
     expect(agent.speechable).toBeFalse();
 
-    // viewer count changes
+    // viewer count changes — should prompt once but remain speechable=false
     agent.onAir(niconamaLive(11));
-    expect(agent.speechable).toBeTrue();
+    expect(agent.speechable).toBeFalse();
+    expect(called).toHaveBeenCalledTimes(1);
   });
 
   it('should be true again after stream goes offline following silence', () => {

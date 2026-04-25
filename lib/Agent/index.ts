@@ -56,6 +56,7 @@ export class MakaMujo {
   #currentProgramCommentCount = 0;
   #currentNGramSize = inferNGramSize(INITIAL_COMMENT_NUMBER);
   #currentNGramSizeRaw = inferNGramSizeRaw(INITIAL_COMMENT_NUMBER);
+  #hasPromptedCommentForViewerIncrease = false;
 
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
@@ -146,6 +147,8 @@ export class MakaMujo {
 
       // Update last comment timestamp for any received comment that counts as activity.
       this.#lastCommentAt = new Date(Date.now());
+      // Reset viewer-prompted flag when a real comment arrives
+      this.#hasPromptedCommentForViewerIncrease = false;
 
       if (typeof data.no === 'number' && data.no > 0) {
         const commentNumber = data.no;
@@ -254,11 +257,26 @@ export class MakaMujo {
           if (this.#currentProgramUrl !== url) {
             this.#currentProgramUrl = url;
             this.#currentProgramCommentCount = 0;
+            this.#hasPromptedCommentForViewerIncrease = false;
           }
 
           if (this.#lastListenerCount !== listeners) {
             this.#lastListenerCount = listeners;
             this.#listenersStaleSince = new Date(Date.now());
+            const now = Date.now();
+            const commentsStale = this.#lastCommentAt === undefined || (now - this.#lastCommentAt.getTime()) >= SILENCE_THRESHOLD_MS;
+            const hadCommentBefore = this.#lastCommentAt !== undefined;
+            // Only prompt viewers when the agent previously had comments but has
+            // become silent due to no recent comments. Do not treat "never had
+            // comments" as the silent state for prompting.
+            if (hadCommentBefore && commentsStale) {
+              if (!this.#hasPromptedCommentForViewerIncrease) {
+                this.#hasPromptedCommentForViewerIncrease = true;
+                // Call TTS directly so the prompt is emitted immediately
+                // (don't affect the main speech queue used by `speech()`).
+                void this.#tts.speech('コメントしていってね〜');
+              }
+            }
           }
         } else {
           this.#lastListenerCount = undefined;
@@ -295,6 +313,11 @@ export class MakaMujo {
         (now - this.#listenersStaleSince.getTime()) >= SILENCE_THRESHOLD_MS;
       const commentsStale = this.#lastCommentAt === undefined ||
         (now - this.#lastCommentAt.getTime()) >= SILENCE_THRESHOLD_MS;
+      // If we've already prompted viewers to comment after a viewer increase,
+      // remain silent until an actual comment arrives.
+      if (commentsStale && this.#hasPromptedCommentForViewerIncrease) {
+        return false;
+      }
       if (listenersStale && commentsStale) {
         return false;
       }
