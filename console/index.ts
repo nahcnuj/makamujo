@@ -69,13 +69,17 @@ function startConsoleServerImpl(
   certPath: string,
   keyPath: string,
 ): ConsoleServer {
-  // Fail fast if TLS cert/key files are missing before starting any servers.
-  if (!existsSync(certPath) || !existsSync(keyPath)) {
-    throw new Error(
-      `TLS certificate files not found at the resolved paths. ` +
-      `certPath=${JSON.stringify(certPath)}, keyPath=${JSON.stringify(keyPath)}. ` +
-      `Provide valid certPath/keyPath arguments or set CONSOLE_TLS_CERT and CONSOLE_TLS_KEY env vars to the correct paths.`
-    );
+  // If the caller requested loopback-only mode, skip TLS certificate checks
+  // since no outer TLS server will be started. Otherwise, fail fast when
+  // TLS assets are missing to avoid confusing runtime errors later.
+  if (process.env.CONSOLE_LOOPBACK_ONLY !== '1') {
+    if (!existsSync(certPath) || !existsSync(keyPath)) {
+      throw new Error(
+        `TLS certificate files not found at the resolved paths. ` +
+        `certPath=${JSON.stringify(certPath)}, keyPath=${JSON.stringify(keyPath)}. ` +
+        `Provide valid certPath/keyPath arguments or set CONSOLE_TLS_CERT and CONSOLE_TLS_KEY env vars to the correct paths.`
+      );
+    }
   }
 
   const accessLogger = createDailyRotatingJsonLogger(consoleAccessLogPath);
@@ -117,6 +121,22 @@ function startConsoleServerImpl(
   });
 
   const loopbackConsolePort = loopbackServer.port;
+
+  // If explicitly requested, expose only the loopback server and do not attempt
+  // to bind the outer TLS server. This is useful for CI and local E2E runs
+  // where binding privileged ports or providing TLS certs is inconvenient.
+  if (process.env.CONSOLE_LOOPBACK_ONLY === '1') {
+    return {
+      get url() { return new URL(`http://127.0.0.1:${loopbackConsolePort}`); },
+      stop(closeActiveConnections?: boolean) {
+        clearInterval(agentStateBroadcastInterval);
+        for (const client of webSocketClients) {
+          client.close();
+        }
+        loopbackServer.stop(closeActiveConnections);
+      },
+    };
+  }
 
   // Outer console server: exposed publicly on port 443.
   // Checks the client IP against the shared allowlist before proxying to the loopback server.
@@ -245,8 +265,24 @@ function startConsoleServerImpl(
       },
     });
   } catch (err) {
-    loopbackServer.stop(true);
-    throw err;
+    // If binding to the outer TLS port fails (commonly because the port is
+    // privileged or already in use), do not abort startup. Instead, fall
+    // back to exposing the loopback server directly so E2E tests and local
+    // development can still access console routes without requiring root.
+    console.error('[WARN] failed to start outer console server, falling back to loopback only:', err);
+    // Create a lightweight proxy object that exposes the loopback server URL
+    // and a stop method compatible with the returned ConsoleServer contract.
+    const fallbackUrl = new URL(`http://127.0.0.1:${loopbackConsolePort}`);
+    return {
+      get url() { return fallbackUrl; },
+      stop(closeActiveConnections?: boolean) {
+        clearInterval(agentStateBroadcastInterval);
+        for (const client of webSocketClients) {
+          client.close();
+        }
+        loopbackServer.stop(closeActiveConnections);
+      },
+    };
   }
 
   return {

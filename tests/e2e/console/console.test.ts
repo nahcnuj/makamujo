@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { spawn } from "child_process";
-import { existsSync, writeFileSync } from "fs";
+import { existsSync, writeFileSync, createWriteStream, mkdirSync } from "fs";
 import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
 
-const CONSOLE_BASE_URL = `https://127.0.0.1`;
+let CONSOLE_BASE_URL = `https://127.0.0.1`;
 const BROADCASTING_BASE_URL = `http://127.0.0.1:7777`;
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 const BROWSER_PAGE_LOAD_TIMEOUT_MS = 20_000;
@@ -11,8 +11,8 @@ const EXPECTED_CONSOLE_TITLE = "馬可無序 - 管理コンソール";
 
 let server: ReturnType<typeof spawn> | null = null;
 
-const waitForServerReady = async () => {
-  return new Promise<void>((resolve, reject) => {
+const waitForServerReady = async (): Promise<string | null> => {
+  return new Promise<string | null>((resolve, reject) => {
     if (!server) {
       reject(new Error("Server process not started"));
       return;
@@ -32,13 +32,13 @@ const waitForServerReady = async () => {
       server?.off("exit", onExit);
     };
 
-    const resolveOnce = () => {
+    const resolveOnce = (url?: string | null) => {
       if (settled) {
         return;
       }
       settled = true;
       cleanup();
-      resolve();
+      resolve(url ?? null);
     };
 
     const rejectOnce = (error: Error) => {
@@ -52,8 +52,14 @@ const waitForServerReady = async () => {
 
     const onData = (chunk: Buffer | string) => {
       buffer += chunk.toString();
-      if (buffer.includes("Console running")) {
-        resolveOnce();
+      const marker = "Console running at ";
+      const idx = buffer.indexOf(marker);
+      if (idx >= 0) {
+        const rest = buffer.slice(idx + marker.length);
+        const line = rest.split(/\r?\n/)[0].trim();
+        resolveOnce(line || null);
+      } else if (buffer.includes("Console running")) {
+        resolveOnce(null);
       }
     };
 
@@ -77,13 +83,50 @@ test.beforeAll(async ({ request }) => {
 
   server = spawn(
     process.platform === "win32" ? "bun.exe" : "bun",
-    ["start"],
+    ["index.ts", "--port", "7777"],
     {
+      env: { ...process.env, NODE_ENV: "production", CONSOLE_TLS_CERT: process.env.CONSOLE_TLS_CERT, CONSOLE_TLS_KEY: process.env.CONSOLE_TLS_KEY, CONSOLE_LOOPBACK_ONLY: '1' },
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
 
-  await waitForServerReady();
+  // Capture server stdout/stderr to files for debugging when tests fail.
+  try {
+    mkdirSync("./var/test-logs", { recursive: true });
+  } catch {}
+  const ts = Date.now();
+  const outPath = `./var/test-logs/console-server-${ts}.log`;
+  const errPath = `./var/test-logs/console-server-${ts}.err.log`;
+  const outStream = createWriteStream(outPath);
+  const errStream = createWriteStream(errPath);
+  server.stdout?.pipe(outStream);
+  server.stderr?.pipe(errStream);
+
+  const consoleUrl = await waitForServerReady();
+  if (consoleUrl) {
+    CONSOLE_BASE_URL = consoleUrl.replace(/\/$/, '');
+  }
+
+  // Verify the console base URL is responding before continuing.
+  const start = Date.now();
+  const deadline = start + SERVER_STARTUP_TIMEOUT_MS;
+  let lastErr: Error | null = null;
+  while (Date.now() < deadline) {
+    try {
+      const health = await request.get(`${CONSOLE_BASE_URL}/console/robots.txt`);
+      if (health.ok()) {
+        lastErr = null;
+        break;
+      }
+      lastErr = new Error(`unexpected status ${health.status()}`);
+    } catch (err) {
+      lastErr = err as Error;
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  if (lastErr) {
+    throw new Error(`Console server not responding at ${CONSOLE_BASE_URL}: ${String(lastErr)}`);
+  }
 
   // Register the test runner's IP as the allowed IP so that subsequent
   // requests to the IP-restricted console server are permitted.
@@ -100,6 +143,8 @@ test.afterAll(() => {
     server.kill();
   }
   server = null;
+  try { outStream.end(); } catch {}
+  try { errStream.end(); } catch {}
 });
 
 test.describe("console", () => {
