@@ -10,11 +10,11 @@
 ## 現在のチェックリスト
 
 - [x] [MUST] Review issue #195 — 課題内容の確認と実装計画作成
-- [ ] [MUST] Reproduce the bug locally — 再現手順の確認とローカル再現 (in-progress)
-- [ ] [SHOULD] Implement fix — 実装と単体テストの追加
-- [ ] [SHOULD] Add/adjust tests — 既存テストの修正と追加
-- [ ] [SHOULD] Run tests and CI checks — テスト実行とCI確認
-- [ ] [SHOULD] Update TODO.md and PR description — 作業ログとPR本文の更新
+- [x] [MUST] Reproduce the bug locally — 再現手順の確認とローカル再現
+- [x] [SHOULD] Implement fix — 実装と単体テストの追加
+- [x] [SHOULD] Add/adjust tests — 既存テストの修正と追加
+- [x] [SHOULD] Run tests and CI checks — テスト実行とCI確認
+- [x] [SHOULD] Update TODO.md and PR description — 作業ログとPR本文の更新
 
 <!-- 対応すべきタスクは以上です。 -->
 
