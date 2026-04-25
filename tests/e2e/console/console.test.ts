@@ -231,4 +231,20 @@ test.describe("console", () => {
     const finalWidth = widthAfterLongSpeechBoundingBox?.width ?? 0;
     expect(finalWidth).toBeCloseTo(initialWidth);
   });
+
+  test("connects via WebSocket and updates on broadcast (non-mock)", async ({ page, request }) => {
+    // Load the console without mock mode so the UI opens a real WebSocket.
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+
+    // Post the fixture to the broadcasting app which updates the shared agent state.
+    const payload = cloneAgentStateResponseMockFixture();
+    const res = await request.post(`${BROADCASTING_BASE_URL}/api/meta`, { data: payload });
+    expect(res.ok(), `broadcast POST failed: ${res.status()}`).toBeTruthy();
+
+    // Wait for the UI to show the details populated via WebSocket broadcast.
+    const detailsLocator = page.getByTestId("agent-status-details");
+    await detailsLocator.waitFor({ timeout: 10_000 });
+    await expect(detailsLocator).toContainText("生成N-gram");
+    await expect(detailsLocator).toContainText("4-gram");
+  });
 });
