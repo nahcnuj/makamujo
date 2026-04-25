@@ -502,14 +502,49 @@ export function AgentStatus() {
         const url = createAgentStateWebSocketUrl(baseHref);
 
         let ws: WebSocket | null = null;
+        let pollingInterval: ReturnType<typeof setInterval> | null = null;
+        let wsOpened = false;
+        const apiAgentStateUrl = `${window.location.protocol}//${window.location.host}/console/api/agent-state`;
+
+        const startPolling = () => {
+            if (pollingInterval) return;
+            const fetchOnce = async () => {
+                try {
+                    const res = await fetch(apiAgentStateUrl);
+                    if (!res.ok) {
+                        setState((s) => ({ ...s, agentStatusError: `fetch /console/api/agent-state: ${res.status} ${res.statusText}`, isLoadingAgentState: false }));
+                        return;
+                    }
+                    const json = await res.json();
+                    setState((s) => ({ ...s, agentStateResponse: json as AgentStateResponse, agentStatusError: null, lastUpdatedTime: new Date().toLocaleString("ja-JP"), isLoadingAgentState: false }));
+                } catch (err) {
+                    setState((s) => ({ ...s, agentStatusError: String(err), isLoadingAgentState: false }));
+                }
+            };
+            // initial fetch
+            void fetchOnce();
+            pollingInterval = setInterval(fetchOnce, AGENT_STATE_REFRESH_INTERVAL_MS);
+        };
         try {
             ws = new WebSocket(url);
         } catch (err) {
-            setState((s) => ({ ...s, agentStatusError: String(err), isLoadingAgentState: false }));
+            // If WebSocket cannot be constructed, fall back to polling.
+            setState((s) => ({ ...s, agentStatusError: null, isLoadingAgentState: true }));
+            startPolling();
             return;
         }
 
         setState((s) => ({ ...s, isLoadingAgentState: true }));
+
+        ws.addEventListener("open", () => {
+            wsOpened = true;
+            // If polling was started, stop it now that WS is available.
+            if (pollingInterval) {
+                clearInterval(pollingInterval as any);
+                pollingInterval = null;
+            }
+            // upon open, server may immediately send state; keep loading flag until message arrives
+        });
 
         ws.addEventListener("message", (ev) => {
             try {
@@ -521,16 +556,34 @@ export function AgentStatus() {
         });
 
         ws.addEventListener("error", () => {
-            setState((s) => ({ ...s, agentStatusError: "WebSocket エラー", isLoadingAgentState: false }));
+            // If the socket errors before opening, fallback to polling.
+            if (!wsOpened) {
+                startPolling();
+            } else {
+                setState((s) => ({ ...s, agentStatusError: "WebSocket エラー", isLoadingAgentState: false }));
+            }
         });
 
         ws.addEventListener("close", () => {
-            setState((s) => ({ ...s, isLoadingAgentState: false }));
+            // If the socket closed unexpectedly, start polling to continue updates.
+            if (!wsOpened) {
+                startPolling();
+            } else {
+                startPolling();
+            }
         });
 
         return () => {
             try {
                 ws?.close();
+            } catch {
+                // ignore
+            }
+            try {
+                if (pollingInterval) {
+                    clearInterval(pollingInterval as any);
+                    pollingInterval = null;
+                }
             } catch {
                 // ignore
             }
