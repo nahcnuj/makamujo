@@ -14,9 +14,6 @@
 
 ## 現在のチェックリスト
 
-### MUST
-- [ ] [MUST] Run `bun ci` and tests — run typecheck and test suite
-
 ### SHOULD
 現在未完了のタスクはありません。
 
