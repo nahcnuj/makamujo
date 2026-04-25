@@ -56,54 +56,70 @@ type UseAgentStateWebSocketParams = {
   onError?: (errorMessage: string) => void;
   enabled?: boolean;
 };
+export type CreateWebSocketConnectorParams = {
+  getUrl: () => string;
+  makeWebSocket?: (url: string) => { addEventListener: (type: string, handler: (ev?: any) => void) => void; close?: () => void };
+  reconnectDelayMs?: number;
+  setTimeoutImpl?: (cb: () => void, ms: number) => number;
+  clearTimeoutImpl?: (id: number) => void;
+  onMessage: (response: AgentStateResponse) => void;
+  onError?: (errorMessage: string) => void;
+  onOpen?: () => void;
+  onClose?: () => void;
+};
 
-export function useAgentStateWebSocket({ onMessage, onError, enabled = true }: UseAgentStateWebSocketParams) {
-  const websocketRef = useRef<WebSocket | null>(null);
-  const websocketReconnectTimeoutIdRef = useRef<number | undefined>(undefined);
-  const websocketActiveRef = useRef(true);
-  const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
+export function createWebSocketConnector({
+  getUrl,
+  makeWebSocket = (url: string) => new WebSocket(url),
+  reconnectDelayMs = AGENT_STATE_WEB_SOCKET_RECONNECT_DELAY_MS,
+  setTimeoutImpl = (cb: () => void, ms: number) => window.setTimeout(cb, ms),
+  clearTimeoutImpl = (id: number) => window.clearTimeout(id),
+  onMessage,
+  onError,
+  onOpen,
+  onClose,
+}: CreateWebSocketConnectorParams) {
+  let socketRef: any = null;
+  let reconnectId: number | undefined = undefined;
+  let active = true;
 
-  const cleanup = useCallback(() => {
-    websocketActiveRef.current = false;
-    if (websocketReconnectTimeoutIdRef.current !== undefined) {
-      window.clearTimeout(websocketReconnectTimeoutIdRef.current);
-      websocketReconnectTimeoutIdRef.current = undefined;
+  const scheduleReconnect = () => {
+    if (!active) return;
+    if (reconnectId !== undefined) clearTimeoutImpl(reconnectId);
+    reconnectId = setTimeoutImpl(() => {
+      reconnectId = undefined;
+      connect();
+    }, reconnectDelayMs);
+  };
+
+  function cleanup() {
+    active = false;
+    if (reconnectId !== undefined) {
+      clearTimeoutImpl(reconnectId);
+      reconnectId = undefined;
     }
-    if (websocketRef.current !== null) {
-      websocketRef.current.close();
-      websocketRef.current = null;
-    }
-  }, []);
-
-  const connect = useCallback(() => {
-    if (typeof window === "undefined" || !websocketActiveRef.current || websocketRef.current !== null) {
-      return;
-    }
-
-      const socket = new WebSocket(createAgentStateWebSocketUrl(`wss://${window.location.host}`));
-    websocketRef.current = socket;
-
-    const scheduleReconnect = () => {
-      if (!websocketActiveRef.current) {
-        return;
+    if (socketRef !== null && typeof socketRef.close === "function") {
+      try {
+        socketRef.close();
+      } catch {
+        // ignore
       }
-      if (websocketReconnectTimeoutIdRef.current !== undefined) {
-        window.clearTimeout(websocketReconnectTimeoutIdRef.current);
-      }
-      websocketReconnectTimeoutIdRef.current = window.setTimeout(() => {
-        websocketReconnectTimeoutIdRef.current = undefined;
-        connect();
-      }, AGENT_STATE_WEB_SOCKET_RECONNECT_DELAY_MS);
-    };
+      socketRef = null;
+    }
+  }
+
+  function connect() {
+    if (typeof window === "undefined" || !active || socketRef !== null) return;
+    const url = getUrl();
+    const socket = makeWebSocket(url);
+    socketRef = socket;
 
     socket.addEventListener("open", () => {
-      setIsWebSocketConnected(true);
-      if (onError) {
-        onError("");
-      }
+      if (onOpen) onOpen();
+      if (onError) onError("");
     });
 
-    socket.addEventListener("message", (event) => {
+    socket.addEventListener("message", (event: any) => {
       const payload = typeof event.data === "string" ? event.data : String(event.data);
       try {
         const responseData = parseAgentStateResponse(payload);
@@ -115,19 +131,57 @@ export function useAgentStateWebSocket({ onMessage, onError, enabled = true }: U
     });
 
     const handleSocketClosed = () => {
-      setIsWebSocketConnected(false);
-      websocketRef.current = null;
+      if (onClose) onClose();
+      socketRef = null;
       scheduleReconnect();
     };
 
     socket.addEventListener("close", handleSocketClosed);
     socket.addEventListener("error", handleSocketClosed);
-  }, [onMessage, onError]);
+  }
 
-  useEffect(() => {
-    if (!enabled) {
+  return { connect, cleanup } as const;
+}
+
+export function useAgentStateWebSocket({ onMessage, onError, enabled = true }: UseAgentStateWebSocketParams) {
+  const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
+  const connectorRef = useRef<ReturnType<typeof createWebSocketConnector> | null>(null);
+
+  const connect = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (connectorRef.current !== null) {
+      // already created and possibly connected
+      connectorRef.current.connect();
       return;
     }
+    const connector = createWebSocketConnector({
+      getUrl: () => createAgentStateWebSocketUrl(`wss://${window.location.host}`),
+      makeWebSocket: (url: string) => new WebSocket(url),
+      onMessage: (resp) => {
+        setIsWebSocketConnected(true);
+        onMessage(resp);
+      },
+      onError: (err) => {
+        setIsWebSocketConnected(false);
+        if (onError) onError(err);
+      },
+      onOpen: () => setIsWebSocketConnected(true),
+      onClose: () => setIsWebSocketConnected(false),
+    });
+    connectorRef.current = connector;
+    connector.connect();
+  }, [onMessage, onError]);
+
+  const cleanup = useCallback(() => {
+    if (connectorRef.current) {
+      connectorRef.current.cleanup();
+      connectorRef.current = null;
+    }
+    setIsWebSocketConnected(false);
+  }, []);
+
+  useEffect(() => {
+    if (!enabled) return;
     connect();
     return cleanup;
   }, [connect, cleanup, enabled]);
