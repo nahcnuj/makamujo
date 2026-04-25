@@ -239,8 +239,66 @@ test.describe("console", () => {
     expect(finalWidth).toBeCloseTo(initialWidth);
   });
 
-  test("connects via WebSocket and updates on broadcast (non-mock)", async ({ page, request }) => {
+  test("connects via SSE and updates on broadcast (non-mock)", async ({ page, request }) => {
+    // Diagnostic probe: check whether the broadcasting server's SSE
+    // endpoint responds with the expected content-type when queried
+    // from the test runner. Do not read the body to avoid blocking on
+    // an open SSE stream — just inspect status and headers.
+    try {
+      const probe = await request.get(`${BROADCASTING_BASE_URL}/api/ws`, { headers: { accept: 'text/event-stream' } });
+      console.log('[TEST DIAG] /api/ws probe ->', { status: probe.status(), contentType: probe.headers()['content-type'] });
+    } catch (err) {
+      console.log('[TEST DIAG] /api/ws probe failed ->', String(err));
+    }
+    try {
+      const probe2 = await request.get(`${BROADCASTING_BASE_URL}/console/api/ws`, { headers: { accept: 'text/event-stream' } });
+      console.log('[TEST DIAG] /console/api/ws probe ->', { status: probe2.status(), contentType: probe2.headers()['content-type'] });
+    } catch (err) {
+      console.log('[TEST DIAG] /console/api/ws probe failed ->', String(err));
+    }
+
+    // Inspect the console server's environment endpoint so we know if the
+    // client should attempt a direct connection to the broadcasting
+    // server (helpful when the proxy is misbehaving in tests).
+    try {
+      const consoleEnvRes = await request.get(`${CONSOLE_BASE_URL}/console/env`);
+      let consoleEnvBody = null;
+      try { consoleEnvBody = await consoleEnvRes.json(); } catch {}
+      console.log('[TEST DIAG] /console/env ->', { status: consoleEnvRes.status(), body: consoleEnvBody });
+    } catch (err) {
+      console.log('[TEST DIAG] /console/env probe failed ->', String(err));
+    }
+
+    // Install a small init script so we can reliably detect when the
+    // page's EventSource has opened. This avoids race conditions where
+    // the test POST happens before the browser subscribes.
+    await page.addInitScript(() => {
+      (function () {
+        const OrigEventSource = (window as any).EventSource;
+        Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
+        (window as any).EventSource = function (url: string) {
+          const es = new OrigEventSource(url);
+          try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
+          return es;
+        } as any;
+        try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
+      })();
+    });
+
     await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+
+    // Wait for the client to select an SSE URL (either same-origin proxy or
+    // a direct broadcasting server URL) so we can inspect which path the
+    // browser attempted to connect to.
+    try {
+      await page.waitForFunction(() => (window as any).__sseUrl !== undefined, { timeout: 5_000 });
+    } catch {}
+    const sseUrl = await page.evaluate(() => (window as any).__sseUrl ?? null);
+    console.log('[TEST DIAG] page.__sseUrl ->', sseUrl);
+
+    // Wait for the page to establish the SSE connection before sending
+    // the broadcast POST to avoid timing-dependent flakiness.
+    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
 
     const payload = cloneAgentStateResponseMockFixture();
     const res = await request.post(`${BROADCASTING_BASE_URL}/api/meta`, { data: payload });

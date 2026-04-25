@@ -436,24 +436,9 @@ export function AgentStatus() {
         return;
       }
 
-      const response = await fetch("/console/api/agent-state");
-      const responseText = await response.text();
-      if (!response.ok) {
-        let errorMessageFromResponse: string | null = null;
-        try {
-          const responseData = parseAgentStateResponse(responseText);
-          errorMessageFromResponse = responseData.error ?? null;
-        } catch {
-          errorMessageFromResponse = null;
-        }
-        throw new Error(errorMessageFromResponse ?? `配信状態の取得に失敗しました (${response.status})`);
-      }
-
-      const responseData = parseAgentStateResponse(responseText);
-      setAgentStateResponse(responseData);
-      setAgentStatusError(null);
-      setIsShowingMockAgentState(false);
-      setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
+      // In non-mock mode, the agent state is provided via a live stream
+      // (SSE/WebSocket). Manual HTTP polling is not supported.
+      throw new Error("ライブ更新はSSEでのみ提供されます。");
     } catch (error) {
       const errorMessage =
         error instanceof SyntaxError
@@ -471,8 +456,76 @@ export function AgentStatus() {
   }, []);
 
   useEffect(() => {
-    void fetchAgentState();
-    return startAgentStateAutoRefresh(fetchAgentState);
+    if (typeof window === 'undefined') return;
+
+    if (shouldUseMockAgentState()) {
+      // Mock mode: use HTTP polling refresh to present deterministic state.
+      void fetchAgentState();
+      return startAgentStateAutoRefresh(fetchAgentState);
+    }
+
+    // Non-mock mode: subscribe to server-sent events (SSE). Prefer the
+    // same-origin proxy path `/console/api/ws`. In test/loopback-only
+    // runs the proxy may not reach the broadcasting server correctly,
+    // so query `/console/env` to optionally connect directly to the
+    // broadcasting server (cross-origin). The broadcasting server
+    // exposes SSE with CORS for tests.
+    setIsLoadingAgentState(false);
+    setAgentStatusError(null);
+
+    let es: EventSource | null = null;
+    (async () => {
+      let sseUrl = '/console/api/ws';
+      try {
+        const envRes = await fetch('/console/env');
+        if (envRes.ok) {
+          const env = await envRes.json();
+          const broadcastingHost = env?.broadcastingHost;
+          const broadcastingPort = env?.broadcastingPort;
+          if (broadcastingHost && broadcastingPort) {
+            const curHost = window.location.hostname;
+            const curPort = window.location.port;
+            if (!(String(broadcastingHost) === curHost && String(broadcastingPort) === curPort)) {
+              sseUrl = `${window.location.protocol}//${broadcastingHost}:${broadcastingPort}/console/api/ws`;
+            }
+          }
+        }
+      } catch (err) {
+        // ignore env probe failures and fall back to same-origin proxy
+      }
+
+      try {
+        try { (window as any).__sseUrl = sseUrl; } catch {}
+        try { console.log('[TRACE] AgentStatus connecting EventSource ->', sseUrl); } catch {}
+        es = new EventSource(sseUrl);
+      } catch (err) {
+        setAgentStatusError('ライブ接続に失敗しました');
+        return;
+      }
+
+      es.onopen = () => {
+        setAgentStatusError(null);
+      };
+      es.onmessage = (ev: MessageEvent) => {
+        try {
+          const responseData = parseAgentStateResponse(String(ev.data));
+          setAgentStateResponse(responseData);
+          setAgentStatusError(null);
+          setIsShowingMockAgentState(false);
+          setLastUpdatedTime(new Date().toLocaleTimeString('ja-JP'));
+        } catch (err) {
+          setAgentStatusError(INVALID_AGENT_STATE_RESPONSE_ERROR);
+        }
+      };
+      es.onerror = () => {
+        setAgentStatusError('ライブ接続が切断されました');
+        try { es?.close(); } catch {}
+      };
+    })();
+
+    return () => {
+      try { es?.close(); } catch {}
+    };
   }, [fetchAgentState]);
 
   const agentStatusSections = createAgentStatusSections(agentStateResponse);

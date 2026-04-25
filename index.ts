@@ -105,6 +105,55 @@ const streamer = new MakaMujo(model, tts);
 // when possible.
 let lastPublishedStreamState: unknown = undefined;
 let currentSpeechState = { speech: '', silent: false };
+// WebSocket clients connected to the broadcasting server.
+const wsClients = new Set<any>();
+
+// Server-Sent Events (SSE) clients: store controller objects so we can
+// push `data: ...\n\n` frames to each connected client.
+const sseClients = new Set<any>();
+
+const sseBroadcast = (payload: unknown) => {
+  const frame = `data: ${JSON.stringify(payload)}\n\n`;
+  try { console.log('[INFO] sseBroadcast -> sseClients count=', sseClients.size); } catch {}
+  for (const controller of Array.from(sseClients)) {
+    try {
+      controller.enqueue(frame);
+    } catch (err) {
+      try { controller.close(); } catch {}
+      try { sseClients.delete(controller); } catch {}
+    }
+  }
+};
+
+const broadcastToWsClients = (payload: unknown) => {
+  const message = JSON.stringify(payload);
+  for (const ws of Array.from(wsClients)) {
+    try {
+      ws.send(message);
+    } catch (err) {
+      try { ws.close(); } catch {}
+      try { wsClients.delete(ws); } catch {}
+    }
+  }
+};
+
+const getCurrentStreamPayload = () => {
+  const agentStreamState = agent.getStreamState?.();
+  const streamState = (lastPublishedStreamState === undefined || lastPublishedStreamState === null)
+    ? agentStreamState
+    : lastPublishedStreamState;
+  const base = streamState && typeof streamState === 'object' ? (streamState as any) : {};
+  return {
+    niconama: base.niconama ?? {},
+    canSpeak: base.canSpeak ?? streamer.canSpeak,
+    currentGame: base.currentGame ?? streamer.currentGame ?? null,
+    nGram: base.nGram ?? streamer.currentNGramSize,
+    nGramRaw: base.nGramRaw ?? streamer.currentNGramSizeRaw,
+    speech: base.speech ?? agent.getSpeech(),
+    speechHistory: base.speechHistory ?? generatedSpeechHistory,
+  } as const;
+};
+
 let agent: any = {
   setSpeech: (text: string) => { currentSpeechState = { speech: text, silent: false }; },
   getSpeech: () => currentSpeechState,
@@ -190,9 +239,6 @@ const server = serve({
     // Serve favicon from the public directory.
     '/favicon-32x32.png': new Response(Bun.file('./src/public/favicon-32x32.png')),
 
-    // Serve index.html for all unmatched routes.
-    '/*': App,
-
     '/': {
       ...index,
       PUT: async (req, server) => {
@@ -230,25 +276,163 @@ const server = serve({
 
     '/api/meta': {
       GET: () => {
-        const streamState = agent.getStreamState();
-        console.debug('[DEBUG] GET /api/meta ->', JSON.stringify(streamState));
-        return Response.json({
-          niconama: streamState ?? {},
-          canSpeak: streamer.canSpeak,
-          currentGame: streamer.currentGame ?? null,
-          nGram: streamer.currentNGramSize,
-          nGramRaw: streamer.currentNGramSizeRaw,
-          speech: agent.getSpeech(),
-          speechHistory: generatedSpeechHistory,
-        });
+        // Prefer the last published stream state when present (tests POST to
+        // /api/meta). If no published state exists, fall back to the external
+        // agent's in-memory state so normal runtime still works.
+        const agentStreamState = agent.getStreamState?.();
+        const streamState = (lastPublishedStreamState === undefined || lastPublishedStreamState === null)
+          ? agentStreamState
+          : lastPublishedStreamState;
+        console.log('[INFO] GET /api/meta ->', JSON.stringify(streamState));
+        const base = streamState && typeof streamState === 'object' ? (streamState as any) : {};
+        const responsePayload = {
+          niconama: base.niconama ?? {},
+          canSpeak: base.canSpeak ?? streamer.canSpeak,
+          currentGame: base.currentGame ?? streamer.currentGame ?? null,
+          nGram: base.nGram ?? streamer.currentNGramSize,
+          nGramRaw: base.nGramRaw ?? streamer.currentNGramSizeRaw,
+          speech: base.speech ?? agent.getSpeech(),
+          speechHistory: base.speechHistory ?? generatedSpeechHistory,
+        } as const;
+        console.log('[INFO] GET /api/meta response ->', JSON.stringify(responsePayload));
+        return Response.json(responsePayload);
       },
       POST: async (req) => {
-        const body = await req.json();
-        const published = body.data ?? body;
-        console.debug('[DEBUG] POST /api/meta <-', JSON.stringify(published));
-        agent.publishStreamState(published);
-        return Response.json({});
+        try {
+          let body: any;
+          try {
+            body = await req.json();
+          } catch (err) {
+            console.warn('[WARN] POST /api/meta failed to parse JSON body:', err instanceof Error ? err.message : String(err));
+            return Response.json({}, { status: 400 });
+          }
+
+          const published = body.data ?? body;
+
+          // Persist the published stream state so GET /api/meta reflects it.
+          try {
+            lastPublishedStreamState = published;
+          } catch (err) {
+            console.warn('[WARN] failed to persist published stream state locally:', err instanceof Error ? err.message : String(err));
+          }
+
+          // Notify connected WS and SSE clients about the new published state.
+          try {
+            broadcastToWsClients(getCurrentStreamPayload());
+          } catch (err) {
+            console.warn('[WARN] failed to broadcast to WebSocket clients:', err instanceof Error ? err.message : String(err));
+          }
+          try {
+            sseBroadcast(getCurrentStreamPayload());
+          } catch (err) {
+            console.warn('[WARN] failed to broadcast to SSE clients:', err instanceof Error ? err.message : String(err));
+          }
+
+          try { console.log('[INFO] POST /api/meta -> sseClients=', sseClients.size, 'wsClients=', wsClients.size); } catch {}
+
+          return Response.json({});
+        } catch (err) {
+          console.error('[ERROR] POST /api/meta handler crashed:', err instanceof Error ? err.stack ?? err.message : String(err));
+          return Response.json({}, { status: 500 });
+        }
       },
+    },
+
+    // WebSocket / SSE endpoints for console clients to subscribe to live
+    // agent state. Support both EventStream (SSE) and WebSocket upgrades.
+    '/api/ws': {
+      GET: (req: Request) => {
+        const accept = req.headers.get('accept') ?? '';
+        try { console.log('[TRACE] /api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch {}
+        if (accept.includes('text/event-stream')) {
+          const stream = new ReadableStream({
+            start(controller) {
+              try { console.log('[INFO] SSE client connected (/api/ws)'); } catch {}
+              sseClients.add(controller);
+              // Send current state immediately.
+              try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
+            },
+            cancel() { try { sseClients.delete(this); } catch {} },
+          });
+          return new Response(stream, {
+            headers: {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              Connection: 'keep-alive',
+              'Access-Control-Allow-Origin': '*',
+            },
+            status: 200,
+          });
+        }
+
+        try {
+          const upgraded = (Bun as any).upgradeWebSocket(req, {
+            open(ws: any) {
+              try { console.log('[INFO] WebSocket client connected (/api/ws)'); } catch {}
+              try { wsClients.add(ws); } catch {}
+              try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch {}
+            },
+            message() {},
+            close(ws: any) { try { wsClients.delete(ws); } catch {} },
+            error(ws: any) { try { wsClients.delete(ws); } catch {} },
+          });
+          return upgraded.response;
+        } catch (err) {
+          return new Response('WebSocket upgrade failed', { status: 400 });
+        }
+      },
+    },
+
+    '/console/api/ws': {
+      GET: (req: Request) => {
+        const accept = req.headers.get('accept') ?? '';
+        try { console.log('[TRACE] /console/api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch {}
+        if (accept.includes('text/event-stream')) {
+          const stream = new ReadableStream({
+            start(controller) {
+              try { console.log('[INFO] SSE client connected (/console/api/ws)'); } catch {}
+              sseClients.add(controller);
+              try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
+            },
+            cancel() { try { sseClients.delete(this); } catch {} },
+          });
+          return new Response(stream, {
+            headers: {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              Connection: 'keep-alive',
+              'Access-Control-Allow-Origin': '*',
+            },
+            status: 200,
+          });
+        }
+
+        try {
+          const upgraded = (Bun as any).upgradeWebSocket(req, {
+            open(ws: any) {
+              try { console.log('[INFO] WebSocket client connected (/console/api/ws)'); } catch {}
+              try { wsClients.add(ws); } catch {}
+              try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch {}
+            },
+            message() {},
+            close(ws: any) { try { wsClients.delete(ws); } catch {} },
+            error(ws: any) { try { wsClients.delete(ws); } catch {} },
+          });
+          return upgraded.response;
+        } catch (err) {
+          return new Response('WebSocket upgrade failed', { status: 400 });
+        }
+      },
+    },
+
+    // Serve index.html for all unmatched routes. Placed last so that API
+    // routes are matched first and are not shadowed by this catch-all.
+    '/*': (req: Request) => {
+      try {
+        const path = new URL(req.url).pathname;
+        console.log('[TRACE] catch-all matched path=', path, 'accept=', req.headers.get('accept'));
+      } catch {}
+      return (App as any);
     },
   },
 

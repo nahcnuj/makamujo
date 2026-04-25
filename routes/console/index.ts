@@ -2,7 +2,132 @@ import ConsoleApp from "../../console/src/index.html";
 import robotsTxt from "./robots.txt";
 import * as agentState from "./api/agent-state";
 
+const BROADCASTING_HOST = process.env.BROADCASTING_HOST ?? 'localhost';
+const BROADCASTING_PORT = process.env.BROADCASTING_PORT ?? '7777';
+
+try {
+  console.log('[DEBUG] routes/console initializing', { BROADCASTING_HOST, BROADCASTING_PORT });
+} catch {}
+
 export const routes = {
+  // Proxy the console client's streaming endpoint to the broadcasting
+  // server so the browser can open a same-origin EventSource/WS.
+  '/console/api/ws': async (req: Request) => {
+    try {
+      let proxyBase = `http://${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
+      // Detect accidental self-proxying: if the configured broadcasting
+      // base would target the current incoming host (the loopback
+      // console server) prefer the default broadcasting address to avoid
+      // returning the SPA HTML instead of an SSE stream.
+      try {
+        const incomingHost = req.headers.get('host') ?? '';
+        if (incomingHost && proxyBase.includes(incomingHost)) {
+          proxyBase = `http://localhost:7777`;
+          console.log('[WARN] Detected self-proxying; overriding proxyBase ->', proxyBase);
+        }
+      } catch {}
+      // Parse the incoming request URL safely (it may be relative).
+      let parsed: URL;
+      try {
+        parsed = new URL(req.url);
+      } catch (err) {
+        const hostForParse = req.headers.get('host') ?? `${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
+        parsed = new URL(req.url, `http://${hostForParse}`);
+      }
+
+      // Always target the broadcasting server's `/console/api/ws` endpoint
+      // and preserve the original query string. The broadcasting server
+      // exposes the same SSE/WS behavior at `/console/api/ws` and
+      // `/api/ws`; using the console-prefixed path avoids ambiguity with
+      // any potential upstream routing rules that might shadow `/api`.
+      const proxyUrl = `${proxyBase}/console/api/ws${parsed.search ?? ''}`;
+      // Log incoming proxy requests for diagnostics (helps E2E failures)
+      try {
+        console.log('[DEBUG] /console/api/ws proxy ->', {
+          url: proxyUrl.toString(),
+          accept: req.headers.get('accept'),
+          upgrade: req.headers.get('upgrade'),
+        });
+      } catch {}
+
+      const proxyHeaders = new Headers(req.headers);
+      // Strip hop-by-hop and origin-specific headers that should not be
+      // forwarded as-is. Do not forcibly override the `Host` header;
+      // letting the underlying fetch set the host avoids surprising
+      // virtual-host routing differences when making local loopback
+      // requests.
+      // Ensure upstream sees the broadcasting host string that the
+      // server advertises. This helps when the server's routing may be
+      // sensitive to the Host header (e.g., localhost vs 127.0.0.1).
+      proxyHeaders.set('host', `${BROADCASTING_HOST}:${BROADCASTING_PORT}`);
+      proxyHeaders.delete('origin');
+      proxyHeaders.delete('referer');
+      // EventSource clients send `Accept: text/event-stream`. If the
+      // header is missing for any reason, prefer SSE semantics by
+      // defaulting the Accept header.
+      if (!proxyHeaders.has('accept')) {
+        proxyHeaders.set('accept', 'text/event-stream');
+      }
+
+      const proxied = await fetch(proxyUrl.toString(), {
+        method: req.method,
+        headers: proxyHeaders,
+        body: req.body,
+      });
+
+      try {
+        console.log('[DEBUG] /console/api/ws upstream response ->', {
+          status: proxied.status,
+          contentType: proxied.headers.get('content-type'),
+        });
+      } catch {}
+
+      // If the upstream responded with an SSE stream, re-wrap the
+      // streaming body so Bun forwards chunks to the browser without
+      // buffering. For non-streaming responses (e.g., the SPA index
+      // HTML), return the upstream response unchanged so callers get a
+      // faithful response.
+      try {
+        const contentType = proxied.headers.get('content-type') ?? '';
+        if (contentType.includes('text/event-stream')) {
+          const responseHeaders = new Headers(proxied.headers);
+          responseHeaders.set('cache-control', 'no-cache');
+          return new Response(proxied.body, {
+            status: proxied.status,
+            headers: responseHeaders,
+          });
+        }
+
+        // Non-SSE response (likely HTML). Log a short snippet of the
+        // upstream body to aid diagnosis, then return the proxied
+        // response unchanged so the browser receives the same content.
+        try {
+          const clone = proxied.clone();
+          const text = await clone.text().catch(() => '');
+          try {
+            console.log('[DEBUG] /console/api/ws upstream HTML snippet ->', text.slice(0, 512));
+          } catch {}
+        } catch {}
+
+        return proxied;
+      } catch (err) {
+        return proxied;
+      }
+    } catch (err) {
+      return new Response('proxy failed', { status: 502 });
+    }
+  },
+  '/console/env': async () => {
+    try {
+      try { console.log('[TRACE] /console/env requested'); } catch {}
+      return new Response(JSON.stringify({ broadcastingHost: BROADCASTING_HOST, broadcastingPort: BROADCASTING_PORT }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 200,
+      });
+    } catch (err) {
+      return new Response(JSON.stringify({}), { headers: { 'Content-Type': 'application/json' }, status: 500 });
+    }
+  },
   '/console/*': ConsoleApp,
   '/console/robots.txt': robotsTxt,
   '/console/api/agent-state': agentState,
