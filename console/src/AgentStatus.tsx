@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentStateResponse } from "./hooks/useAgentStateWebSocket";
 import { useAgentState } from "./hooks/useAgentState";
-import { useAgentStateWebSocket } from "./hooks/useAgentStateWebSocket";
 import type { AgentStatusRow } from "./agentStatusSections/AgentStatusSectionCard";
 import { GAME_SECTION_TITLE, GameStatusSection } from "./agentStatusSections/GameStatusSection";
 import { LIVE_DELIVERY_SECTION_TITLE, LiveDeliveryStatusSection } from "./agentStatusSections/LiveDeliveryStatusSection";
@@ -470,7 +469,7 @@ export function AgentStatusView({
 
 // Container: lifecycle and networking live here so the view stays presentational.
 export function AgentStatus() {
-  const { state, setState } = useAgentState();
+  const { state, setState, refresh } = useAgentState();
   const {
     agentStateResponse,
     agentStatusError,
@@ -479,44 +478,6 @@ export function AgentStatus() {
     isShowingMockAgentState,
   } = state;
 
-  const { isWebSocketConnected, connect, cleanup } = useAgentStateWebSocket({
-    onMessage: (response) => {
-      setState((prev) => ({
-        ...prev,
-        agentStateResponse: response,
-        agentStatusError: null,
-        isShowingMockAgentState: false,
-        lastUpdatedTime: new Date().toLocaleTimeString("ja-JP"),
-        isLoadingAgentState: false,
-      }));
-    },
-    onError: (errorMessage) => {
-      setState((prev) => ({
-        ...prev,
-        agentStatusError: errorMessage,
-        agentStateResponse: null,
-        isShowingMockAgentState: false,
-        lastUpdatedTime: new Date().toLocaleTimeString("ja-JP"),
-        isLoadingAgentState: false,
-      }));
-    },
-  });
-
-  // Show loading indicator until first WS message or error arrives.
-  useEffect(() => {
-    setState({ isLoadingAgentState: true });
-    return () => {
-      cleanup();
-    };
-  }, [setState, cleanup]);
-
-  const handleRefresh = useCallback(() => {
-    // force reconnect to retrieve fresh state from server
-    cleanup();
-    connect();
-    setState({ isLoadingAgentState: true });
-  }, [cleanup, connect, setState]);
-
   return (
     <AgentStatusView
       agentStateResponse={agentStateResponse}
@@ -524,7 +485,7 @@ export function AgentStatus() {
       lastUpdatedTime={lastUpdatedTime}
       isLoadingAgentState={isLoadingAgentState}
       isShowingMockAgentState={isShowingMockAgentState}
-      onRefresh={handleRefresh}
+      onRefresh={refresh}
     />
   );
 }

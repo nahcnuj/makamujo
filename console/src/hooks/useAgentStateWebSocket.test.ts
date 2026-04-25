@@ -119,10 +119,10 @@ describe("createWebSocketConnector", () => {
     connector.connect();
     expect(created.length).toBe(1);
     // simulate close -> should schedule a reconnect
-    created[0].trigger("close", {});
+    created[0]!.trigger("close", {});
     expect(timers.length).toBe(1);
     // invoke scheduled reconnect callback -> should create another socket
-    timers[0]();
+    timers[0]!();
     expect(created.length).toBe(2);
 
     connector.cleanup();
