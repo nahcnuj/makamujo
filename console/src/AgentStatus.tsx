@@ -369,7 +369,7 @@ export type AgentStatusViewProps = {
   lastUpdatedTime: string;
   isLoadingAgentState: boolean;
   isShowingMockAgentState: boolean;
-  fetchAgentState: () => Promise<void>;
+  onRefresh?: () => void | Promise<void>;
 };
 
 export function AgentStatusView({
@@ -378,7 +378,7 @@ export function AgentStatusView({
   lastUpdatedTime,
   isLoadingAgentState,
   isShowingMockAgentState,
-  fetchAgentState,
+  onRefresh,
 }: AgentStatusViewProps) {
   const agentStatusSections = createAgentStatusSections(agentStateResponse);
   const sectionMap = agentStatusSections.reduce<Partial<Record<AgentStatusSection["title"], AgentStatusSection>>>(
@@ -407,7 +407,9 @@ export function AgentStatusView({
           </p>
           <button
             type="button"
-            onClick={fetchAgentState}
+            onClick={() => {
+              if (onRefresh) void onRefresh();
+            }}
             disabled={isLoadingAgentState}
             className="bg-emerald-300 text-emerald-950 border-0 px-5 py-1.5 rounded-lg font-bold transition-all duration-100 hover:bg-emerald-200 hover:-translate-y-px cursor-pointer whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
           >

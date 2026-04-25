@@ -79,7 +79,7 @@ export function AgentStatus() {
             lastUpdatedTime={lastUpdatedTime}
             isLoadingAgentState={isLoadingAgentState}
             isShowingMockAgentState={isShowingMockAgentState}
-            fetchAgentState={fetchAgentState}
+            onRefresh={fetchAgentState}
         />
     );
 }
