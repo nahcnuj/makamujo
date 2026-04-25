@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AgentStatus, createAgentStateWebSocketUrl } from "./AgentStatus";
+import { AgentStatus } from "./AgentStatusContainer";
+import { createAgentStateWebSocketUrl } from "./agentStateService";
 import { GameStatusSection } from "./agentStatusSections/GameStatusSection";
 import { LiveDeliveryStatusSection } from "./agentStatusSections/LiveDeliveryStatusSection";
 import { MarkovModelStatusSection } from "./agentStatusSections/MarkovModelStatusSection";

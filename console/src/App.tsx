@@ -1,4 +1,4 @@
-import { AgentStatus } from "./AgentStatus";
+import { AgentStatus } from "./AgentStatusContainer";
 import "./index.css";
 
 export function App() {

@@ -1,7 +1,7 @@
 import { Container } from "automated-gameplay-transmitter";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { cloneAgentStateResponseMockFixture } from "../../tests/fixtures/agentStateResponseMock";
+import type { AgentStateResponse } from "./agentStateService";
 import type { AgentStatusRow } from "./agentStatusSections/AgentStatusSectionCard";
 import { GAME_SECTION_TITLE, GameStatusSection } from "./agentStatusSections/GameStatusSection";
 import { LIVE_DELIVERY_SECTION_TITLE, LiveDeliveryStatusSection } from "./agentStatusSections/LiveDeliveryStatusSection";
@@ -10,42 +10,7 @@ import { MARKOV_MODEL_SECTION_TITLE, MarkovModelStatusSection } from "./agentSta
 /**
  * Response schema returned by `/console/api/agent-state`.
  * `error` is populated when the proxy endpoint returns a non-200 response.
- */
-type AgentStateResponse = {
-  error?: string
-  niconama?: {
-    type?: string
-    meta?: {
-      title?: string
-      url?: string
-      start?: number
-      total?: {
-        listeners?: number
-        gift?: number
-        ad?: number
-        comments?: number
-      }
-    }
-  }
-  canSpeak?: boolean
-  currentGame?: {
-    name?: string
-    state?: Record<string, unknown>
-  } | null
-  nGram?: number
-  nGramRaw?: number
-  speech?: {
-    speech?: string
-    silent?: boolean
-  }
-  speechHistory?: Array<{
-    id?: string
-    speech?: string
-    nGram?: number
-    nGramRaw?: number
-  }>
-};
-
+*/
 type AgentStatusSection = {
   title: string
   rows: AgentStatusRow[]
@@ -53,15 +18,7 @@ type AgentStatusSection = {
 
 export const AGENT_STATE_REFRESH_INTERVAL_MS = 1_000;
 export const AGENT_STATE_MOCK_NOTICE_MESSAGE = "配信エージェント状態モックを表示中";
-const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
-const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正です。";
 const SPEECH_UNAVAILABLE_INDICATOR = "・・・";
-export const AGENT_STATE_WEB_SOCKET_PATH = "/console/api/ws";
-export const AGENT_STATE_WEB_SOCKET_RECONNECT_DELAY_MS = 2_000;
-
-export const createAgentStateWebSocketUrl = (baseHref: `wss:${string}`): string => {
-  return new URL(AGENT_STATE_WEB_SOCKET_PATH, baseHref).toString();
-};
 
 // Distinguishes unix seconds from unix milliseconds by treating 13-digit values as milliseconds.
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
@@ -76,19 +33,6 @@ const createLabelSet = (labels: readonly string[]) => new Set<string>(labels);
 const LIVE_DELIVERY_ROW_LABEL_SET = createLabelSet(LIVE_DELIVERY_ROW_LABELS);
 const MARKOV_MODEL_ROW_LABEL_SET = createLabelSet(MARKOV_MODEL_ROW_LABELS);
 const GAME_ROW_LABEL_SET = createLabelSet(GAME_ROW_LABELS);
-
-export const createMockAgentStateResponse = (): AgentStateResponse => cloneAgentStateResponseMockFixture();
-
-export const isAgentStateMockQueryEnabled = (searchParams: string): boolean => {
-  return new URLSearchParams(searchParams).get(AGENT_STATE_MOCK_QUERY_KEY) === "1";
-};
-
-export const shouldUseMockAgentState = (): boolean => {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  return isAgentStateMockQueryEnabled(window.location.search);
-};
 
 /**
  * Starts periodic refresh polling and returns a cleanup function.
@@ -116,13 +60,7 @@ export const startAgentStateAutoRefresh = (
   };
 };
 
-export const parseAgentStateResponse = (responseText: string): AgentStateResponse => {
-  try {
-    return JSON.parse(responseText) as AgentStateResponse;
-  } catch {
-    throw new SyntaxError(INVALID_AGENT_STATE_RESPONSE_ERROR);
-  }
-};
+
 
 const formatStateLabel = (type: string | undefined): string => {
   if (type === "live") {
@@ -526,161 +464,4 @@ export function AgentStatusView({
   );
 }
 
-export function AgentStatusWebSocket() {
-  const [agentStateResponse, setAgentStateResponse] = useState<AgentStateResponse | null>(null);
-  const [agentStatusError, setAgentStatusError] = useState<string | null>(null);
-  const [lastUpdatedTime, setLastUpdatedTime] = useState("");
-  const [isLoadingAgentState, setIsLoadingAgentState] = useState(false);
-  const [isShowingMockAgentState, setIsShowingMockAgentState] = useState(false);
-  const websocketRef = useRef<WebSocket | null>(null);
-  const websocketReconnectTimeoutIdRef = useRef<number | undefined>(undefined);
-  const websocketActiveRef = useRef(true);
-  const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
-
-  const cleanupAgentStateWebSocket = useCallback(() => {
-    websocketActiveRef.current = false;
-    if (websocketReconnectTimeoutIdRef.current !== undefined) {
-      window.clearTimeout(websocketReconnectTimeoutIdRef.current);
-      websocketReconnectTimeoutIdRef.current = undefined;
-    }
-    if (websocketRef.current !== null) {
-      websocketRef.current.close();
-      websocketRef.current = null;
-    }
-  }, []);
-
-  const connectAgentStateWebSocket = useCallback(() => {
-    if (typeof window === "undefined" || !websocketActiveRef.current || websocketRef.current !== null) {
-      return;
-    }
-
-    const socket = new WebSocket(createAgentStateWebSocketUrl(`wss://${window.location.host}`));
-    websocketRef.current = socket;
-
-    const scheduleReconnect = () => {
-      if (!websocketActiveRef.current) {
-        return;
-      }
-      if (websocketReconnectTimeoutIdRef.current !== undefined) {
-        window.clearTimeout(websocketReconnectTimeoutIdRef.current);
-      }
-      websocketReconnectTimeoutIdRef.current = window.setTimeout(() => {
-        websocketReconnectTimeoutIdRef.current = undefined;
-        connectAgentStateWebSocket();
-      }, AGENT_STATE_WEB_SOCKET_RECONNECT_DELAY_MS);
-    };
-
-    socket.addEventListener("open", () => {
-      setIsWebSocketConnected(true);
-      setAgentStatusError(null);
-    });
-
-    socket.addEventListener("message", (event) => {
-      const payload = typeof event.data === "string" ? event.data : String(event.data);
-      try {
-        const responseData = parseAgentStateResponse(payload);
-        setAgentStateResponse(responseData);
-        setAgentStatusError(null);
-        setIsShowingMockAgentState(false);
-        setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
-      } catch (error) {
-        const errorMessage =
-          error instanceof SyntaxError
-            ? INVALID_AGENT_STATE_RESPONSE_ERROR
-            : error instanceof Error
-              ? error.message
-              : String(error);
-        setAgentStatusError(errorMessage);
-        setAgentStateResponse(null);
-        setIsShowingMockAgentState(false);
-        setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
-      }
-    });
-
-    const handleSocketClosed = () => {
-      setIsWebSocketConnected(false);
-      websocketRef.current = null;
-      scheduleReconnect();
-    };
-
-    socket.addEventListener("close", handleSocketClosed);
-    socket.addEventListener("error", handleSocketClosed);
-  }, []);
-
-  const fetchAgentState = useCallback(async () => {
-    setIsLoadingAgentState(true);
-    try {
-      if (shouldUseMockAgentState()) {
-        setAgentStateResponse(createMockAgentStateResponse());
-        setAgentStatusError(null);
-        setIsShowingMockAgentState(true);
-        setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
-        return;
-      }
-
-      const response = await fetch("/console/api/agent-state");
-      const responseText = await response.text();
-      if (!response.ok) {
-        let errorMessageFromResponse: string | null = null;
-        try {
-          const responseData = parseAgentStateResponse(responseText);
-          errorMessageFromResponse = responseData.error ?? null;
-        } catch {
-          errorMessageFromResponse = null;
-        }
-        throw new Error(errorMessageFromResponse ?? `配信状態の取得に失敗しました (${response.status})`);
-      }
-
-      const responseData = parseAgentStateResponse(responseText);
-      setAgentStateResponse(responseData);
-      setAgentStatusError(null);
-      setIsShowingMockAgentState(false);
-      setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
-    } catch (error) {
-      const errorMessage =
-        error instanceof SyntaxError
-          ? INVALID_AGENT_STATE_RESPONSE_ERROR
-          : error instanceof Error
-            ? error.message
-            : String(error);
-      setAgentStatusError(errorMessage);
-      setAgentStateResponse(null);
-      setIsShowingMockAgentState(false);
-      setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
-    } finally {
-      setIsLoadingAgentState(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchAgentState();
-  }, [fetchAgentState]);
-
-  useEffect(() => {
-    if (shouldUseMockAgentState()) {
-      return;
-    }
-    connectAgentStateWebSocket();
-    return cleanupAgentStateWebSocket;
-  }, [cleanupAgentStateWebSocket, connectAgentStateWebSocket]);
-
-  useEffect(() => {
-    if (shouldUseMockAgentState() || isWebSocketConnected) {
-      return;
-    }
-    return startAgentStateAutoRefresh(fetchAgentState);
-  }, [fetchAgentState, isWebSocketConnected]);
-
-  return (
-    <AgentStatusView
-      agentStateResponse={agentStateResponse}
-      agentStatusError={agentStatusError}
-      lastUpdatedTime={lastUpdatedTime}
-      isLoadingAgentState={isLoadingAgentState}
-      isShowingMockAgentState={isShowingMockAgentState}
-      fetchAgentState={fetchAgentState}
-    />
-  );
-}
-
-export const AgentStatus = AgentStatusWebSocket;
+ 

@@ -9,6 +9,9 @@
 
 ## 現在のチェックリスト
 
+- [x] [MUST] AgentStatus: single export — Ensure `console/src/AgentStatus.tsx` exports only one public component (`AgentStatus`).
+- [ ] [SHOULD] Scan console components — Find other `console/src` files that export multiple public components.
+- [x] [SHOULD] Run tsc & tests — Run typecheck and test suites to verify changes.
 
 <!-- 対応すべきタスクは以上です。 -->
 

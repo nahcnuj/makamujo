@@ -3,15 +3,24 @@ import { Fragment, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   AGENT_STATE_REFRESH_INTERVAL_MS,
-  createMockAgentStateResponse,
   createAgentStatusSections,
   createAgentStatusRows,
-  isAgentStateMockQueryEnabled,
-  parseAgentStateResponse,
-  shouldUseMockAgentState,
   startAgentStateAutoRefresh,
 } from "../../../console/src/AgentStatus";
+import { parseAgentStateResponse } from "../../../console/src/agentStateService";
 import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
+
+const createMockAgentStateResponse = () => cloneAgentStateResponseMockFixture();
+const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
+const isAgentStateMockQueryEnabled = (searchParams: string): boolean => {
+  return new URLSearchParams(searchParams).get(AGENT_STATE_MOCK_QUERY_KEY) === "1";
+};
+const shouldUseMockAgentState = (): boolean => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return isAgentStateMockQueryEnabled(window.location.search);
+};
 
 const originalSetInterval = globalThis.setInterval;
 const originalClearInterval = globalThis.clearInterval;
