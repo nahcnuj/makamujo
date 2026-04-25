@@ -1,36 +1,69 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { AgentStatusView, startAgentStateAutoRefresh } from "./AgentStatus";
 import { useAgentState } from "./hooks/useAgentState";
 import { useAgentStateWebSocket } from "./hooks/useAgentStateWebSocket";
+import { fetchAgentStateFromApi } from "./agentStateService";
 
 export function AgentStatus() {
+    const { state, setState } = useAgentState();
     const {
         agentStateResponse,
-        setAgentStateResponse,
         agentStatusError,
-        setAgentStatusError,
         lastUpdatedTime,
-        setLastUpdatedTime,
         isLoadingAgentState,
         isShowingMockAgentState,
-        setIsShowingMockAgentState,
-        fetchAgentState,
-    } = useAgentState();
+    } = state;
+
+    const fetchAgentState = useCallback(async () => {
+        setState({ isLoadingAgentState: true });
+        try {
+            const responseData = await fetchAgentStateFromApi(fetch);
+            setState((prev) => ({
+                ...prev,
+                agentStateResponse: responseData,
+                agentStatusError: null,
+                isShowingMockAgentState: false,
+                lastUpdatedTime: new Date().toLocaleTimeString("ja-JP"),
+            }));
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            setState((prev) => ({
+                ...prev,
+                agentStatusError: errorMessage,
+                agentStateResponse: null,
+                isShowingMockAgentState: false,
+                lastUpdatedTime: new Date().toLocaleTimeString("ja-JP"),
+            }));
+        } finally {
+            setState({ isLoadingAgentState: false });
+        }
+    }, [setState]);
 
     const { isWebSocketConnected } = useAgentStateWebSocket({
         onMessage: (response) => {
-            setAgentStateResponse(response);
-            setAgentStatusError(null);
-            setIsShowingMockAgentState(false);
-            setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
+            setState((prev) => ({
+                ...prev,
+                agentStateResponse: response,
+                agentStatusError: null,
+                isShowingMockAgentState: false,
+                lastUpdatedTime: new Date().toLocaleTimeString("ja-JP"),
+            }));
         },
         onError: (errorMessage) => {
-            setAgentStatusError(errorMessage);
-            setAgentStateResponse(null);
-            setIsShowingMockAgentState(false);
-            setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
+            setState((prev) => ({
+                ...prev,
+                agentStatusError: errorMessage,
+                agentStateResponse: null,
+                isShowingMockAgentState: false,
+                lastUpdatedTime: new Date().toLocaleTimeString("ja-JP"),
+            }));
         },
     });
+
+    useEffect(() => {
+        // initial fetch
+        void fetchAgentState();
+    }, [fetchAgentState]);
 
     useEffect(() => {
         if (isWebSocketConnected) {

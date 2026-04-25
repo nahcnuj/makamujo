@@ -1,47 +1,29 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import type { AgentStateResponse } from "../agentStateService";
-import { fetchAgentStateFromApi } from "../agentStateService";
+
+type HookState = {
+  agentStateResponse: AgentStateResponse | null;
+  agentStatusError: string | null;
+  lastUpdatedTime: string;
+  isLoadingAgentState: boolean;
+  isShowingMockAgentState: boolean;
+};
 
 export function useAgentState() {
-  const [agentStateResponse, setAgentStateResponse] = useState<AgentStateResponse | null>(null);
-  const [agentStatusError, setAgentStatusError] = useState<string | null>(null);
-  const [lastUpdatedTime, setLastUpdatedTime] = useState("");
-  const [isLoadingAgentState, setIsLoadingAgentState] = useState(false);
-  const [isShowingMockAgentState, setIsShowingMockAgentState] = useState(false);
+  const [state, setInternalState] = useState<HookState>({
+    agentStateResponse: null,
+    agentStatusError: null,
+    lastUpdatedTime: "",
+    isLoadingAgentState: false,
+    isShowingMockAgentState: false,
+  });
 
-  const fetchAgentState = useCallback(async () => {
-    setIsLoadingAgentState(true);
-    try {
-      const responseData = await fetchAgentStateFromApi(fetch);
-      setAgentStateResponse(responseData);
-      setAgentStatusError(null);
-      setIsShowingMockAgentState(false);
-      setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      setAgentStatusError(errorMessage);
-      setAgentStateResponse(null);
-      setIsShowingMockAgentState(false);
-      setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
-    } finally {
-      setIsLoadingAgentState(false);
-    }
-  }, []);
+  const setState = useCallback(
+    (patch: Partial<HookState> | ((prev: HookState) => Partial<HookState>)) => {
+      setInternalState((prev) => ({ ...prev, ...(typeof patch === "function" ? patch(prev) : patch) }));
+    },
+    [],
+  );
 
-  useEffect(() => {
-    void fetchAgentState();
-  }, [fetchAgentState]);
-
-  return {
-    agentStateResponse,
-    setAgentStateResponse,
-    agentStatusError,
-    setAgentStatusError,
-    lastUpdatedTime,
-    setLastUpdatedTime,
-    isLoadingAgentState,
-    isShowingMockAgentState,
-    setIsShowingMockAgentState,
-    fetchAgentState,
-  } as const;
+  return { state, setState } as const;
 }
