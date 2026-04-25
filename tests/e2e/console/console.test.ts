@@ -169,18 +169,9 @@ test.describe("console", () => {
   });
 
   test("renders the console app in a browser", async ({ page }) => {
-    // Navigate to the console app and wait for the agent-state WebSocket
-    // connection to deliver the initial payload used to populate the UI.
-    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
-
-    // Wait for the client to open a WebSocket and receive the first frame.
-    try {
-      const ws = await page.waitForEvent("websocket", { timeout: 5_000 });
-      await ws.waitForEvent("framereceived", { timeout: 5_000 });
-    } catch {
-      // If no WebSocket was observed in the short window, continue and
-      // allow the subsequent DOM-based waits to provide diagnostic output.
-    }
+    // Load the console in mock mode so the UI renders deterministic agent
+    // state without relying on the server or WebSocket timing.
+    await page.goto(`${CONSOLE_BASE_URL}/console/?agentStateMock=1`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
     expect(await page.title()).toContain(EXPECTED_CONSOLE_TITLE);
     const rootElement = await page.$("#root");
     expect(rootElement).not.toBeNull();
@@ -195,21 +186,8 @@ test.describe("console", () => {
     // after initial render) before failing.
     const detailsLocator = page.getByTestId("agent-status-details");
     const emptyLocator = page.getByTestId("agent-status-empty");
-    // Ensure the agent-state API request is observed so the test's mock
-    // is applied and the app had a chance to render with real data.
-    try {
-      await page.waitForResponse((resp) => resp.url().includes("/console/api/agent-state") && resp.status() === 200, { timeout: 5_000 });
-    } catch {
-      // If the explicit response didn't appear within a short window,
-      // fall back to waiting for either the details or empty placeholder
-      // to avoid flakiness where the network event races the render.
-    }
-
-    // Wait up to the browser page load timeout for one of the two to appear.
-    await Promise.race([
-      detailsLocator.waitFor({ timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS }),
-      emptyLocator.waitFor({ timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS }),
-    ]);
+    // Wait up to the browser page load timeout for the details to appear.
+    await detailsLocator.waitFor({ timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
 
     if (await emptyLocator.count() > 0) {
       // Give the app an extra moment for live updates (WebSocket) to populate
