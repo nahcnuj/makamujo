@@ -9,11 +9,11 @@
 
 ## 現在のチェックリスト
 
-- [x] [MUST] AgentStatus: single export — Ensure `console/src/AgentStatus.tsx` exports only one public component (`AgentStatus`).
-- [ ] [SHOULD] Scan console components — Find other `console/src` files that export multiple public components.
-- [x] [SHOULD] Run tsc & tests — Run typecheck and test suites to verify changes.
-
-<!-- 対応すべきタスクは以上です。 -->
-
-## 注意
+ - [x] Create `agentStateService.ts` (constants + URL helper)
+ - [x] Create `hooks/useAgentState.ts` (fetch + state)
+ - [x] Create `hooks/useAgentStateWebSocket.ts` (websocket logic)
+ - [x] Refactor `AgentStatusContainer.tsx` to use hooks/service
+ - [x] Update tests to import `createAgentStateWebSocketUrl` from service
+ - [x] Run typecheck and tests
+ - [x] Remove production mock helpers and move mocks to fixtures
 このファイルを編集したら、対応する全てのタスクを `manage_todo_list` ツールに送ってください。
