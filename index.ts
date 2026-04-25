@@ -97,25 +97,44 @@ const tts = process.platform !== 'win32' ?
   new FallbackTTS();
 
 const streamer = new MakaMujo(model, tts);
-let agent: any;
-try {
-  agent = createAgentApi(streamer);
-} catch (err) {
-  console.warn('[WARN]', 'createAgentApi failed, continuing with in-memory fallback agent:', err instanceof Error ? err.message : String(err));
-  // In-memory fallback agent: record published stream state and expose
-  // minimal APIs so tests and the HTTP routes can function without the
-  // external IPC-enabled agent implementation.
-  let lastPublishedStreamState: unknown = undefined;
-  let currentSpeechState = { speech: '', silent: false };
-  agent = {
-    setSpeech: (text: string) => { currentSpeechState = { speech: text, silent: false }; },
-    getSpeech: () => currentSpeechState,
-    getGame: () => null,
-    getStreamState: () => lastPublishedStreamState,
-    publishStreamState: (data: unknown) => { lastPublishedStreamState = data; },
-    postComments: (_: unknown) => {},
-  };
-}
+
+// Provide an in-memory fallback agent synchronously so the rest of the
+// server initialization can reference `agent` without awaiting a dynamic
+// import. We'll try to dynamically import and initialize the real
+// `automated-gameplay-transmitter` agent later and replace this fallback
+// when possible.
+let lastPublishedStreamState: unknown = undefined;
+let currentSpeechState = { speech: '', silent: false };
+let agent: any = {
+  setSpeech: (text: string) => { currentSpeechState = { speech: text, silent: false }; },
+  getSpeech: () => currentSpeechState,
+  getGame: () => null,
+  getStreamState: () => lastPublishedStreamState,
+  publishStreamState: (data: unknown) => { lastPublishedStreamState = data; },
+  postComments: (_: unknown) => {},
+};
+
+// Attempt to dynamically load the external agent API. This avoids module
+// evaluation side-effects at import time (such as binding to IPC paths)
+// which can cause transient failures in CI and local test runs.
+(async () => {
+  try {
+    const mod = await import("automated-gameplay-transmitter");
+    if (typeof mod.createAgentApi === 'function') {
+      try {
+        const externalAgent = mod.createAgentApi(streamer);
+        agent = externalAgent;
+        console.info('[INFO] external agent API initialized');
+      } catch (err) {
+        console.warn('[WARN] createAgentApi threw, keeping in-memory fallback:', err instanceof Error ? err.message : String(err));
+      }
+    } else {
+      console.warn('[WARN] automated-gameplay-transmitter did not export createAgentApi; using fallback agent');
+    }
+  } catch (err) {
+    console.warn('[WARN] dynamic import failed, continuing with in-memory fallback agent:', err instanceof Error ? err.message : String(err));
+  }
+})();
 // Keep only a recent window to avoid unbounded in-memory growth while keeping enough context for console operations.
 const GENERATED_SPEECH_HISTORY_MAX_LENGTH = 20;
 const generatedSpeechHistory: Array<{ id: string; speech: string; nGram: number; nGramRaw: number }> = [];
@@ -212,6 +231,7 @@ const server = serve({
     '/api/meta': {
       GET: () => {
         const streamState = agent.getStreamState();
+        console.debug('[DEBUG] GET /api/meta ->', JSON.stringify(streamState));
         return Response.json({
           niconama: streamState ?? {},
           canSpeak: streamer.canSpeak,
@@ -224,7 +244,9 @@ const server = serve({
       },
       POST: async (req) => {
         const body = await req.json();
-        agent.publishStreamState(body.data ?? body);
+        const published = body.data ?? body;
+        console.debug('[DEBUG] POST /api/meta <-', JSON.stringify(published));
+        agent.publishStreamState(published);
         return Response.json({});
       },
     },
