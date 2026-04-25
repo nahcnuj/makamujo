@@ -123,7 +123,7 @@ describe('speechable', () => {
     expect(agent.speechable).toBeTrue();
   });
 
-  it('should be true when a comment was received long ago but listener count just changed', () => {
+  it('should remain silent when a comment was received long ago and listener count just changed', () => {
     jest.spyOn(Date, 'now').mockReturnValue(0);
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.listen([viewerComment]);
@@ -132,7 +132,7 @@ describe('speechable', () => {
     // listener count just changed — resets listenersStaleSince
     agent.onAir(niconamaLive(10));
 
-    expect(agent.speechable).toBeTrue();
+    expect(agent.speechable).toBeFalse();
   });
 
   it('should be false when both listener count and last comment are stale', () => {

@@ -255,10 +255,16 @@ export class MakaMujo {
             this.#listenersStaleSince = new Date(Date.now());
             const now = Date.now();
             const commentsStale = this.#lastCommentAt === undefined || (now - this.#lastCommentAt.getTime()) >= SILENCE_THRESHOLD_MS;
-            if (commentsStale) {
+            const hadCommentBefore = this.#lastCommentAt !== undefined;
+            // Only prompt viewers when the agent previously had comments but has
+            // become silent due to no recent comments. Do not treat "never had
+            // comments" as the silent state for prompting.
+            if (hadCommentBefore && commentsStale) {
               if (!this.#hasPromptedCommentForViewerIncrease) {
                 this.#hasPromptedCommentForViewerIncrease = true;
-                this.speech('コメントしていってね〜');
+                // Call TTS directly so the prompt is emitted immediately
+                // (don't affect the main speech queue used by `speech()`).
+                void this.#tts.speech('コメントしていってね〜');
               }
             }
           }
@@ -297,6 +303,11 @@ export class MakaMujo {
         (now - this.#listenersStaleSince.getTime()) >= SILENCE_THRESHOLD_MS;
       const commentsStale = this.#lastCommentAt === undefined ||
         (now - this.#lastCommentAt.getTime()) >= SILENCE_THRESHOLD_MS;
+      // If we've already prompted viewers to comment after a viewer increase,
+      // remain silent until an actual comment arrives.
+      if (commentsStale && this.#hasPromptedCommentForViewerIncrease) {
+        return false;
+      }
       if (listenersStale && commentsStale) {
         return false;
       }
