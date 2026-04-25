@@ -56,6 +56,7 @@ export class MakaMujo {
   #currentProgramCommentCount = 0;
   #currentNGramSize = inferNGramSize(INITIAL_COMMENT_NUMBER);
   #currentNGramSizeRaw = inferNGramSizeRaw(INITIAL_COMMENT_NUMBER);
+  #hasPromptedCommentForViewerIncrease = false;
 
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
@@ -136,6 +137,8 @@ export class MakaMujo {
 
       // Update last comment timestamp for any received comment that counts as activity.
       this.#lastCommentAt = new Date(Date.now());
+      // Reset viewer-prompted flag when a real comment arrives
+      this.#hasPromptedCommentForViewerIncrease = false;
 
       if (typeof data.no === 'number' && data.no > 0) {
         const commentNumber = data.no;
@@ -244,11 +247,20 @@ export class MakaMujo {
           if (this.#currentProgramUrl !== url) {
             this.#currentProgramUrl = url;
             this.#currentProgramCommentCount = 0;
+            this.#hasPromptedCommentForViewerIncrease = false;
           }
 
           if (this.#lastListenerCount !== listeners) {
             this.#lastListenerCount = listeners;
             this.#listenersStaleSince = new Date(Date.now());
+            const now = Date.now();
+            const commentsStale = this.#lastCommentAt === undefined || (now - this.#lastCommentAt.getTime()) >= SILENCE_THRESHOLD_MS;
+            if (commentsStale) {
+              if (!this.#hasPromptedCommentForViewerIncrease) {
+                this.#hasPromptedCommentForViewerIncrease = true;
+                this.speech('コメントしていってね〜');
+              }
+            }
           }
         } else {
           this.#lastListenerCount = undefined;
