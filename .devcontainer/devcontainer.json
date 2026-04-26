@@ -1,0 +1,17 @@
+{
+  "name": "Makamujo Dev Container",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/git": "latest",
+    "ghcr.io/devcontainers/features/github-cli": "latest"
+  },
+  "workspaceFolder": "/workspace",
+  "mounts": [
+    "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached"
+  ],
+  "postCreateCommand": "bun ci",
+  "remoteUser": "vscode"
+}

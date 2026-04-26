@@ -20,6 +20,11 @@
 - [x] [MUST] Run `bun ci` to install dependencies — Completed (no dependency changes).
 - [x] [MUST] Run typecheck and unit tests — Completed; all tests passing.
 
+- [x] [MUST] Create DevContainer files (`.devcontainer/Dockerfile` and `.devcontainer/devcontainer.json`) — Added Debian 12 base image, installed Bun, configured features for Git and GitHub CLI, and set workspace mount.
+- [x] [MUST] Copy `package.json` and `bun.lock*` into image for build caching — `Dockerfile` copies `package.json` and `bun.lock*`.
+- [x] [MUST] Run `bun ci` after container creation — `devcontainer.json` has `postCreateCommand` set to `bun ci`.
+- [x] [MUST] Mount local repository root into container workspace folder — `devcontainer.json` sets `workspaceMount` to bind the local repo into `/workspace`.
+
 <!-- 対応すべきタスクは以上です。 -->
 
 ## 注意
