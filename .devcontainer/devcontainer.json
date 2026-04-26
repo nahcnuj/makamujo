@@ -8,10 +8,8 @@
     "ghcr.io/devcontainers/features/git": "latest",
     "ghcr.io/devcontainers/features/github-cli": "latest"
   },
-  "workspaceFolder": "/workspace",
-  "mounts": [
-    "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached"
-  ],
+  "workspaceMount": "source=${localWorkspaceFolder},target=${containerWorkspaceFolder},type=bind,consistency=cached",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "postCreateCommand": "bun ci",
   "remoteUser": "vscode"
 }
