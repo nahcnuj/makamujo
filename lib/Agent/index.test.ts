@@ -218,12 +218,13 @@ describe('speechable', () => {
 
     // Start a long-running main speech without awaiting it
     agent.speech('main-block');
-    // viewer count changes — should prompt immediately even while main speech is pending
+    // viewer count changes — prompt should be queued (not played) while main speech is pending
     agent.onAir(niconamaLive(11));
     // allow scheduled tasks to run
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(called).toHaveBeenCalledWith('コメントしていってね〜');
+    expect(called).toHaveBeenCalledWith('main-block', { additionalHalfTone: 3, speakingRate: 1.2 });
+    expect(called).not.toHaveBeenCalledWith('コメントしていってね〜', { additionalHalfTone: 3, speakingRate: 1.2 });
     expect(agent.speechable).toBeFalse();
   });
 
@@ -250,8 +251,9 @@ describe('speechable', () => {
     agent.onAir(niconamaLive(11));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(fail).toHaveBeenCalledWith('コメントしていってね〜');
-    expect(agent.speechable).toBeTrue();
+    // With queued behavior the prompt is not played while main speech is pending.
+    expect(fail).not.toHaveBeenCalledWith('コメントしていってね〜');
+    expect(agent.speechable).toBeFalse();
   });
 
   it('should be true again after stream goes offline following silence', () => {
