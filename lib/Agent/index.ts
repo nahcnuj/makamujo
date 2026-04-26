@@ -38,6 +38,7 @@ export class MakaMujo {
   #speechPromise = Promise.resolve();
   #speechListeners: Array<(text: string) => Promise<void>> = [];
   #speechCompleteListeners: Array<() => Promise<void>> = [];
+  #ttsErrorHandlers: Array<(text: string, err: unknown) => void> = [];
 
   #browserState?: State;
   #playing?: {
@@ -114,7 +115,13 @@ export class MakaMujo {
         ...this.#speechListeners.map(f => f(text)),
       ];
       if (typeof text === 'string' && text.trim().length > 0) {
-        tasks.unshift(this.#tts.speech(text, { additionalHalfTone: 3, speakingRate: 1.2 }));
+        const ttsTask = this.#tts.speech(text, { additionalHalfTone: 3, speakingRate: 1.2 }).catch((err) => {
+          for (const h of this.#ttsErrorHandlers) {
+            try { void h(text, err); } catch (_) { /* ignore handler errors */ }
+          }
+          throw err;
+        });
+        tasks.unshift(ttsTask);
       }
       await Promise.all(tasks);
       await Promise.all(this.#speechCompleteListeners.map(f => Promise.resolve(f())));
@@ -125,6 +132,11 @@ export class MakaMujo {
 
   onSpeech(cb: (text: string) => Promise<void>): MakaMujo {
     this.#speechListeners.push(cb);
+    return this;
+  }
+
+  onTtsError(cb: (text: string, err: unknown) => void): MakaMujo {
+    this.#ttsErrorHandlers.push(cb);
     return this;
   }
 
@@ -267,13 +279,22 @@ export class MakaMujo {
               if (!this.#hasPromptedCommentForViewerIncrease) {
                 this.#hasPromptedCommentForViewerIncrease = true;
                 // Call the prompt playback out-of-band so it doesn't wait on
-                // the main speech queue. If the prompt playback fails, clear
-                // the prompted flag so the agent can try again later.
-                const ttsTask = this.#tts.speech('コメントしていってね〜').catch((err) => {
-                  console.error('[ERROR]', 'prompting comment failed', err);
-                  this.#hasPromptedCommentForViewerIncrease = false;
-                });
-                void ttsTask;
+                // the main speech queue. Notify speech listeners so the
+                // console/UI is updated, and if the prompt playback fails,
+                // clear the prompted flag so the agent can try again later.
+                const promptText = 'コメントしていってね〜';
+                // Queue the prompt through the normal speech queue so it respects
+                // existing speech blocking. Register a temporary TTS error
+                // handler to clear the prompted flag if playback fails.
+                const clearOnError = (text: string, err: unknown) => {
+                  if (text === promptText) {
+                    console.error('[ERROR]', 'prompting comment failed', err);
+                    this.#hasPromptedCommentForViewerIncrease = false;
+                    this.#ttsErrorHandlers = this.#ttsErrorHandlers.filter(h => h !== clearOnError);
+                  }
+                };
+                this.#ttsErrorHandlers.push(clearOnError);
+                void this.speech(promptText);
               }
             }
           }
