@@ -403,6 +403,10 @@ const server = serve({
             return upgraded.response;
           } catch (err) {
             try { console.error('[ERROR] WebSocket upgrade failed (/api/ws)', err instanceof Error ? err.stack ?? err.message : String(err)); } catch {}
+            const msg = err instanceof Error ? err.message ?? '' : String(err);
+            if (msg.includes('upgradeWebSocket not available')) {
+              return new Response('websocket upgrade unavailable', { status: 501 });
+            }
             return new Response('WebSocket upgrade failed', { status: 400 });
           }
         }
@@ -463,6 +467,10 @@ const server = serve({
             return upgraded.response;
           } catch (err) {
             try { console.error('[ERROR] WebSocket upgrade failed (/console/api/ws)', err instanceof Error ? err.stack ?? err.message : String(err)); } catch {}
+            const msg = err instanceof Error ? err.message ?? '' : String(err);
+            if (msg.includes('upgradeWebSocket not available')) {
+              return new Response('websocket upgrade unavailable', { status: 501 });
+            }
             return new Response('WebSocket upgrade failed', { status: 400 });
           }
         }
