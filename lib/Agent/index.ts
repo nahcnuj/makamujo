@@ -83,6 +83,7 @@ export class MakaMujo {
         
         // NOTE: the body of this function is unchanged.
       this.#browserState = state;
+      console.debug('[DEBUG]', 'receiver got state', JSON.stringify(state, null, 0));
 
       if (state.name === 'closed') {
         this.#playing = undefined;
@@ -108,6 +109,7 @@ export class MakaMujo {
         return Action.noop;
       }
       console.debug('[DEBUG]', 'next action', JSON.stringify(value, null, 0));
+      console.debug('[DEBUG]', 'sending action', JSON.stringify(value, null, 0));
 
       return value;
       });

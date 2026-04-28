@@ -307,7 +307,33 @@ const server = serve({
             return Response.json({}, { status: 400 });
           }
 
-          const published = body.data ?? body;
+          let published = body.data ?? body;
+
+          // Normalize legacy stream payloads of the form { type: 'niconama', data: {...} }
+          // into the internal shape expected by getCurrentStreamPayload().
+          try {
+            if (published && typeof published === 'object' && 'type' in published && published.type === 'niconama') {
+              const d = published.data ?? {};
+              published = {
+                niconama: {
+                  type: d.isLive ? 'live' : 'offline',
+                  meta: {
+                    title: d.title ?? undefined,
+                    url: d.url ?? undefined,
+                    start: d.startTime ?? undefined,
+                    total: {
+                      listeners: typeof d.total === 'number' ? d.total : undefined,
+                      gift: d.points?.gift ?? undefined,
+                      ad: d.points?.ad ?? undefined,
+                      comments: undefined,
+                    },
+                  },
+                },
+              } as const;
+            }
+          } catch (err) {
+            console.warn('[WARN] failed to normalize published stream state:', err instanceof Error ? err.message : String(err));
+          }
 
           // Persist the published stream state so GET /api/meta reflects it.
           try {
@@ -432,7 +458,14 @@ const server = serve({
         const path = new URL(req.url).pathname;
         console.log('[TRACE] catch-all matched path=', path, 'accept=', req.headers.get('accept'));
       } catch {}
-      return (App as any);
+      try {
+        return new Response(Bun.file('./src/index.html'), {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        });
+      } catch (err) {
+        try { console.error('[ERROR] failed to serve index.html', err); } catch {}
+        return Response.json({}, { status: 500 });
+      }
     },
   },
 

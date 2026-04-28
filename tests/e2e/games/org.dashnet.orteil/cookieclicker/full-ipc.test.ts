@@ -32,7 +32,7 @@ test.describe("Full IPC operation", () => {
       // 1. Start `bun start`
       serverProcess = spawn(
         process.platform === "win32" ? "bun.exe" : "bun",
-        ["start", "--port", String(PORT)],
+        ["index.ts", "--port", String(PORT)],
         {
           env: {
             ...process.env,

@@ -57,7 +57,7 @@ test.beforeAll(async () => {
     ? `\\\\.\\pipe\\makamujo-ipc-${randomId}`
     : join(process.cwd(), "var", `ipc-${randomId}.sock`);
 
-  server = spawn(process.platform === "win32" ? "bun.exe" : "bun", ["start", "--port", String(PORT)], {
+  server = spawn(process.platform === "win32" ? "bun.exe" : "bun", ["index.ts", "--port", String(PORT)], {
     env: { ...process.env, NODE_ENV: "production", CONSOLE_LOOPBACK_ONLY: '1', MAKAMUJO_IPC_PATH: ipcPath },
     stdio: ["ignore", "pipe", "pipe"],
   });
