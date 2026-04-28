@@ -14,6 +14,7 @@ import { startConsoleServer } from "./console/index";
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import * as index from "./routes/index";
 import App from "./src/index.html";
+import { handleCatchAll } from "./src/catchAll";
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
@@ -135,19 +136,6 @@ const broadcastToWsClients = (payload: unknown) => {
       try { wsClients.delete(ws); } catch {}
     }
   }
-};
-
-// Resolve the runtime WebSocket upgrader function if available. Tests
-// can force-disable upgrades by setting `FORCE_DISABLE_WS_UPGRADE=1`.
-const getWsUpgrader = (): any | null => {
-  try {
-    const v = process.env.FORCE_DISABLE_WS_UPGRADE;
-    if (v === '1' || v === 'true') return null;
-  } catch {}
-  if (typeof (Bun as any).upgradeWebSocket === 'function') return (Bun as any).upgradeWebSocket;
-  if (typeof (globalThis as any).upgradeWebSocket === 'function') return (globalThis as any).upgradeWebSocket;
-  if (typeof (globalThis as any).Bun?.upgradeWebSocket === 'function') return (globalThis as any).Bun.upgradeWebSocket;
-  return null;
 };
 
 const getCurrentStreamPayload = () => {
@@ -382,53 +370,16 @@ const server = serve({
     '/api/ws': {
       GET: (req: Request) => {
         const accept = req.headers.get('accept') ?? '';
-        const upgradeHeader = req.headers.get('upgrade') ?? '';
-        try { console.log('[TRACE] /api/ws handler invoked, accept=', accept, 'upgrade=', upgradeHeader); } catch {}
-
-        // If the client initiated a WebSocket upgrade prefer handling the
-        // upgrade over SSE even if an Accept header is present. Some
-        // clients (or runtimes) may include both headers and the
-        // upgrade must take precedence to return a 101 response.
-        // Some environments omit or normalize the `Upgrade` header but
-        // still include the `Sec-WebSocket-Key` handshake header. Treat
-        // the presence of `Sec-WebSocket-Key` as an indicator of a WS
-        // handshake as well.
-        const hasSecWebSocketKey = !!req.headers.get('sec-websocket-key');
-        if (hasSecWebSocketKey || (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket')) {
-          try {
-            const upgrader = getWsUpgrader();
-            if (!upgrader) throw new Error('upgradeWebSocket not available');
-            const upgraded = upgrader(req, {
-              open(ws: any) {
-                try { console.log('[INFO] WebSocket client connected (/api/ws)'); } catch {}
-                try { wsClients.add(ws); } catch {}
-                try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch {}
-              },
-              message() {},
-              close(ws: any) { try { wsClients.delete(ws); } catch {} },
-              error(ws: any) { try { wsClients.delete(ws); } catch {} },
-            });
-            return upgraded.response;
-          } catch (err) {
-            try { console.error('[ERROR] WebSocket upgrade failed (/api/ws)', err instanceof Error ? err.stack ?? err.message : String(err)); } catch {}
-            const msg = err instanceof Error ? err.message ?? '' : String(err);
-            if (msg.includes('upgradeWebSocket not available')) {
-              return new Response('websocket upgrade unavailable', { status: 501 });
-            }
-            return new Response('WebSocket upgrade failed', { status: 400 });
-          }
-        }
-
+        try { console.log('[TRACE] /api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch {}
         if (accept.includes('text/event-stream')) {
-          let savedController: any = null;
           const stream = new ReadableStream({
             start(controller) {
-              savedController = controller;
               try { console.log('[INFO] SSE client connected (/api/ws)'); } catch {}
-              sseClients.add(savedController);
-              try { savedController.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
+              sseClients.add(controller);
+              // Send current state immediately.
+              try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
             },
-            cancel() { try { sseClients.delete(savedController); } catch {} },
+            cancel() { try { sseClients.delete(this); } catch {} },
           });
           return new Response(stream, {
             headers: {
@@ -440,54 +391,37 @@ const server = serve({
             status: 200,
           });
         }
-        return new Response('Unsupported', { status: 400 });
+
+        try {
+          const upgraded = (Bun as any).upgradeWebSocket(req, {
+            open(ws: any) {
+              try { console.log('[INFO] WebSocket client connected (/api/ws)'); } catch {}
+              try { wsClients.add(ws); } catch {}
+              try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch {}
+            },
+            message() {},
+            close(ws: any) { try { wsClients.delete(ws); } catch {} },
+            error(ws: any) { try { wsClients.delete(ws); } catch {} },
+          });
+          return upgraded.response;
+        } catch (err) {
+          return new Response('WebSocket upgrade failed', { status: 400 });
+        }
       },
     },
 
     '/console/api/ws': {
       GET: (req: Request) => {
         const accept = req.headers.get('accept') ?? '';
-        const upgradeHeader = req.headers.get('upgrade') ?? '';
-        try { console.log('[TRACE] /console/api/ws handler invoked, accept=', accept, 'upgrade=', upgradeHeader); } catch {}
-
-        // Prefer WebSocket upgrade if the client requested it. Also
-        // accept the handshake when `Sec-WebSocket-Key` is present.
-        const hasSecWebSocketKey2 = !!req.headers.get('sec-websocket-key');
-        if (hasSecWebSocketKey2 || (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket')) {
-          try {
-            const upgrader = getWsUpgrader();
-            if (!upgrader) throw new Error('upgradeWebSocket not available');
-            const upgraded = upgrader(req, {
-              open(ws: any) {
-                try { console.log('[INFO] WebSocket client connected (/console/api/ws)'); } catch {}
-                try { wsClients.add(ws); } catch {}
-                try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch {}
-              },
-              message() {},
-              close(ws: any) { try { wsClients.delete(ws); } catch {} },
-              error(ws: any) { try { wsClients.delete(ws); } catch {} },
-            });
-            return upgraded.response;
-          } catch (err) {
-            try { console.error('[ERROR] WebSocket upgrade failed (/console/api/ws)', err instanceof Error ? err.stack ?? err.message : String(err)); } catch {}
-            const msg = err instanceof Error ? err.message ?? '' : String(err);
-            if (msg.includes('upgradeWebSocket not available')) {
-              return new Response('websocket upgrade unavailable', { status: 501 });
-            }
-            return new Response('WebSocket upgrade failed', { status: 400 });
-          }
-        }
-
+        try { console.log('[TRACE] /console/api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch {}
         if (accept.includes('text/event-stream')) {
-          let savedController: any = null;
           const stream = new ReadableStream({
             start(controller) {
-              savedController = controller;
               try { console.log('[INFO] SSE client connected (/console/api/ws)'); } catch {}
-              sseClients.add(savedController);
-              try { savedController.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
+              sseClients.add(controller);
+              try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
             },
-            cancel() { try { sseClients.delete(savedController); } catch {} },
+            cancel() { try { sseClients.delete(this); } catch {} },
           });
           return new Response(stream, {
             headers: {
@@ -500,26 +434,30 @@ const server = serve({
           });
         }
 
-        return new Response('Unsupported', { status: 400 });
+        try {
+          const upgraded = (Bun as any).upgradeWebSocket(req, {
+            open(ws: any) {
+              try { console.log('[INFO] WebSocket client connected (/console/api/ws)'); } catch {}
+              try { wsClients.add(ws); } catch {}
+              try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch {}
+            },
+            message() {},
+            close(ws: any) { try { wsClients.delete(ws); } catch {} },
+            error(ws: any) { try { wsClients.delete(ws); } catch {} },
+          });
+          return upgraded.response;
+        } catch (err) {
+          return new Response('WebSocket upgrade failed', { status: 400 });
+        }
       },
     },
 
-    // Serve index.html for all unmatched routes. Placed last so that API
-    // routes are matched first and are not shadowed by this catch-all.
-    '/*': (req: Request) => {
-      try {
-        const path = new URL(req.url).pathname;
-        console.log('[TRACE] catch-all matched path=', path, 'accept=', req.headers.get('accept'));
-      } catch {}
-      try {
-        return new Response(Bun.file('./src/index.html'), {
-          headers: { 'Content-Type': 'text/html; charset=utf-8' },
-        });
-      } catch (err) {
-        try { console.error('[ERROR] failed to serve index.html', err); } catch {}
-        return Response.json({}, { status: 500 });
-      }
-    },
+    // Catch-all handler. Serve `index.html` only for navigation (HTML)
+    // requests; for other requests attempt to resolve static/module files
+    // from `./src` and `./src/public` so TypeScript/JSX modules can be
+    // requested by the browser (e.g. `/frontend.tsx`, `/App`). This avoids
+    // accidentally returning `index.html` for module imports.
+    '/*': handleCatchAll,
   },
 
   development: process.env.NODE_ENV !== "production" && {

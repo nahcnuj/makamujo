@@ -309,4 +309,32 @@ test.describe("console", () => {
     await expect(detailsLocator).toContainText("生成N-gram");
     await expect(detailsLocator).toContainText("4-gram", { timeout: 10_000 });
   });
+
+  test("proxy returns SSE content-type at /console/api/ws", async ({ request }) => {
+    const res = await request.get(`${CONSOLE_BASE_URL}/console/api/ws`, { headers: { accept: 'text/event-stream' } });
+    expect(res.ok(), `GET /console/api/ws failed: ${res.status()}`).toBeTruthy();
+    const ct = res.headers()['content-type'] || '';
+    expect(ct).toContain('text/event-stream');
+  });
+
+  test("proxy forwards WebSocket upgrades to broadcasting server", async ({ page }) => {
+    // Build a ws/wss URL matching the console origin used by the test harness.
+    const originUrl = new URL(CONSOLE_BASE_URL);
+    const wsProtocol = originUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${originUrl.host}/console/api/ws`;
+
+    const firstMessage = await page.evaluate(async (url) => {
+      return await new Promise((resolve, reject) => {
+        const ws = new WebSocket(url);
+        ws.binaryType = 'arraybuffer';
+        const timeout = setTimeout(() => { try { ws.close(); } catch {} ; reject(new Error('timeout')); }, 5000);
+        ws.onmessage = (ev) => { clearTimeout(timeout); try { ws.close(); } catch {} ; resolve(ev.data); };
+        ws.onerror = (e) => { clearTimeout(timeout); try { ws.close(); } catch {} ; reject(new Error('ws error')); };
+      });
+    }, wsUrl);
+
+    expect(firstMessage).toBeTruthy();
+    const parsed = JSON.parse(firstMessage as string);
+    expect(parsed).toHaveProperty('niconama');
+  });
 });

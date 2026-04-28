@@ -135,24 +135,83 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
 
         try {
           // Proxy to the loopback console server, which handles HTML bundling and routing.
-          const proxyURL = new URL(req.url);
-          proxyURL.protocol = 'http:';
-          proxyURL.hostname = '127.0.0.1';
-          proxyURL.port = String(loopbackConsolePort);
+            const proxyURL = new URL(req.url);
+            proxyURL.protocol = 'http:';
+            proxyURL.hostname = '127.0.0.1';
+            proxyURL.port = String(loopbackConsolePort);
 
-          // Strip hop-by-hop and origin-specific headers that should not be forwarded as-is.
-          const proxyHeaders = new Headers(req.headers);
-          proxyHeaders.delete('host');
-          proxyHeaders.delete('origin');
-          proxyHeaders.delete('referer');
+            // If this is an incoming WebSocket upgrade, proxy the upgrade by
+            // accepting the client's WebSocket and creating a client WebSocket
+            // to the loopback server, then bridge messages between them. Using
+            // `fetch` here cannot proxy WebSocket upgrade handshakes.
+            const upgradeHeader = (req.headers.get('upgrade') || '').toLowerCase();
+            if (upgradeHeader === 'websocket') {
+              try {
+                const wsPath = `${proxyURL.pathname}${proxyURL.search}`;
+                const loopbackWsUrl = `ws://127.0.0.1:${loopbackConsolePort}${wsPath}`;
+                const upgraded = (Bun as any).upgradeWebSocket(req, {
+                  open(clientWs: any) {
+                    try {
+                      const protocolsHeader = req.headers.get('sec-websocket-protocol');
+                      const protocols = protocolsHeader ? protocolsHeader.split(',').map((s) => s.trim()) : undefined;
+                      const target = protocols ? new WebSocket(loopbackWsUrl, protocols) : new WebSocket(loopbackWsUrl);
 
-          const response = await fetch(proxyURL.toString(), {
-            method: req.method,
-            headers: proxyHeaders,
-            body: req.body,
-          });
-          statusCode = response.status;
-          return response;
+                      target.binaryType = 'arraybuffer';
+
+                      target.onopen = () => {
+                        // noop
+                      };
+
+                      target.onmessage = (ev: any) => {
+                        try { clientWs.send(ev.data); } catch {}
+                      };
+
+                      target.onclose = () => { try { clientWs.close(); } catch {} };
+                      target.onerror = () => { try { clientWs.close(); } catch {} };
+
+                      clientWs.onmessage = (ev: any) => {
+                        try { target.send(ev.data); } catch {}
+                      };
+                      clientWs.onclose = () => { try { target.close(); } catch {} };
+                      clientWs.onerror = () => { try { target.close(); } catch {} };
+                    } catch (err) {
+                      try { clientWs.close(); } catch {}
+                    }
+                  },
+                  message() {},
+                  close() {},
+                  error() {},
+                });
+                return upgraded.response;
+              } catch (err) {
+                statusCode = 502;
+                errorLogger.write({
+                  event: 'console_ws_proxy_failed',
+                  clientIp: clientIpAddress,
+                  method: req.method,
+                  path: requestURL.pathname,
+                  query: requestURL.search,
+                  error: formatUnknownError(err),
+                  userAgent,
+                  referer,
+                });
+                return new Response('Bad Gateway', { status: 502 });
+              }
+            }
+
+            // Strip hop-by-hop and origin-specific headers that should not be forwarded as-is.
+            const proxyHeaders = new Headers(req.headers);
+            proxyHeaders.delete('host');
+            proxyHeaders.delete('origin');
+            proxyHeaders.delete('referer');
+
+            const response = await fetch(proxyURL.toString(), {
+              method: req.method,
+              headers: proxyHeaders,
+              body: req.body,
+            });
+            statusCode = response.status;
+            return response;
         } catch (err) {
           statusCode = 502;
           errorLogger.write({
