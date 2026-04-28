@@ -73,7 +73,18 @@ export const routes = {
           const upstreamWsUrl = upstreamUrlObj.toString();
           try { console.log('[DEBUG] /console/api/ws upstream websocket url ->', upstreamWsUrl); } catch {}
 
-          const upgraded = (Bun as any).upgradeWebSocket(req, {
+          const upgrader = ((): any => {
+            if (typeof (Bun as any).upgradeWebSocket === 'function') return (Bun as any).upgradeWebSocket;
+            if (typeof (globalThis as any).upgradeWebSocket === 'function') return (globalThis as any).upgradeWebSocket;
+            if (typeof (globalThis as any).Bun?.upgradeWebSocket === 'function') return (globalThis as any).Bun.upgradeWebSocket;
+            return null;
+          })();
+          if (!upgrader) {
+            try { console.warn('[WARN] no upgradeWebSocket API available for websocket bridge'); } catch {}
+            return new Response('websocket upgrade unavailable', { status: 501 });
+          }
+
+          const upgraded = upgrader(req, {
             open(clientWs: any) {
               try {
                 const protocols = protocolsHeader ? protocolsHeader.split(',').map((s) => s.trim()) : undefined;

@@ -383,7 +383,14 @@ const server = serve({
         const hasSecWebSocketKey = !!req.headers.get('sec-websocket-key');
         if (hasSecWebSocketKey || (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket')) {
           try {
-            const upgraded = (Bun as any).upgradeWebSocket(req, {
+            const upgrader = ((): any => {
+              if (typeof (Bun as any).upgradeWebSocket === 'function') return (Bun as any).upgradeWebSocket;
+              if (typeof (globalThis as any).upgradeWebSocket === 'function') return (globalThis as any).upgradeWebSocket;
+              if (typeof (globalThis as any).Bun?.upgradeWebSocket === 'function') return (globalThis as any).Bun.upgradeWebSocket;
+              return null;
+            })();
+            if (!upgrader) throw new Error('upgradeWebSocket not available');
+            const upgraded = upgrader(req, {
               open(ws: any) {
                 try { console.log('[INFO] WebSocket client connected (/api/ws)'); } catch {}
                 try { wsClients.add(ws); } catch {}
@@ -436,7 +443,14 @@ const server = serve({
         const hasSecWebSocketKey2 = !!req.headers.get('sec-websocket-key');
         if (hasSecWebSocketKey2 || (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket')) {
           try {
-            const upgraded = (Bun as any).upgradeWebSocket(req, {
+            const upgrader = ((): any => {
+              if (typeof (Bun as any).upgradeWebSocket === 'function') return (Bun as any).upgradeWebSocket;
+              if (typeof (globalThis as any).upgradeWebSocket === 'function') return (globalThis as any).upgradeWebSocket;
+              if (typeof (globalThis as any).Bun?.upgradeWebSocket === 'function') return (globalThis as any).Bun.upgradeWebSocket;
+              return null;
+            })();
+            if (!upgrader) throw new Error('upgradeWebSocket not available');
+            const upgraded = upgrader(req, {
               open(ws: any) {
                 try { console.log('[INFO] WebSocket client connected (/console/api/ws)'); } catch {}
                 try { wsClients.add(ws); } catch {}
