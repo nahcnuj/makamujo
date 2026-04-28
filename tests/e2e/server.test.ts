@@ -51,9 +51,14 @@ test.beforeAll(async () => {
   if (!existsSync("./var/cookieclicker.txt")) {
     writeFileSync("./var/cookieclicker.txt", "");
   }
+  // Use a unique IPC path per server run to avoid conflicts on Windows.
+  const randomId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  const ipcPath = process.platform === "win32"
+    ? `\\\\.\\pipe\\makamujo-ipc-${randomId}`
+    : join(process.cwd(), "var", `ipc-${randomId}.sock`);
 
-  server = spawn(process.platform === "win32" ? "bun.exe" : "bun", ["start", "--port", String(PORT)], {
-    env: { ...process.env, NODE_ENV: "production" },
+  server = spawn(process.platform === "win32" ? "bun.exe" : "bun", ["index.ts", "--port", String(PORT)], {
+    env: { ...process.env, NODE_ENV: "production", CONSOLE_LOOPBACK_ONLY: '1', MAKAMUJO_IPC_PATH: ipcPath },
     stdio: ["ignore", "pipe", "pipe"],
   });
 

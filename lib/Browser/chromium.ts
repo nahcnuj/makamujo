@@ -1,5 +1,6 @@
 import type { Browser } from "automated-gameplay-transmitter";
 import { setTimeout } from "node:timers/promises";
+import { existsSync } from "node:fs";
 import type { ViewportSize } from "playwright";
 import playwright from "playwright";
 import { chromium as $_ } from "playwright-extra";
@@ -15,8 +16,13 @@ export const create = async (
   },
 ): Promise<Browser> => {
   const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '60000', 10);
+  // If an explicit executablePath was provided but the file doesn't exist,
+  // ignore it and fall back to the Playwright channel mode so that
+  // installed Playwright browsers can be used in CI environments.
+  const effectiveExecutablePath = executablePath && existsSync(executablePath) ? executablePath : undefined;
+
   const launchOpts = {
-    ...(executablePath ? { executablePath } : { channel: 'chromium' }),
+    ...(effectiveExecutablePath ? { executablePath: effectiveExecutablePath } : { channel: 'chromium' }),
     headless: process.env.CHROMIUM_HEADLESS === '1',
     timeout: launchTimeout,
     // https://peter.sh/experiments/chromium-command-line-switches/

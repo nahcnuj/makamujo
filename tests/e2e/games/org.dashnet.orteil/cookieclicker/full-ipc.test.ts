@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { spawn } from "child_process";
-import { existsSync, writeFileSync, unlinkSync } from "fs";
+import { existsSync, writeFileSync, unlinkSync, mkdirSync, createWriteStream } from "fs";
 import { join } from "path";
 
 const PORT = 17779;
@@ -32,7 +32,7 @@ test.describe("Full IPC operation", () => {
       // 1. Start `bun start`
       serverProcess = spawn(
         process.platform === "win32" ? "bun.exe" : "bun",
-        ["start", "--port", String(PORT)],
+        ["index.ts", "--port", String(PORT)],
         {
           env: {
             ...process.env,
@@ -85,6 +85,16 @@ test.describe("Full IPC operation", () => {
           stdio: ["ignore", "pipe", "pipe"],
         },
       );
+
+      // capture browser logs for debugging
+      try { mkdirSync('./var/test-logs', { recursive: true }); } catch {}
+      const ts = Date.now();
+      const browserOutPath = `./var/test-logs/full-ipc-browser-${ts}.log`;
+      const browserErrPath = `./var/test-logs/full-ipc-browser-${ts}.err.log`;
+      const browserOutStream = createWriteStream(browserOutPath);
+      const browserErrStream = createWriteStream(browserErrPath);
+      browserProcess.stdout?.pipe(browserOutStream);
+      browserProcess.stderr?.pipe(browserErrStream);
 
       // 3. Monitor server stdout for the first 'noop' action.
       //    The solver emits `[DEBUG] next action {"name":"noop"}` when it
