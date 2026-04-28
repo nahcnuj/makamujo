@@ -376,7 +376,12 @@ const server = serve({
         // upgrade over SSE even if an Accept header is present. Some
         // clients (or runtimes) may include both headers and the
         // upgrade must take precedence to return a 101 response.
-        if (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket') {
+        // Some environments omit or normalize the `Upgrade` header but
+        // still include the `Sec-WebSocket-Key` handshake header. Treat
+        // the presence of `Sec-WebSocket-Key` as an indicator of a WS
+        // handshake as well.
+        const hasSecWebSocketKey = !!req.headers.get('sec-websocket-key');
+        if (hasSecWebSocketKey || (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket')) {
           try {
             const upgraded = (Bun as any).upgradeWebSocket(req, {
               open(ws: any) {
@@ -390,6 +395,7 @@ const server = serve({
             });
             return upgraded.response;
           } catch (err) {
+            try { console.error('[ERROR] WebSocket upgrade failed (/api/ws)', err instanceof Error ? err.stack ?? err.message : String(err)); } catch {}
             return new Response('WebSocket upgrade failed', { status: 400 });
           }
         }
@@ -425,8 +431,10 @@ const server = serve({
         const upgradeHeader = req.headers.get('upgrade') ?? '';
         try { console.log('[TRACE] /console/api/ws handler invoked, accept=', accept, 'upgrade=', upgradeHeader); } catch {}
 
-        // Prefer WebSocket upgrade if the client requested it.
-        if (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket') {
+        // Prefer WebSocket upgrade if the client requested it. Also
+        // accept the handshake when `Sec-WebSocket-Key` is present.
+        const hasSecWebSocketKey2 = !!req.headers.get('sec-websocket-key');
+        if (hasSecWebSocketKey2 || (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket')) {
           try {
             const upgraded = (Bun as any).upgradeWebSocket(req, {
               open(ws: any) {
@@ -440,6 +448,7 @@ const server = serve({
             });
             return upgraded.response;
           } catch (err) {
+            try { console.error('[ERROR] WebSocket upgrade failed (/console/api/ws)', err instanceof Error ? err.stack ?? err.message : String(err)); } catch {}
             return new Response('WebSocket upgrade failed', { status: 400 });
           }
         }
