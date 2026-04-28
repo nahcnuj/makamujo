@@ -369,16 +369,41 @@ const server = serve({
     '/api/ws': {
       GET: (req: Request) => {
         const accept = req.headers.get('accept') ?? '';
-        try { console.log('[TRACE] /api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch {}
+        const upgradeHeader = req.headers.get('upgrade') ?? '';
+        try { console.log('[TRACE] /api/ws handler invoked, accept=', accept, 'upgrade=', upgradeHeader); } catch {}
+
+        // If the client initiated a WebSocket upgrade prefer handling the
+        // upgrade over SSE even if an Accept header is present. Some
+        // clients (or runtimes) may include both headers and the
+        // upgrade must take precedence to return a 101 response.
+        if (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket') {
+          try {
+            const upgraded = (Bun as any).upgradeWebSocket(req, {
+              open(ws: any) {
+                try { console.log('[INFO] WebSocket client connected (/api/ws)'); } catch {}
+                try { wsClients.add(ws); } catch {}
+                try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch {}
+              },
+              message() {},
+              close(ws: any) { try { wsClients.delete(ws); } catch {} },
+              error(ws: any) { try { wsClients.delete(ws); } catch {} },
+            });
+            return upgraded.response;
+          } catch (err) {
+            return new Response('WebSocket upgrade failed', { status: 400 });
+          }
+        }
+
         if (accept.includes('text/event-stream')) {
+          let savedController: any = null;
           const stream = new ReadableStream({
             start(controller) {
+              savedController = controller;
               try { console.log('[INFO] SSE client connected (/api/ws)'); } catch {}
-              sseClients.add(controller);
-              // Send current state immediately.
-              try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
+              sseClients.add(savedController);
+              try { savedController.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
             },
-            cancel() { try { sseClients.delete(this); } catch {} },
+            cancel() { try { sseClients.delete(savedController); } catch {} },
           });
           return new Response(stream, {
             headers: {
@@ -390,37 +415,45 @@ const server = serve({
             status: 200,
           });
         }
-
-        try {
-          const upgraded = (Bun as any).upgradeWebSocket(req, {
-            open(ws: any) {
-              try { console.log('[INFO] WebSocket client connected (/api/ws)'); } catch {}
-              try { wsClients.add(ws); } catch {}
-              try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch {}
-            },
-            message() {},
-            close(ws: any) { try { wsClients.delete(ws); } catch {} },
-            error(ws: any) { try { wsClients.delete(ws); } catch {} },
-          });
-          return upgraded.response;
-        } catch (err) {
-          return new Response('WebSocket upgrade failed', { status: 400 });
-        }
+        return new Response('Unsupported', { status: 400 });
       },
     },
 
     '/console/api/ws': {
       GET: (req: Request) => {
         const accept = req.headers.get('accept') ?? '';
-        try { console.log('[TRACE] /console/api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch {}
+        const upgradeHeader = req.headers.get('upgrade') ?? '';
+        try { console.log('[TRACE] /console/api/ws handler invoked, accept=', accept, 'upgrade=', upgradeHeader); } catch {}
+
+        // Prefer WebSocket upgrade if the client requested it.
+        if (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket') {
+          try {
+            const upgraded = (Bun as any).upgradeWebSocket(req, {
+              open(ws: any) {
+                try { console.log('[INFO] WebSocket client connected (/console/api/ws)'); } catch {}
+                try { wsClients.add(ws); } catch {}
+                try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch {}
+              },
+              message() {},
+              close(ws: any) { try { wsClients.delete(ws); } catch {} },
+              error(ws: any) { try { wsClients.delete(ws); } catch {} },
+            });
+            return upgraded.response;
+          } catch (err) {
+            return new Response('WebSocket upgrade failed', { status: 400 });
+          }
+        }
+
         if (accept.includes('text/event-stream')) {
+          let savedController: any = null;
           const stream = new ReadableStream({
             start(controller) {
+              savedController = controller;
               try { console.log('[INFO] SSE client connected (/console/api/ws)'); } catch {}
-              sseClients.add(controller);
-              try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
+              sseClients.add(savedController);
+              try { savedController.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
             },
-            cancel() { try { sseClients.delete(this); } catch {} },
+            cancel() { try { sseClients.delete(savedController); } catch {} },
           });
           return new Response(stream, {
             headers: {
@@ -433,21 +466,7 @@ const server = serve({
           });
         }
 
-        try {
-          const upgraded = (Bun as any).upgradeWebSocket(req, {
-            open(ws: any) {
-              try { console.log('[INFO] WebSocket client connected (/console/api/ws)'); } catch {}
-              try { wsClients.add(ws); } catch {}
-              try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch {}
-            },
-            message() {},
-            close(ws: any) { try { wsClients.delete(ws); } catch {} },
-            error(ws: any) { try { wsClients.delete(ws); } catch {} },
-          });
-          return upgraded.response;
-        } catch (err) {
-          return new Response('WebSocket upgrade failed', { status: 400 });
-        }
+        return new Response('Unsupported', { status: 400 });
       },
     },
 
