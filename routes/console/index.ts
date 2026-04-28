@@ -186,8 +186,13 @@ export const routes = {
             },
             cancel(reason) {
               try { console.log('[DEBUG] /console/api/ws SSE rewrap -> cancel invoked', reason); } catch {}
-              if (reader && typeof reader.cancel === 'function') {
-                try { reader.cancel().catch(() => {}); } catch {}
+              if (reader) {
+                try {
+                  const r: any = reader;
+                  if (typeof r.cancel === 'function') {
+                    try { r.cancel().catch(() => {}); } catch {}
+                  }
+                } catch {}
               }
             },
           });
