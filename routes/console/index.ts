@@ -79,8 +79,15 @@ export const routes = {
                 const protocols = protocolsHeader ? protocolsHeader.split(',').map((s) => s.trim()) : undefined;
                 try { console.log('[DEBUG] websocket bridge open ->', { upstream: upstreamWsUrl, protocols }); } catch {}
 
-                const target = protocols ? new WebSocket(upstreamWsUrl, protocols) : new WebSocket(upstreamWsUrl);
-                target.binaryType = 'arraybuffer';
+                let target: WebSocket | null = null;
+                try {
+                  target = protocols ? new WebSocket(upstreamWsUrl, protocols) : new WebSocket(upstreamWsUrl);
+                  target.binaryType = 'arraybuffer';
+                } catch (err) {
+                  try { console.warn('[WARN] websocket bridge failed to construct target websocket', String(err)); } catch {}
+                  try { clientWs.close(); } catch {}
+                  return;
+                }
 
                 target.onopen = () => { try { console.log('[DEBUG] websocket bridge target.onopen'); } catch {} };
                 target.onmessage = (ev: any) => { try { clientWs.send(ev.data); } catch (err) { try { console.warn('[WARN] websocket target->client send failed', String(err)); } catch {} } };
@@ -135,9 +142,18 @@ export const routes = {
 
           try { console.log('[DEBUG] /console/api/ws SSE rewrap -> creating reader'); } catch {}
 
+          let reader: any = null;
+          let readerClosed = false;
           const stream = new ReadableStream({
             start(controller) {
-              const reader = (upstreamBody as any).getReader();
+              try {
+                reader = (upstreamBody as any).getReader();
+              } catch (err) {
+                try { console.warn('[WARN] /console/api/ws SSE rewrap -> failed to get reader', String(err)); } catch {}
+                try { controller.error(err); } catch {}
+                return;
+              }
+
               let firstChunkLogged = false;
 
               (async function pump() {
@@ -146,7 +162,10 @@ export const routes = {
                     const { done, value } = await reader.read();
                     if (done) {
                       try { console.log('[DEBUG] /console/api/ws SSE rewrap -> upstream done'); } catch {}
-                      controller.close();
+                      if (!readerClosed) {
+                        try { controller.close(); } catch {}
+                        readerClosed = true;
+                      }
                       break;
                     }
                     try {
@@ -160,14 +179,17 @@ export const routes = {
                 } catch (err) {
                   try { console.warn('[WARN] /console/api/ws SSE rewrap pump error', String(err)); } catch {}
                   try { controller.error(err); } catch {}
+                } finally {
+                  readerClosed = true;
                 }
               })();
-
-              // Cancel handler should attempt to cancel the upstream reader
-              controller.cancel = () => {
+            },
+            cancel(reason) {
+              try { console.log('[DEBUG] /console/api/ws SSE rewrap -> cancel invoked', reason); } catch {}
+              if (reader && typeof reader.cancel === 'function') {
                 try { reader.cancel().catch(() => {}); } catch {}
-              };
-            }
+              }
+            },
           });
 
           return new Response(stream, { status: proxied.status, headers: responseHeaders });
