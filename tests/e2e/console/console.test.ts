@@ -134,12 +134,12 @@ test.beforeAll(async ({ request }) => {
   let lastErr: Error | null = null;
   while (Date.now() < deadline) {
     try {
-      const health = await request.get(`${CONSOLE_BASE_URL}/console/robots.txt`);
-      if (health.ok()) {
+      const health = await fetch(`${CONSOLE_BASE_URL}/console/robots.txt`);
+      if (health.ok) {
         lastErr = null;
         break;
       }
-      lastErr = new Error(`unexpected status ${health.status()}`);
+      lastErr = new Error(`unexpected status ${health.status}`);
     } catch (err) {
       lastErr = err as Error;
     }
@@ -151,11 +151,11 @@ test.beforeAll(async ({ request }) => {
 
   // Register the test runner's IP as the allowed IP so that subsequent
   // requests to the IP-restricted console server are permitted.
-  const allowlistRegistrationResponse = await request.post(`${BROADCASTING_BASE_URL}/`);
+  const allowlistRegistrationResponse = await fetch(`${BROADCASTING_BASE_URL}/`, { method: 'POST' });
   const allowlistRegistrationResponseText = await allowlistRegistrationResponse.text();
   expect(
-    allowlistRegistrationResponse.ok(),
-    `Allowlist registration failed with status ${allowlistRegistrationResponse.status()} ${allowlistRegistrationResponse.statusText()}: ${allowlistRegistrationResponseText}`,
+    allowlistRegistrationResponse.ok,
+    `Allowlist registration failed with status ${allowlistRegistrationResponse.status} ${allowlistRegistrationResponse.statusText || ''}: ${allowlistRegistrationResponseText}`,
   ).toBeTruthy();
 });
 
@@ -245,14 +245,14 @@ test.describe("console", () => {
     // from the test runner. Do not read the body to avoid blocking on
     // an open SSE stream — just inspect status and headers.
     try {
-      const probe = await request.get(`${BROADCASTING_BASE_URL}/api/ws`, { headers: { accept: 'text/event-stream' } });
-      console.log('[TEST DIAG] /api/ws probe ->', { status: probe.status(), contentType: probe.headers()['content-type'] });
+      const probe = await fetch(`${BROADCASTING_BASE_URL}/api/ws`, { headers: { accept: 'text/event-stream' } });
+      console.log('[TEST DIAG] /api/ws probe ->', { status: probe.status, contentType: probe.headers.get('content-type') });
     } catch (err) {
       console.log('[TEST DIAG] /api/ws probe failed ->', String(err));
     }
     try {
-      const probe2 = await request.get(`${BROADCASTING_BASE_URL}/console/api/ws`, { headers: { accept: 'text/event-stream' } });
-      console.log('[TEST DIAG] /console/api/ws probe ->', { status: probe2.status(), contentType: probe2.headers()['content-type'] });
+      const probe2 = await fetch(`${BROADCASTING_BASE_URL}/console/api/ws`, { headers: { accept: 'text/event-stream' } });
+      console.log('[TEST DIAG] /console/api/ws probe ->', { status: probe2.status, contentType: probe2.headers.get('content-type') });
     } catch (err) {
       console.log('[TEST DIAG] /console/api/ws probe failed ->', String(err));
     }
@@ -261,10 +261,10 @@ test.describe("console", () => {
     // client should attempt a direct connection to the broadcasting
     // server (helpful when the proxy is misbehaving in tests).
     try {
-      const consoleEnvRes = await request.get(`${CONSOLE_BASE_URL}/console/env`);
+      const consoleEnvRes = await fetch(`${CONSOLE_BASE_URL}/console/env`);
       let consoleEnvBody = null;
       try { consoleEnvBody = await consoleEnvRes.json(); } catch {}
-      console.log('[TEST DIAG] /console/env ->', { status: consoleEnvRes.status(), body: consoleEnvBody });
+      console.log('[TEST DIAG] /console/env ->', { status: consoleEnvRes.status, body: consoleEnvBody });
     } catch (err) {
       console.log('[TEST DIAG] /console/env probe failed ->', String(err));
     }
@@ -301,8 +301,8 @@ test.describe("console", () => {
     await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
 
     const payload = cloneAgentStateResponseMockFixture();
-    const res = await request.post(`${BROADCASTING_BASE_URL}/api/meta`, { data: payload });
-    expect(res.ok(), `broadcast POST failed: ${res.status()}`).toBeTruthy();
+    const res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+    expect(res.ok, `broadcast POST failed: ${res.status}`).toBeTruthy();
 
     const detailsLocator = page.getByTestId("agent-status-details");
     await detailsLocator.waitFor({ timeout: 10_000 });
@@ -311,9 +311,9 @@ test.describe("console", () => {
   });
 
   test("proxy returns SSE content-type at /console/api/ws", async ({ request }) => {
-    const res = await request.get(`${CONSOLE_BASE_URL}/console/api/ws`, { headers: { accept: 'text/event-stream' } });
-    expect(res.ok(), `GET /console/api/ws failed: ${res.status()}`).toBeTruthy();
-    const ct = res.headers()['content-type'] || '';
+    const res = await fetch(`${CONSOLE_BASE_URL}/console/api/ws`, { headers: { accept: 'text/event-stream' } });
+    expect(res.ok, `GET /console/api/ws failed: ${res.status}`).toBeTruthy();
+    const ct = res.headers.get('content-type') || '';
     expect(ct).toContain('text/event-stream');
   });
 
