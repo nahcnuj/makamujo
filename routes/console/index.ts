@@ -48,10 +48,16 @@ export const routes = {
         const upstreamWsUrl = upstreamUrlObj.toString();
         try { console.log('[DEBUG] /console/api/ws upstream websocket url ->', upstreamWsUrl); } catch {}
 
-        const upgrader = ((): any => {
-          if (typeof (Bun as any).upgradeWebSocket === 'function') return (Bun as any).upgradeWebSocket;
-          if (typeof (globalThis as any).upgradeWebSocket === 'function') return (globalThis as any).upgradeWebSocket;
-          if (typeof (globalThis as any).Bun?.upgradeWebSocket === 'function') return (globalThis as any).Bun.upgradeWebSocket;
+        const upgrader = (() => {
+          try {
+            if (typeof globalThis !== 'undefined') {
+              if ((globalThis as any).Bun && typeof (globalThis as any).Bun.upgradeWebSocket === 'function') return (globalThis as any).Bun.upgradeWebSocket;
+              if (typeof (globalThis as any).upgradeWebSocket === 'function') return (globalThis as any).upgradeWebSocket;
+            }
+          } catch {}
+          try {
+            if (typeof Bun !== 'undefined' && (Bun as any).upgradeWebSocket) return (Bun as any).upgradeWebSocket;
+          } catch {}
           return null;
         })();
         if (!upgrader) {
@@ -60,7 +66,9 @@ export const routes = {
         }
 
         try { console.log('[DEBUG] invoking upgrader for client request'); } catch {}
-        const upgraded = upgrader(req, {
+        let upgraded: any = null;
+        try {
+          upgraded = upgrader(req, {
           open(clientWs: any) {
             // Simplified bridge: always use SSE->WS forwarding on upgrades.
             // This avoids relying on an upstream WebSocket client and
@@ -138,10 +146,25 @@ export const routes = {
           },
           message() {},
           close() {},
-        });
+          });
+        } catch (err) {
+          try { console.warn('[ERROR] upgrader threw', String(err)); } catch {}
+          upgraded = null;
+        }
 
-        try { console.log('[DEBUG] upgrader invoked, upgraded type ->', typeof upgraded, 'response status ->', upgraded && upgraded.response && upgraded.response.status); } catch {}
-        try { return upgraded.response; } catch (err) { try { console.warn('[ERROR] failed to return upgraded.response', String(err)); } catch {} }
+        try { console.log('[DEBUG] upgrader invoked, upgraded ->', upgraded && (upgraded.response || upgraded)); } catch {}
+        // Support both forms: upgraded may be a Response or an object with `response`.
+        try {
+          if (upgraded && (upgraded instanceof Response)) {
+            return upgraded;
+          }
+          if (upgraded && upgraded.response) {
+            return upgraded.response;
+          }
+        } catch (err) {
+          try { console.warn('[ERROR] failed to return upgraded response', String(err)); } catch {}
+        }
+
         return new Response('upgrade failed', { status: 500 });
       }
 
