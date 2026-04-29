@@ -341,30 +341,33 @@ test.describe("console", () => {
 
     let firstMessage: string | null = null;
     try {
-      firstMessage = await page.evaluate(async (proxyUrl, fallbackUrl) => {
-        return await new Promise((resolve, reject) => {
-          const timeoutMs = 5000;
-          function attempt(urlToConnect: string | null) {
-            if (!urlToConnect) {
-              return reject(new Error('no url to connect'));
-            }
-            const ws = new WebSocket(urlToConnect);
-            ws.binaryType = 'arraybuffer';
-            const timeout = setTimeout(() => { try { ws.close(); } catch {} ; reject(new Error('timeout')); }, timeoutMs);
-            ws.onmessage = (ev) => { clearTimeout(timeout); try { ws.close(); } catch {} ; resolve(ev.data); };
-            ws.onerror = () => {
-              clearTimeout(timeout);
-              try { ws.close(); } catch {}
-              if (urlToConnect === proxyUrl && fallbackUrl) {
-                attempt(fallbackUrl);
-              } else {
-                reject(new Error('ws error'));
+      firstMessage = await page.evaluate(
+        async ({ proxyUrl, fallbackUrl }: { proxyUrl: string | null; fallbackUrl: string | null }) => {
+          return await new Promise((resolve, reject) => {
+            const timeoutMs = 5000;
+            function attempt(urlToConnect: string | null) {
+              if (!urlToConnect) {
+                return reject(new Error('no url to connect'));
               }
-            };
-          }
-          attempt(proxyUrl);
-        });
-      }, wsUrl, broadcastingWsUrl);
+              const ws = new WebSocket(urlToConnect);
+              ws.binaryType = 'arraybuffer';
+              const timeout = setTimeout(() => { try { ws.close(); } catch {} ; reject(new Error('timeout')); }, timeoutMs);
+              ws.onmessage = (ev) => { clearTimeout(timeout); try { ws.close(); } catch {} ; resolve(ev.data); };
+              ws.onerror = () => {
+                clearTimeout(timeout);
+                try { ws.close(); } catch {}
+                if (urlToConnect === proxyUrl && fallbackUrl) {
+                  attempt(fallbackUrl);
+                } else {
+                  reject(new Error('ws error'));
+                }
+              };
+            }
+            attempt(proxyUrl);
+          });
+        },
+        { proxyUrl: wsUrl, fallbackUrl: broadcastingWsUrl },
+      );
     } catch (err) {
       console.log('[TEST DIAG] WS connection attempt failed ->', String(err));
     }
