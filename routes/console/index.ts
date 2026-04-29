@@ -73,6 +73,12 @@ export const routes = {
           const protocolsHeader = req.headers.get('sec-websocket-protocol') ?? '';
           try { console.log('[DEBUG] /console/api/ws websocket proxy handshake ->', { upgrade: upgradeHeader, connection: connectionHeader, protocols: protocolsHeader }); } catch {}
 
+          try {
+            const hdrs: Record<string, string> = {};
+            for (const [k, v] of req.headers.entries()) hdrs[k] = String(v);
+            try { console.log('[DIAG] /console/api/ws upgrade request headers ->', hdrs); } catch {}
+          } catch {}
+
           const upstreamUrlObj = new URL(proxyUrl);
           upstreamUrlObj.protocol = upstreamUrlObj.protocol === 'https:' ? 'wss:' : 'ws:';
           // Prefer IPv4 loopback when broadcasting host is configured as
@@ -83,6 +89,8 @@ export const routes = {
           }
           const upstreamWsUrl = upstreamUrlObj.toString();
           try { console.log('[DEBUG] /console/api/ws upstream websocket url ->', upstreamWsUrl); } catch {}
+
+          try { console.log('[DIAG] attempting websocket upgrade bridge (upgrader present)'); } catch {}
 
           const upgrader = ((): any => {
             if (typeof (Bun as any).upgradeWebSocket === 'function') return (Bun as any).upgradeWebSocket;
@@ -162,6 +170,7 @@ export const routes = {
                 };
 
                 try {
+                  try { console.log('[DIAG] creating upstream WebSocket ->', { upstreamWsUrl, protocols }); } catch {}
                   const target = protocols ? new WebSocket(upstreamWsUrl, protocols) : new WebSocket(upstreamWsUrl);
                   target.binaryType = 'arraybuffer';
 
@@ -169,10 +178,11 @@ export const routes = {
                   target.onmessage = (ev: any) => { try { clientWs.send(ev.data); } catch (err) { try { console.warn('[WARN] websocket target->client send failed', String(err)); } catch {} } };
                   target.onclose = (ev: any) => { try { console.log('[DEBUG] websocket bridge target.onclose', ev); clientWs.close(); } catch {} };
                   target.onerror = (ev: any) => {
-                    try { console.warn('[WARN] websocket bridge target.onerror', ev); } catch {}
+                    try { console.warn('[WARN] websocket bridge target.onerror', ev && typeof ev === 'object' ? JSON.stringify(ev) : String(ev)); } catch {}
                     // Attempt streaming SSE fallback so the browser still gets
                     // an initial payload even if the upstream WS handshake
                     // fails asynchronously.
+                    try { console.log('[DIAG] upstream target.onerror, invoking SSE fallback'); } catch {}
                     forwardSseToClient();
                   };
 
@@ -181,7 +191,9 @@ export const routes = {
                   clientWs.onerror = (ev: any) => { try { console.warn('[WARN] websocket bridge client.onerror', ev); target.close(); } catch {} };
                   return;
                 } catch (err) {
-                  try { console.warn('[WARN] websocket bridge failed, falling back to SSE stream initial-send', String(err)); } catch {}
+                  try { console.warn('[WARN] websocket bridge failed to construct target', String(err)); } catch {}
+                  try { console.error('[DIAG] websocket bridge construction error', err instanceof Error ? (err.stack ?? err.message) : String(err)); } catch {}
+                  try { console.log('[DIAG] falling back to SSE initial-send'); } catch {}
                 }
 
                 // Fallback: fetch current state from broadcasting server and
