@@ -90,4 +90,21 @@ describe("AgentStatus category sections", () => {
     expect(html).toContain("ゲーム情報");
     expect(html).toContain("<ul");
   });
+
+  it("renders speech history words as separate cards", () => {
+    const stateResponse = {
+      nGram: 4,
+      speechHistory: [
+        { id: "speech-1", speech: "alpha beta gamma", nGram: 4 },
+      ],
+    } as any;
+
+    const rows = require("./AgentStatus").createAgentStatusRows(stateResponse);
+    const markovRows = rows.filter((r: any) => r.label === "これまでの発話" || r.label === "生成N-gram");
+    const html = renderToStaticMarkup(<MarkovModelStatusSection markovModelRows={markovRows} />);
+
+    expect(html).toContain("これまでの発話");
+    // Expect each word to be rendered as a separate card element with distinctive class
+    expect((html.match(/speech-word-chip/g) || []).length).toBeGreaterThanOrEqual(3);
+  });
 });
