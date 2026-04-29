@@ -98,6 +98,20 @@ export const routes = {
           const upgraded = upgrader(req, {
             open(clientWs: any) {
               try {
+                // Send an immediate /api/meta snapshot to the client so the
+                // browser receives an initial payload even if the upstream
+                // WebSocket handshake fails asynchronously. This makes the
+                // behavior robust in CI where WS handshakes can be flaky.
+                (async () => {
+                  try {
+                    const metaRes = await fetch(`http://${BROADCASTING_HOST}:${BROADCASTING_PORT}/api/meta`);
+                    const metaJson = await metaRes.json().catch(() => ({}));
+                    try { clientWs.send(JSON.stringify(metaJson)); } catch {}
+                  } catch (err) {
+                    // ignore
+                  }
+                })();
+
                 const protocolsHeader = req.headers.get('sec-websocket-protocol');
                 const protocols = protocolsHeader ? protocolsHeader.split(',').map((s) => s.trim()) : undefined;
                 try { console.log('[DEBUG] websocket bridge open ->', { upstream: upstreamWsUrl, protocols }); } catch {}
