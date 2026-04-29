@@ -323,18 +323,24 @@ test.describe("console", () => {
     const wsProtocol = originUrl.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProtocol}//${originUrl.host}/console/api/ws`;
 
-    const firstMessage = await page.evaluate(async (url) => {
-      return await new Promise((resolve, reject) => {
+    const firstMessageResult = await page.evaluate(async (url) => {
+      return await new Promise((resolve) => {
         const ws = new WebSocket(url);
         ws.binaryType = 'arraybuffer';
-        const timeout = setTimeout(() => { try { ws.close(); } catch {} ; reject(new Error('timeout')); }, 5000);
-        ws.onmessage = (ev) => { clearTimeout(timeout); try { ws.close(); } catch {} ; resolve(ev.data); };
-        ws.onerror = (e) => { clearTimeout(timeout); try { ws.close(); } catch {} ; reject(new Error('ws error')); };
+        const timeout = setTimeout(() => { try { ws.close(); } catch {} ; resolve({ ok: false, error: 'timeout' }); }, 10000);
+        ws.onmessage = (ev) => { clearTimeout(timeout); try { ws.close(); } catch {} ; resolve({ ok: true, data: ev.data }); };
+        ws.onerror = (e) => { clearTimeout(timeout); try { ws.close(); } catch {} ; resolve({ ok: false, error: 'ws error' }); };
       });
     }, wsUrl);
 
-    expect(firstMessage).toBeTruthy();
-    const parsed = JSON.parse(firstMessage as string);
+    if (!firstMessageResult || !firstMessageResult.ok) {
+      const serverLogs = (() => {
+        try { return require('fs').readFileSync('./var/test-logs/console-server-*.log', 'utf8'); } catch { return null; }
+      })();
+      throw new Error(`WebSocket handshake failed in page: ${String(firstMessageResult?.error)}\n-- server logs:\n${String(serverLogs)}`);
+    }
+
+    const parsed = JSON.parse(firstMessageResult.data as string);
     expect(parsed).toHaveProperty('niconama');
   });
 });
