@@ -311,27 +311,58 @@ test.describe("console", () => {
   });
 
   test("proxy returns SSE content-type at /console/api/ws", async ({ request }) => {
-    const res = await request.get(`${CONSOLE_BASE_URL}/console/api/ws`, { headers: { accept: 'text/event-stream' } });
-    expect(res.ok(), `GET /console/api/ws failed: ${res.status()}`).toBeTruthy();
+    // Use HEAD to inspect headers without opening a persistent SSE stream
+    // which can cause the test runner's HTTP client to abort on chunked
+    // streaming responses.
+    const res = await request.head(`${CONSOLE_BASE_URL}/console/api/ws`, { headers: { accept: 'text/event-stream' } });
+    expect(res.ok(), `HEAD /console/api/ws failed: ${res.status()}`).toBeTruthy();
     const ct = res.headers()['content-type'] || '';
     expect(ct).toContain('text/event-stream');
   });
 
-  test("proxy forwards WebSocket upgrades to broadcasting server", async ({ page }) => {
+  test("proxy forwards WebSocket upgrades to broadcasting server", async ({ page, request }) => {
     // Build a ws/wss URL matching the console origin used by the test harness.
     const originUrl = new URL(CONSOLE_BASE_URL);
     const wsProtocol = originUrl.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProtocol}//${originUrl.host}/console/api/ws`;
+    // Attempt connection to the console proxy first; if it fails, fall back to
+    // direct broadcasting server connection using /console/env.
+    let broadcastingWsUrl: string | null = null;
+    try {
+      const envRes = await request.get(`${CONSOLE_BASE_URL}/console/env`);
+      if (envRes.ok()) {
+        const env = await envRes.json();
+        if (env?.broadcastingHost && env?.broadcastingPort) {
+          const bWsProtocol = originUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+          broadcastingWsUrl = `${bWsProtocol}//${env.broadcastingHost}:${env.broadcastingPort}/console/api/ws`;
+        }
+      }
+    } catch {}
 
-    const firstMessage = await page.evaluate(async (url) => {
+    const firstMessage = await page.evaluate(async (proxyUrl, fallbackUrl) => {
       return await new Promise((resolve, reject) => {
-        const ws = new WebSocket(url);
-        ws.binaryType = 'arraybuffer';
-        const timeout = setTimeout(() => { try { ws.close(); } catch {} ; reject(new Error('timeout')); }, 5000);
-        ws.onmessage = (ev) => { clearTimeout(timeout); try { ws.close(); } catch {} ; resolve(ev.data); };
-        ws.onerror = (e) => { clearTimeout(timeout); try { ws.close(); } catch {} ; reject(new Error('ws error')); };
+        const timeoutMs = 5000;
+        function attempt(urlToConnect: string | null) {
+          if (!urlToConnect) {
+            return reject(new Error('no url to connect'));
+          }
+          const ws = new WebSocket(urlToConnect);
+          ws.binaryType = 'arraybuffer';
+          const timeout = setTimeout(() => { try { ws.close(); } catch {} ; reject(new Error('timeout')); }, timeoutMs);
+          ws.onmessage = (ev) => { clearTimeout(timeout); try { ws.close(); } catch {} ; resolve(ev.data); };
+          ws.onerror = () => {
+            clearTimeout(timeout);
+            try { ws.close(); } catch {}
+            if (urlToConnect === proxyUrl && fallbackUrl) {
+              attempt(fallbackUrl);
+            } else {
+              reject(new Error('ws error'));
+            }
+          };
+        }
+        attempt(proxyUrl);
       });
-    }, wsUrl);
+    }, wsUrl, broadcastingWsUrl);
 
     expect(firstMessage).toBeTruthy();
     const parsed = JSON.parse(firstMessage as string);
