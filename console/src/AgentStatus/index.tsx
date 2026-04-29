@@ -169,11 +169,11 @@ const formatSpeechHistoryNGramLabel = (nGram: number | undefined): string => {
 
 const createSpeechHistoryDisplayItems = (
   speechHistory: AgentStateResponse["speechHistory"] | undefined,
-): Array<{ id: string; speechText: string; displayLine: string; nGramLabel: string }> => {
+): Array<{ id: string; speechText: string; displayLine: string; nGramLabel: string; nodes?: string[] }> => {
   if (!Array.isArray(speechHistory)) {
     return [];
   }
-  const speechHistoryItems = speechHistory.reduce<Array<{ id: string; speechText: string; displayLine: string; nGramLabel: string }>>(
+  const speechHistoryItems = speechHistory.reduce<Array<{ id: string; speechText: string; displayLine: string; nGramLabel: string; nodes?: string[] }>>(
     (accumulatedItems, speechHistoryItem) => {
       const speechText = speechHistoryItem.speech?.trim();
       if (!speechText) {
