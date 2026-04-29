@@ -69,8 +69,12 @@ export function handleCatchAll(req: Request): Response {
           const lines = out.split('\n');
           let insertAt = 0;
           for (let i = 0; i < lines.length; i++) {
+<<<<<<< HEAD
             const line = lines[i] ?? '';
             if (/^import\s/.test(line)) insertAt = i + 1;
+=======
+            if (/^import\s/.test(lines[i])) insertAt = i + 1;
+>>>>>>> 03251b5 (fix: prevent TSX parse error in embedded browsers (#218))
           }
           lines.splice(insertAt, 0, "import React from 'react';");
           out = lines.join('\n');
