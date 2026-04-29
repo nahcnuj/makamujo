@@ -10,6 +10,9 @@
 ## 現在のチェックリスト
 以下のタスクはリポジトリ内での作業チェックリストです。完了済みはチェック済みになっています。
 
+- [x] [MUST] Cache Playwright browsers in CI — Added restore/save cache steps to `.github/workflows/ci.yml` for `~/.cache/ms-playwright` to speed up E2E runs.
+- [x] [MUST] Sync `manage_todo_list` — Recorded progress and updated statuses via the `manage_todo_list` tool.
+
 - [x] [MUST] Fetch issue #202 and summarize — Retrieved issue content and inspected the issue.
 - [x] [MUST] Analyze repository for affected code — Inspected `lib/Agent/index.ts` and `lib/TTS` implementations.
 - [x] [SHOULD] Propose or implement fix — Implemented a small fix to reset the prompt flag on TTS failure; further verification recommended.

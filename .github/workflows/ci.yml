@@ -44,7 +44,6 @@ jobs:
         with:
           path: node_modules
           key: node-modules-${{ github.run_id }}
-          fail-on-cache-miss: true
       - name: Run tsc --noEmit
         run: bun run typecheck
 
@@ -69,8 +68,23 @@ jobs:
         with:
           path: node_modules
           key: node-modules-${{ github.run_id }}
+      - name: Restore Playwright browsers from cache
+        if: matrix.suite.label == 'e2e'
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ github.workspace }}/var/playwright-browsers
+          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          fail-on-cache-miss: false
       - name: Allow binding to port 443 without root
         if: matrix.suite.label == 'e2e'
         run: sudo sysctl -w net.ipv4.ip_unprivileged_port_start=443
       - name: Run ${{ matrix.suite.label }} tests
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/var/playwright-browsers
         run: bun run ${{ matrix.suite.script }}
+      - name: Save Playwright browsers to cache
+        if: matrix.suite.label == 'e2e'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ github.workspace }}/var/playwright-browsers
+          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('bun.lock') }}
