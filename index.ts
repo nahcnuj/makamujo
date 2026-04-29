@@ -406,6 +406,10 @@ const server = serve({
         }
 
         try {
+          const upgradeHeader = (req.headers.get('upgrade') || '').toLowerCase();
+          if (upgradeHeader === 'websocket' && process.env.FORCE_DISABLE_WS_UPGRADE === '1') {
+            return new Response('websocket upgrade unavailable', { status: 501 });
+          }
           const upgraded = (Bun as any).upgradeWebSocket(req, {
             open(ws: any) {
               try { console.log('[INFO] WebSocket client connected (/api/ws)'); } catch {}

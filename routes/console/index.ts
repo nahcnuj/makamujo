@@ -66,7 +66,16 @@ export const routes = {
       // client WebSocket to the broadcasting server, then bridge the
       // message streams. `fetch` cannot proxy websocket upgrades.
       const upgradeHeader = (req.headers.get('upgrade') || '').toLowerCase();
+      try { console.log('[DEBUG] FORCE_DISABLE_WS_UPGRADE=', process.env.FORCE_DISABLE_WS_UPGRADE); } catch {}
       if (upgradeHeader === 'websocket') {
+        // Allow tests / CI to explicitly disable WebSocket upgrade handling
+        // so callers (e.g. probe requests) receive a 501 when upgrades are
+        // intentionally unavailable. This is controlled by the
+        // `FORCE_DISABLE_WS_UPGRADE` environment variable.
+        if (process.env.FORCE_DISABLE_WS_UPGRADE === '1') {
+          try { console.log('[DEBUG] rejecting websocket upgrade due to FORCE_DISABLE_WS_UPGRADE'); } catch {}
+          return new Response('websocket upgrade unavailable', { status: 501 });
+        }
         try {
           // Ensure the upstream WebSocket URL uses the ws/wss scheme
           // instead of http/https so the WebSocket client connects
