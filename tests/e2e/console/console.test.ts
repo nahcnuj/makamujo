@@ -372,26 +372,8 @@ test.describe("console", () => {
       console.log('[TEST DIAG] WS connection attempt failed ->', String(err));
     }
 
-    if (firstMessage) {
-      expect(firstMessage).toBeTruthy();
-      const parsed = JSON.parse(firstMessage as string);
-      expect(parsed).toHaveProperty('niconama');
-    } else {
-      // No WebSocket message received from proxy or direct broadcasting
-      // server. Treat this as a test failure (do not accept the HTTP
-      // /api/meta fallback as a pass) but include diagnostics to aid
-      // triage when CI environments lack websocket connectivity.
-      try {
-        const metaRes = await request.get(`${BROADCASTING_BASE_URL}/api/meta`);
-        const metaStatus = metaRes.status();
-        let metaBody: unknown = null;
-        try { metaBody = await metaRes.json(); } catch {}
-        throw new Error(
-          `WebSocket upgrade not observed on proxy nor direct upstream. HTTP /api/meta returned status=${metaStatus} body=${JSON.stringify(metaBody)}`,
-        );
-      } catch (err) {
-        throw new Error(`WebSocket upgrade not observed and diagnostic fetch failed: ${String(err)}`);
-      }
-    }
+    expect(firstMessage).toBeTruthy();
+    const parsed = JSON.parse(firstMessage as string);
+    expect(parsed).toHaveProperty('niconama');
   });
 });
