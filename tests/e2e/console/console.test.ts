@@ -377,11 +377,21 @@ test.describe("console", () => {
       const parsed = JSON.parse(firstMessage as string);
       expect(parsed).toHaveProperty('niconama');
     } else {
-      // Final fallback: if WebSocket attempts failed, verify via HTTP meta
-      const metaRes = await request.get(`${BROADCASTING_BASE_URL}/api/meta`);
-      expect(metaRes.ok(), `HTTP fallback /api/meta failed: ${metaRes.status()}`).toBeTruthy();
-      const metaBody = await metaRes.json();
-      expect(metaBody).toHaveProperty('niconama');
+      // No WebSocket message received from proxy or direct broadcasting
+      // server. Treat this as a test failure (do not accept the HTTP
+      // /api/meta fallback as a pass) but include diagnostics to aid
+      // triage when CI environments lack websocket connectivity.
+      try {
+        const metaRes = await request.get(`${BROADCASTING_BASE_URL}/api/meta`);
+        const metaStatus = metaRes.status();
+        let metaBody: unknown = null;
+        try { metaBody = await metaRes.json(); } catch {}
+        throw new Error(
+          `WebSocket upgrade not observed on proxy nor direct upstream. HTTP /api/meta returned status=${metaStatus} body=${JSON.stringify(metaBody)}`,
+        );
+      } catch (err) {
+        throw new Error(`WebSocket upgrade not observed and diagnostic fetch failed: ${String(err)}`);
+      }
     }
   });
 });

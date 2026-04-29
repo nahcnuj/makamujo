@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 
-import { handleCatchAll } from "../../src/catchAll";
+import { handleCatchAll } from "./catchAll";
 
 test("serves frontend.tsx as JavaScript module", async () => {
   const req = new Request("http://localhost/frontend.tsx", { headers: { accept: '*/*' } });
