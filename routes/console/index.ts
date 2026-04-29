@@ -22,7 +22,7 @@ export const routes = {
       try {
         const incomingHost = req.headers.get('host') ?? '';
         if (incomingHost && proxyBase.includes(incomingHost)) {
-          proxyBase = `http://localhost:7777`;
+          proxyBase = `http://127.0.0.1:7777`;
           console.log('[WARN] Detected self-proxying; overriding proxyBase ->', proxyBase);
         }
       } catch {}
@@ -67,13 +67,20 @@ export const routes = {
       // is unreliable because it may not surface the 101 handshake.
       try {
         const upgradeHeader = (req.headers.get('upgrade') || '').toLowerCase();
-        if (upgradeHeader === 'websocket') {
+        const hasSecWebSocketKey = !!req.headers.get('sec-websocket-key');
+        if (upgradeHeader === 'websocket' || hasSecWebSocketKey) {
           const connectionHeader = req.headers.get('connection') ?? '';
           const protocolsHeader = req.headers.get('sec-websocket-protocol') ?? '';
           try { console.log('[DEBUG] /console/api/ws websocket proxy handshake ->', { upgrade: upgradeHeader, connection: connectionHeader, protocols: protocolsHeader }); } catch {}
 
           const upstreamUrlObj = new URL(proxyUrl);
           upstreamUrlObj.protocol = upstreamUrlObj.protocol === 'https:' ? 'wss:' : 'ws:';
+          // Prefer IPv4 loopback when broadcasting host is configured as
+          // 'localhost' to avoid environments where 'localhost' resolves
+          // to an IPv6 address that the loopback server is not bound to.
+          if (upstreamUrlObj.hostname === 'localhost' || BROADCASTING_HOST === 'localhost') {
+            upstreamUrlObj.hostname = '127.0.0.1';
+          }
           const upstreamWsUrl = upstreamUrlObj.toString();
           try { console.log('[DEBUG] /console/api/ws upstream websocket url ->', upstreamWsUrl); } catch {}
 
