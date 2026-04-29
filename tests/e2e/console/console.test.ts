@@ -370,10 +370,16 @@ test.describe("console", () => {
       );
     } catch (err) {
       console.log('[TEST DIAG] WS connection attempt failed ->', String(err));
+      throw err;
     }
 
     expect(firstMessage).toBeTruthy();
-    const parsed = JSON.parse(firstMessage as string);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(firstMessage as string);
+    } catch (err) {
+      throw new Error(`WebSocket first message is not valid JSON: ${String(err)} -- message: ${String(firstMessage)}`);
+    }
     expect(parsed).toHaveProperty('niconama');
   });
 });
