@@ -50,7 +50,10 @@ jobs:
   test:
     needs: setup
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    # E2E matrix can be slow (Playwright browser install, TLS setup,
+    # and test execution). Increase job timeout so E2E runs do not cause
+    # spurious CI cancellations.
+    timeout-minutes: 15
     strategy:
       matrix:
         suite:
