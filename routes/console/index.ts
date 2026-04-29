@@ -145,6 +145,28 @@ export const routes = {
         return new Response('websocket proxy failed', { status: 502 });
       }
 
+      // Special-case HEAD: some upstream streaming endpoints do not
+      // respond to HEAD consistently. To reliably expose headers to
+      // test runners without opening a persistent stream, perform a
+      // GET to the upstream and return only the headers for HEAD
+      // requests. Ensure we cancel the upstream body to avoid leaving
+      // the connection open.
+      let proxied: Response;
+      if ((req.method || '').toUpperCase() === 'HEAD') {
+        proxied = await fetch(proxyUrl.toString(), {
+          method: 'GET',
+          headers: proxyHeaders,
+        });
+        try {
+          const responseHeaders = new Headers(proxied.headers);
+          responseHeaders.set('cache-control', 'no-cache');
+          try { proxied.body && typeof proxied.body.cancel === 'function' && proxied.body.cancel(); } catch {}
+          return new Response(null, { status: proxied.status, headers: responseHeaders });
+        } catch (err) {
+          // Fall through to treat as a normal proxied response below
+        }
+      }
+
       const proxied = await fetch(proxyUrl.toString(), {
         method: req.method,
         headers: proxyHeaders,
