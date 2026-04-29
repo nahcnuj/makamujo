@@ -283,7 +283,12 @@ export const routes = {
   '/console/env': async () => {
     try {
       try { console.log('[TRACE] /console/env requested'); } catch {}
-      return new Response(JSON.stringify({ broadcastingHost: BROADCASTING_HOST, broadcastingPort: BROADCASTING_PORT }), {
+      // Normalize broadcasting host for browser clients: prefer IPv4
+      // loopback when configuration uses 'localhost' to avoid cases
+      // where 'localhost' resolves to an IPv6 address (::1) that the
+      // server is not bound to in some environments (Playwright CI).
+      const clientBroadcastingHost = BROADCASTING_HOST === 'localhost' ? '127.0.0.1' : BROADCASTING_HOST;
+      return new Response(JSON.stringify({ broadcastingHost: clientBroadcastingHost, broadcastingPort: BROADCASTING_PORT }), {
         headers: { 'Content-Type': 'application/json' },
         status: 200,
       });
