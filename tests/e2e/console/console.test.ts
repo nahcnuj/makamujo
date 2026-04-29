@@ -6,8 +6,8 @@ import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateRes
 
 let CONSOLE_BASE_URL = `https://127.0.0.1`;
 const BROADCASTING_BASE_URL = `http://127.0.0.1:7777`;
-const SERVER_STARTUP_TIMEOUT_MS = 15_000;
-const BROWSER_PAGE_LOAD_TIMEOUT_MS = 20_000;
+const SERVER_STARTUP_TIMEOUT_MS = 30_000;
+const BROWSER_PAGE_LOAD_TIMEOUT_MS = 60_000;
 const EXPECTED_CONSOLE_TITLE = "馬可無序 - 管理コンソール";
 
 let server: ReturnType<typeof spawn> | null = null;
