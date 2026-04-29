@@ -167,7 +167,7 @@ export const routes = {
         }
       }
 
-      const proxied = await fetch(proxyUrl.toString(), {
+      proxied = await fetch(proxyUrl.toString(), {
         method: req.method,
         headers: proxyHeaders,
         body: req.body,
