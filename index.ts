@@ -137,6 +137,19 @@ const broadcastToWsClients = (payload: unknown) => {
   }
 };
 
+// Resolve the runtime WebSocket upgrader function if available. Tests
+// can force-disable upgrades by setting `FORCE_DISABLE_WS_UPGRADE=1`.
+const getWsUpgrader = (): any | null => {
+  try {
+    const v = process.env.FORCE_DISABLE_WS_UPGRADE;
+    if (v === '1' || v === 'true') return null;
+  } catch {}
+  if (typeof (Bun as any).upgradeWebSocket === 'function') return (Bun as any).upgradeWebSocket;
+  if (typeof (globalThis as any).upgradeWebSocket === 'function') return (globalThis as any).upgradeWebSocket;
+  if (typeof (globalThis as any).Bun?.upgradeWebSocket === 'function') return (globalThis as any).Bun.upgradeWebSocket;
+  return null;
+};
+
 const getCurrentStreamPayload = () => {
   const agentStreamState = agent.getStreamState?.();
   const streamState = (lastPublishedStreamState === undefined || lastPublishedStreamState === null)
@@ -152,20 +165,6 @@ const getCurrentStreamPayload = () => {
     speech: base.speech ?? agent.getSpeech(),
     speechHistory: base.speechHistory ?? generatedSpeechHistory,
   } as const;
-
-  // Resolve the runtime WebSocket upgrader function if available. Tests
-  // can force-disable upgrades by setting `FORCE_DISABLE_WS_UPGRADE=1`.
-  const getWsUpgrader = () => {
-    try {
-      if (process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPRADE === 'true') {
-        return null;
-      }
-    } catch {}
-    if (typeof (Bun as any).upgradeWebSocket === 'function') return (Bun as any).upgradeWebSocket;
-    if (typeof (globalThis as any).upgradeWebSocket === 'function') return (globalThis as any).upgradeWebSocket;
-    if (typeof (globalThis as any).Bun?.upgradeWebSocket === 'function') return (globalThis as any).Bun.upgradeWebSocket;
-    return null;
-  };
 };
 
 let agent: any = {
