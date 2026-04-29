@@ -340,6 +340,8 @@ test.describe("console", () => {
 
     let firstMessage: string | null = null;
     try {
+      console.log('[TEST DIAG] wsUrl ->', wsUrl);
+      console.log('[TEST DIAG] broadcastingWsUrl ->', broadcastingWsUrl);
       firstMessage = await page.evaluate(
         async ({ proxyUrl, fallbackUrl }: { proxyUrl: string | null; fallbackUrl: string | null }) => {
           return await new Promise((resolve, reject) => {
