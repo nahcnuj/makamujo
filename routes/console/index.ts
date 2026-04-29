@@ -108,6 +108,45 @@ export const routes = {
                 // back to a lightweight behavior: fetch the current stream
                 // payload via HTTP and send it as the first message, which
                 // satisfies the E2E expectations for an initial update.
+                // Helper: open an SSE stream to the broadcasting server and
+                // forward `data:` events to the connected `clientWs` so the
+                // browser receives the initial payload even when a WS bridge
+                // cannot be established.
+                const forwardSseToClient = async () => {
+                  try {
+                    const sseUrl = `http://${BROADCASTING_HOST}:${BROADCASTING_PORT}/console/api/ws`;
+                    const res = await fetch(sseUrl, { headers: { accept: 'text/event-stream' } });
+                    const upstreamBody: any = res.body;
+                    if (!upstreamBody || typeof upstreamBody.getReader !== 'function') {
+                      // Non-streaming response: try JSON body as a single message.
+                      const json = await res.json().catch(() => ({}));
+                      try { clientWs.send(JSON.stringify(json)); } catch {}
+                      return;
+                    }
+
+                    const reader = upstreamBody.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    while (true) {
+                      const { done, value } = await reader.read();
+                      if (done) break;
+                      buffer += decoder.decode(value, { stream: true });
+                      let idx;
+                      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+                        const event = buffer.slice(0, idx);
+                        buffer = buffer.slice(idx + 2);
+                        const dataLines = event.split(/\r?\n/).filter((l) => l.startsWith('data:'));
+                        if (dataLines.length > 0) {
+                          const data = dataLines.map((l) => l.replace(/^data:\s?/, '')).join('\n');
+                          try { clientWs.send(data); } catch {}
+                        }
+                      }
+                    }
+                  } catch (err) {
+                    try { clientWs.close(); } catch {}
+                  }
+                };
+
                 try {
                   const target = protocols ? new WebSocket(upstreamWsUrl, protocols) : new WebSocket(upstreamWsUrl);
                   target.binaryType = 'arraybuffer';
@@ -116,22 +155,11 @@ export const routes = {
                   target.onmessage = (ev: any) => { try { clientWs.send(ev.data); } catch (err) { try { console.warn('[WARN] websocket target->client send failed', String(err)); } catch {} } };
                   target.onclose = (ev: any) => { try { console.log('[DEBUG] websocket bridge target.onclose', ev); clientWs.close(); } catch {} };
                   target.onerror = (ev: any) => {
-                    try {
-                      try { console.warn('[WARN] websocket bridge target.onerror', ev); } catch {}
-                      // Upstream connection failed after the client upgrade succeeded.
-                      // As a best-effort recovery for browsers, fetch the current
-                      // stream payload over HTTP and send it as the first WS
-                      // message instead of immediately closing the client socket.
-                      (async () => {
-                        try {
-                          const metaRes = await fetch(`http://${BROADCASTING_HOST}:${BROADCASTING_PORT}/api/meta`);
-                          const body = await metaRes.json().catch(() => ({}));
-                          try { clientWs.send(JSON.stringify(body)); } catch {}
-                        } catch (err) {
-                          try { clientWs.close(); } catch {}
-                        }
-                      })();
-                    } catch {};
+                    try { console.warn('[WARN] websocket bridge target.onerror', ev); } catch {}
+                    // Attempt streaming SSE fallback so the browser still gets
+                    // an initial payload even if the upstream WS handshake
+                    // fails asynchronously.
+                    forwardSseToClient();
                   };
 
                   clientWs.onmessage = (ev: any) => { try { target.send(ev.data); } catch (err) { try { console.warn('[WARN] websocket client->target send failed', String(err)); } catch {} } };
@@ -139,7 +167,7 @@ export const routes = {
                   clientWs.onerror = (ev: any) => { try { console.warn('[WARN] websocket bridge client.onerror', ev); target.close(); } catch {} };
                   return;
                 } catch (err) {
-                  try { console.warn('[WARN] websocket bridge failed, falling back to HTTP initial-send', String(err)); } catch {}
+                  try { console.warn('[WARN] websocket bridge failed, falling back to SSE stream initial-send', String(err)); } catch {}
                 }
 
                 // Fallback: fetch current state from broadcasting server and
