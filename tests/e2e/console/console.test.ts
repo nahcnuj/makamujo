@@ -290,11 +290,10 @@ test.describe("console", () => {
     // Wait for the client to select an SSE URL (either same-origin proxy or
     // a direct broadcasting server URL) so we can inspect which path the
     // browser attempted to connect to.
-    try {
-      await page.waitForFunction(() => (window as any).__sseUrl !== undefined, { timeout: 5_000 });
-    } catch {}
+    await page.waitForFunction(() => (window as any).__sseUrl !== undefined, { timeout: 5_000 });
     const sseUrl = await page.evaluate(() => (window as any).__sseUrl ?? null);
     console.log('[TEST DIAG] page.__sseUrl ->', sseUrl);
+    expect(sseUrl, 'page did not select an SSE URL (proxy or direct) before timeout').toBeTruthy();
 
     // Wait for the page to establish the SSE connection before sending
     // the broadcast POST to avoid timing-dependent flakiness.
