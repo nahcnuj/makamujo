@@ -165,9 +165,16 @@ export const routes = {
                       }
                     }
                   } catch (err) {
-                    try { clientWs.close(); } catch {}
+                    try { console.warn('[DIAG] forwardSseToClient failed', String(err)); } catch {}
+                    return;
                   }
                 };
+
+                // Start SSE-to-WS forwarding immediately so the client
+                // receives an initial payload promptly even if the upstream
+                // WS handshake is flaky in CI. This runs in parallel with
+                // attempting a bridged WebSocket connection.
+                try { forwardSseToClient(); } catch (err) { try { console.warn('[DIAG] forwardSseToClient invocation failed', String(err)); } catch {} }
 
                 try {
                   try { console.log('[DIAG] creating upstream WebSocket ->', { upstreamWsUrl, protocols }); } catch {}
