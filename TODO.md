@@ -27,5 +27,13 @@
 
 <!-- 対応すべきタスクは以上です。 -->
 
+## Current Work (added by automated agent)
+
+- [x] [MUST] Analyze failing e2e console WS proxy test — Located failing E2E test and inspected proxy code.
+- [x] [MUST] Reproduce failing test and collect logs — Reproduced integration behavior locally and collected logs.
+- [x] [MUST] Implement fix in console WS proxy bridging — Added HTTP /api/meta fallback on upstream WS error in routes/console/index.ts.
+- [ ] [MUST] Run E2E Playwright test to verify fix — Pending; Playwright browser run not executed in this session.
+- [ ] [MUST] Update PR with patch and summary — Pending: prepare PR comment with explanation.
+
 ## 注意
 このファイルを編集したら、対応する全てのタスクを `manage_todo_list` ツールに送ってください。
