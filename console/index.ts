@@ -58,6 +58,9 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
   const loopbackServer = serve({
     port: 0, // OS assigns a random available port
     hostname: '127.0.0.1',
+    // Keep long-lived connections (SSE / proxied WebSockets) open.
+    // The default idle timeout can close streaming responses after 10s.
+    idleTimeout: 0,
     routes: consoleRoutes.routes,
     development: process.env.NODE_ENV !== "production" && {
       // Enable browser hot reloading in development
@@ -97,6 +100,8 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
   try {
     outerServer = serve({
       port: 443,
+      // Keep long-lived connections open on the outer TLS server too.
+      idleTimeout: 0,
       async fetch(req, server) {
         const requestStartTime = Date.now();
         const requestURL = new URL(req.url);

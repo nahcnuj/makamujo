@@ -10,6 +10,9 @@
 ## 現在のチェックリスト
 以下のタスクはリポジトリ内での作業チェックリストです。完了済みはチェック済みになっています。
 
+- [x] [MUST] Cache Playwright browsers in CI — Added restore/save cache steps to `.github/workflows/ci.yml` for `~/.cache/ms-playwright` to speed up E2E runs.
+- [x] [MUST] Sync `manage_todo_list` — Recorded progress and updated statuses via the `manage_todo_list` tool.
+
 - [x] [MUST] Fetch issue #202 and summarize — Retrieved issue content and inspected the issue.
 - [x] [MUST] Analyze repository for affected code — Inspected `lib/Agent/index.ts` and `lib/TTS` implementations.
 - [x] [SHOULD] Propose or implement fix — Implemented a small fix to reset the prompt flag on TTS failure; further verification recommended.
@@ -27,13 +30,17 @@
 
 <!-- 対応すべきタスクは以上です。 -->
 
-## Current Work (added by automated agent)
+## ISSUE-211 — Console streaming proxy
 
-- [x] [MUST] Analyze failing e2e console WS proxy test — Located failing E2E test and inspected proxy code.
-- [x] [MUST] Reproduce failing test and collect logs — Reproduced integration behavior locally and collected logs.
-- [x] [MUST] Implement fix in console WS proxy bridging — Added HTTP /api/meta fallback on upstream WS error in routes/console/index.ts.
-- [ ] [MUST] Run E2E Playwright test to verify fix — Pending; Playwright browser run not executed in this session.
-- [ ] [MUST] Update PR with patch and summary — Pending: prepare PR comment with explanation.
+このセクションは Issue #211 の対応進捗を示します。AIエージェントはこのファイルと `manage_todo_list` を同期します。
+
+- [x] [MUST] Fix console proxy streaming — SSE cancel handlers and rewrap streams
+- [x] [MUST] Add E2E tests for SSE/WS proxy — validate SSE headers and WS upgrades
+- [ ] [MUST] Commit & push fixes (trigger CI) — push changes to the feature branch
+- [ ] [MUST] Monitor CI until green — watch the e2e job and confirm passing
+- [ ] [SHOULD] Gather CI artifacts on failure — download `test-results` and `var/test-logs`
+- [x] [SHOULD] Add debug logging for streams — added logs to routes/console/index.ts
+
 
 ## 注意
 このファイルを編集したら、対応する全てのタスクを `manage_todo_list` ツールに送ってください。

@@ -15,7 +15,6 @@ import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import * as index from "./routes/index";
 import App from "./src/index.html";
 import { handleCatchAll } from "./src/catchAll";
-import robotsTxt from "./routes/console/robots.txt";
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
@@ -224,9 +223,7 @@ streamer.onSpeechComplete(async () => {
   }, 1000);
 });
 
-// Defer starting the stream playback until after the HTTP servers are up.
-// This reduces startup latency observed in CI where synchronous work here
-// could delay the process becoming responsive to health checks.
+streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
 
 const portNumber = parseInt(port ?? "7777", 10);
 if (!Number.isFinite(portNumber) || portNumber < 1 || portNumber > 65535) {
@@ -236,6 +233,9 @@ if (!Number.isFinite(portNumber) || portNumber < 1 || portNumber > 65535) {
 
 const server = serve({
   port: portNumber,
+  // Keep long-lived connections (SSE / proxied WebSockets) open.
+  // The default idle timeout can close streaming responses after 10s.
+  idleTimeout: 0,
   routes: {
     // Serve nc433974.png from the public directory.
     '/nc433974.png': new Response(Bun.file('./src/public/nc433974.png')),
@@ -375,15 +375,25 @@ const server = serve({
         const accept = req.headers.get('accept') ?? '';
         try { console.log('[TRACE] /api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch {}
         if (accept.includes('text/event-stream')) {
-          const stream = new ReadableStream({
-            start(controller) {
-              try { console.log('[INFO] SSE client connected (/api/ws)'); } catch {}
-              sseClients.add(controller);
-              // Send current state immediately.
-              try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
-            },
-            cancel() { try { sseClients.delete(this); } catch {} },
-          });
+          const stream = new ReadableStream((function () {
+            let savedController: any = undefined;
+            return {
+              start(controller: any) {
+                try { console.log('[INFO] SSE client connected (/api/ws)'); } catch {}
+                savedController = controller;
+                sseClients.add(controller);
+                try { console.log('[DEBUG] sseClients count after add ->', sseClients.size); } catch {}
+                // Send current state immediately.
+                try {
+                  controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`);
+                  try { console.log('[DEBUG] SSE initial frame enqueued (/api/ws)'); } catch {}
+                } catch (err) {
+                  try { console.error('[ERROR] failed to enqueue initial SSE frame (/api/ws)', err); } catch {}
+                }
+              },
+              cancel() { try { if (savedController) { sseClients.delete(savedController); try { console.log('[DEBUG] sseClients count after delete ->', sseClients.size); } catch {} } } catch {} },
+            };
+          })());
           return new Response(stream, {
             headers: {
               'Content-Type': 'text/event-stream',
@@ -396,9 +406,6 @@ const server = serve({
         }
 
         try {
-          if (process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPGRADE === 'true') {
-            return new Response('websocket upgrade unavailable', { status: 501 });
-          }
           const upgraded = (Bun as any).upgradeWebSocket(req, {
             open(ws: any) {
               try { console.log('[INFO] WebSocket client connected (/api/ws)'); } catch {}
@@ -421,14 +428,24 @@ const server = serve({
         const accept = req.headers.get('accept') ?? '';
         try { console.log('[TRACE] /console/api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch {}
         if (accept.includes('text/event-stream')) {
-          const stream = new ReadableStream({
-            start(controller) {
-              try { console.log('[INFO] SSE client connected (/console/api/ws)'); } catch {}
-              sseClients.add(controller);
-              try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
-            },
-            cancel() { try { sseClients.delete(this); } catch {} },
-          });
+          const stream = new ReadableStream((function () {
+            let savedController: any = undefined;
+            return {
+              start(controller: any) {
+                try { console.log('[INFO] SSE client connected (/console/api/ws)'); } catch {}
+                savedController = controller;
+                sseClients.add(controller);
+                try { console.log('[DEBUG] sseClients count after add ->', sseClients.size); } catch {}
+                try {
+                  controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`);
+                  try { console.log('[DEBUG] SSE initial frame enqueued (/console/api/ws)'); } catch {}
+                } catch (err) {
+                  try { console.error('[ERROR] failed to enqueue initial SSE frame (/console/api/ws)', err); } catch {}
+                }
+              },
+              cancel() { try { if (savedController) { sseClients.delete(savedController); try { console.log('[DEBUG] sseClients count after delete ->', sseClients.size); } catch {} } } catch {} },
+            };
+          })());
           return new Response(stream, {
             headers: {
               'Content-Type': 'text/event-stream',
@@ -441,9 +458,6 @@ const server = serve({
         }
 
         try {
-          if (process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPGRADE === 'true') {
-            return new Response('websocket upgrade unavailable', { status: 501 });
-          }
           const upgraded = (Bun as any).upgradeWebSocket(req, {
             open(ws: any) {
               try { console.log('[INFO] WebSocket client connected (/console/api/ws)'); } catch {}
@@ -460,8 +474,6 @@ const server = serve({
         }
       },
     },
-
-    '/console/robots.txt': robotsTxt,
 
     // Catch-all handler. Serve `index.html` only for navigation (HTML)
     // requests; for other requests attempt to resolve static/module files
@@ -489,14 +501,6 @@ try {
 } catch (err) {
   const consoleStartupError = err instanceof Error ? (err.stack ?? err.message) : String(err);
   console.error(`[ERROR] CONSOLE_STARTUP_FAILED ${JSON.stringify(consoleStartupError)}`);
-}
-
-// Start the stream playback after servers are listening so startup is
-// responsive for health checks used by tests and CI.
-try {
-  streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
-} catch (err) {
-  console.warn('[WARN] streamer.play failed during startup:', err instanceof Error ? err.message : String(err));
 }
 
 let running = false;
