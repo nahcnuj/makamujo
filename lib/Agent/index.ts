@@ -300,7 +300,8 @@ export class MakaMujo {
                 // handler to clear the prompted flag if playback fails.
                 const clearOnError = (text: string, err: unknown) => {
                   if (text === promptText) {
-                    console.error('[ERROR]', 'prompting comment failed', err);
+                    const msg = err instanceof Error ? err.message : String(err);
+                    console.error('[ERROR]', 'prompting comment failed', msg);
                     this.#hasPromptedCommentForViewerIncrease = false;
                     this.#ttsErrorHandlers = this.#ttsErrorHandlers.filter(h => h !== clearOnError);
                   }
