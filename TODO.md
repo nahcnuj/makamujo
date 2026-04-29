@@ -30,6 +30,15 @@
 
 <!-- 対応すべきタスクは以上です。 -->
 
+## REBASE — sync `fix/issue-210` with `main` (Issue #217)
+
+- [ ] [MUST] Ensure working tree is clean — verify no uncommitted changes
+- [ ] [MUST] Fetch remote and update `main` — `git fetch` and `git pull --rebase`
+- [ ] [MUST] Rebase `fix/issue-210` onto `origin/main` — resolve conflicts if any
+- [ ] [SHOULD] Run tests locally — `bun run test` (recommended)
+- [ ] [MUST] Push `fix/issue-210` with `--force-with-lease` after rebase
+
+
 ## ISSUE-211 — Console streaming proxy
 
 このセクションは Issue #211 の対応進捗を示します。AIエージェントはこのファイルと `manage_todo_list` を同期します。
