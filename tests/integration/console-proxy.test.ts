@@ -5,6 +5,10 @@ import { existsSync, writeFileSync, mkdirSync } from "fs";
 const BROADCASTING_BASE_URL = `http://127.0.0.1:7777`;
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 
+// Integration test runner default timeouts can be too short on CI runners.
+// We avoid altering runner timeouts here and instead wait for the server
+// readiness message on stdout so the hook completes quickly.
+
 let server: ReturnType<typeof spawn> | null = null;
 
 beforeAll(async () => {
@@ -26,23 +30,50 @@ beforeAll(async () => {
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
+  // Wait for the server process to emit a ready message on stdout. This
+  // is more reliable than polling HTTP on CI, and avoids test harness
+  // hook timeouts that can occur under high load.
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      cleanupListeners();
+      reject(new Error('Server startup timed out'));
+    }, SERVER_STARTUP_TIMEOUT_MS);
 
-  const start = Date.now();
-  let lastErr: Error | null = null;
-  while (Date.now() - start < SERVER_STARTUP_TIMEOUT_MS) {
-    try {
-      const res = await fetch(`${BROADCASTING_BASE_URL}/console/robots.txt`);
-      if (res.ok) {
-        lastErr = null;
-        break;
+    let buffer = '';
+    const stdout = server!.stdout;
+    const stderr = server!.stderr;
+
+    function onData(chunk: any) {
+      buffer += String(chunk);
+      if (buffer.includes('Server running') || buffer.includes('🚀 Server running')) {
+        clearTimeout(timeout);
+        cleanupListeners();
+        resolve();
       }
-      lastErr = new Error(`unexpected status ${res.status}`);
-    } catch (err) {
-      lastErr = err as Error;
     }
-    await new Promise((r) => setTimeout(r, 250));
-  }
-  if (lastErr) throw new Error(`Console server not responding: ${String(lastErr)}`);
+
+    function onExit(code: number | null) {
+      clearTimeout(timeout);
+      cleanupListeners();
+      reject(new Error(`Server exited early with code ${code}`));
+    }
+
+    function cleanupListeners() {
+      try { stdout?.off('data', onData); } catch {}
+      try { stderr?.off('data', onData); } catch {}
+      try { server?.off('exit', onExit); } catch {}
+    }
+
+    try {
+      stdout?.on('data', onData);
+      stderr?.on('data', onData);
+      server?.on('exit', onExit);
+    } catch (err) {
+      clearTimeout(timeout);
+      cleanupListeners();
+      reject(err);
+    }
+  });
 });
 
 afterAll(() => {

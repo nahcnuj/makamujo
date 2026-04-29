@@ -10,9 +10,6 @@
 ## 現在のチェックリスト
 以下のタスクはリポジトリ内での作業チェックリストです。完了済みはチェック済みになっています。
 
-- [x] [MUST] Cache Playwright browsers in CI — Added restore/save cache steps to `.github/workflows/ci.yml` for `~/.cache/ms-playwright` to speed up E2E runs.
-- [x] [MUST] Sync `manage_todo_list` — Recorded progress and updated statuses via the `manage_todo_list` tool.
-
 - [x] [MUST] Fetch issue #202 and summarize — Retrieved issue content and inspected the issue.
 - [x] [MUST] Analyze repository for affected code — Inspected `lib/Agent/index.ts` and `lib/TTS` implementations.
 - [x] [SHOULD] Propose or implement fix — Implemented a small fix to reset the prompt flag on TTS failure; further verification recommended.
@@ -30,13 +27,13 @@
 
 <!-- 対応すべきタスクは以上です。 -->
 
+## Current Work (added by automated agent)
+
+- [x] [MUST] Analyze failing e2e console WS proxy test — Located failing E2E test and inspected proxy code.
+- [x] [MUST] Reproduce failing test and collect logs — Reproduced integration behavior locally and collected logs.
+- [x] [MUST] Implement fix in console WS proxy bridging — Added HTTP /api/meta fallback on upstream WS error in routes/console/index.ts.
+- [ ] [MUST] Run E2E Playwright test to verify fix — Pending; Playwright browser run not executed in this session.
+- [ ] [MUST] Update PR with patch and summary — Pending: prepare PR comment with explanation.
+
 ## 注意
 このファイルを編集したら、対応する全てのタスクを `manage_todo_list` ツールに送ってください。
-
-## このセッションで実行したタスク
-
-- [x] [MUST] Run tests and collect failures — Ran `bun ci` and executed unit tests (all passing).
-- [x] [MUST] Fix failing tests and code errors — Applied fixes where needed; tests passing.
-- [x] [MUST] Re-run tests until all pass — Verified all tests pass locally.
-- [x] [MUST] Commit changes and update TODO.md — Updated `TODO.md` and synced via `manage_todo_list`.
-- [x] [MUST] Push branch to remote — Pushed `fix/expert-debugger/add-agent-clean` to `origin`.

@@ -3,7 +3,11 @@ import { AllowedIP } from "../lib/allowedIP";
 export const POST: Bun.Serve.Handler<Bun.BunRequest, Bun.Server<unknown>, Response> = (req, server) => {
   const ip = server.requestIP(req);
   if (!ip) {
-    console.error('[ERROR]', `No IP address is available in the request:`, JSON.stringify(req));
+    try {
+      console.error('[ERROR]', 'No IP address is available in the request:', { method: req.method, url: req.url });
+    } catch {
+      console.error('[ERROR]', 'No IP address is available in the request (failed to log request details)');
+    }
     return Response.json(undefined, { status: 404 });
   }
   AllowedIP.set(ip);
