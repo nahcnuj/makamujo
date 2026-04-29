@@ -51,24 +51,82 @@ export const routes = {
       } catch {}
 
       const proxyHeaders = new Headers(req.headers);
-      // Strip hop-by-hop and origin-specific headers that should not be
-      // forwarded as-is. Do not forcibly override the `Host` header;
-      // letting the underlying fetch set the host avoids surprising
-      // virtual-host routing differences when making local loopback
-      // requests.
-      // Ensure upstream sees the broadcasting host string that the
-      // server advertises. This helps when the server's routing may be
-      // sensitive to the Host header (e.g., localhost vs 127.0.0.1).
       proxyHeaders.set('host', `${BROADCASTING_HOST}:${BROADCASTING_PORT}`);
       proxyHeaders.delete('origin');
       proxyHeaders.delete('referer');
-      // EventSource clients send `Accept: text/event-stream`. If the
-      // header is missing for any reason, prefer SSE semantics by
-      // defaulting the Accept header.
       if (!proxyHeaders.has('accept')) {
         proxyHeaders.set('accept', 'text/event-stream');
       }
 
+      // Handle WebSocket upgrade requests directly so we can bridge the
+      // upgrade to the broadcasting server. Using fetch() for upgrades
+      // is unreliable because it may not surface the 101 handshake.
+      try {
+        const upgradeHeader = (req.headers.get('upgrade') || '').toLowerCase();
+        if (upgradeHeader === 'websocket') {
+          const connectionHeader = req.headers.get('connection') ?? '';
+          const protocolsHeader = req.headers.get('sec-websocket-protocol') ?? '';
+          try { console.log('[DEBUG] /console/api/ws websocket proxy handshake ->', { upgrade: upgradeHeader, connection: connectionHeader, protocols: protocolsHeader }); } catch {}
+
+          const upstreamUrlObj = new URL(proxyUrl);
+          upstreamUrlObj.protocol = upstreamUrlObj.protocol === 'https:' ? 'wss:' : 'ws:';
+          const upstreamWsUrl = upstreamUrlObj.toString();
+          try { console.log('[DEBUG] /console/api/ws upstream websocket url ->', upstreamWsUrl); } catch {}
+
+          const upgrader = ((): any => {
+            if (typeof (Bun as any).upgradeWebSocket === 'function') return (Bun as any).upgradeWebSocket;
+            if (typeof (globalThis as any).upgradeWebSocket === 'function') return (globalThis as any).upgradeWebSocket;
+            if (typeof (globalThis as any).Bun?.upgradeWebSocket === 'function') return (globalThis as any).Bun.upgradeWebSocket;
+            return null;
+          })();
+          if (!upgrader) {
+            try { console.warn('[WARN] no upgradeWebSocket API available for websocket bridge'); } catch {}
+            return new Response('websocket upgrade unavailable', { status: 501 });
+          }
+
+          const upgraded = upgrader(req, {
+            open(clientWs: any) {
+              try {
+                const protocols = protocolsHeader ? protocolsHeader.split(',').map((s) => s.trim()) : undefined;
+                try { console.log('[DEBUG] websocket bridge open ->', { upstream: upstreamWsUrl, protocols }); } catch {}
+
+                let target: WebSocket | null = null;
+                try {
+                  target = protocols ? new WebSocket(upstreamWsUrl, protocols) : new WebSocket(upstreamWsUrl);
+                  target.binaryType = 'arraybuffer';
+                } catch (err) {
+                  try { console.warn('[WARN] websocket bridge failed to construct target websocket', String(err)); } catch {}
+                  try { clientWs.close(); } catch {}
+                  return;
+                }
+
+                target.onopen = () => { try { console.log('[DEBUG] websocket bridge target.onopen'); } catch {} };
+                target.onmessage = (ev: any) => { try { clientWs.send(ev.data); } catch (err) { try { console.warn('[WARN] websocket target->client send failed', String(err)); } catch {} } };
+                target.onclose = (ev: any) => { try { console.log('[DEBUG] websocket bridge target.onclose', ev); clientWs.close(); } catch {} };
+                target.onerror = (ev: any) => { try { console.warn('[WARN] websocket bridge target.onerror', ev); clientWs.close(); } catch {} };
+
+                clientWs.onmessage = (ev: any) => { try { target.send(ev.data); } catch (err) { try { console.warn('[WARN] websocket client->target send failed', String(err)); } catch {} } };
+                clientWs.onclose = (ev: any) => { try { console.log('[DEBUG] websocket bridge client.onclose', ev); target.close(); } catch {} };
+                clientWs.onerror = (ev: any) => { try { console.warn('[WARN] websocket bridge client.onerror', ev); target.close(); } catch {} };
+              } catch (err) {
+                try { console.warn('[WARN] websocket bridge open handler failed', String(err)); } catch {}
+                try { clientWs.close(); } catch {}
+              }
+            },
+            message() {},
+            close() {},
+            error() {},
+          });
+          return upgraded.response;
+        }
+      } catch (err) {
+        try { console.warn('[WARN] websocket proxy failed prefetch', String(err)); } catch {}
+        return new Response('websocket proxy failed', { status: 502 });
+      }
+
+      // Non-upgrade: proxy the request using fetch and, if the upstream
+      // response is an SSE stream, rewrap the body to ensure Bun does
+      // not buffer it before sending to the browser.
       const proxied = await fetch(proxyUrl.toString(), {
         method: req.method,
         headers: proxyHeaders,
@@ -82,31 +140,83 @@ export const routes = {
         });
       } catch {}
 
-      // If the upstream responded with an SSE stream, re-wrap the
-      // streaming body so Bun forwards chunks to the browser without
-      // buffering. For non-streaming responses (e.g., the SPA index
-      // HTML), return the upstream response unchanged so callers get a
-      // faithful response.
       try {
         const contentType = proxied.headers.get('content-type') ?? '';
         if (contentType.includes('text/event-stream')) {
           const responseHeaders = new Headers(proxied.headers);
           responseHeaders.set('cache-control', 'no-cache');
-          return new Response(proxied.body, {
-            status: proxied.status,
-            headers: responseHeaders,
+
+          const upstreamBody = proxied.body;
+          if (!upstreamBody) {
+            return new Response(null, { status: proxied.status, headers: responseHeaders });
+          }
+
+          try { console.log('[DEBUG] /console/api/ws SSE rewrap -> creating reader'); } catch {}
+
+          let reader: any = null;
+          let readerClosed = false;
+          const stream = new ReadableStream({
+            start(controller) {
+              try {
+                reader = (upstreamBody as any).getReader();
+              } catch (err) {
+                try { console.warn('[WARN] /console/api/ws SSE rewrap -> failed to get reader', String(err)); } catch {}
+                try { controller.error(err); } catch {}
+                return;
+              }
+
+              let firstChunkLogged = false;
+
+              (async function pump() {
+                try {
+                  while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                      try { console.log('[DEBUG] /console/api/ws SSE rewrap -> upstream done'); } catch {}
+                      if (!readerClosed) {
+                        try { controller.close(); } catch {}
+                        readerClosed = true;
+                      }
+                      break;
+                    }
+                    try {
+                      if (!firstChunkLogged) {
+                        try { console.log('[DEBUG] /console/api/ws SSE rewrap -> first chunk size', value ? (value.byteLength ?? value.length ?? 0) : 0); } catch {}
+                        firstChunkLogged = true;
+                      }
+                    } catch {}
+                    controller.enqueue(value);
+                  }
+                } catch (err) {
+                  try { console.warn('[WARN] /console/api/ws SSE rewrap pump error', String(err)); } catch {}
+                  try { controller.error(err); } catch {}
+                } finally {
+                  readerClosed = true;
+                }
+              })();
+            },
+            cancel(reason) {
+              try { console.log('[DEBUG] /console/api/ws SSE rewrap -> cancel invoked', reason); } catch {}
+              if (reader) {
+                try {
+                  const r: any = reader;
+                  if (typeof r.cancel === 'function') {
+                    try { r.cancel().catch(() => {}); } catch {}
+                  }
+                } catch {}
+              }
+            },
           });
+
+          return new Response(stream, { status: proxied.status, headers: responseHeaders });
         }
 
-        // Non-SSE response (likely HTML). Log a short snippet of the
-        // upstream body to aid diagnosis, then return the proxied
-        // response unchanged so the browser receives the same content.
+        // Non-SSE: return the proxied response unchanged, but log a
+        // snippet to help diagnose unexpected HTML being returned.
         try {
           const clone = proxied.clone();
           const text = await clone.text().catch(() => '');
-          try {
-            console.log('[DEBUG] /console/api/ws upstream HTML snippet ->', text.slice(0, 512));
-          } catch {}
+          try { console.log('[DEBUG] /console/api/ws upstream HTML snippet ->', text.slice(0, 512)); } catch {}
         } catch {}
 
         return proxied;

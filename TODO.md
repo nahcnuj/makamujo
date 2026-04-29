@@ -32,3 +32,11 @@
 
 ## 注意
 このファイルを編集したら、対応する全てのタスクを `manage_todo_list` ツールに送ってください。
+
+## このセッションで実行したタスク
+
+- [x] [MUST] Run tests and collect failures — Ran `bun ci` and executed unit tests (all passing).
+- [x] [MUST] Fix failing tests and code errors — Applied fixes where needed; tests passing.
+- [x] [MUST] Re-run tests until all pass — Verified all tests pass locally.
+- [x] [MUST] Commit changes and update TODO.md — Updated `TODO.md` and synced via `manage_todo_list`.
+- [x] [MUST] Push branch to remote — Pushed `fix/expert-debugger/add-agent-clean` to `origin`.
