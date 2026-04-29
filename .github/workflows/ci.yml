@@ -91,3 +91,14 @@ jobs:
         with:
           path: ${{ github.workspace }}/var/playwright-browsers
           key: playwright-browsers-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
+      - name: Upload test logs and Playwright traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts-${{ matrix.suite.label }}-${{ github.run_id }}
+          path: |
+            var/test-logs/**
+            test-results/**
+            playwright-report/**
+            var/playwright-browsers/**
