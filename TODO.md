@@ -35,6 +35,8 @@
 - [ ] [MUST] Run E2E Playwright test to verify fix — Pending; Playwright browser run not executed in this session.
 - [ ] [MUST] Update PR with patch and summary — Pending: prepare PR comment with explanation.
 
+- [x] [MUST] Fix OBS browser syntax error — Tightened navigation detection in `src/catchAll.ts` to avoid serving `index.html` for module/file requests (fixes syntax error in old OBS browser).
+
 - [x] [MUST] Issue #225: 管理コンソール - これまでの発話の改善 — 読了、テスト追加、実装（単語ごとにカード表示、非マルコフ文言の除去）を行いました。
 - [ ] [MUST] Commit changes and open PR for branch `225-管理コンソール-これまでの発話の改善` — Pending: create PR with description and attach screenshots if needed.
  - [ ] [SHOULD] Propose AGT library enhancement — create an issue requesting generation trace (node path) or API to return nodes visited during generation.

@@ -5,7 +5,14 @@ export function handleCatchAll(req: Request): Response {
   const accept = req.headers.get('accept') ?? '';
   try { console.log('[TRACE] catch-all matched path=', path, 'accept=', accept); } catch {}
 
-  if (accept.includes('text/html') || path === '/') {
+  // Treat as a navigation (serve index.html) only when the request
+  // is explicitly for HTML navigation. Some embedded browsers (OBS)
+  // include `text/html` in Accept headers for subresource requests
+  // such as module imports (e.g. `/frontend.tsx`). Avoid returning
+  // `index.html` for requests that look like file/module paths by
+  // checking for a path extension.
+  const looksLikeFile = path.includes('.') && !path.endsWith('/');
+  if ((accept.includes('text/html') && !looksLikeFile) || path === '/') {
     try {
       return new Response(Bun.file('./src/index.html'), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
