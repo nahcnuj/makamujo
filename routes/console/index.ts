@@ -78,8 +78,7 @@ async function performWebSocketUpgrade(req: Request, upgrader: any, proxyBase: s
               const upstreamBody: any = res.body;
 
               try {
-                const metaRes = await fetch(`${proxyBase}/api/meta`);
-                const metaJson = await metaRes.json().catch(() => ({}));
+                const metaJson = await fetchMetaSnapshot(proxyBase);
                 try { clientWs.send(JSON.stringify(metaJson)); } catch {}
               } catch (err) {
                 try { console.warn('[DIAG] failed to send initial meta snapshot', String(err)); } catch {}
@@ -117,6 +116,16 @@ async function performWebSocketUpgrade(req: Request, upgrader: any, proxyBase: s
       resolve(null);
     }
   });
+}
+
+async function fetchMetaSnapshot(proxyBase: string): Promise<any> {
+  try {
+    const res = await fetch(`${proxyBase}/api/meta`);
+    return await res.json().catch(() => ({}));
+  } catch (err) {
+    try { console.warn('[DIAG] fetchMetaSnapshot failed', String(err)); } catch {}
+    return {};
+  }
 }
 
 /**
