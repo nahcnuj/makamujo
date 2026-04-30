@@ -75,12 +75,17 @@ export class MarkovChainModel implements TalkModel {
   generate(
     start: string = '',
     nGram = 1,
-  ): string {
+  ): string | { text: string; nodes?: string[] } {
     // Delegates n-gram generation to AGT's MarkovModel implementation.
     // AGT may return either a string or an object with `text` and `nodes`.
     const res = this.#model.gen(start, nGram) as unknown;
     if (typeof res === 'string') return res;
-    if (res && typeof res === 'object' && 'text' in res) return (res as any).text as string;
+    if (res && typeof res === 'object' && 'text' in res) {
+      return {
+        text: (res as any).text as string,
+        nodes: Array.isArray((res as any).nodes) ? (res as any).nodes.map(String) : undefined,
+      };
+    }
     return String(res ?? '');
   }
 

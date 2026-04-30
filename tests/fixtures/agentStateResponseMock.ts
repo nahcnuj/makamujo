@@ -31,7 +31,13 @@ export const AGENT_STATE_RESPONSE_MOCK_FIXTURE = {
     silent: false,
   },
   speechHistory: [
-    { id: "speech-history-1", speech: "コメントを学習してお話ししています", nGram: 4, nGramRaw: 4 },
+    {
+      id: "speech-history-1",
+      speech: "コメントを学習してお話ししています",
+      nGram: 4,
+      nGramRaw: 4,
+      nodes: ["コメント", "を", "学習", "して", "お話し", "しています"],
+    },
     { id: "speech-history-2", speech: "ぜひ上のリンクから遊びに来てね", nGram: 3, nGramRaw: 3.2 },
     { id: "speech-history-3", speech: "ゲーム情報も画面に表示しています", nGram: 4, nGramRaw: 4 },
     { id: "speech-history-4", speech: "コメント数の推移も追っています", nGram: 2, nGramRaw: 2.4 },

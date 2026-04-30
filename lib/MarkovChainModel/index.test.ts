@@ -10,6 +10,11 @@ beforeEach(() => {
 });
 
 const temporaryModelFilePaths: string[] = [];
+
+type MarkovChainModelGenerateResult = string | { text: string; nodes?: string[] };
+const getResultText = (result: MarkovChainModelGenerateResult) =>
+  typeof result === 'string' ? result : result.text;
+
 afterEach(() => {
   while (temporaryModelFilePaths.length > 0) {
     const path = temporaryModelFilePaths.pop();
@@ -22,7 +27,7 @@ afterEach(() => {
 describe('an empty markov chain model', () => {
   it('should generate just "。"', () => {
     const model = new MarkovChainModel();
-    expect(model.generate()).toBe('。');
+    expect(getResultText(model.generate())).toBe('。');
   });
 });
 
@@ -42,12 +47,12 @@ describe('a no-branch model', () => {
         '。': 1,
       }
     });
-    expect(model.generate()).toBe('こんにちは。');
-    expect(model.generate('')).toBe('こんにちは。');
-    expect(model.generate('こん')).toBe('こんにちは。');
-    expect(model.generate('にち')).toBe('にちは。');
-    expect(model.generate('は')).toBe('は。');
-    expect(model.generate('。')).toBe('。');
+    expect(getResultText(model.generate())).toBe('こんにちは。');
+    expect(getResultText(model.generate(''))).toBe('こんにちは。');
+    expect(getResultText(model.generate('こん'))).toBe('こんにちは。');
+    expect(getResultText(model.generate('にち'))).toBe('にちは。');
+    expect(getResultText(model.generate('は'))).toBe('は。');
+    expect(getResultText(model.generate('。'))).toBe('。');
   });
 });
 
@@ -57,7 +62,7 @@ describe('a distribution including candidates for "。"', () => {
       '': { '。': 1 },
       '。': { 'ん': 1 },
     });
-    expect(model.generate()).toBe('。');
+    expect(getResultText(model.generate())).toBe('。');
   });
 });
 
@@ -78,7 +83,7 @@ describe('a distribution with two even branches', () => {
     const randomSpy = jest.spyOn(Math, 'random');
     for (const i in [...new Array(times)]) {
       randomSpy.mockReturnValue(Number.parseInt(i) / times);
-      const got = model.generate() as 'こんにちは。' | 'こんばんは。';
+      const got = getResultText(model.generate()) as 'こんにちは。' | 'こんばんは。';
       expect(got).toBeOneOf(['こんにちは。', 'こんばんは。']);
       counts[got]++;
     }
@@ -111,7 +116,7 @@ describe('fromFile', () => {
     writeFileSync(path, model.toJSON());
 
     const loaded = MarkovChainModel.fromFile(path);
-    expect(loaded.generate()).toBe('こんにちは。');
+    expect(getResultText(loaded.generate())).toBe('こんにちは。');
   });
 
 });
@@ -125,7 +130,7 @@ describe('n-gram contexts', () => {
       'B\u0000C': { '。': 1 },
     });
 
-    expect(model.generate('', 2)).toBe('ABC。');
+    expect(getResultText(model.generate('', 2))).toBe('ABC。');
   });
 
   it('falls back to lower-order context when n is smaller', () => {
@@ -137,7 +142,7 @@ describe('n-gram contexts', () => {
       'C': { '。': 1 },
     });
 
-    expect(model.generate('', 1)).toBe('AB。');
+    expect(getResultText(model.generate('', 1))).toBe('AB。');
   });
 });
 

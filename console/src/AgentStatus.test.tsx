@@ -107,6 +107,29 @@ describe("AgentStatus category sections", () => {
     // Expect each word to be rendered as a separate card element with distinctive class
     expect((html.match(/speech-word-chip/g) || []).length).toBeGreaterThanOrEqual(3);
   });
+
+  it("renders markov trace nodes when available", () => {
+    const stateResponse = {
+      nGram: 4,
+      speechHistory: [
+        {
+          id: "speech-1",
+          speech: "alpha beta gamma",
+          nGram: 4,
+          nodes: ["alpha", "beta", "gamma"],
+        },
+      ],
+    } as any;
+
+    const rows = require("./AgentStatus").createAgentStatusRows(stateResponse);
+    const markovRows = rows.filter((r: any) => r.label === "これまでの発話" || r.label === "生成N-gram");
+    const html = renderToStaticMarkup(<MarkovModelStatusSection markovModelRows={markovRows} />);
+
+    expect(html).toContain("alpha");
+    expect(html).toContain("beta");
+    expect(html).toContain("gamma");
+    expect((html.match(/speech-word-chip/g) || []).length).toBe(3);
+  });
 });
 
 describe("AgentStatus SSE error handling", () => {

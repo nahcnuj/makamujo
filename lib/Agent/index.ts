@@ -36,7 +36,7 @@ export class MakaMujo {
   #tts: TTS;
 
   #speechPromise = Promise.resolve();
-  #speechListeners: Array<(text: string) => Promise<void>> = [];
+  #speechListeners: Array<(text: TalkModelGenerateResult) => Promise<void>> = [];
   #speechCompleteListeners: Array<() => Promise<void>> = [];
   #ttsErrorHandlers: Array<(text: string, err: unknown) => void> = [];
 
@@ -118,18 +118,20 @@ export class MakaMujo {
     }
   }
 
-  async speech(text: string = this.#talkModel.generate('', this.#currentNGramSize)) {
+  async speech(text: TalkModelGenerateResult = this.#talkModel.generate('', this.#currentNGramSize)) {
     // Queue speech work onto the internal chain. For empty text we avoid
     // calling the underlying TTS implementation (some TalkModel generators
     // return an empty string) but still notify speech listeners.
+    const speechText = typeof text === 'string' ? text : text.text;
+
     this.#speechPromise = this.#speechPromise.then(async () => {
       const tasks: Array<Promise<void>> = [
         ...this.#speechListeners.map(f => f(text)),
       ];
-      if (typeof text === 'string' && text.trim().length > 0) {
-        const ttsTask = this.#tts.speech(text, { additionalHalfTone: 3, speakingRate: 1.2 }).catch((err) => {
+      if (speechText.trim().length > 0) {
+        const ttsTask = this.#tts.speech(speechText, { additionalHalfTone: 3, speakingRate: 1.2 }).catch((err) => {
           for (const h of this.#ttsErrorHandlers) {
-            try { void h(text, err); } catch (_) { /* ignore handler errors */ }
+            try { void h(speechText, err); } catch (_) { /* ignore handler errors */ }
           }
           throw err;
         });
@@ -142,7 +144,7 @@ export class MakaMujo {
     await this.#speechPromise;
   }
 
-  onSpeech(cb: (text: string) => Promise<void>): MakaMujo {
+  onSpeech(cb: (text: TalkModelGenerateResult) => Promise<void>): MakaMujo {
     this.#speechListeners.push(cb);
     return this;
   }
@@ -397,8 +399,10 @@ export class MakaMujo {
   }
 }
 
+export type TalkModelGenerateResult = string | { text: string; nodes?: string[] };
+
 export interface TalkModel {
-  generate(start?: string, nGram?: number): string
+  generate(start?: string, nGram?: number): TalkModelGenerateResult
   learn(text: string): void
   toJSON(): string
 }
