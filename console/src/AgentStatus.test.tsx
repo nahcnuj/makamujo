@@ -130,6 +130,29 @@ describe("AgentStatus category sections", () => {
     expect(html).toContain("gamma");
     expect((html.match(/speech-word-chip/g) || []).length).toBe(3);
   });
+
+  it("renders trace nodes even when nGram is invalid", () => {
+    const stateResponse = {
+      speechHistory: [
+        {
+          id: "speech-1",
+          speech: "alpha beta gamma",
+          nGram: NaN,
+          nodes: ["alpha", "beta", "gamma"],
+        },
+      ],
+    } as any;
+
+    const rows = require("./AgentStatus").createAgentStatusRows(stateResponse);
+    const speechHistoryRow = rows.find((row: any) => row.label === "これまでの発話");
+    expect(speechHistoryRow?.value).toBeUndefined();
+    const html = renderToStaticMarkup(<MarkovModelStatusSection markovModelRows={[speechHistoryRow!] as any} />);
+
+    expect(html).toContain("alpha");
+    expect(html).toContain("beta");
+    expect(html).toContain("gamma");
+    expect((html.match(/speech-word-chip/g) || []).length).toBe(3);
+  });
 });
 
 describe("AgentStatus SSE error handling", () => {
