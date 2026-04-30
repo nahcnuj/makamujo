@@ -49,6 +49,7 @@ type AgentStateResponse = {
     speech?: string
     nGram?: number
     nGramRaw?: number
+    nodes?: readonly string[]
   }>
 };
 
