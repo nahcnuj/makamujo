@@ -10,7 +10,7 @@ test("serves frontend.tsx as JavaScript module", async () => {
   expect(ct).toMatch(/application\/javascript/);
   const body = await res.text();
   expect(body).toContain('This file is the entry point for the React app');
-  expect(body).toContain('import { StrictMode }');
+  expect(body).toContain('import { StrictMode');
 });
 
 test("serves index.html for navigation requests", async () => {

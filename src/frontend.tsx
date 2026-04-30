@@ -5,13 +5,13 @@
  * It is included in `src/index.html`.
  */
 
-import { StrictMode } from "react";
+import { StrictMode, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 
 function start() {
   const root = createRoot(document.getElementById("root")!);
-  root.render(<StrictMode><App /></StrictMode>);
+  root.render(createElement(StrictMode, null, createElement(App, null)));
 }
 
 if (document.readyState === "loading") {

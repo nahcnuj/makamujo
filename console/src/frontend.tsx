@@ -6,11 +6,12 @@
  */
 
 import { createRoot } from "react-dom/client";
+import { createElement } from "react";
 import { App } from "./App";
 
 function start() {
   const root = createRoot(document.getElementById("root")!);
-  root.render(<App />);
+  root.render(createElement(App, null));
 }
 
 if (document.readyState === "loading") {
