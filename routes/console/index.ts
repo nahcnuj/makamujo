@@ -232,22 +232,7 @@ export const routes = {
       return new Response('proxy failed', { status: 502 });
     }
   },
-  '/console/env': async () => {
-    try {
-      try { console.log('[TRACE] /console/env requested'); } catch {}
-      // Normalize broadcasting host for browser clients: prefer IPv4
-      // loopback when configuration uses 'localhost' to avoid cases
-      // where 'localhost' resolves to an IPv6 address (::1) that the
-      // server is not bound to in some environments (Playwright CI).
-      const clientBroadcastingHost = BROADCASTING_HOST === 'localhost' ? '127.0.0.1' : BROADCASTING_HOST;
-      return new Response(JSON.stringify({ broadcastingHost: clientBroadcastingHost, broadcastingPort: BROADCASTING_PORT }), {
-        headers: { 'Content-Type': 'application/json' },
-        status: 200,
-      });
-    } catch (err) {
-      return new Response(JSON.stringify({}), { headers: { 'Content-Type': 'application/json' }, status: 500 });
-    }
-  },
+  
   '/console/*': ConsoleApp,
   '/console/robots.txt': robotsTxt,
   '/console/api/agent-state': agentState,

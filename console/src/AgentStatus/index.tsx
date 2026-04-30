@@ -494,28 +494,10 @@ export function AgentStatus() {
 
     let es: EventSource | null = null;
     (async () => {
-      let sseUrl = '/console/api/ws';
+      const sseUrl = '/console/api/ws';
+      try { (window as any).__sseUrl = sseUrl; } catch {}
+      try { console.log('[TRACE] AgentStatus connecting EventSource ->', sseUrl); } catch {}
       try {
-        const envRes = await fetch('/console/env');
-        if (envRes.ok) {
-          const env = await envRes.json();
-          const broadcastingHost = env?.broadcastingHost;
-          const broadcastingPort = env?.broadcastingPort;
-          if (broadcastingHost && broadcastingPort) {
-            const curHost = window.location.hostname;
-            const curPort = window.location.port;
-            if (!(String(broadcastingHost) === curHost && String(broadcastingPort) === curPort)) {
-              sseUrl = `${window.location.protocol}//${broadcastingHost}:${broadcastingPort}/console/api/ws`;
-            }
-          }
-        }
-      } catch (err) {
-        // ignore env probe failures and fall back to same-origin proxy
-      }
-
-      try {
-        try { (window as any).__sseUrl = sseUrl; } catch {}
-        try { console.log('[TRACE] AgentStatus connecting EventSource ->', sseUrl); } catch {}
         es = new EventSource(sseUrl);
       } catch (err) {
         setAgentStatusError('ライブ接続に失敗しました');
