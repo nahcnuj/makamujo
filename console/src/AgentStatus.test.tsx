@@ -108,6 +108,33 @@ describe("AgentStatus category sections", () => {
     expect((html.match(/speech-word-chip/g) || []).length).toBeGreaterThanOrEqual(3);
   });
 
+  it("normalizes object speech payloads for top-level speech", () => {
+    const stateResponse = {
+      nGram: 4,
+      speech: { speech: { text: "コメント", nodes: ["コメント"] }, silent: false },
+    } as any;
+
+    const rows = require("./AgentStatus").createAgentStatusRows(stateResponse);
+    const speechRow = rows.find((row: any) => row.label === "発話内容");
+    expect(speechRow?.value).toBe("コメント");
+  });
+
+  it("normalizes object speech payloads in speech history", () => {
+    const stateResponse = {
+      nGram: 4,
+      speechHistory: [
+        { id: "speech-1", speech: { text: "コメント", nodes: ["コメント"] }, nGram: 4, nGramRaw: 4 },
+      ],
+    } as any;
+
+    const rows = require("./AgentStatus").createAgentStatusRows(stateResponse);
+    const markovRows = rows.filter((r: any) => r.label === "これまでの発話" || r.label === "生成N-gram");
+    const html = renderToStaticMarkup(<MarkovModelStatusSection markovModelRows={markovRows} />);
+
+    expect(html).toContain("コメント");
+    expect((html.match(/speech-word-chip/g) || []).length).toBe(1);
+  });
+
   it("renders markov trace nodes when available", () => {
     const stateResponse = {
       nGram: 4,

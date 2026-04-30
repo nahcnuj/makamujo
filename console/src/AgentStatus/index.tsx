@@ -41,12 +41,12 @@ type AgentStateResponse = {
   nGram?: number
   nGramRaw?: number
   speech?: {
-    speech?: string
+    speech?: string | { text?: string; nodes?: readonly string[] } | { speech?: string; text?: string; nodes?: readonly string[] }
     silent?: boolean
   }
   speechHistory?: Array<{
     id?: string
-    speech?: string
+    speech?: string | { text?: string; nodes?: readonly string[] }
     nGram?: number
     nGramRaw?: number
     nodes?: readonly string[]
@@ -160,6 +160,25 @@ const formatNGramValue = (nGram: number | undefined, nGramRaw: number | undefine
   return `${nGramValue} (${formattedRaw})`;
 };
 
+const normalizeSpeechText = (
+  speech: string | { text?: string; nodes?: readonly string[] } | { speech?: string; text?: string; nodes?: readonly string[] } | undefined,
+): string | undefined => {
+  if (typeof speech === 'string') {
+    return speech.trim() || undefined;
+  }
+
+  if (speech && typeof speech === 'object') {
+    const textValue = typeof (speech as any).text === 'string'
+      ? (speech as any).text
+      : typeof (speech as any).speech === 'string'
+        ? (speech as any).speech
+        : undefined;
+    return typeof textValue === 'string' ? textValue.trim() || undefined : undefined;
+  }
+
+  return undefined;
+};
+
 const formatSpeechHistoryItemText = (
   speechText: string,
   nGram: number | undefined,
@@ -182,7 +201,7 @@ const createSpeechHistoryDisplayItems = (
   }
   const speechHistoryItems = speechHistory.reduce<Array<{ id: string; speechText: string; displayLine: string; nGramLabel: string; nodes?: string[] }>>(
     (accumulatedItems, speechHistoryItem) => {
-      const speechText = speechHistoryItem.speech?.trim();
+      const speechText = normalizeSpeechText(speechHistoryItem.speech);
       if (!speechText) {
         return accumulatedItems;
       }
@@ -426,7 +445,7 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
   if (stateResponse?.canSpeak === false) {
     rows.push({ label: "発話内容", value: SPEECH_UNAVAILABLE_INDICATOR });
   } else if (stateResponse?.speech !== undefined) {
-    rows.push({ label: "発話内容", value: stateResponse.speech.speech ?? "-" });
+    rows.push({ label: "発話内容", value: normalizeSpeechText(stateResponse.speech.speech) ?? "-" });
   }
 
   return rows;
