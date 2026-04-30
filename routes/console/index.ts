@@ -45,6 +45,107 @@ function streamUpstreamResponse(proxied: Response) {
 }
 
 /**
+ * Return an available upgradeWebSocket API compatible function or null.
+ */
+function getUpgrader(): ((req: Request, opts: any) => any) | null {
+  try {
+    if (typeof globalThis !== 'undefined') {
+      if ((globalThis as any).Bun && typeof (globalThis as any).Bun.upgradeWebSocket === 'function') return (globalThis as any).Bun.upgradeWebSocket;
+      if (typeof (globalThis as any).upgradeWebSocket === 'function') return (globalThis as any).upgradeWebSocket;
+    }
+  } catch {}
+  try {
+    if (typeof Bun !== 'undefined' && (Bun as any).upgradeWebSocket) return (Bun as any).upgradeWebSocket;
+  } catch {}
+  return null;
+}
+
+/**
+ * Perform the websocket upgrade and bridge SSE->WS to forward upstream SSE events.
+ */
+async function performWebSocketUpgrade(req: Request, upgrader: any, proxyBase: string) {
+  return new Promise<any>((resolve, _reject) => {
+    try {
+      const upgraded = upgrader(req, {
+        open(clientWs: any) {
+          (async () => {
+            try {
+              try { console.log('[DEBUG] websocket upgrade accepted; starting SSE->WS forwarder'); } catch {}
+              const sseUrl = `${proxyBase}/console/api/ws`;
+              try { console.log('[DEBUG] opening upstream SSE fetch ->', sseUrl); } catch {}
+              const res = await fetch(sseUrl, { headers: { accept: 'text/event-stream' } });
+              try { console.log('[DEBUG] upstream SSE response ->', { status: res.status, contentType: res.headers.get('content-type') }); } catch {}
+              const upstreamBody: any = res.body;
+
+              try {
+                const metaRes = await fetch(`${proxyBase}/api/meta`);
+                const metaJson = await metaRes.json().catch(() => ({}));
+                try { clientWs.send(JSON.stringify(metaJson)); } catch {}
+              } catch (err) {
+                try { console.warn('[DIAG] failed to send initial meta snapshot', String(err)); } catch {}
+              }
+
+              if (!upstreamBody || typeof upstreamBody.getReader !== 'function') {
+                try {
+                  const json = await res.json().catch(() => ({}));
+                  try { clientWs.send(JSON.stringify(json)); } catch {}
+                } catch {}
+                return;
+              }
+
+              const reader = upstreamBody.getReader();
+              const decoder = new TextDecoder();
+              let buffer = '';
+              let stopped = false;
+
+              (async () => {
+                try {
+                  while (!stopped) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    let idx = buffer.indexOf('\r\n\r\n');
+                    if (idx === -1) idx = buffer.indexOf('\n\n');
+                    while (idx !== -1) {
+                      const event = buffer.slice(0, idx);
+                      buffer = buffer.slice(idx + (buffer.startsWith('\r\n', idx) ? 4 : 2));
+                      const dataLines = event.split(/\r?\n/).filter((l) => l.startsWith('data:'));
+                      if (dataLines.length > 0) {
+                        const data = dataLines.map((l) => l.replace(/^data:\s?/, '')).join('\n');
+                        try { clientWs.send(data); } catch (err) { try { clientWs.close(); } catch {} }
+                      }
+                      idx = buffer.indexOf('\r\n\r\n');
+                      if (idx === -1) idx = buffer.indexOf('\n\n');
+                    }
+                  }
+                } catch (err) {
+                  try { console.warn('[DIAG] SSE reader failed', String(err)); } catch {}
+                } finally {
+                  try { reader.cancel && typeof reader.cancel === 'function' && reader.cancel(); } catch {}
+                }
+              })();
+
+              clientWs.onmessage = (_ev: any) => {};
+              clientWs.onclose = (_ev: any) => { stopped = true; try { reader.cancel && typeof reader.cancel === 'function' && reader.cancel(); } catch {} };
+              clientWs.onerror = (_ev: any) => { stopped = true; try { reader.cancel && typeof reader.cancel === 'function' && reader.cancel(); } catch {} };
+              return;
+            } catch (err) {
+              try { console.warn('[WARN] simplified websocket bridge failed', String(err)); } catch {}
+              try { clientWs.close(); } catch {}
+            }
+          })();
+        },
+        message() {},
+        close() {},
+      });
+      resolve(upgraded);
+    } catch (err) {
+      resolve(null);
+    }
+  });
+}
+
+/**
  * Build sanitized proxy headers for upstream requests.
  */
 function buildProxyHeaders(req: Request, proxyBase: string) {
@@ -96,112 +197,19 @@ export const routes = {
         const upstreamWsUrl = upstreamUrlObj.toString();
         try { console.log('[DEBUG] /console/api/ws upstream websocket url ->', upstreamWsUrl); } catch {}
 
-        const upgrader = (() => {
-          try {
-            if (typeof globalThis !== 'undefined') {
-              if ((globalThis as any).Bun && typeof (globalThis as any).Bun.upgradeWebSocket === 'function') return (globalThis as any).Bun.upgradeWebSocket;
-              if (typeof (globalThis as any).upgradeWebSocket === 'function') return (globalThis as any).upgradeWebSocket;
-            }
-          } catch {}
-          try {
-            if (typeof Bun !== 'undefined' && (Bun as any).upgradeWebSocket) return (Bun as any).upgradeWebSocket;
-          } catch {}
-          return null;
-        })();
+        const upgrader = getUpgrader();
         if (!upgrader) {
           try { console.warn('[WARN] no upgradeWebSocket API available for websocket bridge'); } catch {}
           return new Response('websocket upgrade unavailable', { status: 501 });
         }
 
         try { console.log('[DEBUG] invoking upgrader for client request'); } catch {}
-        let upgraded: any = null;
-        try {
-          upgraded = upgrader(req, {
-          open(clientWs: any) {
-            // Simplified bridge: always use SSE->WS forwarding on upgrades.
-            // This avoids relying on an upstream WebSocket client and
-            // ensures an initial JSON payload is sent to the browser.
-            (async () => {
-              try {
-                try { console.log('[DEBUG] websocket upgrade accepted; starting SSE->WS forwarder'); } catch {}
-
-                const sseUrl = `${proxyBase}/console/api/ws`;
-                try { console.log('[DEBUG] opening upstream SSE fetch ->', sseUrl); } catch {}
-                const res = await fetch(sseUrl, { headers: { accept: 'text/event-stream' } });
-                try { console.log('[DEBUG] upstream SSE response ->', { status: res.status, contentType: res.headers.get('content-type') }); } catch {}
-                const upstreamBody: any = res.body;
-
-                // Send a one-off /api/meta snapshot to ensure the client
-                // gets an initial JSON message promptly.
-                try {
-                  const metaRes = await fetch(`${proxyBase}/api/meta`);
-                  const metaJson = await metaRes.json().catch(() => ({}));
-                  try { clientWs.send(JSON.stringify(metaJson)); } catch {}
-                } catch (err) {
-                  try { console.warn('[DIAG] failed to send initial meta snapshot', String(err)); } catch {}
-                }
-
-                if (!upstreamBody || typeof upstreamBody.getReader !== 'function') {
-                  // Non-streaming fallback: send JSON body and return.
-                  try {
-                    const json = await res.json().catch(() => ({}));
-                    try { clientWs.send(JSON.stringify(json)); } catch {}
-                  } catch {}
-                  return;
-                }
-
-                const reader = upstreamBody.getReader();
-                const decoder = new TextDecoder();
-                let buffer = '';
-                let stopped = false;
-
-                (async () => {
-                  try {
-                    while (!stopped) {
-                      const { done, value } = await reader.read();
-                      if (done) break;
-                      buffer += decoder.decode(value, { stream: true });
-                      let idx = buffer.indexOf('\r\n\r\n');
-                      if (idx === -1) idx = buffer.indexOf('\n\n');
-                      while (idx !== -1) {
-                        const event = buffer.slice(0, idx);
-                        buffer = buffer.slice(idx + (buffer.startsWith('\r\n', idx) ? 4 : 2));
-                        const dataLines = event.split(/\r?\n/).filter((l) => l.startsWith('data:'));
-                        if (dataLines.length > 0) {
-                          const data = dataLines.map((l) => l.replace(/^data:\s?/, '')).join('\n');
-                          try { clientWs.send(data); } catch (err) { try { clientWs.close(); } catch {} }
-                        }
-                        idx = buffer.indexOf('\r\n\r\n');
-                        if (idx === -1) idx = buffer.indexOf('\n\n');
-                      }
-                    }
-                  } catch (err) {
-                    try { console.warn('[DIAG] SSE reader failed', String(err)); } catch {}
-                  } finally {
-                    try { reader.cancel && typeof reader.cancel === 'function' && reader.cancel(); } catch {}
-                  }
-                })();
-
-                clientWs.onmessage = (_ev: any) => {};
-                clientWs.onclose = (_ev: any) => { stopped = true; try { reader.cancel && typeof reader.cancel === 'function' && reader.cancel(); } catch {} };
-                clientWs.onerror = (_ev: any) => { stopped = true; try { reader.cancel && typeof reader.cancel === 'function' && reader.cancel(); } catch {} };
-                return;
-              } catch (err) {
-                try { console.warn('[WARN] simplified websocket bridge failed', String(err)); } catch {}
-                try { clientWs.close(); } catch {}
-              }
-            })();
-          },
-          message() {},
-          close() {},
-          });
-        } catch (err) {
+        const upgraded = await performWebSocketUpgrade(req, upgrader, proxyBase).catch((err) => {
           try { console.warn('[ERROR] upgrader threw', String(err)); } catch {}
-          upgraded = null;
-        }
+          return null;
+        });
 
         try { console.log('[DEBUG] upgrader invoked, upgraded ->', upgraded && (upgraded.response || upgraded)); } catch {}
-        // Support both forms: upgraded may be a Response or an object with `response`.
         try {
           if (upgraded && (upgraded instanceof Response)) {
             return upgraded;
