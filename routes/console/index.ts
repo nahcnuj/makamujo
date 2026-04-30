@@ -101,9 +101,7 @@ async function performWebSocketUpgrade(req: Request, upgrader: any, proxyBase: s
               clientWs.onclose = (_ev: any) => { cancelForward(); };
               clientWs.onerror = (_ev: any) => { cancelForward(); };
 
-              clientWs.onmessage = (_ev: any) => {};
-              clientWs.onclose = (_ev: any) => { stopped = true; try { reader.cancel && typeof reader.cancel === 'function' && reader.cancel(); } catch {} };
-              clientWs.onerror = (_ev: any) => { stopped = true; try { reader.cancel && typeof reader.cancel === 'function' && reader.cancel(); } catch {} };
+              // handlers set above by cancelForward
               return;
             } catch (err) {
               try { console.warn('[WARN] simplified websocket bridge failed', String(err)); } catch {}
