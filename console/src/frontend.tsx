@@ -10,7 +10,9 @@ import { createElement } from "react";
 import { App } from "./App";
 
 function start() {
-  const root = createRoot(document.getElementById("root")!);
+  const el = document.getElementById("root");
+  if (!el) throw new Error("root element not found");
+  const root = createRoot(el);
   root.render(createElement(App, null));
 }
 
