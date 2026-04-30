@@ -219,3 +219,45 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
 
   return proxied;
 }
+
+export async function proxyConsoleUpgrade(req: Request, proxyUrl: string, proxyBase: string): Promise<Response> {
+  try {
+    const BROADCASTING_HOST = process.env.BROADCASTING_HOST ?? 'localhost';
+    const upstreamUrlObj = new URL(proxyUrl);
+    upstreamUrlObj.protocol = upstreamUrlObj.protocol === 'https:' ? 'wss:' : 'ws:';
+    if (upstreamUrlObj.hostname === 'localhost' || BROADCASTING_HOST === 'localhost') upstreamUrlObj.hostname = '127.0.0.1';
+    const upstreamWsUrl = upstreamUrlObj.toString();
+    try { console.log('[DEBUG] /console/api/ws upstream websocket url ->', upstreamWsUrl); } catch {}
+
+    const upgrader = getUpgrader();
+    if (!upgrader) {
+      try { console.warn('[WARN] no upgradeWebSocket API available for websocket bridge'); } catch {}
+      return new Response('websocket upgrade unavailable', { status: 501 });
+    }
+
+    try { console.log('[DEBUG] invoking upgrader for client request'); } catch {}
+    const upgraded = await performWebSocketUpgrade(req, upgrader, proxyBase).catch((err) => {
+      try { console.warn('[ERROR] upgrader threw', String(err)); } catch {}
+      return null;
+    });
+
+    try { console.log('[DEBUG] upgrader invoked, upgraded ->', upgraded && (upgraded.response || upgraded)); } catch {}
+    try {
+      if (upgraded && (upgraded instanceof Response)) {
+        return upgraded;
+      }
+      if (upgraded && upgraded.response) {
+        return upgraded.response;
+      }
+    } catch (err) {
+      try { console.warn('[ERROR] failed to return upgraded response', String(err)); } catch {}
+    }
+
+    return new Response('upgrade failed', { status: 500 });
+  } catch (err) {
+    return new Response('upgrade failed', { status: 500 });
+  }
+}
+
+// Re-export for route imports
+export { proxyConsoleUpgrade as proxyConsoleUpgrade };
