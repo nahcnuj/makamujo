@@ -93,37 +93,13 @@ async function performWebSocketUpgrade(req: Request, upgrader: any, proxyBase: s
                 return;
               }
 
-              const reader = upstreamBody.getReader();
-              const decoder = new TextDecoder();
-              let buffer = '';
-              let stopped = false;
+              const cancelForward = forwardSSEEventsToSink(upstreamBody, (data) => {
+                try { clientWs.send(data); } catch (err) { try { clientWs.close(); } catch {} }
+              });
 
-              (async () => {
-                try {
-                  while (!stopped) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    buffer += decoder.decode(value, { stream: true });
-                    let idx = buffer.indexOf('\r\n\r\n');
-                    if (idx === -1) idx = buffer.indexOf('\n\n');
-                    while (idx !== -1) {
-                      const event = buffer.slice(0, idx);
-                      buffer = buffer.slice(idx + (buffer.startsWith('\r\n', idx) ? 4 : 2));
-                      const dataLines = event.split(/\r?\n/).filter((l) => l.startsWith('data:'));
-                      if (dataLines.length > 0) {
-                        const data = dataLines.map((l) => l.replace(/^data:\s?/, '')).join('\n');
-                        try { clientWs.send(data); } catch (err) { try { clientWs.close(); } catch {} }
-                      }
-                      idx = buffer.indexOf('\r\n\r\n');
-                      if (idx === -1) idx = buffer.indexOf('\n\n');
-                    }
-                  }
-                } catch (err) {
-                  try { console.warn('[DIAG] SSE reader failed', String(err)); } catch {}
-                } finally {
-                  try { reader.cancel && typeof reader.cancel === 'function' && reader.cancel(); } catch {}
-                }
-              })();
+              clientWs.onmessage = (_ev: any) => {};
+              clientWs.onclose = (_ev: any) => { cancelForward(); };
+              clientWs.onerror = (_ev: any) => { cancelForward(); };
 
               clientWs.onmessage = (_ev: any) => {};
               clientWs.onclose = (_ev: any) => { stopped = true; try { reader.cancel && typeof reader.cancel === 'function' && reader.cancel(); } catch {} };
@@ -143,6 +119,52 @@ async function performWebSocketUpgrade(req: Request, upgrader: any, proxyBase: s
       resolve(null);
     }
   });
+}
+
+/**
+ * Read an upstream EventSource stream and forward 'data:' payloads to sink.
+ * Returns a cancel function to stop reading.
+ */
+function forwardSSEEventsToSink(upstreamBody: any, sink: (data: string) => void) {
+  if (!upstreamBody || typeof upstreamBody.getReader !== 'function') {
+    return () => {};
+  }
+  const reader = upstreamBody.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let stopped = false;
+
+  (async () => {
+    try {
+      while (!stopped) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let idx = buffer.indexOf('\r\n\r\n');
+        if (idx === -1) idx = buffer.indexOf('\n\n');
+        while (idx !== -1) {
+          const event = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + (buffer.startsWith('\r\n', idx) ? 4 : 2));
+          const dataLines = event.split(/\r?\n/).filter((l) => l.startsWith('data:'));
+          if (dataLines.length > 0) {
+            const data = dataLines.map((l) => l.replace(/^data:\s?/, '')).join('\n');
+            try { sink(data); } catch {}
+          }
+          idx = buffer.indexOf('\r\n\r\n');
+          if (idx === -1) idx = buffer.indexOf('\n\n');
+        }
+      }
+    } catch (err) {
+      try { console.warn('[DIAG] SSE reader failed', String(err)); } catch {}
+    } finally {
+      try { reader.cancel && typeof reader.cancel === 'function' && reader.cancel(); } catch {}
+    }
+  })();
+
+  return () => {
+    stopped = true;
+    try { reader.cancel && typeof reader.cancel === 'function' && reader.cancel(); } catch {}
+  };
 }
 
 /**
