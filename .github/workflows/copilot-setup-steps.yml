@@ -29,8 +29,23 @@ jobs:
           key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - name: Run TypeScript check
         run: bun run typecheck
+      - name: Restore Playwright browsers cache (if available)
+        uses: actions/cache/restore@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - name: Install Playwright browsers (optional)
-        run: bun run pretest:e2e
+        run: |
+          if [ -d "$HOME/.cache/ms-playwright" ] && [ "$(ls -A $HOME/.cache/ms-playwright)" ]; then
+            echo "Playwright cache found, skipping browser download"
+          else
+            bun run pretest:e2e
+          fi
+      - name: Save Playwright browsers cache
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - name: Install Japanese fonts (for screenshots)
         run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
       - name: Run quick tests

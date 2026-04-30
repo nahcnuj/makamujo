@@ -36,8 +36,23 @@ jobs:
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+      - name: Restore Playwright browsers cache (if available)
+        uses: actions/cache/restore@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - name: Install Playwright Chromium
-        run: bunx playwright install --with-deps chromium
+        run: |
+          if [ -d "$HOME/.cache/ms-playwright" ] && [ "$(ls -A $HOME/.cache/ms-playwright)" ]; then
+            echo "Playwright cache found, skipping browser download"
+          else
+            bunx playwright install --with-deps chromium
+          fi
+      - name: Save Playwright browsers cache
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - name: Install CJK fonts
         run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
       - name: Generate OGP image
