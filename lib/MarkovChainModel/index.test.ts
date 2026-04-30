@@ -29,6 +29,22 @@ describe('an empty markov chain model', () => {
     const model = new MarkovChainModel();
     expect(getResultText(model.generate())).toBe('。');
   });
+
+  it('should return trace nodes when generating text', () => {
+    const model = new MarkovChainModel({
+      '': { 'こん': 1 },
+      'こん': { 'にち': 1 },
+      'にち': { 'は': 1 },
+      'は': { '。': 1 },
+    });
+
+    const result = model.generate();
+    expect(typeof result).toBe('object');
+    expect(result).not.toBeNull();
+    expect((result as any).text).toBe('こんにちは。');
+    expect(Array.isArray((result as any).nodes)).toBe(true);
+    expect((result as any).nodes).toEqual(['こん', 'にち', 'は', '。']);
+  });
 });
 
 describe('a no-branch model', () => {
