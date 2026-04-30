@@ -5,7 +5,8 @@ import {
   computeProxyUrl,
   getUpgrader,
   performWebSocketUpgrade,
-  streamUpstreamResponse
+  streamUpstreamResponse,
+  proxyConsoleApiWsRequest,
 } from "../../lib/console-proxy";
 import * as agentState from "./api/agent-state";
 import robotsTxt from "./robots.txt";
