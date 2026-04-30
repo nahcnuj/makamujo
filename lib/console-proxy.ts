@@ -259,5 +259,4 @@ export async function proxyConsoleUpgrade(req: Request, proxyUrl: string, proxyB
   }
 }
 
-// Re-export for route imports
-export { proxyConsoleUpgrade as proxyConsoleUpgrade };
+// proxyConsoleUpgrade is exported by its declaration above
