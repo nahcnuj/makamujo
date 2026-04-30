@@ -1,6 +1,16 @@
 import ConsoleApp from "../../console/src/index.html";
 import robotsTxt from "./robots.txt";
 import * as agentState from "./api/agent-state";
+import {
+  streamUpstreamResponse,
+  getUpgrader,
+  performWebSocketUpgrade,
+  forwardSSEEventsToSink,
+  buildProxyHeaders,
+  computeProxyBase,
+  computeProxyUrl,
+  fetchMetaSnapshot,
+} from "../../lib/console-proxy";
 
 const BROADCASTING_HOST = process.env.BROADCASTING_HOST ?? 'localhost';
 const BROADCASTING_PORT = process.env.BROADCASTING_PORT ?? '7777';
@@ -9,40 +19,7 @@ try {
   console.log('[DEBUG] routes/console initializing', { BROADCASTING_HOST, BROADCASTING_PORT });
 } catch {}
 
-function streamUpstreamResponse(proxied: Response) {
-  const responseHeaders = new Headers(proxied.headers);
-  responseHeaders.set('cache-control', 'no-cache');
-    // Remove content-length to avoid mismatches when streaming/chunked.
-    responseHeaders.delete('content-length');
-  const upstreamBody: any = proxied.body;
-  if (upstreamBody && typeof upstreamBody.getReader === 'function') {
-    const wrapped = new ReadableStream({
-      start(controller) {
-        const reader = upstreamBody.getReader();
-        (async () => {
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) { controller.close(); break; }
-              controller.enqueue(value);
-            }
-          } catch (e) {
-            try { controller.error(e); } catch {}
-          } finally {
-            try { reader.releaseLock(); } catch {}
-          }
-        })();
-      },
-      cancel() {
-        try { upstreamBody.cancel && upstreamBody.cancel(); } catch {}
-      },
-    });
-
-    return new Response(wrapped, { status: proxied.status, headers: responseHeaders });
-  }
-
-  return new Response(proxied.body, { status: proxied.status, headers: responseHeaders });
-}
+// moved helpers into ../../lib/console-proxy
 
 /**
  * Return an available upgradeWebSocket API compatible function or null.
