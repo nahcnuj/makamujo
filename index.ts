@@ -463,12 +463,9 @@ const server = serve({
 
     '/console/robots.txt': robotsTxt,
 
-    // Catch-all handler. Serve `index.html` only for navigation (HTML)
-    // requests; for other requests attempt to resolve static/module files
-    // from `./src` and `./src/public` so TypeScript/JSX modules can be
-    // requested by the browser (e.g. `/frontend.tsx`, `/App`). This avoids
-    // accidentally returning `index.html` for module imports.
-    '/*': handleCatchAll,
+    // Serve the application HTML via Bun's HTML import so Bun can rewrite
+    // and resolve module imports (safe, local resolution without external CDN).
+    '/*': App,
   },
 
   development: process.env.NODE_ENV !== "production" && {
