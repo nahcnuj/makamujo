@@ -7,6 +7,12 @@ import { GAME_SECTION_TITLE, GameStatusSection } from "../agentStatusSections/Ga
 import { LIVE_DELIVERY_SECTION_TITLE, LiveDeliveryStatusSection } from "../agentStatusSections/LiveDeliveryStatusSection";
 import { MARKOV_MODEL_SECTION_TITLE, MarkovModelStatusSection } from "../agentStatusSections/MarkovModelStatusSection";
 
+const EVENT_SOURCE_CLOSED = typeof EventSource !== 'undefined' ? EventSource.CLOSED : 2;
+
+export function shouldShowAgentStatusErrorForEventSourceError(readyState: number): boolean {
+  return readyState === EVENT_SOURCE_CLOSED;
+}
+
 /**
  * Response schema returned by `/console/api/agent-state`.
  * `error` is populated when the proxy endpoint returns a non-200 response.
@@ -519,8 +525,13 @@ export function AgentStatus() {
         }
       };
       es.onerror = () => {
-        setAgentStatusError('ライブ接続が切断されました');
-        try { es?.close(); } catch {}
+        try {
+          if (es?.readyState === EventSource.CLOSED) {
+            setAgentStatusError('ライブ接続が切断されました');
+          }
+        } catch {
+          setAgentStatusError('ライブ接続が切断されました');
+        }
       };
     })();
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AgentStatus } from "./AgentStatus";
+import { AgentStatus, shouldShowAgentStatusErrorForEventSourceError } from "./AgentStatus";
 import { GameStatusSection } from "./agentStatusSections/GameStatusSection";
 import { LiveDeliveryStatusSection } from "./agentStatusSections/LiveDeliveryStatusSection";
 import { MarkovModelStatusSection } from "./agentStatusSections/MarkovModelStatusSection";
@@ -106,5 +106,14 @@ describe("AgentStatus category sections", () => {
     expect(html).toContain("これまでの発話");
     // Expect each word to be rendered as a separate card element with distinctive class
     expect((html.match(/speech-word-chip/g) || []).length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("AgentStatus SSE error handling", () => {
+  it("reports an error only when the EventSource is fully closed", () => {
+    expect(shouldShowAgentStatusErrorForEventSourceError(0)).toBe(false);
+    expect(shouldShowAgentStatusErrorForEventSourceError(1)).toBe(false);
+    expect(shouldShowAgentStatusErrorForEventSourceError(2)).toBe(true);
+    expect(shouldShowAgentStatusErrorForEventSourceError(-1)).toBe(false);
   });
 });
