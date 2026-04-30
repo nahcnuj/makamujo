@@ -77,7 +77,11 @@ export class MarkovChainModel implements TalkModel {
     nGram = 1,
   ): string {
     // Delegates n-gram generation to AGT's MarkovModel implementation.
-    return this.#model.gen(start, nGram);
+    // AGT may return either a string or an object with `text` and `nodes`.
+    const res = this.#model.gen(start, nGram) as unknown;
+    if (typeof res === 'string') return res;
+    if (res && typeof res === 'object' && 'text' in res) return (res as any).text as string;
+    return String(res ?? '');
   }
 
   learn(text: string): void {
