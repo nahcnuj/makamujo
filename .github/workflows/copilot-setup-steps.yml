@@ -15,8 +15,18 @@ jobs:
         uses: oven-sh/setup-bun@v2
       - name: Show Bun version
         run: bun --version
+      - name: Restore node_modules from cache (if available)
+        uses: actions/cache/restore@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - name: Install dependencies
         run: bun ci
+      - name: Save node_modules to cache
+        uses: actions/cache/save@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - name: Run TypeScript check
         run: bun run typecheck
       - name: Install Playwright browsers (optional)

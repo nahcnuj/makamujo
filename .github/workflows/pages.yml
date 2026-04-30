@@ -24,8 +24,18 @@ jobs:
         uses: actions/checkout@v6
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
+      - name: Restore node_modules from cache (if available)
+        uses: actions/cache/restore@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - name: Install dependencies
         run: bun install
+      - name: Save node_modules to cache
+        uses: actions/cache/save@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - name: Install Playwright Chromium
         run: bunx playwright install --with-deps chromium
       - name: Install CJK fonts

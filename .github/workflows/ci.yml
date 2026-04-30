@@ -24,13 +24,18 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
+      - name: Restore node_modules from cache (if available)
+        uses: actions/cache/restore@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - name: Install dependencies
         run: bun ci
       - name: Save node_modules to cache
         uses: actions/cache/save@v5
         with:
           path: node_modules
-          key: node-modules-${{ github.run_id }}
+          key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
 
   typecheck:
     needs: setup
@@ -43,7 +48,7 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: node_modules
-          key: node-modules-${{ github.run_id }}
+          key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           fail-on-cache-miss: true
       - name: Run tsc --noEmit
         run: bun run typecheck
@@ -68,7 +73,7 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: node_modules
-          key: node-modules-${{ github.run_id }}
+          key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - name: Allow binding to port 443 without root
         if: matrix.suite.label == 'e2e'
         run: sudo sysctl -w net.ipv4.ip_unprivileged_port_start=443
