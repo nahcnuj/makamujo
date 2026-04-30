@@ -9,6 +9,39 @@ try {
   console.log('[DEBUG] routes/console initializing', { BROADCASTING_HOST, BROADCASTING_PORT });
 } catch {}
 
+function streamUpstreamResponse(proxied: Response) {
+  const responseHeaders = new Headers(proxied.headers);
+  responseHeaders.set('cache-control', 'no-cache');
+  const upstreamBody: any = proxied.body;
+  if (upstreamBody && typeof upstreamBody.getReader === 'function') {
+    const wrapped = new ReadableStream({
+      start(controller) {
+        const reader = upstreamBody.getReader();
+        (async () => {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) { controller.close(); break; }
+              controller.enqueue(value);
+            }
+          } catch (e) {
+            try { controller.error(e); } catch {}
+          } finally {
+            try { reader.releaseLock(); } catch {}
+          }
+        })();
+      },
+      cancel() {
+        try { upstreamBody.cancel && upstreamBody.cancel(); } catch {}
+      },
+    });
+
+    return new Response(wrapped, { status: proxied.status, headers: responseHeaders });
+  }
+
+  return new Response(proxied.body, { status: proxied.status, headers: responseHeaders });
+}
+
 export const routes = {
   // Proxy the console client's streaming endpoint to the broadcasting
   // server so the browser can open a same-origin EventSource/WS.
