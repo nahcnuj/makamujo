@@ -12,6 +12,8 @@ try {
 function streamUpstreamResponse(proxied: Response) {
   const responseHeaders = new Headers(proxied.headers);
   responseHeaders.set('cache-control', 'no-cache');
+    // Remove content-length to avoid mismatches when streaming/chunked.
+    responseHeaders.delete('content-length');
   const upstreamBody: any = proxied.body;
   if (upstreamBody && typeof upstreamBody.getReader === 'function') {
     const wrapped = new ReadableStream({
@@ -235,6 +237,9 @@ export const routes = {
       if (contentType.includes('text/event-stream')) {
         const responseHeaders = new Headers(proxied.headers);
         responseHeaders.set('cache-control', 'no-cache');
+        // Remove content-length to avoid incomplete/chunked encoding errors
+        // when the upstream stream is proxied as a new ReadableStream.
+        responseHeaders.delete('content-length');
         const upstreamBody: any = proxied.body;
         if (upstreamBody && typeof upstreamBody.getReader === 'function') {
           const wrapped = new ReadableStream({
