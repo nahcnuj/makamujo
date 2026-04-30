@@ -235,39 +235,7 @@ export const routes = {
 
       const contentType = proxied.headers.get('content-type') ?? '';
       if (contentType.includes('text/event-stream')) {
-        const responseHeaders = new Headers(proxied.headers);
-        responseHeaders.set('cache-control', 'no-cache');
-        // Remove content-length to avoid incomplete/chunked encoding errors
-        // when the upstream stream is proxied as a new ReadableStream.
-        responseHeaders.delete('content-length');
-        const upstreamBody: any = proxied.body;
-        if (upstreamBody && typeof upstreamBody.getReader === 'function') {
-          const wrapped = new ReadableStream({
-            start(controller) {
-              const reader = upstreamBody.getReader();
-              (async () => {
-                try {
-                  while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) { controller.close(); break; }
-                    controller.enqueue(value);
-                  }
-                } catch (e) {
-                  try { controller.error(e); } catch {}
-                } finally {
-                  try { reader.releaseLock(); } catch {}
-                }
-              })();
-            },
-            cancel() {
-              try { upstreamBody.cancel && upstreamBody.cancel(); } catch {}
-            },
-          });
-
-          return new Response(wrapped, { status: proxied.status, headers: responseHeaders });
-        }
-
-        return new Response(proxied.body, { status: proxied.status, headers: responseHeaders });
+        return streamUpstreamResponse(proxied);
       }
 
       return proxied;
