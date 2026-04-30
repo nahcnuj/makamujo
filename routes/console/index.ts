@@ -182,28 +182,39 @@ function buildProxyHeaders(req: Request, proxyBase: string) {
   return proxyHeaders;
 }
 
+/**
+ * Compute the proxy base URL to reach the broadcasting server.
+ * Handles self-proxy detection by mapping to 127.0.0.1 when appropriate.
+ */
+function computeProxyBase(req: Request) {
+  let proxyBase = `http://${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
+  try {
+    const incomingHost = req.headers.get('host') ?? '';
+    if (incomingHost && proxyBase.includes(incomingHost)) {
+      proxyBase = `http://127.0.0.1:${BROADCASTING_PORT}`;
+      try { console.log('[WARN] Detected self-proxying; overriding proxyBase ->', proxyBase); } catch {}
+    }
+  } catch {}
+  return proxyBase;
+}
+
+function computeProxyUrl(req: Request, proxyBase: string) {
+  let parsed: URL;
+  try { parsed = new URL(req.url); } catch (err) {
+    const hostForParse = req.headers.get('host') ?? `${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
+    parsed = new URL(req.url, `http://${hostForParse}`);
+  }
+  return `${proxyBase}/console/api/ws${parsed.search ?? ''}`;
+}
+
 export const routes = {
   // Proxy the console client's streaming endpoint to the broadcasting
   // server so the browser can open a same-origin EventSource/WS.
   '/console/api/ws': async (req: Request) => {
     try { console.log('[TRACE] incoming request headers ->', Object.fromEntries(req.headers)); } catch {}
     try {
-      let proxyBase = `http://${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
-      try {
-        const incomingHost = req.headers.get('host') ?? '';
-        if (incomingHost && proxyBase.includes(incomingHost)) {
-          proxyBase = `http://127.0.0.1:${BROADCASTING_PORT}`;
-          try { console.log('[WARN] Detected self-proxying; overriding proxyBase ->', proxyBase); } catch {}
-        }
-      } catch {}
-
-      let parsed: URL;
-      try { parsed = new URL(req.url); } catch (err) {
-        const hostForParse = req.headers.get('host') ?? `${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
-        parsed = new URL(req.url, `http://${hostForParse}`);
-      }
-
-      const proxyUrl = `${proxyBase}/console/api/ws${parsed.search ?? ''}`;
+      const proxyBase = computeProxyBase(req);
+      const proxyUrl = computeProxyUrl(req, proxyBase);
       try { console.log('[DEBUG] /console/api/ws proxy ->', { url: proxyUrl, method: req.method, accept: req.headers.get('accept'), upgrade: req.headers.get('upgrade'), secWebSocketKey: req.headers.get('sec-websocket-key'), secWebSocketProtocol: req.headers.get('sec-websocket-protocol') }); } catch {}
 
       const proxyHeaders = buildProxyHeaders(req, proxyBase);
