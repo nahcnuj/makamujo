@@ -463,8 +463,9 @@ const server = serve({
 
     '/console/robots.txt': robotsTxt,
 
-    // Rely on Bun's default handling for `/*` so it can serve static files
-    // and resolve module imports from the project (node_modules) correctly.
+    // Serve the application HTML via Bun's HTML import so Bun can rewrite
+    // and resolve module imports (safe, local resolution without external CDN).
+    '/*': App,
   },
 
   development: process.env.NODE_ENV !== "production" && {
