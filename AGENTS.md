@@ -4,7 +4,7 @@
 このファイルはAIエージェント専用の指示書です。
 あなたが作業を始める前に参照し、正確に作業できるようにプロジェクトのコンテキストやルールを提供します。
 
-## 進捗管理（`TODO.md` の利用）
+## 進捗管理
 
 @TODO.md
 
@@ -55,11 +55,11 @@
   2. `bun run screenshot:annotate-ocr --input /tmp/makamujo/console-agent-status-mock.png --output /tmp/makamujo/console-agent-status-mock-annotated.png`
   3. OCR結果に `馬可無序` / `配信エージェント状態モックを表示中` / `配信エージェント状態モック` が含まれることを確認する
   - `screenshot:annotate-ocr` 実行に `tesseract` と `convert`（ImageMagick）が必要。Debian/Ubuntu系では `sudo apt-get install -y tesseract-ocr tesseract-ocr-jpn imagemagick` でインストール可能
-- 検証コマンドは次の順で実行する
+- 動作確認は次の順に実行する
   1. `bun run typecheck`
   2. `bun run test`
   3. `bun run test:integration`
-- 作業完了は、CIのcheckがすべて通っていることを確認して判断する
+- 作業完了はすべての動作確認が正常終了したことによって判断する
 - シェルスクリプトの挙動確認が必要な変更では `bun run test:bin` も実行する
 
 ## コーディングスタイル
@@ -71,13 +71,15 @@
   - 関数・メソッド: 動詞
   - 変数: 名詞句
 - Use only `as const` or `satisfies T` for narrowing types
+  - OK: `{ x: 'y' } as const`
+  - OK: ` 'xyz' satisfies ``x${string}`` `
+  - NG: `JSON.parse(x) as any as { x: string }`
 
 ## バージョン管理
 - コミットメッセージは Conventional Commit 形式
 
 ## テストガイドライン
-- 新規に作成する関数には必ず単体テストを作成
-  - exportしない関数にはテストを書かなくて構いません
+- 新規に作成する公開関数には必ず単体テストを作成する
 - テストフレームワークはBun（Jest互換）
 - コミット前に必ずテストを実行し、すべて成功すること
 - テストファイルの配置
