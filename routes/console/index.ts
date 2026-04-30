@@ -34,7 +34,12 @@ export const routes = {
       try { console.log('[DEBUG] /console/api/ws proxy ->', { url: proxyUrl, method: req.method, accept: req.headers.get('accept'), upgrade: req.headers.get('upgrade'), secWebSocketKey: req.headers.get('sec-websocket-key'), secWebSocketProtocol: req.headers.get('sec-websocket-protocol') }); } catch {}
 
       const proxyHeaders = new Headers(req.headers);
-      proxyHeaders.set('host', `${BROADCASTING_HOST}:${BROADCASTING_PORT}`);
+      try {
+        const proxyBaseHost = new URL(proxyBase).host;
+        proxyHeaders.set('host', proxyBaseHost);
+      } catch {
+        proxyHeaders.set('host', `${BROADCASTING_HOST}:${BROADCASTING_PORT}`);
+      }
       proxyHeaders.delete('origin');
       proxyHeaders.delete('referer');
       if (!proxyHeaders.has('accept')) proxyHeaders.set('accept', 'text/event-stream');
@@ -77,7 +82,7 @@ export const routes = {
               try {
                 try { console.log('[DEBUG] websocket upgrade accepted; starting SSE->WS forwarder'); } catch {}
 
-                const sseUrl = `http://${BROADCASTING_HOST === 'localhost' ? '127.0.0.1' : BROADCASTING_HOST}:${BROADCASTING_PORT}/console/api/ws`;
+                const sseUrl = `${proxyBase}/console/api/ws`;
                 try { console.log('[DEBUG] opening upstream SSE fetch ->', sseUrl); } catch {}
                 const res = await fetch(sseUrl, { headers: { accept: 'text/event-stream' } });
                 try { console.log('[DEBUG] upstream SSE response ->', { status: res.status, contentType: res.headers.get('content-type') }); } catch {}
@@ -86,7 +91,7 @@ export const routes = {
                 // Send a one-off /api/meta snapshot to ensure the client
                 // gets an initial JSON message promptly.
                 try {
-                  const metaRes = await fetch(`http://${BROADCASTING_HOST}:${BROADCASTING_PORT}/api/meta`);
+                  const metaRes = await fetch(`${proxyBase}/api/meta`);
                   const metaJson = await metaRes.json().catch(() => ({}));
                   try { clientWs.send(JSON.stringify(metaJson)); } catch {}
                 } catch (err) {
