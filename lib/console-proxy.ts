@@ -190,3 +190,32 @@ export async function fetchMetaSnapshot(proxyBase: string): Promise<any> {
     return {};
   }
 }
+
+export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, proxyHeaders: Headers): Promise<Response> {
+  // HEAD handling: probe upstream with GET and return headers only
+  if ((req.method || 'GET').toUpperCase() === 'HEAD') {
+    const upstreamGet = await fetch(proxyUrl.toString(), {
+      method: 'GET',
+      headers: proxyHeaders,
+    });
+    const responseHeaders = new Headers(upstreamGet.headers);
+    if ((upstreamGet.headers.get('content-type') || '').includes('text/event-stream')) {
+      responseHeaders.set('cache-control', 'no-cache');
+    }
+    return new Response(null, { status: upstreamGet.status, headers: responseHeaders });
+  }
+
+  // Non-upgrade: proxy via fetch and rewrap SSE bodies when needed
+  const proxied = await fetch(proxyUrl.toString(), {
+    method: req.method,
+    headers: proxyHeaders,
+    body: req.body,
+  });
+
+  const contentType = proxied.headers.get('content-type') ?? '';
+  if (contentType.includes('text/event-stream')) {
+    return streamUpstreamResponse(proxied);
+  }
+
+  return proxied;
+}

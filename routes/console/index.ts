@@ -67,37 +67,8 @@ export const routes = {
         return new Response('upgrade failed', { status: 500 });
       }
 
-      // Non-upgrade: for HEAD requests upstream may omit body headers,
-      // so probe with GET and return the same headers for HEAD to ensure
-      // callers (tests) observe the expected Content-Type.
-      if ((req.method || 'GET').toUpperCase() === 'HEAD') {
-        const upstreamGet = await fetch(proxyUrl.toString(), {
-          method: 'GET',
-          headers: proxyHeaders,
-        });
-        const responseHeaders = new Headers(upstreamGet.headers);
-        // Ensure cache-control for SSE
-        if ((upstreamGet.headers.get('content-type') || '').includes('text/event-stream')) {
-          responseHeaders.set('cache-control', 'no-cache');
-        }
-        return new Response(null, { status: upstreamGet.status, headers: responseHeaders });
-      }
-
-      // Non-upgrade: proxy via fetch and rewrap SSE bodies when needed
-      const proxied = await fetch(proxyUrl.toString(), {
-        method: req.method,
-        headers: proxyHeaders,
-        body: req.body,
-      });
-
-      try { console.log('[DEBUG] /console/api/ws upstream response ->', { status: proxied.status, contentType: proxied.headers.get('content-type') }); } catch {}
-
-      const contentType = proxied.headers.get('content-type') ?? '';
-      if (contentType.includes('text/event-stream')) {
-        return streamUpstreamResponse(proxied);
-      }
-
-      return proxied;
+      // Delegate HEAD and proxy fetch handling to helper
+      return await proxyConsoleApiWsRequest(req, proxyUrl, proxyHeaders);
     } catch (err) {
       return new Response('proxy failed', { status: 502 });
     }
