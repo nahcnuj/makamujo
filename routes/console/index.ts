@@ -44,6 +44,23 @@ function streamUpstreamResponse(proxied: Response) {
   return new Response(proxied.body, { status: proxied.status, headers: responseHeaders });
 }
 
+/**
+ * Build sanitized proxy headers for upstream requests.
+ */
+function buildProxyHeaders(req: Request, proxyBase: string) {
+  const proxyHeaders = new Headers(req.headers);
+  try {
+    const proxyBaseHost = new URL(proxyBase).host;
+    proxyHeaders.set('host', proxyBaseHost);
+  } catch {
+    proxyHeaders.set('host', `${BROADCASTING_HOST}:${BROADCASTING_PORT}`);
+  }
+  proxyHeaders.delete('origin');
+  proxyHeaders.delete('referer');
+  if (!proxyHeaders.has('accept')) proxyHeaders.set('accept', 'text/event-stream');
+  return proxyHeaders;
+}
+
 export const routes = {
   // Proxy the console client's streaming endpoint to the broadcasting
   // server so the browser can open a same-origin EventSource/WS.
@@ -68,16 +85,7 @@ export const routes = {
       const proxyUrl = `${proxyBase}/console/api/ws${parsed.search ?? ''}`;
       try { console.log('[DEBUG] /console/api/ws proxy ->', { url: proxyUrl, method: req.method, accept: req.headers.get('accept'), upgrade: req.headers.get('upgrade'), secWebSocketKey: req.headers.get('sec-websocket-key'), secWebSocketProtocol: req.headers.get('sec-websocket-protocol') }); } catch {}
 
-      const proxyHeaders = new Headers(req.headers);
-      try {
-        const proxyBaseHost = new URL(proxyBase).host;
-        proxyHeaders.set('host', proxyBaseHost);
-      } catch {
-        proxyHeaders.set('host', `${BROADCASTING_HOST}:${BROADCASTING_PORT}`);
-      }
-      proxyHeaders.delete('origin');
-      proxyHeaders.delete('referer');
-      if (!proxyHeaders.has('accept')) proxyHeaders.set('accept', 'text/event-stream');
+      const proxyHeaders = buildProxyHeaders(req, proxyBase);
 
       const upgradeHeader = (req.headers.get('upgrade') || '').toLowerCase();
       const hasSecWebSocketKey = !!req.headers.get('sec-websocket-key');
