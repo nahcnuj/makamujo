@@ -213,7 +213,7 @@ export function createResilientSseProxy(
             const upstream = await fetchUpstream();
             const body = upstream.body as ReadableStream<Uint8Array> | null;
 
-            if (!body || typeof (body as any).getReader !== 'function') {
+            if (!body || typeof (body as ReadableStream<Uint8Array>).getReader !== 'function') {
               if (!stopped) {
                 try { controller.enqueue(encoder.encode(': keepalive\n\n')); } catch {}
                 await new Promise<void>(r => setTimeout(r, reconnectDelayMs));

@@ -68,6 +68,8 @@ afterAll(() => {
   upstream = null;
 });
 
+const READ_TIMEOUT_MS = 4000;
+
 test('proxy maintains SSE connection and reconnects when upstream drops', async () => {
   const base = consoleBaseUrl ?? `http://127.0.0.1:${MAIN_SERVER_PORT}`;
   const res = await fetch(`${base}/console/api/ws`, { headers: { accept: 'text/event-stream' } });
@@ -83,7 +85,7 @@ test('proxy maintains SSE connection and reconnects when upstream drops', async 
   const readWithTimeout = () =>
     Promise.race([
       reader.read() as Promise<{ done: boolean; value: Uint8Array | undefined }>,
-      new Promise<{ done: true; value: undefined }>(r => setTimeout(() => r({ done: true, value: undefined }), 4000)),
+      new Promise<{ done: true; value: undefined }>(r => setTimeout(() => r({ done: true, value: undefined }), READ_TIMEOUT_MS)),
     ]);
 
   try {
