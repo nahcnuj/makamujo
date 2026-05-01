@@ -216,15 +216,19 @@ function findSseBoundary(buffer: string): { end: number; length: number } | null
  * @param firstResponse - The initial upstream SSE response (already fetched by caller).
  * @param fetchUpstream - Factory called on each reconnect; receives an AbortSignal.
  * @param reconnectDelayMs - Delay before reconnecting after upstream drop.
+ * @param keepaliveIntervalMs - Periodically sends SSE comment pings on idle downstream
+ *   connections to avoid idle chunked-encoding termination.
  */
 export function createResilientSseProxy(
   firstResponse: Response,
   fetchUpstream: (signal: AbortSignal) => Promise<Response>,
   reconnectDelayMs = 500,
+  keepaliveIntervalMs = 5_000,
 ): Response {
   let stopped = false;
   let abortController = new AbortController();
   let currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  let keepaliveTimer: ReturnType<typeof setInterval> | null = null;
   const encoder = new TextEncoder();
 
   // Preserve SSE-relevant headers from the initial upstream response.
@@ -273,6 +277,13 @@ export function createResilientSseProxy(
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
+      if (keepaliveIntervalMs > 0) {
+        keepaliveTimer = setInterval(() => {
+          if (stopped) return;
+          try { controller.enqueue(encoder.encode(': keepalive\n\n')); } catch {}
+        }, keepaliveIntervalMs);
+      }
+
       (async () => {
         try {
           // Process the initial response body (already fetched by the caller).
@@ -294,17 +305,29 @@ export function createResilientSseProxy(
             }
           }
         } finally {
+          if (keepaliveTimer) {
+            clearInterval(keepaliveTimer);
+            keepaliveTimer = null;
+          }
           try { controller.close(); } catch {}
         }
       })().catch(() => {
+        if (keepaliveTimer) {
+          clearInterval(keepaliveTimer);
+          keepaliveTimer = null;
+        }
         try { controller.close(); } catch {}
       });
     },
     cancel() {
       stopped = true;
-      try { abortController.abort(); } catch {}
-      // Cancel the in-flight reader so reader.read() unblocks immediately,
+      if (keepaliveTimer) {
+        clearInterval(keepaliveTimer);
+        keepaliveTimer = null;
+      }
+      // Abort any in-flight reconnect fetch and cancel any active upstream reader,
       // allowing the loop to exit promptly without leaking the upstream connection.
+      try { abortController.abort(); } catch {}
       try { currentReader?.cancel(); } catch {}
     },
   });

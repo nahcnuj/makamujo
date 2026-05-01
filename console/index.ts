@@ -36,6 +36,34 @@ export function createAccessDeniedRedirectResponse(requestURL: URL): Response {
   });
 }
 
+export function createLoopbackProxyHeaders(originalHeaders: Headers): Headers {
+  const headers = new Headers(originalHeaders);
+  // Save Connection header value before removing it, so we can strip RFC 7230 tokens after.
+  const connectionValue = headers.get('connection');
+  const hopByHopHeaders = [
+    'connection',
+    'keep-alive',
+    'proxy-authenticate',
+    'proxy-authorization',
+    'proxy-connection',
+    'transfer-encoding',
+    'te',
+    'trailer',
+    'upgrade',
+  ];
+  hopByHopHeaders.forEach((header) => headers.delete(header));
+  headers.delete('host');
+  headers.delete('origin');
+  headers.delete('referer');
+  // Per RFC 7230, also remove any header names listed in the Connection header value.
+  if (connectionValue) {
+    connectionValue.split(',').map(t => t.trim().toLowerCase()).forEach(token => {
+      if (token) headers.delete(token);
+    });
+  }
+  return headers;
+}
+
 /**
  * Start the console server.
  *
@@ -200,10 +228,7 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
             }
 
             // Strip hop-by-hop and origin-specific headers that should not be forwarded as-is.
-            const proxyHeaders = new Headers(req.headers);
-            proxyHeaders.delete('host');
-            proxyHeaders.delete('origin');
-            proxyHeaders.delete('referer');
+            const proxyHeaders = createLoopbackProxyHeaders(req.headers);
 
             const response = await fetch(proxyURL.toString(), {
               method: req.method,
