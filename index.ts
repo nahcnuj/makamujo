@@ -211,7 +211,7 @@ streamer.onSpeech(async (text) => {
     clearTimeout(clearSpeechTimer);
     clearSpeechTimer = undefined;
   }
-  agent.setSpeech(text);
+  agent.setSpeech(speechText);
 });
 
 streamer.onSpeechComplete(async () => {
