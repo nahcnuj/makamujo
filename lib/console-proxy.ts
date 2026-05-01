@@ -191,6 +191,78 @@ export async function fetchMetaSnapshot(proxyBase: string): Promise<any> {
   }
 }
 
+/**
+ * Creates an SSE Response that stays connected even when the upstream drops.
+ * When the upstream closes or errors, it automatically reconnects and continues
+ * streaming. This prevents ERR_INCOMPLETE_CHUNKED_ENCODING errors in the browser
+ * caused by the upstream connection dropping mid-stream.
+ */
+export function createResilientSseProxy(
+  fetchUpstream: () => Promise<Response>,
+  reconnectDelayMs = 500,
+): Response {
+  let stopped = false;
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      (async () => {
+        while (!stopped) {
+          let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+          try {
+            const upstream = await fetchUpstream();
+            const body = upstream.body as ReadableStream<Uint8Array> | null;
+
+            if (!body || typeof (body as any).getReader !== 'function') {
+              if (!stopped) {
+                try { controller.enqueue(encoder.encode(': keepalive\n\n')); } catch {}
+                await new Promise<void>(r => setTimeout(r, reconnectDelayMs));
+              }
+              continue;
+            }
+
+            reader = (body as ReadableStream<Uint8Array>).getReader();
+            while (!stopped) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              try { controller.enqueue(value); } catch {}
+            }
+          } catch {
+            // Connection failed, will retry after delay
+          } finally {
+            if (reader) {
+              try { reader.cancel(); } catch {}
+              reader = null;
+            }
+          }
+
+          if (!stopped) {
+            // Flush any partial SSE event in the downstream buffer with a blank
+            // line, then wait before reconnecting to the upstream.
+            try { controller.enqueue(encoder.encode('\n\n')); } catch {}
+            await new Promise<void>(r => setTimeout(r, reconnectDelayMs));
+          }
+        }
+        try { controller.close(); } catch {}
+      })().catch(() => {
+        try { controller.close(); } catch {}
+      });
+    },
+    cancel() {
+      stopped = true;
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  });
+}
+
 export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, proxyHeaders: Headers): Promise<Response> {
   // HEAD handling: probe upstream with GET and return headers only
   if ((req.method || 'GET').toUpperCase() === 'HEAD') {
@@ -205,7 +277,14 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
     return new Response(null, { status: upstreamGet.status, headers: responseHeaders });
   }
 
-  // Non-upgrade: proxy via fetch and rewrap SSE bodies when needed
+  // For GET requests, use the resilient SSE proxy that auto-reconnects on upstream
+  // failures. This prevents ERR_INCOMPLETE_CHUNKED_ENCODING errors in the browser.
+  if ((req.method || 'GET').toUpperCase() === 'GET') {
+    const headers = proxyHeaders;
+    return createResilientSseProxy(() => fetch(proxyUrl.toString(), { method: 'GET', headers }));
+  }
+
+  // Non-GET: proxy via fetch and rewrap SSE bodies when needed
   const proxied = await fetch(proxyUrl.toString(), {
     method: req.method,
     headers: proxyHeaders,

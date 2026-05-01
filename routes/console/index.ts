@@ -3,9 +3,6 @@ import {
   buildProxyHeaders,
   computeProxyBase,
   computeProxyUrl,
-  getUpgrader,
-  performWebSocketUpgrade,
-  streamUpstreamResponse,
   proxyConsoleApiWsRequest,
   proxyConsoleUpgrade,
 } from "../../lib/console-proxy";

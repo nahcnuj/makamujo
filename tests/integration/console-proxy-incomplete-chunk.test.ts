@@ -68,19 +68,37 @@ afterAll(() => {
   upstream = null;
 });
 
-test('proxy forwards initial SSE event despite upstream truncation', async () => {
+test('proxy maintains SSE connection and reconnects when upstream drops', async () => {
   const base = consoleBaseUrl ?? `http://127.0.0.1:${MAIN_SERVER_PORT}`;
   const res = await fetch(`${base}/console/api/ws`, { headers: { accept: 'text/event-stream' } });
   expect(res.ok).toBeTruthy();
   const body: any = res.body;
   expect(body).toBeTruthy();
   const reader = body.getReader();
-  const { done, value } = await reader.read();
   const decoder = new TextDecoder();
-  const text = decoder.decode(value);
-  // We expect to receive the initial well-formed event
-  expect(text).toContain('data: HELLO');
-  // Ensure stream eventually ends (upstream closed abruptly)
-  const next = await reader.read();
-  expect(next.done).toBeTruthy();
+
+  let accumulated = '';
+
+  // Read chunks with a per-read timeout to avoid hanging indefinitely.
+  const readWithTimeout = () =>
+    Promise.race([
+      reader.read() as Promise<{ done: boolean; value: Uint8Array | undefined }>,
+      new Promise<{ done: true; value: undefined }>(r => setTimeout(() => r({ done: true, value: undefined }), 4000)),
+    ]);
+
+  try {
+    // Keep reading until we see at least 2 HELLO events (initial + after reconnect)
+    while ((accumulated.match(/data: HELLO/g) ?? []).length < 2) {
+      const { done, value } = await readWithTimeout();
+      if (done) break;
+      if (value) accumulated += decoder.decode(value);
+    }
+  } finally {
+    try { reader.cancel(); } catch {}
+  }
+
+  // The proxy should keep the downstream connection alive and deliver at least
+  // two HELLO events: one from the initial connection and one after reconnect.
+  const helloCount = (accumulated.match(/data: HELLO/g) ?? []).length;
+  expect(helloCount).toBeGreaterThanOrEqual(2);
 });
