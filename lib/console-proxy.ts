@@ -325,7 +325,9 @@ export function createResilientSseProxy(
         clearInterval(keepaliveTimer);
         keepaliveTimer = null;
       }
+      // Abort any in-flight reconnect fetch and cancel any active upstream reader,
       // allowing the loop to exit promptly without leaking the upstream connection.
+      try { abortController.abort(); } catch {}
       try { currentReader?.cancel(); } catch {}
     },
   });

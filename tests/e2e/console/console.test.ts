@@ -314,13 +314,22 @@ test.describe("console", () => {
       const OrigEventSource = (window as any).EventSource;
       Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
       Object.defineProperty(window, '__sseError', { value: false, writable: true, configurable: true });
-      (window as any).EventSource = function (url: string) {
+      const WrappedEventSource = function (url: string) {
         const es = new OrigEventSource(url);
         try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
         try { es.addEventListener('error', () => { (window as any).__sseError = true; }); } catch {}
         return es;
       } as any;
-      try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
+      try {
+        for (const key of Object.getOwnPropertyNames(OrigEventSource)) {
+          Object.defineProperty(
+            WrappedEventSource,
+            key,
+            Object.getOwnPropertyDescriptor(OrigEventSource, key)!
+          );
+        }
+      } catch {}
+      (window as any).EventSource = WrappedEventSource;
     });
 
     await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: 'domcontentloaded', timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });

@@ -57,3 +57,31 @@ test("strips hop-by-hop headers from loopback proxy requests", () => {
   expect(headers.get('referer')).toBeNull();
   expect(headers.get('accept')).toBe('text/event-stream');
 });
+
+test("strips proxy-authenticate and proxy-authorization from loopback proxy requests", () => {
+  const originalHeaders = new Headers([
+    ['proxy-authenticate', 'Basic realm="proxy"'],
+    ['proxy-authorization', 'Basic dXNlcjpwYXNz'],
+    ['authorization', 'Bearer token123'],
+  ]);
+
+  const headers = createLoopbackProxyHeaders(originalHeaders);
+  expect(headers.get('proxy-authenticate')).toBeNull();
+  expect(headers.get('proxy-authorization')).toBeNull();
+  expect(headers.get('authorization')).toBe('Bearer token123');
+});
+
+test("strips headers named in Connection header value (RFC 7230)", () => {
+  const originalHeaders = new Headers([
+    ['connection', 'x-custom-hop, another-hop'],
+    ['x-custom-hop', 'some-value'],
+    ['another-hop', 'other-value'],
+    ['x-preserved', 'preserved'],
+  ]);
+
+  const headers = createLoopbackProxyHeaders(originalHeaders);
+  expect(headers.get('connection')).toBeNull();
+  expect(headers.get('x-custom-hop')).toBeNull();
+  expect(headers.get('another-hop')).toBeNull();
+  expect(headers.get('x-preserved')).toBe('preserved');
+});
