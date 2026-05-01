@@ -322,11 +322,10 @@ test.describe("console", () => {
       } as any;
       try {
         for (const key of Object.getOwnPropertyNames(OrigEventSource)) {
-          Object.defineProperty(
-            WrappedEventSource,
-            key,
-            Object.getOwnPropertyDescriptor(OrigEventSource, key)!
-          );
+          const descriptor = Object.getOwnPropertyDescriptor(OrigEventSource, key);
+          if (descriptor) {
+            Object.defineProperty(WrappedEventSource, key, descriptor);
+          }
         }
       } catch {}
       (window as any).EventSource = WrappedEventSource;

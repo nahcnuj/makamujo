@@ -38,6 +38,8 @@ export function createAccessDeniedRedirectResponse(requestURL: URL): Response {
 
 export function createLoopbackProxyHeaders(originalHeaders: Headers): Headers {
   const headers = new Headers(originalHeaders);
+  // Save Connection header value before removing it, so we can strip RFC 7230 tokens after.
+  const connectionValue = headers.get('connection');
   const hopByHopHeaders = [
     'connection',
     'keep-alive',
@@ -49,17 +51,16 @@ export function createLoopbackProxyHeaders(originalHeaders: Headers): Headers {
     'trailer',
     'upgrade',
   ];
+  hopByHopHeaders.forEach((header) => headers.delete(header));
+  headers.delete('host');
+  headers.delete('origin');
+  headers.delete('referer');
   // Per RFC 7230, also remove any header names listed in the Connection header value.
-  const connectionValue = headers.get('connection');
   if (connectionValue) {
     connectionValue.split(',').map(t => t.trim().toLowerCase()).forEach(token => {
       if (token) headers.delete(token);
     });
   }
-  hopByHopHeaders.forEach((header) => headers.delete(header));
-  headers.delete('host');
-  headers.delete('origin');
-  headers.delete('referer');
   return headers;
 }
 
