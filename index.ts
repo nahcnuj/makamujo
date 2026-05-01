@@ -156,6 +156,26 @@ const getCurrentStreamPayload = () => {
   } as const;
 };
 
+const normalizeSpeechText = (speech: unknown): string | undefined => {
+  if (typeof speech === 'string') {
+    return speech;
+  }
+
+  if (!speech || typeof speech !== 'object') {
+    return undefined;
+  }
+
+  if (typeof (speech as any).text === 'string') {
+    return (speech as any).text;
+  }
+
+  if (typeof (speech as any).speech === 'string') {
+    return (speech as any).speech;
+  }
+
+  return undefined;
+};
+
 let agent: any = {
   setSpeech: (text: string) => { currentSpeechState = { speech: text, silent: false }; },
   getSpeech: () => currentSpeechState,
@@ -211,7 +231,7 @@ streamer.onSpeech(async (text) => {
     clearTimeout(clearSpeechTimer);
     clearSpeechTimer = undefined;
   }
-  agent.setSpeech(text);
+  agent.setSpeech(speechText);
 });
 
 streamer.onSpeechComplete(async () => {
@@ -274,7 +294,11 @@ const server = serve({
     },
 
     '/api/speech': async () => {
-      return Response.json(agent.getSpeech());
+      const speechState = agent.getSpeech();
+      return Response.json({
+        speech: normalizeSpeechText(speechState) ?? '',
+        silent: !!(speechState && typeof speechState === 'object' ? (speechState as any).silent : false),
+      });
     },
 
     '/api/game': async () => {

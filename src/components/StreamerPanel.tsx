@@ -4,6 +4,7 @@ import { CharacterSprite } from "./CharacterSprite";
 
 export function StreamerPanel() {
   const { speech, silent } = useAgentContext();
+  const speechText = typeof speech === 'string' ? speech : '';
 
   return (
     <div className="flex gap-2 h-full">
@@ -14,7 +15,7 @@ export function StreamerPanel() {
         <Box borderColor="border-emerald-300" borderWidth="border-8" borderStyle="border-double" rounded="rounded-xl">
           <Container>
             <div className="w-full h-full text-3xl/9 break-all text-ellipsis overflow-hidden">
-              {silent ? '・・・' : speech.replace(/。$/, '')}
+              {silent ? '・・・' : speechText.replace(/。$/, '')}
             </div>
           </Container>
         </Box>
