@@ -44,6 +44,20 @@ describe('updateSpeechState', () => {
       expect(setSpeech).toHaveBeenCalledWith('hello');
     });
 
+    it('normalizes speech objects with a text field', () => {
+      const setSpeech = mock((_: string) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState({ speech: { text: 'こんにちは' } }, '', setSpeech, setSilent);
+      expect(setSpeech).toHaveBeenCalledWith('こんにちは');
+    });
+
+    it('normalizes speech objects with a speech field', () => {
+      const setSpeech = mock((_: string) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState({ speech: { speech: 'こんばんは' } }, '', setSpeech, setSilent);
+      expect(setSpeech).toHaveBeenCalledWith('こんばんは');
+    });
+
     it('clears speech when API returns an empty string', () => {
       const setSpeech = mock((_: string) => {});
       const setSilent = mock((_: boolean) => {});

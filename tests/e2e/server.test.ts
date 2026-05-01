@@ -87,6 +87,7 @@ test.describe("server", () => {
     expect(res.ok()).toBeTruthy();
     const data = await res.json();
     expect(data).toHaveProperty("speech");
+    expect(typeof data.speech).toBe('string');
   });
 
   test("responds to /api/game", async ({ request }) => {
