@@ -39,6 +39,7 @@
 
 - [x] [MUST] Fix console SSE reconnect handling — Allow EventSource to auto-reconnect and avoid forcing immediate closure on transient SSE errors.
 - [x] [SHOULD] Add regression test for SSE EventSource error handling — Verify console status error only appears when the stream is fully closed.
+- [x] [MUST] Refactor AgentStatus component — Reorganize `console/src/AgentStatus/index.tsx` and split AgentStatus logic into reusable submodules.
 
 - [x] [MUST] Issue #225: 管理コンソール - これまでの発話の改善 — 読了、テスト追加、実装（単語ごとにカード表示、非マルコフ文言の除去）を行いました。
 - [ ] [MUST] Commit changes and open PR for branch `225-管理コンソール-これまでの発話の改善` — Pending: create PR with description and attach screenshots if needed.

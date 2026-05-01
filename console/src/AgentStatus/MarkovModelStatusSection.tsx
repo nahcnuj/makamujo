@@ -1,10 +1,10 @@
 import { AgentStatusSectionCard } from "./AgentStatusSectionCard";
-import type { AgentStatusRow } from "./AgentStatusSectionCard";
+import type { AgentStatusRow } from "./types";
 
 export const MARKOV_MODEL_SECTION_TITLE = "マルコフ連鎖モデルの状態";
 
 type MarkovModelStatusSectionProps = {
-  markovModelRows: AgentStatusRow[]
+  markovModelRows: AgentStatusRow[];
 };
 
 export const MarkovModelStatusSection = ({ markovModelRows }: MarkovModelStatusSectionProps) => {
