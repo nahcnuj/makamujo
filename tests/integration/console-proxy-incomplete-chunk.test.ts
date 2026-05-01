@@ -103,4 +103,7 @@ test('proxy maintains SSE connection and reconnects when upstream drops', async 
   // two HELLO events: one from the initial connection and one after reconnect.
   const helloCount = (accumulated.match(/data: HELLO/g) ?? []).length;
   expect(helloCount).toBeGreaterThanOrEqual(2);
+  // Incomplete SSE frames (data: PARTIAL without trailing \n\n) must be dropped
+  // by the proxy and never forwarded to the browser's EventSource.
+  expect(accumulated).not.toContain('PARTIAL');
 });

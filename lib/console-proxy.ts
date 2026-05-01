@@ -192,74 +192,126 @@ export async function fetchMetaSnapshot(proxyBase: string): Promise<any> {
 }
 
 /**
+ * Returns the position and length of the first SSE frame boundary (\n\n or \r\n\r\n)
+ * in the given buffer, or null if no complete boundary is found.
+ */
+function findSseBoundary(buffer: string): { end: number; length: number } | null {
+  const lfIdx = buffer.indexOf('\n\n');
+  const crlfIdx = buffer.indexOf('\r\n\r\n');
+  if (lfIdx === -1 && crlfIdx === -1) return null;
+  if (lfIdx !== -1 && (crlfIdx === -1 || lfIdx <= crlfIdx)) return { end: lfIdx, length: 2 };
+  return { end: crlfIdx, length: 4 };
+}
+
+/**
  * Creates an SSE Response that stays connected even when the upstream drops.
  * When the upstream closes or errors, it automatically reconnects and continues
  * streaming. This prevents ERR_INCOMPLETE_CHUNKED_ENCODING errors in the browser
  * caused by the upstream connection dropping mid-stream.
+ *
+ * Only complete SSE frames (delimited by \n\n or \r\n\r\n) are forwarded; any
+ * incomplete frame in the buffer is silently dropped when the upstream disconnects,
+ * preventing partial/corrupt events from reaching the browser's EventSource.
+ *
+ * @param firstResponse - The initial upstream SSE response (already fetched by caller).
+ * @param fetchUpstream - Factory called on each reconnect; receives an AbortSignal.
+ * @param reconnectDelayMs - Delay before reconnecting after upstream drop.
  */
 export function createResilientSseProxy(
-  fetchUpstream: () => Promise<Response>,
+  firstResponse: Response,
+  fetchUpstream: (signal: AbortSignal) => Promise<Response>,
   reconnectDelayMs = 500,
 ): Response {
   let stopped = false;
+  let abortController = new AbortController();
+  let currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   const encoder = new TextEncoder();
+
+  // Preserve SSE-relevant headers from the initial upstream response.
+  const responseHeaders = new Headers();
+  responseHeaders.set('Content-Type', 'text/event-stream');
+  responseHeaders.set('Cache-Control', 'no-cache');
+  responseHeaders.set('Connection', 'keep-alive');
+  const corsHeader = firstResponse.headers.get('Access-Control-Allow-Origin');
+  if (corsHeader) responseHeaders.set('Access-Control-Allow-Origin', corsHeader);
+
+  const processUpstreamBody = async (
+    upstream: Response,
+    controller: ReadableStreamDefaultController<Uint8Array>,
+  ): Promise<void> => {
+    const body = upstream.body as ReadableStream<Uint8Array> | null;
+    if (!body || typeof body.getReader !== 'function') return;
+
+    const reader = body.getReader();
+    currentReader = reader;
+    const decoder = new TextDecoder();
+    let sseBuffer = '';
+
+    try {
+      while (!stopped) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        sseBuffer += decoder.decode(value, { stream: true });
+
+        // Emit only complete SSE frames; buffer incomplete ones until the next chunk.
+        let boundary = findSseBoundary(sseBuffer);
+        while (boundary !== null) {
+          const { end, length } = boundary;
+          const frame = sseBuffer.slice(0, end + length);
+          sseBuffer = sseBuffer.slice(end + length);
+          try { controller.enqueue(encoder.encode(frame)); } catch {}
+          boundary = findSseBoundary(sseBuffer);
+        }
+      }
+    } finally {
+      currentReader = null;
+      // Any incomplete frame remaining in sseBuffer is discarded here, preventing
+      // a truncated/corrupt event from being dispatched after reconnect.
+      try { reader.cancel(); } catch {}
+    }
+  };
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       (async () => {
-        while (!stopped) {
-          let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-          try {
-            const upstream = await fetchUpstream();
-            const body = upstream.body as ReadableStream<Uint8Array> | null;
+        try {
+          // Process the initial response body (already fetched by the caller).
+          // Wrap in try-catch: an abrupt socket close on the upstream side causes
+          // reader.read() to throw rather than return { done: true }, which must
+          // not propagate and close the downstream stream prematurely.
+          try { await processUpstreamBody(firstResponse, controller); } catch {}
 
-            if (!body || typeof (body as ReadableStream<Uint8Array>).getReader !== 'function') {
-              if (!stopped) {
-                try { controller.enqueue(encoder.encode(': keepalive\n\n')); } catch {}
-                await new Promise<void>(r => setTimeout(r, reconnectDelayMs));
-              }
-              continue;
-            }
-
-            reader = (body as ReadableStream<Uint8Array>).getReader();
-            while (!stopped) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              try { controller.enqueue(value); } catch {}
-            }
-          } catch {
-            // Connection failed, will retry after delay
-          } finally {
-            if (reader) {
-              try { reader.cancel(); } catch {}
-              reader = null;
-            }
-          }
-
-          if (!stopped) {
-            // Flush any partial SSE event in the downstream buffer with a blank
-            // line, then wait before reconnecting to the upstream.
-            try { controller.enqueue(encoder.encode('\n\n')); } catch {}
+          while (!stopped) {
             await new Promise<void>(r => setTimeout(r, reconnectDelayMs));
+            if (stopped) break;
+
+            abortController = new AbortController();
+            try {
+              const upstream = await fetchUpstream(abortController.signal);
+              try { await processUpstreamBody(upstream, controller); } catch {}
+            } catch {
+              // Connection failed; will retry after delay.
+            }
           }
+        } finally {
+          try { controller.close(); } catch {}
         }
-        try { controller.close(); } catch {}
       })().catch(() => {
         try { controller.close(); } catch {}
       });
     },
     cancel() {
       stopped = true;
+      try { abortController.abort(); } catch {}
+      // Cancel the in-flight reader so reader.read() unblocks immediately,
+      // allowing the loop to exit promptly without leaking the upstream connection.
+      try { currentReader?.cancel(); } catch {}
     },
   });
 
   return new Response(stream, {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    },
+    status: firstResponse.status,
+    headers: responseHeaders,
   });
 }
 
@@ -277,14 +329,26 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
     return new Response(null, { status: upstreamGet.status, headers: responseHeaders });
   }
 
-  // For GET requests, use the resilient SSE proxy that auto-reconnects on upstream
-  // failures. This prevents ERR_INCOMPLETE_CHUNKED_ENCODING errors in the browser.
-  if ((req.method || 'GET').toUpperCase() === 'GET') {
+  // For SSE GET requests, probe upstream once and use the resilient proxy if SSE is returned.
+  // This prevents ERR_INCOMPLETE_CHUNKED_ENCODING errors in the browser caused by upstream drops.
+  if (
+    (req.method || 'GET').toUpperCase() === 'GET' &&
+    (req.headers.get('accept') ?? '').includes('text/event-stream')
+  ) {
+    const probe = await fetch(proxyUrl.toString(), { method: 'GET', headers: proxyHeaders });
+    const contentType = probe.headers.get('content-type') ?? '';
+    if (!probe.ok || !contentType.includes('text/event-stream')) {
+      // Upstream returned a non-SSE or error response — pass it through as-is.
+      return streamUpstreamResponse(probe);
+    }
     const headers = proxyHeaders;
-    return createResilientSseProxy(() => fetch(proxyUrl.toString(), { method: 'GET', headers }));
+    return createResilientSseProxy(
+      probe,
+      (signal) => fetch(proxyUrl.toString(), { method: 'GET', headers, signal }),
+    );
   }
 
-  // Non-GET: proxy via fetch and rewrap SSE bodies when needed
+  // Non-SSE GET or non-GET: proxy via fetch and rewrap SSE bodies when needed
   const proxied = await fetch(proxyUrl.toString(), {
     method: req.method,
     headers: proxyHeaders,
