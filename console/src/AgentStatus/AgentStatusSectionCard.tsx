@@ -1,24 +1,9 @@
 import { Container } from "automated-gameplay-transmitter";
-import type { ReactNode } from "react";
-
-export type AgentStatusRow = {
-  label: string
-  href?: string
-  hideLabel?: boolean
-} & (
-  | {
-    value: string
-    valueComponent?: never
-  }
-  | {
-    value?: never
-    valueComponent: ReactNode
-  }
-);
+import type { AgentStatusRow } from "./types";
 
 type AgentStatusSectionCardProps = {
-  title: string
-  rows: AgentStatusRow[]
+  title: string;
+  rows: AgentStatusRow[];
 };
 
 export const AgentStatusSectionCard = ({ title, rows }: AgentStatusSectionCardProps) => {

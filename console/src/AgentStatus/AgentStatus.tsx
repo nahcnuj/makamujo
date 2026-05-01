@@ -6,15 +6,17 @@ import {
   INVALID_AGENT_STATE_RESPONSE_ERROR,
   createMockAgentStateResponse,
   isAgentStateMockQueryEnabled,
-  shouldShowAgentStatusErrorForEventSourceError,
   shouldUseMockAgentState,
   parseAgentStateResponse,
   startAgentStateAutoRefresh,
 } from "./agentStatusState";
 import { createAgentStatusSections } from "./createAgentStatusSections";
-import { GAME_SECTION_TITLE, GameStatusSection } from "../agentStatusSections/GameStatusSection";
-import { LIVE_DELIVERY_SECTION_TITLE, LiveDeliveryStatusSection } from "../agentStatusSections/LiveDeliveryStatusSection";
-import { MARKOV_MODEL_SECTION_TITLE, MarkovModelStatusSection } from "../agentStatusSections/MarkovModelStatusSection";
+import { GAME_SECTION_TITLE } from "./GameStatusSection";
+import { GameStatusSection } from "./GameStatusSection";
+import { LIVE_DELIVERY_SECTION_TITLE } from "./LiveDeliveryStatusSection";
+import { LiveDeliveryStatusSection } from "./LiveDeliveryStatusSection";
+import { MARKOV_MODEL_SECTION_TITLE } from "./MarkovModelStatusSection";
+import { MarkovModelStatusSection } from "./MarkovModelStatusSection";
 
 const AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS = "grid-rows-[auto_minmax(0,1fr)]";
 
