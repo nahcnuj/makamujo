@@ -309,6 +309,39 @@ test.describe("console", () => {
     await expect(detailsLocator).toContainText("4-gram", { timeout: 10_000 });
   });
 
+  test("keeps SSE connection open while the console browser tab is open", async ({ page, request }) => {
+    await page.addInitScript(() => {
+      const OrigEventSource = (window as any).EventSource;
+      Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
+      Object.defineProperty(window, '__sseError', { value: false, writable: true, configurable: true });
+      (window as any).EventSource = function (url: string) {
+        const es = new OrigEventSource(url);
+        try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
+        try { es.addEventListener('error', () => { (window as any).__sseError = true; }); } catch {}
+        return es;
+      } as any;
+      try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
+    });
+
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: 'domcontentloaded', timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
+
+    // Keep the console tab open long enough for idle SSE/keepalive behavior
+    // to be observed, then send a broadcast update.
+    await page.waitForTimeout(6_000);
+    expect(await page.evaluate(() => (window as any).__sseError)).toBeFalsy();
+
+    const payload = cloneAgentStateResponseMockFixture();
+    const res = await request.post(`${BROADCASTING_BASE_URL}/api/meta`, { data: payload });
+    expect(res.ok(), `broadcast POST failed: ${res.status()}`).toBeTruthy();
+
+    const detailsLocator = page.getByTestId("agent-status-details");
+    await detailsLocator.waitFor({ timeout: 10_000 });
+    await expect(detailsLocator).toContainText("生成N-gram");
+    await expect(detailsLocator).toContainText("4-gram", { timeout: 10_000 });
+    expect(await page.evaluate(() => (window as any).__sseError)).toBeFalsy();
+  });
+
   test("proxy returns SSE content-type at /console/api/ws", async ({ request }) => {
     // Use HEAD to inspect headers without opening a persistent SSE stream
     // which can cause the test runner's HTTP client to abort on chunked
