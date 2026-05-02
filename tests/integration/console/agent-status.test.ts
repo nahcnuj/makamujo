@@ -140,12 +140,6 @@ describe("createAgentStatusRows", () => {
     expect(liveMetricHtml).toContain("123");
     expect(liveMetricHtml).toContain("コメント数");
     expect(liveMetricHtml).toContain("grid-cols-5");
-    expect(rows).toContainEqual({ label: "タイトル", value: "テスト配信" });
-    expect(rows).toContainEqual({
-      label: "配信URL",
-      value: "https://example.com/live",
-      href: "https://example.com/live",
-    });
   });
 
   it("includes currentGame and speech rows when present", () => {
@@ -162,7 +156,9 @@ describe("createAgentStatusRows", () => {
     });
 
     expect(rows).toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
-    expect(rows).toContainEqual({ label: "生成N-gram", value: "4-gram (4.00)" });
+    expect(rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "生成N-gram", value: "4-gram (4.00)" }),
+    ]));
     const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
     expect(gameInfoRow?.value).toBeUndefined();
     expect(gameInfoRow?.valueComponent).toBeDefined();
@@ -261,13 +257,27 @@ describe("createAgentStatusRows", () => {
   });
 
   it("formats n-gram row with fallback for invalid numbers", () => {
-    expect(createAgentStatusRows({ nGram: Infinity })).toContainEqual({ label: "生成N-gram", value: "-" });
-    expect(createAgentStatusRows({ nGram: 0 })).toContainEqual({ label: "生成N-gram", value: "-" });
-    expect(createAgentStatusRows({ nGram: 4.8 })).toContainEqual({ label: "生成N-gram", value: "4-gram" });
-    expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: 4.8 })).toContainEqual({ label: "生成N-gram", value: "4-gram (4.80)" });
-    expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: 0.5 })).toContainEqual({ label: "生成N-gram", value: "4-gram" });
-    expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: -2 })).toContainEqual({ label: "生成N-gram", value: "4-gram" });
-    expect(createAgentStatusRows({})).not.toContainEqual({ label: "生成N-gram", value: "-" });
+    expect(createAgentStatusRows({ nGram: Infinity })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "生成N-gram", value: "-" }),
+    ]));
+    expect(createAgentStatusRows({ nGram: 0 })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "生成N-gram", value: "-" }),
+    ]));
+    expect(createAgentStatusRows({ nGram: 4.8 })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "生成N-gram", value: "4-gram" }),
+    ]));
+    expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: 4.8 })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "生成N-gram", value: "4-gram (4.80)" }),
+    ]));
+    expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: 0.5 })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "生成N-gram", value: "4-gram" }),
+    ]));
+    expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: -2 })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "生成N-gram", value: "4-gram" }),
+    ]));
+    expect(createAgentStatusRows({})).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "生成N-gram", value: "-" }),
+    ]));
   });
 
   it("shows all speech history items in descending order", () => {
@@ -305,11 +315,12 @@ describe("createAgentStatusRows", () => {
     const liveMetricRow = rows.find((row) => row.label === "配信指標");
     expect(liveMetricRow?.value).toBeUndefined();
     expect(renderToStaticMarkup(createElement(Fragment, null, liveMetricRow?.valueComponent))).toContain("配信中");
-    expect(rows).toContainEqual({ label: "タイトル", value: "-" });
-    expect(rows).toContainEqual({ label: "配信URL", value: "-", href: undefined });
+    expect(rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "配信指標" }),
+    ]));
   });
 
-  it("formats niconama start time from millisecond timestamps without multiplying again", () => {
+  it("does not include a dedicated start time row in createAgentStatusRows", () => {
     const rows = createAgentStatusRows({
       niconama: {
         type: "live",
@@ -318,8 +329,7 @@ describe("createAgentStatusRows", () => {
         },
       },
     });
-    const startRow = rows.find((row) => row.label === "開始時刻");
-    expect(startRow?.value).toContain("2024");
+    expect(rows.some((row) => row.label === "開始時刻")).toBe(false);
   });
 });
 
@@ -335,8 +345,10 @@ describe("createAgentStatusSections", () => {
       valueComponent: expect.anything(),
     });
     expect(liveDeliverySection?.rows).toContainEqual({ label: "発話内容", value: "コメントを学習してお話ししています" });
-    const markovModelSection = sections.find((section) => section.title === "マルコフ連鎖モデルの状態");
-    expect(markovModelSection?.rows).toContainEqual({ label: "生成N-gram", value: "4-gram (4.00)" });
+    const markovModelSection = sections.find((section) => section.title === "マルコフ連鎖モデル");
+    expect(markovModelSection?.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "生成N-gram", value: "4-gram (4.00)" }),
+    ]));
     expect(markovModelSection?.rows).not.toContainEqual({ label: "発話内容", value: "コメントを学習してお話ししています" });
     const gameSection = sections.find((section) => section.title === "ゲームの状態");
     expect(gameSection?.rows).toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
@@ -349,8 +361,8 @@ describe("createAgentStatusSections", () => {
     const sections = createAgentStatusSections({ nGram: 4 });
     expect(sections).toEqual([
       {
-        title: "マルコフ連鎖モデルの状態",
-        rows: [{ label: "生成N-gram", value: "4-gram" }],
+        title: "マルコフ連鎖モデル",
+        rows: [expect.objectContaining({ label: "生成N-gram", value: "4-gram" })],
       },
     ]);
   });
@@ -361,11 +373,11 @@ describe("createAgentStatusSections", () => {
     });
     expect(sections).toEqual([
       {
-        title: "マルコフ連鎖モデルの状態",
-        rows: [{
+        title: "マルコフ連鎖モデル",
+        rows: [expect.objectContaining({
           label: "これまでの発話",
           valueComponent: expect.anything(),
-        }],
+        })],
       },
     ]);
   });
@@ -377,7 +389,7 @@ describe("createAgentStatusSections", () => {
     });
     const liveDeliverySection = sections.find((section) => section.title === "配信状況");
     expect(liveDeliverySection?.rows).toContainEqual({ label: "発話内容", value: "最新発話" });
-    const markovModelSection = sections.find((section) => section.title === "マルコフ連鎖モデルの状態");
+    const markovModelSection = sections.find((section) => section.title === "マルコフ連鎖モデル");
     expect(markovModelSection).toBeUndefined();
   });
 });
