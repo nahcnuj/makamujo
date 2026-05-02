@@ -172,7 +172,7 @@ export const AgentStatus = () => {
       ) : (
         <div
           data-testid="agent-status-details"
-          className="w-full h-full min-h-0 pr-1 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-4"
+          className="w-full h-full min-h-0 pr-1 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-4 overflow-y-auto"
         >
           {hasPrimaryColumnSections ? (
             <div className="min-w-0 min-h-0 h-full flex flex-col gap-4 overflow-hidden">

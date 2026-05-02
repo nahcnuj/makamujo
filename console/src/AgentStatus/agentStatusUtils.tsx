@@ -293,6 +293,9 @@ const renderCurrentGameStateValueComponent = (
               <li key={stateKey}>
                 <details className="group rounded-md border border-emerald-300/40 p-2">
                   <summary className="flex items-center gap-2 font-semibold cursor-pointer list-none">
+                    <span aria-hidden="true" className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-slate-500">
+                      ▶
+                    </span>
                     <span>{stateKey}</span>
                     {Array.isArray(stateValue) ? (
                       <span className="text-sm italic text-slate-500">({stateValue.length})</span>

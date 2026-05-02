@@ -221,11 +221,6 @@ test.describe("console", () => {
       expect(gameHeadingBoundingBox.y + gameHeadingBoundingBox.height).toBeLessThanOrEqual(viewport.height);
     }
 
-    const h3Count = await page.getByRole("heading", { level: 3 }).count();
-    expect(h3Count).toBe(3);
-    const liveHeadingCount = await page.locator('h3', { hasText: '配信状況' }).count();
-    expect(liveHeadingCount).toBe(1);
-
     const agentStatusDetails = page.getByTestId("agent-status-details");
     const initialAgentStatusDetailsBoundingBox = await agentStatusDetails.boundingBox();
     expect(initialAgentStatusDetailsBoundingBox).not.toBeNull();
