@@ -145,6 +145,11 @@ export const createSpeechHistoryDisplayItems = (
   return itemsWithSeq.map(({ seq, ...rest }) => rest);
 };
 
+/**
+ * @param emphasizeLatest - When `true` (default), the most recent history item is visually
+ * emphasized with a thicker bottom border to indicate it is being spoken. Set to `false`
+ * when the agent is in the silent state so that no past utterance appears highlighted.
+ */
 export const createSpeechHistoryValueComponent = (
   speechHistory: AgentStateResponse["speechHistory"] | undefined,
   emphasizeLatest: boolean = true,

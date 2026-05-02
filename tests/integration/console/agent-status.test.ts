@@ -276,13 +276,11 @@ describe("createAgentStatusRows", () => {
     expect(rows).not.toContainEqual({ label: "発話内容", value: "発話テキスト" });
   });
 
-  it("does not show 発話内容 when speech.silent is true even if canSpeak is false", () => {
-    const rows = createAgentStatusRows({ canSpeak: false, speech: { speech: "前回の発話", silent: true } });
-    expect(rows).not.toContainEqual(expect.objectContaining({ label: "発話内容" }));
-  });
-
-  it("does not show 発話内容 when speech.silent is true even if canSpeak is true", () => {
-    const rows = createAgentStatusRows({ canSpeak: true, speech: { speech: "前回の発話", silent: true } });
+  it.each([
+    { label: "canSpeak が false のとき", canSpeak: false },
+    { label: "canSpeak が true のとき", canSpeak: true },
+  ] as const)("does not show 発話内容 when speech.silent is true ($label)", ({ canSpeak }) => {
+    const rows = createAgentStatusRows({ canSpeak, speech: { speech: "前回の発話", silent: true } });
     expect(rows).not.toContainEqual(expect.objectContaining({ label: "発話内容" }));
   });
 
