@@ -109,6 +109,31 @@ test.describe("server", () => {
     expect(res.ok()).toBeTruthy();
   });
 
+  test("normalizes legacy /api/meta payload and preserves missing comments count", async ({ request }) => {
+    const res = await request.post(`${BASE_URL}/api/meta`, {
+      data: {
+        type: 'niconama',
+        data: {
+          isLive: true,
+          title: 'legacy normalization',
+          startTime: 0,
+          total: 1,
+          points: { gift: 0, ad: 0 },
+          url: 'https://example.com/legacy',
+        },
+      },
+    });
+
+    expect(res.ok()).toBeTruthy();
+
+    const metaRes = await request.get(`${BASE_URL}/api/meta`);
+    expect(metaRes.ok()).toBeTruthy();
+    const metaJson = await metaRes.json();
+    expect(metaJson).toHaveProperty('niconama.type', 'live');
+    expect(metaJson).toHaveProperty('niconama.meta.url', 'https://example.com/legacy');
+    expect(metaJson.niconama.meta.total).not.toHaveProperty('comments');
+  });
+
   test("accepts PUT / via comment route", async ({ request }) => {
     const postRes = await request.post(`${BASE_URL}/`);
     expect(postRes.ok()).toBeTruthy();

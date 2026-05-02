@@ -174,12 +174,59 @@ const broadcastCurrentPayload = (context: string) => {
   }
 };
 
+const normalizePublishedStreamState = (state: unknown): unknown => {
+  if (!state || typeof state !== 'object') {
+    return state;
+  }
+
+  const rawState = state as Record<string, unknown>;
+
+  if (rawState.type === 'niconama') {
+    const data = rawState.data as Record<string, unknown> | undefined;
+    const total: Record<string, unknown> = {};
+    if (typeof data?.total === 'number') {
+      total.listeners = data.total;
+    }
+    if (data?.points && typeof (data.points as Record<string, unknown>).gift !== 'undefined') {
+      total.gift = (data.points as Record<string, unknown>).gift;
+    }
+    if (data?.points && typeof (data.points as Record<string, unknown>).ad !== 'undefined') {
+      total.ad = (data.points as Record<string, unknown>).ad;
+    }
+
+    return {
+      niconama: {
+        type: data?.isLive ? 'live' : 'offline',
+        meta: {
+          title: data?.title ?? undefined,
+          url: data?.url ?? undefined,
+          start: data?.startTime ?? undefined,
+          total: Object.keys(total).length > 0 ? total : undefined,
+        },
+      },
+    };
+  }
+
+  if ('niconama' in rawState && rawState.niconama && typeof rawState.niconama === 'object') {
+    return rawState;
+  }
+
+  if (rawState.type === 'live' || rawState.type === 'offline') {
+    return {
+      niconama: rawState,
+    };
+  }
+
+  return rawState;
+};
+
 const getCurrentStreamPayload = () => {
   const agentStreamState = agent.getStreamState?.();
   const streamState = (lastPublishedStreamState === undefined || lastPublishedStreamState === null)
     ? agentStreamState
     : lastPublishedStreamState;
-  const base = streamState && typeof streamState === 'object' ? (streamState as any) : {};
+  const normalizedStreamState = normalizePublishedStreamState(streamState);
+  const base = normalizedStreamState && typeof normalizedStreamState === 'object' ? (normalizedStreamState as any) : {};
   return {
     niconama: base.niconama ?? {},
     canSpeak: base.canSpeak ?? streamer.canSpeak,
@@ -386,30 +433,16 @@ const server = serve({
             return Response.json({}, { status: 400 });
           }
 
-          let published = body.data ?? body;
+          let published: unknown = body;
+          if (published && typeof published === 'object' && !('type' in published) && 'data' in published) {
+            published = (published as any).data;
+          }
 
-          // Normalize legacy stream payloads of the form { type: 'niconama', data: {...} }
-          // into the internal shape expected by getCurrentStreamPayload().
+          // Normalize any published stream state into the internal shape expected by
+          // getCurrentStreamPayload(). This includes legacy payloads of the form
+          // { type: 'niconama', data: {...} } and raw stream state objects.
           try {
-            if (published && typeof published === 'object' && 'type' in published && published.type === 'niconama') {
-              const d = published.data ?? {};
-              published = {
-                niconama: {
-                  type: d.isLive ? 'live' : 'offline',
-                  meta: {
-                    title: d.title ?? undefined,
-                    url: d.url ?? undefined,
-                    start: d.startTime ?? undefined,
-                    total: {
-                      listeners: typeof d.total === 'number' ? d.total : undefined,
-                      gift: d.points?.gift ?? undefined,
-                      ad: d.points?.ad ?? undefined,
-                      comments: undefined,
-                    },
-                  },
-                },
-              } as const;
-            }
+            published = normalizePublishedStreamState(published);
           } catch (err) {
             console.warn('[WARN] failed to normalize published stream state:', err instanceof Error ? err.message : String(err));
           }
