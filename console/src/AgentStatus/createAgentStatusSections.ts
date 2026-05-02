@@ -4,7 +4,7 @@ import { LIVE_DELIVERY_SECTION_TITLE } from "./LiveDeliveryStatusSection";
 import { MARKOV_MODEL_SECTION_TITLE } from "./MarkovModelStatusSection";
 
 const LIVE_DELIVERY_ROW_LABELS = ["配信指標", "タイトル", "配信URL", "開始時刻", "発話内容"] as const;
-const MARKOV_MODEL_ROW_LABELS = ["生成N-gram", "これまでの発話"] as const;
+const MARKOV_MODEL_ROW_LABELS = ["生成N-gram", "返信先コメント", "これまでの発話"] as const;
 const GAME_ROW_LABELS = ["ゲーム情報"] as const;
 
 const createLabelSet = (labels: readonly string[]) => new Set<string>(labels);

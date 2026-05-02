@@ -227,6 +227,10 @@ const getCurrentStreamPayload = () => {
     : lastPublishedStreamState;
   const normalizedStreamState = normalizePublishedStreamState(streamState);
   const base = normalizedStreamState && typeof normalizedStreamState === 'object' ? (normalizedStreamState as any) : {};
+  const replyTargetComment = base.replyTargetComment && typeof base.replyTargetComment === 'object'
+    ? base.replyTargetComment
+    : undefined;
+
   return {
     niconama: base.niconama ?? {},
     canSpeak: base.canSpeak ?? streamer.canSpeak,
@@ -235,6 +239,7 @@ const getCurrentStreamPayload = () => {
     nGramRaw: base.nGramRaw ?? streamer.currentNGramSizeRaw,
     speech: base.speech ?? agent.getSpeech(),
     speechHistory: base.speechHistory ?? generatedSpeechHistory,
+    replyTargetComment,
     commentCount: base.commentCount ?? streamer.streamState?.meta?.total?.comments,
   } as const;
 };
@@ -416,6 +421,9 @@ const server = serve({
             return Response.json({}, { status: 400 });
           }
 
+          const replyTargetComment = body && typeof body === 'object' && 'replyTargetComment' in body
+            ? (body as any).replyTargetComment
+            : undefined;
           let published: unknown = body;
           if (published && typeof published === 'object' && !('type' in published) && 'data' in published) {
             published = (published as any).data;
@@ -436,6 +444,13 @@ const server = serve({
           // { type: 'niconama', data: {...} } and raw stream state objects.
           try {
             published = normalizePublishedStreamState(published);
+            if (replyTargetComment !== undefined) {
+              if (published && typeof published === 'object') {
+                (published as any).replyTargetComment = replyTargetComment;
+              } else {
+                published = { replyTargetComment };
+              }
+            }
           } catch (err) {
             console.warn('[WARN] failed to normalize published stream state:', err instanceof Error ? err.message : String(err));
           }

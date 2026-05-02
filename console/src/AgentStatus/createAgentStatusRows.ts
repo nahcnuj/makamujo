@@ -2,6 +2,7 @@ import type { AgentStateResponse, AgentStatusRow } from "./types";
 import {
   createCurrentGameInfoValueComponent,
   createLiveDeliveryMetricsValueComponent,
+  createReplyTargetCommentValueComponent,
   createSpeechHistoryDisplayItems,
   createSpeechHistoryValueComponent,
   formatNGramValue,
@@ -41,8 +42,15 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
     });
   }
 
-  const isSpeechSilent = stateResponse?.speech?.silent === true;
+  if (stateResponse?.replyTargetComment?.text) {
+    rows.push({
+      label: "返信先コメント",
+      hideLabel: true,
+      valueComponent: createReplyTargetCommentValueComponent(stateResponse.replyTargetComment),
+    });
+  }
 
+  const isSpeechSilent = stateResponse?.speech?.silent === true;
   const speechHistoryItems = createSpeechHistoryDisplayItems(stateResponse?.speechHistory);
   if (speechHistoryItems.length > 0) {
     rows.push({
