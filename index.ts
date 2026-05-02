@@ -33,13 +33,13 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
   try {
     console.error('[UNHANDLED_REJECTION]', reason instanceof Error ? reason.stack ?? reason.message : String(reason));
-  } catch {}
+  } catch { }
 });
 process.on('uncaughtException', (err) => {
   try {
     // Log the exception for diagnostics
     console.error('[UNCAUGHT_EXCEPTION]', err instanceof Error ? err.stack ?? err.message : String(err));
-  } catch {}
+  } catch { }
 
   // Do not terminate the process for transient IPC listen failures
   // (e.g., EADDRINUSE on Windows named pipes) so tests can recover.
@@ -123,33 +123,33 @@ const createSseStream = (label: string) => {
   let ctl: ReadableStreamDefaultController<string> | undefined;
   return new ReadableStream<string>({
     start(controller) {
-      try { console.log(`[INFO] SSE client connected (${label})`); } catch {}
+      try { console.log(`[INFO] SSE client connected (${label})`); } catch { }
       ctl = controller;
       sseClients.add(controller);
-      try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
+      try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch { }
     },
-    cancel() { if (ctl) { try { sseClients.delete(ctl); } catch {} ctl = undefined; } },
+    cancel() { if (ctl) { try { sseClients.delete(ctl); } catch { } ctl = undefined; } },
   });
 };
 
 const sseBroadcast = (payload: unknown) => {
   if (sseClients.size === 0) return;
   const frame = `data: ${JSON.stringify(payload)}\n\n`;
-  try { console.log('[INFO] sseBroadcast -> sseClients count=', sseClients.size); } catch {}
+  try { console.log('[INFO] sseBroadcast -> sseClients count=', sseClients.size); } catch { }
   for (const controller of Array.from(sseClients)) {
     try {
       // Evict clients under backpressure (desiredSize <= 0) to avoid blocking
       // the event loop when a slow or unread connection fills its TCP send buffer.
       // null means the stream is already closed/errored; treat that like healthy.
       if ((controller.desiredSize ?? 1) <= 0) {
-        try { controller.close(); } catch {}
+        try { controller.close(); } catch { }
         sseClients.delete(controller);
         continue;
       }
       controller.enqueue(frame);
     } catch (err) {
-      try { controller.close(); } catch {}
-      try { sseClients.delete(controller); } catch {}
+      try { controller.close(); } catch { }
+      try { sseClients.delete(controller); } catch { }
     }
   }
 };
@@ -160,8 +160,8 @@ const broadcastToWsClients = (payload: unknown) => {
     try {
       ws.send(message);
     } catch (err) {
-      try { ws.close(); } catch {}
-      try { wsClients.delete(ws); } catch {}
+      try { ws.close(); } catch { }
+      try { wsClients.delete(ws); } catch { }
     }
   }
 };
@@ -264,7 +264,7 @@ let agent: any = {
   getGame: () => null,
   getStreamState: () => lastPublishedStreamState,
   publishStreamState: (data: unknown) => { lastPublishedStreamState = data; },
-  postComments: (_: unknown) => {},
+  postComments: (_: unknown) => { },
 };
 
 // Attempt to dynamically load the external agent API. This avoids module
@@ -409,7 +409,7 @@ const server = serve({
         const streamState = (lastPublishedStreamState === undefined || lastPublishedStreamState === null)
           ? agentStreamState
           : lastPublishedStreamState;
-        console.log('[INFO] GET /api/meta ->', JSON.stringify(streamState));
+        // console.log('[INFO] GET /api/meta ->', JSON.stringify(streamState));
         const base = streamState && typeof streamState === 'object' ? (streamState as any) : {};
         const responsePayload = {
           niconama: base.niconama ?? {},
@@ -420,7 +420,7 @@ const server = serve({
           speech: base.speech ?? agent.getSpeech(),
           speechHistory: base.speechHistory ?? generatedSpeechHistory,
         } as const;
-        console.log('[INFO] GET /api/meta response ->', JSON.stringify(responsePayload));
+        // console.log('[INFO] GET /api/meta response ->', JSON.stringify(responsePayload));
         return Response.json(responsePayload);
       },
       POST: async (req) => {
@@ -466,7 +466,9 @@ const server = serve({
             console.warn('[WARN] failed to broadcast to SSE clients:', err instanceof Error ? err.message : String(err));
           }
 
-          try { console.log('[INFO] POST /api/meta -> sseClients=', sseClients.size, 'wsClients=', wsClients.size); } catch {}
+          try {
+            //console.log('[INFO] POST /api/meta -> sseClients=', sseClients.size, 'wsClients=', wsClients.size);
+          } catch { }
 
           return Response.json({});
         } catch (err) {
@@ -481,7 +483,7 @@ const server = serve({
     '/api/ws': {
       GET: (req: Request) => {
         const accept = req.headers.get('accept') ?? '';
-        try { console.log('[TRACE] /api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch {}
+        try { console.log('[TRACE] /api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
         if (accept.includes('text/event-stream')) {
           return new Response(createSseStream('/api/ws'), {
             headers: {
@@ -500,13 +502,13 @@ const server = serve({
           }
           const upgraded = (Bun as any).upgradeWebSocket(req, {
             open(ws: any) {
-              try { console.log('[INFO] WebSocket client connected (/api/ws)'); } catch {}
-              try { wsClients.add(ws); } catch {}
-              try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch {}
+              try { console.log('[INFO] WebSocket client connected (/api/ws)'); } catch { }
+              try { wsClients.add(ws); } catch { }
+              try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch { }
             },
-            message() {},
-            close(ws: any) { try { wsClients.delete(ws); } catch {} },
-            error(ws: any) { try { wsClients.delete(ws); } catch {} },
+            message() { },
+            close(ws: any) { try { wsClients.delete(ws); } catch { } },
+            error(ws: any) { try { wsClients.delete(ws); } catch { } },
           });
           return upgraded.response;
         } catch (err) {
@@ -518,7 +520,7 @@ const server = serve({
     '/console/api/ws': {
       GET: (req: Request) => {
         const accept = req.headers.get('accept') ?? '';
-        try { console.log('[TRACE] /console/api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch {}
+        try { console.log('[TRACE] /console/api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
         if (accept.includes('text/event-stream')) {
           return new Response(createSseStream('/console/api/ws'), {
             headers: {
@@ -537,13 +539,13 @@ const server = serve({
           }
           const upgraded = (Bun as any).upgradeWebSocket(req, {
             open(ws: any) {
-              try { console.log('[INFO] WebSocket client connected (/console/api/ws)'); } catch {}
-              try { wsClients.add(ws); } catch {}
-              try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch {}
+              try { console.log('[INFO] WebSocket client connected (/console/api/ws)'); } catch { }
+              try { wsClients.add(ws); } catch { }
+              try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch { }
             },
-            message() {},
-            close(ws: any) { try { wsClients.delete(ws); } catch {} },
-            error(ws: any) { try { wsClients.delete(ws); } catch {} },
+            message() { },
+            close(ws: any) { try { wsClients.delete(ws); } catch { } },
+            error(ws: any) { try { wsClients.delete(ws); } catch { } },
           });
           return upgraded.response;
         } catch (err) {
