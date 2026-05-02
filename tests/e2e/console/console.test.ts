@@ -242,17 +242,20 @@ test.describe("console", () => {
   test("connects via SSE and updates on broadcast (non-mock)", async ({ page, request }) => {
     // Diagnostic probe: check whether the broadcasting server's SSE
     // endpoint responds with the expected content-type when queried
-    // from the test runner. Do not read the body to avoid blocking on
-    // an open SSE stream — just inspect status and headers.
+    // from the test runner. Dispose the response immediately after
+    // inspecting headers to close the SSE stream and avoid filling
+    // the server's TCP send buffer with unread broadcast frames.
     try {
       const probe = await request.get(`${BROADCASTING_BASE_URL}/api/ws`, { headers: { accept: 'text/event-stream' } });
       console.log('[TEST DIAG] /api/ws probe ->', { status: probe.status(), contentType: probe.headers()['content-type'] });
+      await probe.dispose();
     } catch (err) {
       console.log('[TEST DIAG] /api/ws probe failed ->', String(err));
     }
     try {
       const probe2 = await request.get(`${BROADCASTING_BASE_URL}/console/api/ws`, { headers: { accept: 'text/event-stream' } });
       console.log('[TEST DIAG] /console/api/ws probe ->', { status: probe2.status(), contentType: probe2.headers()['content-type'] });
+      await probe2.dispose();
     } catch (err) {
       console.log('[TEST DIAG] /console/api/ws probe failed ->', String(err));
     }

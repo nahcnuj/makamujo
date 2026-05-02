@@ -120,6 +120,14 @@ const sseBroadcast = (payload: unknown) => {
   try { console.log('[INFO] sseBroadcast -> sseClients count=', sseClients.size); } catch {}
   for (const controller of Array.from(sseClients)) {
     try {
+      // Skip clients that are under backpressure (desiredSize <= 0) to avoid
+      // blocking the event loop when a slow or unread connection fills its
+      // TCP send buffer. Evict them so they don't accumulate.
+      if (controller.desiredSize !== undefined && controller.desiredSize !== null && controller.desiredSize <= 0) {
+        try { controller.close(); } catch {}
+        sseClients.delete(controller);
+        continue;
+      }
       controller.enqueue(frame);
     } catch (err) {
       try { controller.close(); } catch {}
@@ -422,14 +430,16 @@ const server = serve({
         const accept = req.headers.get('accept') ?? '';
         try { console.log('[TRACE] /api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch {}
         if (accept.includes('text/event-stream')) {
+          let sseController: ReadableStreamDefaultController<string> | undefined;
           const stream = new ReadableStream({
             start(controller) {
               try { console.log('[INFO] SSE client connected (/api/ws)'); } catch {}
+              sseController = controller;
               sseClients.add(controller);
               // Send current state immediately.
               try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
             },
-            cancel() { try { sseClients.delete(this); } catch {} },
+            cancel() { if (sseController) { try { sseClients.delete(sseController); } catch {} sseController = undefined; } },
           });
           return new Response(stream, {
             headers: {
@@ -468,13 +478,15 @@ const server = serve({
         const accept = req.headers.get('accept') ?? '';
         try { console.log('[TRACE] /console/api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch {}
         if (accept.includes('text/event-stream')) {
+          let sseController: ReadableStreamDefaultController<string> | undefined;
           const stream = new ReadableStream({
             start(controller) {
               try { console.log('[INFO] SSE client connected (/console/api/ws)'); } catch {}
+              sseController = controller;
               sseClients.add(controller);
               try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
             },
-            cancel() { try { sseClients.delete(this); } catch {} },
+            cancel() { if (sseController) { try { sseClients.delete(sseController); } catch {} sseController = undefined; } },
           });
           return new Response(stream, {
             headers: {
