@@ -39,6 +39,7 @@ export class MakaMujo {
   #speechListeners: Array<(text: TalkModelGenerateResult) => Promise<void>> = [];
   #speechCompleteListeners: Array<() => Promise<void>> = [];
   #ttsErrorHandlers: Array<(text: string, err: unknown) => void> = [];
+  #gameStateChangeListeners: Array<() => void> = [];
 
   #browserState?: State;
   #playing?: {
@@ -100,12 +101,18 @@ export class MakaMujo {
               ...state.state,
             } as any,
           };
+          for (const listener of this.#gameStateChangeListeners) {
+            try { listener(); } catch {}
+          }
         }
       }
 
       const { done, value } = solver.next(state);
       if (done) {
         this.#playing = undefined;
+        for (const listener of this.#gameStateChangeListeners) {
+          try { listener(); } catch {}
+        }
         return Action.noop;
       }
       console.debug('[DEBUG]', 'next action', JSON.stringify(value, null, 0));
@@ -156,6 +163,11 @@ export class MakaMujo {
 
   onSpeechComplete(cb: () => Promise<void>): MakaMujo {
     this.#speechCompleteListeners.push(cb);
+    return this;
+  }
+
+  onGameStateChange(cb: () => void): MakaMujo {
+    this.#gameStateChangeListeners.push(cb);
     return this;
   }
 

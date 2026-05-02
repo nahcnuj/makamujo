@@ -232,19 +232,30 @@ streamer.onSpeech(async (text) => {
     clearSpeechTimer = undefined;
   }
   agent.setSpeech(speechText);
+  // Notify console clients immediately when a new utterance starts.
+  try { sseBroadcast(getCurrentStreamPayload()); } catch {}
 });
 
 streamer.onSpeechComplete(async () => {
   if (clearSpeechTimer) {
     clearTimeout(clearSpeechTimer);
   }
+  // Notify console clients that the utterance has finished.
+  try { sseBroadcast(getCurrentStreamPayload()); } catch {}
   clearSpeechTimer = setTimeout(() => {
     const speechState = agent.getSpeech();
     if (!speechState.silent) {
       agent.setSpeech('');
     }
     clearSpeechTimer = undefined;
+    // Notify console clients that the displayed speech has been cleared.
+    try { sseBroadcast(getCurrentStreamPayload()); } catch {}
   }, 1000);
+});
+
+// Notify console clients when game state changes via browser IPC.
+streamer.onGameStateChange(() => {
+  try { sseBroadcast(getCurrentStreamPayload()); } catch {}
 });
 
 // Defer starting the stream playback until after the HTTP servers are up.
