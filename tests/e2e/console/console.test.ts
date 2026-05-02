@@ -208,10 +208,9 @@ test.describe("console", () => {
     }
 
     await expect(detailsLocator).not.toContainText("話せる状態");
-    await expect(detailsLocator).toContainText("生成N-gram");
     await expect(detailsLocator).toContainText("4-gram");
     await expect(page.getByRole("heading", { level: 3, name: "配信状況" })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 3, name: "マルコフ連鎖モデルの状態" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 3, name: "マルコフ連鎖モデル" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 3, name: "『org.dashnet.orteil/cookieclicker』プレイ中" })).toBeVisible();
 
     const agentStatusDetails = page.getByTestId("agent-status-details");
@@ -310,7 +309,6 @@ test.describe("console", () => {
 
     const detailsLocator = page.getByTestId("agent-status-details");
     await detailsLocator.waitFor({ timeout: 10_000 });
-    await expect(detailsLocator).toContainText("生成N-gram");
     await expect(detailsLocator).toContainText("4-gram", { timeout: 10_000 });
   });
 
@@ -359,7 +357,7 @@ test.describe("console", () => {
 
     const detailsLocator = page.getByTestId("agent-status-details");
     await detailsLocator.waitFor({ timeout: 10_000 });
-    await expect(detailsLocator).toContainText("生成N-gram");
+    await expect(detailsLocator).toContainText("4-gram", { timeout: 10_000 });
     await expect(page.waitForFunction(
       (count) => (window as any).__sseMessageCount > count,
       messagesBeforeIdle,
