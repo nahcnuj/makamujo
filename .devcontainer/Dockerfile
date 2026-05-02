@@ -2,15 +2,23 @@
 FROM mcr.microsoft.com/devcontainers/base:2.1-debian12
 
 ARG USERNAME=vscode
+ENV BUN_INSTALL=/usr/local
 WORKDIR /workspace
 
-RUN apt-get update && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        curl \
+        ca-certificates \
+        libcap2-bin \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Bun system-wide.
+RUN curl -fsSL https://bun.sh/install | bash \
+    && chmod +x /usr/local/bin/bun
 
 USER ${USERNAME}
 
-# Install bun
-RUN curl -fsSL https://bun.com/install | bash
+ENV PATH="${BUN_INSTALL}/bin:${PATH}"
 
-ENV PATH="/home/${USERNAME}/.bun/bin:${PATH}"
-
-COPY package.json bun.lock* /workspace/
+COPY package.json bun.lock* ./

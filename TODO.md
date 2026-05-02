@@ -37,8 +37,7 @@
 
 - [x] [MUST] Fix OBS browser syntax error — Tightened navigation detection in `src/catchAll.ts` to avoid serving `index.html` for module/file requests (fixes syntax error in old OBS browser).
 
-- [x] [MUST] Fix console SSE reconnect handling — Allow EventSource to auto-reconnect and avoid forcing immediate closure on transient SSE errors.
-- [x] [SHOULD] Add regression test for SSE EventSource error handling — Verify console status error only appears when the stream is fully closed.
+- [x] [MUST] Fix console SSE reconnect handling — Allow EventSource to auto-reconnect and avoid forcing immediate closure on transient SSE errors.- [x] [MUST] Bypass management console IP restriction in development mode — Allow `bun run dev` to access the management console without the production-only IP allowlist.- [x] [SHOULD] Add regression test for SSE EventSource error handling — Verify console status error only appears when the stream is fully closed.
 - [x] [MUST] Refactor AgentStatus component — Reorganize `console/src/AgentStatus/index.tsx` and split AgentStatus logic into reusable submodules.
 
 - [x] [MUST] Issue #225: 管理コンソール - これまでの発話の改善 — 読了、テスト追加、実装（単語ごとにカード表示、非マルコフ文言の除去）を行いました。
