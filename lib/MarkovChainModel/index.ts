@@ -77,15 +77,8 @@ export class MarkovChainModel implements TalkModel {
     nGram = 1,
   ): string | { text: string; nodes?: string[] } {
     // Delegates n-gram generation to AGT's MarkovModel implementation.
-    // Request trace output so we can preserve node paths for console diagnostics.
-    const res = this.#model.gen(start, nGram, { trace: true }) as unknown;
+    const res = this.#model.gen(start, nGram) as unknown;
     if (typeof res === 'string') return res;
-    if (res && typeof res === 'object' && 'text' in res) {
-      return {
-        text: (res as any).text as string,
-        nodes: Array.isArray((res as any).nodes) ? (res as any).nodes.map(String) : undefined,
-      };
-    }
     return String(res ?? '');
   }
 
