@@ -28,11 +28,7 @@ function getContentType(filePath: string): string | undefined {
 }
 
 function normalizeConsoleHtml(source: string): string {
-  const withoutBase = source.replace(/<base[^>]*>\s*/i, '');
-  return withoutBase.replace(
-    /<script\s+type="module"\s+src="\.\/frontend\.tsx"><\/script>/i,
-    `  <link rel="stylesheet" href="${CONSOLE_PUBLIC_PATH}frontend.css" />\n  <script type="module" src="${CONSOLE_PUBLIC_PATH}frontend.js"></script>`
-  );
+  return source;
 }
 
 async function buildConsoleApp() {
