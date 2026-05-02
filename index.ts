@@ -115,6 +115,7 @@ const wsClients = new Set<any>();
 const sseClients = new Set<any>();
 
 const sseBroadcast = (payload: unknown) => {
+  if (sseClients.size === 0) return;
   const frame = `data: ${JSON.stringify(payload)}\n\n`;
   try { console.log('[INFO] sseBroadcast -> sseClients count=', sseClients.size); } catch {}
   for (const controller of Array.from(sseClients)) {
@@ -136,6 +137,14 @@ const broadcastToWsClients = (payload: unknown) => {
       try { ws.close(); } catch {}
       try { wsClients.delete(ws); } catch {}
     }
+  }
+};
+
+const broadcastCurrentPayload = (context: string) => {
+  try {
+    sseBroadcast(getCurrentStreamPayload());
+  } catch (err) {
+    console.warn(`[WARN] failed to broadcast to SSE clients (${context}):`, err instanceof Error ? err.message : String(err));
   }
 };
 
@@ -233,7 +242,7 @@ streamer.onSpeech(async (text) => {
   }
   agent.setSpeech(speechText);
   // Notify console clients immediately when a new utterance starts.
-  try { sseBroadcast(getCurrentStreamPayload()); } catch {}
+  broadcastCurrentPayload('onSpeech');
 });
 
 streamer.onSpeechComplete(async () => {
@@ -241,7 +250,7 @@ streamer.onSpeechComplete(async () => {
     clearTimeout(clearSpeechTimer);
   }
   // Notify console clients that the utterance has finished.
-  try { sseBroadcast(getCurrentStreamPayload()); } catch {}
+  broadcastCurrentPayload('onSpeechComplete');
   clearSpeechTimer = setTimeout(() => {
     const speechState = agent.getSpeech();
     if (!speechState.silent) {
@@ -249,13 +258,13 @@ streamer.onSpeechComplete(async () => {
     }
     clearSpeechTimer = undefined;
     // Notify console clients that the displayed speech has been cleared.
-    try { sseBroadcast(getCurrentStreamPayload()); } catch {}
+    broadcastCurrentPayload('onSpeechClear');
   }, 1000);
 });
 
 // Notify console clients when game state changes via browser IPC.
 streamer.onGameStateChange(() => {
-  try { sseBroadcast(getCurrentStreamPayload()); } catch {}
+  broadcastCurrentPayload('onGameStateChange');
 });
 
 // Defer starting the stream playback until after the HTTP servers are up.

@@ -88,6 +88,7 @@ export class MakaMujo {
 
       if (state.name === 'closed') {
         this.#playing = undefined;
+        this.#notifyGameStateChangeAsync();
         return Action.noop;
       }
 
@@ -101,18 +102,14 @@ export class MakaMujo {
               ...state.state,
             } as any,
           };
-          for (const listener of this.#gameStateChangeListeners) {
-            try { listener(); } catch {}
-          }
+          this.#notifyGameStateChangeAsync();
         }
       }
 
       const { done, value } = solver.next(state);
       if (done) {
         this.#playing = undefined;
-        for (const listener of this.#gameStateChangeListeners) {
-          try { listener(); } catch {}
-        }
+        this.#notifyGameStateChangeAsync();
         return Action.noop;
       }
       console.debug('[DEBUG]', 'next action', JSON.stringify(value, null, 0));
@@ -169,6 +166,15 @@ export class MakaMujo {
   onGameStateChange(cb: () => void): MakaMujo {
     this.#gameStateChangeListeners.push(cb);
     return this;
+  }
+
+  #notifyGameStateChangeAsync(): void {
+    const listenersSnapshot = [...this.#gameStateChangeListeners];
+    queueMicrotask(() => {
+      for (const listener of listenersSnapshot) {
+        try { listener(); } catch {}
+      }
+    });
   }
 
   listen(comments: AgentComment[]) {
