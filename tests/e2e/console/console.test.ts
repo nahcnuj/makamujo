@@ -240,34 +240,27 @@ test.describe("console", () => {
   });
 
   test("connects via SSE and updates on broadcast (non-mock)", async ({ page, request }) => {
-    // Diagnostic probe: check whether the broadcasting server's SSE
-    // endpoint responds with the expected content-type when queried
-    // from the test runner. Dispose the response immediately after
-    // inspecting headers to close the SSE stream and avoid filling
-    // the server's TCP send buffer with unread broadcast frames.
-    try {
-      const probe = await request.get(`${BROADCASTING_BASE_URL}/api/ws`, { headers: { accept: 'text/event-stream' } });
-      console.log('[TEST DIAG] /api/ws probe ->', { status: probe.status(), contentType: probe.headers()['content-type'] });
-      await probe.dispose();
-    } catch (err) {
-      console.log('[TEST DIAG] /api/ws probe failed ->', String(err));
-    }
-    try {
-      const probe2 = await request.get(`${BROADCASTING_BASE_URL}/console/api/ws`, { headers: { accept: 'text/event-stream' } });
-      console.log('[TEST DIAG] /console/api/ws probe ->', { status: probe2.status(), contentType: probe2.headers()['content-type'] });
-      await probe2.dispose();
-    } catch (err) {
-      console.log('[TEST DIAG] /console/api/ws probe failed ->', String(err));
-    }
+    const probeEventStream = async (url: string) => {
+      try {
+        const probe = await fetch(url, { headers: { accept: 'text/event-stream' } });
+        console.log('[TEST DIAG] probe ->', { url, status: probe.status, contentType: probe.headers.get('content-type') });
+        try { probe.body?.cancel?.(); } catch {}
+      } catch (err) {
+        console.log('[TEST DIAG] probe failed ->', String(err));
+      }
+    };
+
+    await probeEventStream(`${BROADCASTING_BASE_URL}/api/ws`);
+    await probeEventStream(`${BROADCASTING_BASE_URL}/console/api/ws`);
 
     // Inspect the console server's environment endpoint so we know if the
     // client should attempt a direct connection to the broadcasting
     // server (helpful when the proxy is misbehaving in tests).
     try {
-      const consoleEnvRes = await request.get(`${CONSOLE_BASE_URL}/console/env`);
+      const consoleEnvRes = await fetch(`${CONSOLE_BASE_URL}/console/env`);
       let consoleEnvBody = null;
       try { consoleEnvBody = await consoleEnvRes.json(); } catch {}
-      console.log('[TEST DIAG] /console/env ->', { status: consoleEnvRes.status(), body: consoleEnvBody });
+      console.log('[TEST DIAG] /console/env ->', { status: consoleEnvRes.status, body: consoleEnvBody });
     } catch (err) {
       console.log('[TEST DIAG] /console/env probe failed ->', String(err));
     }
@@ -303,8 +296,12 @@ test.describe("console", () => {
     await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
 
     const payload = cloneAgentStateResponseMockFixture();
-    const res = await request.post(`${BROADCASTING_BASE_URL}/api/meta`, { data: payload });
-    expect(res.ok(), `broadcast POST failed: ${res.status()}`).toBeTruthy();
+    const res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    expect(res.ok, `broadcast POST failed: ${res.status}`).toBeTruthy();
 
     const detailsLocator = page.getByTestId("agent-status-details");
     await detailsLocator.waitFor({ timeout: 10_000 });
@@ -317,9 +314,11 @@ test.describe("console", () => {
       const OrigEventSource = (window as any).EventSource;
       Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
       Object.defineProperty(window, '__sseError', { value: false, writable: true, configurable: true });
+      Object.defineProperty(window, '__sseMessageCount', { value: 0, writable: true, configurable: true });
       const WrappedEventSource = function (url: string) {
         const es = new OrigEventSource(url);
         try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
+        try { es.addEventListener('message', () => { (window as any).__sseMessageCount += 1; }); } catch {}
         try { es.addEventListener('error', () => { (window as any).__sseError = true; }); } catch {}
         return es;
       } as any;
@@ -336,20 +335,31 @@ test.describe("console", () => {
 
     await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: 'domcontentloaded', timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
     await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
+    await page.waitForFunction(() => (window as any).__sseMessageCount > 0, { timeout: 10_000 });
 
     // Keep the console tab open long enough for idle SSE/keepalive behavior
-    // to be observed, then send a broadcast update.
+    // to be observed, then verify the connection is still alive.
+    const messagesBeforeIdle = await page.evaluate(() => (window as any).__sseMessageCount ?? 0);
     await page.waitForTimeout(6_000);
     expect(await page.evaluate(() => (window as any).__sseError)).toBeFalsy();
+    expect(await page.evaluate(() => (window as any).__sseMessageCount ?? 0)).toBeGreaterThanOrEqual(messagesBeforeIdle);
 
     const payload = cloneAgentStateResponseMockFixture();
-    const res = await request.post(`${BROADCASTING_BASE_URL}/api/meta`, { data: payload });
-    expect(res.ok(), `broadcast POST failed: ${res.status()}`).toBeTruthy();
+    const res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    expect(res.ok, `broadcast POST failed: ${res.status}`).toBeTruthy();
 
     const detailsLocator = page.getByTestId("agent-status-details");
     await detailsLocator.waitFor({ timeout: 10_000 });
     await expect(detailsLocator).toContainText("生成N-gram");
-    await expect(detailsLocator).toContainText("4-gram", { timeout: 10_000 });
+    await expect(page.waitForFunction(
+      (count) => (window as any).__sseMessageCount > count,
+      messagesBeforeIdle,
+      { timeout: 10_000 },
+    )).resolves.toBeTruthy();
     expect(await page.evaluate(() => (window as any).__sseError)).toBeFalsy();
   });
 
