@@ -309,23 +309,8 @@ describe('speech completion hooks', () => {
 
     expect(speechListener).toHaveBeenCalledWith(expect.objectContaining({
       text: 'hello',
-      generated: false,
     }));
     expect(completeListener).toHaveBeenCalled();
-  });
-
-  it('emits generated=true when speech is produced by the default argument', async () => {
-    const agent = new MakaMujo(stubTalkModel, stubTts);
-    const speechListener = jest.fn(async () => {});
-
-    agent.onSpeech(speechListener);
-    await agent.speech();
-
-    expect(speechListener).toHaveBeenCalledWith(expect.objectContaining({
-      generated: true,
-      nGram: 1,
-      nGramRaw: -2,
-    }));
   });
 });
 

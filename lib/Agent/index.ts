@@ -1,4 +1,4 @@
-import { Action, type State, type AgentComment } from "automated-gameplay-transmitter";
+import { Action, type AgentComment, type State } from "automated-gameplay-transmitter";
 import { writeFileSync } from "node:fs";
 import { createReceiver } from "../Browser/socket";
 import { ServerGames as Games, type GameName } from "./games/server";
@@ -6,10 +6,11 @@ import type { AgentState } from "./State";
 
 export const SILENCE_THRESHOLD_MS = 5 * 60 * 1_000; // 5 minutes
 
-const jaJP = new Intl.Locale('ja-JP');
 const N_GRAM_LOG_SCALE = 2;
 const N_GRAM_LOG_BASELINE = 2;
 const INITIAL_COMMENT_NUMBER = 1;
+
+const jaJP = new Intl.Locale('ja-JP');
 const pickTopic = (text: string) => {
   const words = Array.from(new Intl.Segmenter(jaJP, { granularity: 'word' }).segment(text)).map(({ segment }) => segment);
   const cands = words.reduce<string[]>((prev, s) => {
