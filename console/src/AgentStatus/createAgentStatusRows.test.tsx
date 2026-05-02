@@ -21,11 +21,24 @@ describe("createAgentStatusRows", () => {
       speechHistory: [{ id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 }],
     } as any);
 
-    expect(rows).toContainEqual({ label: "タイトル", value: "タイトル" });
-    expect(rows).toContainEqual({ label: "配信URL", value: "https://example.com/live", href: "https://example.com/live" });
-    expect(rows).toContainEqual({ label: "現在のゲーム", value: "ゲームID" });
-    expect(rows).toContainEqual({ label: "生成N-gram", value: "4-gram" });
+    expect(rows).not.toContainEqual({ label: "タイトル", value: "タイトル" });
+    expect(rows.find((row) => row.label === "開始時刻")).toBeUndefined();
+    expect(rows.find((row) => row.label === "配信URL")).toBeUndefined();
+    expect(rows).not.toContainEqual({ label: "現在のゲーム", value: "ゲームID" });
+    expect(rows).toContainEqual({ label: "生成N-gram", hideLabel: true, value: "4-gram" });
     expect(rows.find((row) => row.label === "発話内容")?.value).toBe("テスト発話");
+  });
+
+  it("hides the speech history label so the value spans full width", () => {
+    const rows = createAgentStatusRows({
+      nGram: 4,
+      speechHistory: [
+        { id: "speech-1", speech: "alpha beta gamma", nGram: 4 },
+      ],
+    } as any);
+
+    const speechHistoryRow = rows.find((row) => row.label === "これまでの発話");
+    expect(speechHistoryRow).toEqual(expect.objectContaining({ hideLabel: true }));
   });
 
   it("renders speech history words as separate cards", () => {
@@ -40,6 +53,88 @@ describe("createAgentStatusRows", () => {
 
     expect(html).toContain("これまでの発話");
     expect((html.match(/speech-word-chip/g) || []).length).toBeGreaterThanOrEqual(3);
+    expect(html).toContain("n=4");
+    expect(html).toContain("class=\"text-xs whitespace-nowrap\"");
+    expect(html).toContain("bg-emerald-950/40");
+  });
+
+  it("renders speech word chips with the same background class regardless of emphasis", () => {
+    const rows = createAgentStatusRows({
+      nGram: 4,
+      speechHistory: [
+        { id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 },
+        { id: "speech-2", speech: "ぜひ遊びに来てね", nGram: 3, nGramRaw: 3 },
+      ],
+    } as any);
+    const markovRows = rows.filter((r) => r.label === "これまでの発話" || r.label === "生成N-gram");
+    const html = renderToStaticMarkup(<MarkovModelStatusSection markovModelRows={markovRows} />);
+    const chipClassAttributes = html.match(/class="speech-word-chip[^"]*"/g) ?? [];
+
+    expect(chipClassAttributes.length).toBeGreaterThanOrEqual(2);
+    chipClassAttributes.forEach((classAttr) => {
+      expect(classAttr).toContain("bg-emerald-950/40");
+    });
+    expect(html).toContain("items-baseline");
+  });
+
+  it("hides duplicate speech content from live delivery when it matches top speech history", () => {
+    const rows = createAgentStatusRows({
+      nGram: 4,
+      speech: { speech: "alpha beta gamma", silent: false },
+      speechHistory: [
+        { id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 },
+      ],
+    } as any);
+
+    expect(rows.find((row) => row.label === "発話内容")).toBeUndefined();
+    expect(rows.find((row) => row.label === "これまでの発話")).toBeDefined();
+  });
+
+  it("keeps first history emphasis even when current speech is absent", () => {
+    const rows = createAgentStatusRows({
+      nGram: 4,
+      speechHistory: [
+        { id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 },
+      ],
+    } as any);
+    const markovRows = rows.filter((r) => r.label === "これまでの発話" || r.label === "生成N-gram");
+    const html = renderToStaticMarkup(<MarkovModelStatusSection markovModelRows={markovRows} />);
+
+    expect(html).toContain("border-b-emerald-300/80");
+    expect(html).toContain("border-bottom-width:var(--speech-history-border-bottom-width)");
+    expect(html).not.toContain("bg-emerald-300/80");
+    expect(html).toContain("alpha");
+    expect(html).toContain("beta");
+    expect(html).toContain("gamma");
+  });
+
+  it("still renders speech content when it differs from top speech history", () => {
+    const rows = createAgentStatusRows({
+      nGram: 4,
+      speech: { speech: "コメント", silent: false },
+      speechHistory: [
+        { id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 },
+      ],
+    } as any);
+
+    expect(rows.find((row) => row.label === "発話内容")?.value).toBe("コメント");
+    expect(rows.find((row) => row.label === "これまでの発話")).toBeDefined();
+  });
+
+  it("emphasizes the first speech history item with a thicker bottom border", () => {
+    const rows = createAgentStatusRows({
+      nGram: 4,
+      speechHistory: [
+        { id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 },
+      ],
+    } as any);
+    const markovRows = rows.filter((r) => r.label === "これまでの発話" || r.label === "生成N-gram");
+    const html = renderToStaticMarkup(<MarkovModelStatusSection markovModelRows={markovRows} />);
+
+    expect(html).toContain("border-b");
+    expect(html).toContain("border-b-emerald-300/80");
+    expect(html).toContain("border-bottom-width:var(--speech-history-border-bottom-width)");
+    expect(html).toContain("border-emerald-300/30");
   });
 
   it("normalizes object speech payloads for top-level speech", () => {
@@ -95,5 +190,10 @@ describe("createAgentStatusRows", () => {
     expect(html).toContain("beta");
     expect(html).toContain("gamma");
     expect((html.match(/speech-word-chip/g) || []).length).toBe(3);
+  });
+
+  it("does not show detailed game state rows when currentGame is null", () => {
+    const rows = createAgentStatusRows({ currentGame: null });
+    expect(rows.find((row) => row.label === "ゲーム情報")).toBeUndefined();
   });
 });

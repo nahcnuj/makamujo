@@ -7,7 +7,15 @@ const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
 export const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正です。";
 const EVENT_SOURCE_CLOSED = typeof EventSource !== "undefined" ? EventSource.CLOSED : 2;
 
-export const createMockAgentStateResponse = (): AgentStateResponse => cloneAgentStateResponseMockFixture();
+const AGENT_STATE_MOCK_NO_GAME_QUERY_KEY = "agentStateMockNoGame";
+
+export const createMockAgentStateResponse = (): AgentStateResponse => {
+  const searchParams = typeof window === "undefined" ? "" : window.location.search;
+  if (new URLSearchParams(searchParams).get(AGENT_STATE_MOCK_NO_GAME_QUERY_KEY) === "1") {
+    return { ...cloneAgentStateResponseMockFixture(), currentGame: null };
+  }
+  return cloneAgentStateResponseMockFixture();
+};
 
 export const isAgentStateMockQueryEnabled = (searchParams: string): boolean => {
   return new URLSearchParams(searchParams).get(AGENT_STATE_MOCK_QUERY_KEY) === "1";

@@ -208,11 +208,10 @@ test.describe("console", () => {
     }
 
     await expect(detailsLocator).not.toContainText("話せる状態");
-    await expect(detailsLocator).toContainText("生成N-gram");
     await expect(detailsLocator).toContainText("4-gram");
     await expect(page.getByRole("heading", { level: 3, name: "配信状況" })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 3, name: "マルコフ連鎖モデルの状態" })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 3, name: "ゲームの状態" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 3, name: "マルコフ連鎖モデル" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 3, name: "『org.dashnet.orteil/cookieclicker』プレイ中" })).toBeVisible();
 
     const agentStatusDetails = page.getByTestId("agent-status-details");
     const initialAgentStatusDetailsBoundingBox = await agentStatusDetails.boundingBox();
@@ -237,6 +236,11 @@ test.describe("console", () => {
     expect(widthAfterLongSpeechBoundingBox).not.toBeNull();
     const finalWidth = widthAfterLongSpeechBoundingBox?.width ?? 0;
     expect(finalWidth).toBeCloseTo(initialWidth);
+  });
+
+  test("renders a heading containing プレイ中 even when currentGame is missing", async ({ page }) => {
+    await page.goto(`${CONSOLE_BASE_URL}/console/?agentStateMock=1&agentStateMockNoGame=1`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await expect(page.getByRole("heading", { name: /プレイ中/ })).toBeVisible();
   });
 
   test("connects via SSE and updates on broadcast (non-mock)", async ({ page, request }) => {
@@ -305,7 +309,6 @@ test.describe("console", () => {
 
     const detailsLocator = page.getByTestId("agent-status-details");
     await detailsLocator.waitFor({ timeout: 10_000 });
-    await expect(detailsLocator).toContainText("生成N-gram");
     await expect(detailsLocator).toContainText("4-gram", { timeout: 10_000 });
   });
 
@@ -354,7 +357,7 @@ test.describe("console", () => {
 
     const detailsLocator = page.getByTestId("agent-status-details");
     await detailsLocator.waitFor({ timeout: 10_000 });
-    await expect(detailsLocator).toContainText("生成N-gram");
+    await expect(detailsLocator).toContainText("4-gram", { timeout: 10_000 });
     await expect(page.waitForFunction(
       (count) => (window as any).__sseMessageCount > count,
       messagesBeforeIdle,
