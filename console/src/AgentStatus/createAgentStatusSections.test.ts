@@ -26,6 +26,21 @@ describe("createAgentStatusSections", () => {
     expect(sections.map((section) => section.title)).toEqual(["マルコフ連鎖モデル", "『-』プレイ中"]);
   });
 
+  it("includes reply target comments in the markov model section", () => {
+    const sections = createAgentStatusSections({
+      nGram: 4,
+      replyTargetComment: {
+        text: "返信先コメントを表示します",
+        pickedTopic: "返信",
+      },
+    } as any);
+
+    const markovSection = sections.find((section) => section.title === "マルコフ連鎖モデル");
+    expect(markovSection?.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "返信先コメント" }),
+    ]));
+  });
+
   it("shows fallback game title without detail rows when currentGame is null", () => {
     const sections = createAgentStatusSections({ currentGame: null } as any);
 

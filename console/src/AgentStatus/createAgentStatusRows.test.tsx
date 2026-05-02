@@ -176,6 +176,27 @@ describe("createAgentStatusRows", () => {
     expect((html.match(/speech-word-chip/g) || []).length).toBe(3);
   });
 
+  it("renders reply target comment with picked topic highlight", () => {
+    const rows = createAgentStatusRows({
+      nGram: 4,
+      replyTargetComment: {
+        text: "このコメントに返信します",
+        pickedTopic: "返信",
+      },
+    } as any);
+    const replyRow = rows.find((row) => row.label === "返信先コメント");
+
+    expect(replyRow).toBeDefined();
+    expect(replyRow?.hideLabel).toBe(true);
+    const html = renderToStaticMarkup(<MarkovModelStatusSection markovModelRows={[replyRow!] as any} />);
+
+    expect(html).toContain("このコメントに");
+    expect(html).toContain("します");
+    expect(html).toContain("picked topic");
+    expect(html).toContain("返信");
+    expect(html).toContain("bg-emerald-300/30");
+  });
+
   it("renders trace nodes even when nGram is invalid", () => {
     const rows = createAgentStatusRows({
       speechHistory: [

@@ -102,6 +102,27 @@ test.describe("server", () => {
     expect(data).toHaveProperty("nGram");
   });
 
+  test("propagates replyTargetComment through /api/meta responses", async ({ request }) => {
+    const postRes = await request.post(`${BASE_URL}/api/meta`, {
+      data: {
+        replyTargetComment: {
+          text: 'わかりました。返信します',
+          pickedTopic: '返信',
+        },
+      },
+    });
+    expect(postRes.ok()).toBeTruthy();
+
+    const metaRes = await request.get(`${BASE_URL}/api/meta`);
+    expect(metaRes.ok()).toBeTruthy();
+    const metaJson = await metaRes.json();
+    expect(metaJson).toHaveProperty('replyTargetComment');
+    expect(metaJson.replyTargetComment).toEqual({
+      text: 'わかりました。返信します',
+      pickedTopic: '返信',
+    });
+  });
+
   test("accepts POST /api/meta", async ({ request }) => {
     const res = await request.post(`${BASE_URL}/api/meta`, {
       data: { data: { type: 'niconama', data: { isLive: false, title: 'test', startTime: 0, total: 0, points: { gift: 0, ad: 0 }, url: 'https://example.com' } } },

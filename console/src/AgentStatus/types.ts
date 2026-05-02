@@ -53,5 +53,9 @@ export type AgentStateResponse = {
     nGramRaw?: number
     nodes?: readonly string[]
   }>
+  replyTargetComment?: {
+    text?: string
+    pickedTopic?: string
+  }
   commentCount?: number
 };

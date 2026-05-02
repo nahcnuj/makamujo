@@ -85,6 +85,59 @@ export const normalizeSpeechText = (speech: SpeechPayload): string | undefined =
   return undefined;
 };
 
+const createHighlightedCommentLines = (commentText: string, pickedTopic: string) => {
+  if (!pickedTopic) {
+    return [commentText];
+  }
+  if (pickedTopic === commentText) {
+    return ["", pickedTopic, ""];
+  }
+  return commentText.split(pickedTopic).flatMap((segment, index, segments) => (
+    index === segments.length - 1
+      ? [segment]
+      : [segment, pickedTopic]
+  ));
+};
+
+export const createReplyTargetCommentValueComponent = (
+  replyTargetComment: AgentStateResponse["replyTargetComment"],
+): ReactNode => {
+  const text = replyTargetComment?.text?.trim();
+  const pickedTopic = replyTargetComment?.pickedTopic?.trim();
+  if (!text) {
+    return <span>-</span>;
+  }
+
+  const commentNodes = pickedTopic
+    ? createHighlightedCommentLines(text, pickedTopic)
+    : [text];
+
+  return (
+    <div className="space-y-2">
+      <p className="break-words whitespace-pre-wrap">
+        {commentNodes.map((part, index) => (
+          index % 2 === 1 ? (
+            <span
+              key={`highlighted-topic-${index}`}
+              className="rounded bg-emerald-300/30 px-1 font-semibold text-emerald-100"
+            >
+              {part}
+            </span>
+          ) : (
+            <span key={`comment-part-${index}`}>{part}</span>
+          )
+        ))}
+      </p>
+      {pickedTopic ? (
+        <div className="inline-flex flex-wrap items-center gap-2 rounded border border-emerald-300/40 bg-emerald-950/40 px-2 py-1 text-xs text-emerald-100">
+          <span className="text-slate-300">picked topic</span>
+          <span className="font-semibold">{pickedTopic}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const formatSpeechHistoryNGramLabel = (nGram: number | undefined): string => {
   if (nGram === undefined || !Number.isFinite(nGram) || nGram < 1) {
     return "-";
