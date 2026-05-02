@@ -1,5 +1,31 @@
-import { beforeEach, describe, expect, it, jest } from "bun:test";
+import { beforeEach, describe, expect, it, jest, mock } from "bun:test";
 import { MakaMujo, SILENCE_THRESHOLD_MS, type TalkModel, type TTS } from ".";
+
+// Variables starting with "mock" are available in mock.module factory closures
+// even after hoisting (following the same convention as jest.mock).
+let mockCapturedIpcCallback: ((state: any) => any) | undefined;
+const mockSolverControl = { done: false };
+
+mock.module('../Browser/socket', () => ({
+  createReceiver: (cb: (state: any) => any) => {
+    mockCapturedIpcCallback = cb;
+  },
+}));
+
+mock.module('./games/server', () => ({
+  ServerGames: {
+    CookieClicker: {
+      solver: () => ({
+        next: () =>
+          mockSolverControl.done
+            ? { done: true as const, value: undefined }
+            : { done: false as const, value: { name: 'noop' } },
+      }),
+      sight: () => ({}),
+      Component: () => null,
+    },
+  },
+}));
 
 const stubTalkModel: TalkModel = {
   generate: () => '',
@@ -371,5 +397,109 @@ describe('comment learning n-gram size', () => {
 
     expect(learn).not.toHaveBeenCalled();
     expect(generate).not.toHaveBeenCalled();
+  });
+});
+
+describe('onGameStateChange', () => {
+  beforeEach(() => {
+    mockCapturedIpcCallback = undefined;
+    mockSolverControl.done = false;
+  });
+
+  const flushMicrotasks = () => Promise.resolve();
+
+  it('calls listener when IPC receives closed state', async () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    const listener = jest.fn();
+    agent.onGameStateChange(listener);
+
+    agent.play('CookieClicker');
+    mockCapturedIpcCallback!({ name: 'closed' });
+    await flushMicrotasks();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls listener when IPC receives idle state with game state payload', async () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    const listener = jest.fn();
+    agent.onGameStateChange(listener);
+
+    agent.play('CookieClicker');
+    mockCapturedIpcCallback!({ name: 'idle', state: { cookies: 42 } });
+    await flushMicrotasks();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call listener when IPC receives idle state without game state payload', async () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    const listener = jest.fn();
+    agent.onGameStateChange(listener);
+
+    agent.play('CookieClicker');
+    mockCapturedIpcCallback!({ name: 'idle' });
+    await flushMicrotasks();
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('calls listener when solver signals done', async () => {
+    mockSolverControl.done = true;
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    const listener = jest.fn();
+    agent.onGameStateChange(listener);
+
+    agent.play('CookieClicker');
+    mockCapturedIpcCallback!({ name: 'idle' });
+    await flushMicrotasks();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('defers listener execution via queueMicrotask so IPC receiver is not blocked', async () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    const callOrder: string[] = [];
+    agent.onGameStateChange(() => { callOrder.push('listener'); });
+
+    agent.play('CookieClicker');
+    mockCapturedIpcCallback!({ name: 'closed' });
+    callOrder.push('afterReceiver');
+
+    // Listener must not have run synchronously
+    expect(callOrder).toEqual(['afterReceiver']);
+
+    await flushMicrotasks();
+    expect(callOrder).toEqual(['afterReceiver', 'listener']);
+  });
+
+  it('calls all registered listeners', async () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    const listenerA = jest.fn();
+    const listenerB = jest.fn();
+    agent.onGameStateChange(listenerA);
+    agent.onGameStateChange(listenerB);
+
+    agent.play('CookieClicker');
+    mockCapturedIpcCallback!({ name: 'closed' });
+    await flushMicrotasks();
+
+    expect(listenerA).toHaveBeenCalledTimes(1);
+    expect(listenerB).toHaveBeenCalledTimes(1);
+  });
+
+  it('continues calling remaining listeners even if one throws', async () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    const failingListener = jest.fn(() => { throw new Error('boom'); });
+    const succeedingListener = jest.fn();
+    agent.onGameStateChange(failingListener);
+    agent.onGameStateChange(succeedingListener);
+
+    agent.play('CookieClicker');
+    mockCapturedIpcCallback!({ name: 'closed' });
+    await flushMicrotasks();
+
+    expect(failingListener).toHaveBeenCalledTimes(1);
+    expect(succeedingListener).toHaveBeenCalledTimes(1);
   });
 });
