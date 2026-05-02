@@ -1,12 +1,11 @@
 import { AgentStatusSectionCard } from "./AgentStatusSectionCard";
 import type { AgentStatusRow } from "./types";
 
-export const GAME_SECTION_TITLE = "ゲームの状態";
-
 type GameStatusSectionProps = {
+  title: string;
   gameRows: AgentStatusRow[];
 };
 
-export const GameStatusSection = ({ gameRows }: GameStatusSectionProps) => {
-  return <AgentStatusSectionCard title={GAME_SECTION_TITLE} rows={gameRows} />;
+export const GameStatusSection = ({ title, gameRows }: GameStatusSectionProps) => {
+  return <AgentStatusSectionCard title={title} rows={gameRows} />;
 };

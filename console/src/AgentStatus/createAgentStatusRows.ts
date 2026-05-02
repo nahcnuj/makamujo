@@ -21,11 +21,16 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
   }
 
   if (stateResponse !== null && stateResponse !== undefined && "currentGame" in stateResponse) {
-    rows.push({ label: "現在のゲーム", value: stateResponse.currentGame?.name ?? "-" });
-    rows.push({
-      label: "ゲーム情報",
-      valueComponent: createCurrentGameInfoValueComponent(stateResponse.currentGame?.state),
-    });
+    const currentGameName = stateResponse.currentGame?.name;
+    const currentGameState = stateResponse.currentGame?.state;
+
+    if (currentGameName !== undefined && currentGameState !== undefined) {
+      rows.push({
+        label: "ゲーム情報",
+        hideLabel: true,
+        valueComponent: createCurrentGameInfoValueComponent(currentGameState),
+      });
+    }
   }
 
   if (stateResponse?.nGram !== undefined) {
@@ -48,7 +53,7 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
   const normalizedSpeechText = normalizeSpeechText(stateResponse?.speech);
   const shouldRenderSpeechContent = stateResponse?.canSpeak === false
     || (normalizedSpeechText !== undefined && speechHistoryItems.length === 0)
-    || (normalizedSpeechText !== undefined && speechHistoryItems[0].speechText !== normalizedSpeechText);
+    || (normalizedSpeechText !== undefined && speechHistoryItems[0]?.speechText !== normalizedSpeechText);
 
   if (stateResponse?.canSpeak === false) {
     rows.push({ label: "発話内容", value: getSpeechUnavailableIndicator() });

@@ -24,7 +24,7 @@ describe("createAgentStatusRows", () => {
     expect(rows).not.toContainEqual({ label: "タイトル", value: "タイトル" });
     expect(rows.find((row) => row.label === "開始時刻")).toBeUndefined();
     expect(rows.find((row) => row.label === "配信URL")).toBeUndefined();
-    expect(rows).toContainEqual({ label: "現在のゲーム", value: "ゲームID" });
+    expect(rows).not.toContainEqual({ label: "現在のゲーム", value: "ゲームID" });
     expect(rows).toContainEqual({ label: "生成N-gram", hideLabel: true, value: "4-gram" });
     expect(rows.find((row) => row.label === "発話内容")?.value).toBe("テスト発話");
   });
@@ -190,5 +190,10 @@ describe("createAgentStatusRows", () => {
     expect(html).toContain("beta");
     expect(html).toContain("gamma");
     expect((html.match(/speech-word-chip/g) || []).length).toBe(3);
+  });
+
+  it("does not show detailed game state rows when currentGame is null", () => {
+    const rows = createAgentStatusRows({ currentGame: null });
+    expect(rows.find((row) => row.label === "ゲーム情報")).toBeUndefined();
   });
 });

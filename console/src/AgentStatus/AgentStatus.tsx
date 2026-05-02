@@ -11,14 +11,13 @@ import {
   startAgentStateAutoRefresh,
 } from "./agentStatusState";
 import { createAgentStatusSections } from "./createAgentStatusSections";
-import { GAME_SECTION_TITLE } from "./GameStatusSection";
 import { GameStatusSection } from "./GameStatusSection";
 import { LIVE_DELIVERY_SECTION_TITLE } from "./LiveDeliveryStatusSection";
 import { LiveDeliveryStatusSection } from "./LiveDeliveryStatusSection";
 import { MARKOV_MODEL_SECTION_TITLE } from "./MarkovModelStatusSection";
 import { MarkovModelStatusSection } from "./MarkovModelStatusSection";
 import { AgentStatusHeader } from "./AgentStatusHeader";
-import { formatStartDate, formatStreamStartTime } from "./agentStatusUtils";
+import { formatStreamStartTime } from "./agentStatusUtils";
 
 const AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS = "grid-rows-[auto_minmax(0,1fr)]";
 
@@ -126,7 +125,7 @@ export const AgentStatus = () => {
   );
   const liveDeliverySection = sectionMap[LIVE_DELIVERY_SECTION_TITLE];
   const markovModelSection = sectionMap[MARKOV_MODEL_SECTION_TITLE];
-  const gameSection = sectionMap[GAME_SECTION_TITLE];
+  const gameSection = agentStatusSections.find((section) => section.title.includes("プレイ中"));
   const hasPrimaryColumnSections = liveDeliverySection !== undefined || gameSection !== undefined;
 
   return (
@@ -178,7 +177,7 @@ export const AgentStatus = () => {
           {hasPrimaryColumnSections ? (
             <div className="min-w-0 min-h-0 h-full flex flex-col gap-4">
               {liveDeliverySection ? <LiveDeliveryStatusSection liveDeliveryRows={liveDeliverySection.rows} /> : null}
-              {gameSection ? <GameStatusSection gameRows={gameSection.rows} /> : null}
+              {gameSection ? <GameStatusSection title={gameSection.title} gameRows={gameSection.rows} /> : null}
             </div>
           ) : null}
           {markovModelSection ? (

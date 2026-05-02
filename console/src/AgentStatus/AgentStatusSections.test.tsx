@@ -62,10 +62,11 @@ describe("AgentStatusSections", () => {
   it("renders game section with structured rows", () => {
     const html = renderToStaticMarkup(
       <GameStatusSection
+        title="『org.dashnet.orteil/cookieclicker』プレイ中"
         gameRows={[
-          { label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" },
           {
             label: "ゲーム情報",
+            hideLabel: true,
             valueComponent: (
               <ul>
                 <li>status: idle</li>
@@ -76,9 +77,8 @@ describe("AgentStatusSections", () => {
       />,
     );
 
-    expect(html).toContain("ゲームの状態");
-    expect(html).toContain("現在のゲーム");
-    expect(html).toContain("org.dashnet.orteil/cookieclicker");
+    expect(html).toContain("『org.dashnet.orteil/cookieclicker』プレイ中");
+    expect(html).not.toContain("現在のゲーム");
     expect(html).toContain("ゲーム情報");
     expect(html).toContain("<ul");
   });

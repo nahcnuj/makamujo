@@ -155,7 +155,7 @@ describe("createAgentStatusRows", () => {
       speech: { speech: "テスト発話", silent: false },
     });
 
-    expect(rows).toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
+    expect(rows).not.toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
     expect(rows).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "生成N-gram", value: "4-gram (4.00)" }),
     ]));
@@ -224,9 +224,9 @@ describe("createAgentStatusRows", () => {
 
   it("shows currentGame as '-' when null", () => {
     const rows = createAgentStatusRows({ currentGame: null });
-    expect(rows).toContainEqual({ label: "現在のゲーム", value: "-" });
     const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
     expect(gameInfoRow?.value).toBeUndefined();
+    expect(gameInfoRow?.hideLabel).toBeTrue();
     expect(renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent))).toContain("-");
   });
 
@@ -350,10 +350,13 @@ describe("createAgentStatusSections", () => {
       expect.objectContaining({ label: "生成N-gram", value: "4-gram (4.00)" }),
     ]));
     expect(markovModelSection?.rows).not.toContainEqual({ label: "発話内容", value: "コメントを学習してお話ししています" });
-    const gameSection = sections.find((section) => section.title === "ゲームの状態");
-    expect(gameSection?.rows).toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
+    const gameSection = sections.find((section) =>
+      section.rows.some((row) => row.label === "ゲーム情報"),
+    );
+    expect(gameSection?.title).toBe("『org.dashnet.orteil/cookieclicker』プレイ中");
     const gameInfoRow = gameSection?.rows.find((row) => row.label === "ゲーム情報");
     expect(gameInfoRow?.value).toBeUndefined();
+    expect(gameInfoRow?.hideLabel).toBeTrue();
     expect(renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent))).toContain("status");
   });
 
