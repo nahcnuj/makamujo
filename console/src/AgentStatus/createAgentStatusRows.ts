@@ -17,9 +17,6 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
   if (niconamaState && Object.keys(niconamaState).length > 0) {
     rows.push(
       { label: "配信指標", hideLabel: true, valueComponent: createLiveDeliveryMetricsValueComponent(niconamaState) },
-      { label: "タイトル", value: niconamaState.meta?.title ?? "-" },
-      { label: "配信URL", value: niconamaState.meta?.url ?? "-", href: niconamaState.meta?.url },
-      { label: "開始時刻", value: formatStartDate(niconamaState.meta?.start) },
     );
   }
 
@@ -38,6 +35,7 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
   if (createSpeechHistoryDisplayItems(stateResponse?.speechHistory).length > 0) {
     rows.push({
       label: "これまでの発話",
+      hideLabel: true,
       valueComponent: createSpeechHistoryValueComponent(stateResponse?.speechHistory),
     });
   }

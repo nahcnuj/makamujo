@@ -26,6 +26,22 @@ export const formatStartDate = (startAtUnixTime: number | undefined): string => 
   return new Date(startAtUnixTimeMilliseconds).toLocaleString("ja-JP");
 };
 
+export const formatStreamStartTime = (startAtUnixTime: number | undefined): string | undefined => {
+  if (typeof startAtUnixTime !== "number" || !Number.isFinite(startAtUnixTime) || startAtUnixTime <= 0) {
+    return undefined;
+  }
+  const startAtUnixTimeMilliseconds = startAtUnixTime >= UNIX_MILLISECONDS_THRESHOLD
+    ? startAtUnixTime
+    : startAtUnixTime * 1000;
+  const date = new Date(startAtUnixTimeMilliseconds);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  return `${year}/${month}/${day} ${hour}:${minute} 開始`;
+};
+
 export const formatMetricValue = (metricValue: number | undefined): string => {
   return metricValue === undefined ? "-" : String(metricValue);
 };
@@ -139,7 +155,7 @@ export const createSpeechHistoryValueComponent = (
       {speechHistoryItems.map((speechHistoryItem) => (
         <li key={speechHistoryItem.id} className="rounded-md border border-emerald-300/30 p-2">
           <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-2">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1">
               {speechHistoryItem.nodes && Array.isArray(speechHistoryItem.nodes)
                 ? speechHistoryItem.nodes.map((word, wi) => (
                   <span

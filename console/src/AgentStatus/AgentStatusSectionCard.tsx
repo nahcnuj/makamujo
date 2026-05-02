@@ -11,7 +11,7 @@ export const AgentStatusSectionCard = ({ title, rows }: AgentStatusSectionCardPr
     <Container>
       <section className="bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50 min-w-0 h-full overflow-hidden flex flex-col">
         <h3 className="text-lg font-bold mb-2">{title}</h3>
-        <dl className="min-h-0 flex-1 grid content-start items-start grid-cols-[10rem_minmax(0,1fr)] gap-x-4 gap-y-2 overflow-y-auto pr-1">
+        <dl className="min-h-0 flex-1 grid content-start items-start grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 overflow-y-auto pr-1">
           {rows.map((row) => (
             <div
               key={`${title}:${row.label}:${"value" in row ? row.value : "value-component"}:${row.href ?? "-"}`}

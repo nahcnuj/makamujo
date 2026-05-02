@@ -21,11 +21,24 @@ describe("createAgentStatusRows", () => {
       speechHistory: [{ id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 }],
     } as any);
 
-    expect(rows).toContainEqual({ label: "タイトル", value: "タイトル" });
-    expect(rows).toContainEqual({ label: "配信URL", value: "https://example.com/live", href: "https://example.com/live" });
+    expect(rows).not.toContainEqual({ label: "タイトル", value: "タイトル" });
+    expect(rows.find((row) => row.label === "開始時刻")).toBeUndefined();
+    expect(rows.find((row) => row.label === "配信URL")).toBeUndefined();
     expect(rows).toContainEqual({ label: "現在のゲーム", value: "ゲームID" });
     expect(rows).toContainEqual({ label: "生成N-gram", value: "4-gram" });
     expect(rows.find((row) => row.label === "発話内容")?.value).toBe("テスト発話");
+  });
+
+  it("hides the speech history label so the value spans full width", () => {
+    const rows = createAgentStatusRows({
+      nGram: 4,
+      speechHistory: [
+        { id: "speech-1", speech: "alpha beta gamma", nGram: 4 },
+      ],
+    } as any);
+
+    const speechHistoryRow = rows.find((row) => row.label === "これまでの発話");
+    expect(speechHistoryRow).toEqual(expect.objectContaining({ hideLabel: true }));
   });
 
   it("renders speech history words as separate cards", () => {

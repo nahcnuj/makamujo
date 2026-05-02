@@ -17,6 +17,8 @@ import { LIVE_DELIVERY_SECTION_TITLE } from "./LiveDeliveryStatusSection";
 import { LiveDeliveryStatusSection } from "./LiveDeliveryStatusSection";
 import { MARKOV_MODEL_SECTION_TITLE } from "./MarkovModelStatusSection";
 import { MarkovModelStatusSection } from "./MarkovModelStatusSection";
+import { AgentStatusHeader } from "./AgentStatusHeader";
+import { formatStartDate, formatStreamStartTime } from "./agentStatusUtils";
 
 const AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS = "grid-rows-[auto_minmax(0,1fr)]";
 
@@ -108,6 +110,12 @@ export const AgentStatus = () => {
     };
   }, [fetchAgentState]);
 
+  const streamTitle = agentStateResponse?.niconama?.meta?.title;
+  const streamUrl = agentStateResponse?.niconama?.meta?.url;
+  const streamStartTime = agentStateResponse?.niconama?.meta?.start
+    ? formatStreamStartTime(agentStateResponse.niconama.meta.start)
+    : undefined;
+
   const agentStatusSections = createAgentStatusSections(agentStateResponse);
   const sectionMap = agentStatusSections.reduce<Partial<Record<AgentStatusSection["title"], AgentStatusSection>>>(
     (accumulatedSections, section) => {
@@ -130,17 +138,17 @@ export const AgentStatus = () => {
               馬可無序
             </a>
           </h1>
-          <p className="text-sm text-emerald-200 whitespace-nowrap">
-            最終更新: {lastUpdatedTime || "未取得"}
-          </p>
-          <button
-            type="button"
-            onClick={fetchAgentState}
-            disabled={isLoadingAgentState}
-            className="bg-emerald-300 text-emerald-950 border-0 px-5 py-1.5 rounded-lg font-bold transition-all duration-100 hover:bg-emerald-200 hover:-translate-y-px cursor-pointer whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
+          <AgentStatusHeader
+            streamTitle={streamTitle ?? undefined}
+            streamUrl={streamUrl ?? undefined}
+            startTime={streamStartTime}
+          />
+          <p
+            data-testid={agentStatusError ? "agent-status-error" : "agent-status-last-updated"}
+            className={agentStatusError ? "text-sm text-red-200 whitespace-nowrap" : "text-sm text-emerald-200 whitespace-nowrap"}
           >
-            更新
-          </button>
+            {agentStatusError ? `取得エラー: ${agentStatusError}` : `最終更新: ${lastUpdatedTime || "未取得"}`}
+          </p>
         </div>
         {isShowingMockAgentState ? (
           <Container>
@@ -151,14 +159,6 @@ export const AgentStatus = () => {
               {AGENT_STATE_MOCK_NOTICE_MESSAGE}
             </div>
           </Container>
-        ) : null}
-        {agentStatusError ? (
-          <div
-            data-testid="agent-status-error"
-            className="w-full min-h-[80px] bg-red-950/60 border-2 border-red-300 rounded-xl p-3 text-red-100"
-          >
-            取得エラー: {agentStatusError}
-          </div>
         ) : null}
       </div>
       {agentStatusSections.length === 0 ? (
