@@ -42,7 +42,7 @@ describe("AgentStatusSections", () => {
               <ul>
                 <li>
                   <p>テスト発話</p>
-                  <p>4g</p>
+                  <p>n=4</p>
                   <button type="button" disabled aria-label="学習の取り消し">↩</button>
                 </li>
               </ul>
@@ -52,7 +52,7 @@ describe("AgentStatusSections", () => {
       />,
     );
 
-    expect(html).toContain("マルコフ連鎖モデルの状態");
+    expect(html).toContain("マルコフ連鎖モデル");
     expect(html).toContain("4-gram");
     expect(html).toContain("テスト発話");
     expect(html).toContain("これまでの発話");

@@ -21,7 +21,7 @@ export const createAgentStatusSections = (stateResponse: AgentStateResponse | nu
 
   const sections = [
     { title: "配信状況", rows: liveDeliveryRows },
-    { title: "マルコフ連鎖モデルの状態", rows: markovModelRows },
+    { title: "マルコフ連鎖モデル", rows: markovModelRows },
     { title: "ゲームの状態", rows: gameRows },
   ];
 

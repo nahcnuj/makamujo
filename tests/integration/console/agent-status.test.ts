@@ -177,8 +177,8 @@ describe("createAgentStatusRows", () => {
     expect(speechHistoryHtml).toContain("grid-cols-1");
     expect(speechHistoryHtml).toContain("テスト発話その1");
     expect(speechHistoryHtml).toContain("テスト発話その2");
-    expect(speechHistoryHtml).toContain("4g");
-    expect(speechHistoryHtml).toContain("3g");
+    expect(speechHistoryHtml).toContain("n=4");
+    expect(speechHistoryHtml).toContain("n=3");
     expect(speechHistoryHtml).toContain("aria-label=\"学習の取り消し\"");
     expect(rows).toContainEqual({ label: "発話内容", value: "テスト発話" });
   });

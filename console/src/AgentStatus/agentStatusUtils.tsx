@@ -89,8 +89,10 @@ const formatSpeechHistoryNGramLabel = (nGram: number | undefined): string => {
   if (nGram === undefined || !Number.isFinite(nGram) || nGram < 1) {
     return "-";
   }
-  return `${Math.floor(nGram)}g`;
+  return `n=${Math.floor(nGram)}`;
 };
+
+const EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH = "3px";
 
 const formatSpeechHistoryItemText = (speechText: string, nGram: number | undefined): string => {
   return `${speechText} (${formatSpeechHistoryNGramLabel(nGram)})`;
@@ -152,15 +154,26 @@ export const createSpeechHistoryValueComponent = (
   }
   return (
     <ul className="grid grid-cols-1 gap-2">
-      {speechHistoryItems.map((speechHistoryItem) => (
-        <li key={speechHistoryItem.id} className="rounded-md border border-emerald-300/30 p-2">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-2">
+      {speechHistoryItems.map((speechHistoryItem, index) => (
+        <li
+          key={speechHistoryItem.id}
+          className={index === 0
+            ? "rounded-md border border-emerald-300/30 border-b border-b-emerald-300/80 p-2"
+            : "rounded-md border border-emerald-300/30 p-2"
+          }
+          style={index === 0 ? {
+            "--speech-history-border-bottom-width": EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH,
+            borderBottomWidth: "var(--speech-history-border-bottom-width)",
+            paddingBottom: "calc(0.5rem - var(--speech-history-border-bottom-width))",
+          } as React.CSSProperties : undefined}
+        >
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-2">
             <div className="flex flex-wrap gap-1">
               {speechHistoryItem.nodes && Array.isArray(speechHistoryItem.nodes)
                 ? speechHistoryItem.nodes.map((word, wi) => (
                   <span
                     key={`${speechHistoryItem.id}-node-${wi}`}
-                    className="speech-word-chip inline-block rounded-md border border-emerald-300/30 px-2 py-1 text-sm"
+                    className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
                   >
                     {word}
                   </span>
@@ -168,19 +181,23 @@ export const createSpeechHistoryValueComponent = (
                 : speechHistoryItem.speechText.split(/\s+/).map((word, wi) => (
                   <span
                     key={`${speechHistoryItem.id}-word-${wi}`}
-                    className="speech-word-chip inline-block rounded-md border border-emerald-300/30 px-2 py-1 text-sm"
+                    className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
                   >
                     {word}
                   </span>
                 ))}
             </div>
-            <span className="text-xs text-emerald-200 whitespace-nowrap">{speechHistoryItem.nGramLabel}</span>
+            <span className="text-xs whitespace-nowrap">{speechHistoryItem.nGramLabel}</span>
             <button
               type="button"
               disabled
               aria-label="学習の取り消し"
               title="学習の取り消し"
-              className="text-base leading-none h-7 w-7 rounded border border-emerald-300/50 text-emerald-200 opacity-70 cursor-not-allowed flex items-center justify-center"
+              className="inline-flex items-center justify-center h-7 min-w-[2rem] rounded-md border border-emerald-300/50 bg-emerald-950/20 px-2 text-sm text-emerald-200 opacity-70 cursor-not-allowed shadow-sm shadow-black/20"
+              style={{
+                fontFamily: "ui-sans-serif, system-ui, sans-serif",
+                fontVariantEmoji: "text",
+              }}
             >
               ↩
             </button>

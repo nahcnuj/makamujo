@@ -12,7 +12,7 @@ describe("createAgentStatusSections", () => {
 
     expect(sections.map((section) => section.title)).toEqual([
       "配信状況",
-      "マルコフ連鎖モデルの状態",
+      "マルコフ連鎖モデル",
       "ゲームの状態",
     ]);
   });
@@ -23,6 +23,6 @@ describe("createAgentStatusSections", () => {
       speechHistory: [{ id: "speech-1", speech: "hello world", nGram: 2 }],
     } as any);
 
-    expect(sections.map((section) => section.title)).toEqual(["マルコフ連鎖モデルの状態"]);
+    expect(sections.map((section) => section.title)).toEqual(["マルコフ連鎖モデル"]);
   });
 });
