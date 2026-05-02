@@ -16,6 +16,7 @@ export const MarkovModelStatusSection = ({ markovModelRows }: MarkovModelStatusS
       title={MARKOV_MODEL_SECTION_TITLE}
       titleRightElement={nGramRow?.value ?? undefined}
       rows={rows}
+      className="h-full"
     />
   );
 };

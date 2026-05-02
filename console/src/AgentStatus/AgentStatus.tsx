@@ -172,16 +172,20 @@ export const AgentStatus = () => {
       ) : (
         <div
           data-testid="agent-status-details"
-          className="w-full h-full min-h-0 overflow-y-auto pr-1 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] auto-rows-min xl:auto-rows-[minmax(0,1fr)] gap-4"
+          className="w-full h-full min-h-0 pr-1 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-4"
         >
           {hasPrimaryColumnSections ? (
-            <div className="min-w-0 min-h-0 h-full flex flex-col gap-4">
+            <div className="min-w-0 min-h-0 h-full flex flex-col gap-4 overflow-hidden">
               {liveDeliverySection ? <LiveDeliveryStatusSection liveDeliveryRows={liveDeliverySection.rows} /> : null}
-              {gameSection ? <GameStatusSection title={gameSection.title} gameRows={gameSection.rows} /> : null}
+              {gameSection ? (
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  <GameStatusSection title={gameSection.title} gameRows={gameSection.rows} className="h-full" />
+                </div>
+              ) : null}
             </div>
           ) : null}
           {markovModelSection ? (
-            <div className={`min-w-0 min-h-0 h-full${hasPrimaryColumnSections ? " xl:col-start-2" : ""}`}>
+            <div className={`min-w-0 min-h-0 h-full overflow-y-auto${hasPrimaryColumnSections ? " xl:col-start-2" : ""}`}>
               <MarkovModelStatusSection markovModelRows={markovModelSection.rows} />
             </div>
           ) : null}

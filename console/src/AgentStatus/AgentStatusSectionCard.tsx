@@ -1,23 +1,34 @@
-import { Container } from "automated-gameplay-transmitter";
 import type { ReactNode } from "react";
 import type { AgentStatusRow } from "./types";
 
 type AgentStatusSectionCardProps = {
-  title: string;
+  title?: string;
   titleRightElement?: ReactNode;
   rows: AgentStatusRow[];
+  className?: string;
+  hideTitle?: boolean;
 };
 
-export const AgentStatusSectionCard = ({ title, titleRightElement, rows }: AgentStatusSectionCardProps) => {
+export const AgentStatusSectionCard = ({
+  title,
+  titleRightElement,
+  rows,
+  className = "",
+  hideTitle = false,
+}: AgentStatusSectionCardProps) => {
   return (
-    <Container>
-      <section className="bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50 min-w-0 h-full overflow-hidden flex flex-col">
-        <div className="mb-2 flex items-baseline gap-3">
-          <h3 className="text-lg font-bold">{title}</h3>
-          {titleRightElement ? (
-            <div className="text-base whitespace-nowrap">{titleRightElement}</div>
-          ) : null}
-        </div>
+      <section className={[
+        "bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50 min-w-0 overflow-hidden flex flex-col",
+        className,
+      ].filter(Boolean).join(" ")}>
+        {!hideTitle ? (
+          <div className="mb-2 flex items-baseline gap-3">
+            <h3 className="text-lg font-bold">{title}</h3>
+            {titleRightElement ? (
+              <div className="text-base whitespace-nowrap">{titleRightElement}</div>
+            ) : null}
+          </div>
+        ) : null}
         <dl
           className="min-h-0 flex-1 grid content-start items-start grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 overflow-y-auto pr-1"
           style={{ scrollbarWidth: "thin" }}
@@ -41,6 +52,5 @@ export const AgentStatusSectionCard = ({ title, titleRightElement, rows }: Agent
           ))}
         </dl>
       </section>
-    </Container>
   );
 };

@@ -134,7 +134,8 @@ describe("createAgentStatusRows", () => {
     expect(liveMetricRow?.value).toBeUndefined();
     expect(liveMetricRow?.hideLabel).toBeTrue();
     const liveMetricHtml = renderToStaticMarkup(createElement(Fragment, null, liveMetricRow?.valueComponent));
-    expect(liveMetricHtml).toContain("状態");
+    expect(liveMetricHtml).toContain("配信状況");
+    expect(liveMetricHtml).not.toContain("状態");
     expect(liveMetricHtml).toContain("配信中");
     expect(liveMetricHtml).toContain("視聴者数");
     expect(liveMetricHtml).toContain("123");

@@ -8,5 +8,5 @@ type LiveDeliveryStatusSectionProps = {
 };
 
 export const LiveDeliveryStatusSection = ({ liveDeliveryRows }: LiveDeliveryStatusSectionProps) => {
-  return <AgentStatusSectionCard title={LIVE_DELIVERY_SECTION_TITLE} rows={liveDeliveryRows} />;
+  return <AgentStatusSectionCard title={LIVE_DELIVERY_SECTION_TITLE} rows={liveDeliveryRows} hideTitle />;
 };
