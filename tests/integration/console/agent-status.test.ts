@@ -203,6 +203,28 @@ describe("createAgentStatusRows", () => {
     expect(gameInfoHtml).toContain("shield");
   });
 
+  it("renders nested game state values using details/summary and array counts", () => {
+    const rows = createAgentStatusRows({
+      currentGame: {
+        name: "game",
+        state: {
+          stage: {
+            level: 3,
+          },
+          effects: ["boost", "shield"],
+        },
+      },
+    });
+
+    const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
+    expect(gameInfoRow?.value).toBeUndefined();
+    const gameInfoHtml = renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent));
+    expect(gameInfoHtml).toContain("<details");
+    expect(gameInfoHtml).toContain("<summary");
+    expect(gameInfoHtml).toContain("effects");
+    expect(gameInfoHtml).toContain("(2)");
+  });
+
   it("formats nested objects and empty collections in structured display", () => {
     const rows = createAgentStatusRows({
       currentGame: {

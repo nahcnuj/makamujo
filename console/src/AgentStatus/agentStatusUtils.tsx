@@ -291,10 +291,17 @@ const renderCurrentGameStateValueComponent = (
           if (stateValue !== null && typeof stateValue === "object") {
             return (
               <li key={stateKey}>
-                <div className="font-semibold">{stateKey}</div>
-                <div className="pl-4 border-l border-emerald-300/40">
-                  {renderCurrentGameStateValueComponent(stateValue, visitedObjects)}
-                </div>
+                <details className="group rounded-md border border-emerald-300/40 p-2">
+                  <summary className="flex items-center gap-2 font-semibold cursor-pointer list-none">
+                    <span>{stateKey}</span>
+                    {Array.isArray(stateValue) ? (
+                      <span className="text-sm italic text-slate-500">({stateValue.length})</span>
+                    ) : null}
+                  </summary>
+                  <div className="pl-4 border-l border-emerald-300/40 mt-2">
+                    {renderCurrentGameStateValueComponent(stateValue, visitedObjects)}
+                  </div>
+                </details>
               </li>
             );
           }
