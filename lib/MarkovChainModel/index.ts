@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { MarkovModel } from "automated-gameplay-transmitter";
 import type { TalkModel } from "../Agent";
 
+const jaJP = new Intl.Locale('ja-JP');
+
 type WeightedCandidates = Record<string, number>;
 
 type Distribution = {
@@ -11,6 +13,8 @@ type Distribution = {
   [k: string]: WeightedCandidates
 };
 const DEFAULT_MAX_LEARN_CONTEXT = 8;
+
+const normalizeNGram = (nGram: number): number => Math.max(1, Math.floor(nGram));
 
 /** Ensures text passed to AGT learn API is always a single Japanese sentence terminator suffix. */
 const normalizeLearnText = (text: string): `${string}。` => (
@@ -72,14 +76,26 @@ export class MarkovChainModel implements TalkModel {
     );
   }
 
+  /**
+   * Generate text from the Markov model.
+   *
+   * @param start - Seed word to begin generation from.
+   * @param nGram - N-gram order to use during generation.
+   * @returns A string when trace is unavailable or a trace object when the
+   *          underlying AGT model supports it.
+   */
   generate(
     start: string = '',
     nGram = 1,
   ): string | { text: string; nodes?: string[] } {
-    // Delegates n-gram generation to AGT's MarkovModel implementation.
-    const res = this.#model.gen(start, nGram) as unknown;
-    if (typeof res === 'string') return res;
-    return String(res ?? '');
+    const result = this.#model.gen(start, normalizeNGram(nGram), { trace: true });
+    if (typeof result === 'string') {
+      return result;
+    }
+    return {
+      text: result.text,
+      nodes: Array.isArray(result.nodes) ? result.nodes.map(String) : undefined,
+    };
   }
 
   learn(text: string): void {
