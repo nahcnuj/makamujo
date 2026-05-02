@@ -5,6 +5,7 @@ import {
   proxyConsoleApiWsRequest,
   proxyConsoleUpgrade,
 } from "../../lib/console-proxy";
+import App from "../../console/src/index.html";
 import * as agentState from "./api/agent-state";
 import robotsTxt from "./robots.txt";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
@@ -28,11 +29,7 @@ function getContentType(filePath: string): string | undefined {
 }
 
 function normalizeConsoleHtml(source: string): string {
-  const withoutBase = source.replace(/<base[^>]*>\s*/i, '');
-  return withoutBase.replace(
-    /<script\s+type="module"\s+src="\.\/frontend\.tsx"><\/script>/i,
-    `  <link rel="stylesheet" href="${CONSOLE_PUBLIC_PATH}frontend.css" />\n  <script type="module" src="${CONSOLE_PUBLIC_PATH}frontend.js"></script>`
-  );
+  return source;
 }
 
 async function buildConsoleApp() {
@@ -145,14 +142,6 @@ export const routes = {
   '/console/frontend.css': async (req: Request) => {
     return await serveConsoleAsset(req) ?? await serveConsoleAppHtml();
   },
-  '/console/*': async (req: Request) => {
-    const assetResponse = await serveConsoleAsset(req);
-    if (assetResponse) {
-      return assetResponse;
-    }
-    return await serveConsoleAppHtml();
-  },
-  '/*': async () => {
-    return await serveConsoleAppHtml();
-  },
+
+  '/console/*': App,
 };
