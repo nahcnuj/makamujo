@@ -112,13 +112,40 @@ const wsClients = new Set<any>();
 
 // Server-Sent Events (SSE) clients: store controller objects so we can
 // push `data: ...\n\n` frames to each connected client.
-const sseClients = new Set<any>();
+const sseClients = new Set<ReadableStreamDefaultController<string>>();
+
+/**
+ * Create a ReadableStream that registers its controller in `sseClients` and
+ * removes it when the client disconnects (cancel) or when the handler rejects.
+ * Centralising the creation avoids duplicating the closure-capture pattern.
+ */
+const createSseStream = (label: string) => {
+  let ctl: ReadableStreamDefaultController<string> | undefined;
+  return new ReadableStream<string>({
+    start(controller) {
+      try { console.log(`[INFO] SSE client connected (${label})`); } catch {}
+      ctl = controller;
+      sseClients.add(controller);
+      try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
+    },
+    cancel() { if (ctl) { try { sseClients.delete(ctl); } catch {} ctl = undefined; } },
+  });
+};
 
 const sseBroadcast = (payload: unknown) => {
+  if (sseClients.size === 0) return;
   const frame = `data: ${JSON.stringify(payload)}\n\n`;
   try { console.log('[INFO] sseBroadcast -> sseClients count=', sseClients.size); } catch {}
   for (const controller of Array.from(sseClients)) {
     try {
+      // Evict clients under backpressure (desiredSize <= 0) to avoid blocking
+      // the event loop when a slow or unread connection fills its TCP send buffer.
+      // null means the stream is already closed/errored; treat that like healthy.
+      if ((controller.desiredSize ?? 1) <= 0) {
+        try { controller.close(); } catch {}
+        sseClients.delete(controller);
+        continue;
+      }
       controller.enqueue(frame);
     } catch (err) {
       try { controller.close(); } catch {}
@@ -136,6 +163,14 @@ const broadcastToWsClients = (payload: unknown) => {
       try { ws.close(); } catch {}
       try { wsClients.delete(ws); } catch {}
     }
+  }
+};
+
+const broadcastCurrentPayload = (context: string) => {
+  try {
+    sseBroadcast(getCurrentStreamPayload());
+  } catch (err) {
+    console.warn(`[WARN] failed to broadcast to SSE clients (${context}):`, err instanceof Error ? err.message : String(err));
   }
 };
 
@@ -232,19 +267,30 @@ streamer.onSpeech(async (text) => {
     clearSpeechTimer = undefined;
   }
   agent.setSpeech(speechText);
+  // Notify console clients immediately when a new utterance starts.
+  broadcastCurrentPayload('onSpeech');
 });
 
 streamer.onSpeechComplete(async () => {
   if (clearSpeechTimer) {
     clearTimeout(clearSpeechTimer);
   }
+  // Notify console clients that the utterance has finished.
+  broadcastCurrentPayload('onSpeechComplete');
   clearSpeechTimer = setTimeout(() => {
     const speechState = agent.getSpeech();
     if (!speechState.silent) {
       agent.setSpeech('');
     }
     clearSpeechTimer = undefined;
+    // Notify console clients that the displayed speech has been cleared.
+    broadcastCurrentPayload('onSpeechClear');
   }, 1000);
+});
+
+// Notify console clients when game state changes via browser IPC.
+streamer.onGameStateChange(() => {
+  broadcastCurrentPayload('onGameStateChange');
 });
 
 // Defer starting the stream playback until after the HTTP servers are up.
@@ -402,16 +448,7 @@ const server = serve({
         const accept = req.headers.get('accept') ?? '';
         try { console.log('[TRACE] /api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch {}
         if (accept.includes('text/event-stream')) {
-          const stream = new ReadableStream({
-            start(controller) {
-              try { console.log('[INFO] SSE client connected (/api/ws)'); } catch {}
-              sseClients.add(controller);
-              // Send current state immediately.
-              try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
-            },
-            cancel() { try { sseClients.delete(this); } catch {} },
-          });
-          return new Response(stream, {
+          return new Response(createSseStream('/api/ws'), {
             headers: {
               'Content-Type': 'text/event-stream',
               'Cache-Control': 'no-cache',
@@ -448,15 +485,7 @@ const server = serve({
         const accept = req.headers.get('accept') ?? '';
         try { console.log('[TRACE] /console/api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch {}
         if (accept.includes('text/event-stream')) {
-          const stream = new ReadableStream({
-            start(controller) {
-              try { console.log('[INFO] SSE client connected (/console/api/ws)'); } catch {}
-              sseClients.add(controller);
-              try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch {}
-            },
-            cancel() { try { sseClients.delete(this); } catch {} },
-          });
-          return new Response(stream, {
+          return new Response(createSseStream('/console/api/ws'), {
             headers: {
               'Content-Type': 'text/event-stream',
               'Cache-Control': 'no-cache',

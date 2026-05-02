@@ -39,6 +39,7 @@ export class MakaMujo {
   #speechListeners: Array<(text: TalkModelGenerateResult) => Promise<void>> = [];
   #speechCompleteListeners: Array<() => Promise<void>> = [];
   #ttsErrorHandlers: Array<(text: string, err: unknown) => void> = [];
+  #gameStateChangeListeners: Array<() => void> = [];
 
   #browserState?: State;
   #playing?: {
@@ -87,6 +88,7 @@ export class MakaMujo {
 
       if (state.name === 'closed') {
         this.#playing = undefined;
+        this.#notifyGameStateChangeAsync();
         return Action.noop;
       }
 
@@ -100,12 +102,14 @@ export class MakaMujo {
               ...state.state,
             } as any,
           };
+          this.#notifyGameStateChangeAsync();
         }
       }
 
       const { done, value } = solver.next(state);
       if (done) {
         this.#playing = undefined;
+        this.#notifyGameStateChangeAsync();
         return Action.noop;
       }
       console.debug('[DEBUG]', 'next action', JSON.stringify(value, null, 0));
@@ -157,6 +161,20 @@ export class MakaMujo {
   onSpeechComplete(cb: () => Promise<void>): MakaMujo {
     this.#speechCompleteListeners.push(cb);
     return this;
+  }
+
+  onGameStateChange(cb: () => void): MakaMujo {
+    this.#gameStateChangeListeners.push(cb);
+    return this;
+  }
+
+  #notifyGameStateChangeAsync(): void {
+    const listenersSnapshot = [...this.#gameStateChangeListeners];
+    queueMicrotask(() => {
+      for (const listener of listenersSnapshot) {
+        try { listener(); } catch {}
+      }
+    });
   }
 
   listen(comments: AgentComment[]) {

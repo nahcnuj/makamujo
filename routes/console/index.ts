@@ -1,4 +1,3 @@
-import ConsoleApp from "../../console/src/index.html";
 import {
   buildProxyHeaders,
   computeProxyBase,
@@ -8,9 +7,104 @@ import {
 } from "../../lib/console-proxy";
 import * as agentState from "./api/agent-state";
 import robotsTxt from "./robots.txt";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const BROADCASTING_HOST = process.env.BROADCASTING_HOST ?? 'localhost';
 const BROADCASTING_PORT = process.env.BROADCASTING_PORT ?? '7777';
+
+const CONSOLE_BUILD_PATH = process.env.CONSOLE_BUILD_PATH ?? resolve(process.cwd(), 'var/console/build');
+const CONSOLE_SOURCE_HTML_PATH = resolve(process.cwd(), 'console/src/index.html');
+const CONSOLE_PUBLIC_PATH = '/console/';
+
+let consoleBuildPromise: Promise<void> | null = null;
+let builtConsoleHtml: string | null = null;
+
+function getContentType(filePath: string): string | undefined {
+  if (filePath.endsWith('.js')) return 'application/javascript; charset=utf-8';
+  if (filePath.endsWith('.css')) return 'text/css; charset=utf-8';
+  if (filePath.endsWith('.html')) return 'text/html; charset=utf-8';
+  return undefined;
+}
+
+function normalizeConsoleHtml(source: string): string {
+  const withoutBase = source.replace(/<base[^>]*>\s*/i, '');
+  return withoutBase.replace(
+    /<script\s+type="module"\s+src="\.\/frontend\.tsx"><\/script>/i,
+    `  <link rel="stylesheet" href="${CONSOLE_PUBLIC_PATH}frontend.css" />\n  <script type="module" src="${CONSOLE_PUBLIC_PATH}frontend.js"></script>`
+  );
+}
+
+async function buildConsoleApp() {
+  mkdirSync(CONSOLE_BUILD_PATH, { recursive: true });
+  const result = await Bun.build({
+    entrypoints: [resolve(process.cwd(), 'console/src/frontend.tsx')],
+    outdir: CONSOLE_BUILD_PATH,
+    publicPath: CONSOLE_PUBLIC_PATH,
+    splitting: true,
+    target: 'browser',
+    minify: process.env.NODE_ENV === 'production',
+  });
+
+  if (!result.success) {
+    throw new Error('Console frontend build failed');
+  }
+
+  const sourceHtml = readFileSync(CONSOLE_SOURCE_HTML_PATH, 'utf-8');
+  builtConsoleHtml = normalizeConsoleHtml(sourceHtml);
+}
+
+function ensureConsoleBuilt(): Promise<void> {
+  if (!consoleBuildPromise) {
+    consoleBuildPromise = (async () => {
+      try {
+        await buildConsoleApp();
+      } catch (error) {
+        console.error('[ERROR] console build failed', error);
+        throw error;
+      }
+    })();
+  }
+  return consoleBuildPromise;
+}
+
+function getConsoleAssetPath(pathname: string): string | null {
+  if (!pathname.startsWith(CONSOLE_PUBLIC_PATH)) {
+    return null;
+  }
+  const assetPath = pathname.slice(CONSOLE_PUBLIC_PATH.length);
+  if (!assetPath) {
+    return null;
+  }
+  const resolved = resolve(CONSOLE_BUILD_PATH, assetPath);
+  if (!resolved.startsWith(CONSOLE_BUILD_PATH + '/')) {
+    return null;
+  }
+  if (!existsSync(resolved)) {
+    return null;
+  }
+  return resolved;
+}
+
+async function serveConsoleAsset(req: Request): Promise<Response | null> {
+  await ensureConsoleBuilt();
+  const url = new URL(req.url);
+  const assetPath = getConsoleAssetPath(url.pathname);
+  if (!assetPath) return null;
+
+  const headers: Record<string, string> = {};
+  const contentType = getContentType(assetPath);
+  if (contentType) headers['Content-Type'] = contentType;
+
+  return new Response(Bun.file(assetPath), { headers });
+}
+
+async function serveConsoleAppHtml(): Promise<Response> {
+  await ensureConsoleBuilt();
+  return new Response(builtConsoleHtml ?? '', {
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  });
+}
 
 try {
   console.log('[DEBUG] routes/console initializing', { BROADCASTING_HOST, BROADCASTING_PORT });
@@ -42,8 +136,23 @@ export const routes = {
       return new Response('proxy failed', { status: 502 });
     }
   },
-  
-  '/console/*': ConsoleApp,
+
   '/console/robots.txt': robotsTxt,
   '/console/api/agent-state': agentState,
+  '/console/frontend.js': async (req: Request) => {
+    return await serveConsoleAsset(req) ?? await serveConsoleAppHtml();
+  },
+  '/console/frontend.css': async (req: Request) => {
+    return await serveConsoleAsset(req) ?? await serveConsoleAppHtml();
+  },
+  '/console/*': async (req: Request) => {
+    const assetResponse = await serveConsoleAsset(req);
+    if (assetResponse) {
+      return assetResponse;
+    }
+    return await serveConsoleAppHtml();
+  },
+  '/*': async () => {
+    return await serveConsoleAppHtml();
+  },
 };
