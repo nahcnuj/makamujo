@@ -46,6 +46,8 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+      - name: Configure apt mirror (JAIST)
+        run: sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://ftp.jaist.ac.jp/pub/Linux/ubuntu|g' /etc/apt/sources.list
       - name: Install Japanese fonts (for screenshots)
         run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
       - name: Run quick tests
