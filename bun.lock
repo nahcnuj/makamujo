@@ -6,7 +6,7 @@
       "name": "@nahcnuj/makamujo",
       "dependencies": {
         "@playwright/browser-chromium": "^1.59.1",
-        "automated-gameplay-transmitter": "^0.6.3",
+        "automated-gameplay-transmitter": "^0.6.2",
         "bun": "^1.3.13",
         "bun-plugin-tailwind": "^0.1.2",
         "playwright": "^1.59.1",
@@ -122,7 +122,7 @@
 
     "arr-union": ["arr-union@3.1.0", "", {}, "sha512-sKpyeERZ02v1FeCZT8lrfJq5u6goHCtpTAzPwJYe7c8SPFOboNjNg1vz2L4VTn9T4PQxEx13TbXLmYUcS6Ug7Q=="],
 
-    "automated-gameplay-transmitter": ["automated-gameplay-transmitter@0.6.3", "", { "dependencies": { "@playwright/browser-chromium": "^1.57.0", "bun-plugin-tailwind": "^0.1.2", "playwright": "^1.57.0", "playwright-extra": "^4.3.6", "puppeteer-extra-plugin-stealth": "^2.11.2", "tailwindcss": "^4.1.18" }, "peerDependencies": { "react": ">=19", "react-dom": ">=19" } }, "sha512-J6OjGkapgpLKvBTIsop0cPk/hBzLm2yIDXoiMuWzzt1uEakfG/4s7wzvZO+jADugFI4bGl7Shgpprs/Q3kzUJA=="],
+    "automated-gameplay-transmitter": ["automated-gameplay-transmitter@0.6.2", "", { "dependencies": { "@playwright/browser-chromium": "^1.57.0", "bun-plugin-tailwind": "^0.1.2", "playwright": "^1.57.0", "playwright-extra": "^4.3.6", "puppeteer-extra-plugin-stealth": "^2.11.2", "tailwindcss": "^4.1.18" }, "peerDependencies": { "react": ">=19", "react-dom": ">=19" } }, "sha512-wCwAyIhEnCZgzLmnPY3CkyeCVEv+i0uvFvyXfXEmeLY8DxYNQ2exXy+D0JJNn4GcyBYTxTciabeVlk+zSdoYPw=="],
 
     "balanced-match": ["balanced-match@1.0.2", "", {}, "sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw=="],
 
