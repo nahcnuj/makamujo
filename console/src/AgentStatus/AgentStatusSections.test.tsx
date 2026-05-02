@@ -52,7 +52,7 @@ describe("AgentStatusSections", () => {
     if (!liveDeliveryRow) {
       throw new Error("Expected live delivery row to be defined");
     }
-    expect(liveDeliveryRow).toMatchObject({ label: "配信状況", hideLabel: true });
+    expect(liveDeliveryRow).toMatchObject({ label: "配信指標", hideLabel: true });
     const html = renderToStaticMarkup(<>{liveDeliveryRow.valueComponent}</>);
     expect(html).toContain("配信状況");
     expect(html).toContain("配信中");
