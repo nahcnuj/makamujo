@@ -145,8 +145,14 @@ export const createSpeechHistoryDisplayItems = (
   return itemsWithSeq.map(({ seq, ...rest }) => rest);
 };
 
+/**
+ * @param emphasizeLatest - When `true` (default), the most recent history item is visually
+ * emphasized with a thicker bottom border to indicate it is being spoken. Set to `false`
+ * when the agent is in the silent state so that no past utterance appears highlighted.
+ */
 export const createSpeechHistoryValueComponent = (
   speechHistory: AgentStateResponse["speechHistory"] | undefined,
+  emphasizeLatest: boolean = true,
 ): ReactNode => {
   const speechHistoryItems = createSpeechHistoryDisplayItems(speechHistory);
   if (speechHistoryItems.length === 0) {
@@ -157,11 +163,11 @@ export const createSpeechHistoryValueComponent = (
       {speechHistoryItems.map((speechHistoryItem, index) => (
         <li
           key={speechHistoryItem.id}
-          className={index === 0
+          className={index === 0 && emphasizeLatest
             ? "rounded-md border border-emerald-300/30 border-b border-b-emerald-300/80 p-2"
             : "rounded-md border border-emerald-300/30 p-2"
           }
-          style={index === 0 ? {
+          style={index === 0 && emphasizeLatest ? {
             "--speech-history-border-bottom-width": EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH,
             borderBottomWidth: "var(--speech-history-border-bottom-width)",
             paddingBottom: "calc(0.5rem - var(--speech-history-border-bottom-width))",
