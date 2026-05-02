@@ -5,6 +5,7 @@ import {
   proxyConsoleApiWsRequest,
   proxyConsoleUpgrade,
 } from "../../lib/console-proxy";
+import App from "../../console/src/index.html";
 import * as agentState from "./api/agent-state";
 import robotsTxt from "./robots.txt";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
@@ -141,14 +142,6 @@ export const routes = {
   '/console/frontend.css': async (req: Request) => {
     return await serveConsoleAsset(req) ?? await serveConsoleAppHtml();
   },
-  '/console/*': async (req: Request) => {
-    const assetResponse = await serveConsoleAsset(req);
-    if (assetResponse) {
-      return assetResponse;
-    }
-    return await serveConsoleAppHtml();
-  },
-  '/*': async () => {
-    return await serveConsoleAppHtml();
-  },
+
+  '/console/*': App,
 };
