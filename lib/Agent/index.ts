@@ -31,12 +31,20 @@ const inferNGramSize = (commentNumber: number): number => {
   return Math.max(1, Math.floor(inferNGramSizeRaw(commentNumber)));
 };
 
+type SpeechEvent = {
+  text: string;
+  generated: boolean;
+  nGram?: number;
+  nGramRaw?: number;
+  nodes?: string[];
+};
+
 export class MakaMujo {
   #talkModel: TalkModel;
   #tts: TTS;
 
   #speechPromise = Promise.resolve();
-  #speechListeners: Array<(text: TalkModelGenerateResult) => Promise<void>> = [];
+  #speechListeners: Array<(event: SpeechEvent) => Promise<void>> = [];
   #speechCompleteListeners: Array<() => Promise<void>> = [];
   #ttsErrorHandlers: Array<(text: string, err: unknown) => void> = [];
   #gameStateChangeListeners: Array<() => void> = [];
@@ -122,18 +130,30 @@ export class MakaMujo {
     }
   }
 
-  async speech(text: TalkModelGenerateResult = this.#talkModel.generate('', this.#currentNGramSize)) {
+  async speech(text?: TalkModelGenerateResult) {
+    const actualText = text === undefined ? this.#talkModel.generate('', this.#currentNGramSize) : text;
+    const speechText = typeof actualText === 'string' ? actualText : actualText.text;
+    const event: SpeechEvent = {
+      text: speechText,
+      generated: text === undefined,
+      ...(text === undefined ? {
+        nGram: this.#currentNGramSize,
+        nGramRaw: this.#currentNGramSizeRaw,
+      } : {}),
+      ...(typeof actualText === 'object' && Array.isArray(actualText.nodes) ? { nodes: actualText.nodes } : {}),
+    };
+
     // Queue speech work onto the internal chain. For empty text we avoid
     // calling the underlying TTS implementation (some TalkModel generators
     // return an empty string) but still notify speech listeners.
-    const speechText = typeof text === 'string' ? text : text.text;
 
     this.#speechPromise = this.#speechPromise.then(async () => {
       const tasks: Array<Promise<void>> = [
-        ...this.#speechListeners.map(f => f(text)),
+        ...this.#speechListeners.map(f => f(event)),
       ];
-      if (speechText.trim().length > 0) {
-        const ttsTask = this.#tts.speech(speechText, { additionalHalfTone: 3, speakingRate: 1.2 }).catch((err) => {
+      const trimmedText = event.text.trim();
+      if (trimmedText.length > 0) {
+        const ttsTask = this.#tts.speech(trimmedText, { additionalHalfTone: 3, speakingRate: 1.2 }).catch((err) => {
           for (const h of this.#ttsErrorHandlers) {
             try { void h(speechText, err); } catch (_) { /* ignore handler errors */ }
           }
@@ -148,7 +168,7 @@ export class MakaMujo {
     await this.#speechPromise;
   }
 
-  onSpeech(cb: (text: TalkModelGenerateResult) => Promise<void>): MakaMujo {
+  onSpeech(cb: (event: SpeechEvent) => Promise<void>): MakaMujo {
     this.#speechListeners.push(cb);
     return this;
   }
