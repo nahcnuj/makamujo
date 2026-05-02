@@ -92,9 +92,12 @@ export class MarkovChainModel implements TalkModel {
     if (typeof result === 'string') {
       return result;
     }
+
+    const nodes = Array.isArray(result.nodes) ? result.nodes.map(String) : undefined;
+    const startToken = start.trim();
     return {
       text: result.text,
-      nodes: Array.isArray(result.nodes) ? result.nodes.map(String) : undefined,
+      nodes: startToken && nodes ? [startToken, ...nodes] : nodes,
     };
   }
 

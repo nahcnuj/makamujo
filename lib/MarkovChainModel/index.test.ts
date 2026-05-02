@@ -11,9 +11,15 @@ beforeEach(() => {
 
 const temporaryModelFilePaths: string[] = [];
 
-type MarkovChainModelGenerateResult = string | { text: string; nodes?: string[] };
+type MarkovChainModelGenerateResult = ReturnType<MarkovChainModel['generate']>;
 const getResultText = (result: MarkovChainModelGenerateResult) =>
   typeof result === 'string' ? result : result.text;
+
+function assertTraceResult(
+  result: MarkovChainModelGenerateResult,
+): asserts result is Exclude<MarkovChainModelGenerateResult, string> {
+  expect(typeof result).not.toBe('string');
+}
 
 afterEach(() => {
   while (temporaryModelFilePaths.length > 0) {
@@ -39,11 +45,23 @@ describe('an empty markov chain model', () => {
     });
 
     const result = model.generate();
-    expect(typeof result).toBe('object');
-    expect(result).not.toBeNull();
-    expect((result as any).text).toBe('こんにちは。');
-    expect(Array.isArray((result as any).nodes)).toBe(true);
-    expect((result as any).nodes).toEqual(['こん', 'にち', 'は', '。']);
+    assertTraceResult(result);
+    expect(result.text).toBe('こんにちは。');
+    expect(result.nodes).toEqual(['こん', 'にち', 'は', '。']);
+  });
+
+  it('should include the start token in trace nodes when a start string is provided', () => {
+    const model = new MarkovChainModel({
+      '': { 'こん': 1 },
+      'こん': { 'にち': 1 },
+      'にち': { 'は': 1 },
+      'は': { '。': 1 },
+    });
+
+    const result = model.generate('こん');
+    assertTraceResult(result);
+    expect(result.text).toBe('こんにちは。');
+    expect(result.nodes).toEqual(['こん', 'にち', 'は', '。']);
   });
 });
 
