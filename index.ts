@@ -539,7 +539,10 @@ console.log(`🚀 Server running at ${server.url}`);
 
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 try {
-  consoleServer = startConsoleServer({ broadcastingHost: '127.0.0.1', broadcastingPort: server.port });
+  consoleServer = startConsoleServer({
+    broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
+    broadcastingPort: process.env.BROADCASTING_PORT ?? server.port,
+  });
   console.log(`🚀 Console running at ${consoleServer.url}`);
 } catch (err) {
   const consoleStartupError = err instanceof Error ? (err.stack ?? err.message) : String(err);

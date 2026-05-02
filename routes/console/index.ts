@@ -103,7 +103,7 @@ async function serveConsoleAppHtml(): Promise<Response> {
 }
 
 try {
-  console.log('[DEBUG] routes/console initializing', { BROADCASTING_HOST, BROADCASTING_PORT });
+  console.log('[DEBUG] routes/console initializing');
 } catch {}
 
 // helpers moved to ../../lib/console-proxy
