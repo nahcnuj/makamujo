@@ -134,7 +134,8 @@ describe("createAgentStatusRows", () => {
     expect(liveMetricRow?.value).toBeUndefined();
     expect(liveMetricRow?.hideLabel).toBeTrue();
     const liveMetricHtml = renderToStaticMarkup(createElement(Fragment, null, liveMetricRow?.valueComponent));
-    expect(liveMetricHtml).toContain("状態");
+    expect(liveMetricHtml).toContain("配信状況");
+    expect(liveMetricHtml).not.toContain("状態");
     expect(liveMetricHtml).toContain("配信中");
     expect(liveMetricHtml).toContain("視聴者数");
     expect(liveMetricHtml).toContain("123");
@@ -200,6 +201,28 @@ describe("createAgentStatusRows", () => {
     expect(gameInfoHtml).toContain("effects");
     expect(gameInfoHtml).toContain("boost");
     expect(gameInfoHtml).toContain("shield");
+  });
+
+  it("renders nested game state values using details/summary and array counts", () => {
+    const rows = createAgentStatusRows({
+      currentGame: {
+        name: "game",
+        state: {
+          stage: {
+            level: 3,
+          },
+          effects: ["boost", "shield"],
+        },
+      },
+    });
+
+    const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
+    expect(gameInfoRow?.value).toBeUndefined();
+    const gameInfoHtml = renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent));
+    expect(gameInfoHtml).toContain("<details");
+    expect(gameInfoHtml).toContain("<summary");
+    expect(gameInfoHtml).toContain("effects");
+    expect(gameInfoHtml).toContain("(2)");
   });
 
   it("formats nested objects and empty collections in structured display", () => {

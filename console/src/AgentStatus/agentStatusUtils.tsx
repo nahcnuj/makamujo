@@ -212,7 +212,7 @@ export const createLiveDeliveryMetricsValueComponent = (
   niconamaState: AgentStateResponse["niconama"],
 ): ReactNode => {
   const liveMetricItems = [
-    { label: "状態", value: formatStateLabel(niconamaState?.type) },
+    { label: "配信状況", value: formatStateLabel(niconamaState?.type) },
     { label: "視聴者数", value: formatMetricValue(niconamaState?.meta?.total?.listeners) },
     { label: "コメント数", value: formatMetricValue(niconamaState?.meta?.total?.comments) },
     { label: "ギフト", value: formatMetricValue(niconamaState?.meta?.total?.gift) },
@@ -220,19 +220,21 @@ export const createLiveDeliveryMetricsValueComponent = (
   ];
 
   return (
-    <div className="rounded-md border border-emerald-300/30 p-2">
-      <div className="grid grid-cols-5 gap-x-2 gap-y-1">
-        {liveMetricItems.map((liveMetricItem) => (
-          <p key={liveMetricItem.label} className="font-bold text-center whitespace-nowrap">
-            {liveMetricItem.label}
-          </p>
-        ))}
-        {liveMetricItems.map((liveMetricItem) => (
-          <p key={`${liveMetricItem.label}-value`} className="text-center whitespace-nowrap">
-            {liveMetricItem.value}
-          </p>
-        ))}
-      </div>
+    <div className="grid grid-cols-5 gap-x-2 gap-y-1">
+      {liveMetricItems.map((liveMetricItem, index) => (
+        <div key={`label-${liveMetricItem.label}`} className="text-center whitespace-nowrap">
+          {index === 0 ? (
+            <h3 className="font-bold">{liveMetricItem.label}</h3>
+          ) : (
+            <span className="font-bold">{liveMetricItem.label}</span>
+          )}
+        </div>
+      ))}
+      {liveMetricItems.map((liveMetricItem) => (
+        <p key={`value-${liveMetricItem.label}`} className="text-center whitespace-nowrap">
+          {liveMetricItem.value}
+        </p>
+      ))}
     </div>
   );
 };
@@ -289,10 +291,20 @@ const renderCurrentGameStateValueComponent = (
           if (stateValue !== null && typeof stateValue === "object") {
             return (
               <li key={stateKey}>
-                <div className="font-semibold">{stateKey}</div>
-                <div className="pl-4 border-l border-emerald-300/40">
-                  {renderCurrentGameStateValueComponent(stateValue, visitedObjects)}
-                </div>
+                <details className="group rounded-md border border-emerald-300/40 p-2">
+                  <summary className="flex items-center gap-2 font-semibold cursor-pointer list-none">
+                    <span aria-hidden="true" className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-slate-500">
+                      ▶
+                    </span>
+                    <span>{stateKey}</span>
+                    {Array.isArray(stateValue) ? (
+                      <span className="text-sm italic text-slate-500">({stateValue.length})</span>
+                    ) : null}
+                  </summary>
+                  <div className="pl-4 border-l border-emerald-300/40 mt-2">
+                    {renderCurrentGameStateValueComponent(stateValue, visitedObjects)}
+                  </div>
+                </details>
               </li>
             );
           }

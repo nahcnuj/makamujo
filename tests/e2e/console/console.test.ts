@@ -185,6 +185,8 @@ test.describe("console", () => {
   });
 
   test("renders the console app in a browser", async ({ page }) => {
+    const viewport = { width: 1280, height: 1000 };
+    await page.setViewportSize(viewport);
     // Load the console in mock mode so the UI renders deterministic agent
     // state without relying on the server or WebSocket timing.
     await page.goto(`${CONSOLE_BASE_URL}/console/?agentStateMock=1`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
@@ -211,7 +213,13 @@ test.describe("console", () => {
     await expect(detailsLocator).toContainText("4-gram");
     await expect(page.getByRole("heading", { level: 3, name: "配信状況" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 3, name: "マルコフ連鎖モデル" })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 3, name: "『org.dashnet.orteil/cookieclicker』プレイ中" })).toBeVisible();
+    const gameHeading = page.getByRole("heading", { level: 3, name: "『org.dashnet.orteil/cookieclicker』プレイ中" });
+    await expect(gameHeading).toBeVisible();
+    const gameHeadingBoundingBox = await gameHeading.boundingBox();
+    expect(gameHeadingBoundingBox).not.toBeNull();
+    if (gameHeadingBoundingBox) {
+      expect(gameHeadingBoundingBox.y + gameHeadingBoundingBox.height).toBeLessThanOrEqual(viewport.height);
+    }
 
     const agentStatusDetails = page.getByTestId("agent-status-details");
     const initialAgentStatusDetailsBoundingBox = await agentStatusDetails.boundingBox();
