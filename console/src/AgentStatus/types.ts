@@ -32,7 +32,6 @@ export type AgentStateResponse = {
         listeners?: number
         gift?: number
         ad?: number
-        comments?: number
       }
     }
   }
@@ -54,4 +53,5 @@ export type AgentStateResponse = {
     nGramRaw?: number
     nodes?: readonly string[]
   }>
+  commentCount?: number
 };

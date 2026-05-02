@@ -235,6 +235,7 @@ const getCurrentStreamPayload = () => {
     nGramRaw: base.nGramRaw ?? streamer.currentNGramSizeRaw,
     speech: base.speech ?? agent.getSpeech(),
     speechHistory: base.speechHistory ?? generatedSpeechHistory,
+    commentCount: base.commentCount ?? streamer.streamState?.meta?.total?.comments,
   } as const;
 };
 
@@ -375,6 +376,7 @@ const server = serve({
           return Response.json({}, { status: 500 });
         }
         agent.postComments(comments);
+        broadcastCurrentPayload('onComment');
 
         if (modelFile) {
           try {
@@ -402,26 +404,7 @@ const server = serve({
 
     '/api/meta': {
       GET: () => {
-        // Prefer the last published stream state when present (tests POST to
-        // /api/meta). If no published state exists, fall back to the external
-        // agent's in-memory state so normal runtime still works.
-        const agentStreamState = agent.getStreamState?.();
-        const streamState = (lastPublishedStreamState === undefined || lastPublishedStreamState === null)
-          ? agentStreamState
-          : lastPublishedStreamState;
-        // console.log('[INFO] GET /api/meta ->', JSON.stringify(streamState));
-        const base = streamState && typeof streamState === 'object' ? (streamState as any) : {};
-        const responsePayload = {
-          niconama: base.niconama ?? {},
-          canSpeak: base.canSpeak ?? streamer.canSpeak,
-          currentGame: base.currentGame ?? streamer.currentGame ?? null,
-          nGram: base.nGram ?? streamer.currentNGramSize,
-          nGramRaw: base.nGramRaw ?? streamer.currentNGramSizeRaw,
-          speech: base.speech ?? agent.getSpeech(),
-          speechHistory: base.speechHistory ?? generatedSpeechHistory,
-        } as const;
-        // console.log('[INFO] GET /api/meta response ->', JSON.stringify(responsePayload));
-        return Response.json(responsePayload);
+        return Response.json(getCurrentStreamPayload());
       },
       POST: async (req) => {
         try {
@@ -436,6 +419,16 @@ const server = serve({
           let published: unknown = body;
           if (published && typeof published === 'object' && !('type' in published) && 'data' in published) {
             published = (published as any).data;
+          }
+
+          // Forward the raw stream state payload to the streamer so it can
+          // update its internal state (program URL, comment counter, etc.).
+          // This must happen before normalisation so the streamer receives the
+          // original niconama payload format it understands.
+          try {
+            agent.publishStreamState?.(published);
+          } catch (err) {
+            console.warn('[WARN] failed to forward stream state to streamer:', err instanceof Error ? err.message : String(err));
           }
 
           // Normalize any published stream state into the internal shape expected by
