@@ -276,6 +276,32 @@ describe("createAgentStatusRows", () => {
     expect(rows).not.toContainEqual({ label: "発話内容", value: "発話テキスト" });
   });
 
+  it("does not show 発話内容 when speech.silent is true even if canSpeak is false", () => {
+    const rows = createAgentStatusRows({ canSpeak: false, speech: { speech: "前回の発話", silent: true } });
+    expect(rows).not.toContainEqual(expect.objectContaining({ label: "発話内容" }));
+  });
+
+  it("does not show 発話内容 when speech.silent is true even if canSpeak is true", () => {
+    const rows = createAgentStatusRows({ canSpeak: true, speech: { speech: "前回の発話", silent: true } });
+    expect(rows).not.toContainEqual(expect.objectContaining({ label: "発話内容" }));
+  });
+
+  it("does not emphasize latest speech history item when speech.silent is true", () => {
+    const speechHistory = [
+      { id: "history-1", speech: "最新発話", nGram: 4, nGramRaw: 4 },
+      { id: "history-2", speech: "前の発話", nGram: 3, nGramRaw: 3 },
+    ];
+    const rowsWhenSilent = createAgentStatusRows({ canSpeak: false, speech: { speech: "最新発話", silent: true }, speechHistory });
+    const speechHistoryRowWhenSilent = rowsWhenSilent.find((row) => row.label === "これまでの発話");
+    const htmlWhenSilent = renderToStaticMarkup(createElement(Fragment, null, speechHistoryRowWhenSilent?.valueComponent));
+    expect(htmlWhenSilent).not.toContain("border-b-emerald-300/80");
+
+    const rowsWhenNotSilent = createAgentStatusRows({ canSpeak: true, speech: { speech: "最新発話", silent: false }, speechHistory });
+    const speechHistoryRowWhenNotSilent = rowsWhenNotSilent.find((row) => row.label === "これまでの発話");
+    const htmlWhenNotSilent = renderToStaticMarkup(createElement(Fragment, null, speechHistoryRowWhenNotSilent?.valueComponent));
+    expect(htmlWhenNotSilent).toContain("border-b-emerald-300/80");
+  });
+
   it("formats n-gram row with fallback for invalid numbers", () => {
     expect(createAgentStatusRows({ nGram: Infinity })).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "生成N-gram", value: "-" }),

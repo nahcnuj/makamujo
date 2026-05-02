@@ -41,12 +41,14 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
     });
   }
 
+  const isSpeechSilent = stateResponse?.speech?.silent === true;
+
   const speechHistoryItems = createSpeechHistoryDisplayItems(stateResponse?.speechHistory);
   if (speechHistoryItems.length > 0) {
     rows.push({
       label: "これまでの発話",
       hideLabel: true,
-      valueComponent: createSpeechHistoryValueComponent(stateResponse?.speechHistory),
+      valueComponent: createSpeechHistoryValueComponent(stateResponse?.speechHistory, !isSpeechSilent),
     });
   }
 
@@ -55,10 +57,12 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
     || (normalizedSpeechText !== undefined && speechHistoryItems.length === 0)
     || (normalizedSpeechText !== undefined && speechHistoryItems[0]?.speechText !== normalizedSpeechText);
 
-  if (stateResponse?.canSpeak === false) {
-    rows.push({ label: "発話内容", value: getSpeechUnavailableIndicator() });
-  } else if (normalizedSpeechText !== undefined && shouldRenderSpeechContent) {
-    rows.push({ label: "発話内容", value: normalizedSpeechText });
+  if (!isSpeechSilent) {
+    if (stateResponse?.canSpeak === false) {
+      rows.push({ label: "発話内容", value: getSpeechUnavailableIndicator() });
+    } else if (normalizedSpeechText !== undefined && shouldRenderSpeechContent) {
+      rows.push({ label: "発話内容", value: normalizedSpeechText });
+    }
   }
 
   return rows;
