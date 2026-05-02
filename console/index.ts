@@ -36,6 +36,10 @@ export function createAccessDeniedRedirectResponse(requestURL: URL): Response {
   });
 }
 
+export function isConsoleIPRestrictionEnabled(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
 export function createLoopbackProxyHeaders(originalHeaders: Headers): Headers {
   const headers = new Headers(originalHeaders);
   // Save Connection header value before removing it, so we can strip RFC 7230 tokens after.
@@ -77,9 +81,26 @@ export function createLoopbackProxyHeaders(originalHeaders: Headers): Headers {
  * @param keyPath  - Path to the TLS private key file. Defaults to the `CONSOLE_TLS_KEY` env var.
  * @returns A handle with the outer server's URL and a unified `stop()` method.
  */
-export function startConsoleServer(certPath: string = consoleCertPath, keyPath: string = consoleKeyPath): ConsoleServer {
+export type StartConsoleServerOptions = {
+  certPath?: string;
+  keyPath?: string;
+  broadcastingHost?: string;
+  broadcastingPort?: number | string;
+};
+
+export function startConsoleServer({
+  certPath = consoleCertPath,
+  keyPath = consoleKeyPath,
+  broadcastingHost = process.env.BROADCASTING_HOST ?? 'localhost',
+  broadcastingPort = process.env.BROADCASTING_PORT ?? '7777',
+}: StartConsoleServerOptions = {}): ConsoleServer {
   const accessLogger = createDailyRotatingJsonLogger(consoleAccessLogPath);
   const errorLogger = createDailyRotatingJsonLogger(consoleErrorLogPath);
+
+  // Configure the console loopback proxy to route requests to the current
+  // broadcasting server. This avoids relying on an external BROADCASTING_PORT
+  // environment variable in development.
+  consoleRoutes.setBroadcastingTarget(broadcastingHost, broadcastingPort);
 
   // Loopback console server: binds to 127.0.0.1 only and serves all console routes
   // (including HTML bundling). Not exposed to the public network.
@@ -133,7 +154,8 @@ export function startConsoleServer(certPath: string = consoleCertPath, keyPath: 
         const ip = server.requestIP(req);
         const clientIpAddress = ip ? `${ip.family}/${ip.address}` : 'unknown';
         let statusCode = 500;
-        if (!ip || !AllowedIP.equals(ip)) {
+        const consoleIpRestrictionEnabled = isConsoleIPRestrictionEnabled();
+        if (consoleIpRestrictionEnabled && (!ip || !AllowedIP.equals(ip))) {
           const redirectResponse = createAccessDeniedRedirectResponse(requestURL);
           statusCode = redirectResponse.status;
           errorLogger.write({

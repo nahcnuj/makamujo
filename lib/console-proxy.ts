@@ -142,13 +142,21 @@ export function forwardSSEEventsToSink(upstreamBody: any, sink: (data: string) =
   };
 }
 
+let BROADCASTING_HOST = process.env.BROADCASTING_HOST ?? 'localhost';
+let BROADCASTING_PORT = process.env.BROADCASTING_PORT ?? '7777';
+
+export function setBroadcastingTarget(host: string, port: string | number) {
+  BROADCASTING_HOST = host;
+  BROADCASTING_PORT = String(port);
+}
+
 export function buildProxyHeaders(req: Request, proxyBase: string) {
   const proxyHeaders = new Headers(req.headers);
   try {
     const proxyBaseHost = new URL(proxyBase).host;
     proxyHeaders.set('host', proxyBaseHost);
   } catch {
-    proxyHeaders.set('host', `${process.env.BROADCASTING_HOST ?? 'localhost'}:${process.env.BROADCASTING_PORT ?? '7777'}`);
+    proxyHeaders.set('host', `${BROADCASTING_HOST}:${BROADCASTING_PORT}`);
   }
   proxyHeaders.delete('origin');
   proxyHeaders.delete('referer');
@@ -157,8 +165,6 @@ export function buildProxyHeaders(req: Request, proxyBase: string) {
 }
 
 export function computeProxyBase(req: Request) {
-  const BROADCASTING_HOST = process.env.BROADCASTING_HOST ?? 'localhost';
-  const BROADCASTING_PORT = process.env.BROADCASTING_PORT ?? '7777';
   let proxyBase = `http://${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
   try {
     const incomingHost = req.headers.get('host') ?? '';
@@ -173,8 +179,6 @@ export function computeProxyBase(req: Request) {
 export function computeProxyUrl(req: Request, proxyBase: string) {
   let parsed: URL;
   try { parsed = new URL(req.url); } catch (err) {
-    const BROADCASTING_HOST = process.env.BROADCASTING_HOST ?? 'localhost';
-    const BROADCASTING_PORT = process.env.BROADCASTING_PORT ?? '7777';
     const hostForParse = req.headers.get('host') ?? `${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
     parsed = new URL(req.url, `http://${hostForParse}`);
   }

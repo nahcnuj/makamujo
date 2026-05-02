@@ -539,11 +539,12 @@ console.log(`🚀 Server running at ${server.url}`);
 
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 try {
-  consoleServer = startConsoleServer();
+  consoleServer = startConsoleServer({ broadcastingHost: '127.0.0.1', broadcastingPort: server.port });
   console.log(`🚀 Console running at ${consoleServer.url}`);
 } catch (err) {
   const consoleStartupError = err instanceof Error ? (err.stack ?? err.message) : String(err);
   console.error(`[ERROR] CONSOLE_STARTUP_FAILED ${JSON.stringify(consoleStartupError)}`);
+  process.exit(1);
 }
 
 // Start the stream playback after servers are listening so startup is

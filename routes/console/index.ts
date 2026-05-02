@@ -4,15 +4,14 @@ import {
   computeProxyUrl,
   proxyConsoleApiWsRequest,
   proxyConsoleUpgrade,
+  setBroadcastingTarget,
 } from "../../lib/console-proxy";
+export { setBroadcastingTarget } from "../../lib/console-proxy";
 import App from "../../console/src/index.html";
 import * as agentState from "./api/agent-state";
 import robotsTxt from "./robots.txt";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-
-const BROADCASTING_HOST = process.env.BROADCASTING_HOST ?? 'localhost';
-const BROADCASTING_PORT = process.env.BROADCASTING_PORT ?? '7777';
 
 const CONSOLE_BUILD_PATH = process.env.CONSOLE_BUILD_PATH ?? resolve(process.cwd(), 'var/console/build');
 const CONSOLE_SOURCE_HTML_PATH = resolve(process.cwd(), 'console/src/index.html');

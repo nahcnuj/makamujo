@@ -2,12 +2,12 @@ import { test, expect } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createLoopbackProxyHeaders, consoleBasePath, consoleRedirectURL, createAccessDeniedRedirectResponse, startConsoleServer } from "../../../console/index";
+import { createLoopbackProxyHeaders, consoleBasePath, consoleRedirectURL, createAccessDeniedRedirectResponse, isConsoleIPRestrictionEnabled, startConsoleServer } from "../../../console/index";
 
 test("throws when TLS certificate file is missing", () => {
   const tmpDir = mkdtempSync(join(tmpdir(), 'console-test-'));
   try {
-    expect(() => startConsoleServer(join(tmpDir, 'nonexistent-cert.pem'), join(tmpDir, 'nonexistent-key.pem')))
+    expect(() => startConsoleServer({ certPath: join(tmpDir, 'nonexistent-cert.pem'), keyPath: join(tmpDir, 'nonexistent-key.pem') }))
       .toThrow('TLS certificate files not found');
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
@@ -20,7 +20,7 @@ test("throws when TLS certificate file exists but key file is missing", () => {
   writeFileSync(certFilePath, 'placeholder');
 
   try {
-    expect(() => startConsoleServer(certFilePath, join(tmpDir, 'nonexistent-key.pem')))
+    expect(() => startConsoleServer({ certPath: certFilePath, keyPath: join(tmpDir, 'nonexistent-key.pem') }))
       .toThrow('TLS certificate files not found');
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
@@ -84,4 +84,27 @@ test("strips headers named in Connection header value (RFC 7230)", () => {
   expect(headers.get('x-custom-hop')).toBeNull();
   expect(headers.get('another-hop')).toBeNull();
   expect(headers.get('x-preserved')).toBe('preserved');
+});
+
+test("disables console IP restriction in development mode", () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = undefined;
+    expect(isConsoleIPRestrictionEnabled()).toBe(false);
+
+    process.env.NODE_ENV = 'development';
+    expect(isConsoleIPRestrictionEnabled()).toBe(false);
+  } finally {
+    process.env.NODE_ENV = originalNodeEnv;
+  }
+});
+
+test("enables console IP restriction in production mode", () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = 'production';
+    expect(isConsoleIPRestrictionEnabled()).toBe(true);
+  } finally {
+    process.env.NODE_ENV = originalNodeEnv;
+  }
 });
