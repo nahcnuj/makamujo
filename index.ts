@@ -227,31 +227,15 @@ const getCurrentStreamPayload = () => {
     : lastPublishedStreamState;
   const normalizedStreamState = normalizePublishedStreamState(streamState);
   const base = normalizedStreamState && typeof normalizedStreamState === 'object' ? (normalizedStreamState as any) : {};
-  // Overlay the in-memory comment count maintained by the streamer into the
-  // niconama payload. The published stream state from onecomme does not carry a
-  // comment count, so we inject it from the MakaMujo instance that tracks it.
-  const baseNiconama = base.niconama ?? {};
-  const streamerComments = streamer.streamState?.meta?.total?.comments;
-  const niconama = streamerComments !== undefined && baseNiconama.meta
-    ? {
-        ...baseNiconama,
-        meta: {
-          ...baseNiconama.meta,
-          total: {
-            ...baseNiconama.meta.total,
-            comments: streamerComments,
-          },
-        },
-      }
-    : baseNiconama;
   return {
-    niconama,
+    niconama: base.niconama ?? {},
     canSpeak: base.canSpeak ?? streamer.canSpeak,
     currentGame: base.currentGame ?? streamer.currentGame ?? null,
     nGram: base.nGram ?? streamer.currentNGramSize,
     nGramRaw: base.nGramRaw ?? streamer.currentNGramSizeRaw,
     speech: base.speech ?? agent.getSpeech(),
     speechHistory: base.speechHistory ?? generatedSpeechHistory,
+    commentCount: base.commentCount ?? streamer.streamState?.meta?.total?.comments,
   } as const;
 };
 

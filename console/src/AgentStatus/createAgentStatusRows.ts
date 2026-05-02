@@ -16,7 +16,7 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
   const niconamaState = stateResponse?.niconama;
   if (niconamaState && Object.keys(niconamaState).length > 0) {
     rows.push(
-      { label: "配信指標", hideLabel: true, valueComponent: createLiveDeliveryMetricsValueComponent(niconamaState) },
+      { label: "配信指標", hideLabel: true, valueComponent: createLiveDeliveryMetricsValueComponent(niconamaState, stateResponse?.commentCount) },
     );
   }
 

@@ -13,10 +13,10 @@ export const AGENT_STATE_RESPONSE_MOCK_FIXTURE = {
         listeners: 123,
         gift: 456,
         ad: 789,
-        comments: 321,
       },
     },
   },
+  commentCount: 321,
   canSpeak: true,
   currentGame: {
     name: "org.dashnet.orteil/cookieclicker",
@@ -63,10 +63,10 @@ export const cloneAgentStateResponseMockFixture = () => ({
         listeners: AGENT_STATE_RESPONSE_MOCK_FIXTURE.niconama.meta.total.listeners,
         gift: AGENT_STATE_RESPONSE_MOCK_FIXTURE.niconama.meta.total.gift,
         ad: AGENT_STATE_RESPONSE_MOCK_FIXTURE.niconama.meta.total.ad,
-        comments: AGENT_STATE_RESPONSE_MOCK_FIXTURE.niconama.meta.total.comments,
       },
     },
   },
+  commentCount: AGENT_STATE_RESPONSE_MOCK_FIXTURE.commentCount,
   canSpeak: AGENT_STATE_RESPONSE_MOCK_FIXTURE.canSpeak,
   currentGame: {
     name: AGENT_STATE_RESPONSE_MOCK_FIXTURE.currentGame.name,

@@ -171,11 +171,11 @@ test("comment count in /api/meta reflects PUT comments after POST /api/meta stre
       body: streamStateBody,
     });
     initialMeta = await (await fetch(`${BROADCASTING_BASE_URL}/api/meta`)).json();
-    if (initialMeta.niconama?.meta?.total?.comments === 0) break;
+    if (initialMeta.niconama?.meta?.total?.comments === 0 || initialMeta.commentCount === 0) break;
     await new Promise(r => setTimeout(r, 100));
   }
   // Verify the initial comment count is 0 (streamer is now tracking the program).
-  expect(initialMeta.niconama?.meta?.total?.comments).toBe(0);
+  expect(initialMeta.commentCount).toBe(0);
 
   // Send a user comment (no > 0 counts as a user comment).
   await fetch(`${BROADCASTING_BASE_URL}/`, {
@@ -186,5 +186,5 @@ test("comment count in /api/meta reflects PUT comments after POST /api/meta stre
 
   // The comment count should now be 1.
   const updatedMeta = await (await fetch(`${BROADCASTING_BASE_URL}/api/meta`)).json() as any;
-  expect(updatedMeta.niconama?.meta?.total?.comments).toBe(1);
+  expect(updatedMeta.commentCount).toBe(1);
 });

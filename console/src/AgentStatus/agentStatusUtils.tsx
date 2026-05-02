@@ -210,11 +210,12 @@ export const createSpeechHistoryValueComponent = (
 
 export const createLiveDeliveryMetricsValueComponent = (
   niconamaState: AgentStateResponse["niconama"],
+  commentCount: AgentStateResponse["commentCount"],
 ): ReactNode => {
   const liveMetricItems = [
     { label: "配信状況", value: formatStateLabel(niconamaState?.type) },
     { label: "視聴者数", value: formatMetricValue(niconamaState?.meta?.total?.listeners) },
-    { label: "コメント数", value: formatMetricValue(niconamaState?.meta?.total?.comments) },
+    { label: "コメント数", value: formatMetricValue(commentCount) },
     { label: "ギフト", value: formatMetricValue(niconamaState?.meta?.total?.gift) },
     { label: "広告", value: formatMetricValue(niconamaState?.meta?.total?.ad) },
   ];

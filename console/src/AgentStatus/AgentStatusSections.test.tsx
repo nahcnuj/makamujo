@@ -37,12 +37,12 @@ describe("AgentStatusSections", () => {
         meta: {
           total: {
             listeners: 123,
-            comments: 0,
             gift: 5,
             ad: 1,
           },
         },
       },
+      commentCount: 0,
     };
 
     const rows = createAgentStatusRows(state);
@@ -120,9 +120,10 @@ describe("AgentStatusSections", () => {
       niconama: {
         type: "live",
         meta: {
-          total: { listeners: 10, comments: 1, gift: 2, ad: 3 },
+          total: { listeners: 10, gift: 2, ad: 3 },
         },
       },
+      commentCount: 1,
     });
     const liveDeliveryRow = rows[0];
     if (!liveDeliveryRow) {
