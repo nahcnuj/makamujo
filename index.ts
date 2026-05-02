@@ -243,22 +243,20 @@ let agent: any = {
 })();
 // Keep only a recent window to avoid unbounded in-memory growth while keeping enough context for console operations.
 const GENERATED_SPEECH_HISTORY_MAX_LENGTH = 20;
-const generatedSpeechHistory: Array<{ id: string; speech: string; nGram?: number; nGramRaw?: number; nodes?: string[] }> = [];
+const generatedSpeechHistory: Array<{ id: string; speech: string; nGram: number; nGramRaw: number; nodes?: string[] }> = [];
 let generatedSpeechHistorySequence = 0;
 
 let clearSpeechTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
-streamer.onSpeech(async (event) => {
-  const speechText = normalizeSpeechText(event) ?? '';
-  const traceNodes = typeof event === 'object' && event !== null && Array.isArray((event as any).nodes) ? (event as any).nodes : undefined;
-  const nGram = typeof event === 'object' && event !== null && typeof (event as any).nGram === 'number' ? (event as any).nGram : streamer.currentNGramSize;
-  const nGramRaw = typeof event === 'object' && event !== null && typeof (event as any).nGramRaw === 'number' ? (event as any).nGramRaw : streamer.currentNGramSizeRaw;
+streamer.onSpeech(async (text) => {
+  const speechText = typeof text === 'string' ? text : text.text;
+  const traceNodes = typeof text === 'object' && text !== null ? text.nodes : undefined;
   generatedSpeechHistorySequence += 1;
   generatedSpeechHistory.unshift({
     id: `speech-${generatedSpeechHistorySequence}`,
     speech: speechText,
-    nGram,
-    nGramRaw,
+    nGram: streamer.currentNGramSize,
+    nGramRaw: streamer.currentNGramSizeRaw,
     nodes: traceNodes,
   });
   if (generatedSpeechHistory.length > GENERATED_SPEECH_HISTORY_MAX_LENGTH) {
