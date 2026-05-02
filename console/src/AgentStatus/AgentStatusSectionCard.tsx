@@ -18,7 +18,10 @@ export const AgentStatusSectionCard = ({ title, titleRightElement, rows }: Agent
             <div className="text-base whitespace-nowrap">{titleRightElement}</div>
           ) : null}
         </div>
-        <dl className="min-h-0 flex-1 grid content-start items-start grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 overflow-y-auto pr-1">
+        <dl
+          className="min-h-0 flex-1 grid content-start items-start grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 overflow-y-auto pr-1"
+          style={{ scrollbarWidth: "thin" }}
+        >
           {rows.map((row) => (
             <div
               key={`${title}:${row.label}:${"value" in row ? row.value : "value-component"}:${row.href ?? "-"}`}

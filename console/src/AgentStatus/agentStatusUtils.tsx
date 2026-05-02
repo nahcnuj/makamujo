@@ -153,7 +153,7 @@ export const createSpeechHistoryValueComponent = (
     return <span>-</span>;
   }
   return (
-    <ul className="grid grid-cols-1 gap-2">
+    <ul className="grid grid-cols-1 gap-2 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
       {speechHistoryItems.map((speechHistoryItem, index) => (
         <li
           key={speechHistoryItem.id}
