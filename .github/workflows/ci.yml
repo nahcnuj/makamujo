@@ -89,6 +89,9 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+      - name: Configure apt mirror (JAIST)
+        if: matrix.suite.label == 'e2e'
+        run: sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://ftp.jaist.ac.jp/pub/Linux/ubuntu|g' /etc/apt/sources.list
       - name: Allow binding to port 443 without root
         if: matrix.suite.label == 'e2e'
         run: sudo sysctl -w net.ipv4.ip_unprivileged_port_start=443
