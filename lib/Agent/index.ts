@@ -1,4 +1,4 @@
-import { Action, type State, type AgentComment } from "automated-gameplay-transmitter";
+import { Action, type AgentComment, type State } from "automated-gameplay-transmitter";
 import { writeFileSync } from "node:fs";
 import { createReceiver } from "../Browser/socket";
 import { ServerGames as Games, type GameName } from "./games/server";
@@ -6,10 +6,11 @@ import type { AgentState } from "./State";
 
 export const SILENCE_THRESHOLD_MS = 5 * 60 * 1_000; // 5 minutes
 
-const jaJP = new Intl.Locale('ja-JP');
 const N_GRAM_LOG_SCALE = 2;
 const N_GRAM_LOG_BASELINE = 2;
 const INITIAL_COMMENT_NUMBER = 1;
+
+const jaJP = new Intl.Locale('ja-JP');
 const pickTopic = (text: string) => {
   const words = Array.from(new Intl.Segmenter(jaJP, { granularity: 'word' }).segment(text)).map(({ segment }) => segment);
   const cands = words.reduce<string[]>((prev, s) => {
@@ -31,12 +32,19 @@ const inferNGramSize = (commentNumber: number): number => {
   return Math.max(1, Math.floor(inferNGramSizeRaw(commentNumber)));
 };
 
+type SpeechEvent = {
+  text: string;
+  nGram?: number;
+  nGramRaw?: number;
+  nodes?: string[];
+};
+
 export class MakaMujo {
   #talkModel: TalkModel;
   #tts: TTS;
 
   #speechPromise = Promise.resolve();
-  #speechListeners: Array<(text: TalkModelGenerateResult) => Promise<void>> = [];
+  #speechListeners: Array<(event: SpeechEvent) => Promise<void>> = [];
   #speechCompleteListeners: Array<() => Promise<void>> = [];
   #ttsErrorHandlers: Array<(text: string, err: unknown) => void> = [];
   #gameStateChangeListeners: Array<() => void> = [];
@@ -79,63 +87,73 @@ export class MakaMujo {
       createReceiver((state) => {
         // receiver callback is intentionally synchronous
         // and is expected to return an action for the solver.
-        
+
         // (implementation below)
-        
+
         // NOTE: the body of this function is unchanged.
-      this.#browserState = state;
-      console.debug('[DEBUG]', 'receiver got state', JSON.stringify(state, null, 0));
+        this.#browserState = state;
+        console.debug('[DEBUG]', 'receiver got state', JSON.stringify(state, null, 0));
 
-      if (state.name === 'closed') {
-        this.#playing = undefined;
-        this.#notifyGameStateChangeAsync();
-        return Action.noop;
-      }
-
-      if (state.name === 'idle') {
-        // console.debug('[DEBUG]', 'receiver idle state =', JSON.stringify(state.state, null, 0));
-        if (state.state) {
-          this.#playing = {
-            name,
-            state: {
-              ...this.#playing?.state ?? {},
-              ...state.state,
-            } as any,
-          };
+        if (state.name === 'closed') {
+          this.#playing = undefined;
           this.#notifyGameStateChangeAsync();
+          return Action.noop;
         }
-      }
 
-      const { done, value } = solver.next(state);
-      if (done) {
-        this.#playing = undefined;
-        this.#notifyGameStateChangeAsync();
-        return Action.noop;
-      }
-      console.debug('[DEBUG]', 'next action', JSON.stringify(value, null, 0));
-      console.debug('[DEBUG]', 'sending action', JSON.stringify(value, null, 0));
+        if (state.name === 'idle') {
+          // console.debug('[DEBUG]', 'receiver idle state =', JSON.stringify(state.state, null, 0));
+          if (state.state) {
+            this.#playing = {
+              name,
+              state: {
+                ...this.#playing?.state ?? {},
+                ...state.state,
+              } as any,
+            };
+            this.#notifyGameStateChangeAsync();
+          }
+        }
 
-      return value;
+        const { done, value } = solver.next(state);
+        if (done) {
+          this.#playing = undefined;
+          this.#notifyGameStateChangeAsync();
+          return Action.noop;
+        }
+        console.debug('[DEBUG]', 'next action', JSON.stringify(value, null, 0));
+        console.debug('[DEBUG]', 'sending action', JSON.stringify(value, null, 0));
+
+        return value;
       });
     } catch (err) {
       console.warn('[WARN]', 'failed to start IPC receiver, continuing without browser IPC:', err instanceof Error ? err.message : String(err));
     }
   }
 
-  async speech(text: TalkModelGenerateResult = this.#talkModel.generate('', this.#currentNGramSize)) {
+  async speech(text?: TalkModelGenerateResult) {
+    const event: SpeechEvent = typeof text === 'string' ? { text } : (() => {
+      const ret = this.#talkModel.generate('', this.#currentNGramSize);
+      return typeof ret === 'string' ? {
+        text: ret,
+      } : {
+        nGram: this.#currentNGramSize,
+        nGramRaw: this.#currentNGramSizeRaw,
+        ...ret,
+      };
+    })();
+
     // Queue speech work onto the internal chain. For empty text we avoid
     // calling the underlying TTS implementation (some TalkModel generators
     // return an empty string) but still notify speech listeners.
-    const speechText = typeof text === 'string' ? text : text.text;
-
     this.#speechPromise = this.#speechPromise.then(async () => {
       const tasks: Array<Promise<void>> = [
-        ...this.#speechListeners.map(f => f(text)),
+        ...this.#speechListeners.map(f => f(event)),
       ];
-      if (speechText.trim().length > 0) {
-        const ttsTask = this.#tts.speech(speechText, { additionalHalfTone: 3, speakingRate: 1.2 }).catch((err) => {
+      const trimmedText = event.text.trim();
+      if (trimmedText.length > 0) {
+        const ttsTask = this.#tts.speech(trimmedText, { additionalHalfTone: 3, speakingRate: 1.2 }).catch((err) => {
           for (const h of this.#ttsErrorHandlers) {
-            try { void h(speechText, err); } catch (_) { /* ignore handler errors */ }
+            try { void h(trimmedText, err); } catch (_) { /* ignore handler errors */ }
           }
           throw err;
         });
@@ -148,7 +166,7 @@ export class MakaMujo {
     await this.#speechPromise;
   }
 
-  onSpeech(cb: (text: TalkModelGenerateResult) => Promise<void>): MakaMujo {
+  onSpeech(cb: (event: SpeechEvent) => Promise<void>): MakaMujo {
     this.#speechListeners.push(cb);
     return this;
   }
@@ -172,7 +190,7 @@ export class MakaMujo {
     const listenersSnapshot = [...this.#gameStateChangeListeners];
     queueMicrotask(() => {
       for (const listener of listenersSnapshot) {
-        try { listener(); } catch {}
+        try { listener(); } catch { }
       }
     });
   }

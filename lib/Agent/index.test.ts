@@ -307,7 +307,9 @@ describe('speech completion hooks', () => {
 
     await agent.speech('hello');
 
-    expect(speechListener).toHaveBeenCalledWith('hello');
+    expect(speechListener).toHaveBeenCalledWith(expect.objectContaining({
+      text: 'hello',
+    }));
     expect(completeListener).toHaveBeenCalled();
   });
 });
