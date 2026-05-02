@@ -222,12 +222,9 @@ describe("createAgentStatusRows", () => {
     expect(gameInfoHtml).toContain("空の配列");
   });
 
-  it("shows currentGame as '-' when null", () => {
+  it("does not show detailed game state rows when currentGame is null", () => {
     const rows = createAgentStatusRows({ currentGame: null });
-    const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
-    expect(gameInfoRow?.value).toBeUndefined();
-    expect(gameInfoRow?.hideLabel).toBeTrue();
-    expect(renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent))).toContain("-");
+    expect(rows.find((row) => row.label === "ゲーム情報")).toBeUndefined();
   });
 
   it("falls back solver state row to '-' when currentGame.state is not serializable", () => {
@@ -360,17 +357,21 @@ describe("createAgentStatusSections", () => {
     expect(renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent))).toContain("status");
   });
 
-  it("returns only sections that have rows", () => {
+  it("includes a fallback game section even when only other sections have rows", () => {
     const sections = createAgentStatusSections({ nGram: 4 });
     expect(sections).toEqual([
       {
         title: "マルコフ連鎖モデル",
         rows: [expect.objectContaining({ label: "生成N-gram", value: "4-gram" })],
       },
+      {
+        title: "『-』プレイ中",
+        rows: [],
+      },
     ]);
   });
 
-  it("includes speech history row in markov model section", () => {
+  it("includes speech history row in markov model section and fallback game section", () => {
     const sections = createAgentStatusSections({
       speechHistory: [{ speech: "過去発話", nGram: 4, nGramRaw: 4 }],
     });
@@ -381,6 +382,10 @@ describe("createAgentStatusSections", () => {
           label: "これまでの発話",
           valueComponent: expect.anything(),
         })],
+      },
+      {
+        title: "『-』プレイ中",
+        rows: [],
       },
     ]);
   });
