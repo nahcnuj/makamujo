@@ -229,6 +229,7 @@ export function createResilientSseProxy(
   reconnectDelayMs = 500,
   keepaliveIntervalMs = 5_000,
 ): Response {
+  const debug = process.env.CONSOLE_PROXY_DEBUG === '1';
   let stopped = false;
   let abortController = new AbortController();
   let currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
