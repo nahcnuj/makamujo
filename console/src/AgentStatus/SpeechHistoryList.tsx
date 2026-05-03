@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { AgentStateResponse } from "./types";
 import { createSpeechHistoryDisplayItems } from "./agentStatusUtils";
 
@@ -19,6 +19,37 @@ type SpeechHistoryListProps = {
   emphasizeLatest: boolean;
 };
 
+type NewItemsButtonProps = {
+  count: number;
+  onClick: () => void;
+};
+
+const NewItemsButton = ({ count, onClick }: NewItemsButtonProps) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="sticky top-0 z-10 w-full mb-2 py-1 px-2 text-xs text-center bg-emerald-800/90 text-emerald-100 rounded border border-emerald-300/50 hover:bg-emerald-700/90 cursor-pointer"
+  >
+    ↑ 新しい発話が {count} 件あります
+  </button>
+);
+
+const UndoLearningButton = () => (
+  <button
+    type="button"
+    disabled
+    aria-label="学習の取り消し"
+    title="学習の取り消し"
+    className="inline-flex items-center justify-center h-7 min-w-[2rem] rounded-md border border-emerald-300/50 bg-emerald-950/20 px-2 text-sm text-emerald-200 opacity-70 cursor-not-allowed shadow-sm shadow-black/20"
+    style={{
+      fontFamily: "ui-sans-serif, system-ui, sans-serif",
+      fontVariantEmoji: "text",
+    }}
+  >
+    ↩
+  </button>
+);
+
 /**
  * Renders the speech history list with infinite scroll support.
  *
@@ -37,9 +68,61 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHisto
 
   const isAtTopRef = useRef(true);
   const prevFirstItemIdRef = useRef<string | undefined>(initialItems[0]?.id);
+  // Synchronous in-flight guard to prevent concurrent fetches when the
+  // IntersectionObserver fires multiple times before React flushes setIsLoadingMore.
+  const isFetchingRef = useRef(false);
 
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const bottomSentinelRef = useRef<HTMLDivElement>(null);
+  // Reference to the nearest scrollable ancestor; found once on mount.
+  const scrollContainerRef = useRef<Element | null>(null);
+  // scrollHeight of the scroll container from the most recent layout — used to
+  // compute the height delta when new SSE items are prepended at the top.
+  const prevScrollHeightRef = useRef(0);
+
+  // Find and cache the nearest scrollable ancestor once after mount.
+  // Also seed prevScrollHeightRef so the first SSE update has a valid baseline.
+  useLayoutEffect(() => {
+    let node: Element | null = topSentinelRef.current?.parentElement ?? null;
+    while (node) {
+      const overflowY = window.getComputedStyle(node).overflowY;
+      if (overflowY === "auto" || overflowY === "scroll") {
+        scrollContainerRef.current = node;
+        break;
+      }
+      node = node.parentElement;
+    }
+    prevScrollHeightRef.current = scrollContainerRef.current?.scrollHeight ?? 0;
+  }, []);
+
+  // Restore the scroll position when SSE prepends new items at the top while
+  // the user is scrolled away from the top.
+  //
+  // Strategy: `prevScrollHeightRef` stores the scrollHeight captured at the END
+  // of the previous layout — i.e., BEFORE the current DOM mutation. After React
+  // commits the new DOM, we compute:
+  //   delta = newScrollHeight − oldScrollHeight
+  // and add delta to scrollTop so the currently-visible content stays in place.
+  // We then store the new scrollHeight for the next update.
+  //
+  // This avoids reading DOM during render (which is unsafe in React 18 concurrent
+  // mode) and is equivalent to the browser's native overflow-anchor behaviour.
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+
+    if (!container || isAtTopRef.current) {
+      // User is at the top: no anchoring needed; just refresh the baseline.
+      prevScrollHeightRef.current = container?.scrollHeight ?? prevScrollHeightRef.current;
+      return;
+    }
+
+    // delta > 0 means items were prepended (scrollHeight grew without scrollTop changing).
+    const delta = container.scrollHeight - prevScrollHeightRef.current;
+    if (delta > 0) {
+      container.scrollTop += delta;
+    }
+    prevScrollHeightRef.current = container.scrollHeight;
+  }, [initialItems]);
 
   // Track whether the top of the speech history list is visible in the viewport.
   // When the user scrolls the containing <dl> card downward, the top sentinel
@@ -77,11 +160,17 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHisto
   // Fetch older items via the pagination API.
   // Using a ref so the IntersectionObserver callback always calls the latest closure.
   const fetchMoreItems = async () => {
-    if (isLoadingMore || !hasMore) return;
+    // Synchronous ref guard prevents concurrent fetches when the observer fires
+    // multiple times before React processes setIsLoadingMore(true).
+    if (isFetchingRef.current || !hasMore) return;
+    isFetchingRef.current = true;
 
     const allItems = [...initialItems, ...olderItems];
     const oldestItem = allItems[allItems.length - 1];
-    if (!oldestItem) return;
+    if (!oldestItem) {
+      isFetchingRef.current = false;
+      return;
+    }
 
     setIsLoadingMore(true);
     try {
@@ -99,6 +188,7 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHisto
     } catch {
       // Ignore transient fetch errors; the user can scroll again to retry.
     } finally {
+      isFetchingRef.current = false;
       setIsLoadingMore(false);
     }
   };
@@ -124,15 +214,9 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHisto
   }, []);
 
   const handleScrollToTop = useCallback(() => {
-    // Walk up the DOM to find the nearest scrollable ancestor and scroll it to the top.
-    let node: Element | null = topSentinelRef.current?.parentElement ?? null;
-    while (node) {
-      const overflowY = window.getComputedStyle(node).overflowY;
-      if (overflowY === "auto" || overflowY === "scroll") {
-        node.scrollTo({ top: 0, behavior: "smooth" });
-        break;
-      }
-      node = node.parentElement;
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.scrollTo({ top: 0, behavior: "smooth" });
     }
     setPendingNewCount(0);
   }, []);
@@ -148,13 +232,7 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHisto
   return (
     <div className="relative">
       {pendingNewCount > 0 ? (
-        <button
-          type="button"
-          onClick={handleScrollToTop}
-          className="sticky top-0 z-10 w-full mb-2 py-1 px-2 text-xs text-center bg-emerald-800/90 text-emerald-100 rounded border border-emerald-300/50 hover:bg-emerald-700/90 cursor-pointer"
-        >
-          ↑ 新しい発話が {pendingNewCount} 件あります
-        </button>
+        <NewItemsButton count={pendingNewCount} onClick={handleScrollToTop} />
       ) : null}
       <div ref={topSentinelRef} aria-hidden="true" className="h-0" />
       <ul className="grid grid-cols-1 gap-2" style={{ scrollbarWidth: "thin" }}>
@@ -192,19 +270,7 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHisto
                   ))}
               </div>
               <span className="text-xs whitespace-nowrap">{speechHistoryItem.nGramLabel}</span>
-              <button
-                type="button"
-                disabled
-                aria-label="学習の取り消し"
-                title="学習の取り消し"
-                className="inline-flex items-center justify-center h-7 min-w-[2rem] rounded-md border border-emerald-300/50 bg-emerald-950/20 px-2 text-sm text-emerald-200 opacity-70 cursor-not-allowed shadow-sm shadow-black/20"
-                style={{
-                  fontFamily: "ui-sans-serif, system-ui, sans-serif",
-                  fontVariantEmoji: "text",
-                }}
-              >
-                ↩
-              </button>
+              <UndoLearningButton />
             </div>
           </li>
         ))}
@@ -218,3 +284,4 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHisto
     </div>
   );
 };
+

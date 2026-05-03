@@ -13,6 +13,8 @@ import { parseArgs } from "node:util";
 import { startConsoleServer } from "./console/index";
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import * as index from "./routes/index";
+import * as speechHistoryRoute from "./routes/api/speech-history";
+import type { SpeechHistoryEntry } from "./routes/api/speech-history";
 import App from "./src/index.html";
 import { handleCatchAll } from "./src/catchAll";
 import robotsTxt from "./routes/console/robots.txt";
@@ -238,7 +240,7 @@ const getCurrentStreamPayload = () => {
     nGram: base.nGram ?? streamer.currentNGramSize,
     nGramRaw: base.nGramRaw ?? streamer.currentNGramSizeRaw,
     speech: base.speech ?? agent.getSpeech(),
-    speechHistory: (base.speechHistory ?? generatedSpeechHistory).slice(0, GENERATED_SPEECH_HISTORY_SSE_SIZE),
+    speechHistory: (Array.isArray(base.speechHistory) ? base.speechHistory : generatedSpeechHistory).slice(0, GENERATED_SPEECH_HISTORY_SSE_SIZE),
     replyTargetComment,
     commentCount: base.commentCount ?? streamer.streamState?.meta?.total?.comments,
   } as const;
@@ -297,8 +299,11 @@ let agent: any = {
 // Keep a larger buffer in memory for pagination while limiting the SSE payload size.
 const GENERATED_SPEECH_HISTORY_BUFFER_SIZE = 200;
 const GENERATED_SPEECH_HISTORY_SSE_SIZE = 20;
-const generatedSpeechHistory: Array<{ id: string; speech: string; nGram?: number; nGramRaw?: number; nodes?: string[] }> = [];
+const generatedSpeechHistory: SpeechHistoryEntry[] = [];
 let generatedSpeechHistorySequence = 0;
+
+// Bind the in-memory array to the speech-history route handler.
+speechHistoryRoute.setSpeechHistoryRef(generatedSpeechHistory);
 
 let clearSpeechTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
@@ -404,27 +409,7 @@ const server = serve({
       });
     },
 
-    '/api/speech-history': {
-      GET: (req: Request) => {
-        const url = new URL(req.url);
-        const beforeId = url.searchParams.get('before');
-        const limitParam = url.searchParams.get('limit');
-        const limit = Math.min(Math.max(1, Number.parseInt(limitParam ?? '10', 10) || 10), 50);
-
-        let startIndex = 0;
-        if (beforeId !== null) {
-          const beforeIndex = generatedSpeechHistory.findIndex((item) => item.id === beforeId);
-          if (beforeIndex === -1) {
-            return Response.json({ items: [], hasMore: false });
-          }
-          startIndex = beforeIndex + 1;
-        }
-
-        const items = generatedSpeechHistory.slice(startIndex, startIndex + limit);
-        const hasMore = startIndex + limit < generatedSpeechHistory.length;
-        return Response.json({ items, hasMore });
-      },
-    },
+    '/api/speech-history': speechHistoryRoute,
 
     '/api/game': async () => {
       return Response.json(agent.getGame() ?? {});
