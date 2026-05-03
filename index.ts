@@ -13,6 +13,8 @@ import { parseArgs } from "node:util";
 import { startConsoleServer } from "./console/index";
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import * as index from "./routes/index";
+import * as speechHistoryRoute from "./routes/api/speech-history";
+import type { SpeechHistoryEntry } from "./routes/api/speech-history";
 import App from "./src/index.html";
 import { handleCatchAll } from "./src/catchAll";
 import robotsTxt from "./routes/console/robots.txt";
@@ -238,7 +240,7 @@ const getCurrentStreamPayload = () => {
     nGram: base.nGram ?? streamer.currentNGramSize,
     nGramRaw: base.nGramRaw ?? streamer.currentNGramSizeRaw,
     speech: base.speech ?? agent.getSpeech(),
-    speechHistory: base.speechHistory ?? generatedSpeechHistory,
+    speechHistory: (Array.isArray(base.speechHistory) ? base.speechHistory : generatedSpeechHistory).slice(0, GENERATED_SPEECH_HISTORY_SSE_SIZE),
     replyTargetComment,
     commentCount: base.commentCount ?? streamer.streamState?.meta?.total?.comments,
   } as const;
@@ -294,10 +296,14 @@ let agent: any = {
     console.warn('[WARN] dynamic import failed, continuing with in-memory fallback agent:', err instanceof Error ? err.message : String(err));
   }
 })();
-// Keep only a recent window to avoid unbounded in-memory growth while keeping enough context for console operations.
-const GENERATED_SPEECH_HISTORY_MAX_LENGTH = 20;
-const generatedSpeechHistory: Array<{ id: string; speech: string; nGram?: number; nGramRaw?: number; nodes?: string[] }> = [];
+// Keep a larger buffer in memory for pagination while limiting the SSE payload size.
+const GENERATED_SPEECH_HISTORY_BUFFER_SIZE = 200;
+const GENERATED_SPEECH_HISTORY_SSE_SIZE = 20;
+const generatedSpeechHistory: SpeechHistoryEntry[] = [];
 let generatedSpeechHistorySequence = 0;
+
+// Bind the in-memory array to the speech-history route handler.
+speechHistoryRoute.setSpeechHistoryRef(generatedSpeechHistory);
 
 let clearSpeechTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
@@ -314,8 +320,8 @@ streamer.onSpeech(async (event) => {
     nGramRaw,
     nodes: traceNodes,
   });
-  if (generatedSpeechHistory.length > GENERATED_SPEECH_HISTORY_MAX_LENGTH) {
-    generatedSpeechHistory.length = GENERATED_SPEECH_HISTORY_MAX_LENGTH;
+  if (generatedSpeechHistory.length > GENERATED_SPEECH_HISTORY_BUFFER_SIZE) {
+    generatedSpeechHistory.length = GENERATED_SPEECH_HISTORY_BUFFER_SIZE;
   }
   if (clearSpeechTimer) {
     clearTimeout(clearSpeechTimer);
@@ -402,6 +408,8 @@ const server = serve({
         silent: !!(speechState && typeof speechState === 'object' ? (speechState as any).silent : false),
       });
     },
+
+    '/api/speech-history': speechHistoryRoute,
 
     '/api/game': async () => {
       return Response.json(agent.getGame() ?? {});
