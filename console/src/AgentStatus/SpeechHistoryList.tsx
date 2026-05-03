@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { AgentStateResponse } from "./types";
 import { createSpeechHistoryDisplayItems } from "./agentStatusUtils";
+import { NewItemsButton } from "./NewItemsButton";
+import { UndoLearningButton } from "./UndoLearningButton";
 
 type SpeechHistoryDisplayItem = {
   id: string;
@@ -18,37 +20,6 @@ type SpeechHistoryListProps = {
   initialItems: SpeechHistoryDisplayItem[];
   emphasizeLatest: boolean;
 };
-
-type NewItemsButtonProps = {
-  count: number;
-  onClick: () => void;
-};
-
-const NewItemsButton = ({ count, onClick }: NewItemsButtonProps) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="sticky top-0 z-10 w-full mb-2 py-1 px-2 text-xs text-center bg-emerald-800/90 text-emerald-100 rounded border border-emerald-300/50 hover:bg-emerald-700/90 cursor-pointer"
-  >
-    ↑ 新しい発話が {count} 件あります
-  </button>
-);
-
-const UndoLearningButton = () => (
-  <button
-    type="button"
-    disabled
-    aria-label="学習の取り消し"
-    title="学習の取り消し"
-    className="inline-flex items-center justify-center h-7 min-w-[2rem] rounded-md border border-emerald-300/50 bg-emerald-950/20 px-2 text-sm text-emerald-200 opacity-70 cursor-not-allowed shadow-sm shadow-black/20"
-    style={{
-      fontFamily: "ui-sans-serif, system-ui, sans-serif",
-      fontVariantEmoji: "text",
-    }}
-  >
-    ↩
-  </button>
-);
 
 /**
  * Renders the speech history list with infinite scroll support.
