@@ -76,7 +76,7 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHisto
 
   // Fetch older items via the pagination API.
   // Using a ref so the IntersectionObserver callback always calls the latest closure.
-  const fetchMoreItemsFn = async () => {
+  const fetchMoreItems = async () => {
     if (isLoadingMore || !hasMore) return;
 
     const allItems = [...initialItems, ...olderItems];
@@ -103,8 +103,8 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHisto
     }
   };
 
-  const fetchMoreItemsRef = useRef(fetchMoreItemsFn);
-  fetchMoreItemsRef.current = fetchMoreItemsFn;
+  const fetchMoreItemsRef = useRef(fetchMoreItems);
+  fetchMoreItemsRef.current = fetchMoreItems;
 
   // Attach the IntersectionObserver once and invoke the latest fetch callback via ref.
   useEffect(() => {
