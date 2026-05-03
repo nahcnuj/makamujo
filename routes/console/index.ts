@@ -9,6 +9,7 @@ import {
 export { setBroadcastingTarget } from "../../lib/console-proxy";
 import App from "../../console/src/index.html";
 import * as agentState from "./api/agent-state";
+import * as speechHistory from "./api/speech-history";
 import robotsTxt from "./robots.txt";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -135,6 +136,7 @@ export const routes = {
 
   '/console/robots.txt': robotsTxt,
   '/console/api/agent-state': agentState,
+  '/console/api/speech-history': speechHistory,
   '/console/frontend.js': async (req: Request) => {
     return await serveConsoleAsset(req) ?? await serveConsoleAppHtml();
   },

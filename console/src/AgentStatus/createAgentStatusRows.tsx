@@ -4,12 +4,11 @@ import {
   createLiveDeliveryMetricsValueComponent,
   createReplyTargetCommentValueComponent,
   createSpeechHistoryDisplayItems,
-  createSpeechHistoryValueComponent,
   formatNGramValue,
-  formatStartDate,
   getSpeechUnavailableIndicator,
   normalizeSpeechText,
 } from "./agentStatusUtils";
+import { SpeechHistoryList } from "./SpeechHistoryList";
 
 export const createAgentStatusRows = (stateResponse: AgentStateResponse | null): AgentStatusRow[] => {
   const rows: AgentStatusRow[] = [];
@@ -56,7 +55,7 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
     rows.push({
       label: "これまでの発話",
       hideLabel: true,
-      valueComponent: createSpeechHistoryValueComponent(stateResponse?.speechHistory, !isSpeechSilent),
+      valueComponent: <SpeechHistoryList initialItems={speechHistoryItems} emphasizeLatest={!isSpeechSilent} />,
     });
   }
 

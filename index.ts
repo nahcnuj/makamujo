@@ -238,7 +238,7 @@ const getCurrentStreamPayload = () => {
     nGram: base.nGram ?? streamer.currentNGramSize,
     nGramRaw: base.nGramRaw ?? streamer.currentNGramSizeRaw,
     speech: base.speech ?? agent.getSpeech(),
-    speechHistory: base.speechHistory ?? generatedSpeechHistory,
+    speechHistory: (base.speechHistory ?? generatedSpeechHistory).slice(0, GENERATED_SPEECH_HISTORY_SSE_SIZE),
     replyTargetComment,
     commentCount: base.commentCount ?? streamer.streamState?.meta?.total?.comments,
   } as const;
@@ -294,8 +294,9 @@ let agent: any = {
     console.warn('[WARN] dynamic import failed, continuing with in-memory fallback agent:', err instanceof Error ? err.message : String(err));
   }
 })();
-// Keep only a recent window to avoid unbounded in-memory growth while keeping enough context for console operations.
-const GENERATED_SPEECH_HISTORY_MAX_LENGTH = 20;
+// Keep a larger buffer in memory for pagination while limiting the SSE payload size.
+const GENERATED_SPEECH_HISTORY_BUFFER_SIZE = 200;
+const GENERATED_SPEECH_HISTORY_SSE_SIZE = 20;
 const generatedSpeechHistory: Array<{ id: string; speech: string; nGram?: number; nGramRaw?: number; nodes?: string[] }> = [];
 let generatedSpeechHistorySequence = 0;
 
@@ -314,8 +315,8 @@ streamer.onSpeech(async (event) => {
     nGramRaw,
     nodes: traceNodes,
   });
-  if (generatedSpeechHistory.length > GENERATED_SPEECH_HISTORY_MAX_LENGTH) {
-    generatedSpeechHistory.length = GENERATED_SPEECH_HISTORY_MAX_LENGTH;
+  if (generatedSpeechHistory.length > GENERATED_SPEECH_HISTORY_BUFFER_SIZE) {
+    generatedSpeechHistory.length = GENERATED_SPEECH_HISTORY_BUFFER_SIZE;
   }
   if (clearSpeechTimer) {
     clearTimeout(clearSpeechTimer);
@@ -401,6 +402,28 @@ const server = serve({
         speech: normalizeSpeechText(speechState) ?? '',
         silent: !!(speechState && typeof speechState === 'object' ? (speechState as any).silent : false),
       });
+    },
+
+    '/api/speech-history': {
+      GET: (req: Request) => {
+        const url = new URL(req.url);
+        const beforeId = url.searchParams.get('before');
+        const limitParam = url.searchParams.get('limit');
+        const limit = Math.min(Math.max(1, Number.parseInt(limitParam ?? '10', 10) || 10), 50);
+
+        let startIndex = 0;
+        if (beforeId !== null) {
+          const beforeIndex = generatedSpeechHistory.findIndex((item) => item.id === beforeId);
+          if (beforeIndex === -1) {
+            return Response.json({ items: [], hasMore: false });
+          }
+          startIndex = beforeIndex + 1;
+        }
+
+        const items = generatedSpeechHistory.slice(startIndex, startIndex + limit);
+        const hasMore = startIndex + limit < generatedSpeechHistory.length;
+        return Response.json({ items, hasMore });
+      },
     },
 
     '/api/game': async () => {
