@@ -131,7 +131,11 @@ export class MakaMujo {
   }
 
   async speech(text?: TalkModelGenerateResult) {
-    const event: SpeechEvent = typeof text === 'string' ? { text } : (() => {
+    const event: SpeechEvent = typeof text === 'string' ? { text } : text !== undefined ? {
+      nGram: this.#currentNGramSize,
+      nGramRaw: this.#currentNGramSizeRaw,
+      ...text,
+    } : (() => {
       const ret = this.#talkModel.generate('', this.#currentNGramSize);
       return typeof ret === 'string' ? {
         text: ret,

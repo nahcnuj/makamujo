@@ -314,6 +314,91 @@ describe('speech completion hooks', () => {
   });
 });
 
+describe('comment response speech', () => {
+  const comment = (text: string, no: number) => ({
+    data: {
+      comment: text,
+      no,
+      anonymity: false,
+      hasGift: false,
+    },
+  });
+
+  it('calls TTS with topic-generated text when generate returns a non-empty string', async () => {
+    const called = jest.fn(async () => {});
+    const spyTts: TTS = { speech: called };
+    const talkModel: TalkModel = {
+      generate: jest.fn((start) => start === 'こんにちは' ? 'こんにちは、ようこそ。' : ''),
+      learn: () => {},
+      toJSON: () => '{}',
+    };
+    const agent = new MakaMujo(talkModel, spyTts);
+
+    agent.listen([comment('こんにちは', 1)]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(called).toHaveBeenCalledWith('こんにちは、ようこそ。', expect.anything());
+  });
+
+  it('calls TTS with topic-generated text when generate returns a non-empty object', async () => {
+    const called = jest.fn(async () => {});
+    const spyTts: TTS = { speech: called };
+    const talkModel: TalkModel = {
+      generate: jest.fn((start) =>
+        start === 'こんにちは'
+          ? { text: 'こんにちは、ようこそ。', nodes: ['、', 'ようこそ', '。'] }
+          : '',
+      ),
+      learn: () => {},
+      toJSON: () => '{}',
+    };
+    const agent = new MakaMujo(talkModel, spyTts);
+
+    agent.listen([comment('こんにちは', 1)]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(called).toHaveBeenCalledWith('こんにちは、ようこそ。', expect.anything());
+  });
+
+  it('does not call TTS when generate returns empty text', async () => {
+    const called = jest.fn(async () => {});
+    const spyTts: TTS = { speech: called };
+    const talkModel: TalkModel = {
+      generate: jest.fn(() => ''),
+      learn: () => {},
+      toJSON: () => '{}',
+    };
+    const agent = new MakaMujo(talkModel, spyTts);
+
+    agent.listen([comment('こんにちは', 1)]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(called).not.toHaveBeenCalled();
+  });
+
+  it('does not call generate a second time when the first generate returns an object result', async () => {
+    const spyTts: TTS = { speech: jest.fn(async () => {}) };
+    const generate = jest.fn((start: string | undefined) =>
+      start === 'こんにちは'
+        ? { text: 'こんにちは、ようこそ。', nodes: ['。'] }
+        : '',
+    );
+    const talkModel: TalkModel = {
+      generate,
+      learn: () => {},
+      toJSON: () => '{}',
+    };
+    const agent = new MakaMujo(talkModel, spyTts);
+
+    agent.listen([comment('こんにちは', 1)]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // generate should only be called once (for the topic), not a second time with ''
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(generate).toHaveBeenCalledWith('こんにちは', expect.anything());
+  });
+});
+
 describe('comment learning n-gram size', () => {
   const comment = (no: number) => ({
     data: {
