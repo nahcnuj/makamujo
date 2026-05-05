@@ -1,3 +1,4 @@
+/** @jsxImportSource hono/jsx */
 import type { AgentStateResponse, AgentStatusRow } from "./types";
 import {
   createCurrentGameInfoValueComponent,

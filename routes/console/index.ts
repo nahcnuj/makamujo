@@ -45,6 +45,13 @@ async function buildConsoleApp() {
     splitting: true,
     target: 'browser',
     minify: process.env.NODE_ENV === 'production',
+    // @ts-expect-error: alias is a valid Bun.build option but not yet typed in bun-types
+    alias: {
+      'react': 'hono/jsx/dom',
+      'react/jsx-runtime': 'hono/jsx/dom/jsx-runtime',
+      'hono/jsx': 'hono/jsx/dom',
+      'hono/jsx/jsx-runtime': 'hono/jsx/dom/jsx-runtime',
+    },
   });
 
   if (!result.success) {

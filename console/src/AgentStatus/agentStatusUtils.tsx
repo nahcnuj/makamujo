@@ -1,5 +1,6 @@
+/** @jsxImportSource hono/jsx */
 import type { AgentStateResponse } from "./types";
-import type { ReactNode } from "react";
+import type { Child, CSSProperties } from "hono/jsx";
 
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
@@ -101,7 +102,7 @@ const createHighlightedCommentLines = (commentText: string, pickedTopic: string)
 
 export const createReplyTargetCommentValueComponent = (
   replyTargetComment: AgentStateResponse["replyTargetComment"],
-): ReactNode => {
+): Child => {
   const text = replyTargetComment?.text?.trim();
   const pickedTopic = replyTargetComment?.pickedTopic?.trim();
   if (!text) {
@@ -206,7 +207,7 @@ export const createSpeechHistoryDisplayItems = (
 export const createSpeechHistoryValueComponent = (
   speechHistory: AgentStateResponse["speechHistory"] | undefined,
   emphasizeLatest: boolean = true,
-): ReactNode => {
+): Child => {
   const speechHistoryItems = createSpeechHistoryDisplayItems(speechHistory);
   if (speechHistoryItems.length === 0) {
     return <span>-</span>;
@@ -224,7 +225,7 @@ export const createSpeechHistoryValueComponent = (
             "--speech-history-border-bottom-width": EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH,
             borderBottomWidth: "var(--speech-history-border-bottom-width)",
             paddingBottom: "calc(0.5rem - var(--speech-history-border-bottom-width))",
-          } as React.CSSProperties : undefined}
+          } as CSSProperties : undefined}
         >
           <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-2">
             <div className="flex flex-wrap gap-1">
@@ -270,7 +271,7 @@ export const createSpeechHistoryValueComponent = (
 export const createLiveDeliveryMetricsValueComponent = (
   niconamaState: AgentStateResponse["niconama"],
   commentCount: AgentStateResponse["commentCount"],
-): ReactNode => {
+): Child => {
   const liveMetricItems = [
     { label: "配信状況", value: formatStateLabel(niconamaState?.type) },
     { label: "視聴者数", value: formatMetricValue(niconamaState?.meta?.total?.listeners) },
@@ -312,7 +313,7 @@ const formatCurrentGameStateLeafValue = (stateValue: unknown): string => {
 const renderCurrentGameStateValueComponent = (
   currentGameStateValue: unknown,
   visitedObjects = new WeakSet<object>(),
-): React.ReactNode => {
+): Child => {
   if (currentGameStateValue === null || typeof currentGameStateValue !== "object") {
     return <span>{formatCurrentGameStateLeafValue(currentGameStateValue)}</span>;
   }
@@ -384,7 +385,7 @@ const renderCurrentGameStateValueComponent = (
 
 export const createCurrentGameInfoValueComponent = (
   currentGameState: Record<string, unknown> | undefined,
-): ReactNode => {
+): Child => {
   if (currentGameState === undefined) {
     return <span>-</span>;
   }

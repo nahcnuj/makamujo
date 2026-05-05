@@ -1,9 +1,10 @@
-import type { ReactNode } from "react";
+/** @jsxImportSource hono/jsx */
+import type { Child } from "hono/jsx";
 import type { AgentStatusRow } from "./types";
 
 type AgentStatusSectionCardProps = {
   title?: string;
-  titleRightElement?: ReactNode;
+  titleRightElement?: Child;
   rows: AgentStatusRow[];
   className?: string;
   hideTitle?: boolean;

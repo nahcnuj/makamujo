@@ -1,3 +1,4 @@
+/** @jsxImportSource hono/jsx */
 import { AgentStatus } from "./AgentStatus";
 import "./index.css";
 

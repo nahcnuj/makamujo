@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
-import { Fragment, createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToString } from "hono/jsx/dom/server";
 import {
   AGENT_STATE_REFRESH_INTERVAL_MS,
   createMockAgentStateResponse,
@@ -133,7 +132,7 @@ describe("createAgentStatusRows", () => {
     const liveMetricRow = rows.find((row) => row.label === "配信指標");
     expect(liveMetricRow?.value).toBeUndefined();
     expect(liveMetricRow?.hideLabel).toBeTrue();
-    const liveMetricHtml = renderToStaticMarkup(createElement(Fragment, null, liveMetricRow?.valueComponent));
+    const liveMetricHtml = renderToString(liveMetricRow?.valueComponent);
     expect(liveMetricHtml).toContain("配信状況");
     expect(liveMetricHtml).not.toContain("状態");
     expect(liveMetricHtml).toContain("配信中");
@@ -163,13 +162,13 @@ describe("createAgentStatusRows", () => {
     const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
     expect(gameInfoRow?.value).toBeUndefined();
     expect(gameInfoRow?.valueComponent).toBeDefined();
-    const gameInfoHtml = renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent));
+    const gameInfoHtml = renderToString(gameInfoRow?.valueComponent);
     expect(gameInfoHtml).toContain("<ul");
     expect(gameInfoHtml).toContain("status");
     expect(gameInfoHtml).toContain("idle");
     const speechHistoryRow = rows.find((row) => row.label === "これまでの発話");
     expect(speechHistoryRow?.value).toBeUndefined();
-    const speechHistoryHtml = renderToStaticMarkup(createElement(Fragment, null, speechHistoryRow?.valueComponent));
+    const speechHistoryHtml = renderToString(speechHistoryRow?.valueComponent);
     expect(speechHistoryHtml).toContain("<ul");
     expect(speechHistoryHtml).toContain("grid-cols-1");
     expect(speechHistoryHtml).toContain("テスト発話その1");
@@ -195,7 +194,7 @@ describe("createAgentStatusRows", () => {
 
     const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
     expect(gameInfoRow?.value).toBeUndefined();
-    const gameInfoHtml = renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent));
+    const gameInfoHtml = renderToString(gameInfoRow?.valueComponent);
     expect(gameInfoHtml).toContain("<ul");
     expect(gameInfoHtml).toContain("stage");
     expect(gameInfoHtml).toContain("effects");
@@ -218,7 +217,7 @@ describe("createAgentStatusRows", () => {
 
     const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
     expect(gameInfoRow?.value).toBeUndefined();
-    const gameInfoHtml = renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent));
+    const gameInfoHtml = renderToString(gameInfoRow?.valueComponent);
     expect(gameInfoHtml).toContain("<details");
     expect(gameInfoHtml).toContain("<summary");
     expect(gameInfoHtml).toContain("effects");
@@ -240,7 +239,7 @@ describe("createAgentStatusRows", () => {
 
     const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
     expect(gameInfoRow?.value).toBeUndefined();
-    const gameInfoHtml = renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent));
+    const gameInfoHtml = renderToString(gameInfoRow?.valueComponent);
     expect(gameInfoHtml).toContain("空のオブジェクト");
     expect(gameInfoHtml).toContain("空の配列");
   });
@@ -261,7 +260,7 @@ describe("createAgentStatusRows", () => {
     });
     const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
     expect(gameInfoRow?.value).toBeUndefined();
-    expect(renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent))).toContain("-");
+    expect(renderToString(gameInfoRow?.valueComponent)).toContain("-");
   });
 
   it("shows speech as '・・・' when canSpeak is false", () => {
@@ -291,12 +290,12 @@ describe("createAgentStatusRows", () => {
     ];
     const rowsWhenSilent = createAgentStatusRows({ canSpeak: false, speech: { speech: "最新発話", silent: true }, speechHistory });
     const speechHistoryRowWhenSilent = rowsWhenSilent.find((row) => row.label === "これまでの発話");
-    const htmlWhenSilent = renderToStaticMarkup(createElement(Fragment, null, speechHistoryRowWhenSilent?.valueComponent));
+    const htmlWhenSilent = renderToString(speechHistoryRowWhenSilent?.valueComponent);
     expect(htmlWhenSilent).not.toContain("border-b-emerald-300/80");
 
     const rowsWhenNotSilent = createAgentStatusRows({ canSpeak: true, speech: { speech: "最新発話", silent: false }, speechHistory });
     const speechHistoryRowWhenNotSilent = rowsWhenNotSilent.find((row) => row.label === "これまでの発話");
-    const htmlWhenNotSilent = renderToStaticMarkup(createElement(Fragment, null, speechHistoryRowWhenNotSilent?.valueComponent));
+    const htmlWhenNotSilent = renderToString(speechHistoryRowWhenNotSilent?.valueComponent);
     expect(htmlWhenNotSilent).toContain("border-b-emerald-300/80");
   });
 
@@ -334,7 +333,7 @@ describe("createAgentStatusRows", () => {
     const rows = createAgentStatusRows({ speechHistory });
     const speechHistoryRow = rows.find((row) => row.label === "これまでの発話");
     expect(speechHistoryRow?.value).toBeUndefined();
-    const speechHistoryHtml = renderToStaticMarkup(createElement(Fragment, null, speechHistoryRow?.valueComponent));
+    const speechHistoryHtml = renderToString(speechHistoryRow?.valueComponent);
     expect(speechHistoryHtml).toContain(">テスト発話1<");
     expect(speechHistoryHtml).toContain(">テスト発話12<");
     expect((speechHistoryHtml.match(/aria-label="学習の取り消し"/g) ?? []).length).toBe(12);
@@ -358,7 +357,7 @@ describe("createAgentStatusRows", () => {
     const rows = createAgentStatusRows({ niconama: { type: "live" } });
     const liveMetricRow = rows.find((row) => row.label === "配信指標");
     expect(liveMetricRow?.value).toBeUndefined();
-    expect(renderToStaticMarkup(createElement(Fragment, null, liveMetricRow?.valueComponent))).toContain("配信中");
+    expect(renderToString(liveMetricRow?.valueComponent)).toContain("配信中");
     expect(rows).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "配信指標" }),
     ]));
@@ -401,7 +400,7 @@ describe("createAgentStatusSections", () => {
     const gameInfoRow = gameSection?.rows.find((row) => row.label === "ゲーム情報");
     expect(gameInfoRow?.value).toBeUndefined();
     expect(gameInfoRow?.hideLabel).toBeTrue();
-    expect(renderToStaticMarkup(createElement(Fragment, null, gameInfoRow?.valueComponent))).toContain("status");
+    expect(renderToString(gameInfoRow?.valueComponent)).toContain("status");
   });
 
   it("includes a fallback game section even when only other sections have rows", () => {

@@ -1,5 +1,6 @@
+/** @jsxImportSource hono/jsx */
 import { describe, expect, it } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToString } from "hono/jsx/dom/server";
 import { createAgentStatusRows } from "./createAgentStatusRows";
 import { MarkovModelStatusSection } from "./MarkovModelStatusSection";
 
@@ -49,7 +50,7 @@ describe("createAgentStatusRows", () => {
       ],
     } as any);
     const markovRows = rows.filter((r) => r.label === "これまでの発話" || r.label === "生成N-gram");
-    const html = renderToStaticMarkup(<MarkovModelStatusSection markovModelRows={markovRows} />);
+    const html = renderToString(<MarkovModelStatusSection markovModelRows={markovRows} />);
 
     expect(html).toContain("これまでの発話");
     expect((html.match(/speech-word-chip/g) || []).length).toBeGreaterThanOrEqual(3);
@@ -67,7 +68,7 @@ describe("createAgentStatusRows", () => {
       ],
     } as any);
     const markovRows = rows.filter((r) => r.label === "これまでの発話" || r.label === "生成N-gram");
-    const html = renderToStaticMarkup(<MarkovModelStatusSection markovModelRows={markovRows} />);
+    const html = renderToString(<MarkovModelStatusSection markovModelRows={markovRows} />);
     const chipClassAttributes = html.match(/class="speech-word-chip[^"]*"/g) ?? [];
 
     expect(chipClassAttributes.length).toBeGreaterThanOrEqual(2);
@@ -98,7 +99,7 @@ describe("createAgentStatusRows", () => {
       ],
     } as any);
     const markovRows = rows.filter((r) => r.label === "これまでの発話" || r.label === "生成N-gram");
-    const html = renderToStaticMarkup(<MarkovModelStatusSection markovModelRows={markovRows} />);
+    const html = renderToString(<MarkovModelStatusSection markovModelRows={markovRows} />);
 
     expect(html).toContain("border-b-emerald-300/80");
     expect(html).toContain("border-bottom-width:var(--speech-history-border-bottom-width)");
@@ -129,7 +130,7 @@ describe("createAgentStatusRows", () => {
       ],
     } as any);
     const markovRows = rows.filter((r) => r.label === "これまでの発話" || r.label === "生成N-gram");
-    const html = renderToStaticMarkup(<MarkovModelStatusSection markovModelRows={markovRows} />);
+    const html = renderToString(<MarkovModelStatusSection markovModelRows={markovRows} />);
 
     expect(html).toContain("border-b");
     expect(html).toContain("border-b-emerald-300/80");
@@ -154,7 +155,7 @@ describe("createAgentStatusRows", () => {
       ],
     } as any);
     const markovRows = rows.filter((r) => r.label === "これまでの発話" || r.label === "生成N-gram");
-    const html = renderToStaticMarkup(<MarkovModelStatusSection markovModelRows={markovRows} />);
+    const html = renderToString(<MarkovModelStatusSection markovModelRows={markovRows} />);
 
     expect(html).toContain("コメント");
     expect((html.match(/speech-word-chip/g) || []).length).toBe(1);
@@ -168,7 +169,7 @@ describe("createAgentStatusRows", () => {
       ],
     } as any);
     const markovRows = rows.filter((r) => r.label === "これまでの発話" || r.label === "生成N-gram");
-    const html = renderToStaticMarkup(<MarkovModelStatusSection markovModelRows={markovRows} />);
+    const html = renderToString(<MarkovModelStatusSection markovModelRows={markovRows} />);
 
     expect(html).toContain("alpha");
     expect(html).toContain("beta");
@@ -188,7 +189,7 @@ describe("createAgentStatusRows", () => {
 
     expect(replyRow).toBeDefined();
     expect(replyRow?.hideLabel).toBe(true);
-    const html = renderToStaticMarkup(<MarkovModelStatusSection markovModelRows={[replyRow!] as any} />);
+    const html = renderToString(<MarkovModelStatusSection markovModelRows={[replyRow!] as any} />);
 
     expect(html).toContain("このコメントに");
     expect(html).toContain("します");
@@ -205,7 +206,7 @@ describe("createAgentStatusRows", () => {
     } as any);
     const speechHistoryRow = rows.find((row) => row.label === "これまでの発話");
     expect(speechHistoryRow?.value).toBeUndefined();
-    const html = renderToStaticMarkup(<MarkovModelStatusSection markovModelRows={[speechHistoryRow!] as any} />);
+    const html = renderToString(<MarkovModelStatusSection markovModelRows={[speechHistoryRow!] as any} />);
 
     expect(html).toContain("alpha");
     expect(html).toContain("beta");

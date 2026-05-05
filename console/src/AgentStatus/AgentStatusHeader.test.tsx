@@ -1,10 +1,11 @@
+/** @jsxImportSource hono/jsx */
 import { describe, expect, it } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToString } from "hono/jsx/dom/server";
 import { AgentStatusHeader } from "./AgentStatusHeader";
 
 describe("AgentStatusHeader", () => {
   it("renders the stream title as a link and shows the start time", () => {
-    const html = renderToStaticMarkup(
+    const html = renderToString(
       <AgentStatusHeader
         streamTitle="配信タイトル"
         streamUrl="https://example.com/live"
@@ -18,7 +19,7 @@ describe("AgentStatusHeader", () => {
   });
 
   it("renders nothing when neither stream title nor start time is provided", () => {
-    const html = renderToStaticMarkup(<AgentStatusHeader />);
+    const html = renderToString(<AgentStatusHeader />);
     expect(html).toBe("");
   });
 });

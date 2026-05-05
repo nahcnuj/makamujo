@@ -1,5 +1,6 @@
-import { Container } from "automated-gameplay-transmitter";
-import { useCallback, useEffect, useState } from "react";
+/** @jsxImportSource hono/jsx */
+import { Container } from "../agt-compat";
+import { useCallback, useEffect, useState } from "hono/jsx";
 import type { AgentStatusSection, AgentStateResponse } from "./types";
 import {
   AGENT_STATE_MOCK_NOTICE_MESSAGE,
