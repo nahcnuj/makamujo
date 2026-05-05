@@ -5,7 +5,8 @@
 // and initialization succeed.
 import { serve } from "bun";
 import { Hono } from "hono";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 // Use the global `setInterval` timer instead of the Node
 // `timers/promises` async iterator. The async iterator can behave
 // inconsistently across runtimes; using a classic timer keeps the
@@ -16,8 +17,6 @@ import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import * as index from "./routes/index";
 import * as speechHistoryRoute from "./routes/api/speech-history";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
-import App from "./src/index.html";
-import robotsTxt from "./routes/console/robots.txt";
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
@@ -443,13 +442,76 @@ const apiApp = new Hono()
 
 type WsData = { label: string };
 
+const MAIN_BUILD_PATH = resolve(process.cwd(), 'var/main/build');
+const MAIN_SOURCE_HTML_PATH = resolve(process.cwd(), 'src/index.html');
+
+let mainBuildPromise: Promise<void> | null = null;
+let builtMainHtml: string | null = null;
+
+function normalizeMainHtml(source: string): string {
+  return source.replace(/src="\.\/frontend\.tsx"/, 'src="./frontend.js"');
+}
+
+async function buildMainFrontend() {
+  mkdirSync(MAIN_BUILD_PATH, { recursive: true });
+  const result = await Bun.build({
+    entrypoints: [resolve(process.cwd(), 'src/frontend.tsx')],
+    outdir: MAIN_BUILD_PATH,
+    publicPath: '/',
+    splitting: true,
+    target: 'browser',
+    minify: process.env.NODE_ENV === 'production',
+    // Redirect React imports to hono/jsx/dom so AGT components share the
+    // same JSX runtime as the app's own hono/jsx/dom code.
+    // @ts-expect-error: alias is a valid Bun.build option but not yet typed in bun-types
+    alias: {
+      'react': 'hono/jsx/dom',
+      'react/jsx-runtime': 'hono/jsx/dom/jsx-runtime',
+    },
+  });
+  if (!result.success) {
+    throw new Error('Main frontend build failed');
+  }
+  builtMainHtml = normalizeMainHtml(readFileSync(MAIN_SOURCE_HTML_PATH, 'utf-8'));
+}
+
+function ensureMainFrontendBuilt(): Promise<void> {
+  if (!mainBuildPromise) {
+    mainBuildPromise = (async () => {
+      try {
+        await buildMainFrontend();
+      } catch (error) {
+        console.error('[ERROR] main frontend build failed', error);
+        throw error;
+      }
+    })();
+  }
+  return mainBuildPromise;
+}
+
+function getMainFrontendAssetPath(pathname: string): string | null {
+  // Only serve files (paths with an extension that aren't root-only)
+  if (!pathname.includes('.') || pathname.endsWith('/')) return null;
+  const resolved = resolve(MAIN_BUILD_PATH, pathname.slice(1));
+  if (!resolved.startsWith(MAIN_BUILD_PATH + '/')) return null;
+  if (!existsSync(resolved)) return null;
+  return resolved;
+}
+
+function getMainAssetContentType(filePath: string): string | undefined {
+  if (filePath.endsWith('.js')) return 'application/javascript; charset=utf-8';
+  if (filePath.endsWith('.css')) return 'text/css; charset=utf-8';
+  if (filePath.endsWith('.html')) return 'text/html; charset=utf-8';
+  return undefined;
+}
+
 /**
- * Build a WebSocket/SSE route handler for the given label.
- * Returns an SSE stream when `Accept: text/event-stream` is requested,
- * upgrades to WebSocket otherwise (using the proper Bun server.upgrade API).
+ * Build a stream (SSE/WebSocket) route handler for the given label.
+ * Returns an SSE stream when `Accept: text/event-stream` is requested.
+ * WebSocket upgrades are handled at the serve.fetch level before Hono.
  */
-const makeWsRouteHandler = (label: string) =>
-  (req: Bun.BunRequest<string>, server: Bun.Server<WsData>): Response | undefined => {
+const makeStreamHandler = (label: string) =>
+  (req: Request): Response => {
     const accept = req.headers.get('accept') ?? '';
     try { console.log(`[TRACE] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
     if (accept.includes('text/event-stream')) {
@@ -463,76 +525,86 @@ const makeWsRouteHandler = (label: string) =>
         status: 200,
       });
     }
+    return new Response('websocket upgrade unavailable', { status: 501 });
+  };
 
-    if (process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPGRADE === 'true') {
-      return new Response('websocket upgrade unavailable', { status: 501 });
+// mainServer is assigned immediately after serve() returns; closures in
+// mainApp route handlers capture it by reference so it is always defined
+// when a handler actually runs.
+let mainServer!: Bun.Server<WsData>;
+
+const mainApp = new Hono()
+  // Static assets from the public directory
+  .get('/nc433974.png', () => new Response(Bun.file('./src/public/nc433974.png')))
+  .get('/favicon-32x32.png', () => new Response(Bun.file('./src/public/favicon-32x32.png')))
+
+  // Root HTTP handlers (broadcast/comment ingestion)
+  .post('/', (c) => index.POST(c.req.raw, mainServer.requestIP(c.req.raw)))
+  .put('/', async (c) => {
+    const res = await index.PUT(c.req.raw, mainServer.requestIP(c.req.raw));
+    if (!res.ok) {
+      console.error('response is not ok', res);
+      return res;
+    }
+    const comments = await res.json();
+    if (!Array.isArray(comments)) {
+      console.error('response data was unprocessed', comments);
+      return Response.json({}, { status: 500 });
+    }
+    agent.postComments(comments);
+    broadcastCurrentPayload('onComment');
+
+    if (modelFile) {
+      try {
+        writeFileSync(modelFile, streamer.talkModel.toJSON());
+      } catch (err) {
+        console.warn('[WARN]', 'failed to write model', modelFile, err);
+      }
     }
 
-    const upgraded = server.upgrade(req, { data: { label } satisfies WsData });
-    if (!upgraded) {
+    return Response.json({});
+  })
+
+  // WebSocket / SSE endpoints
+  .get('/api/ws', (c) => makeStreamHandler('/api/ws')(c.req.raw))
+  .get('/console/api/ws', (c) => makeStreamHandler('/console/api/ws')(c.req.raw))
+
+  // Delegate all /api/* routes to the existing Hono app
+  .route('/', apiApp)
+
+  // Serve the built frontend (HTML + JS/CSS assets)
+  .all('*', async (c) => {
+    await ensureMainFrontendBuilt();
+    const assetPath = getMainFrontendAssetPath(new URL(c.req.url).pathname);
+    if (assetPath) {
+      const headers: Record<string, string> = {};
+      const ct = getMainAssetContentType(assetPath);
+      if (ct) headers['Content-Type'] = ct;
+      return new Response(Bun.file(assetPath), { headers });
+    }
+    return new Response(builtMainHtml ?? '', {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
+  });
+
+const server = mainServer = serve<WsData>({
+  port: portNumber,
+  async fetch(req: Request, server: Bun.Server<WsData>) {
+    const url = new URL(req.url);
+    const isWsEndpoint = url.pathname === '/api/ws' || url.pathname === '/console/api/ws';
+    const accept = req.headers.get('accept') ?? '';
+    const forceDisableWs = process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPGRADE === 'true';
+
+    if (isWsEndpoint && !accept.includes('text/event-stream') && !forceDisableWs) {
+      const label = url.pathname;
+      try { console.log(`[TRACE] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
+      const upgraded = server.upgrade(req, { data: { label } satisfies WsData });
+      if (upgraded) return undefined;
       try { console.warn(`[WARN] WebSocket upgrade failed for ${label}`, { upgrade: req.headers.get('upgrade'), secWebSocketKey: req.headers.get('sec-websocket-key') }); } catch {}
       return new Response('WebSocket upgrade failed', { status: 400 });
     }
-    return undefined;
-  };
 
-const server = serve<WsData>({
-  port: portNumber,
-  routes: {
-    // Serve nc433974.png from the public directory.
-    '/nc433974.png': new Response(Bun.file('./src/public/nc433974.png')),
-
-    // Serve favicon from the public directory.
-    '/favicon-32x32.png': new Response(Bun.file('./src/public/favicon-32x32.png')),
-
-    '/': {
-      POST: (req: Bun.BunRequest<'/'>, server: Bun.Server<WsData>) => {
-        return index.POST(req, server.requestIP(req));
-      },
-      PUT: async (req: Bun.BunRequest<'/'>, server: Bun.Server<WsData>) => {
-        const res = await index.PUT(req, server.requestIP(req));
-        if (!res.ok) {
-          console.error('response is not ok', res);
-          return res;
-        }
-        const comments = await res.json();
-        if (!Array.isArray(comments)) {
-          console.error('response data was unprocessed', comments);
-          return Response.json({}, { status: 500 });
-        }
-        agent.postComments(comments);
-        broadcastCurrentPayload('onComment');
-
-        if (modelFile) {
-          try {
-            writeFileSync(modelFile, streamer.talkModel.toJSON());
-          } catch (err) {
-            console.warn('[WARN]', 'failed to write model', modelFile, err);
-          }
-        }
-
-        return Response.json({});
-      },
-    },
-
-    // WebSocket / SSE endpoints for console clients to subscribe to live
-    // agent state. Support both EventStream (SSE) and WebSocket upgrades.
-    '/api/ws': {
-      GET: makeWsRouteHandler('/api/ws'),
-    },
-
-    '/console/api/ws': {
-      GET: makeWsRouteHandler('/console/api/ws'),
-    },
-
-    // API routes delegated to the Hono app.
-    '/api/*': (req: Bun.BunRequest<'/api/*'>) => apiApp.fetch(req),
-
-    '/console/robots.txt': robotsTxt,
-
-    // Serve the application HTML via Bun's HTML import so Bun can rewrite
-    // and resolve module imports (safe, local resolution without external CDN).
-    '/*': App,
+    return mainApp.fetch(req);
   },
 
   websocket: {
@@ -544,14 +616,6 @@ const server = serve<WsData>({
     },
     message() { },
     close(ws) { try { wsClients.delete(ws); } catch { } },
-  },
-
-  development: process.env.NODE_ENV !== "production" && {
-    // Enable browser hot reloading in development
-    hmr: true,
-
-    // Echo console logs from the browser to the server
-    console: true,
   },
 });
 

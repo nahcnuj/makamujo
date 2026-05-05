@@ -1,3 +1,4 @@
+/** @jsxImportSource hono/jsx/dom */
 import type { State } from "./State";
 
 export default function ({ state }: { state: State }) {

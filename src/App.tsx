@@ -1,4 +1,5 @@
-import { Box, Container, Layout } from "automated-gameplay-transmitter";
+/** @jsxImportSource hono/jsx/dom */
+import { Box, Container, Layout } from "./agt-compat";
 import { GamePanel } from "./components/GamePanel";
 import { StreamerPanel } from "./components/StreamerPanel";
 import { AgentProvider } from "./contexts/AgentContext";

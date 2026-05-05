@@ -9,8 +9,8 @@ test("serves frontend.tsx as JavaScript module", async () => {
   const ct = res.headers.get('content-type') ?? '';
   expect(ct).toMatch(/application\/javascript/);
   const body = await res.text();
-  expect(body).toContain('This file is the entry point for the React app');
-  expect(body).toContain('import { StrictMode');
+  expect(body).toContain('This file is the entry point for the app');
+  expect(body).toContain('from "hono/jsx/dom"');
 });
 
 test("serves index.html for navigation requests", async () => {

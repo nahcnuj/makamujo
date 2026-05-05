@@ -1,6 +1,7 @@
+/** @jsxImportSource hono/jsx/dom */
 import { Games } from "../../lib/Agent/games";
 import { useAgentContext } from "../contexts/AgentContext";
-import { HighlightOnChange } from "automated-gameplay-transmitter";
+import { HighlightOnChange } from "../agt-compat";
 
 const formatDuration = (d: Date) =>
   `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
@@ -26,7 +27,7 @@ export function GamePanel() {
   const duration = new Date(now.getTime() - (streamState?.meta?.start ?? 0) + now.getTimezoneOffset() * 60_000);
 
   // console.log(playing);
-  const Component = playing ? Games[playing.name].Component : () => undefined;
+  const Component = playing ? Games[playing.name].Component : () => null;
 
   return (
     <div className="h-full flex flex-col justify-between text-2xl/8">
