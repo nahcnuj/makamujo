@@ -1,6 +1,6 @@
+/** @jsxImportSource hono/jsx */
 import { describe, expect, it } from "bun:test";
-import { createElement, Fragment } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToString } from "hono/jsx/dom/server";
 import { SpeechHistoryList } from "./SpeechHistoryList";
 
 const SAMPLE_ITEMS = [
@@ -11,8 +11,8 @@ const SAMPLE_ITEMS = [
 
 describe("SpeechHistoryList", () => {
   it("renders all initial items", () => {
-    const html = renderToStaticMarkup(
-      createElement(SpeechHistoryList, { initialItems: SAMPLE_ITEMS, emphasizeLatest: true }),
+    const html = renderToString(
+      <SpeechHistoryList initialItems={SAMPLE_ITEMS} emphasizeLatest={true} />,
     );
 
     expect(html).toContain("三番目の発話");
@@ -21,8 +21,8 @@ describe("SpeechHistoryList", () => {
   });
 
   it("renders items in given order (newest first)", () => {
-    const html = renderToStaticMarkup(
-      createElement(SpeechHistoryList, { initialItems: SAMPLE_ITEMS, emphasizeLatest: true }),
+    const html = renderToString(
+      <SpeechHistoryList initialItems={SAMPLE_ITEMS} emphasizeLatest={true} />,
     );
 
     const pos3 = html.indexOf("三番目の発話");
@@ -33,8 +33,8 @@ describe("SpeechHistoryList", () => {
   });
 
   it("emphasizes the first item with thicker bottom border when emphasizeLatest is true", () => {
-    const html = renderToStaticMarkup(
-      createElement(SpeechHistoryList, { initialItems: SAMPLE_ITEMS, emphasizeLatest: true }),
+    const html = renderToString(
+      <SpeechHistoryList initialItems={SAMPLE_ITEMS} emphasizeLatest={true} />,
     );
 
     expect(html).toContain("border-b-emerald-300/80");
@@ -42,8 +42,8 @@ describe("SpeechHistoryList", () => {
   });
 
   it("does not emphasize the first item when emphasizeLatest is false", () => {
-    const html = renderToStaticMarkup(
-      createElement(SpeechHistoryList, { initialItems: SAMPLE_ITEMS, emphasizeLatest: false }),
+    const html = renderToString(
+      <SpeechHistoryList initialItems={SAMPLE_ITEMS} emphasizeLatest={false} />,
     );
 
     expect(html).not.toContain("border-b-emerald-300/80");
@@ -51,8 +51,8 @@ describe("SpeechHistoryList", () => {
   });
 
   it("renders word chips for space-separated speech text", () => {
-    const html = renderToStaticMarkup(
-      createElement(SpeechHistoryList, { initialItems: SAMPLE_ITEMS, emphasizeLatest: true }),
+    const html = renderToString(
+      <SpeechHistoryList initialItems={SAMPLE_ITEMS} emphasizeLatest={true} />,
     );
 
     expect((html.match(/speech-word-chip/g) ?? []).length).toBeGreaterThanOrEqual(3);
@@ -68,8 +68,8 @@ describe("SpeechHistoryList", () => {
         nodes: ["alpha", "beta", "gamma"],
       },
     ];
-    const html = renderToStaticMarkup(
-      createElement(SpeechHistoryList, { initialItems: itemsWithNodes, emphasizeLatest: true }),
+    const html = renderToString(
+      <SpeechHistoryList initialItems={itemsWithNodes} emphasizeLatest={true} />,
     );
 
     expect(html).toContain("alpha");
@@ -79,16 +79,16 @@ describe("SpeechHistoryList", () => {
   });
 
   it("renders 学習の取り消し button for each item", () => {
-    const html = renderToStaticMarkup(
-      createElement(SpeechHistoryList, { initialItems: SAMPLE_ITEMS, emphasizeLatest: true }),
+    const html = renderToString(
+      <SpeechHistoryList initialItems={SAMPLE_ITEMS} emphasizeLatest={true} />,
     );
 
     expect((html.match(/aria-label="学習の取り消し"/g) ?? []).length).toBe(3);
   });
 
   it("renders no pending notification initially", () => {
-    const html = renderToStaticMarkup(
-      createElement(SpeechHistoryList, { initialItems: SAMPLE_ITEMS, emphasizeLatest: true }),
+    const html = renderToString(
+      <SpeechHistoryList initialItems={SAMPLE_ITEMS} emphasizeLatest={true} />,
     );
 
     expect(html).not.toContain("新しい発話が");

@@ -2,7 +2,7 @@ import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { routes as consoleRoutes } from "../routes/console/index";
+import { app as consoleApp, websocket as consoleWebsocket } from "../routes/console/index";
 
 const ROOT_DIR = path.resolve(import.meta.dir, "..");
 const DEFAULT_OUTPUT_PATH = path.join(ROOT_DIR, "var", "screenshots", "console-agent-status-mock.png");
@@ -60,7 +60,8 @@ ensureJapaneseFonts();
 const consolePreviewServer = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
-  routes: consoleRoutes,
+  fetch: consoleApp.fetch,
+  websocket: consoleWebsocket,
 });
 
 try {

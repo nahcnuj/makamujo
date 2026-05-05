@@ -1,4 +1,5 @@
-import { Box, Container } from "automated-gameplay-transmitter";
+/** @jsxImportSource hono/jsx/dom */
+import { Box, Container } from "../agt-compat";
 import { useAgentContext } from "../contexts/AgentContext";
 import { CharacterSprite } from "./CharacterSprite";
 

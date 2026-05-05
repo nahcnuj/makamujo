@@ -1,19 +1,18 @@
 /**
- * This file is the entry point for the React app, it sets up the root
+ * This file is the entry point for the app, it sets up the root
  * element and renders the App component to the DOM.
  *
  * It is included in `src/index.html`.
  */
+/** @jsxImportSource hono/jsx/dom */
 
-import { StrictMode, createElement } from "react";
-import { createRoot } from "react-dom/client";
+import { render } from "hono/jsx/dom";
 import { App } from "./App";
 
 function start() {
   const el = document.getElementById("root");
   if (!el) throw new Error("root element not found");
-  const root = createRoot(el);
-  root.render(createElement(StrictMode, null, createElement(App, null)));
+  render(<App />, el);
 }
 
 if (document.readyState === "loading") {
