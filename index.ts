@@ -4,7 +4,9 @@
 // We'll initialize a fallback agent first and replace it if the import
 // and initialization succeed.
 import { serve } from "bun";
-import { readFileSync, writeFileSync } from "node:fs";
+import { Hono } from "hono";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 // Use the global `setInterval` timer instead of the Node
 // `timers/promises` async iterator. The async iterator can behave
 // inconsistently across runtimes; using a classic timer keeps the
@@ -15,9 +17,6 @@ import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import * as index from "./routes/index";
 import * as speechHistoryRoute from "./routes/api/speech-history";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
-import App from "./src/index.html";
-import { handleCatchAll } from "./src/catchAll";
-import robotsTxt from "./routes/console/robots.txt";
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
@@ -364,225 +363,291 @@ if (!Number.isFinite(portNumber) || portNumber < 1 || portNumber > 65535) {
   process.exit(1);
 }
 
-const server = serve({
-  port: portNumber,
-  routes: {
-    // Serve nc433974.png from the public directory.
-    '/nc433974.png': new Response(Bun.file('./src/public/nc433974.png')),
+// Hono app for API routes (delegated from the '/api/*' route below).
+const apiApp = new Hono()
+  .get('/api/speech', () => {
+    const speechState = agent.getSpeech();
+    return Response.json({
+      speech: normalizeSpeechText(speechState) ?? '',
+      silent: !!(speechState && typeof speechState === 'object' ? (speechState as any).silent : false),
+    });
+  })
+  .get('/api/speech-history', (c) => speechHistoryRoute.GET(c.req.raw))
+  .get('/api/game', () => {
+    return Response.json(agent.getGame() ?? {});
+  })
+  .get('/api/meta', () => {
+    return Response.json(getCurrentStreamPayload());
+  })
+  .post('/api/meta', async (c) => {
+    try {
+      let body: any;
+      try {
+        body = await c.req.json();
+      } catch (err) {
+        console.warn('[WARN] POST /api/meta failed to parse JSON body:', err instanceof Error ? err.message : String(err));
+        return Response.json({}, { status: 400 });
+      }
 
-    // Serve favicon from the public directory.
-    '/favicon-32x32.png': new Response(Bun.file('./src/public/favicon-32x32.png')),
+      const replyTargetComment = body && typeof body === 'object' && 'replyTargetComment' in body
+        ? (body as any).replyTargetComment
+        : undefined;
+      let published: unknown = body;
+      if (published && typeof published === 'object' && !('type' in published) && 'data' in published) {
+        published = (published as any).data;
+      }
 
-    '/': {
-      ...index,
-      PUT: async (req, server) => {
-        const res = await index.PUT(req, server);
-        if (!res.ok) {
-          console.error('response is not ok', res);
-          return res;
-        }
-        const comments = await res.json();
-        if (!Array.isArray(comments)) {
-          console.error('response data was unprocessed', comments);
-          return Response.json({}, { status: 500 });
-        }
-        agent.postComments(comments);
-        broadcastCurrentPayload('onComment');
+      try {
+        agent.publishStreamState?.(published);
+      } catch (err) {
+        console.warn('[WARN] failed to forward stream state to streamer:', err instanceof Error ? err.message : String(err));
+      }
 
-        if (modelFile) {
-          try {
-            writeFileSync(modelFile, streamer.talkModel.toJSON());
-          } catch (err) {
-            console.warn('[WARN]', 'failed to write model', modelFile, err);
+      try {
+        published = normalizePublishedStreamState(published);
+        if (replyTargetComment !== undefined) {
+          if (published && typeof published === 'object') {
+            (published as any).replyTargetComment = replyTargetComment;
+          } else {
+            published = { replyTargetComment };
           }
         }
+      } catch (err) {
+        console.warn('[WARN] failed to normalize published stream state:', err instanceof Error ? err.message : String(err));
+      }
 
-        return Response.json({});
-      },
+      try {
+        lastPublishedStreamState = published;
+      } catch (err) {
+        console.warn('[WARN] failed to persist published stream state locally:', err instanceof Error ? err.message : String(err));
+      }
+
+      try {
+        broadcastToWsClients(getCurrentStreamPayload());
+      } catch (err) {
+        console.warn('[WARN] failed to broadcast to WebSocket clients:', err instanceof Error ? err.message : String(err));
+      }
+      try {
+        sseBroadcast(getCurrentStreamPayload());
+      } catch (err) {
+        console.warn('[WARN] failed to broadcast to SSE clients:', err instanceof Error ? err.message : String(err));
+      }
+
+      return Response.json({});
+    } catch (err) {
+      console.error('[ERROR] POST /api/meta handler crashed:', err instanceof Error ? err.stack ?? err.message : String(err));
+      return Response.json({}, { status: 500 });
+    }
+  });
+
+type WsData = { label: string };
+
+const MAIN_BUILD_PATH = resolve(process.cwd(), 'var/main/build');
+const MAIN_SOURCE_HTML_PATH = resolve(process.cwd(), 'src/index.html');
+
+let mainBuildPromise: Promise<void> | null = null;
+let builtMainHtml: string | null = null;
+
+function normalizeMainHtml(source: string): string {
+  // Replace the TypeScript entrypoint reference with the compiled output filename.
+  const result = source.replace(/src=(["'])\.\/frontend\.tsx\1/, 'src=$1./frontend.js$1');
+  if (result === source) {
+    console.warn('[WARN] normalizeMainHtml: expected <script src="./frontend.tsx"> was not found in HTML');
+  }
+  return result;
+}
+
+async function buildMainFrontend() {
+  mkdirSync(MAIN_BUILD_PATH, { recursive: true });
+  const result = await Bun.build({
+    entrypoints: [resolve(process.cwd(), 'src/frontend.tsx')],
+    outdir: MAIN_BUILD_PATH,
+    publicPath: '/',
+    splitting: true,
+    target: 'browser',
+    minify: process.env.NODE_ENV === 'production',
+    // Redirect React imports to hono/jsx/dom so AGT components share the
+    // same JSX runtime as the app's own hono/jsx/dom code.
+    // This is safe because the AGT components used in this codebase (Box,
+    // Container, Layout, HighlightOnChange, CharacterSprite) only rely on
+    // the subset of React APIs (createElement, hooks) that hono/jsx/dom
+    // also implements. AGT-specific React APIs (e.g. createRoot) are never
+    // imported in src/; they remain available in console/src/ which has its
+    // own separate build.
+    // @ts-expect-error: alias is a valid Bun.build option but not yet typed in bun-types
+    alias: {
+      'react': 'hono/jsx/dom',
+      'react/jsx-runtime': 'hono/jsx/dom/jsx-runtime',
     },
+  });
+  if (!result.success) {
+    throw new Error('Main frontend build failed');
+  }
+  builtMainHtml = normalizeMainHtml(readFileSync(MAIN_SOURCE_HTML_PATH, 'utf-8'));
+}
 
-    '/api/speech': async () => {
-      const speechState = agent.getSpeech();
-      return Response.json({
-        speech: normalizeSpeechText(speechState) ?? '',
-        silent: !!(speechState && typeof speechState === 'object' ? (speechState as any).silent : false),
+function ensureMainFrontendBuilt(): Promise<void> {
+  if (!mainBuildPromise) {
+    mainBuildPromise = (async () => {
+      try {
+        await buildMainFrontend();
+      } catch (error) {
+        // Reset so the next request can retry the build.
+        mainBuildPromise = null;
+        console.error('[ERROR] main frontend build failed', error);
+        throw error;
+      }
+    })();
+  }
+  return mainBuildPromise;
+}
+
+function getMainFrontendAssetPath(pathname: string): string | null {
+  // Only serve files (paths with an extension that aren't root-only)
+  if (!pathname.includes('.') || pathname.endsWith('/')) return null;
+  const resolved = resolve(MAIN_BUILD_PATH, pathname.slice(1));
+  // Prevent path traversal: ensure the resolved path is within the build directory.
+  // Normalize both paths before comparing to handle any OS-specific separator differences.
+  const normalizedBuildPath = resolve(MAIN_BUILD_PATH);
+  const normalizedResolved = resolve(resolved);
+  if (!normalizedResolved.startsWith(normalizedBuildPath + '/')) return null;
+  if (!existsSync(normalizedResolved)) return null;
+  return normalizedResolved;
+}
+
+function getMainAssetContentType(filePath: string): string | undefined {
+  if (filePath.endsWith('.js')) return 'application/javascript; charset=utf-8';
+  if (filePath.endsWith('.css')) return 'text/css; charset=utf-8';
+  if (filePath.endsWith('.html')) return 'text/html; charset=utf-8';
+  return undefined;
+}
+
+/**
+ * Build a stream (SSE/WebSocket) route handler for the given label.
+ * Returns an SSE stream when `Accept: text/event-stream` is requested.
+ * WebSocket upgrades are handled at the serve.fetch level before Hono.
+ */
+const makeStreamHandler = (label: string) =>
+  (req: Request): Response => {
+    const accept = req.headers.get('accept') ?? '';
+    try { console.log(`[TRACE] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
+    if (accept.includes('text/event-stream')) {
+      return new Response(createSseStream(label), {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+        },
+        status: 200,
       });
-    },
+    }
+    return new Response('websocket upgrade unavailable', { status: 501 });
+  };
 
-    '/api/speech-history': speechHistoryRoute,
+// mainServer is assigned synchronously via `const server = mainServer = serve(...)`
+// below. Route handlers only run when requests arrive (after the event-loop
+// yields), so mainServer is always defined by the time a handler executes.
+// The non-null assertion (!) is therefore safe; the runtime check below
+// provides an extra guard for unexpected scenarios.
+let mainServer!: Bun.Server<WsData>;
 
-    '/api/game': async () => {
-      return Response.json(agent.getGame() ?? {});
-    },
+const getMainServer = (): Bun.Server<WsData> => {
+  if (!mainServer) throw new Error('Server not yet initialized');
+  return mainServer;
+};
 
-    '/api/meta': {
-      GET: () => {
-        return Response.json(getCurrentStreamPayload());
-      },
-      POST: async (req) => {
-        try {
-          let body: any;
-          try {
-            body = await req.json();
-          } catch (err) {
-            console.warn('[WARN] POST /api/meta failed to parse JSON body:', err instanceof Error ? err.message : String(err));
-            return Response.json({}, { status: 400 });
-          }
+const mainApp = new Hono()
+  // Static assets from the public directory
+  .get('/nc433974.png', () => new Response(Bun.file('./src/public/nc433974.png')))
+  .get('/favicon-32x32.png', () => new Response(Bun.file('./src/public/favicon-32x32.png')))
 
-          const replyTargetComment = body && typeof body === 'object' && 'replyTargetComment' in body
-            ? (body as any).replyTargetComment
-            : undefined;
-          let published: unknown = body;
-          if (published && typeof published === 'object' && !('type' in published) && 'data' in published) {
-            published = (published as any).data;
-          }
+  // Root HTTP handlers (broadcast/comment ingestion)
+  .post('/', (c) => index.POST(c.req.raw, getMainServer().requestIP(c.req.raw)))
+  .put('/', async (c) => {
+    const res = await index.PUT(c.req.raw, getMainServer().requestIP(c.req.raw));
+    if (!res.ok) {
+      console.error('response is not ok', res);
+      return res;
+    }
+    const comments = await res.json();
+    if (!Array.isArray(comments)) {
+      console.error('response data was unprocessed', comments);
+      return Response.json({}, { status: 500 });
+    }
+    agent.postComments(comments);
+    broadcastCurrentPayload('onComment');
 
-          // Forward the raw stream state payload to the streamer so it can
-          // update its internal state (program URL, comment counter, etc.).
-          // This must happen before normalisation so the streamer receives the
-          // original niconama payload format it understands.
-          try {
-            agent.publishStreamState?.(published);
-          } catch (err) {
-            console.warn('[WARN] failed to forward stream state to streamer:', err instanceof Error ? err.message : String(err));
-          }
+    if (modelFile) {
+      try {
+        writeFileSync(modelFile, streamer.talkModel.toJSON());
+      } catch (err) {
+        console.warn('[WARN]', 'failed to write model', modelFile, err);
+      }
+    }
 
-          // Normalize any published stream state into the internal shape expected by
-          // getCurrentStreamPayload(). This includes legacy payloads of the form
-          // { type: 'niconama', data: {...} } and raw stream state objects.
-          try {
-            published = normalizePublishedStreamState(published);
-            if (replyTargetComment !== undefined) {
-              if (published && typeof published === 'object') {
-                (published as any).replyTargetComment = replyTargetComment;
-              } else {
-                published = { replyTargetComment };
-              }
-            }
-          } catch (err) {
-            console.warn('[WARN] failed to normalize published stream state:', err instanceof Error ? err.message : String(err));
-          }
+    return Response.json({});
+  })
 
-          // Persist the published stream state so GET /api/meta reflects it.
-          try {
-            lastPublishedStreamState = published;
-          } catch (err) {
-            console.warn('[WARN] failed to persist published stream state locally:', err instanceof Error ? err.message : String(err));
-          }
+  // WebSocket / SSE endpoints
+  .get('/api/ws', (c) => makeStreamHandler('/api/ws')(c.req.raw))
+  .get('/console/api/ws', (c) => makeStreamHandler('/console/api/ws')(c.req.raw))
 
-          // Notify connected WS and SSE clients about the new published state.
-          try {
-            broadcastToWsClients(getCurrentStreamPayload());
-          } catch (err) {
-            console.warn('[WARN] failed to broadcast to WebSocket clients:', err instanceof Error ? err.message : String(err));
-          }
-          try {
-            sseBroadcast(getCurrentStreamPayload());
-          } catch (err) {
-            console.warn('[WARN] failed to broadcast to SSE clients:', err instanceof Error ? err.message : String(err));
-          }
+  // Delegate all /api/* routes to the existing Hono app
+  .route('/', apiApp)
 
-          try {
-            //console.log('[INFO] POST /api/meta -> sseClients=', sseClients.size, 'wsClients=', wsClients.size);
-          } catch { }
+  // Serve the built frontend (HTML + JS/CSS assets)
+  .all('*', async (c) => {
+    await ensureMainFrontendBuilt();
+    if (!builtMainHtml) {
+      // Build succeeded but HTML is unexpectedly missing — should not happen.
+      return new Response('Frontend build incomplete', { status: 503 });
+    }
+    const assetPath = getMainFrontendAssetPath(new URL(c.req.url).pathname);
+    if (assetPath) {
+      const headers: Record<string, string> = {};
+      const ct = getMainAssetContentType(assetPath);
+      if (ct) headers['Content-Type'] = ct;
+      return new Response(Bun.file(assetPath), { headers });
+    }
+    return new Response(builtMainHtml, {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
+  });
 
-          return Response.json({});
-        } catch (err) {
-          console.error('[ERROR] POST /api/meta handler crashed:', err instanceof Error ? err.stack ?? err.message : String(err));
-          return Response.json({}, { status: 500 });
-        }
-      },
-    },
+const server = mainServer = serve<WsData>({
+  port: portNumber,
+  async fetch(req: Request, server: Bun.Server<WsData>) {
+    const url = new URL(req.url);
+    const isWsEndpoint = url.pathname === '/api/ws' || url.pathname === '/console/api/ws';
+    const accept = req.headers.get('accept') ?? '';
+    const forceDisableWs = process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPGRADE === 'true';
 
-    // WebSocket / SSE endpoints for console clients to subscribe to live
-    // agent state. Support both EventStream (SSE) and WebSocket upgrades.
-    '/api/ws': {
-      GET: (req: Request) => {
-        const accept = req.headers.get('accept') ?? '';
-        try { console.log('[TRACE] /api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
-        if (accept.includes('text/event-stream')) {
-          return new Response(createSseStream('/api/ws'), {
-            headers: {
-              'Content-Type': 'text/event-stream',
-              'Cache-Control': 'no-cache',
-              Connection: 'keep-alive',
-              'Access-Control-Allow-Origin': '*',
-            },
-            status: 200,
-          });
-        }
+    if (isWsEndpoint && !accept.includes('text/event-stream') && !forceDisableWs) {
+      const label = url.pathname;
+      try { console.log(`[TRACE] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
+      const upgraded = server.upgrade(req, { data: { label } satisfies WsData });
+      if (upgraded) {
+        // undefined signals Bun that the connection was upgraded to WebSocket
+        // and no HTTP response should be sent back.
+        return undefined;
+      }
+      try { console.warn(`[WARN] WebSocket upgrade failed for ${label}`, { upgrade: req.headers.get('upgrade'), secWebSocketKey: req.headers.get('sec-websocket-key') }); } catch {}
+      return new Response('WebSocket upgrade failed', { status: 400 });
+    }
 
-        try {
-          if (process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPGRADE === 'true') {
-            return new Response('websocket upgrade unavailable', { status: 501 });
-          }
-          const upgraded = (Bun as any).upgradeWebSocket(req, {
-            open(ws: any) {
-              try { console.log('[INFO] WebSocket client connected (/api/ws)'); } catch { }
-              try { wsClients.add(ws); } catch { }
-              try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch { }
-            },
-            message() { },
-            close(ws: any) { try { wsClients.delete(ws); } catch { } },
-            error(ws: any) { try { wsClients.delete(ws); } catch { } },
-          });
-          return upgraded.response;
-        } catch (err) {
-          return new Response('WebSocket upgrade failed', { status: 400 });
-        }
-      },
-    },
-
-    '/console/api/ws': {
-      GET: (req: Request) => {
-        const accept = req.headers.get('accept') ?? '';
-        try { console.log('[TRACE] /console/api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
-        if (accept.includes('text/event-stream')) {
-          return new Response(createSseStream('/console/api/ws'), {
-            headers: {
-              'Content-Type': 'text/event-stream',
-              'Cache-Control': 'no-cache',
-              Connection: 'keep-alive',
-              'Access-Control-Allow-Origin': '*',
-            },
-            status: 200,
-          });
-        }
-
-        try {
-          if (process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPGRADE === 'true') {
-            return new Response('websocket upgrade unavailable', { status: 501 });
-          }
-          const upgraded = (Bun as any).upgradeWebSocket(req, {
-            open(ws: any) {
-              try { console.log('[INFO] WebSocket client connected (/console/api/ws)'); } catch { }
-              try { wsClients.add(ws); } catch { }
-              try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch { }
-            },
-            message() { },
-            close(ws: any) { try { wsClients.delete(ws); } catch { } },
-            error(ws: any) { try { wsClients.delete(ws); } catch { } },
-          });
-          return upgraded.response;
-        } catch (err) {
-          return new Response('WebSocket upgrade failed', { status: 400 });
-        }
-      },
-    },
-
-    '/console/robots.txt': robotsTxt,
-
-    // Serve the application HTML via Bun's HTML import so Bun can rewrite
-    // and resolve module imports (safe, local resolution without external CDN).
-    '/*': App,
+    return mainApp.fetch(req);
   },
 
-  development: process.env.NODE_ENV !== "production" && {
-    // Enable browser hot reloading in development
-    hmr: true,
-
-    // Echo console logs from the browser to the server
-    console: true,
+  websocket: {
+    open(ws) {
+      const { label } = ws.data;
+      try { console.log(`[INFO] WebSocket client connected (${label})`); } catch { }
+      try { wsClients.add(ws); } catch { }
+      try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch { }
+    },
+    message() { },
+    close(ws) { try { wsClients.delete(ws); } catch { } },
   },
 });
 

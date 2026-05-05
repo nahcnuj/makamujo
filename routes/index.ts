@@ -1,7 +1,8 @@
 import { AllowedIP } from "../lib/allowedIP";
 
-export const POST: Bun.Serve.Handler<Bun.BunRequest, Bun.Server<unknown>, Response> = (req, server) => {
-  const ip = server.requestIP(req);
+type IPInfo = { family: string; address: string };
+
+export const POST = (req: Request, ip: IPInfo | null): Response => {
   if (!ip) {
     try {
       console.error('[ERROR]', 'No IP address is available in the request:', { method: req.method, url: req.url });
@@ -11,12 +12,10 @@ export const POST: Bun.Serve.Handler<Bun.BunRequest, Bun.Server<unknown>, Respon
     return Response.json(undefined, { status: 404 });
   }
   AllowedIP.set(ip);
-  // console.debug('[DEBUG]', 'Connected from', client, 'at', new Date().toISOString());
   return new Response();
 };
 
-export const PUT: Bun.Serve.Handler<Bun.BunRequest, Bun.Server<unknown>, Response> = async (req, server) => {
-  const ip = server.requestIP(req);
+export const PUT = async (req: Request, ip: IPInfo | null): Promise<Response> => {
   if (!ip) {
     return Response.json(undefined, { status: 404 });
   }
@@ -26,7 +25,5 @@ export const PUT: Bun.Serve.Handler<Bun.BunRequest, Bun.Server<unknown>, Respons
   }
 
   const comments: any[] = await req.json();
-  // console.debug('[DEBUG]', 'PUT /', JSON.stringify(comments.map(({ data }) => data), null, 2));
-
   return Response.json(comments);
 };
