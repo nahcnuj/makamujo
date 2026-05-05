@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { Child } from "hono/jsx";
 
 export type AgentStatusRow = {
   label: string
@@ -11,7 +11,7 @@ export type AgentStatusRow = {
   }
   | {
     value?: never
-    valueComponent: ReactNode
+    valueComponent: Child
   }
 );
 

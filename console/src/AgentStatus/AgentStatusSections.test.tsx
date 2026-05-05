@@ -1,5 +1,6 @@
+/** @jsxImportSource hono/jsx */
 import { describe, expect, it } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToString } from "hono/jsx/dom/server";
 import type { AgentStateResponse } from "./types";
 import { createAgentStatusRows } from "./createAgentStatusRows";
 import { GameStatusSection } from "./GameStatusSection";
@@ -8,7 +9,7 @@ import { MarkovModelStatusSection } from "./MarkovModelStatusSection";
 
 describe("AgentStatusSections", () => {
   it("renders live delivery section with title and link", () => {
-    const html = renderToStaticMarkup(
+    const html = renderToString(
       <LiveDeliveryStatusSection
         liveDeliveryRows={[
           {
@@ -53,7 +54,7 @@ describe("AgentStatusSections", () => {
       throw new Error("Expected live delivery row to be defined");
     }
     expect(liveDeliveryRow).toMatchObject({ label: "配信指標", hideLabel: true });
-    const html = renderToStaticMarkup(<>{liveDeliveryRow.valueComponent}</>);
+    const html = renderToString(<>{liveDeliveryRow.valueComponent}</>);
     expect(html).toContain("配信状況");
     expect(html).toContain("配信中");
     expect(html).toContain("視聴者数");
@@ -63,7 +64,7 @@ describe("AgentStatusSections", () => {
   });
 
   it("renders markov model section with speech history", () => {
-    const html = renderToStaticMarkup(
+    const html = renderToString(
       <MarkovModelStatusSection
         markovModelRows={[
           { label: "生成N-gram", value: "4-gram" },
@@ -92,7 +93,7 @@ describe("AgentStatusSections", () => {
   });
 
   it("renders game section with structured rows", () => {
-    const html = renderToStaticMarkup(
+    const html = renderToString(
       <GameStatusSection
         title="『org.dashnet.orteil/cookieclicker』プレイ中"
         gameRows={[
@@ -129,11 +130,11 @@ describe("AgentStatusSections", () => {
     if (!liveDeliveryRow) {
       throw new Error("Expected live delivery row to be defined");
     }
-    const liveDeliveryHtml = renderToStaticMarkup(<>{liveDeliveryRow.valueComponent}</>);
+    const liveDeliveryHtml = renderToString(<>{liveDeliveryRow.valueComponent}</>);
     expect((liveDeliveryHtml.match(/<h3\b/g) || []).length).toBe(1);
     expect((liveDeliveryHtml.match(/配信状況/g) || []).length).toBe(1);
 
-    const markovHtml = renderToStaticMarkup(
+    const markovHtml = renderToString(
       <MarkovModelStatusSection
         markovModelRows={[
           { label: "生成N-gram", value: "4-gram" },
@@ -142,7 +143,7 @@ describe("AgentStatusSections", () => {
     );
     expect((markovHtml.match(/<h3\b/g) || []).length).toBe(1);
 
-    const gameHtml = renderToStaticMarkup(
+    const gameHtml = renderToString(
       <GameStatusSection
         title="『org.dashnet.orteil/cookieclicker』プレイ中"
         gameRows={[{ label: "ゲーム情報", hideLabel: true, valueComponent: <span>status: idle</span> }]}

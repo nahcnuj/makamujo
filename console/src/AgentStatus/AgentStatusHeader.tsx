@@ -1,3 +1,4 @@
+/** @jsxImportSource hono/jsx */
 type AgentStatusHeaderProps = {
   streamTitle?: string;
   streamUrl?: string;

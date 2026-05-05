@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+/** @jsxImportSource hono/jsx */
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "hono/jsx";
+import type { CSSProperties } from "hono/jsx";
 import type { AgentStateResponse } from "./types";
 import { createSpeechHistoryDisplayItems } from "./agentStatusUtils";
 import { NewItemsButton } from "./NewItemsButton";
@@ -88,7 +90,7 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHisto
     }
 
     // delta > 0 means items were prepended (scrollHeight grew without scrollTop changing).
-    const delta = container.scrollHeight - prevScrollHeightRef.current;
+    const delta = container.scrollHeight - (prevScrollHeightRef.current ?? 0);
     if (delta > 0) {
       container.scrollTop += delta;
     }
@@ -175,7 +177,7 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHisto
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry?.isIntersecting) {
-          void fetchMoreItemsRef.current();
+          void fetchMoreItemsRef.current?.();
         }
       },
       { threshold: 0 },
@@ -218,7 +220,7 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHisto
               "--speech-history-border-bottom-width": EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH,
               borderBottomWidth: "var(--speech-history-border-bottom-width)",
               paddingBottom: "calc(0.2rem - var(--speech-history-border-bottom-width))",
-            } as React.CSSProperties : undefined}
+            } as CSSProperties : undefined}
           >
             <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-2">
               <div className="flex flex-wrap gap-1">
