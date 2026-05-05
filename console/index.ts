@@ -250,6 +250,7 @@ export function startConsoleServer({
                   });
                   return new Response('Bad Gateway', { status: 502 });
                 }
+                statusCode = 101;
                 return undefined;
               } catch (err) {
                 statusCode = 502;

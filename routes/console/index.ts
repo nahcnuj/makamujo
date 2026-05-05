@@ -14,7 +14,7 @@ import * as agentState from "./api/agent-state";
 import * as speechHistory from "./api/speech-history";
 import robotsTxt from "./robots.txt";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 
 const CONSOLE_BUILD_PATH = process.env.CONSOLE_BUILD_PATH ?? resolve(process.cwd(), 'var/console/build');
 const CONSOLE_SOURCE_HTML_PATH = resolve(process.cwd(), 'console/src/index.html');
@@ -85,13 +85,16 @@ function getConsoleAssetPath(pathname: string): string | null {
     return null;
   }
   const resolved = resolve(CONSOLE_BUILD_PATH, assetPath);
-  if (!resolved.startsWith(CONSOLE_BUILD_PATH + '/')) {
+  const normalizedBuildPath = resolve(CONSOLE_BUILD_PATH);
+  const normalizedResolved = resolve(resolved);
+  const relativePath = relative(normalizedBuildPath, normalizedResolved);
+  if (relativePath.startsWith('..')) {
     return null;
   }
-  if (!existsSync(resolved)) {
+  if (!existsSync(normalizedResolved)) {
     return null;
   }
-  return resolved;
+  return normalizedResolved;
 }
 
 async function serveConsoleAsset(req: Request): Promise<Response | null> {

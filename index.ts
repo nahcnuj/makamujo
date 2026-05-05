@@ -17,6 +17,7 @@ import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import * as index from "./routes/index";
 import * as speechHistoryRoute from "./routes/api/speech-history";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
+import { handleCatchAll } from "./src/frontendServer";
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
@@ -169,9 +170,11 @@ const broadcastToWsClients = (payload: unknown) => {
 
 const broadcastCurrentPayload = (context: string) => {
   try {
-    sseBroadcast(getCurrentStreamPayload());
+    const payload = getCurrentStreamPayload();
+    sseBroadcast(payload);
+    broadcastToWsClients(payload);
   } catch (err) {
-    console.warn(`[WARN] failed to broadcast to SSE clients (${context}):`, err instanceof Error ? err.message : String(err));
+    console.warn(`[WARN] failed to broadcast to clients (${context}):`, err instanceof Error ? err.message : String(err));
   }
 };
 
@@ -597,23 +600,7 @@ const mainApp = new Hono()
   .route('/', apiApp)
 
   // Serve the built frontend (HTML + JS/CSS assets)
-  .all('*', async (c) => {
-    await ensureMainFrontendBuilt();
-    if (!builtMainHtml) {
-      // Build succeeded but HTML is unexpectedly missing — should not happen.
-      return new Response('Frontend build incomplete', { status: 503 });
-    }
-    const assetPath = getMainFrontendAssetPath(new URL(c.req.url).pathname);
-    if (assetPath) {
-      const headers: Record<string, string> = {};
-      const ct = getMainAssetContentType(assetPath);
-      if (ct) headers['Content-Type'] = ct;
-      return new Response(Bun.file(assetPath), { headers });
-    }
-    return new Response(builtMainHtml, {
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    });
-  });
+  .all('*', async (c) => handleCatchAll(c.req.raw));
 
 const server = mainServer = serve<WsData>({
   port: portNumber,

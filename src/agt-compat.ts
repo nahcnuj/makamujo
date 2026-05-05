@@ -24,10 +24,11 @@ type HonoReturn = ReturnType<FC<{}>>;
 
 // Cast to a hono-compatible function signature so that AGT's React-typed
 // components are accepted by hono/jsx/dom JSX without TypeScript type errors.
-// Prop shapes are not checked by TypeScript here; correctness is ensured at
-// runtime via the Bun.build() `react → hono/jsx/dom` alias.
-export const Box = _Box as unknown as (props: any) => HonoReturn;
-export const Container = _Container as unknown as (props: any) => HonoReturn;
-export const Layout = _Layout as unknown as (props: any) => HonoReturn;
-export const HighlightOnChange = _HighlightOnChange as unknown as (props: any) => HonoReturn;
-export const CharacterSprite = _CharacterSprite as unknown as (props: any) => HonoReturn;
+// The component prop types are preserved from the original AGT exports.
+type HonoComponent<Props> = (props: Props) => HonoReturn;
+
+export const Box = _Box as unknown as HonoComponent<Parameters<typeof _Box>[0]>;
+export const Container = _Container as unknown as HonoComponent<Parameters<typeof _Container>[0]>;
+export const Layout = _Layout as unknown as HonoComponent<Parameters<typeof _Layout>[0]>;
+export const HighlightOnChange = _HighlightOnChange as unknown as HonoComponent<Parameters<typeof _HighlightOnChange>[0]>;
+export const CharacterSprite = _CharacterSprite as unknown as HonoComponent<Parameters<typeof _CharacterSprite>[0]>;
