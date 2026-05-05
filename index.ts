@@ -4,6 +4,7 @@
 // We'll initialize a fallback agent first and replace it if the import
 // and initialization succeed.
 import { serve } from "bun";
+import { Hono } from "hono";
 import { readFileSync, writeFileSync } from "node:fs";
 // Use the global `setInterval` timer instead of the Node
 // `timers/promises` async iterator. The async iterator can behave
@@ -16,7 +17,6 @@ import * as index from "./routes/index";
 import * as speechHistoryRoute from "./routes/api/speech-history";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
 import App from "./src/index.html";
-import { handleCatchAll } from "./src/catchAll";
 import robotsTxt from "./routes/console/robots.txt";
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
@@ -364,7 +364,115 @@ if (!Number.isFinite(portNumber) || portNumber < 1 || portNumber > 65535) {
   process.exit(1);
 }
 
-const server = serve({
+// Hono app for API routes (delegated from the '/api/*' route below).
+const apiApp = new Hono()
+  .get('/api/speech', () => {
+    const speechState = agent.getSpeech();
+    return Response.json({
+      speech: normalizeSpeechText(speechState) ?? '',
+      silent: !!(speechState && typeof speechState === 'object' ? (speechState as any).silent : false),
+    });
+  })
+  .get('/api/speech-history', (c) => speechHistoryRoute.GET(c.req.raw))
+  .get('/api/game', () => {
+    return Response.json(agent.getGame() ?? {});
+  })
+  .get('/api/meta', () => {
+    return Response.json(getCurrentStreamPayload());
+  })
+  .post('/api/meta', async (c) => {
+    try {
+      let body: any;
+      try {
+        body = await c.req.json();
+      } catch (err) {
+        console.warn('[WARN] POST /api/meta failed to parse JSON body:', err instanceof Error ? err.message : String(err));
+        return Response.json({}, { status: 400 });
+      }
+
+      const replyTargetComment = body && typeof body === 'object' && 'replyTargetComment' in body
+        ? (body as any).replyTargetComment
+        : undefined;
+      let published: unknown = body;
+      if (published && typeof published === 'object' && !('type' in published) && 'data' in published) {
+        published = (published as any).data;
+      }
+
+      try {
+        agent.publishStreamState?.(published);
+      } catch (err) {
+        console.warn('[WARN] failed to forward stream state to streamer:', err instanceof Error ? err.message : String(err));
+      }
+
+      try {
+        published = normalizePublishedStreamState(published);
+        if (replyTargetComment !== undefined) {
+          if (published && typeof published === 'object') {
+            (published as any).replyTargetComment = replyTargetComment;
+          } else {
+            published = { replyTargetComment };
+          }
+        }
+      } catch (err) {
+        console.warn('[WARN] failed to normalize published stream state:', err instanceof Error ? err.message : String(err));
+      }
+
+      try {
+        lastPublishedStreamState = published;
+      } catch (err) {
+        console.warn('[WARN] failed to persist published stream state locally:', err instanceof Error ? err.message : String(err));
+      }
+
+      try {
+        broadcastToWsClients(getCurrentStreamPayload());
+      } catch (err) {
+        console.warn('[WARN] failed to broadcast to WebSocket clients:', err instanceof Error ? err.message : String(err));
+      }
+      try {
+        sseBroadcast(getCurrentStreamPayload());
+      } catch (err) {
+        console.warn('[WARN] failed to broadcast to SSE clients:', err instanceof Error ? err.message : String(err));
+      }
+
+      return Response.json({});
+    } catch (err) {
+      console.error('[ERROR] POST /api/meta handler crashed:', err instanceof Error ? err.stack ?? err.message : String(err));
+      return Response.json({}, { status: 500 });
+    }
+  });
+
+type WsData = { label: string };
+
+/**
+ * Build a WebSocket/SSE route handler for the given label.
+ * Returns an SSE stream when `Accept: text/event-stream` is requested,
+ * upgrades to WebSocket otherwise (using the proper Bun server.upgrade API).
+ */
+const makeWsRouteHandler = (label: string) =>
+  (req: Bun.BunRequest<string>, server: Bun.Server<WsData>): Response | undefined => {
+    const accept = req.headers.get('accept') ?? '';
+    try { console.log(`[TRACE] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
+    if (accept.includes('text/event-stream')) {
+      return new Response(createSseStream(label), {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+        },
+        status: 200,
+      });
+    }
+
+    if (process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPGRADE === 'true') {
+      return new Response('websocket upgrade unavailable', { status: 501 });
+    }
+
+    const upgraded = server.upgrade(req, { data: { label } satisfies WsData });
+    return upgraded ? undefined : new Response('WebSocket upgrade failed', { status: 400 });
+  };
+
+const server = serve<WsData>({
   port: portNumber,
   routes: {
     // Serve nc433974.png from the public directory.
@@ -374,9 +482,11 @@ const server = serve({
     '/favicon-32x32.png': new Response(Bun.file('./src/public/favicon-32x32.png')),
 
     '/': {
-      ...index,
-      PUT: async (req, server) => {
-        const res = await index.PUT(req, server);
+      POST: (req: Bun.BunRequest<'/'>, server: Bun.Server<WsData>) => {
+        return index.POST(req, server.requestIP(req));
+      },
+      PUT: async (req: Bun.BunRequest<'/'>, server: Bun.Server<WsData>) => {
+        const res = await index.PUT(req, server.requestIP(req));
         if (!res.ok) {
           console.error('response is not ok', res);
           return res;
@@ -401,180 +511,35 @@ const server = serve({
       },
     },
 
-    '/api/speech': async () => {
-      const speechState = agent.getSpeech();
-      return Response.json({
-        speech: normalizeSpeechText(speechState) ?? '',
-        silent: !!(speechState && typeof speechState === 'object' ? (speechState as any).silent : false),
-      });
-    },
-
-    '/api/speech-history': speechHistoryRoute,
-
-    '/api/game': async () => {
-      return Response.json(agent.getGame() ?? {});
-    },
-
-    '/api/meta': {
-      GET: () => {
-        return Response.json(getCurrentStreamPayload());
-      },
-      POST: async (req) => {
-        try {
-          let body: any;
-          try {
-            body = await req.json();
-          } catch (err) {
-            console.warn('[WARN] POST /api/meta failed to parse JSON body:', err instanceof Error ? err.message : String(err));
-            return Response.json({}, { status: 400 });
-          }
-
-          const replyTargetComment = body && typeof body === 'object' && 'replyTargetComment' in body
-            ? (body as any).replyTargetComment
-            : undefined;
-          let published: unknown = body;
-          if (published && typeof published === 'object' && !('type' in published) && 'data' in published) {
-            published = (published as any).data;
-          }
-
-          // Forward the raw stream state payload to the streamer so it can
-          // update its internal state (program URL, comment counter, etc.).
-          // This must happen before normalisation so the streamer receives the
-          // original niconama payload format it understands.
-          try {
-            agent.publishStreamState?.(published);
-          } catch (err) {
-            console.warn('[WARN] failed to forward stream state to streamer:', err instanceof Error ? err.message : String(err));
-          }
-
-          // Normalize any published stream state into the internal shape expected by
-          // getCurrentStreamPayload(). This includes legacy payloads of the form
-          // { type: 'niconama', data: {...} } and raw stream state objects.
-          try {
-            published = normalizePublishedStreamState(published);
-            if (replyTargetComment !== undefined) {
-              if (published && typeof published === 'object') {
-                (published as any).replyTargetComment = replyTargetComment;
-              } else {
-                published = { replyTargetComment };
-              }
-            }
-          } catch (err) {
-            console.warn('[WARN] failed to normalize published stream state:', err instanceof Error ? err.message : String(err));
-          }
-
-          // Persist the published stream state so GET /api/meta reflects it.
-          try {
-            lastPublishedStreamState = published;
-          } catch (err) {
-            console.warn('[WARN] failed to persist published stream state locally:', err instanceof Error ? err.message : String(err));
-          }
-
-          // Notify connected WS and SSE clients about the new published state.
-          try {
-            broadcastToWsClients(getCurrentStreamPayload());
-          } catch (err) {
-            console.warn('[WARN] failed to broadcast to WebSocket clients:', err instanceof Error ? err.message : String(err));
-          }
-          try {
-            sseBroadcast(getCurrentStreamPayload());
-          } catch (err) {
-            console.warn('[WARN] failed to broadcast to SSE clients:', err instanceof Error ? err.message : String(err));
-          }
-
-          try {
-            //console.log('[INFO] POST /api/meta -> sseClients=', sseClients.size, 'wsClients=', wsClients.size);
-          } catch { }
-
-          return Response.json({});
-        } catch (err) {
-          console.error('[ERROR] POST /api/meta handler crashed:', err instanceof Error ? err.stack ?? err.message : String(err));
-          return Response.json({}, { status: 500 });
-        }
-      },
-    },
-
     // WebSocket / SSE endpoints for console clients to subscribe to live
     // agent state. Support both EventStream (SSE) and WebSocket upgrades.
     '/api/ws': {
-      GET: (req: Request) => {
-        const accept = req.headers.get('accept') ?? '';
-        try { console.log('[TRACE] /api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
-        if (accept.includes('text/event-stream')) {
-          return new Response(createSseStream('/api/ws'), {
-            headers: {
-              'Content-Type': 'text/event-stream',
-              'Cache-Control': 'no-cache',
-              Connection: 'keep-alive',
-              'Access-Control-Allow-Origin': '*',
-            },
-            status: 200,
-          });
-        }
-
-        try {
-          if (process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPGRADE === 'true') {
-            return new Response('websocket upgrade unavailable', { status: 501 });
-          }
-          const upgraded = (Bun as any).upgradeWebSocket(req, {
-            open(ws: any) {
-              try { console.log('[INFO] WebSocket client connected (/api/ws)'); } catch { }
-              try { wsClients.add(ws); } catch { }
-              try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch { }
-            },
-            message() { },
-            close(ws: any) { try { wsClients.delete(ws); } catch { } },
-            error(ws: any) { try { wsClients.delete(ws); } catch { } },
-          });
-          return upgraded.response;
-        } catch (err) {
-          return new Response('WebSocket upgrade failed', { status: 400 });
-        }
-      },
+      GET: makeWsRouteHandler('/api/ws'),
     },
 
     '/console/api/ws': {
-      GET: (req: Request) => {
-        const accept = req.headers.get('accept') ?? '';
-        try { console.log('[TRACE] /console/api/ws handler invoked, accept=', accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
-        if (accept.includes('text/event-stream')) {
-          return new Response(createSseStream('/console/api/ws'), {
-            headers: {
-              'Content-Type': 'text/event-stream',
-              'Cache-Control': 'no-cache',
-              Connection: 'keep-alive',
-              'Access-Control-Allow-Origin': '*',
-            },
-            status: 200,
-          });
-        }
-
-        try {
-          if (process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPGRADE === 'true') {
-            return new Response('websocket upgrade unavailable', { status: 501 });
-          }
-          const upgraded = (Bun as any).upgradeWebSocket(req, {
-            open(ws: any) {
-              try { console.log('[INFO] WebSocket client connected (/console/api/ws)'); } catch { }
-              try { wsClients.add(ws); } catch { }
-              try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch { }
-            },
-            message() { },
-            close(ws: any) { try { wsClients.delete(ws); } catch { } },
-            error(ws: any) { try { wsClients.delete(ws); } catch { } },
-          });
-          return upgraded.response;
-        } catch (err) {
-          return new Response('WebSocket upgrade failed', { status: 400 });
-        }
-      },
+      GET: makeWsRouteHandler('/console/api/ws'),
     },
+
+    // API routes delegated to the Hono app.
+    '/api/*': (req: Bun.BunRequest<'/api/*'>) => apiApp.fetch(req),
 
     '/console/robots.txt': robotsTxt,
 
     // Serve the application HTML via Bun's HTML import so Bun can rewrite
     // and resolve module imports (safe, local resolution without external CDN).
     '/*': App,
+  },
+
+  websocket: {
+    open(ws) {
+      const { label } = ws.data;
+      try { console.log(`[INFO] WebSocket client connected (${label})`); } catch { }
+      try { wsClients.add(ws); } catch { }
+      try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch { }
+    },
+    message() { },
+    close(ws) { try { wsClients.delete(ws); } catch { } },
   },
 
   development: process.env.NODE_ENV !== "production" && {

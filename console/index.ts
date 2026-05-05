@@ -102,19 +102,13 @@ export function startConsoleServer({
   // environment variable in development.
   consoleRoutes.setBroadcastingTarget(broadcastingHost, broadcastingPort);
 
-  // Loopback console server: binds to 127.0.0.1 only and serves all console routes
-  // (including HTML bundling). Not exposed to the public network.
+  // Loopback console server: binds to 127.0.0.1 only and serves all console routes.
+  // Not exposed to the public network.
   const loopbackServer = serve({
     port: 0, // OS assigns a random available port
     hostname: '127.0.0.1',
-    routes: consoleRoutes.routes,
-    development: process.env.NODE_ENV !== "production" && {
-      // Enable browser hot reloading in development
-      hmr: true,
-
-      // Echo console logs from the browser to the server
-      console: true,
-    },
+    fetch: consoleRoutes.app.fetch,
+    websocket: consoleRoutes.websocket,
   });
 
   const loopbackConsolePort = loopbackServer.port;
@@ -142,9 +136,49 @@ export function startConsoleServer({
 
   // Outer console server: exposed publicly on port 443.
   // Checks the client IP against the shared allowlist before proxying to the loopback server.
+  type OuterWsData = {
+    loopbackWsUrl: string;
+    protocols: string[] | undefined;
+    target?: WebSocket;
+  };
+
+  const outerWebSocket: Bun.WebSocketHandler<OuterWsData> = {
+    open(ws) {
+      const { loopbackWsUrl, protocols } = ws.data;
+      try {
+        const target = protocols ? new WebSocket(loopbackWsUrl, protocols) : new WebSocket(loopbackWsUrl);
+
+        target.binaryType = 'arraybuffer';
+
+        target.onopen = () => {
+          // noop
+        };
+
+        target.onmessage = (ev) => {
+          try { ws.send(ev.data as string | ArrayBuffer); } catch {}
+        };
+
+        target.onclose = () => { try { ws.close(); } catch {} };
+        target.onerror = () => { try { ws.close(); } catch {} };
+
+        ws.data.target = target;
+      } catch (err) {
+        try { ws.close(); } catch {}
+      }
+    },
+    message(ws, data) {
+      const { target } = ws.data;
+      if (target) try { target.send(data as string | ArrayBuffer); } catch {}
+    },
+    close(ws) {
+      const { target } = ws.data;
+      if (target) try { target.close(); } catch {}
+    },
+  };
+
   let outerServer: ReturnType<typeof serve>;
   try {
-    outerServer = serve({
+    outerServer = serve<OuterWsData>({
       port: 443,
       async fetch(req, server) {
         const requestStartTime = Date.now();
@@ -184,7 +218,7 @@ export function startConsoleServer({
         }
 
         try {
-          // Proxy to the loopback console server, which handles HTML bundling and routing.
+          // Proxy to the loopback console server, which handles routing.
             const proxyURL = new URL(req.url);
             proxyURL.protocol = 'http:';
             proxyURL.hostname = '127.0.0.1';
@@ -199,40 +233,24 @@ export function startConsoleServer({
               try {
                 const wsPath = `${proxyURL.pathname}${proxyURL.search}`;
                 const loopbackWsUrl = `ws://127.0.0.1:${loopbackConsolePort}${wsPath}`;
-                const upgraded = (Bun as any).upgradeWebSocket(req, {
-                  open(clientWs: any) {
-                    try {
-                      const protocolsHeader = req.headers.get('sec-websocket-protocol');
-                      const protocols = protocolsHeader ? protocolsHeader.split(',').map((s) => s.trim()) : undefined;
-                      const target = protocols ? new WebSocket(loopbackWsUrl, protocols) : new WebSocket(loopbackWsUrl);
-
-                      target.binaryType = 'arraybuffer';
-
-                      target.onopen = () => {
-                        // noop
-                      };
-
-                      target.onmessage = (ev: any) => {
-                        try { clientWs.send(ev.data); } catch {}
-                      };
-
-                      target.onclose = () => { try { clientWs.close(); } catch {} };
-                      target.onerror = () => { try { clientWs.close(); } catch {} };
-
-                      clientWs.onmessage = (ev: any) => {
-                        try { target.send(ev.data); } catch {}
-                      };
-                      clientWs.onclose = () => { try { target.close(); } catch {} };
-                      clientWs.onerror = () => { try { target.close(); } catch {} };
-                    } catch (err) {
-                      try { clientWs.close(); } catch {}
-                    }
-                  },
-                  message() {},
-                  close() {},
-                  error() {},
-                });
-                return upgraded.response;
+                const protocolsHeader = req.headers.get('sec-websocket-protocol');
+                const protocols = protocolsHeader ? protocolsHeader.split(',').map((s) => s.trim()) : undefined;
+                const upgraded = server.upgrade(req, { data: { loopbackWsUrl, protocols } });
+                if (!upgraded) {
+                  statusCode = 502;
+                  errorLogger.write({
+                    event: 'console_ws_proxy_failed',
+                    clientIp: clientIpAddress,
+                    method: req.method,
+                    path: requestURL.pathname,
+                    query: requestURL.search,
+                    error: 'WebSocket upgrade failed',
+                    userAgent,
+                    referer,
+                  });
+                  return new Response('Bad Gateway', { status: 502 });
+                }
+                return undefined;
               } catch (err) {
                 statusCode = 502;
                 errorLogger.write({
@@ -286,6 +304,7 @@ export function startConsoleServer({
           });
         }
       },
+      websocket: outerWebSocket,
       tls: {
         cert: Bun.file(certPath),
         key: Bun.file(keyPath),
