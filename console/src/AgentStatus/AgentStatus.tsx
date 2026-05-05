@@ -149,16 +149,6 @@ export const AgentStatus = () => {
             {agentStatusError ? `取得エラー: ${agentStatusError}` : `最終更新: ${lastUpdatedTime || "未取得"}`}
           </p>
         </div>
-        {isShowingMockAgentState ? (
-          <Container>
-            <div
-              data-testid="agent-status-mock-notice"
-              className="w-full bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50"
-            >
-              {AGENT_STATE_MOCK_NOTICE_MESSAGE}
-            </div>
-          </Container>
-        ) : null}
       </div>
       {agentStatusSections.length === 0 ? (
         <Container>

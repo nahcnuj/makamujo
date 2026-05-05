@@ -18,7 +18,7 @@ export const AgentStatusSectionCard = ({
 }: AgentStatusSectionCardProps) => {
   return (
       <section className={[
-        "bg-emerald-950/70 border-2 border-emerald-300 rounded-xl p-3 text-emerald-50 min-w-0 overflow-hidden flex flex-col",
+        "bg-emerald-950/70 rounded-sm p-3 text-emerald-50 min-w-0 overflow-hidden flex flex-col",
         className,
       ].filter(Boolean).join(" ")}>
         {!hideTitle ? (

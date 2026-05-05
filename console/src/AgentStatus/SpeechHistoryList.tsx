@@ -206,18 +206,18 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHisto
         <NewItemsButton count={pendingNewCount} onClick={handleScrollToTop} />
       ) : null}
       <div ref={topSentinelRef} aria-hidden="true" className="h-0" />
-      <ul className="grid grid-cols-1 gap-2" style={{ scrollbarWidth: "thin" }}>
+      <ul className="grid grid-cols-1 gap-4" style={{ scrollbarWidth: "thin" }}>
         {allItems.map((speechHistoryItem, index) => (
           <li
             key={speechHistoryItem.id}
             className={index === 0 && emphasizeLatest
-              ? "rounded-md border border-emerald-300/30 border-b border-b-emerald-300/80 p-2"
-              : "rounded-md border border-emerald-300/30 p-2"
+              ? "rounded-sm border-b border-b-emerald-300/80 px-1"
+              : "rounded-sm px-1"
             }
             style={index === 0 && emphasizeLatest ? {
               "--speech-history-border-bottom-width": EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH,
               borderBottomWidth: "var(--speech-history-border-bottom-width)",
-              paddingBottom: "calc(0.5rem - var(--speech-history-border-bottom-width))",
+              paddingBottom: "calc(0.2rem - var(--speech-history-border-bottom-width))",
             } as React.CSSProperties : undefined}
           >
             <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-2">
