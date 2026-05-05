@@ -177,7 +177,7 @@ export const app = new Hono()
       onError() { cancelForward?.(); },
     };
   }))
-  .get('/console/robots.txt', () => robotsTxt)
+  .get('/console/robots.txt', () => robotsTxt.clone())
   .get('/console/api/agent-state', () => agentState.GET())
   .get('/console/api/speech-history', (c) => speechHistory.GET(c.req.raw))
   .get('/console/frontend.js', async (c) => await serveConsoleAsset(c.req.raw) ?? new Response('Not Found', { status: 404 }))
