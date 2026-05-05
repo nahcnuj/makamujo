@@ -146,7 +146,7 @@ export function startConsoleServer({
     open(ws) {
       const { loopbackWsUrl, protocols } = ws.data;
       try {
-        const target = protocols ? new WebSocket(loopbackWsUrl, protocols) : new WebSocket(loopbackWsUrl);
+        const target = new WebSocket(loopbackWsUrl, protocols);
 
         target.binaryType = 'arraybuffer';
 

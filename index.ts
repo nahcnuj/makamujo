@@ -469,7 +469,11 @@ const makeWsRouteHandler = (label: string) =>
     }
 
     const upgraded = server.upgrade(req, { data: { label } satisfies WsData });
-    return upgraded ? undefined : new Response('WebSocket upgrade failed', { status: 400 });
+    if (!upgraded) {
+      try { console.warn(`[WARN] WebSocket upgrade failed for ${label}`, { upgrade: req.headers.get('upgrade'), secWebSocketKey: req.headers.get('sec-websocket-key') }); } catch {}
+      return new Response('WebSocket upgrade failed', { status: 400 });
+    }
+    return undefined;
   };
 
 const server = serve<WsData>({
