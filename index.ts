@@ -449,7 +449,12 @@ let mainBuildPromise: Promise<void> | null = null;
 let builtMainHtml: string | null = null;
 
 function normalizeMainHtml(source: string): string {
-  return source.replace(/src="\.\/frontend\.tsx"/, 'src="./frontend.js"');
+  // Replace the TypeScript entrypoint reference with the compiled output filename.
+  const result = source.replace(/src=(["'])\.\/frontend\.tsx\1/, 'src=$1./frontend.js$1');
+  if (result === source) {
+    console.warn('[WARN] normalizeMainHtml: expected <script src="./frontend.tsx"> was not found in HTML');
+  }
+  return result;
 }
 
 async function buildMainFrontend() {
@@ -463,6 +468,12 @@ async function buildMainFrontend() {
     minify: process.env.NODE_ENV === 'production',
     // Redirect React imports to hono/jsx/dom so AGT components share the
     // same JSX runtime as the app's own hono/jsx/dom code.
+    // This is safe because the AGT components used in this codebase (Box,
+    // Container, Layout, HighlightOnChange, CharacterSprite) only rely on
+    // the subset of React APIs (createElement, hooks) that hono/jsx/dom
+    // also implements. AGT-specific React APIs (e.g. createRoot) are never
+    // imported in src/; they remain available in console/src/ which has its
+    // own separate build.
     // @ts-expect-error: alias is a valid Bun.build option but not yet typed in bun-types
     alias: {
       'react': 'hono/jsx/dom',
@@ -481,6 +492,8 @@ function ensureMainFrontendBuilt(): Promise<void> {
       try {
         await buildMainFrontend();
       } catch (error) {
+        // Reset so the next request can retry the build.
+        mainBuildPromise = null;
         console.error('[ERROR] main frontend build failed', error);
         throw error;
       }
@@ -493,9 +506,13 @@ function getMainFrontendAssetPath(pathname: string): string | null {
   // Only serve files (paths with an extension that aren't root-only)
   if (!pathname.includes('.') || pathname.endsWith('/')) return null;
   const resolved = resolve(MAIN_BUILD_PATH, pathname.slice(1));
-  if (!resolved.startsWith(MAIN_BUILD_PATH + '/')) return null;
-  if (!existsSync(resolved)) return null;
-  return resolved;
+  // Prevent path traversal: ensure the resolved path is within the build directory.
+  // Normalize both paths before comparing to handle any OS-specific separator differences.
+  const normalizedBuildPath = resolve(MAIN_BUILD_PATH);
+  const normalizedResolved = resolve(resolved);
+  if (!normalizedResolved.startsWith(normalizedBuildPath + '/')) return null;
+  if (!existsSync(normalizedResolved)) return null;
+  return normalizedResolved;
 }
 
 function getMainAssetContentType(filePath: string): string | undefined {
@@ -528,10 +545,17 @@ const makeStreamHandler = (label: string) =>
     return new Response('websocket upgrade unavailable', { status: 501 });
   };
 
-// mainServer is assigned immediately after serve() returns; closures in
-// mainApp route handlers capture it by reference so it is always defined
-// when a handler actually runs.
+// mainServer is assigned synchronously via `const server = mainServer = serve(...)`
+// below. Route handlers only run when requests arrive (after the event-loop
+// yields), so mainServer is always defined by the time a handler executes.
+// The non-null assertion (!) is therefore safe; the runtime check below
+// provides an extra guard for unexpected scenarios.
 let mainServer!: Bun.Server<WsData>;
+
+const getMainServer = (): Bun.Server<WsData> => {
+  if (!mainServer) throw new Error('Server not yet initialized');
+  return mainServer;
+};
 
 const mainApp = new Hono()
   // Static assets from the public directory
@@ -539,9 +563,9 @@ const mainApp = new Hono()
   .get('/favicon-32x32.png', () => new Response(Bun.file('./src/public/favicon-32x32.png')))
 
   // Root HTTP handlers (broadcast/comment ingestion)
-  .post('/', (c) => index.POST(c.req.raw, mainServer.requestIP(c.req.raw)))
+  .post('/', (c) => index.POST(c.req.raw, getMainServer().requestIP(c.req.raw)))
   .put('/', async (c) => {
-    const res = await index.PUT(c.req.raw, mainServer.requestIP(c.req.raw));
+    const res = await index.PUT(c.req.raw, getMainServer().requestIP(c.req.raw));
     if (!res.ok) {
       console.error('response is not ok', res);
       return res;
@@ -575,6 +599,10 @@ const mainApp = new Hono()
   // Serve the built frontend (HTML + JS/CSS assets)
   .all('*', async (c) => {
     await ensureMainFrontendBuilt();
+    if (!builtMainHtml) {
+      // Build succeeded but HTML is unexpectedly missing — should not happen.
+      return new Response('Frontend build incomplete', { status: 503 });
+    }
     const assetPath = getMainFrontendAssetPath(new URL(c.req.url).pathname);
     if (assetPath) {
       const headers: Record<string, string> = {};
@@ -582,7 +610,7 @@ const mainApp = new Hono()
       if (ct) headers['Content-Type'] = ct;
       return new Response(Bun.file(assetPath), { headers });
     }
-    return new Response(builtMainHtml ?? '', {
+    return new Response(builtMainHtml, {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
   });
@@ -599,7 +627,11 @@ const server = mainServer = serve<WsData>({
       const label = url.pathname;
       try { console.log(`[TRACE] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
       const upgraded = server.upgrade(req, { data: { label } satisfies WsData });
-      if (upgraded) return undefined;
+      if (upgraded) {
+        // undefined signals Bun that the connection was upgraded to WebSocket
+        // and no HTTP response should be sent back.
+        return undefined;
+      }
       try { console.warn(`[WARN] WebSocket upgrade failed for ${label}`, { upgrade: req.headers.get('upgrade'), secWebSocketKey: req.headers.get('sec-websocket-key') }); } catch {}
       return new Response('WebSocket upgrade failed', { status: 400 });
     }
