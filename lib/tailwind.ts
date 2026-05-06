@@ -53,7 +53,6 @@ function walkFiles(directory: string, candidates: Set<string>) {
       walkFiles(fullPath, candidates);
       continue;
     }
-
     const extension = extname(entry.name);
     if (!candidateExtensions.has(extension)) continue;
     const content = readFileSync(fullPath, "utf-8");
