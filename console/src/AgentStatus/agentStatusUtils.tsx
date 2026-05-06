@@ -129,12 +129,6 @@ export const createReplyTargetCommentValueComponent = (
           )
         ))}
       </p>
-      {pickedTopic ? (
-        <div className="inline-flex flex-wrap items-center gap-2 rounded border border-emerald-300/40 bg-emerald-950/40 px-2 py-1 text-xs text-emerald-100">
-          <span className="text-slate-300">picked topic</span>
-          <span className="font-semibold">{pickedTopic}</span>
-        </div>
-      ) : null}
     </div>
   );
 };

@@ -193,7 +193,6 @@ describe("createAgentStatusRows", () => {
 
     expect(html).toContain("このコメントに");
     expect(html).toContain("します");
-    expect(html).toContain("picked topic");
     expect(html).toContain("返信");
     expect(html).toContain("bg-emerald-300/30");
   });
