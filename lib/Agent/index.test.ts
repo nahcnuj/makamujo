@@ -90,6 +90,19 @@ describe('per-program comment tracking', () => {
     expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(3);
   });
 
+  it('stores replyTargetComment in the stream state when a comment triggers reply generation', () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    agent.onAir(niconamaLive(10));
+
+    agent.listen([viewerComment]);
+
+    const streamState = agent.streamState as any;
+    expect(streamState?.replyTargetComment).toBeDefined();
+    expect(streamState.replyTargetComment.text).toBe('こんにちは');
+    expect(typeof streamState.replyTargetComment.pickedTopic).toBe('string');
+    expect(streamState.replyTargetComment.pickedTopic.length).toBeGreaterThan(0);
+  });
+
   it('does not count system messages as user comments', () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaLive(10));

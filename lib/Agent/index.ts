@@ -226,6 +226,12 @@ export class MakaMujo {
         const topic = pickTopic(comment);
         if (topic) {
           // console.debug('[DEBUG]', 'picked a word', `"${topic}"`, 'from', `"${comment}"`);
+          if (this.#streamState && typeof this.#streamState === 'object') {
+            (this.#streamState as Record<string, unknown>).replyTargetComment = {
+              text: comment,
+              pickedTopic: topic,
+            };
+          }
           this.speech(this.#talkModel.generate(topic, this.#currentNGramSize));
         }
       }
