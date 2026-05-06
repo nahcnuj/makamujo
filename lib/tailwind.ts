@@ -31,7 +31,8 @@ function extractCandidatesFromContent(content: string, extension: string): Set<s
   if (extension === ".css") {
     const applyRegex = /@apply\s+([^;]+);/g;
     for (const match of content.matchAll(applyRegex)) {
-      for (const candidate of match[1].trim().split(/\s+/)) {
+      const raw = match[1] ?? "";
+      for (const candidate of raw.trim().split(/\s+/)) {
         if (candidate) candidates.add(candidate);
       }
     }
