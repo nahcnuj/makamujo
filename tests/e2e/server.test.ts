@@ -155,6 +155,36 @@ test.describe("server", () => {
     expect(metaJson.niconama.meta.total).not.toHaveProperty('comments');
   });
 
+  test("preserves replyTargetComment when normalizing legacy /api/meta payload", async ({ request }) => {
+    const legacyRes = await request.post(`${BASE_URL}/api/meta`, {
+      data: {
+        type: 'niconama',
+        data: {
+          isLive: true,
+          title: 'legacy reply target',
+          startTime: 0,
+          total: 1,
+          points: { gift: 0, ad: 0 },
+          url: 'https://example.com/legacy-reply',
+        },
+        replyTargetComment: {
+          text: 'Legacy 返信先コメント',
+          pickedTopic: '返信',
+        },
+      },
+    });
+    expect(legacyRes.ok()).toBeTruthy();
+
+    const metaRes = await request.get(`${BASE_URL}/api/meta`);
+    expect(metaRes.ok()).toBeTruthy();
+    const metaJson = await metaRes.json();
+    expect(metaJson).toHaveProperty('replyTargetComment');
+    expect(metaJson.replyTargetComment).toEqual({
+      text: 'Legacy 返信先コメント',
+      pickedTopic: '返信',
+    });
+  });
+
   test("accepts PUT / via comment route", async ({ request }) => {
     const postRes = await request.post(`${BASE_URL}/`);
     expect(postRes.ok()).toBeTruthy();

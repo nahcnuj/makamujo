@@ -5,6 +5,9 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
 
   const rawState = state as Record<string, unknown>;
 
+  // Preserve any top-level custom fields while normalizing legacy payloads.
+  // This is important for values like replyTargetComment, commentCount, and
+  // speechHistory that are not part of the legacy `type/data` structure.
   if (rawState.type === 'niconama') {
     const data = rawState.data as Record<string, unknown> | undefined;
     const total: Record<string, unknown> = {};
