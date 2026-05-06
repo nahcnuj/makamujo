@@ -13,7 +13,7 @@ export { setBroadcastingTarget } from "../../lib/console-proxy";
 import * as agentState from "./api/agent-state";
 import * as speechHistory from "./api/speech-history";
 import robotsTxt from "./robots.txt";
-import { compileTailwindCss } from "../../lib/tailwind";
+import { compileTailwindCss, createCssResponse } from "../../lib/tailwind";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
@@ -190,10 +190,9 @@ export const app = new Hono()
   .get('/console/robots.txt', () => robotsTxt.clone())
   .get('/console/api/agent-state', () => agentState.GET())
   .get('/console/api/speech-history', (c) => speechHistory.GET(c.req.raw))
-  .get('/console/index.css', async () => {
-    return new Response(await compileTailwindCss('console/src/index.css'), {
-      headers: { 'Content-Type': 'text/css; charset=utf-8' },
-    });
+  .get('/console/index.css', async (c) => {
+    const css = await compileTailwindCss('console/src/index.css');
+    return createCssResponse(css, c.req.raw);
   })
   .get('/console/frontend.js', async (c) => await serveConsoleAsset(c.req.raw) ?? new Response('Not Found', { status: 404 }))
   .get('/console/frontend.css', async (c) => await serveConsoleAsset(c.req.raw) ?? new Response('Not Found', { status: 404 }))
