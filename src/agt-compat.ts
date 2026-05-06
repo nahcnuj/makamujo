@@ -6,7 +6,7 @@
  * At runtime these are the real AGT components; the casts only affect
  * TypeScript's view of them.
  */
-import type { FC } from "hono/jsx/dom";
+import type { Child, FC } from "hono/jsx/dom";
 import {
   Box as _Box,
   Container as _Container,
@@ -22,10 +22,13 @@ export { useInterval };
 // with hono's own type definitions without importing internal hono types.
 type HonoReturn = ReturnType<FC<{}>>;
 
+type HonoizeChildren<Props> = Omit<Props, 'children'> & { children?: Child };
+
 // Cast to a hono-compatible function signature so that AGT's React-typed
 // components are accepted by hono/jsx/dom JSX without TypeScript type errors.
-// The component prop types are preserved from the original AGT exports.
-type HonoComponent<Props> = (props: Props) => HonoReturn;
+// The component prop types are preserved from the original AGT exports,
+// except React's `children` type is remapped to Hono's `Child`.
+type HonoComponent<Props> = (props: HonoizeChildren<Props>) => HonoReturn;
 
 export const Box = _Box as unknown as HonoComponent<Parameters<typeof _Box>[0]>;
 export const Container = _Container as unknown as HonoComponent<Parameters<typeof _Container>[0]>;

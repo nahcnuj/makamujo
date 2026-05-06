@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "imports": {
+    "react": "hono/jsx/dom",
+    "react/jsx-runtime": "hono/jsx/dom/jsx-runtime"
+  },
   "scripts": {
     "dev": "bun --hot index.ts --port=8777",
     "setup": "bun --version && bun ci && bun run typecheck",
@@ -21,10 +25,10 @@
   },
   "dependencies": {
     "@playwright/browser-chromium": "^1.59.1",
-    "automated-gameplay-transmitter": "^0.6.3",
+    "automated-gameplay-transmitter": "^0.6.4",
     "bun": "^1.3.13",
     "bun-plugin-tailwind": "^0.1.2",
-    "hono": "4.12.16",
+    "hono": "4.12.17",
     "playwright": "^1.59.1",
     "playwright-extra": "^4.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
@@ -34,6 +38,7 @@
     "@playwright/test": "^1.59.1",
     "@types/bun": "latest",
     "@types/node": "^24.12.2",
+    "react": "^18.3.1",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }
