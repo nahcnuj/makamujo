@@ -20,8 +20,7 @@
     "browser": "node --import tsx ./bin/x/browser.ts",
     "generate-ogp": "bun run scripts/generate-ogp.ts",
     "generate-banner": "bun run scripts/generate-banner.ts",
-    "screenshot:console-agent-status": "bun run scripts/capture-console-agent-status.ts",
-    "screenshot:annotate-ocr": "bun run scripts/annotate-console-screenshot-ocr.ts"
+    "screenshot:console-agent-status": "bun run scripts/capture-console-agent-status.ts"
   },
   "dependencies": {
     "@playwright/browser-chromium": "^1.59.1",
