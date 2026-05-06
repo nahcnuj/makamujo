@@ -14,6 +14,7 @@ import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { startConsoleServer } from "./console/index";
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
+import { normalizePublishedStreamState, normalizeSpeechText } from "./src/lib/streamState";
 import * as index from "./routes/index";
 import * as speechHistoryRoute from "./routes/api/speech-history";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
@@ -24,25 +25,12 @@ process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
 process.on('SIGUSR1', signalHandler.bind(null, { exit: true }));
 process.on('SIGUSR2', signalHandler.bind(null, { exit: true }));
-// Log uncaught exceptions for better diagnostics before invoking the
-// existing exit handler which terminates the process.
 process.on('uncaughtException', (err) => {
   try {
     console.error('[UNCAUGHT_EXCEPTION]', err instanceof Error ? err.stack ?? err.message : String(err));
   } catch {
     // ignore logging failures
   }
-});
-process.on('unhandledRejection', (reason) => {
-  try {
-    console.error('[UNHANDLED_REJECTION]', reason instanceof Error ? reason.stack ?? reason.message : String(reason));
-  } catch { }
-});
-process.on('uncaughtException', (err) => {
-  try {
-    // Log the exception for diagnostics
-    console.error('[UNCAUGHT_EXCEPTION]', err instanceof Error ? err.stack ?? err.message : String(err));
-  } catch { }
 
   // Do not terminate the process for transient IPC listen failures
   // (e.g., EADDRINUSE on Windows named pipes) so tests can recover.
@@ -52,8 +40,12 @@ process.on('uncaughtException', (err) => {
     return;
   }
 
-  // For other uncaught exceptions, perform the existing exit behavior.
   exitHandler({ exit: true }, 1);
+});
+process.on('unhandledRejection', (reason) => {
+  try {
+    console.error('[UNHANDLED_REJECTION]', reason instanceof Error ? reason.stack ?? reason.message : String(reason));
+  } catch { }
 });
 
 const { values: {
@@ -179,52 +171,6 @@ const broadcastCurrentPayload = (context: string) => {
   }
 };
 
-const normalizePublishedStreamState = (state: unknown): unknown => {
-  if (!state || typeof state !== 'object') {
-    return state;
-  }
-
-  const rawState = state as Record<string, unknown>;
-
-  if (rawState.type === 'niconama') {
-    const data = rawState.data as Record<string, unknown> | undefined;
-    const total: Record<string, unknown> = {};
-    if (typeof data?.total === 'number') {
-      total.listeners = data.total;
-    }
-    if (data?.points && typeof (data.points as Record<string, unknown>).gift !== 'undefined') {
-      total.gift = (data.points as Record<string, unknown>).gift;
-    }
-    if (data?.points && typeof (data.points as Record<string, unknown>).ad !== 'undefined') {
-      total.ad = (data.points as Record<string, unknown>).ad;
-    }
-
-    return {
-      niconama: {
-        type: data?.isLive ? 'live' : 'offline',
-        meta: {
-          title: data?.title ?? undefined,
-          url: data?.url ?? undefined,
-          start: data?.startTime ?? undefined,
-          total: Object.keys(total).length > 0 ? total : undefined,
-        },
-      },
-    };
-  }
-
-  if ('niconama' in rawState && rawState.niconama && typeof rawState.niconama === 'object') {
-    return rawState;
-  }
-
-  if (rawState.type === 'live' || rawState.type === 'offline') {
-    return {
-      niconama: rawState,
-    };
-  }
-
-  return rawState;
-};
-
 const getCurrentStreamPayload = () => {
   const agentStreamState = agent.getStreamState?.();
   const streamState = (lastPublishedStreamState === undefined || lastPublishedStreamState === null)
@@ -247,26 +193,6 @@ const getCurrentStreamPayload = () => {
     replyTargetComment,
     commentCount: base.commentCount ?? streamer.streamState?.meta?.total?.comments,
   } as const;
-};
-
-const normalizeSpeechText = (speech: unknown): string | undefined => {
-  if (typeof speech === 'string') {
-    return speech;
-  }
-
-  if (!speech || typeof speech !== 'object') {
-    return undefined;
-  }
-
-  if (typeof (speech as any).text === 'string') {
-    return (speech as any).text;
-  }
-
-  if (typeof (speech as any).speech === 'string') {
-    return (speech as any).speech;
-  }
-
-  return undefined;
 };
 
 let agent: any = {

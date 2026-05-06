@@ -1,3 +1,5 @@
+import { normalizeSpeechText } from "../lib/streamState";
+
 /**
  * Update `speech` and `silent` state from a `/api/speech` response.
  * `speech` is only replaced when the response contains a non-empty string, so
@@ -7,26 +9,6 @@ type SpeechPayload =
   | string
   | { text?: string; nodes?: readonly string[] }
   | { speech?: string; text?: string; nodes?: readonly string[] };
-
-const normalizeSpeechText = (speech: SpeechPayload | undefined): string | undefined => {
-  if (typeof speech === 'string') {
-    return speech;
-  }
-
-  if (!speech || typeof speech !== 'object') {
-    return undefined;
-  }
-
-  if ('text' in speech && typeof speech.text === 'string') {
-    return speech.text;
-  }
-
-  if ('speech' in speech && typeof speech.speech === 'string') {
-    return speech.speech;
-  }
-
-  return undefined;
-};
 
 export function updateSpeechState(
   res: { speech?: SpeechPayload; silent?: boolean },

@@ -1,4 +1,6 @@
 /** @jsxImportSource hono/jsx */
+import { normalizeSpeechText } from "../../../src/lib/streamState";
+export { normalizeSpeechText };
 import type { AgentStateResponse } from "./types";
 import type { Child, CSSProperties } from "hono/jsx";
 
@@ -57,33 +59,6 @@ export const formatNGramValue = (nGram: number | undefined, nGramRaw: number | u
   }
   const formattedRaw = Number(nGramRaw).toFixed(2);
   return `${nGramValue} (${formattedRaw})`;
-};
-
-type SpeechPayload =
-  | string
-  | { text?: string; nodes?: readonly string[] }
-  | ({ speech?: string | { text?: string; nodes?: readonly string[] } | { speech?: string; text?: string; nodes?: readonly string[] }; silent?: boolean })
-  | undefined;
-
-export const normalizeSpeechText = (speech: SpeechPayload): string | undefined => {
-  if (typeof speech === "string") {
-    return speech.trim() || undefined;
-  }
-
-  if (speech && typeof speech === "object") {
-    const textValue = typeof (speech as any).text === "string"
-      ? (speech as any).text
-      : typeof (speech as any).speech === "string"
-        ? (speech as any).speech
-        : typeof (speech as any).speech === "object"
-          ? typeof (speech as any).speech.text === "string"
-            ? (speech as any).speech.text
-            : undefined
-          : undefined;
-    return typeof textValue === "string" ? textValue.trim() || undefined : undefined;
-  }
-
-  return undefined;
 };
 
 const createHighlightedCommentLines = (commentText: string, pickedTopic: string) => {
