@@ -349,9 +349,16 @@ const apiApp = new Hono()
         return Response.json({}, { status: 400 });
       }
 
-      const replyTargetComment = body && typeof body === 'object' && 'replyTargetComment' in body
-        ? (body as any).replyTargetComment
-        : undefined;
+      const replyTargetComment = (() => {
+        if (body && typeof body === 'object' && 'replyTargetComment' in body) {
+          return (body as any).replyTargetComment;
+        }
+        const nestedData = body && typeof body === 'object' && 'data' in body ? (body as any).data : undefined;
+        if (nestedData && typeof nestedData === 'object' && 'replyTargetComment' in nestedData) {
+          return (nestedData as any).replyTargetComment;
+        }
+        return undefined;
+      })();
       let published: unknown = body;
       if (published && typeof published === 'object' && !('type' in published) && 'data' in published) {
         published = (published as any).data;
