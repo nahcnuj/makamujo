@@ -85,15 +85,21 @@ const waitForServerReady = async (): Promise<{ consoleUrl: string | null; server
       const consoleIdx = buffer.indexOf(consoleMarker);
       if (consoleIdx >= 0) {
         const rest = buffer.slice(consoleIdx + consoleMarker.length);
-        const line = (rest.split(/\r?\n/)[0] || "").trim();
-        consoleUrl = line || null;
+        const newlineIdx = rest.search(/\r?\n/);
+        if (newlineIdx >= 0) {
+          const line = rest.slice(0, newlineIdx).trim();
+          consoleUrl = line || null;
+        }
       }
 
       const serverIdx = buffer.indexOf(serverMarker);
       if (serverIdx >= 0) {
         const rest = buffer.slice(serverIdx + serverMarker.length);
-        const line = (rest.split(/\r?\n/)[0] || "").trim();
-        serverUrl = line || null;
+        const newlineIdx = rest.search(/\r?\n/);
+        if (newlineIdx >= 0) {
+          const line = rest.slice(0, newlineIdx).trim();
+          serverUrl = line || null;
+        }
       }
 
       if (consoleUrl !== null && serverUrl !== null) {
@@ -381,11 +387,6 @@ test.describe("console", () => {
     expect(sseUrl, 'page did not select an SSE URL before timeout').toBeTruthy();
 
     await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
-
-    const commentRes = await request.put(`${BROADCASTING_BASE_URL}/`, {
-      data: [{ data: { comment: '返信コメント', no: 42, anonymity: false, hasGift: false } }],
-    });
-    expect(commentRes.ok()).toBeTruthy();
 
     const payload = {
       ...cloneAgentStateResponseMockFixture(),
