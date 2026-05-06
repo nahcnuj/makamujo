@@ -12,7 +12,8 @@ test("compiles main Tailwind CSS without unresolved directives and includes app 
   expect(css).toContain(".min-w-\\[320px\\]");
   expect(css).toContain("overflow-hidden");
   expect(css).toContain("bg-emerald-950");
-  expect(css).toContain("grid");
+  expect(css).toContain("grid-cols-10");
+  expect(css).toContain("aspect-video");
 });
 
 test("compiles console Tailwind CSS without unresolved directives and includes console utilities", async () => {
