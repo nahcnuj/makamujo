@@ -1,11 +1,12 @@
 import { expect, test } from "@playwright/test";
 import { spawn } from "child_process";
 import { existsSync, writeFileSync, createWriteStream, mkdirSync } from "fs";
+import { createServer } from "node:net";
 import { join } from "path";
 import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
 
 let CONSOLE_BASE_URL = `https://127.0.0.1`;
-const BROADCASTING_BASE_URL = `http://127.0.0.1:7777`;
+let BROADCASTING_BASE_URL = `http://127.0.0.1:7777`;
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 const BROWSER_PAGE_LOAD_TIMEOUT_MS = 20_000;
 const EXPECTED_CONSOLE_TITLE = "馬可無序 - 管理コンソール";
@@ -14,8 +15,26 @@ let server: ReturnType<typeof spawn> | null = null;
 let outStream: import('fs').WriteStream | null = null;
 let errStream: import('fs').WriteStream | null = null;
 
-const waitForServerReady = async (): Promise<string | null> => {
-  return new Promise<string | null>((resolve, reject) => {
+const getFreePort = (): Promise<number> => {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.on('error', (error) => {
+      reject(error);
+    });
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      if (address && typeof address !== 'string') {
+        const port = address.port;
+        server.close(() => resolve(port));
+      } else {
+        server.close(() => reject(new Error('Failed to acquire a free port')));
+      }
+    });
+  });
+};
+
+const waitForServerReady = async (): Promise<{ consoleUrl: string | null; serverUrl: string | null }> => {
+  return new Promise<{ consoleUrl: string | null; serverUrl: string | null }>((resolve, reject) => {
     if (!server) {
       reject(new Error("Server process not started"));
       return;
@@ -31,6 +50,8 @@ const waitForServerReady = async (): Promise<string | null> => {
 
     let settled = false;
     let buffer = "";
+    let consoleUrl: string | null = null;
+    let serverUrl: string | null = null;
 
     const cleanup = () => {
       clearTimeout(timeout);
@@ -38,13 +59,13 @@ const waitForServerReady = async (): Promise<string | null> => {
       proc.off("exit", onExit);
     };
 
-    const resolveOnce = (url?: string | null) => {
+    const resolveOnce = () => {
       if (settled) {
         return;
       }
       settled = true;
       cleanup();
-      resolve(url ?? null);
+      resolve({ consoleUrl, serverUrl });
     };
 
     const rejectOnce = (error: Error) => {
@@ -58,14 +79,25 @@ const waitForServerReady = async (): Promise<string | null> => {
 
     const onData = (chunk: Buffer | string) => {
       buffer += chunk.toString();
-      const marker = "Console running at ";
-      const idx = buffer.indexOf(marker);
-      if (idx >= 0) {
-        const rest = buffer.slice(idx + marker.length);
+      const consoleMarker = "Console running at ";
+      const serverMarker = "Server running at ";
+
+      const consoleIdx = buffer.indexOf(consoleMarker);
+      if (consoleIdx >= 0) {
+        const rest = buffer.slice(consoleIdx + consoleMarker.length);
         const line = (rest.split(/\r?\n/)[0] || "").trim();
-        resolveOnce(line || null);
-      } else if (buffer.includes("Console running")) {
-        resolveOnce(null);
+        consoleUrl = line || null;
+      }
+
+      const serverIdx = buffer.indexOf(serverMarker);
+      if (serverIdx >= 0) {
+        const rest = buffer.slice(serverIdx + serverMarker.length);
+        const line = (rest.split(/\r?\n/)[0] || "").trim();
+        serverUrl = line || null;
+      }
+
+      if (consoleUrl !== null && serverUrl !== null) {
+        resolveOnce();
       }
     };
 
@@ -94,10 +126,11 @@ test.beforeAll(async ({ request }) => {
   const ipcPath = process.platform === "win32"
     ? `\\.\\pipe\\makamujo-ipc-${randomId}`
     : join(process.cwd(), "var", `ipc-${randomId}.sock`);
+  const port = await getFreePort();
 
   server = spawn(
     process.platform === "win32" ? "bun.exe" : "bun",
-    ["index.ts", "--port", "7777"],
+    ["index.ts", "--port", String(port)],
     {
       env: {
         ...process.env,
@@ -123,9 +156,12 @@ test.beforeAll(async ({ request }) => {
   server.stdout?.pipe(outStream);
   server.stderr?.pipe(errStream);
 
-  const consoleUrl = await waitForServerReady();
+  const { consoleUrl, serverUrl } = await waitForServerReady();
   if (consoleUrl) {
     CONSOLE_BASE_URL = consoleUrl.replace(/\/$/, '');
+  }
+  if (serverUrl) {
+    BROADCASTING_BASE_URL = serverUrl.replace(/\/$/, '');
   }
 
   // Verify the console base URL is responding before continuing.
