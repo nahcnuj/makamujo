@@ -7,14 +7,14 @@ const MAIN_SOURCE_HTML_PATH = resolve(process.cwd(), 'src/index.html');
 let mainBuildPromise: Promise<void> | null = null;
 let builtMainHtml: string | null = null;
 
-function getContentType(filePath: string): string | undefined {
+export function getContentType(filePath: string): string | undefined {
   if (filePath.endsWith('.js')) return 'application/javascript; charset=utf-8';
   if (filePath.endsWith('.css')) return 'text/css; charset=utf-8';
   if (filePath.endsWith('.html')) return 'text/html; charset=utf-8';
   return undefined;
 }
 
-function normalizeMainHtml(source: string): string {
+export function normalizeMainHtml(source: string): string {
   const rewrittenHtml = source.replace(/src=(['"])\.\/frontend\.tsx\1/, 'src=$1./frontend.js$1');
   if (rewrittenHtml.match(/<link[^>]+href=(['"])\.\/frontend\.css\1/)) {
     return rewrittenHtml;
@@ -59,16 +59,16 @@ function ensureMainFrontendBuilt(): Promise<void> {
   return mainBuildPromise;
 }
 
-function getMainFrontendAssetPath(pathname: string): string | null {
+export function getMainFrontendAssetPath(pathname: string, buildPath: string = MAIN_BUILD_PATH): string | null {
   if (!pathname.includes('.') || pathname.endsWith('/')) return null;
 
-  const resolved = resolve(MAIN_BUILD_PATH, pathname.slice(1));
-  const normalizedBuildPath = resolve(MAIN_BUILD_PATH);
-  const normalizedResolved = resolve(resolved);
-  const relativePath = relative(normalizedBuildPath, normalizedResolved);
+  const resolvedCandidate = resolve(buildPath, pathname.slice(1));
+  const normalizedBuildPath = resolve(buildPath);
+  const normalizedResolvedCandidate = resolve(resolvedCandidate);
+  const relativePath = relative(normalizedBuildPath, normalizedResolvedCandidate);
   if (relativePath.startsWith('..')) return null;
-  if (!existsSync(normalizedResolved)) return null;
-  return normalizedResolved;
+  if (!existsSync(normalizedResolvedCandidate)) return null;
+  return normalizedResolvedCandidate;
 }
 
 export async function handleCatchAll(req: Request): Promise<Response> {

@@ -1,1 +1,0 @@
-export { handleCatchAll } from "./frontendServer";
