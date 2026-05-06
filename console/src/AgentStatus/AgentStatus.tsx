@@ -1,6 +1,6 @@
 /** @jsxImportSource hono/jsx */
 import { Container } from "../agt-compat";
-import { useCallback, useEffect, useState } from "hono/jsx";
+import { useCallback, useLayoutEffect, useState } from "hono/jsx";
 import type { AgentStatusSection, AgentStateResponse } from "./types";
 import {
   AGENT_STATE_MOCK_NOTICE_MESSAGE,
@@ -57,7 +57,7 @@ export const AgentStatus = () => {
     }
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof window === "undefined") return;
 
     if (shouldUseMockAgentState()) {

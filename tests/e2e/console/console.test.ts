@@ -320,6 +320,60 @@ test.describe("console", () => {
     await expect(detailsLocator).toContainText("4-gram", { timeout: 10_000 });
   });
 
+  test("displays replyTargetComment in the console after broadcast event", async ({ page, request }) => {
+    await page.route('**/*fonts*', (route) => route.abort());
+    await page.route('**/*fonts.googleapis.com*', (route) => route.abort());
+    await page.route('**/*fonts.gstatic.com*', (route) => route.abort());
+
+    await page.addInitScript(() => {
+      const OrigEventSource = (window as any).EventSource;
+      Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
+      (window as any).EventSource = function (url: string) {
+        const es = new OrigEventSource(url);
+        try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
+        return es;
+      } as any;
+      try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
+    });
+
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: 'domcontentloaded', timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await expect(page.getByRole('heading', { name: '馬可無序' })).toBeVisible();
+
+    await page.waitForFunction(() => (window as any).__sseUrl !== undefined, { timeout: 5_000 });
+    const sseUrl = await page.evaluate(() => (window as any).__sseUrl ?? null);
+    console.log('[TEST DIAG] page.__sseUrl ->', sseUrl);
+    expect(sseUrl, 'page did not select an SSE URL before timeout').toBeTruthy();
+
+    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
+
+    const commentRes = await request.put(`${BROADCASTING_BASE_URL}/`, {
+      data: [{ data: { comment: '返信コメント', no: 42, anonymity: false, hasGift: false } }],
+    });
+    expect(commentRes.ok()).toBeTruthy();
+
+    const payload = {
+      ...cloneAgentStateResponseMockFixture(),
+      replyTargetComment: {
+        text: 'このコメントに返信します',
+        pickedTopic: '返信',
+      },
+    };
+
+    const broadcastRes = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    expect(broadcastRes.ok, `broadcast POST failed: ${broadcastRes.status}`).toBeTruthy();
+
+    const detailsLocator = page.getByTestId('agent-status-details');
+    await detailsLocator.waitFor({ timeout: 10_000 });
+    await expect(detailsLocator).toContainText('返信先コメント', { timeout: 10_000 });
+    await expect(detailsLocator).toContainText('このコメントに返信します', { timeout: 10_000 });
+    await expect(detailsLocator).toContainText('picked topic', { timeout: 10_000 });
+    await expect(detailsLocator).toContainText('返信', { timeout: 10_000 });
+  });
+
   test("keeps SSE connection open while the console browser tab is open", async ({ page, request }) => {
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
