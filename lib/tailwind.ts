@@ -5,10 +5,20 @@ import { dirname, extname, join, resolve } from "node:path";
 
 const TAILWIND_CSS_PATH = resolve(process.cwd(), "node_modules/tailwindcss/index.css");
 const compiledCssCache = new Map<string, Promise<string>>();
-const candidateExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".html"]);
+const candidateExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".html", ".css"]);
 const excludedDirectories = new Set(["node_modules", ".git", "dist", "build"]);
 
-function extractCandidatesFromContent(content: string): Set<string> {
+function tokenizeCandidates(source: string): Set<string> {
+  const candidates = new Set<string>();
+  const tokenRegex = /[A-Za-z][A-Za-z0-9_\-:\/\[\]]{0,99}/g;
+  for (const token of source.match(tokenRegex) ?? []) {
+    if (token.includes("class=") || token.includes("className=")) continue;
+    candidates.add(token);
+  }
+  return candidates;
+}
+
+function extractCandidatesFromContent(content: string, extension: string): Set<string> {
   const candidates = new Set<string>();
   const classAttributeRegex = /(?:class|className)\s*=\s*(?:\{\s*)?(?:`([^`]+)`|(['"])(.*?)\2)\s*(?:\})?/gs;
   for (const match of content.matchAll(classAttributeRegex)) {
@@ -17,6 +27,20 @@ function extractCandidatesFromContent(content: string): Set<string> {
       if (candidate) candidates.add(candidate);
     }
   }
+
+  if (extension === ".css") {
+    const applyRegex = /@apply\s+([^;]+);/g;
+    for (const match of content.matchAll(applyRegex)) {
+      for (const candidate of match[1].trim().split(/\s+/)) {
+        if (candidate) candidates.add(candidate);
+      }
+    }
+  }
+
+  for (const token of tokenizeCandidates(content)) {
+    candidates.add(token);
+  }
+
   return candidates;
 }
 
@@ -28,9 +52,10 @@ function walkFiles(directory: string, candidates: Set<string>) {
       walkFiles(fullPath, candidates);
       continue;
     }
-    if (!candidateExtensions.has(extname(entry.name))) continue;
+    const extension = extname(entry.name);
+    if (!candidateExtensions.has(extension)) continue;
     const content = readFileSync(fullPath, "utf-8");
-    for (const candidate of extractCandidatesFromContent(content)) {
+    for (const candidate of extractCandidatesFromContent(content, extension)) {
       candidates.add(candidate);
     }
   }
