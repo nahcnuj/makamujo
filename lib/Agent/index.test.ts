@@ -70,8 +70,8 @@ const viewerComment = {
   },
 };
 
-describe('per-program comment counting', () => {
-  it('initializes comments to 0 and increments for user comments', () => {
+describe('per-program comment tracking', () => {
+  it('initializes comments to 0 and sets the latest comment number for user comments', () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaLive(10));
 
@@ -79,6 +79,15 @@ describe('per-program comment counting', () => {
 
     agent.listen([viewerComment]);
     expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(1);
+  });
+
+  it('updates to the latest comment number when new comments arrive', () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    agent.onAir(niconamaLive(10));
+    agent.listen([viewerComment]);
+
+    agent.listen([{ data: { comment: 'こんにちは', no: 3, anonymity: false, hasGift: false } } as any]);
+    expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(3);
   });
 
   it('does not count system messages as user comments', () => {
