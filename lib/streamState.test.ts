@@ -50,6 +50,7 @@ describe("normalizePublishedStreamState", () => {
     expect((normalized.niconama as Record<string, unknown>).type).toBe("live");
     expect((normalized.niconama as Record<string, unknown>).title).toBe("live state");
   });
+<<<<<<< HEAD
 
   it("preserves additional top-level fields for legacy payloads", () => {
     const legacyState = {
@@ -75,4 +76,6 @@ describe("normalizePublishedStreamState", () => {
     expect(normalized.commentCount).toBe(7);
     expect(normalized).toHaveProperty("niconama");
   });
+=======
+>>>>>>> b4c3d6e (fix(reply-target-comment): preserve replyTargetComment through legacy stream state normalization)
 });
