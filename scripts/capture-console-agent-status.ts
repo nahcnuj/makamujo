@@ -34,7 +34,10 @@ const captureScreenshot = async (url: string, outputPath: string) => {
   try {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20_000 });
     await page.getByRole("heading", { name: "馬可無序" }).waitFor();
-    await page.getByTestId("agent-status-mock-notice").waitFor();
+    await Promise.race([
+      page.getByTestId("agent-status-details").waitFor(),
+      page.getByTestId("agent-status-empty").waitFor(),
+    ]);
     mkdirSync(path.dirname(outputPath), { recursive: true });
     await page.screenshot({ path: outputPath, type: "png", fullPage: false });
   } finally {
