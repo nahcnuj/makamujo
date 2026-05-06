@@ -6,11 +6,11 @@ import { dirname, extname, join, resolve } from "node:path";
 const TAILWIND_CSS_PATH = resolve(process.cwd(), "node_modules/tailwindcss/index.css");
 const compiledCssCache = new Map<string, Promise<string>>();
 const candidateExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".html", ".css"]);
-const excludedDirectories = new Set(["node_modules", ".git", "dist", "build"]);
+const excludedDirectories = new Set(["node_modules", ".git", "build"]);
 
 function tokenizeCandidates(source: string): Set<string> {
   const candidates = new Set<string>();
-  const tokenRegex = /[A-Za-z][A-Za-z0-9_\-:\/\[\]]{0,99}/g;
+  const tokenRegex = /[A-Za-z][A-Za-z0-9_\-:\/\[\]\(\),]{0,99}/g;
   for (const token of source.match(tokenRegex) ?? []) {
     if (token.includes("class=") || token.includes("className=")) continue;
     candidates.add(token);
@@ -64,10 +64,26 @@ function walkFiles(directory: string, candidates: Set<string>) {
 }
 
 function gatherCandidatesForSource(sourcePath: string): string[] {
-  const rootDirectory = sourcePath.startsWith("console/") ? resolve(process.cwd(), "console/src") : resolve(process.cwd(), "src");
+  const rootDirectories = [
+    sourcePath.startsWith("console/") ? resolve(process.cwd(), "console/src") : resolve(process.cwd(), "src"),
+  ];
+
+  if (!sourcePath.startsWith("console/")) {
+    const agtDist = resolve(process.cwd(), "node_modules/automated-gameplay-transmitter/dist");
+    try {
+      if (statSync(agtDist).isDirectory()) {
+        rootDirectories.push(agtDist);
+      }
+    } catch {
+      // ignore missing AGT package during tests or install phases
+    }
+  }
+
   const candidates = new Set<string>();
-  if (statSync(rootDirectory).isDirectory()) {
-    walkFiles(rootDirectory, candidates);
+  for (const rootDirectory of rootDirectories) {
+    if (statSync(rootDirectory).isDirectory()) {
+      walkFiles(rootDirectory, candidates);
+    }
   }
   return [...candidates];
 }
