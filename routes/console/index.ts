@@ -13,6 +13,7 @@ export { setBroadcastingTarget } from "../../lib/console-proxy";
 import * as agentState from "./api/agent-state";
 import * as speechHistory from "./api/speech-history";
 import robotsTxt from "./robots.txt";
+import { compileTailwindCss, createCssResponse } from "../../lib/tailwind";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
@@ -156,7 +157,6 @@ export const app = new Hono()
             try { console.log('[DEBUG] opening upstream SSE fetch ->', sseUrl); } catch {}
             const res = await fetch(sseUrl, { headers: { accept: 'text/event-stream' } });
             try { console.log('[DEBUG] upstream SSE response ->', { status: res.status, contentType: res.headers.get('content-type') }); } catch {}
-
             try {
               const metaJson = await fetchMetaSnapshot(proxyBase);
               try { ws.send(JSON.stringify(metaJson)); } catch {}
@@ -190,6 +190,10 @@ export const app = new Hono()
   .get('/console/robots.txt', () => robotsTxt.clone())
   .get('/console/api/agent-state', () => agentState.GET())
   .get('/console/api/speech-history', (c) => speechHistory.GET(c.req.raw))
+  .get('/console/index.css', async (c) => {
+    const css = await compileTailwindCss('console/src/index.css');
+    return createCssResponse(css, c.req.raw);
+  })
   .get('/console/frontend.js', async (c) => await serveConsoleAsset(c.req.raw) ?? new Response('Not Found', { status: 404 }))
   .get('/console/frontend.css', async (c) => await serveConsoleAsset(c.req.raw) ?? new Response('Not Found', { status: 404 }))
   .get('/console/*', () => serveConsoleAppHtml());

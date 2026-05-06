@@ -18,6 +18,7 @@ import * as index from "./routes/index";
 import * as speechHistoryRoute from "./routes/api/speech-history";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
 import { handleCatchAll } from "./src/frontendServer";
+import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
@@ -595,6 +596,10 @@ const mainApp = new Hono()
   // WebSocket / SSE endpoints
   .get('/api/ws', (c) => makeStreamHandler('/api/ws')(c.req.raw))
   .get('/console/api/ws', (c) => makeStreamHandler('/console/api/ws')(c.req.raw))
+  .get('/index.css', async (c) => {
+    const css = await compileTailwindCss('src/index.css');
+    return createCssResponse(css, c.req.raw);
+  })
 
   // Delegate all /api/* routes to the existing Hono app
   .route('/', apiApp)
@@ -641,6 +646,19 @@ const server = mainServer = serve<WsData>({
 console.log(`🚀 Server running at ${server.url}`);
 
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
+if (process.env.NODE_ENV === "production") {
+  void (async () => {
+    try {
+      await Promise.all([
+        compileTailwindCss('src/index.css'),
+        compileTailwindCss('console/src/index.css'),
+      ]);
+      console.log('[INFO] Tailwind CSS cache primed');
+    } catch (err) {
+      console.warn('[WARN] failed to prime Tailwind CSS cache', err);
+    }
+  })();
+}
 try {
   consoleServer = startConsoleServer({
     broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
