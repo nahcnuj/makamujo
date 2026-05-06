@@ -18,6 +18,7 @@ import * as index from "./routes/index";
 import * as speechHistoryRoute from "./routes/api/speech-history";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
 import { handleCatchAll } from "./src/frontendServer";
+import { compileTailwindCss } from "./lib/tailwind";
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
@@ -595,6 +596,11 @@ const mainApp = new Hono()
   // WebSocket / SSE endpoints
   .get('/api/ws', (c) => makeStreamHandler('/api/ws')(c.req.raw))
   .get('/console/api/ws', (c) => makeStreamHandler('/console/api/ws')(c.req.raw))
+  .get('/index.css', async () => {
+    return new Response(await compileTailwindCss('src/index.css'), {
+      headers: { 'Content-Type': 'text/css; charset=utf-8' },
+    });
+  })
 
   // Delegate all /api/* routes to the existing Hono app
   .route('/', apiApp)
