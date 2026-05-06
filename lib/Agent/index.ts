@@ -60,10 +60,10 @@ export class MakaMujo {
   #lastListenerCount?: number;
   #listenersStaleSince?: Date;
   #lastCommentAt?: Date;
-  // The URL of the currently active program. Used to scope comment counting
+  // The URL of the currently active program. Used to scope comment tracking.
   #currentProgramUrl?: string;
-  // Count of user comments received for the current program URL
-  #currentProgramCommentCount = 0;
+  // Latest comment number observed for the current program URL.
+  #currentProgramLatestCommentNo = 0;
   #currentNGramSize = inferNGramSize(INITIAL_COMMENT_NUMBER);
   #currentNGramSizeRaw = inferNGramSizeRaw(INITIAL_COMMENT_NUMBER);
   #hasPromptedCommentForViewerIncrease = false;
@@ -272,12 +272,12 @@ export class MakaMujo {
       // Count user comments for the current program URL. We treat comments
       // with a numeric `no` > 0 as user comments and ignore system messages.
       if (typeof commentData.no === 'number' && commentData.no > 0 && this.#currentProgramUrl) {
-        this.#currentProgramCommentCount += 1;
+        this.#currentProgramLatestCommentNo = commentData.no;
         if (this.#streamState && this.#streamState.meta) {
           const existingTotal = this.#streamState.meta.total ?? { listeners: 0, gift: 0, ad: 0 };
           this.#streamState.meta = {
             ...this.#streamState.meta,
-            total: { ...existingTotal, comments: this.#currentProgramCommentCount },
+            total: { ...existingTotal, comments: this.#currentProgramLatestCommentNo },
           };
         }
       }
@@ -316,7 +316,7 @@ export class MakaMujo {
           // If the program URL changes, reset the per-program comment counter.
           if (this.#currentProgramUrl !== url) {
             this.#currentProgramUrl = url;
-            this.#currentProgramCommentCount = 0;
+            this.#currentProgramLatestCommentNo = 0;
             this.#hasPromptedCommentForViewerIncrease = false;
           }
 
@@ -358,7 +358,7 @@ export class MakaMujo {
           this.#listenersStaleSince = undefined;
           // Clear current program tracking when offline
           this.#currentProgramUrl = undefined;
-          this.#currentProgramCommentCount = 0;
+          this.#currentProgramLatestCommentNo = 0;
         }
 
         this.#streamState = isLive ? {
@@ -371,7 +371,7 @@ export class MakaMujo {
               listeners,
               gift: typeof points?.gift === 'string' ? Number.parseFloat(points.gift) : points?.gift,
               ad: typeof points?.ad === 'string' ? Number.parseFloat(points.ad) : points?.ad,
-              comments: this.#currentProgramCommentCount,
+              comments: this.#currentProgramLatestCommentNo,
             },
           },
         } : undefined;

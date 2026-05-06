@@ -184,7 +184,16 @@ test("comment count in /api/meta reflects PUT comments after POST /api/meta stre
     body: JSON.stringify([{ data: { comment: 'こんにちは', no: 1, anonymity: false, hasGift: false } }]),
   });
 
-  // The comment count should now be 1.
-  const updatedMeta = await (await fetch(`${BROADCASTING_BASE_URL}/api/meta`)).json() as any;
+  // The comment count should now reflect the latest comment number.
+  let updatedMeta = await (await fetch(`${BROADCASTING_BASE_URL}/api/meta`)).json() as any;
   expect(updatedMeta.commentCount).toBe(1);
+
+  await fetch(`${BROADCASTING_BASE_URL}/`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify([{ data: { comment: 'こんばんは', no: 3, anonymity: false, hasGift: false } }]),
+  });
+
+  updatedMeta = await (await fetch(`${BROADCASTING_BASE_URL}/api/meta`)).json() as any;
+  expect(updatedMeta.commentCount).toBe(3);
 });
