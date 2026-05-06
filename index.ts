@@ -19,6 +19,7 @@ import * as speechHistoryRoute from "./routes/api/speech-history";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
 import { handleCatchAll } from "./src/frontendServer";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
+import { normalizePublishedStreamState } from "./lib/streamState";
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
@@ -179,51 +180,6 @@ const broadcastCurrentPayload = (context: string) => {
   }
 };
 
-const normalizePublishedStreamState = (state: unknown): unknown => {
-  if (!state || typeof state !== 'object') {
-    return state;
-  }
-
-  const rawState = state as Record<string, unknown>;
-
-  if (rawState.type === 'niconama') {
-    const data = rawState.data as Record<string, unknown> | undefined;
-    const total: Record<string, unknown> = {};
-    if (typeof data?.total === 'number') {
-      total.listeners = data.total;
-    }
-    if (data?.points && typeof (data.points as Record<string, unknown>).gift !== 'undefined') {
-      total.gift = (data.points as Record<string, unknown>).gift;
-    }
-    if (data?.points && typeof (data.points as Record<string, unknown>).ad !== 'undefined') {
-      total.ad = (data.points as Record<string, unknown>).ad;
-    }
-
-    return {
-      niconama: {
-        type: data?.isLive ? 'live' : 'offline',
-        meta: {
-          title: data?.title ?? undefined,
-          url: data?.url ?? undefined,
-          start: data?.startTime ?? undefined,
-          total: Object.keys(total).length > 0 ? total : undefined,
-        },
-      },
-    };
-  }
-
-  if ('niconama' in rawState && rawState.niconama && typeof rawState.niconama === 'object') {
-    return rawState;
-  }
-
-  if (rawState.type === 'live' || rawState.type === 'offline') {
-    return {
-      niconama: rawState,
-    };
-  }
-
-  return rawState;
-};
 
 const getCurrentStreamPayload = () => {
   const agentStreamState = agent.getStreamState?.();
