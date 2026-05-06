@@ -59,16 +59,16 @@ function ensureMainFrontendBuilt(): Promise<void> {
   return mainBuildPromise;
 }
 
-function getMainFrontendAssetPath(pathname: string): string | null {
+export function getMainFrontendAssetPath(pathname: string, buildPath: string = MAIN_BUILD_PATH): string | null {
   if (!pathname.includes('.') || pathname.endsWith('/')) return null;
 
-  const resolved = resolve(MAIN_BUILD_PATH, pathname.slice(1));
-  const normalizedBuildPath = resolve(MAIN_BUILD_PATH);
-  const normalizedResolved = resolve(resolved);
-  const relativePath = relative(normalizedBuildPath, normalizedResolved);
+  const resolvedCandidate = resolve(buildPath, pathname.slice(1));
+  const normalizedBuildPath = resolve(buildPath);
+  const normalizedResolvedCandidate = resolve(resolvedCandidate);
+  const relativePath = relative(normalizedBuildPath, normalizedResolvedCandidate);
   if (relativePath.startsWith('..')) return null;
-  if (!existsSync(normalizedResolved)) return null;
-  return normalizedResolved;
+  if (!existsSync(normalizedResolvedCandidate)) return null;
+  return normalizedResolvedCandidate;
 }
 
 export async function handleCatchAll(req: Request): Promise<Response> {
