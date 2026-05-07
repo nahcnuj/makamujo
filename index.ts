@@ -194,15 +194,7 @@ const getCurrentStreamPayload = () => {
     : {};
   const replyTargetComment = base.replyTargetComment && typeof base.replyTargetComment === 'object'
     ? base.replyTargetComment
-    : agentBase.replyTargetComment && typeof agentBase.replyTargetComment === 'object'
-      ? agentBase.replyTargetComment
-      : undefined;
-
-  // When lastPublishedStreamState lacks niconama (e.g. after a comment-only
-  // update via POST /api/meta), fall back to the agent's own stream state so
-  // the broadcast status is preserved.
-  const normalizedAgentStreamState = normalizePublishedStreamState(agentStreamState);
-  const agentBase = normalizedAgentStreamState && typeof normalizedAgentStreamState === 'object' ? (normalizedAgentStreamState as any) : {};
+    : undefined;
 
   return {
     niconama: base.niconama ?? agentBase.niconama ?? {},
