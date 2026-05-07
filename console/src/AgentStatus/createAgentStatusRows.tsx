@@ -59,9 +59,7 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
         />
       ),
     });
-  }
-
-  if (replyTargetComment) {
+  } else if (replyTargetComment) {
     rows.push({
       label: "返信先コメント",
       valueComponent: createReplyTargetCommentValueComponent(replyTargetComment),

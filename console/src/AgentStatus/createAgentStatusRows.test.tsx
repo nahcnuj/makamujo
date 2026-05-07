@@ -198,7 +198,7 @@ describe("createAgentStatusRows", () => {
     expect(html).toContain("bg-emerald-300/30");
   });
 
-  it("renders top-level reply target comment as a separate row even when speech history exists", () => {
+  it("does not render a standalone reply row when speech history exists", () => {
     const rows = createAgentStatusRows({
       nGram: 4,
       speechHistory: [
@@ -212,15 +212,8 @@ describe("createAgentStatusRows", () => {
 
     const replyRow = rows.find((row) => row.label === "返信先コメント");
     const speechHistoryRow = rows.find((row) => row.label === "これまでの発話");
-    expect(replyRow).toBeDefined();
+    expect(replyRow).toBeUndefined();
     expect(speechHistoryRow).toBeDefined();
-
-    const html = renderToString(<MarkovModelStatusSection markovModelRows={[speechHistoryRow!, replyRow!] as any} />);
-    expect(html).toContain("返信先コメント");
-    expect(html).toContain("このコメントに");
-    expect(html).toContain("します");
-    expect(html).toContain("返信");
-    expect(html).toContain("bg-emerald-300/30");
   });
 
   it("renders trace nodes even when nGram is invalid", () => {
