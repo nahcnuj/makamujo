@@ -45,7 +45,6 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
   if (stateResponse?.replyTargetComment?.text) {
     rows.push({
       label: "返信先コメント",
-      hideLabel: true,
       valueComponent: createReplyTargetCommentValueComponent(stateResponse.replyTargetComment),
     });
   }

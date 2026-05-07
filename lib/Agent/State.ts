@@ -14,6 +14,12 @@ export type StreamMeta = {
 
 export type StreamState = AGTStreamState;
 
+export type ReplyTargetComment = {
+  text: string;
+  pickedTopic: string;
+};
+
 export type AgentState = StreamState & {
-  meta?: StreamMeta
+  meta?: StreamMeta;
+  replyTargetComment?: ReplyTargetComment;
 };

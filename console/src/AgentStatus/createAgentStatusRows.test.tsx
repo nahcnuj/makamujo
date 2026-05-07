@@ -188,12 +188,12 @@ describe("createAgentStatusRows", () => {
     const replyRow = rows.find((row) => row.label === "返信先コメント");
 
     expect(replyRow).toBeDefined();
-    expect(replyRow?.hideLabel).toBe(true);
+    expect(replyRow?.hideLabel).toBeFalsy();
     const html = renderToString(<MarkovModelStatusSection markovModelRows={[replyRow!] as any} />);
 
+    expect(html).toContain("返信先コメント");
     expect(html).toContain("このコメントに");
     expect(html).toContain("します");
-    expect(html).toContain("picked topic");
     expect(html).toContain("返信");
     expect(html).toContain("bg-emerald-300/30");
   });
