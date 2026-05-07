@@ -93,4 +93,48 @@ describe("SpeechHistoryList", () => {
 
     expect(html).not.toContain("新しい発話が");
   });
+
+  it("renders reply annotation on the first item when replyTargetComment is provided", () => {
+    const html = renderToString(
+      <SpeechHistoryList
+        initialItems={SAMPLE_ITEMS}
+        emphasizeLatest={true}
+        replyTargetComment={{ text: "おめでとうございます", pickedTopic: "おめでとう" }}
+      />,
+    );
+
+    expect(html).toContain("おめでとう");
+    expect(html).toContain("ございます");
+    expect(html).toContain("bg-emerald-300/30");
+  });
+
+  it("does not render reply annotation on non-first items", () => {
+    const items = [
+      { id: "speech-2", speechText: "secondSpeech", displayLine: "secondSpeech (n=4)", nGramLabel: "n=4", nodes: ["secondSpeech"] },
+      { id: "speech-1", speechText: "firstSpeech", displayLine: "firstSpeech (n=4)", nGramLabel: "n=4", nodes: ["firstSpeech"] },
+    ];
+    const html = renderToString(
+      <SpeechHistoryList
+        initialItems={items}
+        emphasizeLatest={true}
+        replyTargetComment={{ text: "replyComment", pickedTopic: undefined }}
+      />,
+    );
+
+    // reply annotation appears only once, before the first item's word chips
+    const replyPos = html.indexOf("replyComment");
+    const secondSpeechPos = html.indexOf("secondSpeech");
+    const firstSpeechPos = html.indexOf("firstSpeech");
+    expect(replyPos).toBeGreaterThanOrEqual(0);
+    expect(replyPos).toBeLessThan(secondSpeechPos);
+    expect(secondSpeechPos).toBeLessThan(firstSpeechPos);
+  });
+
+  it("does not render reply annotation when replyTargetComment is not provided", () => {
+    const html = renderToString(
+      <SpeechHistoryList initialItems={SAMPLE_ITEMS} emphasizeLatest={true} />,
+    );
+
+    expect(html).not.toContain("返信先:");
+  });
 });

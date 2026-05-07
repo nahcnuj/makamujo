@@ -42,12 +42,9 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
     });
   }
 
-  if (stateResponse?.replyTargetComment?.text) {
-    rows.push({
-      label: "返信先コメント",
-      valueComponent: createReplyTargetCommentValueComponent(stateResponse.replyTargetComment),
-    });
-  }
+  const replyTargetComment = stateResponse?.replyTargetComment?.text
+    ? stateResponse.replyTargetComment
+    : undefined;
 
   const isSpeechSilent = stateResponse?.speech?.silent === true;
   const speechHistoryItems = createSpeechHistoryDisplayItems(stateResponse?.speechHistory);
@@ -55,7 +52,18 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
     rows.push({
       label: "これまでの発話",
       hideLabel: true,
-      valueComponent: <SpeechHistoryList initialItems={speechHistoryItems} emphasizeLatest={!isSpeechSilent} />,
+      valueComponent: (
+        <SpeechHistoryList
+          initialItems={speechHistoryItems}
+          emphasizeLatest={!isSpeechSilent}
+          replyTargetComment={replyTargetComment}
+        />
+      ),
+    });
+  } else if (replyTargetComment) {
+    rows.push({
+      label: "返信先コメント",
+      valueComponent: createReplyTargetCommentValueComponent(replyTargetComment),
     });
   }
 

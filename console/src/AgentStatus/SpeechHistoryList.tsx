@@ -18,9 +18,15 @@ const EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH = "3px";
 const FETCH_PAGE_SIZE = 10;
 const SPEECH_HISTORY_API_PATH = "/console/api/speech-history";
 
+type ReplyTargetComment = {
+  text?: string;
+  pickedTopic?: string;
+};
+
 type SpeechHistoryListProps = {
   initialItems: SpeechHistoryDisplayItem[];
   emphasizeLatest: boolean;
+  replyTargetComment?: ReplyTargetComment;
 };
 
 /**
@@ -33,7 +39,32 @@ type SpeechHistoryListProps = {
  * sticky notification button appears at the top so the user can jump back
  * to the latest item without losing their scroll position.
  */
-export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHistoryListProps) => {
+const renderReplyAnnotation = (text: string, pickedTopic: string | undefined) => {
+  if (!pickedTopic) {
+    return <span>{text}</span>;
+  }
+  const segments = text.split(pickedTopic).flatMap((segment, idx, arr) =>
+    idx === arr.length - 1 ? [segment] : [segment, pickedTopic],
+  );
+  return (
+    <>
+      {segments.map((part, idx) =>
+        idx % 2 === 1 ? (
+          <span
+            key={`reply-highlight-${idx}`}
+            className="rounded bg-emerald-300/30 px-0.5 font-semibold text-emerald-100"
+          >
+            {part}
+          </span>
+        ) : (
+          <span key={`reply-part-${idx}`}>{part}</span>
+        ),
+      )}
+    </>
+  );
+};
+
+export const SpeechHistoryList = ({ initialItems, emphasizeLatest, replyTargetComment }: SpeechHistoryListProps) => {
   const [olderItems, setOlderItems] = useState<SpeechHistoryDisplayItem[]>([]);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -222,6 +253,11 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHisto
               paddingBottom: "calc(0.2rem - var(--speech-history-border-bottom-width))",
             } as CSSProperties : undefined}
           >
+            {index === 0 && replyTargetComment?.text ? (
+              <p className="mb-1 text-xs text-emerald-300/60 break-words">
+                {renderReplyAnnotation(replyTargetComment.text, replyTargetComment.pickedTopic)}
+              </p>
+            ) : null}
             <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-2">
               <div className="flex flex-wrap gap-1">
                 {speechHistoryItem.nodes && Array.isArray(speechHistoryItem.nodes)
