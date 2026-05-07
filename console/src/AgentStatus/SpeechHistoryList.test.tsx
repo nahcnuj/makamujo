@@ -11,6 +11,8 @@ beforeAll(() => {
   dom = new JSDOM("<!doctype html><html><body></body></html>");
   globalThis.window = dom.window as any;
   globalThis.document = dom.window.document as any;
+  globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => setTimeout(callback, 0);
+  globalThis.cancelAnimationFrame = (handle: number) => clearTimeout(handle);
 });
 
 afterAll(() => {
@@ -111,7 +113,7 @@ describe("SpeechHistoryList", () => {
     expect(html).not.toContain("新しい発話が");
   });
 
-  it("renders reply annotation inline inside the first item when replyTargetComment is provided", () => {
+  it("renders reply annotation inline inside the first item when speechHistoryItem contains a replyTargetComment", () => {
     const localContainer = document.createElement("div");
     render(
       <SpeechHistoryListItem
@@ -133,6 +135,7 @@ describe("SpeechHistoryList", () => {
     expect(replySpan?.textContent).toContain("おめでとう");
     expect(replySpan?.textContent).toContain("ございます");
   });
+
 
   it("renders reply annotations for each speech history item when each item has its own replyTargetComment", () => {
     const items = Array.from({ length: 10 }, (_, index) => ({
@@ -164,7 +167,7 @@ describe("SpeechHistoryList", () => {
     });
   });
 
-  it("does not render reply annotation on non-first items", () => {
+  it("does not render reply annotation when no speech history item contains replyTargetComment", () => {
     const items = [
       { id: "speech-2", speechText: "secondSpeech", displayLine: "secondSpeech (n=4)", nGramLabel: "n=4", nodes: ["secondSpeech"] },
       { id: "speech-1", speechText: "firstSpeech", displayLine: "firstSpeech (n=4)", nGramLabel: "n=4", nodes: ["firstSpeech"] },
@@ -173,17 +176,10 @@ describe("SpeechHistoryList", () => {
       <SpeechHistoryList
         initialItems={items}
         emphasizeLatest={true}
-        replyTargetComment={{ text: "replyComment", pickedTopic: undefined }}
       />,
     );
 
-    // reply annotation appears only once, before the first item's word chips
-    const replyPos = html.indexOf("replyComment");
-    const secondSpeechPos = html.indexOf("secondSpeech");
-    const firstSpeechPos = html.indexOf("firstSpeech");
-    expect(replyPos).toBeGreaterThanOrEqual(0);
-    expect(replyPos).toBeLessThan(secondSpeechPos);
-    expect(secondSpeechPos).toBeLessThan(firstSpeechPos);
+    expect(html).not.toContain("replyComment");
   });
 
   it("does not render reply annotation when replyTargetComment is not provided", () => {

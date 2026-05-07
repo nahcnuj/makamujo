@@ -56,7 +56,6 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
         <SpeechHistoryList
           initialItems={speechHistoryItems}
           emphasizeLatest={!isSpeechSilent}
-          replyTargetComment={replyTargetComment}
         />
       ),
     });
