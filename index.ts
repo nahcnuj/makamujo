@@ -194,7 +194,9 @@ const getCurrentStreamPayload = () => {
     : {};
   const replyTargetComment = base.replyTargetComment && typeof base.replyTargetComment === 'object'
     ? base.replyTargetComment
-    : undefined;
+    : agentBase.replyTargetComment && typeof agentBase.replyTargetComment === 'object'
+      ? agentBase.replyTargetComment
+      : undefined;
 
   return {
     niconama: base.niconama ?? agentBase.niconama ?? {},
