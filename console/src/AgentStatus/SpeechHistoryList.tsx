@@ -32,6 +32,7 @@ type SpeechHistoryItemProps = {
   isFirst: boolean;
   emphasizeLatest: boolean;
   fallbackReplyTargetComment?: ReplyTargetComment;
+  isFallbackReplyTarget?: boolean;
 };
 
 export const SpeechHistoryListItem = ({
@@ -39,10 +40,11 @@ export const SpeechHistoryListItem = ({
   isFirst,
   emphasizeLatest,
   fallbackReplyTargetComment,
+  isFallbackReplyTarget,
 }: SpeechHistoryItemProps) => {
   const replyComment = speechHistoryItem.replyTargetComment?.text
     ? speechHistoryItem.replyTargetComment
-    : isFirst
+    : isFallbackReplyTarget && fallbackReplyTargetComment?.text
       ? fallbackReplyTargetComment
       : undefined;
 
@@ -301,6 +303,13 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest, replyTargetCo
     return true;
   });
 
+  const normalizedPickedTopic = replyTargetComment?.pickedTopic?.trim();
+  const fallbackReplyTargetCommentIndex = normalizedPickedTopic
+    ? allItems.findIndex((item) => item.speechText.startsWith(normalizedPickedTopic))
+    : replyTargetComment?.text
+      ? 0
+      : -1;
+
   return (
     <div className="relative">
       {pendingNewCount > 0 ? (
@@ -315,6 +324,7 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest, replyTargetCo
             isFirst={index === 0}
             emphasizeLatest={emphasizeLatest}
             fallbackReplyTargetComment={replyTargetComment}
+            isFallbackReplyTarget={index === fallbackReplyTargetCommentIndex}
           />
         ))}
       </ul>

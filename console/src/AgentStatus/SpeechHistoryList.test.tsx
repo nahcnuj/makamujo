@@ -11,6 +11,8 @@ beforeAll(() => {
   dom = new JSDOM("<!doctype html><html><body></body></html>");
   globalThis.window = dom.window as any;
   globalThis.document = dom.window.document as any;
+  globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => setTimeout(callback, 0);
+  globalThis.cancelAnimationFrame = (handle: number) => clearTimeout(handle);
 });
 
 afterAll(() => {
@@ -111,7 +113,7 @@ describe("SpeechHistoryList", () => {
     expect(html).not.toContain("新しい発話が");
   });
 
-  it("renders reply annotation inline inside the first item when replyTargetComment is provided", () => {
+  it("renders reply annotation inline inside the first item when speechHistoryItem contains a replyTargetComment", () => {
     const localContainer = document.createElement("div");
     render(
       <SpeechHistoryListItem
@@ -132,6 +134,44 @@ describe("SpeechHistoryList", () => {
     expect(replySpan).not.toBeNull();
     expect(replySpan?.textContent).toContain("おめでとう");
     expect(replySpan?.textContent).toContain("ございます");
+  });
+
+  it("attaches fallback reply annotation to the matching speech history item by pickedTopic", () => {
+    const items = [
+      {
+        id: "speech-1",
+        speechText: "わこつ",
+        displayLine: "わこつ (n=4)",
+        nGramLabel: "n=4",
+        nodes: ["わこつ"],
+      },
+      {
+        id: "speech-2",
+        speechText: "ここんにちは",
+        displayLine: "ここんにちは (n=4)",
+        nGramLabel: "n=4",
+        nodes: ["ここんにちは"],
+      },
+    ];
+    const localContainer = document.createElement("div");
+    render(
+      <SpeechHistoryList
+        initialItems={items}
+        emphasizeLatest={true}
+        replyTargetComment={{ text: "このコメントに返信します", pickedTopic: "こ" }}
+      />,
+      localContainer,
+    );
+
+    const replySpans = Array.from(localContainer.querySelectorAll("span.text-xs")).filter(
+      (span) => span.className.includes("text-emerald-300"),
+    );
+    expect(replySpans.length).toBe(1);
+    const firstItemReply = localContainer.querySelector("li:nth-child(1) span[class*='text-emerald-300']");
+    const secondItemReply = localContainer.querySelector("li:nth-child(2) span[class*='text-emerald-300']");
+    expect(firstItemReply).toBeNull();
+    expect(secondItemReply).not.toBeNull();
+    expect(secondItemReply?.textContent).toContain("このコメントに返信します");
   });
 
   it("renders reply annotations for each speech history item when each item has its own replyTargetComment", () => {
