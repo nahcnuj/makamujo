@@ -188,9 +188,15 @@ const getCurrentStreamPayload = () => {
     : lastPublishedStreamState;
   const normalizedStreamState = normalizePublishedStreamState(streamState);
   const base = normalizedStreamState && typeof normalizedStreamState === 'object' ? (normalizedStreamState as any) : {};
+  const normalizedAgentStreamState = normalizePublishedStreamState(agentStreamState);
+  const agentBase = normalizedAgentStreamState && typeof normalizedAgentStreamState === 'object'
+    ? (normalizedAgentStreamState as any)
+    : {};
   const replyTargetComment = base.replyTargetComment && typeof base.replyTargetComment === 'object'
     ? base.replyTargetComment
-    : undefined;
+    : agentBase.replyTargetComment && typeof agentBase.replyTargetComment === 'object'
+      ? agentBase.replyTargetComment
+      : undefined;
 
   return {
     niconama: base.niconama ?? {},
