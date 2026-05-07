@@ -56,11 +56,12 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
         <SpeechHistoryList
           initialItems={speechHistoryItems}
           emphasizeLatest={!isSpeechSilent}
-          replyTargetComment={replyTargetComment}
         />
       ),
     });
-  } else if (replyTargetComment) {
+  }
+
+  if (replyTargetComment) {
     rows.push({
       label: "返信先コメント",
       valueComponent: createReplyTargetCommentValueComponent(replyTargetComment),

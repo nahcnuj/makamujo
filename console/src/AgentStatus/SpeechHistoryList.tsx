@@ -22,31 +22,20 @@ const EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH = "3px";
 const FETCH_PAGE_SIZE = 10;
 const SPEECH_HISTORY_API_PATH = "/console/api/speech-history";
 
-type ReplyTargetComment = {
-  text?: string;
-  pickedTopic?: string;
-};
-
 type SpeechHistoryItemProps = {
   speechHistoryItem: SpeechHistoryDisplayItem;
   isFirst: boolean;
   emphasizeLatest: boolean;
-  fallbackReplyTargetComment?: ReplyTargetComment;
-  isFallbackReplyTarget?: boolean;
 };
 
 export const SpeechHistoryListItem = ({
   speechHistoryItem,
   isFirst,
   emphasizeLatest,
-  fallbackReplyTargetComment,
-  isFallbackReplyTarget,
 }: SpeechHistoryItemProps) => {
   const replyComment = speechHistoryItem.replyTargetComment?.text
     ? speechHistoryItem.replyTargetComment
-    : isFallbackReplyTarget && fallbackReplyTargetComment?.text
-      ? fallbackReplyTargetComment
-      : undefined;
+    : undefined;
 
   return (
     <li
@@ -96,7 +85,6 @@ export const SpeechHistoryListItem = ({
 type SpeechHistoryListProps = {
   initialItems: SpeechHistoryDisplayItem[];
   emphasizeLatest: boolean;
-  replyTargetComment?: ReplyTargetComment;
 };
 
 /**
@@ -134,7 +122,7 @@ const renderReplyAnnotation = (text: string, pickedTopic: string | undefined) =>
   );
 };
 
-export const SpeechHistoryList = ({ initialItems, emphasizeLatest, replyTargetComment }: SpeechHistoryListProps) => {
+export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHistoryListProps) => {
   const [olderItems, setOlderItems] = useState<SpeechHistoryDisplayItem[]>([]);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -303,13 +291,6 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest, replyTargetCo
     return true;
   });
 
-  const normalizedPickedTopic = replyTargetComment?.pickedTopic?.trim();
-  const fallbackReplyTargetCommentIndex = normalizedPickedTopic
-    ? allItems.findIndex((item) => item.speechText.startsWith(normalizedPickedTopic))
-    : replyTargetComment?.text
-      ? 0
-      : -1;
-
   return (
     <div className="relative">
       {pendingNewCount > 0 ? (
@@ -323,8 +304,6 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest, replyTargetCo
             speechHistoryItem={speechHistoryItem}
             isFirst={index === 0}
             emphasizeLatest={emphasizeLatest}
-            fallbackReplyTargetComment={replyTargetComment}
-            isFallbackReplyTarget={index === fallbackReplyTargetCommentIndex}
           />
         ))}
       </ul>

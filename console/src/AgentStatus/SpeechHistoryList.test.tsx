@@ -136,43 +136,6 @@ describe("SpeechHistoryList", () => {
     expect(replySpan?.textContent).toContain("ございます");
   });
 
-  it("attaches fallback reply annotation to the matching speech history item by pickedTopic", () => {
-    const items = [
-      {
-        id: "speech-1",
-        speechText: "わこつ",
-        displayLine: "わこつ (n=4)",
-        nGramLabel: "n=4",
-        nodes: ["わこつ"],
-      },
-      {
-        id: "speech-2",
-        speechText: "ここんにちは",
-        displayLine: "ここんにちは (n=4)",
-        nGramLabel: "n=4",
-        nodes: ["ここんにちは"],
-      },
-    ];
-    const localContainer = document.createElement("div");
-    render(
-      <SpeechHistoryList
-        initialItems={items}
-        emphasizeLatest={true}
-        replyTargetComment={{ text: "このコメントに返信します", pickedTopic: "こ" }}
-      />,
-      localContainer,
-    );
-
-    const replySpans = Array.from(localContainer.querySelectorAll("span.text-xs")).filter(
-      (span) => span.className.includes("text-emerald-300"),
-    );
-    expect(replySpans.length).toBe(1);
-    const firstItemReply = localContainer.querySelector("li:nth-child(1) span[class*='text-emerald-300']");
-    const secondItemReply = localContainer.querySelector("li:nth-child(2) span[class*='text-emerald-300']");
-    expect(firstItemReply).toBeNull();
-    expect(secondItemReply).not.toBeNull();
-    expect(secondItemReply?.textContent).toContain("このコメントに返信します");
-  });
 
   it("renders reply annotations for each speech history item when each item has its own replyTargetComment", () => {
     const items = Array.from({ length: 10 }, (_, index) => ({
@@ -204,7 +167,7 @@ describe("SpeechHistoryList", () => {
     });
   });
 
-  it("does not render reply annotation on non-first items", () => {
+  it("does not render reply annotation when no speech history item contains replyTargetComment", () => {
     const items = [
       { id: "speech-2", speechText: "secondSpeech", displayLine: "secondSpeech (n=4)", nGramLabel: "n=4", nodes: ["secondSpeech"] },
       { id: "speech-1", speechText: "firstSpeech", displayLine: "firstSpeech (n=4)", nGramLabel: "n=4", nodes: ["firstSpeech"] },
@@ -213,17 +176,10 @@ describe("SpeechHistoryList", () => {
       <SpeechHistoryList
         initialItems={items}
         emphasizeLatest={true}
-        replyTargetComment={{ text: "replyComment", pickedTopic: undefined }}
       />,
     );
 
-    // reply annotation appears only once, before the first item's word chips
-    const replyPos = html.indexOf("replyComment");
-    const secondSpeechPos = html.indexOf("secondSpeech");
-    const firstSpeechPos = html.indexOf("firstSpeech");
-    expect(replyPos).toBeGreaterThanOrEqual(0);
-    expect(replyPos).toBeLessThan(secondSpeechPos);
-    expect(secondSpeechPos).toBeLessThan(firstSpeechPos);
+    expect(html).not.toContain("replyComment");
   });
 
   it("does not render reply annotation when replyTargetComment is not provided", () => {

@@ -198,7 +198,7 @@ describe("createAgentStatusRows", () => {
     expect(html).toContain("bg-emerald-300/30");
   });
 
-  it("embeds reply target comment as annotation in the first speech history item when history exists", () => {
+  it("renders top-level reply target comment as a separate row even when speech history exists", () => {
     const rows = createAgentStatusRows({
       nGram: 4,
       speechHistory: [
@@ -210,12 +210,13 @@ describe("createAgentStatusRows", () => {
       },
     } as any);
 
-    expect(rows.find((row) => row.label === "返信先コメント")).toBeUndefined();
+    const replyRow = rows.find((row) => row.label === "返信先コメント");
     const speechHistoryRow = rows.find((row) => row.label === "これまでの発話");
+    expect(replyRow).toBeDefined();
     expect(speechHistoryRow).toBeDefined();
-    const html = renderToString(<MarkovModelStatusSection markovModelRows={[speechHistoryRow!] as any} />);
 
-    expect(html).not.toContain("返信先コメント");
+    const html = renderToString(<MarkovModelStatusSection markovModelRows={[speechHistoryRow!, replyRow!] as any} />);
+    expect(html).toContain("返信先コメント");
     expect(html).toContain("このコメントに");
     expect(html).toContain("します");
     expect(html).toContain("返信");
