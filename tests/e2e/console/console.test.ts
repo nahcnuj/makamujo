@@ -405,7 +405,6 @@ test.describe("console", () => {
 
     const detailsLocator = page.getByTestId('agent-status-details');
     await detailsLocator.waitFor({ timeout: 10_000 });
-    await expect(detailsLocator).toContainText('返信先コメント', { timeout: 10_000 });
     await expect(detailsLocator).toContainText('このコメントに返信します', { timeout: 10_000 });
     await expect(detailsLocator).toContainText('返信', { timeout: 10_000 });
   });
