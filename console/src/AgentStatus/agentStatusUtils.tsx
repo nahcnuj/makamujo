@@ -148,13 +148,23 @@ const formatSpeechHistoryItemText = (speechText: string, nGram: number | undefin
 
 export const createSpeechHistoryDisplayItems = (
   speechHistory: AgentStateResponse["speechHistory"] | undefined,
-): Array<{ id: string; speechText: string; displayLine: string; nGramLabel: string; nodes?: string[] }> => {
+): Array<{
+  id: string;
+  speechText: string;
+  displayLine: string;
+  nGramLabel: string;
+  nodes?: string[];
+  replyTargetComment?: {
+    text?: string;
+    pickedTopic?: string;
+  };
+}> => {
   if (!Array.isArray(speechHistory)) {
     return [];
   }
 
   const speechHistoryItems = speechHistory.reduce<
-    Array<{ id: string; speechText: string; displayLine: string; nGramLabel: string; nodes?: string[] }>
+    Array<{ id: string; speechText: string; displayLine: string; nGramLabel: string; nodes?: string[]; replyTargetComment?: { text?: string; pickedTopic?: string } }>
   >((accumulatedItems, speechHistoryItem) => {
     const speechText = normalizeSpeechText(speechHistoryItem.speech);
     if (!speechText) {
@@ -175,6 +185,7 @@ export const createSpeechHistoryDisplayItems = (
       displayLine: formatSpeechHistoryItemText(speechText, speechHistoryItem.nGram),
       nGramLabel: formatSpeechHistoryNGramLabel(speechHistoryItem.nGram),
       nodes: hasTrace ? (traceNodes as string[]) : undefined,
+      replyTargetComment: speechHistoryItem.replyTargetComment,
     });
     return accumulatedItems;
   }, []);
