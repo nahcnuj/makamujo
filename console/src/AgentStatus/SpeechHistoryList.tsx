@@ -12,6 +12,10 @@ type SpeechHistoryDisplayItem = {
   displayLine: string;
   nGramLabel: string;
   nodes?: string[];
+  replyTargetComment?: {
+    text?: string;
+    pickedTopic?: string;
+  };
 };
 
 const EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH = "3px";
@@ -21,6 +25,70 @@ const SPEECH_HISTORY_API_PATH = "/console/api/speech-history";
 type ReplyTargetComment = {
   text?: string;
   pickedTopic?: string;
+};
+
+type SpeechHistoryItemProps = {
+  speechHistoryItem: SpeechHistoryDisplayItem;
+  isFirst: boolean;
+  emphasizeLatest: boolean;
+  fallbackReplyTargetComment?: ReplyTargetComment;
+};
+
+export const SpeechHistoryListItem = ({
+  speechHistoryItem,
+  isFirst,
+  emphasizeLatest,
+  fallbackReplyTargetComment,
+}: SpeechHistoryItemProps) => {
+  const replyComment = speechHistoryItem.replyTargetComment?.text
+    ? speechHistoryItem.replyTargetComment
+    : isFirst
+      ? fallbackReplyTargetComment
+      : undefined;
+
+  return (
+    <li
+      key={speechHistoryItem.id}
+      className={isFirst && emphasizeLatest
+        ? "rounded-sm border-b border-b-emerald-300/80 px-1"
+        : "rounded-sm px-1"
+      }
+      style={isFirst && emphasizeLatest ? {
+        "--speech-history-border-bottom-width": EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH,
+        borderBottomWidth: "var(--speech-history-border-bottom-width)",
+        paddingBottom: "calc(0.2rem - var(--speech-history-border-bottom-width))",
+      } as CSSProperties : undefined}
+    >
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-2">
+        <div className="flex flex-wrap items-center gap-1">
+          {replyComment?.text ? (
+            <span className="text-xs text-emerald-300/60 break-words">
+              {renderReplyAnnotation(replyComment.text, replyComment.pickedTopic)}
+            </span>
+          ) : null}
+          {speechHistoryItem.nodes && Array.isArray(speechHistoryItem.nodes)
+            ? speechHistoryItem.nodes.map((word, wi) => (
+              <span
+                key={`${speechHistoryItem.id}-node-${wi}`}
+                className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
+              >
+                {word}
+              </span>
+            ))
+            : speechHistoryItem.speechText.split(/\s+/).map((word, wi) => (
+              <span
+                key={`${speechHistoryItem.id}-word-${wi}`}
+                className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
+              >
+                {word}
+              </span>
+            ))}
+        </div>
+        <span className="text-xs whitespace-nowrap">{speechHistoryItem.nGramLabel}</span>
+        <UndoLearningButton />
+      </div>
+    </li>
+  );
 };
 
 type SpeechHistoryListProps = {
@@ -241,47 +309,13 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest, replyTargetCo
       <div ref={topSentinelRef} aria-hidden="true" className="h-0" />
       <ul className="grid grid-cols-1 gap-4" style={{ scrollbarWidth: "thin" }}>
         {allItems.map((speechHistoryItem, index) => (
-          <li
+          <SpeechHistoryListItem
             key={speechHistoryItem.id}
-            className={index === 0 && emphasizeLatest
-              ? "rounded-sm border-b border-b-emerald-300/80 px-1"
-              : "rounded-sm px-1"
-            }
-            style={index === 0 && emphasizeLatest ? {
-              "--speech-history-border-bottom-width": EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH,
-              borderBottomWidth: "var(--speech-history-border-bottom-width)",
-              paddingBottom: "calc(0.2rem - var(--speech-history-border-bottom-width))",
-            } as CSSProperties : undefined}
-          >
-            {index === 0 && replyTargetComment?.text ? (
-              <p className="mb-1 text-xs text-emerald-300/60 break-words">
-                {renderReplyAnnotation(replyTargetComment.text, replyTargetComment.pickedTopic)}
-              </p>
-            ) : null}
-            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-2">
-              <div className="flex flex-wrap gap-1">
-                {speechHistoryItem.nodes && Array.isArray(speechHistoryItem.nodes)
-                  ? speechHistoryItem.nodes.map((word, wi) => (
-                    <span
-                      key={`${speechHistoryItem.id}-node-${wi}`}
-                      className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
-                    >
-                      {word}
-                    </span>
-                  ))
-                  : speechHistoryItem.speechText.split(/\s+/).map((word, wi) => (
-                    <span
-                      key={`${speechHistoryItem.id}-word-${wi}`}
-                      className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
-                    >
-                      {word}
-                    </span>
-                  ))}
-              </div>
-              <span className="text-xs whitespace-nowrap">{speechHistoryItem.nGramLabel}</span>
-              <UndoLearningButton />
-            </div>
-          </li>
+            speechHistoryItem={speechHistoryItem}
+            isFirst={index === 0}
+            emphasizeLatest={emphasizeLatest}
+            fallbackReplyTargetComment={replyTargetComment}
+          />
         ))}
       </ul>
       <div ref={bottomSentinelRef} aria-hidden="true" className="h-4" />

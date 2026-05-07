@@ -36,7 +36,9 @@
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "@types/bun": "latest",
+    "@types/jsdom": "^28.0.1",
     "@types/node": "^24.12.2",
+    "jsdom": "^29.1.1",
     "react": "^19.2.4",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
