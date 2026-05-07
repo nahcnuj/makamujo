@@ -197,3 +197,43 @@ test("comment count in /api/meta reflects PUT comments after POST /api/meta stre
   updatedMeta = await (await fetch(`${BROADCASTING_BASE_URL}/api/meta`)).json() as any;
   expect(updatedMeta.commentCount).toBe(3);
 });
+
+test("niconama is preserved in /api/meta after a comment-only POST /api/meta", async () => {
+  const streamStateBody = JSON.stringify({
+    type: 'niconama',
+    data: {
+      isLive: true,
+      title: '配信状況テスト',
+      startTime: 1_700_000_001,
+      total: 5,
+      points: { gift: 0, ad: 0 },
+      url: 'https://live.nicovideo.jp/watch/lv888888888',
+    },
+  });
+
+  // Establish the stream state. Retry until the streamer acknowledges it.
+  let meta: any = null;
+  for (let i = 0; i < 30; i++) {
+    await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: streamStateBody,
+    });
+    meta = await (await fetch(`${BROADCASTING_BASE_URL}/api/meta`)).json();
+    if (meta.niconama?.type === 'live') break;
+    await new Promise(r => setTimeout(r, 100));
+  }
+  expect(meta.niconama?.type).toBe('live');
+
+  // Now POST /api/meta with comment-only data (no niconama), simulating a
+  // comment event that does not include the full broadcast status.
+  await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ replyTargetComment: { comment: 'こんにちは', userId: 'user1' } }),
+  });
+
+  // The broadcast status (niconama) must still be present.
+  const afterCommentMeta = await (await fetch(`${BROADCASTING_BASE_URL}/api/meta`)).json() as any;
+  expect(afterCommentMeta.niconama?.type).toBe('live');
+});

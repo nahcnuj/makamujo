@@ -199,7 +199,7 @@ const getCurrentStreamPayload = () => {
       : undefined;
 
   return {
-    niconama: base.niconama ?? {},
+    niconama: base.niconama ?? agentBase.niconama ?? {},
     canSpeak: base.canSpeak ?? streamer.canSpeak,
     currentGame: base.currentGame ?? streamer.currentGame ?? null,
     nGram: base.nGram ?? streamer.currentNGramSize,
