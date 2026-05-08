@@ -349,7 +349,7 @@ test.describe("console", () => {
     // the broadcast POST to avoid timing-dependent flakiness.
     await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
 
-    const payload = cloneAgentStateResponseMockFixture();
+    const payload: any = cloneAgentStateResponseMockFixture();
     const res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -388,7 +388,7 @@ test.describe("console", () => {
 
     await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
 
-    const payload = cloneAgentStateResponseMockFixture();
+    const payload: any = cloneAgentStateResponseMockFixture();
     // Attach the replyTargetComment to the first speech history item so
     // the inline reply annotation is rendered by AgentStatus (PR #316
     // changed rendering to prefer inline annotations on speech items).
@@ -448,7 +448,7 @@ test.describe("console", () => {
     expect(await page.evaluate(() => (window as any).__sseError)).toBeFalsy();
     expect(await page.evaluate(() => (window as any).__sseMessageCount ?? 0)).toBeGreaterThanOrEqual(messagesBeforeIdle);
 
-    const payload = cloneAgentStateResponseMockFixture();
+    const payload: any = cloneAgentStateResponseMockFixture();
     const res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
