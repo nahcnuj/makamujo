@@ -22,29 +22,20 @@ const EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH = "3px";
 const FETCH_PAGE_SIZE = 10;
 const SPEECH_HISTORY_API_PATH = "/console/api/speech-history";
 
-type ReplyTargetComment = {
-  text?: string;
-  pickedTopic?: string;
-};
-
 type SpeechHistoryItemProps = {
   speechHistoryItem: SpeechHistoryDisplayItem;
   isFirst: boolean;
   emphasizeLatest: boolean;
-  fallbackReplyTargetComment?: ReplyTargetComment;
 };
 
 export const SpeechHistoryListItem = ({
   speechHistoryItem,
   isFirst,
   emphasizeLatest,
-  fallbackReplyTargetComment,
 }: SpeechHistoryItemProps) => {
   const replyComment = speechHistoryItem.replyTargetComment?.text
     ? speechHistoryItem.replyTargetComment
-    : isFirst
-      ? fallbackReplyTargetComment
-      : undefined;
+    : undefined;
 
   return (
     <li
@@ -94,7 +85,6 @@ export const SpeechHistoryListItem = ({
 type SpeechHistoryListProps = {
   initialItems: SpeechHistoryDisplayItem[];
   emphasizeLatest: boolean;
-  replyTargetComment?: ReplyTargetComment;
 };
 
 /**
@@ -132,7 +122,7 @@ const renderReplyAnnotation = (text: string, pickedTopic: string | undefined) =>
   );
 };
 
-export const SpeechHistoryList = ({ initialItems, emphasizeLatest, replyTargetComment }: SpeechHistoryListProps) => {
+export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHistoryListProps) => {
   const [olderItems, setOlderItems] = useState<SpeechHistoryDisplayItem[]>([]);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -314,7 +304,6 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest, replyTargetCo
             speechHistoryItem={speechHistoryItem}
             isFirst={index === 0}
             emphasizeLatest={emphasizeLatest}
-            fallbackReplyTargetComment={replyTargetComment}
           />
         ))}
       </ul>
