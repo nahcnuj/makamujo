@@ -388,8 +388,12 @@ test.describe("console", () => {
 
     await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
 
-    const payload = {
-      ...cloneAgentStateResponseMockFixture(),
+    const payload = cloneAgentStateResponseMockFixture();
+    // Attach the replyTargetComment to the first speech history item so
+    // the inline reply annotation is rendered by AgentStatus (PR #316
+    // changed rendering to prefer inline annotations on speech items).
+    payload.speechHistory[0] = {
+      ...payload.speechHistory[0],
       replyTargetComment: {
         text: 'このコメントに返信します',
         pickedTopic: '返信',
