@@ -82,6 +82,8 @@ const { values: {
   },
 });
 
+// Rely on Bun's `--hot` and Bun.build watch mode in development.
+
 const model = (file => {
   try {
     return MarkovChainModel.fromFile(file);
