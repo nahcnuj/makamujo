@@ -1,4 +1,3 @@
-/** @jsxImportSource hono/jsx */
 import { Container } from "../agt-compat";
 import { useCallback, useLayoutEffect, useState } from "hono/jsx";
 import type { AgentStatusSection, AgentStateResponse } from "./types";

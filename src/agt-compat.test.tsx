@@ -1,4 +1,3 @@
-/** @jsxImportSource hono/jsx/dom */
 import { test, expect } from "bun:test";
 import { Box, Container, Layout, CharacterSprite } from "./agt-compat";
 

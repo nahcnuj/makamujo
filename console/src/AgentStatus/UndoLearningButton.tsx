@@ -1,4 +1,3 @@
-/** @jsxImportSource hono/jsx */
 export const UndoLearningButton = () => (
   <button
     type="button"

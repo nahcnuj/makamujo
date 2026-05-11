@@ -1,4 +1,3 @@
-/** @jsxImportSource hono/jsx/dom */
 import { Games } from "../../lib/Agent/games";
 import { useAgentContext } from "../contexts/AgentContext";
 import { HighlightOnChange } from "../agt-compat";

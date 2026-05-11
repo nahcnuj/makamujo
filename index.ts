@@ -82,6 +82,8 @@ const { values: {
   },
 });
 
+// Rely on Bun's `--hot` and Bun.build watch mode in development.
+
 const model = (file => {
   try {
     return MarkovChainModel.fromFile(file);
@@ -451,6 +453,10 @@ async function buildMainFrontend() {
     alias: {
       'react': 'hono/jsx/dom',
       'react/jsx-runtime': 'hono/jsx/dom/jsx-runtime',
+      'react/jsx-dev-runtime': 'hono/jsx/dom/jsx-dev-runtime',
+      'hono/jsx': 'hono/jsx/dom',
+      'hono/jsx/jsx-runtime': 'hono/jsx/dom/jsx-runtime',
+      'hono/jsx/jsx-dev-runtime': 'hono/jsx/dom/jsx-dev-runtime',
     },
   });
   if (!result.success) {

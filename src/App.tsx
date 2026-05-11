@@ -1,4 +1,3 @@
-/** @jsxImportSource hono/jsx/dom */
 import { Box, Container, Layout } from "./agt-compat";
 import { GamePanel } from "./components/GamePanel";
 import { StreamerPanel } from "./components/StreamerPanel";

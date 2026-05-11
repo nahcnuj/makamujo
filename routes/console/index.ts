@@ -37,7 +37,7 @@ function normalizeConsoleHtml(source: string): string {
   return source.replace(/src="\.\/frontend\.tsx"/, 'src="./frontend.js"');
 }
 
-async function buildConsoleApp() {
+async function buildConsoleApp(watch: boolean = false) {
   mkdirSync(CONSOLE_BUILD_PATH, { recursive: true });
   const result = await Bun.build({
     entrypoints: [resolve(process.cwd(), 'console/src/frontend.tsx')],
@@ -50,9 +50,12 @@ async function buildConsoleApp() {
     alias: {
       'react': 'hono/jsx/dom',
       'react/jsx-runtime': 'hono/jsx/dom/jsx-runtime',
+      'react/jsx-dev-runtime': 'hono/jsx/dom/jsx-dev-runtime',
       'hono/jsx': 'hono/jsx/dom',
       'hono/jsx/jsx-runtime': 'hono/jsx/dom/jsx-runtime',
+      'hono/jsx/jsx-dev-runtime': 'hono/jsx/dom/jsx-dev-runtime',
     },
+    watch,
   });
 
   if (!result.success) {
@@ -65,9 +68,13 @@ async function buildConsoleApp() {
 
 function ensureConsoleBuilt(): Promise<void> {
   if (!consoleBuildPromise) {
+    const isProd = process.env.NODE_ENV === 'production';
     consoleBuildPromise = (async () => {
       try {
-        await buildConsoleApp();
+        // In development, enable Bun.build watch mode so the bundler
+        // incrementally rebuilds when `console/src` files change. In
+        // production, perform a single minified build.
+        await buildConsoleApp(!isProd);
       } catch (error) {
         console.error('[ERROR] console build failed', error);
         throw error;

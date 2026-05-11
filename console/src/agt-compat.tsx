@@ -1,4 +1,3 @@
-/** @jsxImportSource hono/jsx */
 /**
  * Provides AGT (automated-gameplay-transmitter) component equivalents as
  * native hono/jsx components for the management console.
@@ -10,6 +9,7 @@
  *     uses the same DOM-compatible implementation.
  */
 import type { FC, PropsWithChildren } from "hono/jsx";
+import "hono/jsx/dom/jsx-dev-runtime";
 
 /**
  * Layout container matching AGT's Container: full-height, padded, no overflow.

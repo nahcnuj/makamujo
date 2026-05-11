@@ -1,4 +1,3 @@
-/** @jsxImportSource hono/jsx */
 import { AgentStatusSectionCard } from "./AgentStatusSectionCard";
 import type { AgentStatusRow } from "./types";
 

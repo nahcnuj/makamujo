@@ -1,4 +1,3 @@
-/** @jsxImportSource hono/jsx */
 import { AgentStatus } from "./AgentStatus";
 
 export function App() {

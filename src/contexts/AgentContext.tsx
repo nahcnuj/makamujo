@@ -1,5 +1,3 @@
-/** @jsxImportSource hono/jsx/dom */
-
 import { createContext, useContext, useState, type PropsWithChildren } from "hono/jsx/dom";
 import type { Games } from "../../lib/Agent/games";
 import type { AgentState } from "../../lib/Agent/State";

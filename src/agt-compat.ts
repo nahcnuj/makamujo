@@ -1,7 +1,7 @@
 /**
  * Re-exports AGT (automated-gameplay-transmitter) components with type
  * signatures compatible with hono/jsx/dom, enabling their use in JSX files
- * that use `@jsxImportSource hono/jsx/dom`.
+ * that use @jsxImportSource hono/jsx/dom.
  *
  * AGT's compiled dist imports hooks and JSX helpers from `react`. Bun.build's
  * `alias` option does not reliably redirect those imports for pre-compiled
