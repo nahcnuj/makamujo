@@ -1,4 +1,3 @@
-/** @jsxImportSource hono/jsx */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "hono/jsx";
 import type { CSSProperties } from "hono/jsx";
 import type { AgentStateResponse } from "./types";

@@ -1,4 +1,3 @@
-/** @jsxImportSource hono/jsx */
 type NewItemsButtonProps = {
   count: number;
   onClick: () => void;

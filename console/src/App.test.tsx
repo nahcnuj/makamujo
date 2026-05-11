@@ -1,4 +1,3 @@
-/** @jsxImportSource hono/jsx */
 import { describe, expect, it } from "bun:test";
 import { renderToString } from "hono/jsx/dom/server";
 import { App } from "./App";

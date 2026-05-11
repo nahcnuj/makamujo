@@ -1,4 +1,3 @@
-/** @jsxImportSource hono/jsx/dom */
 import { CharacterSprite as GenericSprite } from "../agt-compat";
 
 // simple wrapper that hard-codes the mascot image used by makamujo

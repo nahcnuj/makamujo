@@ -1,4 +1,3 @@
-/** @jsxImportSource hono/jsx */
 import type { AgentStateResponse } from "./types";
 import type { Child, CSSProperties } from "hono/jsx";
 

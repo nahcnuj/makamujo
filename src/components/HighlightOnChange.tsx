@@ -1,4 +1,3 @@
-/** @jsxImportSource hono/jsx/dom */
 import { useEffect, useState } from "hono/jsx/dom";
 import type { Child } from "hono/jsx/dom";
 

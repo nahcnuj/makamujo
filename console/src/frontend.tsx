@@ -4,8 +4,6 @@
  *
  * It is included in `src/index.html`.
  */
-/** @jsxImportSource hono/jsx/dom */
-
 import { render } from "hono/jsx/dom";
 import { App } from "./App";
 

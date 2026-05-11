@@ -1,14 +1,14 @@
 /**
  * Provide Hono-native versions of AGT layout primitives used by the frontend.
  *
- * The app uses `@jsxImportSource hono/jsx/dom` and must render with Hono's DOM
+ * The app uses @jsxImportSource hono/jsx/dom and must render with Hono's DOM
  * runtime. AGT's precompiled components are still built against React's JSX
  * runtime, so importing them directly can produce React element objects that
  * Hono cannot render correctly. The components below preserve the same props
  * and class-based structure, but render native Hono DOM elements.
  */
-/** @jsxImportSource hono/jsx/dom */
 import type { Child, FC } from "hono/jsx/dom";
+import "hono/jsx/dom/jsx-dev-runtime";
 import type {
   Box as AgTBox,
   Container as AgTContainer,
