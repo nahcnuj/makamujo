@@ -4,7 +4,7 @@ import type { Child, CSSProperties } from "hono/jsx";
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
 const GAME_STATE_EMPTY_OBJECT_LABEL = "(空のオブジェクト)";
-const SPEECH_UNAVAILABLE_INDICATOR = "・・・";
+const SPEECH_UNAVAILABLE_INDICATOR = "（コメントしてね）";
 
 export const formatStateLabel = (type: string | undefined): string => {
   if (type === "live") {
