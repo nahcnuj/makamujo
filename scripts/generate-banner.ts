@@ -32,7 +32,7 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
       <stop offset="70%" stop-color="#0d2d1c" stop-opacity="0" />
     </radialGradient>
     <clipPath id="characterClip">
-      <circle cx="50" cy="50" r="38" />
+      <circle cx="38" cy="38" r="38" />
     </clipPath>
   </defs>
 
