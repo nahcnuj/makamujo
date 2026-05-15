@@ -1,25 +1,5 @@
-/**
- * Banner image generator
- *
- * Generates an SVG banner at 320×100 px and writes the result to docs/banner.svg.
- * The banner is intended for embedding on external personal sites as a linked
- * thumbnail.
- *
- * Usage:
- *   bun run scripts/generate-banner.ts
- */
-
-import { writeFileSync } from "node:fs";
-import path from "node:path";
-
-const WIDTH = 320;
-const HEIGHT = 100;
-
-const root = path.resolve(import.meta.dir, "..");
-const outputPath = path.join(root, "docs", "banner.svg");
-
-const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" role="img" aria-labelledby="title desc">
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="100" viewBox="0 0 320 100" role="img" aria-labelledby="title desc">
   <title id="title">馬可無序 バナー画像</title>
   <desc id="desc">AI VTuberプロジェクト 馬可無序の配信中バナー</desc>
   <defs>
@@ -36,9 +16,9 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
     </clipPath>
   </defs>
 
-  <rect width="${WIDTH}" height="${HEIGHT}" fill="#000" />
-  <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#glowLeft)" />
-  <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#glowRight)" />
+  <rect width="320" height="100" fill="#000" />
+  <rect width="320" height="100" fill="url(#glowLeft)" />
+  <rect width="320" height="100" fill="url(#glowRight)" />
 
   <g transform="translate(12 12)">
     <circle cx="38" cy="38" r="38" fill="#0d1a12" />
@@ -59,8 +39,3 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
   <rect x="100" y="73" width="198" height="20" rx="4" ry="4" fill="#0d2d1c" fill-opacity="0.5" stroke="#6ee7b7" stroke-width="1" />
   <text x="199" y="86.5" text-anchor="middle" dominant-baseline="middle" fill="#6ee7b7" font-size="9" font-weight="700" font-family="'Noto Sans JP', 'Noto Sans CJK JP', 'Hiragino Sans', 'Yu Gothic', sans-serif">🎮 ニコニコ生放送で配信中</text>
 </svg>
-`;
-
-writeFileSync(outputPath, `${svg.trim()}\n`);
-
-console.log(`Banner image generated: ${outputPath}`);
