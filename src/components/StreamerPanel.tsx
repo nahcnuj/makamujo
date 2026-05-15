@@ -15,7 +15,7 @@ export function StreamerPanel() {
         <Box borderColor="border-emerald-300" borderWidth="border-8" borderStyle="border-double" rounded="rounded-xl">
           <Container>
             <div className="w-full h-full text-3xl/9 break-all text-ellipsis overflow-hidden">
-              {silent ? '・・・' : speechText.replace(/。$/, '')}
+              {silent ? '（コメントしてね）' : speechText.replace(/。$/, '')}
             </div>
           </Container>
         </Box>
