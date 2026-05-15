@@ -57,8 +57,6 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
       - name: Generate OGP image
         run: bun run generate-ogp
-      - name: Generate banner image
-        run: bun run generate-banner
       - name: Setup Pages
         uses: actions/configure-pages@v6
       - name: Upload artifact

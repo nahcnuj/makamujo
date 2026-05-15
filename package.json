@@ -23,7 +23,6 @@
     "test:e2e": "CONSOLE_TLS_CERT=var/e2e-tls/fullchain.pem CONSOLE_TLS_KEY=var/e2e-tls/privkey.pem playwright test tests/e2e --timeout=60000",
     "browser": "node --import tsx ./bin/x/browser.ts",
     "generate-ogp": "bun run scripts/generate-ogp.ts",
-    "generate-banner": "bun run scripts/generate-banner.ts",
     "screenshot:console-agent-status": "bun run scripts/capture-console-agent-status.ts"
   },
   "dependencies": {
