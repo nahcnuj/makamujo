@@ -263,15 +263,15 @@ describe("createAgentStatusRows", () => {
     expect(renderToString(gameInfoRow?.valueComponent)).toContain("-");
   });
 
-  it("shows speech as '・・・' when canSpeak is false", () => {
+  it("shows message to suggest comment when canSpeak is false", () => {
     const rows = createAgentStatusRows({ canSpeak: false });
-    expect(rows).toContainEqual({ label: "発話内容", value: "・・・" });
+    expect(rows).toContainEqual({ label: "発話内容", value: "（コメントしてね）" });
     expect(rows).not.toContainEqual({ label: "話せる状態", value: "いいえ" });
   });
 
   it("prioritizes speech unavailable indicator when canSpeak is false even if speech exists", () => {
     const rows = createAgentStatusRows({ canSpeak: false, speech: { speech: "発話テキスト", silent: false } });
-    expect(rows).toContainEqual({ label: "発話内容", value: "・・・" });
+    expect(rows).toContainEqual({ label: "発話内容", value: "（コメントしてね）" });
     expect(rows).not.toContainEqual({ label: "発話内容", value: "発話テキスト" });
   });
 
