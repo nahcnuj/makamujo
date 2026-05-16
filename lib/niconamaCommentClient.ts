@@ -247,7 +247,10 @@ export class NiconamaCommentClient {
 
         const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentSignatures);
         if (comments.length > 0) {
+          console.debug('[DEBUG] NiconamaCommentClient captured comments from response:', url, 'count=', comments.length);
           this.#callbacks.onComments(comments);
+        } else if (!hasCommentArrayStructure(body)) {
+          console.warn('[WARN] NiconamaCommentClient received a comment-related response without any comment arrays:', url);
         }
       } catch (err) {
         this.reportError(err);
@@ -292,6 +295,21 @@ export const createNiconamaCommentClient = (
   options: NiconamaCommentClientOptions,
   callbacks: NiconamaCommentClientCallbacks,
 ): NiconamaCommentClient => new NiconamaCommentClient(options, callbacks);
+
+export const hasCommentArrayStructure = (body: unknown): boolean => {
+  if (!body || typeof body !== 'object') return false;
+  const candidateArrays = [
+    (body as any).comments,
+    (body as any).chat,
+    (body as any).chats,
+    (body as any).data?.comments,
+    (body as any).data?.chat,
+    (body as any).data?.chats,
+    (body as any).data,
+  ];
+
+  return candidateArrays.some(Array.isArray);
+};
 
 export const parseAgentCommentsFromResponseBody = (
   body: unknown,
