@@ -250,6 +250,8 @@ export class NiconamaCommentClient {
           console.debug('[DEBUG] NiconamaCommentClient captured comments from response:', url, 'count=', comments.length);
           this.#callbacks.onComments(comments);
         } else if (!hasCommentArrayStructure(body)) {
+          // コメント系レスポンスなのにコメント配列が見つからなかった観察結果を記録する。
+          // 例外ではないため reportError() は使わず console.warn を直接呼ぶ。
           console.warn('[WARN] NiconamaCommentClient received a comment-related response without any comment arrays:', url);
         }
       } catch (err) {
@@ -282,6 +284,12 @@ export class NiconamaCommentClient {
     });
   }
 
+  /**
+   * 例外・障害を通知するメソッド。
+   * `onError` コールバックが設定されていれば呼び出し元に伝播する。
+   * 単なる観察結果の記録（コメント配列がなかった等）には使わず、
+   * 捕捉した例外（`catch` ブロック内の `err`）に限って呼び出すこと。
+   */
   private reportError(error: unknown): void {
     if (typeof this.#callbacks.onError === 'function') {
       this.#callbacks.onError(error);
