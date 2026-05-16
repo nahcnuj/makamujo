@@ -164,50 +164,33 @@ export class NiconamaCommentClient {
         return currentUrl;
       }
 
-      for (const url of DEFAULT_CANDIDATE_URLS) {
-        try {
-          await this.#page.goto(url, { waitUntil: 'domcontentloaded' });
-        } catch {
-          continue;
-        }
+      await this.#page.goto('https://live.nicovideo.jp/', { waitUntil: 'domcontentloaded' });
 
-        if (DEFAULT_NICONAMA_USER_ID && !/\/watch\/user\/\d+/.test(this.#page.url())) {
-          const userPageUrl = await this.#page.evaluate((userId) => {
-            const anchors = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]'));
-            const anchor = anchors.find((a) => {
-              try {
-                const href = new URL(a.href, location.href).href;
-                return href.includes(`/watch/user/${userId}`);
-              } catch {
-                return false;
-              }
-            });
-            return anchor ? new URL(anchor.href, location.href).href : null;
-          }, DEFAULT_NICONAMA_USER_ID);
+      const userAnchor = this.#page.locator('text=馬可無序').first();
+      await userAnchor.waitFor({ state: 'visible', timeout: 15_000 });
+      await userAnchor.hover();
 
-          if (typeof userPageUrl === 'string' && userPageUrl.length > 0) {
-            try {
-              await this.#page.goto(userPageUrl, { waitUntil: 'domcontentloaded' });
-            } catch {
-              // continue to fallback search if navigation failed.
-            }
+      const livePageLocator = this.#page.locator('text=放送中のページ').first();
+      await livePageLocator.waitFor({ state: 'visible', timeout: 15_000 });
 
-            const liveUrlFromUserPage = await this.findLiveUrlFromCurrentPage();
-            if (liveUrlFromUserPage) {
-              return liveUrlFromUserPage;
-            }
-          }
-        }
-
-        const liveUrl = await this.findLiveUrlFromCurrentPage();
-        if (typeof liveUrl === 'string' && liveUrl.length > 0) {
-          return liveUrl;
-        }
+      const livePageUrl = await livePageLocator.getAttribute('href');
+      if (!livePageUrl) {
+        throw new Error('Could not find 放送中のページ href after hovering 馬可無序');
       }
+
+      const absoluteLivePageUrl = new URL(livePageUrl, this.#page.url()).href;
+      await this.#page.goto(absoluteLivePageUrl, { waitUntil: 'domcontentloaded' });
+
+      const finalUrl = this.#page.url();
+      if (!/\/watch\/lv\d+/.test(finalUrl)) {
+        throw new Error(`Hovered live page did not resolve to a watch URL: ${finalUrl}`);
+      }
+
+      return finalUrl;
     } catch (err) {
       this.reportError(err);
+      return null;
     }
-    return null;
   }
 
   private async findLiveUrlFromCurrentPage(): Promise<string | null> {
