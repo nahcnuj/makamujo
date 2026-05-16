@@ -9,10 +9,11 @@ const DEFAULT_VIEWPORT: ViewportSize = {
   width: 1280,
   height: 720,
 };
+const DEFAULT_NICONAMA_USER_ID = process.env.NICONAMA_USER_ID?.trim();
 const DEFAULT_CANDIDATE_URLS = [
   'https://live.nicovideo.jp/',
   'https://live.nicovideo.jp/my',
-  'https://live.nicovideo.jp/watch/user/14171889',
+  ...(DEFAULT_NICONAMA_USER_ID ? [`https://live.nicovideo.jp/watch/user/${DEFAULT_NICONAMA_USER_ID}`] : []),
 ];
 
 export type NiconamaCommentClientOptions = {
@@ -186,7 +187,7 @@ export class NiconamaCommentClient {
         const body = await response.json().catch(() => null);
         if (!body) return;
 
-        const comments = parseAgentCommentsFromResponseBody(body);
+        const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentSignatures);
         if (comments.length > 0) {
           this.#callbacks.onComments(comments);
         }
@@ -234,7 +235,10 @@ export const createNiconamaCommentClient = (
   callbacks: NiconamaCommentClientCallbacks,
 ): NiconamaCommentClient => new NiconamaCommentClient(options, callbacks);
 
-export const parseAgentCommentsFromResponseBody = (body: unknown): AgentComment[] => {
+export const parseAgentCommentsFromResponseBody = (
+  body: unknown,
+  seenCommentSignatures: Set<string> = new Set<string>(),
+): AgentComment[] => {
   if (!body || typeof body !== 'object') return [];
   const rawComments: unknown[] = [];
   const candidateArrays = [
@@ -257,7 +261,7 @@ export const parseAgentCommentsFromResponseBody = (body: unknown): AgentComment[
   }
 
   const comments: AgentComment[] = [];
-  const seenSignatures = new Set<string>();
+  const seenSignatures = seenCommentSignatures;
 
   for (const raw of rawComments) {
     if (!raw || typeof raw !== 'object') continue;
