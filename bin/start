@@ -10,6 +10,15 @@ mkdir -p "${PID_DIR}"
 
 cd "${PROJECT_ROOT}"
 
+PASSWORD=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)
+if [ -z "${PASSWORD}" ]; then
+  echo 'Failed to generate console password' >&2
+  exit 1
+fi
+export CONSOLE_BASIC_AUTH_PASSWORD="${PASSWORD}"
+echo "Console Basic auth username: admin"
+echo "Console Basic auth password: ${PASSWORD}"
+
 NODE_ENV=production nohup bun start >"${PROJECT_ROOT}/var/screen.log" 2>&1 &
 echo $! > "${PID_DIR}/screen"
 
