@@ -6,6 +6,10 @@ type LoggerOptions = {
   now?: () => Date;
 };
 
+export type ConsoleLoggerOptions = {
+  environment?: string;
+};
+
 export type JsonLogRecord = Record<string, unknown>;
 
 export type DailyRotatingJsonLogger = {
@@ -141,4 +145,27 @@ export function formatUnknownError(error: unknown): string {
     return error.stack ?? error.message;
   }
   return String(error);
+}
+
+export function createConsoleLogger({ environment = process.env.NODE_ENV }: ConsoleLoggerOptions = {}): Console {
+  const originalConsole = globalThis.console;
+  const originalLog = originalConsole.log.bind(originalConsole);
+  const originalDebug = originalConsole.debug.bind(originalConsole);
+
+  const logger = Object.create(originalConsole) as Console;
+
+  logger.log = (...args: unknown[]): void => {
+    if (environment === 'production' && args.length > 0 && typeof args[0] === 'string' && args[0].startsWith('[DEBUG]')) {
+      return;
+    }
+    originalLog(...args);
+  };
+
+  logger.debug = environment === 'production'
+    ? () => { /* suppress debug output when configured for production */ }
+    : (...args: unknown[]): void => {
+      originalDebug(...args);
+    };
+
+  return logger;
 }

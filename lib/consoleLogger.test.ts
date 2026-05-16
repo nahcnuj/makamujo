@@ -1,8 +1,8 @@
-import { test, expect } from "bun:test";
+import { test, expect, jest } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createDailyRotatingJsonLogger } from "./consoleLogger";
+import { createConsoleLogger, createDailyRotatingJsonLogger } from "./consoleLogger";
 
 function createTempLogPath() {
   const tempDirectoryPath = mkdtempSync(join(tmpdir(), "console-logger-test-"));
@@ -158,5 +158,29 @@ test("rotates by JST date boundary", async () => {
     expect(readFileSync(logFilePath, "utf8")).toContain('"timestamp":"2026-04-19T00:00:00.000+09:00"');
   } finally {
     rmSync(tempDirectoryPath, { recursive: true, force: true });
+  }
+});
+
+test("creates a console logger that suppresses debug output in production", () => {
+  const originalConsole = globalThis.console;
+  const recordedLog: unknown[][] = [];
+  const fakeConsole = {
+    ...originalConsole,
+    log: (...args: unknown[]) => { recordedLog.push(args); },
+    debug: jest.fn(),
+  } as unknown as Console;
+
+  try {
+    globalThis.console = fakeConsole;
+    const logger = createConsoleLogger({ environment: 'production' });
+
+    logger.log('[DEBUG] hidden');
+    logger.log('[INFO] shown');
+    logger.debug('[DEBUG] hidden-debug');
+
+    expect(recordedLog).toEqual([['[INFO] shown']]);
+    expect(fakeConsole.debug).not.toHaveBeenCalled();
+  } finally {
+    globalThis.console = originalConsole;
   }
 });
