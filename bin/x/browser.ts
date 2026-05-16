@@ -8,7 +8,9 @@ import { ServerGames as Games } from "../../lib/Agent/games/server";
 import { create } from "../../lib/Browser/chromium";
 import { createRetrySender } from "../../lib/Browser/socket";
 import { getDefaultBrowserPath } from "../../lib/Browser/getDefaultBrowserPath";
-import { suppressConsoleLoggerInProduction } from "../../lib/consoleLogger";
+import { createConsoleLogger } from "../../lib/consoleLogger";
+
+const console = createConsoleLogger();
 
 const { values: {
   file,
@@ -62,8 +64,6 @@ const resolvedDisplay = display ?? (() => {
 if (resolvedDisplay) {
   process.env.DISPLAY = resolvedDisplay;
 }
-
-suppressConsoleLoggerInProduction();
 
 if (xauthority) {
   process.env.XAUTHORITY = xauthority;

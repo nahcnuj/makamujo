@@ -6,6 +6,10 @@ type LoggerOptions = {
   now?: () => Date;
 };
 
+export type ConsoleLoggerOptions = {
+  environment?: string;
+};
+
 export type JsonLogRecord = Record<string, unknown>;
 
 export type DailyRotatingJsonLogger = {
@@ -143,19 +147,25 @@ export function formatUnknownError(error: unknown): string {
   return String(error);
 }
 
-export function suppressConsoleLoggerInProduction(): void {
-  if (process.env.NODE_ENV !== 'production') {
-    return;
-  }
+export function createConsoleLogger({ environment = process.env.NODE_ENV }: ConsoleLoggerOptions = {}): Console {
+  const originalConsole = globalThis.console;
+  const originalLog = originalConsole.log.bind(originalConsole);
+  const originalDebug = originalConsole.debug.bind(originalConsole);
 
-  const originalConsoleLog = console.log.bind(console);
+  const logger = Object.create(originalConsole) as Console;
 
-  console.debug = () => { /* suppress debug output in production */ };
-  console.log = (...args: unknown[]) => {
-    if (args.length > 0 && typeof args[0] === 'string' && args[0].startsWith('[DEBUG]')) {
+  logger.log = (...args: unknown[]): void => {
+    if (environment === 'production' && args.length > 0 && typeof args[0] === 'string' && args[0].startsWith('[DEBUG]')) {
       return;
     }
-
-    originalConsoleLog(...args);
+    originalLog(...args);
   };
+
+  logger.debug = environment === 'production'
+    ? () => { /* suppress debug output when configured for production */ }
+    : (...args: unknown[]): void => {
+      originalDebug(...args);
+    };
+
+  return logger;
 }
