@@ -166,7 +166,40 @@ export class NiconamaCommentClient {
 
       await this.#page.goto('https://live.nicovideo.jp/', { waitUntil: 'domcontentloaded' });
 
-      const livePageUrl = await findNiconamaLiveUrlByHovering(this.#page);
+
+      // Hover した結果表示される要素を探すため、hover 前の可視状態を記録します。
+      const livePageAnchors = this.#page.getByText('放送中のページ', { exact: true });
+      const anchorCountBefore = await livePageAnchors.count();
+      const visibleBefore: boolean[] = [];
+      for (let index = 0; index < anchorCountBefore; index += 1) {
+        visibleBefore[index] = await livePageAnchors.nth(index).isVisible().catch(() => false);
+      }
+
+      const makoAnchorLocator = this.#page.getByText('馬可無序', { exact: true }).first();
+      await makoAnchorLocator.hover();
+
+      const deadline = Date.now() + 5_000;
+      let hoverResultLocator: typeof livePageAnchors | null = null;
+      while (Date.now() < deadline) {
+        const anchorCountAfter = await livePageAnchors.count();
+        for (let index = 0; index < anchorCountAfter; index += 1) {
+          const candidate = livePageAnchors.nth(index);
+          const isVisible = await candidate.isVisible().catch(() => false);
+          const wasVisibleBefore = index < anchorCountBefore ? visibleBefore[index] : false;
+          if (isVisible && !wasVisibleBefore) {
+            hoverResultLocator = candidate;
+            break;
+          }
+        }
+        if (hoverResultLocator) break;
+        await this.#page.waitForTimeout(100);
+      }
+
+      if (!hoverResultLocator) {
+        return null;
+      }
+
+      const livePageUrl = await hoverResultLocator.getAttribute('href');
       if (!livePageUrl) {
         return null;
       }
@@ -254,22 +287,6 @@ export class NiconamaCommentClient {
     }
   }
 }
-
-export const findNiconamaLiveUrlByHovering = async (page: Page): Promise<string> => {
-  const userAnchor = page.getByText('馬可無序', { exact: true }).first();
-  await userAnchor.waitFor({ state: 'visible', timeout: 15_000 });
-  await userAnchor.hover();
-
-  const livePageLocator = userAnchor.getByText('放送中のページ', { exact: true }).first();
-  await livePageLocator.waitFor({ state: 'visible', timeout: 15_000 });
-
-  const livePageUrl = await livePageLocator.getAttribute('href');
-  if (!livePageUrl) {
-    throw new Error('Could not find 放送中のページ href after hovering 馬可無序');
-  }
-
-  return livePageUrl;
-};
 
 export const createNiconamaCommentClient = (
   options: NiconamaCommentClientOptions,
