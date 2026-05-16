@@ -33,8 +33,8 @@
 
   <text x="100" y="58" fill="#6ee7b7" font-size="28" font-weight="700" font-family="'Noto Sans JP', 'Noto Sans CJK JP', 'Hiragino Sans', 'Yu Gothic', sans-serif">馬可無序</text>
 
-  <text x="188" y="44" fill="#a7f3d0" font-size="11" font-family="'Noto Sans JP', 'Noto Sans CJK JP', 'Hiragino Sans', 'Yu Gothic', sans-serif" letter-spacing="0.12em">まかむじょ</text>
-  <text x="188" y="57" fill="#a7f3d0" font-size="9" font-family="'Noto Sans JP', 'Noto Sans CJK JP', 'Hiragino Sans', 'Yu Gothic', sans-serif" letter-spacing="0.04em">MAKA Mujo</text>
+  <text x="208" y="44" fill="#a7f3d0" font-size="11" font-family="'Noto Sans JP', 'Noto Sans CJK JP', 'Hiragino Sans', 'Yu Gothic', sans-serif" letter-spacing="0.12em">まかむじょ</text>
+  <text x="208" y="57" fill="#a7f3d0" font-size="9" font-family="'Noto Sans JP', 'Noto Sans CJK JP', 'Hiragino Sans', 'Yu Gothic', sans-serif" letter-spacing="0.04em">MAKA Mujo</text>
 
   <rect x="100" y="73" width="198" height="20" rx="4" ry="4" fill="#0d2d1c" fill-opacity="0.5" stroke="#6ee7b7" stroke-width="1" />
   <text x="199" y="86.5" text-anchor="middle" dominant-baseline="middle" fill="#6ee7b7" font-size="9" font-weight="700" font-family="'Noto Sans JP', 'Noto Sans CJK JP', 'Hiragino Sans', 'Yu Gothic', sans-serif">🎮 ニコニコ生放送で配信中</text>
