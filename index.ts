@@ -146,7 +146,6 @@ const createSseStream = (label: string) => {
 const sseBroadcast = (payload: unknown) => {
   if (sseClients.size === 0) return;
   const frame = `data: ${JSON.stringify(payload)}\n\n`;
-  try { console.log('[INFO] sseBroadcast -> sseClients count=', sseClients.size); } catch { }
   for (const controller of Array.from(sseClients)) {
     try {
       // Evict clients under backpressure (desiredSize <= 0) to avoid blocking
