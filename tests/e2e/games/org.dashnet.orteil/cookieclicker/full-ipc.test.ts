@@ -166,6 +166,7 @@ test.describe("Full IPC operation", () => {
           env: {
             ...process.env,
             NODE_ENV: "production",
+            CONSOLE_LOOPBACK_ONLY: '1',
             MAKAMUJO_IPC_PATH: serverIpcPath,
           },
           stdio: ["ignore", "pipe", "pipe"],
