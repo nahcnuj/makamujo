@@ -191,14 +191,6 @@ test.beforeAll(async ({ request }) => {
     throw new Error(`Console server not responding at ${CONSOLE_BASE_URL}: ${String(lastErr)}`);
   }
 
-  // Register the test runner's IP as the allowed IP so that subsequent
-  // requests to the IP-restricted console server are permitted.
-  const allowlistRegistrationResponse = await request.post(`${BROADCASTING_BASE_URL}/`);
-  const allowlistRegistrationResponseText = await allowlistRegistrationResponse.text();
-  expect(
-    allowlistRegistrationResponse.ok(),
-    `Allowlist registration failed with status ${allowlistRegistrationResponse.status()} ${allowlistRegistrationResponse.statusText()}: ${allowlistRegistrationResponseText}`,
-  ).toBeTruthy();
 });
 
 test.afterAll(() => {
