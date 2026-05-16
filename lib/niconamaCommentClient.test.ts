@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureUserDataDirExists, parseAgentCommentsFromResponseBody } from "./niconamaCommentClient";
+import { ensureUserDataDirExists, hasCommentArrayStructure, parseAgentCommentsFromResponseBody } from "./niconamaCommentClient";
 
 describe("parseAgentCommentsFromResponseBody", () => {
   it("parses comments from a top-level comments array", () => {
@@ -72,6 +72,38 @@ describe("parseAgentCommentsFromResponseBody", () => {
 
     expect(firstParsed).toHaveLength(1);
     expect(secondParsed).toHaveLength(0);
+  });
+
+  it("returns an empty result for an empty top-level comments array", () => {
+    const body = { comments: [] };
+    const parsed = parseAgentCommentsFromResponseBody(body);
+
+    expect(parsed).toHaveLength(0);
+  });
+
+  it("returns an empty result for an empty nested data comments array", () => {
+    const body = { data: { comments: [] } };
+    const parsed = parseAgentCommentsFromResponseBody(body);
+
+    expect(parsed).toHaveLength(0);
+  });
+});
+
+describe("hasCommentArrayStructure", () => {
+  it("returns true for an empty top-level comments array", () => {
+    expect(hasCommentArrayStructure({ comments: [] })).toBe(true);
+  });
+
+  it("returns true for an empty nested data comments array", () => {
+    expect(hasCommentArrayStructure({ data: { comments: [] } })).toBe(true);
+  });
+
+  it("returns true for an empty top-level data array", () => {
+    expect(hasCommentArrayStructure({ data: [] })).toBe(true);
+  });
+
+  it("returns false for a response without comment arrays", () => {
+    expect(hasCommentArrayStructure({ foo: 'bar' })).toBe(false);
   });
 });
 
