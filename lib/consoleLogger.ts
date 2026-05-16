@@ -183,3 +183,9 @@ export function createConsoleLogger({ environment = process.env.NODE_ENV }: Cons
 
   return logger;
 }
+
+export function installConsoleLogger(options: ConsoleLoggerOptions = {}): Console {
+  const logger = createConsoleLogger(options);
+  globalThis.console = logger;
+  return logger;
+}

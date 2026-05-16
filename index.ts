@@ -21,9 +21,9 @@ import { handleCatchAll } from "./src/frontendServer";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
 import { normalizePublishedStreamState } from "./lib/streamState";
 import { createNiconamaCommentClient, type NiconamaCommentClient } from "./lib/niconamaCommentClient";
-import { createConsoleLogger } from "./lib/consoleLogger";
+import { installConsoleLogger } from "./lib/consoleLogger";
 
-const console = createConsoleLogger();
+const console = installConsoleLogger();
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
@@ -537,12 +537,10 @@ const makeStreamHandler = (label: string) =>
     return new Response('websocket upgrade unavailable', { status: 501 });
   };
 
-// mainServer is assigned synchronously via `const server = mainServer = serve(...)`
-// below. Route handlers only run when requests arrive (after the event-loop
-// yields), so mainServer is always defined by the time a handler executes.
-// The non-null assertion (!) is therefore safe; the runtime check below
-// provides an extra guard for unexpected scenarios.
-let mainServer!: Bun.Server<WsData>;
+// mainServer is assigned synchronously after `serve()` returns.
+// The runtime check below guards against uninitialized access when startup
+// fails before the server is fully constructed.
+let mainServer: Bun.Server<WsData> | null = null;
 
 const getMainServer = (): Bun.Server<WsData> => {
   if (!mainServer) throw new Error('Server not yet initialized');
@@ -570,7 +568,7 @@ const mainApp = new Hono()
   // Serve the built frontend (HTML + JS/CSS assets)
   .all('*', async (c) => handleCatchAll(c.req.raw));
 
-const server = mainServer = serve<WsData>({
+const server = serve<WsData>({
   port: portNumber,
   async fetch(req: Request, server: Bun.Server<WsData>) {
     const url = new URL(req.url);
