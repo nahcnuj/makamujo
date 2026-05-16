@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureUserDataDirExists, parseAgentCommentsFromResponseBody } from "./niconamaCommentClient";
+import { ensureUserDataDirExists, findNiconamaLiveUrlByHovering, parseAgentCommentsFromResponseBody } from "./niconamaCommentClient";
 
 describe("parseAgentCommentsFromResponseBody", () => {
   it("parses comments from a top-level comments array", () => {
@@ -100,5 +100,50 @@ describe("ensureUserDataDirExists", () => {
     } finally {
       rmSync(path, { recursive: true, force: true });
     }
+  });
+});
+
+describe("findNiconamaLiveUrlByHovering", () => {
+  it("uses exact 馬可無序 and 放送中のページ text selectors to resolve the live URL", async () => {
+    const livePageLocator = {
+      waitFor: async ({ state }: { state: string }) => {
+        expect(state).toBe("visible");
+      },
+      getAttribute: async (name: string) => {
+        expect(name).toBe("href");
+        return "/watch/lv350505943";
+      },
+      first: function () { return this; },
+    } as any;
+
+    const userAnchor = {
+      waitFor: async ({ state }: { state: string }) => {
+        expect(state).toBe("visible");
+      },
+      hover: async () => undefined,
+      getByText: (text: string, options: { exact: boolean }) => {
+        expect(options.exact).toBe(true);
+        if (text === "放送中のページ") {
+          return livePageLocator;
+        }
+        throw new Error(`Unexpected nested getByText text: ${text}`);
+      },
+      first: function () { return this; },
+    } as any;
+
+    const page = {
+      url: () => "https://live.nicovideo.jp/",
+      getByText: (text: string, options: { exact: boolean }) => {
+        expect(options.exact).toBe(true);
+        if (text === "馬可無序") {
+          return userAnchor;
+        }
+        throw new Error(`Unexpected page getByText text: ${text}`);
+      },
+    } as any;
+
+    const liveUrl = await findNiconamaLiveUrlByHovering(page);
+
+    expect(liveUrl).toBe("/watch/lv350505943");
   });
 });
