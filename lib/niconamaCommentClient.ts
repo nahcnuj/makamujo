@@ -7,6 +7,10 @@ import type { AgentComment } from "automated-gameplay-transmitter";
 const DEFAULT_USER_DATA_DIR = './playwright/.auth/';
 const DEFAULT_CHROMIUM_EXECUTABLE_PATH = '/usr/bin/chromium';
 
+/**
+ * `userDataDir` が存在しない場合はディレクトリを作成する。
+ * パスが存在するがディレクトリでない場合はエラーをスローする。
+ */
 export const ensureUserDataDirExists = (userDataDir: string): void => {
   if (existsSync(userDataDir)) {
     if (!statSync(userDataDir).isDirectory()) {
@@ -21,13 +25,7 @@ const DEFAULT_VIEWPORT: ViewportSize = {
   width: 1280,
   height: 720,
 };
-const DEFAULT_NICONAMA_USER_ID = process.env.NICONAMA_USER_ID?.trim();
-const DEFAULT_CANDIDATE_URLS = [
-  'https://live.nicovideo.jp/',
-  'https://live.nicovideo.jp/my',
-  ...(DEFAULT_NICONAMA_USER_ID ? [`https://live.nicovideo.jp/watch/user/${DEFAULT_NICONAMA_USER_ID}`] : []),
-];
-
+/** `NiconamaCommentClient` の生成オプション。 */
 export type NiconamaCommentClientOptions = {
   userDataDir?: string;
   executablePath?: string;
@@ -40,6 +38,10 @@ type NiconamaCommentClientCallbacks = {
   onError?: (error: unknown) => void;
 };
 
+/**
+ * Playwright の Chromium ブラウザを使って NicoNico 生放送のコメントと放送情報を取得するクライアント。
+ * ページの HTTP レスポンスを監視してコメントを抽出し、定期的に放送情報を更新する。
+ */
 export class NiconamaCommentClient {
   #userDataDir: string;
   #executablePath?: string;
@@ -52,6 +54,7 @@ export class NiconamaCommentClient {
   #seenCommentSignatures = new Set<string>();
   #callbacks: NiconamaCommentClientCallbacks;
 
+  /** クライアントを初期化する。実際のブラウザ起動は {@link start} を呼ぶまで行わない。 */
   constructor(options: NiconamaCommentClientOptions, callbacks: NiconamaCommentClientCallbacks) {
     this.#userDataDir = options.userDataDir ?? DEFAULT_USER_DATA_DIR;
     this.#executablePath = options.executablePath;
@@ -59,6 +62,10 @@ export class NiconamaCommentClient {
     this.#callbacks = callbacks;
   }
 
+  /**
+   * Chromium を起動してライブページを開き、コメント監視と定期ポーリングを開始する。
+   * すでに起動済みの場合は何もしない。
+   */
   async start(): Promise<void> {
     if (this.#running) return;
     this.#stopRequested = false;
@@ -95,6 +102,10 @@ export class NiconamaCommentClient {
     this.#pollTask = this.pollLoop();
   }
 
+  /**
+   * ポーリングを停止し、ブラウザコンテキストを閉じる。
+   * ポーリングループが実行中の場合は完了まで待機する。
+   */
   async stop(): Promise<void> {
     this.#stopRequested = true;
     if (this.#pollTask) {
@@ -109,10 +120,15 @@ export class NiconamaCommentClient {
     this.#running = false;
   }
 
+  /** ブラウザが起動中かどうかを返す。 */
   isRunning(): boolean {
     return this.#running;
   }
 
+  /**
+   * ライブページに遷移して放送情報を取得し、`onMeta` コールバックを呼び出す。
+   * ライブ URL が見つからない場合は遷移をスキップして放送情報の抽出のみ行う。
+   */
   async refreshLivePageState(): Promise<void> {
     if (!this.#page) return;
 
@@ -143,6 +159,10 @@ export class NiconamaCommentClient {
     }
   }
 
+  /**
+   * `pollIntervalMs` ごとに {@link refreshLivePageState} を呼び出し続けるループ。
+   * {@link stop} が呼ばれると次のインターバル後に終了する。
+   */
   async pollLoop(): Promise<void> {
     while (!this.#stopRequested && this.#running) {
       await setTimeout(this.#pollIntervalMs);
@@ -155,6 +175,12 @@ export class NiconamaCommentClient {
     }
   }
 
+  /**
+   * 現在のページが視聴ページであればそのURLを返す。
+   * そうでなければ NicoNico トップページを開き、「馬可無序」のホバーメニューから
+   * 「放送中のページ」リンクを探して遷移し、視聴ページの URL を返す。
+   * ライブが見つからない場合は `null` を返す。
+   */
   private async findLiveUrl(): Promise<string | null> {
     if (!this.#page) return null;
 
@@ -219,21 +245,11 @@ export class NiconamaCommentClient {
     }
   }
 
-  private async findLiveUrlFromCurrentPage(): Promise<string | null> {
-    if (!this.#page) return null;
-    return await this.#page.evaluate(() => {
-      const anchors = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]'));
-      const firstLive = anchors.find((a) => {
-        try {
-          return /\/watch\/lv\d+/.test(new URL(a.href, location.href).href);
-        } catch {
-          return false;
-        }
-      });
-      return firstLive ? new URL(firstLive.href, location.href).href : null;
-    });
-  }
-
+  /**
+   * ページの HTTP レスポンスを監視し、コメント系 JSON レスポンスからコメントを抽出する。
+   * コメントが取得できた場合は `onComments` を呼び出す。
+   * コメント配列構造が含まれないレスポンスを受け取った場合は WARN ログを出力する。
+   */
   private setupResponseWatcher(page: Page): void {
     page.on('response', async (response) => {
       try {
@@ -260,6 +276,9 @@ export class NiconamaCommentClient {
     });
   }
 
+  /**
+   * ページの DOM から放送タイトル・URL・放送中フラグ・視聴者数などの放送情報を抽出して返す。
+   */
   private async extractMetaFromPage(page: Page): Promise<{ title: string; url: string; isLive: boolean; startTime: number; listeners?: number; gift?: number; ad?: number }> {
     return await page.evaluate(() => {
       const title = document.title || (document.querySelector('h1')?.textContent?.trim() ?? 'NicoNico Live');
@@ -299,11 +318,16 @@ export class NiconamaCommentClient {
   }
 }
 
+/** {@link NiconamaCommentClient} のファクトリ関数。 */
 export const createNiconamaCommentClient = (
   options: NiconamaCommentClientOptions,
   callbacks: NiconamaCommentClientCallbacks,
 ): NiconamaCommentClient => new NiconamaCommentClient(options, callbacks);
 
+/**
+ * レスポンスボディにコメント配列構造（`comments` / `chat` / `chats` / `data.comments` 等）が
+ * 含まれるかどうかを返す。配列が空であっても `true` を返す。
+ */
 export const hasCommentArrayStructure = (body: unknown): boolean => {
   if (!body || typeof body !== 'object') return false;
   const candidateArrays = [
@@ -319,6 +343,11 @@ export const hasCommentArrayStructure = (body: unknown): boolean => {
   return candidateArrays.some(Array.isArray);
 };
 
+/**
+ * レスポンスボディからコメントを抽出して返す。
+ * `seenCommentSignatures` に同一シグネチャのコメントが登録済みの場合は除外する（重複排除）。
+ * 抽出したコメントのシグネチャは `seenCommentSignatures` に追記される。
+ */
 export const parseAgentCommentsFromResponseBody = (
   body: unknown,
   seenCommentSignatures: Set<string> = new Set<string>(),
