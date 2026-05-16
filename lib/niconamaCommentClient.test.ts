@@ -1,5 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { parseAgentCommentsFromResponseBody } from "./niconamaCommentClient";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { ensureUserDataDirExists, parseAgentCommentsFromResponseBody } from "./niconamaCommentClient";
 
 describe("parseAgentCommentsFromResponseBody", () => {
   it("parses comments from a top-level comments array", () => {
@@ -69,5 +72,33 @@ describe("parseAgentCommentsFromResponseBody", () => {
 
     expect(firstParsed).toHaveLength(1);
     expect(secondParsed).toHaveLength(0);
+  });
+});
+
+describe("ensureUserDataDirExists", () => {
+  it("creates the directory when it does not exist", () => {
+    const path = mkdtempSync(join(tmpdir(), "niconama-user-data-dir-"));
+    const userDataDir = join(path, "auth-profile");
+
+    try {
+      ensureUserDataDirExists(userDataDir);
+      expect(existsSync(userDataDir)).toBe(true);
+    } finally {
+      rmSync(path, { recursive: true, force: true });
+    }
+  });
+
+  it("throws when the path exists but is not a directory", () => {
+    const path = mkdtempSync(join(tmpdir(), "niconama-user-data-dir-"));
+    const filePath = join(path, "auth-profile");
+    writeFileSync(filePath, "not a directory");
+
+    try {
+      expect(() => ensureUserDataDirExists(filePath)).toThrow(
+        `userDataDir must be a directory: ${filePath}`,
+      );
+    } finally {
+      rmSync(path, { recursive: true, force: true });
+    }
   });
 });

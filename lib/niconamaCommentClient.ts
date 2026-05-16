@@ -1,10 +1,21 @@
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, statSync } from "node:fs";
 import { setTimeout } from "node:timers/promises";
 import type { BrowserContext, Page, ViewportSize } from "playwright";
 import { chromium } from "./Browser/chromium";
 import type { AgentComment } from "automated-gameplay-transmitter";
 
 const DEFAULT_USER_DATA_DIR = './playwright/.auth/';
+
+export const ensureUserDataDirExists = (userDataDir: string): void => {
+  if (existsSync(userDataDir)) {
+    if (!statSync(userDataDir).isDirectory()) {
+      throw new Error(`userDataDir must be a directory: ${userDataDir}`);
+    }
+    return;
+  }
+
+  mkdirSync(userDataDir, { recursive: true });
+};
 const DEFAULT_VIEWPORT: ViewportSize = {
   width: 1280,
   height: 720,
@@ -51,9 +62,7 @@ export class NiconamaCommentClient {
     if (this.#running) return;
     this.#stopRequested = false;
 
-    if (!existsSync(this.#userDataDir)) {
-      throw new Error(`userDataDir does not exist: ${this.#userDataDir}`);
-    }
+    ensureUserDataDirExists(this.#userDataDir);
 
     const launchOptions = {
       ...(this.#executablePath ? { executablePath: this.#executablePath } : { channel: 'chromium' }),
