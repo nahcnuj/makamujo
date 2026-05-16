@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { createBunWebSocket } from "hono/bun";
+import { createConsoleLogger } from "../../lib/consoleLogger";
 import {
   buildProxyHeaders,
   computeProxyBase,
@@ -20,6 +21,8 @@ import { relative, resolve } from "node:path";
 const CONSOLE_BUILD_PATH = process.env.CONSOLE_BUILD_PATH ?? resolve(process.cwd(), 'var/console/build');
 const CONSOLE_SOURCE_HTML_PATH = resolve(process.cwd(), 'console/src/index.html');
 const CONSOLE_PUBLIC_PATH = '/console/';
+
+const debugConsole = createConsoleLogger();
 
 let consoleBuildPromise: Promise<void> | null = null;
 let builtConsoleHtml: string | null = null;
@@ -126,7 +129,7 @@ async function serveConsoleAppHtml(): Promise<Response> {
 }
 
 try {
-  console.log('[DEBUG] routes/console initializing');
+  debugConsole.debug('[DEBUG] routes/console initializing');
 } catch {}
 
 export const { upgradeWebSocket, websocket } = createBunWebSocket();
@@ -137,7 +140,7 @@ export const app = new Hono()
     try {
       const proxyBase = computeProxyBase(c.req.raw);
       const proxyUrl = computeProxyUrl(c.req.raw, proxyBase);
-      try { console.log('[DEBUG] /console/api/ws proxy ->', { url: proxyUrl, method: c.req.method, accept: c.req.header('accept'), upgrade: c.req.header('upgrade'), secWebSocketKey: c.req.header('sec-websocket-key'), secWebSocketProtocol: c.req.header('sec-websocket-protocol') }); } catch {}
+      try { debugConsole.debug('[DEBUG] /console/api/ws proxy ->', { url: proxyUrl, method: c.req.method, accept: c.req.header('accept'), upgrade: c.req.header('upgrade'), secWebSocketKey: c.req.header('sec-websocket-key'), secWebSocketProtocol: c.req.header('sec-websocket-protocol') }); } catch {}
 
       const upgradeHeader = (c.req.header('upgrade') ?? '').toLowerCase();
       const hasSecWebSocketKey = !!c.req.header('sec-websocket-key');
@@ -159,11 +162,11 @@ export const app = new Hono()
       onOpen(_event, ws) {
         (async () => {
           try {
-            try { console.log('[DEBUG] websocket upgrade accepted; starting SSE->WS forwarder'); } catch {}
+            try { debugConsole.debug('[DEBUG] websocket upgrade accepted; starting SSE->WS forwarder'); } catch {}
             const sseUrl = `${proxyBase}/console/api/ws`;
-            try { console.log('[DEBUG] opening upstream SSE fetch ->', sseUrl); } catch {}
+            try { debugConsole.debug('[DEBUG] opening upstream SSE fetch ->', sseUrl); } catch {}
             const res = await fetch(sseUrl, { headers: { accept: 'text/event-stream' } });
-            try { console.log('[DEBUG] upstream SSE response ->', { status: res.status, contentType: res.headers.get('content-type') }); } catch {}
+            try { debugConsole.debug('[DEBUG] upstream SSE response ->', { status: res.status, contentType: res.headers.get('content-type') }); } catch {}
             try {
               const metaJson = await fetchMetaSnapshot(proxyBase);
               try { ws.send(JSON.stringify(metaJson)); } catch {}
