@@ -171,12 +171,35 @@ export class NiconamaCommentClient {
           continue;
         }
 
-        const liveUrl = await this.#page.evaluate(() => {
-          const anchors = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]'));
-          const firstLive = anchors.find((a) => /\/watch\/lv\d+/.test(a.href));
-          return firstLive?.href ?? null;
-        });
+        if (DEFAULT_NICONAMA_USER_ID && !/\/watch\/user\/\d+/.test(this.#page.url())) {
+          const userPageUrl = await this.#page.evaluate((userId) => {
+            const anchors = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]'));
+            const anchor = anchors.find((a) => {
+              try {
+                const href = new URL(a.href, location.href).href;
+                return href.includes(`/watch/user/${userId}`);
+              } catch {
+                return false;
+              }
+            });
+            return anchor ? new URL(anchor.href, location.href).href : null;
+          }, DEFAULT_NICONAMA_USER_ID);
 
+          if (typeof userPageUrl === 'string' && userPageUrl.length > 0) {
+            try {
+              await this.#page.goto(userPageUrl, { waitUntil: 'domcontentloaded' });
+            } catch {
+              // continue to fallback search if navigation failed.
+            }
+
+            const liveUrlFromUserPage = await this.findLiveUrlFromCurrentPage();
+            if (liveUrlFromUserPage) {
+              return liveUrlFromUserPage;
+            }
+          }
+        }
+
+        const liveUrl = await this.findLiveUrlFromCurrentPage();
         if (typeof liveUrl === 'string' && liveUrl.length > 0) {
           return liveUrl;
         }
@@ -185,6 +208,21 @@ export class NiconamaCommentClient {
       this.reportError(err);
     }
     return null;
+  }
+
+  private async findLiveUrlFromCurrentPage(): Promise<string | null> {
+    if (!this.#page) return null;
+    return await this.#page.evaluate(() => {
+      const anchors = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]'));
+      const firstLive = anchors.find((a) => {
+        try {
+          return /\/watch\/lv\d+/.test(new URL(a.href, location.href).href);
+        } catch {
+          return false;
+        }
+      });
+      return firstLive ? new URL(firstLive.href, location.href).href : null;
+    });
   }
 
   private setupResponseWatcher(page: Page): void {
