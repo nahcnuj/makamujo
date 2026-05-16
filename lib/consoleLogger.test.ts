@@ -1,8 +1,8 @@
-import { test, expect } from "bun:test";
+import { test, expect, jest } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createDailyRotatingJsonLogger } from "./consoleLogger";
+import { createDailyRotatingJsonLogger, suppressConsoleLoggerInProduction } from "./consoleLogger";
 
 function createTempLogPath() {
   const tempDirectoryPath = mkdtempSync(join(tmpdir(), "console-logger-test-"));
@@ -158,5 +158,30 @@ test("rotates by JST date boundary", async () => {
     expect(readFileSync(logFilePath, "utf8")).toContain('"timestamp":"2026-04-19T00:00:00.000+09:00"');
   } finally {
     rmSync(tempDirectoryPath, { recursive: true, force: true });
+  }
+});
+
+test("suppresses debug logs when NODE_ENV=production", () => {
+  const originalConsoleLog = console.log;
+  const originalConsoleDebug = console.debug;
+  const recordedLog: unknown[][] = [];
+
+  try {
+    process.env.NODE_ENV = 'production';
+    console.log = (...args: unknown[]) => { recordedLog.push(args); };
+    console.debug = jest.fn();
+
+    suppressConsoleLoggerInProduction();
+
+    console.log('[DEBUG] hidden');
+    console.log('[INFO] shown');
+    console.debug('[DEBUG] hidden-debug');
+
+    expect(recordedLog).toEqual([['[INFO] shown']]);
+    expect(console.debug).not.toBe(originalConsoleDebug);
+  } finally {
+    console.log = originalConsoleLog;
+    console.debug = originalConsoleDebug;
+    delete process.env.NODE_ENV;
   }
 });

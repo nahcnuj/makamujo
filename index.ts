@@ -21,7 +21,7 @@ import { handleCatchAll } from "./src/frontendServer";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
 import { normalizePublishedStreamState } from "./lib/streamState";
 import { createNiconamaCommentClient, type NiconamaCommentClient } from "./lib/niconamaCommentClient";
-import { suppressDebugConsoleInProduction } from "./lib/debugConsole";
+import { suppressConsoleLoggerInProduction } from "./lib/consoleLogger";
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
@@ -29,7 +29,7 @@ process.on('SIGUSR1', signalHandler.bind(null, { exit: true }));
 process.on('SIGUSR2', signalHandler.bind(null, { exit: true }));
 // Log uncaught exceptions for better diagnostics before invoking the
 // existing exit handler which terminates the process.
-suppressDebugConsoleInProduction();
+suppressConsoleLoggerInProduction();
 
 process.on('uncaughtException', (err) => {
   try {
