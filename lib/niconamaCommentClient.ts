@@ -166,16 +166,9 @@ export class NiconamaCommentClient {
 
       await this.#page.goto('https://live.nicovideo.jp/', { waitUntil: 'domcontentloaded' });
 
-      const userAnchor = this.#page.locator('text=馬可無序').first();
-      await userAnchor.waitFor({ state: 'visible', timeout: 15_000 });
-      await userAnchor.hover();
-
-      const livePageLocator = this.#page.locator('text=放送中のページ').first();
-      await livePageLocator.waitFor({ state: 'visible', timeout: 15_000 });
-
-      const livePageUrl = await livePageLocator.getAttribute('href');
+      const livePageUrl = await findNiconamaLiveUrlByHovering(this.#page);
       if (!livePageUrl) {
-        throw new Error('Could not find 放送中のページ href after hovering 馬可無序');
+        return null;
       }
 
       const absoluteLivePageUrl = new URL(livePageUrl, this.#page.url()).href;
@@ -261,6 +254,22 @@ export class NiconamaCommentClient {
     }
   }
 }
+
+export const findNiconamaLiveUrlByHovering = async (page: Page): Promise<string> => {
+  const userAnchor = page.getByText('馬可無序', { exact: true }).first();
+  await userAnchor.waitFor({ state: 'visible', timeout: 15_000 });
+  await userAnchor.hover();
+
+  const livePageLocator = userAnchor.getByText('放送中のページ', { exact: true }).first();
+  await livePageLocator.waitFor({ state: 'visible', timeout: 15_000 });
+
+  const livePageUrl = await livePageLocator.getAttribute('href');
+  if (!livePageUrl) {
+    throw new Error('Could not find 放送中のページ href after hovering 馬可無序');
+  }
+
+  return livePageUrl;
+};
 
 export const createNiconamaCommentClient = (
   options: NiconamaCommentClientOptions,
