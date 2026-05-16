@@ -61,6 +61,4 @@ fi
     --startstreaming \
     --disable-shutdown-check \
     --disable-missing-files-check \
-    --disable-updater \
-    --unfiltered_log \
-    --verbose
+    --disable-updater
