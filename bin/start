@@ -22,7 +22,7 @@ echo "Console Basic auth password: ${PASSWORD}"
 NODE_ENV=production nohup bun start >"${PROJECT_ROOT}/var/screen.log" 2>&1 &
 echo $! > "${PID_DIR}/screen"
 
-nohup bun ./bin/x/browser.ts >"${PROJECT_ROOT}/var/browser.log" 2>&1 &
+NODE_ENV=production nohup bun ./bin/x/browser.ts >"${PROJECT_ROOT}/var/browser.log" 2>&1 &
 echo $! > "${PID_DIR}/browser"
 
 nohup ./bin/x/obs >"${PROJECT_ROOT}/var/obs.log" 2>&1 &

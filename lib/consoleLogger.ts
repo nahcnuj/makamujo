@@ -150,15 +150,29 @@ export function formatUnknownError(error: unknown): string {
 export function createConsoleLogger({ environment = process.env.NODE_ENV }: ConsoleLoggerOptions = {}): Console {
   const originalConsole = globalThis.console;
   const originalLog = originalConsole.log.bind(originalConsole);
+  const originalInfo = originalConsole.info.bind(originalConsole);
   const originalDebug = originalConsole.debug.bind(originalConsole);
 
   const logger = Object.create(originalConsole) as Console;
 
+  const isSuppressedDebug = (args: unknown[]): boolean =>
+    environment === 'production' &&
+    args.length > 0 &&
+    typeof args[0] === 'string' &&
+    args[0].startsWith('[DEBUG]');
+
   logger.log = (...args: unknown[]): void => {
-    if (environment === 'production' && args.length > 0 && typeof args[0] === 'string' && args[0].startsWith('[DEBUG]')) {
+    if (isSuppressedDebug(args)) {
       return;
     }
     originalLog(...args);
+  };
+
+  logger.info = (...args: unknown[]): void => {
+    if (isSuppressedDebug(args)) {
+      return;
+    }
+    originalInfo(...args);
   };
 
   logger.debug = environment === 'production'
