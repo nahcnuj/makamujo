@@ -145,11 +145,6 @@ export function startConsoleServer({
   const consoleBasicAuthPassword = process.env.CONSOLE_BASIC_AUTH_PASSWORD;
   const consoleAccessControlEnabled = isConsoleIPRestrictionEnabled();
 
-  if (consoleAccessControlEnabled && !consoleBasicAuthPassword) {
-    loopbackServer.stop(true);
-    throw new Error('Console basic auth password is required in production via CONSOLE_BASIC_AUTH_PASSWORD.');
-  }
-
   // If running in loopback-only mode (used by tests), return the loopback
   // server without attempting to start the outer TLS-enabled server.
   if (process.env.CONSOLE_LOOPBACK_ONLY === '1') {
@@ -159,6 +154,11 @@ export function startConsoleServer({
         loopbackServer.stop(closeActiveConnections);
       },
     };
+  }
+
+  if (consoleAccessControlEnabled && !consoleBasicAuthPassword) {
+    loopbackServer.stop(true);
+    throw new Error('Console basic auth password is required in production via CONSOLE_BASIC_AUTH_PASSWORD.');
   }
 
   // Fail fast if TLS cert/key files are missing before starting the outer server.
