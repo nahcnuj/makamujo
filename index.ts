@@ -640,7 +640,7 @@ try {
   niconamaCommentClient = createNiconamaCommentClient(
     {
       userDataDir: process.env.NICONAMA_USER_DATA_DIR ?? './playwright/.auth/',
-      executablePath: process.env.CHROMIUM_EXECUTABLE_PATH,
+      executablePath: process.env.CHROMIUM_EXECUTABLE_PATH ?? '/usr/bin/chromium',
       pollIntervalMs: 30_000,
     },
     {

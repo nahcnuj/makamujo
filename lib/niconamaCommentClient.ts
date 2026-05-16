@@ -5,6 +5,7 @@ import { chromium } from "./Browser/chromium";
 import type { AgentComment } from "automated-gameplay-transmitter";
 
 const DEFAULT_USER_DATA_DIR = './playwright/.auth/';
+const DEFAULT_CHROMIUM_EXECUTABLE_PATH = '/usr/bin/chromium';
 
 export const ensureUserDataDirExists = (userDataDir: string): void => {
   if (existsSync(userDataDir)) {
@@ -64,8 +65,9 @@ export class NiconamaCommentClient {
 
     ensureUserDataDirExists(this.#userDataDir);
 
+    const executablePath = this.#executablePath ?? DEFAULT_CHROMIUM_EXECUTABLE_PATH;
     const launchOptions = {
-      ...(this.#executablePath ? { executablePath: this.#executablePath } : { channel: 'chromium' }),
+      executablePath,
       headless: true,
       timeout: 60_000,
       args: [
