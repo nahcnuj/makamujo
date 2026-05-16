@@ -54,20 +54,4 @@ describe("parseAgentCommentsFromResponseBody", () => {
     expect(parsed).toHaveLength(1);
     expect(parsed[0]?.data.comment).toBe("hello");
   });
-
-  it("deduplicates repeated comments across separate parse calls when sharing the same signature cache", () => {
-    const body1 = {
-      comments: [{ comment: "hello", no: 5, anonymity: false, hasGift: false }],
-    };
-    const body2 = {
-      comments: [{ comment: "hello", no: 5, anonymity: false, hasGift: false }],
-    };
-    const seenSignatures = new Set<string>();
-
-    const firstParsed = parseAgentCommentsFromResponseBody(body1, seenSignatures);
-    const secondParsed = parseAgentCommentsFromResponseBody(body2, seenSignatures);
-
-    expect(firstParsed).toHaveLength(1);
-    expect(secondParsed).toHaveLength(0);
-  });
 });

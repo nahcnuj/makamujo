@@ -187,7 +187,7 @@ export class NiconamaCommentClient {
         const body = await response.json().catch(() => null);
         if (!body) return;
 
-        const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentSignatures);
+        const comments = parseAgentCommentsFromResponseBody(body);
         if (comments.length > 0) {
           this.#callbacks.onComments(comments);
         }
@@ -235,10 +235,7 @@ export const createNiconamaCommentClient = (
   callbacks: NiconamaCommentClientCallbacks,
 ): NiconamaCommentClient => new NiconamaCommentClient(options, callbacks);
 
-export const parseAgentCommentsFromResponseBody = (
-  body: unknown,
-  seenCommentSignatures: Set<string> = new Set<string>(),
-): AgentComment[] => {
+export const parseAgentCommentsFromResponseBody = (body: unknown): AgentComment[] => {
   if (!body || typeof body !== 'object') return [];
   const rawComments: unknown[] = [];
   const candidateArrays = [
@@ -261,7 +258,7 @@ export const parseAgentCommentsFromResponseBody = (
   }
 
   const comments: AgentComment[] = [];
-  const seenSignatures = seenCommentSignatures;
+  const seenSignatures = new Set<string>();
 
   for (const raw of rawComments) {
     if (!raw || typeof raw !== 'object') continue;
