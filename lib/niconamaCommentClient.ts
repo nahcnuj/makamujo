@@ -5,7 +5,7 @@ import { DEFAULT_PLAYWRIGHT_USER_DATA_DIR, DEFAULT_CHROMIUM_EXECUTABLE_PATH, lau
 
 const DEFAULT_POLL_INTERVAL_MS = 30_000;
 const DEFAULT_WATCH_PAGE_BASE_URL = 'https://live.nicovideo.jp/';
-export const DEFAULT_FALLBACK_WATCH_URL = 'https://live.nicovideo.jp/watch/user/14171889';
+const DEFAULT_FALLBACK_WATCH_URL = 'https://live.nicovideo.jp/watch/user/14171889';
 
 /**
  * `userDataDir` が存在しない場合はディレクトリを作成する。
@@ -123,6 +123,12 @@ export class NiconamaCommentClient {
       return;
     }
 
+    const embeddedData = await this.fetchEmbeddedDataFromPage(watchUrl);
+    if (!embeddedData || typeof embeddedData !== 'object') {
+      this.reportError(new Error(`failed to resolve embedded-data from NicoNico watch page: ${watchUrl}`));
+      return;
+    }
+
     this.#running = true;
     this.#callbacks.onMeta({
       type: 'niconama',
@@ -136,8 +142,13 @@ export class NiconamaCommentClient {
       },
     });
 
-    await this.setupDirectWebSocketConnection(watchUrl);
+    await this.setupDirectWebSocketConnection(watchUrl, embeddedData);
     this.#pollTask = this.pollLoop();
+  }
+
+  public async fetchEmbeddedData(watchUrl?: string): Promise<unknown | null> {
+    const targetUrl = watchUrl ?? this.#watchUrl ?? DEFAULT_FALLBACK_WATCH_URL;
+    return this.fetchEmbeddedDataFromPage(targetUrl);
   }
 
   async stop(): Promise<void> {
@@ -256,19 +267,19 @@ export class NiconamaCommentClient {
     }
   }
 
-  private async setupDirectWebSocketConnection(watchUrl: string): Promise<void> {
+  private async setupDirectWebSocketConnection(watchUrl: string, embeddedData?: unknown): Promise<void> {
     if (this.#directWebSocket) return;
 
     console.debug('[DEBUG] setting up direct websocket connection', watchUrl);
-    const embeddedData = await this.fetchEmbeddedDataFromPage(watchUrl);
-    if (!embeddedData || typeof embeddedData !== 'object') {
+    const data = embeddedData ?? await this.fetchEmbeddedDataFromPage(watchUrl);
+    if (!data || typeof data !== 'object') {
       console.warn('[WARN] failed to parse embedded data from page', watchUrl);
       return;
     }
 
-    const webSocketUrl = (embeddedData as any).site?.state?.relive?.webSocketUrl;
+    const webSocketUrl = (data as any).site?.state?.relive?.webSocketUrl ?? (data as any).site?.relive?.webSocketUrl;
     if (!webSocketUrl || typeof webSocketUrl !== 'string') {
-      console.warn('[WARN] direct websocket url not found in embedded data', { embeddedData });
+      console.warn('[WARN] direct websocket url not found in embedded data', { embeddedData: data });
       return;
     }
 

@@ -1,28 +1,24 @@
 import { expect, test } from "@playwright/test";
-import { DEFAULT_FALLBACK_WATCH_URL } from "../../lib/niconamaCommentClient";
+import { createNiconamaCommentClient } from "../../lib/niconamaCommentClient";
 
-const parseEmbeddedDataProps = (dataProps: string): unknown | null => {
-  try {
-    return JSON.parse(dataProps.replace(/&quot;/g, '"').replace(/&amp;/g, '&'));
-  } catch {
-    return null;
-  }
-};
+test.describe("NiconamaCommentClient fallback watch page", () => {
+  test("fetches embedded-data from the actual fallback URL and extracts relive websocket URL", async () => {
+    const client = createNiconamaCommentClient(
+      {},
+      {
+        onComments: () => {},
+        onMeta: () => {},
+        onError: (error) => {
+          throw error;
+        },
+      },
+    );
 
-test.describe("Niconama fallback watch page", () => {
-  test("contains embedded-data with relive websocket URL", async ({ page }) => {
-    await page.goto(DEFAULT_FALLBACK_WATCH_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
+    const embeddedData = await client.fetchEmbeddedData();
 
-    const embeddedData = await page.locator('#embedded-data').first();
-    await expect(embeddedData).toBeVisible({ timeout: 30000 });
-
-    const dataProps = await embeddedData.getAttribute('data-props');
-    expect(dataProps).toBeTruthy();
-
-    const embedded = parseEmbeddedDataProps(dataProps ?? '');
-    expect(embedded).toBeTruthy();
-    expect(typeof embedded).toBe('object');
-    expect((embedded as any).site?.state?.relive?.webSocketUrl).toBeTruthy();
-    expect((embedded as any).site?.state?.relive?.webSocketUrl).toMatch(/^wss:\/\//);
+    expect(embeddedData).toBeTruthy();
+    expect(typeof embeddedData).toBe("object");
+    expect((embeddedData as any).site?.state?.relive?.webSocketUrl ?? (embeddedData as any).site?.relive?.webSocketUrl).toBeTruthy();
+    expect((embeddedData as any).site?.state?.relive?.webSocketUrl ?? (embeddedData as any).site?.relive?.webSocketUrl).toMatch(/^wss:\/\//);
   });
 });
