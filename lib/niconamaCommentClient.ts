@@ -426,6 +426,7 @@ export class NiconamaCommentClient {
         knownEventType = true;
         break;
       default:
+        console.warn('[WARN] direct websocket unknown event type', eventType, wsUrl, JSON.stringify(body, null, 2));
         break;
     }
 
