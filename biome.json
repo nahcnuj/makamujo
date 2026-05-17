@@ -16,8 +16,25 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": false,
+      "recommended": true,
+      "complexity": {
+        "noUselessLoneBlockStatements": "off",
+        "useLiteralKeys": "off"
+      },
+      "a11y": {
+        "useAltText": "off"
+      },
+      "security": {
+        "noGlobalEval": "off"
+      },
+      "suspicious": {
+        "noArrayIndexKey": "off",
+        "noAssignInExpressions": "off",
+        "noImplicitAnyLet": "off",
+        "useIterableCallbackReturn": "off"
+      },
       "style": {
+        "useNodejsImportProtocol": "off",
         "useThrowNewError": "error"
       }
     }
