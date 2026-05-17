@@ -12,3 +12,8 @@ MAKA Mujo: an AI‑VTuber
 ## Dependencies
 
 - **[automated-gameplay-transmitter](https://github.com/nahcnuj/automated-gameplay-transmitter)**: browser automation helpers, IPC utilities, and shared React components/contexts used by the UI.
+
+## Lint / Format
+
+- `bun run lint`
+- `bun run format`
