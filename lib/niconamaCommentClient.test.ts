@@ -4,10 +4,29 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   ensureUserDataDirExists,
+  extractEmbeddedDataFromHtml,
   extractWatchUrlFromHtml,
   hasCommentArrayStructure,
   parseAgentCommentsFromResponseBody,
 } from "./niconamaCommentClient";
+
+describe("extractEmbeddedDataFromHtml", () => {
+  it("extracts data props from a script #embedded-data element", () => {
+    const html = '<script id="embedded-data" data-props="{&quot;site&quot;:{&quot;state&quot;:{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com&quot;}}}}"></script>';
+    const extracted = extractEmbeddedDataFromHtml(html);
+    expect(extracted).toEqual({
+      site: { state: { relive: { webSocketUrl: 'wss://example.com' } } },
+    });
+  });
+
+  it("extracts data props from a div #embedded-data element", () => {
+    const html = '<div id="embedded-data" data-props="{&quot;site&quot;:{&quot;state&quot;:{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com&quot;}}}}"></div>';
+    const extracted = extractEmbeddedDataFromHtml(html);
+    expect(extracted).toEqual({
+      site: { state: { relive: { webSocketUrl: 'wss://example.com' } } },
+    });
+  });
+});
 
 describe("extractWatchUrlFromHtml", () => {
   it("extracts relative /watch URLs from anchor tags", () => {

@@ -54,6 +54,24 @@ export const extractWatchUrlFromHtml = (html: string, baseUrl: string): string |
   return null;
 };
 
+export const tryParseJson = (text: string): unknown | null => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+};
+
+export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
+  const match = html.match(/<(?:div|script)[^>]+id=["']embedded-data["'][^>]+data-props=["']([^"']+)["'][^>]*>/i);
+  if (!match) {
+    return null;
+  }
+
+  const jsonText = normalizeHtmlForUrlExtraction(match[1]!);
+  return tryParseJson(jsonText);
+};
+
 export type NiconamaCommentClientOptions = {
   userDataDir?: string;
   executablePath?: string;
@@ -105,6 +123,12 @@ export class NiconamaCommentClient {
       return;
     }
 
+    const embeddedData = await this.fetchEmbeddedDataFromPage(watchUrl);
+    if (!embeddedData || typeof embeddedData !== 'object') {
+      this.reportError(new Error(`failed to resolve embedded-data from NicoNico watch page: ${watchUrl}`));
+      return;
+    }
+
     this.#running = true;
     this.#callbacks.onMeta({
       type: 'niconama',
@@ -118,8 +142,13 @@ export class NiconamaCommentClient {
       },
     });
 
-    await this.setupDirectWebSocketConnection(watchUrl);
+    await this.setupDirectWebSocketConnection(watchUrl, embeddedData);
     this.#pollTask = this.pollLoop();
+  }
+
+  public async fetchEmbeddedData(watchUrl?: string): Promise<unknown | null> {
+    const targetUrl = watchUrl ?? this.#watchUrl ?? DEFAULT_FALLBACK_WATCH_URL;
+    return this.fetchEmbeddedDataFromPage(targetUrl);
   }
 
   async stop(): Promise<void> {
@@ -226,32 +255,31 @@ export class NiconamaCommentClient {
   private async fetchEmbeddedDataFromPage(watchUrl: string): Promise<unknown | null> {
     try {
       const html = await this.fetchHtml(watchUrl);
-      const match = html.match(/<div[^>]+id=["']embedded-data["'][^>]+data-props=["']([^"']+)["'][^>]*>/i);
-      if (!match) {
+      const embeddedData = extractEmbeddedDataFromHtml(html);
+      if (!embeddedData) {
         console.warn('[WARN] embedded-data element not found', watchUrl);
         return null;
       }
-      const normalized = match[1]!.replace(/&quot;/g, '"').replace(/&amp;/g, '&');
-      return this.tryParseJson(normalized);
+      return embeddedData;
     } catch (err) {
       this.reportError(err);
       return null;
     }
   }
 
-  private async setupDirectWebSocketConnection(watchUrl: string): Promise<void> {
+  private async setupDirectWebSocketConnection(watchUrl: string, embeddedData?: unknown): Promise<void> {
     if (this.#directWebSocket) return;
 
     console.debug('[DEBUG] setting up direct websocket connection', watchUrl);
-    const embeddedData = await this.fetchEmbeddedDataFromPage(watchUrl);
-    if (!embeddedData || typeof embeddedData !== 'object') {
+    const data = embeddedData ?? await this.fetchEmbeddedDataFromPage(watchUrl);
+    if (!data || typeof data !== 'object') {
       console.warn('[WARN] failed to parse embedded data from page', watchUrl);
       return;
     }
 
-    const webSocketUrl = (embeddedData as any).site?.state?.relive?.webSocketUrl;
+    const webSocketUrl = (data as any).site?.state?.relive?.webSocketUrl ?? (data as any).site?.relive?.webSocketUrl;
     if (!webSocketUrl || typeof webSocketUrl !== 'string') {
-      console.warn('[WARN] direct websocket url not found in embedded data', { embeddedData });
+      console.warn('[WARN] direct websocket url not found in embedded data', { embeddedData: data });
       return;
     }
 
@@ -380,11 +408,7 @@ export class NiconamaCommentClient {
   }
 
   private tryParseJson(text: string): unknown {
-    try {
-      return JSON.parse(text);
-    } catch {
-      return null;
-    }
+    return tryParseJson(text);
   }
 
   async pollLoop(): Promise<void> {
