@@ -45,7 +45,7 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
       const collectedComments: any[] = [];
       const collectedMeta: any[] = [];
 
-      const client = createNiconamaCommentClient({}, {
+      const client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test' }, {
         onComments: (c) => { collectedComments.push(...c); },
         onMeta: (m) => { collectedMeta.push(m); },
         onError: (e) => { throw e; },
@@ -105,7 +105,7 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
 
       const collectedComments: any[] = [];
 
-      const client = createNiconamaCommentClient({}, {
+      const client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test' }, {
         onComments: (c) => { collectedComments.push(...c); },
         onMeta: () => {},
         onError: (e) => { throw e; },
