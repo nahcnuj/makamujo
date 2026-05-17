@@ -5,6 +5,7 @@ import { DEFAULT_PLAYWRIGHT_USER_DATA_DIR, DEFAULT_CHROMIUM_EXECUTABLE_PATH, lau
 
 const DEFAULT_POLL_INTERVAL_MS = 30_000;
 const DEFAULT_WATCH_PAGE_BASE_URL = 'https://live.nicovideo.jp/';
+const DEFAULT_FALLBACK_WATCH_URL = 'https://live.nicovideo.jp/watch/user/14171889';
 
 /**
  * `userDataDir` が存在しない場合はディレクトリを作成する。
@@ -141,7 +142,9 @@ export class NiconamaCommentClient {
       return candidateUrl;
     }
 
-    if (candidateUrl === DEFAULT_WATCH_PAGE_BASE_URL) {
+    const normalizedRootUrl = DEFAULT_WATCH_PAGE_BASE_URL.replace(/\/+$/u, '');
+    const normalizedCandidateUrl = candidateUrl.replace(/\/+$/u, '');
+    if (normalizedCandidateUrl === normalizedRootUrl) {
       const watchUrl = await this.resolveWatchUrlFromNiconamaTopPage();
       if (watchUrl) {
         return watchUrl;
@@ -154,12 +157,14 @@ export class NiconamaCommentClient {
       const watchUrl = extractWatchUrlFromHtml(html, candidateUrl);
       if (!watchUrl) {
         console.warn('[WARN] failed to resolve watch URL from HTML', candidateUrl);
-        return null;
+        console.info('[INFO] falling back to fixed NicoNico watch URL', DEFAULT_FALLBACK_WATCH_URL);
+        return DEFAULT_FALLBACK_WATCH_URL;
       }
       return watchUrl;
     } catch (err) {
       this.reportError(err);
-      return null;
+      console.info('[INFO] falling back to fixed NicoNico watch URL', DEFAULT_FALLBACK_WATCH_URL);
+      return DEFAULT_FALLBACK_WATCH_URL;
     }
   }
 
@@ -222,7 +227,8 @@ export class NiconamaCommentClient {
       }
 
       console.warn('[WARN] failed to resolve watch URL via Playwright', DEFAULT_WATCH_PAGE_BASE_URL);
-      return null;
+      console.info('[INFO] falling back to fixed NicoNico watch URL', DEFAULT_FALLBACK_WATCH_URL);
+      return DEFAULT_FALLBACK_WATCH_URL;
     } finally {
       await context.close();
     }
