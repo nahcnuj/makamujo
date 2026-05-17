@@ -7,6 +7,7 @@ import {
   extractEmbeddedDataFromHtml,
   extractWatchUrlFromHtml,
   hasCommentArrayStructure,
+  buildNiconamaStreamStateFromStatisticsEvent,
   parseAgentCommentsFromResponseBody,
 } from "./niconamaCommentClient";
 
@@ -133,6 +134,44 @@ describe("parseAgentCommentsFromResponseBody", () => {
     const parsed = parseAgentCommentsFromResponseBody(body);
 
     expect(parsed).toHaveLength(0);
+  });
+});
+
+describe("buildNiconamaStreamStateFromStatisticsEvent", () => {
+  it("returns null for non-statistics events", () => {
+    const payload = { type: "reconnect", data: { viewers: 42 } };
+    expect(buildNiconamaStreamStateFromStatisticsEvent(payload)).toBeNull();
+  });
+
+  it("maps statistics payload to niconama stream state and commentCount", () => {
+    const payload = {
+      type: "statistics",
+      data: {
+        viewers: 49,
+        comments: 5,
+        adPoints: 1800,
+        giftPoints: 0,
+      },
+    };
+
+    expect(buildNiconamaStreamStateFromStatisticsEvent(payload)).toEqual({
+      niconama: {
+        type: "live",
+        meta: {
+          total: {
+            listeners: 49,
+            ad: 1800,
+            gift: 0,
+          },
+        },
+      },
+      commentCount: 5,
+    });
+  });
+
+  it("returns null when no numeric statistics properties are present", () => {
+    const payload = { type: "statistics", data: { foo: "bar" } };
+    expect(buildNiconamaStreamStateFromStatisticsEvent(payload)).toBeNull();
   });
 });
 

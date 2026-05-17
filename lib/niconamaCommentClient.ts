@@ -62,6 +62,43 @@ export const tryParseJson = (text: string): unknown | null => {
   }
 };
 
+export const buildNiconamaStreamStateFromStatisticsEvent = (body: unknown): unknown | null => {
+  if (!body || typeof body !== 'object') return null;
+  if ((body as any).type !== 'statistics') return null;
+
+  const data = (body as any).data;
+  if (!data || typeof data !== 'object') return null;
+
+  const listeners = typeof data.viewers === 'number' ? data.viewers : undefined;
+  const comments = typeof data.comments === 'number' ? data.comments : undefined;
+  const adPoints = typeof data.adPoints === 'number' ? data.adPoints : undefined;
+  const giftPoints = typeof data.giftPoints === 'number' ? data.giftPoints : undefined;
+
+  if (listeners === undefined && comments === undefined && adPoints === undefined && giftPoints === undefined) {
+    return null;
+  }
+
+  const streamState: Record<string, unknown> = {};
+  const total: Record<string, number> = {};
+
+  if (listeners !== undefined) total.listeners = listeners;
+  if (adPoints !== undefined) total.ad = adPoints;
+  if (giftPoints !== undefined) total.gift = giftPoints;
+
+  if (Object.keys(total).length > 0) {
+    streamState.niconama = {
+      type: 'live',
+      meta: { total },
+    };
+  }
+
+  if (comments !== undefined) {
+    streamState.commentCount = comments;
+  }
+
+  return Object.keys(streamState).length > 0 ? streamState : null;
+};
+
 export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
   const match = html.match(/<(?:div|script)[^>]+id=["']embedded-data["'][^>]+data-props=["']([^"']+)["'][^>]*>/i);
   if (!match) {
@@ -375,17 +412,35 @@ export class NiconamaCommentClient {
       return;
     }
 
+    let knownEventType = false;
+    switch (eventType) {
+      case 'statistics': {
+        const metaState = buildNiconamaStreamStateFromStatisticsEvent(body);
+        if (metaState) {
+          this.#callbacks.onMeta(metaState);
+        }
+        knownEventType = true;
+        break;
+      }
+      case 'reconnect':
+        knownEventType = true;
+        break;
+      default:
+        console.warn('[WARN] direct websocket unknown event type', eventType, wsUrl, JSON.stringify(body, null, 2));
+        break;
+    }
+
     const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentSignatures);
     if (comments.length > 0) {
       this.#callbacks.onComments(comments);
-      if (eventType === 'statistics' || eventType === 'reconnect' || eventType === 'seat' || eventType === 'postkey' || eventType === 'postCommentResult' || eventType === 'error_message') {
-        console.warn('[WARN] direct websocket known event type with comment payload', eventType, wsUrl, body);
+      if (knownEventType) {
+        console.debug('[DEBUG] direct websocket known event type with comment payload', eventType, wsUrl, body);
       }
       return;
     }
 
-    if (eventType === 'statistics' || eventType === 'reconnect' || eventType === 'seat' || eventType === 'postkey' || eventType === 'postCommentResult' || eventType === 'error_message') {
-      console.warn('[WARN] direct websocket ignored known event type', eventType, wsUrl, body);
+    if (knownEventType) {
+      console.debug('[DEBUG] direct websocket ignored known event type', eventType, wsUrl, body);
       return;
     }
 
