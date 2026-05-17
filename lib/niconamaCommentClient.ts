@@ -21,6 +21,38 @@ export const ensureUserDataDirExists = (userDataDir: string): void => {
   mkdirSync(userDataDir, { recursive: true });
 };
 
+export const normalizeHtmlForUrlExtraction = (html: string): string =>
+  html
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&#x2F;/g, '/')
+    .replace(/&#x27;/g, "'")
+    .replace(/&#34;/g, '"')
+    .replace(/&#39;/g, "'");
+
+export const extractWatchUrlFromHtml = (html: string, baseUrl: string): string | null => {
+  const normalizedHtml = normalizeHtmlForUrlExtraction(html);
+  const patterns = [
+    /["'](https?:\/\/(?:ext\.)?live\.nicovideo\.jp\/watch\/(?:lv|user)[^"']+)["']/i,
+    /["'](\/watch\/(?:lv|user)[^"']+)["']/i,
+    /watchPageUrl[^"']*["']([^"']*\/watch\/(?:lv|user)[^"']*)["']/i,
+    /programWatchPageUrl[^"']*["']([^"']*\/watch\/(?:lv|user)[^"']*)["']/i,
+    /watchPageUrlAtExtPlayer[^"']*["']([^"']*\/watch\/(?:lv|user)[^"']*)["']/i,
+  ] as const;
+
+  for (const pattern of patterns) {
+    const match = normalizedHtml.match(pattern);
+    if (!match) continue;
+    try {
+      return new URL(match[1]!, baseUrl).href;
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+};
+
 export type NiconamaCommentClientOptions = {
   userDataDir?: string;
   executablePath?: string;
@@ -110,12 +142,12 @@ export class NiconamaCommentClient {
     console.debug('[DEBUG] resolveWatchUrl fetching candidate page', candidateUrl);
     try {
       const html = await this.fetchHtml(candidateUrl);
-      const match = html.match(/href=["'](\/watch\/(?:lv|user)[^"']+)["']/i);
-      if (!match) {
+      const watchUrl = extractWatchUrlFromHtml(html, candidateUrl);
+      if (!watchUrl) {
         console.warn('[WARN] failed to resolve watch URL from HTML', candidateUrl);
         return null;
       }
-      return new URL(match[1]!, candidateUrl).href;
+      return watchUrl;
     } catch (err) {
       this.reportError(err);
       return null;

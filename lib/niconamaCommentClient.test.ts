@@ -2,7 +2,35 @@ import { describe, expect, it } from "bun:test";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureUserDataDirExists, hasCommentArrayStructure, parseAgentCommentsFromResponseBody } from "./niconamaCommentClient";
+import {
+  ensureUserDataDirExists,
+  extractWatchUrlFromHtml,
+  hasCommentArrayStructure,
+  parseAgentCommentsFromResponseBody,
+} from "./niconamaCommentClient";
+
+describe("extractWatchUrlFromHtml", () => {
+  it("extracts relative /watch URLs from anchor tags", () => {
+    const html = '<a href="/watch/lv123456">Watch</a>';
+    expect(extractWatchUrlFromHtml(html, 'https://live.nicovideo.jp/')).toBe(
+      'https://live.nicovideo.jp/watch/lv123456',
+    );
+  });
+
+  it("extracts watchPageUrl values from JSON-like HTML", () => {
+    const html = '...&quot;watchPageUrl&quot;:&quot;https://live.nicovideo.jp/watch/lv350350266?ref=TopPage-RecommendedProgramListSection-PlayerProgramCard&quot;...';
+    expect(extractWatchUrlFromHtml(html, 'https://live.nicovideo.jp/')).toBe(
+      'https://live.nicovideo.jp/watch/lv350350266?ref=TopPage-RecommendedProgramListSection-PlayerProgramCard',
+    );
+  });
+
+  it("extracts watchPageUrlAtExtPlayer values from JSON-like HTML", () => {
+    const html = '..."watchPageUrlAtExtPlayer":"https://ext.live.nicovideo.jp/watch/lv350350266"...';
+    expect(extractWatchUrlFromHtml(html, 'https://live.nicovideo.jp/')).toBe(
+      'https://ext.live.nicovideo.jp/watch/lv350350266',
+    );
+  });
+});
 
 describe("parseAgentCommentsFromResponseBody", () => {
   it("parses comments from a top-level comments array", () => {
