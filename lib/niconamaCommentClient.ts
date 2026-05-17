@@ -185,7 +185,42 @@ export class NiconamaCommentClient {
 
   public async fetchEmbeddedData(watchUrl?: string): Promise<unknown | null> {
     const targetUrl = watchUrl ?? this.#watchUrl ?? DEFAULT_FALLBACK_WATCH_URL;
-    return this.fetchEmbeddedDataFromPage(targetUrl);
+    // Try fetching the page HTML first (fast, no browser required)
+    const embedded = await this.fetchEmbeddedDataFromPage(targetUrl);
+    if (embedded) return embedded;
+
+    // Fallback to Playwright rendering when embedded-data isn't present or is JS-rendered
+    try {
+      console.debug('[DEBUG] fetchEmbeddedData falling back to Playwright', targetUrl);
+      const context = await launchPersistentContext(this.#userDataDir, {
+        executablePath: this.#executablePath,
+        headless: true,
+        ignoreHTTPSErrors: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
+      try {
+        const page = context.pages()[0] ?? await context.newPage();
+        await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 60_000 });
+        const el = await page.$('#embedded-data');
+        if (!el) {
+          console.warn('[WARN] embedded-data element not found via Playwright', targetUrl);
+          return null;
+        }
+        const dataProps = await el.getAttribute('data-props');
+        if (!dataProps) {
+          console.warn('[WARN] embedded-data element missing data-props attribute', targetUrl);
+          return null;
+        }
+        const jsonText = normalizeHtmlForUrlExtraction(dataProps);
+        const parsed = tryParseJson(jsonText);
+        return parsed ?? null;
+      } finally {
+        await context.close();
+      }
+    } catch (err) {
+      this.reportError(err);
+      return null;
+    }
   }
 
   async stop(): Promise<void> {
@@ -258,7 +293,7 @@ export class NiconamaCommentClient {
 
     try {
       const page = context.pages()[0] ?? await context.newPage();
-      await page.goto(DEFAULT_WATCH_PAGE_BASE_URL, { waitUntil: 'domcontentloaded', timeout: 3_000 });
+      await page.goto(DEFAULT_WATCH_PAGE_BASE_URL, { waitUntil: 'networkidle', timeout: 60_000 });
       const targetLocator = page.getByText('馬可無序');
       if (await targetLocator.count() === 0) {
         console.info('[INFO] 馬可無序 was not present on the top page; falling back to fixed watch URL', DEFAULT_FALLBACK_WATCH_URL);
@@ -314,6 +349,12 @@ export class NiconamaCommentClient {
       return;
     }
 
+    const initialComments = parseAgentCommentsFromResponseBody(data, this.#seenCommentSignatures);
+    if (initialComments.length > 0) {
+      console.debug('[DEBUG] direct websocket initial comments from embedded data', { count: initialComments.length, watchUrl });
+      this.#callbacks.onComments(initialComments);
+    }
+
     const webSocketUrl = (data as any).site?.state?.relive?.webSocketUrl ?? (data as any).site?.relive?.webSocketUrl;
     if (!webSocketUrl || typeof webSocketUrl !== 'string') {
       console.warn('[WARN] direct websocket url not found in embedded data', { embeddedData: data });
@@ -332,6 +373,7 @@ export class NiconamaCommentClient {
 
       ws.onopen = () => {
         console.info('[INFO] direct websocket established', webSocketUrl);
+        this.sendDirectWebSocketMessage({ type: 'keepSeat' });
       };
 
       ws.onmessage = (event: { data: unknown }) => {
@@ -423,6 +465,13 @@ export class NiconamaCommentClient {
         break;
       }
       case 'reconnect':
+      case 'reconnect_request':
+      case 'actionComment':
+      case 'action_comment':
+      case 'postCommentResult':
+      case 'post_comment_result':
+      case 'error_message':
+      case 'tag_updated':
         knownEventType = true;
         break;
       default:
@@ -430,7 +479,7 @@ export class NiconamaCommentClient {
         break;
     }
 
-    const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentSignatures);
+    const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentSignatures, eventType);
     if (comments.length > 0) {
       this.#callbacks.onComments(comments);
       if (knownEventType) {
@@ -493,6 +542,43 @@ export const createNiconamaCommentClient = (
   callbacks: NiconamaCommentClientCallbacks,
 ): NiconamaCommentClient => new NiconamaCommentClient(options, callbacks);
 
+const isCommentLikeObject = (object: unknown): boolean => {
+  if (!object || typeof object !== 'object') return false;
+  const text = (object as any).comment ?? (object as any).text ?? (object as any).body ?? (object as any).message;
+  return typeof text === 'string' && text.trim().length > 0;
+};
+
+const collectNestedCommentArrays = (
+  body: unknown,
+  depth = 0,
+  parentKey?: string,
+  maxDepth = 4,
+): unknown[] => {
+  if (depth > maxDepth || !body || typeof body !== 'object') return [];
+
+  const results: unknown[] = [];
+  if (Array.isArray(body)) {
+    if (
+      (parentKey === 'comments' || parentKey === 'chat' || parentKey === 'chats') ||
+      body.some(isCommentLikeObject)
+    ) {
+      results.push(body);
+    }
+
+    for (const item of body) {
+      results.push(...collectNestedCommentArrays(item, depth + 1, undefined, maxDepth));
+    }
+
+    return results;
+  }
+
+  for (const [key, value] of Object.entries(body)) {
+    results.push(...collectNestedCommentArrays(value, depth + 1, key, maxDepth));
+  }
+
+  return results;
+};
+
 export const hasCommentArrayStructure = (body: unknown): boolean => {
   if (!body || typeof body !== 'object') return false;
   const candidateArrays = [
@@ -502,17 +588,51 @@ export const hasCommentArrayStructure = (body: unknown): boolean => {
     (body as any).data?.comments,
     (body as any).data?.chat,
     (body as any).data?.chats,
+    (body as any).site?.state?.relive?.comments,
+    (body as any).site?.state?.relive?.chat,
+    (body as any).site?.state?.relive?.chats,
+    (body as any).site?.relive?.comments,
+    (body as any).site?.relive?.chat,
+    (body as any).site?.relive?.chats,
     (body as any).data,
   ];
 
-  return candidateArrays.some(Array.isArray);
+  if (candidateArrays.some(Array.isArray)) {
+    return true;
+  }
+
+  return collectNestedCommentArrays(body).length > 0;
+};
+
+const collectCommentLikeObjects = (body: unknown, depth = 0, maxDepth = 4): unknown[] => {
+  if (depth > maxDepth || !body || typeof body !== 'object') return [];
+
+  const results: unknown[] = [];
+  if (Array.isArray(body)) {
+    for (const item of body) {
+      results.push(...collectCommentLikeObjects(item, depth + 1, maxDepth));
+    }
+    return results;
+  }
+
+  if (isCommentLikeObject(body)) {
+    results.push(body);
+  }
+
+  for (const value of Object.values(body)) {
+    results.push(...collectCommentLikeObjects(value, depth + 1, maxDepth));
+  }
+
+  return results;
 };
 
 export const parseAgentCommentsFromResponseBody = (
   body: unknown,
   seenCommentSignatures: Set<string> = new Set<string>(),
+  eventType?: string,
 ): AgentComment[] => {
   if (!body || typeof body !== 'object') return [];
+
   const rawComments: unknown[] = [];
   const candidateArrays = [
     (body as any).comments,
@@ -521,6 +641,12 @@ export const parseAgentCommentsFromResponseBody = (
     (body as any).data?.comments,
     (body as any).data?.chat,
     (body as any).data?.chats,
+    (body as any).site?.state?.relive?.comments,
+    (body as any).site?.state?.relive?.chat,
+    (body as any).site?.state?.relive?.chats,
+    (body as any).site?.relive?.comments,
+    (body as any).site?.relive?.chat,
+    (body as any).site?.relive?.chats,
   ];
 
   for (const candidate of candidateArrays) {
@@ -531,6 +657,20 @@ export const parseAgentCommentsFromResponseBody = (
 
   if (rawComments.length === 0 && Array.isArray((body as any).data)) {
     rawComments.push(...(body as any).data);
+  }
+
+  const commentEventTypes = new Set(['actionComment', 'action_comment']);
+  if (rawComments.length === 0 && eventType && commentEventTypes.has(eventType)) {
+    const maybeComment = (body as any).data;
+    if (maybeComment && isCommentLikeObject(maybeComment)) {
+      rawComments.push(maybeComment);
+    }
+  }
+
+  if (rawComments.length === 0) {
+    for (const nestedArray of collectNestedCommentArrays(body)) {
+      rawComments.push(...nestedArray as unknown[]);
+    }
   }
 
   const comments: AgentComment[] = [];

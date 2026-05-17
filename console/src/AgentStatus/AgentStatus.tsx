@@ -71,7 +71,7 @@ export const AgentStatus = () => {
     (async () => {
       const sseUrl = "/console/api/ws";
       try { (window as any).__sseUrl = sseUrl; } catch {}
-      try { console.debug("[DEBUG] AgentStatus connecting EventSource ->", sseUrl); } catch {}
+      try { console.log("[TRACE] AgentStatus connecting EventSource ->", sseUrl); } catch {}
       try {
         es = new EventSource(sseUrl);
       } catch {

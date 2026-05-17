@@ -92,6 +92,76 @@ describe("parseAgentCommentsFromResponseBody", () => {
     });
   });
 
+  it("parses comments from nested embedded data structures", () => {
+    const body = {
+      site: {
+        state: {
+          relive: {
+            comments: [{ comment: "おはよう", no: 3, anonymity: false, hasGift: false, userId: "user456" }],
+          },
+        },
+      },
+    };
+
+    const parsed = parseAgentCommentsFromResponseBody(body);
+
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toEqual({
+      data: expect.objectContaining({
+        comment: "おはよう",
+        no: 3,
+        anonymity: false,
+        hasGift: false,
+        userId: "user456",
+      }),
+    });
+  });
+
+  it("parses a single actionComment payload with nested data object", () => {
+    const body = {
+      type: "actionComment",
+      data: { comment: "こんにちは", no: 7, anonymity: false, hasGift: false, userId: "user321" },
+    };
+
+    const parsed = parseAgentCommentsFromResponseBody(body, new Set(), "actionComment");
+
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toEqual({
+      data: expect.objectContaining({
+        comment: "こんにちは",
+        no: 7,
+        anonymity: false,
+        hasGift: false,
+        userId: "user321",
+      }),
+    });
+  });
+
+  it("parses comments from deeply nested arbitrary objects", () => {
+    const body = {
+      foo: {
+        bar: {
+          baz: {
+            comments: [{ comment: "深いネスト", no: 42, anonymity: true, hasGift: false, userId: "user789" }],
+          },
+        },
+      },
+    };
+
+    const parsed = parseAgentCommentsFromResponseBody(body);
+
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toEqual({
+      data: expect.objectContaining({
+        comment: "深いネスト",
+        no: 42,
+        anonymity: true,
+        hasGift: false,
+        userId: "user789",
+      }),
+    });
+  });
+
   it("deduplicates repeated comments with the same signature", () => {
     const body = {
       comments: [
@@ -182,6 +252,14 @@ describe("hasCommentArrayStructure", () => {
 
   it("returns true for an empty nested data comments array", () => {
     expect(hasCommentArrayStructure({ data: { comments: [] } })).toBe(true);
+  });
+
+  it("returns true for nested embedded data comment arrays", () => {
+    expect(hasCommentArrayStructure({ site: { state: { relive: { comments: [] } } } })).toBe(true);
+  });
+
+  it("returns true for deeply nested arbitrary comment arrays", () => {
+    expect(hasCommentArrayStructure({ foo: { bar: { baz: { comments: [] } } } })).toBe(true);
   });
 
   it("returns true for an empty top-level data array", () => {

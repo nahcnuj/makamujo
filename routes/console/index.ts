@@ -133,7 +133,7 @@ export const { upgradeWebSocket, websocket } = createBunWebSocket();
 
 export const app = new Hono()
   .get('/console/api/ws', async (c, next) => {
-    try { console.debug('[DEBUG] incoming request headers ->', Object.fromEntries(c.req.raw.headers)); } catch {}
+    try { console.log('[TRACE] incoming request headers ->', Object.fromEntries(c.req.raw.headers)); } catch {}
     try {
       const proxyBase = computeProxyBase(c.req.raw);
       const proxyUrl = computeProxyUrl(c.req.raw, proxyBase);
