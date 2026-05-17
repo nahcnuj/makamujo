@@ -178,7 +178,7 @@ export class NiconamaCommentClient {
       this.#directWebSocket = ws;
 
       ws.onopen = () => {
-        console.debug('[DEBUG] direct websocket open', webSocketUrl);
+        console.info('[INFO] direct websocket established', webSocketUrl);
       };
 
       ws.onmessage = (event: { data: unknown }) => {
