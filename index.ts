@@ -303,6 +303,7 @@ let agent: any = {
   publishStreamState: (data: unknown) => { lastPublishedStreamState = data; },
   postComments: (_: unknown) => { },
 };
+let externalAgentInitialized = false;
 
 // Attempt to dynamically load the external agent API. This avoids module
 // evaluation side-effects at import time (such as binding to IPC paths)
@@ -314,6 +315,7 @@ let agent: any = {
       try {
         const externalAgent = mod.createAgentApi(streamer);
         agent = externalAgent;
+        externalAgentInitialized = true;
         console.info('[INFO] external agent API initialized');
       } catch (err) {
         console.warn('[WARN] createAgentApi threw, keeping in-memory fallback:', err instanceof Error ? err.message : String(err));
@@ -644,7 +646,28 @@ try {
     {
       onMeta: handlePublishedStreamState,
       onComments: (comments) => {
-        agent.postComments(comments);
+        try {
+          agent.postComments(comments);
+        } catch (err) {
+          console.warn('[WARN] agent.postComments threw:', err instanceof Error ? err.message : String(err));
+        }
+
+        // If the agent did not update stream state (e.g. fallback agent),
+        // increment the published comment count so the console reflects activity.
+        try {
+          const afterState = typeof agent.getStreamState === 'function' ? agent.getStreamState() : undefined;
+          const hasCount = afterState && typeof afterState === 'object' && typeof (afterState as any).commentCount === 'number';
+          if (!hasCount) {
+            const payload = getCurrentStreamPayload();
+            const currentCount = typeof payload.commentCount === 'number' ? payload.commentCount : 0;
+            const newCount = currentCount + (Array.isArray(comments) ? comments.length : 0);
+            lastPublishedStreamState = (lastPublishedStreamState && typeof lastPublishedStreamState === 'object') ? { ...lastPublishedStreamState } : {};
+            try { (lastPublishedStreamState as any).commentCount = newCount; } catch { }
+          }
+        } catch (err) {
+          console.warn('[WARN] failed to update fallback commentCount:', err instanceof Error ? err.message : String(err));
+        }
+
         broadcastCurrentPayload('onComment');
         if (modelFile) {
           try {

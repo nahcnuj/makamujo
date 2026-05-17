@@ -269,23 +269,25 @@ export class NiconamaCommentClient {
         if (!contentType.includes('application/json')) return;
         const url = response.url();
 
-        // Avoid matching ad endpoints that include the page URL as a query
-        // parameter. Use the response pathname to determine whether this is
-        // likely a comment/chat endpoint.
-        let pathname = '';
-        try { pathname = new URL(url).pathname; } catch { pathname = ''; }
-        if (!/(?:comment|comments|chat|chats)/i.test(pathname)) return;
-
+        // Try to parse JSON body first. Some comment endpoints do not include
+        // 'comment'/'chat' in the pathname, so fall back to inspecting the body
+        // for known comment array structures.
         const body = await response.json().catch(() => null);
         if (!body) return;
+
+        let pathname = '';
+        try { pathname = new URL(url).pathname; } catch { pathname = ''; }
+
+        if (!/(?:comment|comments|chat|chats)/i.test(pathname) && !hasCommentArrayStructure(body)) {
+          // Not a comment-related response by pathname and body doesn't look like comments.
+          return;
+        }
 
         const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentSignatures);
         if (comments.length > 0) {
           console.debug('[DEBUG] NiconamaCommentClient captured comments from response:', url, 'count=', comments.length);
           this.#callbacks.onComments(comments);
         } else if (!hasCommentArrayStructure(body)) {
-          // コメント系レスポンスなのにコメント配列が見つからなかった観察結果を記録する。
-          // 例外ではないため reportError() は使わず console.warn を直接呼ぶ。
           console.warn('[WARN] NiconamaCommentClient received a comment-related response without any comment arrays:', url);
         }
       } catch (err) {
