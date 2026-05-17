@@ -523,7 +523,7 @@ function getMainAssetContentType(filePath: string): string | undefined {
 const makeStreamHandler = (label: string) =>
   (req: Request): Response => {
     const accept = req.headers.get('accept') ?? '';
-    try { console.log(`[TRACE] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
+    try { console.debug(`[DEBUG] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
     if (accept.includes('text/event-stream')) {
       return new Response(createSseStream(label), {
         headers: {
@@ -579,7 +579,7 @@ const server = serve<WsData>({
 
     if (isWsEndpoint && !accept.includes('text/event-stream') && !forceDisableWs) {
       const label = url.pathname;
-      try { console.log(`[TRACE] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
+      try { console.debug(`[DEBUG] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
       const upgraded = server.upgrade(req, { data: { label } satisfies WsData });
       if (upgraded) {
         // undefined signals Bun that the connection was upgraded to WebSocket
