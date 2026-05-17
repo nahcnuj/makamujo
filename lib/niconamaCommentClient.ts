@@ -215,22 +215,6 @@ export class NiconamaCommentClient {
         }
       }
 
-      const fallbackLink = page.locator('a[href*="/watch/"]', { hasText: '放送中のページ' }).first();
-      if (await fallbackLink.count() > 0) {
-        const href = await fallbackLink.getAttribute('href');
-        if (href) {
-          return new URL(href, DEFAULT_WATCH_PAGE_BASE_URL).href;
-        }
-      }
-
-      const anyWatchLink = page.locator('a[href*="/watch/"]').first();
-      if (await anyWatchLink.count() > 0) {
-        const href = await anyWatchLink.getAttribute('href');
-        if (href) {
-          return new URL(href, DEFAULT_WATCH_PAGE_BASE_URL).href;
-        }
-      }
-
       console.warn('[WARN] failed to resolve watch URL via Playwright', DEFAULT_WATCH_PAGE_BASE_URL);
       console.info('[INFO] falling back to fixed NicoNico watch URL', DEFAULT_FALLBACK_WATCH_URL);
       return DEFAULT_FALLBACK_WATCH_URL;
