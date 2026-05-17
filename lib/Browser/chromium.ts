@@ -8,6 +8,33 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
 export const chromium = $_.use(StealthPlugin());
 
+export const DEFAULT_PLAYWRIGHT_USER_DATA_DIR = './playwright/.auth/';
+export const DEFAULT_CHROMIUM_EXECUTABLE_PATH = '/usr/bin/chromium';
+
+export const launchPersistentContext = async (
+  userDataDir: string,
+  options: Record<string, unknown> = {},
+) => {
+  const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '60000', 10);
+  const args = [
+    '--hide-scrollbars',
+    '--window-size=1024,576',
+    '--window-position=1280,600',
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    ...(Array.isArray(options.args) ? (options.args as string[]) : []),
+  ];
+  const launchOpts = {
+    ...options,
+    executablePath: options.executablePath ?? DEFAULT_CHROMIUM_EXECUTABLE_PATH,
+    headless: options.headless ?? process.env.CHROMIUM_HEADLESS === '1',
+    timeout: launchTimeout,
+    args,
+  };
+
+  return chromium.launchPersistentContext(userDataDir, launchOpts as any);
+};
+
 export const create = async (
   executablePath?: string,
   viewport: ViewportSize = {

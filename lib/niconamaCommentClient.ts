@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, statSync } from "node:fs";
 import { setTimeout } from "node:timers/promises";
 import type { AgentComment } from "automated-gameplay-transmitter";
+import { DEFAULT_PLAYWRIGHT_USER_DATA_DIR, DEFAULT_CHROMIUM_EXECUTABLE_PATH, launchPersistentContext } from "./Browser/chromium";
 
-const DEFAULT_USER_DATA_DIR = './niconama/.auth/';
 const DEFAULT_POLL_INTERVAL_MS = 30_000;
 const DEFAULT_WATCH_PAGE_BASE_URL = 'https://live.nicovideo.jp/';
 
@@ -69,6 +69,7 @@ type NiconamaCommentClientCallbacks = {
 export class NiconamaCommentClient {
   #userDataDir: string;
   #watchUrl?: string;
+  #executablePath?: string;
   #pollIntervalMs: number;
   #running = false;
   #stopRequested = false;
@@ -79,8 +80,9 @@ export class NiconamaCommentClient {
   #callbacks: NiconamaCommentClientCallbacks;
 
   constructor(options: NiconamaCommentClientOptions, callbacks: NiconamaCommentClientCallbacks) {
-    this.#userDataDir = options.userDataDir ?? DEFAULT_USER_DATA_DIR;
+    this.#userDataDir = options.userDataDir ?? DEFAULT_PLAYWRIGHT_USER_DATA_DIR;
     this.#watchUrl = options.watchUrl;
+    this.#executablePath = options.executablePath ?? DEFAULT_CHROMIUM_EXECUTABLE_PATH;
     this.#pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.#callbacks = callbacks;
   }
@@ -139,6 +141,13 @@ export class NiconamaCommentClient {
       return candidateUrl;
     }
 
+    if (candidateUrl === DEFAULT_WATCH_PAGE_BASE_URL) {
+      const watchUrl = await this.resolveWatchUrlFromNiconamaTopPage();
+      if (watchUrl) {
+        return watchUrl;
+      }
+    }
+
     console.debug('[DEBUG] resolveWatchUrl fetching candidate page', candidateUrl);
     try {
       const html = await this.fetchHtml(candidateUrl);
@@ -165,6 +174,58 @@ export class NiconamaCommentClient {
       throw new Error(`failed to fetch ${url}: ${response.status}`);
     }
     return await response.text();
+  }
+
+  private async resolveWatchUrlFromNiconamaTopPage(): Promise<string | null> {
+    console.debug('[DEBUG] resolveWatchUrlWithPlaywright opening Niconama top page', DEFAULT_WATCH_PAGE_BASE_URL);
+    const context = await launchPersistentContext(this.#userDataDir, {
+      executablePath: this.#executablePath,
+      headless: true,
+      ignoreHTTPSErrors: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
+    try {
+      const page = context.pages()[0] ?? await context.newPage();
+      await page.goto(DEFAULT_WATCH_PAGE_BASE_URL, { waitUntil: 'networkidle', timeout: 60_000 });
+      const target = page.getByText('馬可無序').first();
+      try {
+        await target.waitFor({ state: 'visible', timeout: 15_000 });
+        await target.hover({ timeout: 15_000 });
+      } catch (hoverErr) {
+        console.warn('[WARN] failed to hover target element', hoverErr);
+      }
+      await page.waitForTimeout(1_500);
+
+      const broadcastLink = page.locator('a:has-text("放送中のページ")').first();
+      if (await broadcastLink.count() > 0) {
+        const href = await broadcastLink.getAttribute('href');
+        if (href) {
+          return new URL(href, DEFAULT_WATCH_PAGE_BASE_URL).href;
+        }
+      }
+
+      const fallbackLink = page.locator('a[href*="/watch/"]', { hasText: '放送中のページ' }).first();
+      if (await fallbackLink.count() > 0) {
+        const href = await fallbackLink.getAttribute('href');
+        if (href) {
+          return new URL(href, DEFAULT_WATCH_PAGE_BASE_URL).href;
+        }
+      }
+
+      const anyWatchLink = page.locator('a[href*="/watch/"]').first();
+      if (await anyWatchLink.count() > 0) {
+        const href = await anyWatchLink.getAttribute('href');
+        if (href) {
+          return new URL(href, DEFAULT_WATCH_PAGE_BASE_URL).href;
+        }
+      }
+
+      console.warn('[WARN] failed to resolve watch URL via Playwright', DEFAULT_WATCH_PAGE_BASE_URL);
+      return null;
+    } finally {
+      await context.close();
+    }
   }
 
   private async fetchEmbeddedDataFromPage(watchUrl: string): Promise<unknown | null> {
