@@ -54,6 +54,25 @@ export const extractWatchUrlFromHtml = (html: string, baseUrl: string): string |
   return null;
 };
 
+export const tryParseJson = (text: string): unknown | null => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+};
+
+export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
+  const normalizedHtml = normalizeHtmlForUrlExtraction(html);
+  const match = normalizedHtml.match(/<(?:div|script)[^>]+id=["']embedded-data["'][^>]+data-props=["']([^"']+)["'][^>]*>/i);
+  if (!match) {
+    return null;
+  }
+
+  const jsonText = match[1]!.replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+  return tryParseJson(jsonText);
+};
+
 export type NiconamaCommentClientOptions = {
   userDataDir?: string;
   executablePath?: string;
@@ -226,13 +245,12 @@ export class NiconamaCommentClient {
   private async fetchEmbeddedDataFromPage(watchUrl: string): Promise<unknown | null> {
     try {
       const html = await this.fetchHtml(watchUrl);
-      const match = html.match(/<(?:div|script)[^>]+id=["']embedded-data["'][^>]+data-props=["']([^"']+)["'][^>]*>/i);
-      if (!match) {
+      const embeddedData = extractEmbeddedDataFromHtml(html);
+      if (!embeddedData) {
         console.warn('[WARN] embedded-data element not found', watchUrl);
         return null;
       }
-      const normalized = match[1]!.replace(/&quot;/g, '"').replace(/&amp;/g, '&');
-      return this.tryParseJson(normalized);
+      return embeddedData;
     } catch (err) {
       this.reportError(err);
       return null;
@@ -380,11 +398,7 @@ export class NiconamaCommentClient {
   }
 
   private tryParseJson(text: string): unknown {
-    try {
-      return JSON.parse(text);
-    } catch {
-      return null;
-    }
+    return tryParseJson(text);
   }
 
   async pollLoop(): Promise<void> {
