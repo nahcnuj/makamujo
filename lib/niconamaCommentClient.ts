@@ -226,7 +226,7 @@ export class NiconamaCommentClient {
   private async fetchEmbeddedDataFromPage(watchUrl: string): Promise<unknown | null> {
     try {
       const html = await this.fetchHtml(watchUrl);
-      const match = html.match(/<div[^>]+id=["']embedded-data["'][^>]+data-props=["']([^"']+)["'][^>]*>/i);
+      const match = html.match(/<(?:div|script)[^>]+id=["']embedded-data["'][^>]+data-props=["']([^"']+)["'][^>]*>/i);
       if (!match) {
         console.warn('[WARN] embedded-data element not found', watchUrl);
         return null;
