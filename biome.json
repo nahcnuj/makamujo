@@ -24,9 +24,6 @@
       "a11y": {
         "useAltText": "off"
       },
-      "security": {
-        "noGlobalEval": "off"
-      },
       "suspicious": {
         "noArrayIndexKey": "off",
         "noAssignInExpressions": "off",
