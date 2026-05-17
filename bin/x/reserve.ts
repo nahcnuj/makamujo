@@ -2,7 +2,7 @@
 
 import { statSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { chromium } from "../../lib/Browser/chromium";
+import { DEFAULT_PLAYWRIGHT_USER_DATA_DIR, DEFAULT_CHROMIUM_EXECUTABLE_PATH, launchPersistentContext } from "../../lib/Browser/chromium";
 
 const { values: {
   'user-data-dir': userDataDir,
@@ -12,11 +12,11 @@ const { values: {
   options: {
     'user-data-dir': {
       type: 'string',
-      default: './playwright/.auth/',
+      default: DEFAULT_PLAYWRIGHT_USER_DATA_DIR,
     },
     'exec-path': {
       type: 'string',
-      default: '/usr/bin/chromium',
+      default: DEFAULT_CHROMIUM_EXECUTABLE_PATH,
     },
     headless: {
       short: 'y',
@@ -30,7 +30,7 @@ if (!statSync(userDataDir).isDirectory()) {
   throw new Error('--user-data-dir must be a directory path');
 }
 
-const ctx = await chromium.launchPersistentContext(userDataDir, {
+const ctx = await launchPersistentContext(userDataDir, {
   executablePath,
   headless,
 });
