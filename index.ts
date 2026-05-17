@@ -581,6 +581,7 @@ const server = serve<WsData>({
       const label = url.pathname;
       try { console.debug(`[DEBUG] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
       const upgraded = server.upgrade(req, { data: { label } satisfies WsData });
+      if (upgraded) {
         // undefined signals Bun that the connection was upgraded to WebSocket
         // and no HTTP response should be sent back.
         return undefined;
