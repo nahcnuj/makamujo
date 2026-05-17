@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-
-const TARGET_URL = "https://live.nicovideo.jp/watch/user/14171889";
+import { DEFAULT_FALLBACK_WATCH_URL } from "../../lib/niconamaCommentClient";
 
 const parseEmbeddedDataProps = (dataProps: string): unknown | null => {
   try {
@@ -12,7 +11,7 @@ const parseEmbeddedDataProps = (dataProps: string): unknown | null => {
 
 test.describe("Niconama fallback watch page", () => {
   test("contains embedded-data with relive websocket URL", async ({ page }) => {
-    await page.goto(TARGET_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.goto(DEFAULT_FALLBACK_WATCH_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
 
     const embeddedData = await page.locator('#embedded-data').first();
     await expect(embeddedData).toBeVisible({ timeout: 30000 });

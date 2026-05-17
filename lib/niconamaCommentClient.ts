@@ -5,7 +5,7 @@ import { DEFAULT_PLAYWRIGHT_USER_DATA_DIR, DEFAULT_CHROMIUM_EXECUTABLE_PATH, lau
 
 const DEFAULT_POLL_INTERVAL_MS = 30_000;
 const DEFAULT_WATCH_PAGE_BASE_URL = 'https://live.nicovideo.jp/';
-const DEFAULT_FALLBACK_WATCH_URL = 'https://live.nicovideo.jp/watch/user/14171889';
+export const DEFAULT_FALLBACK_WATCH_URL = 'https://live.nicovideo.jp/watch/user/14171889';
 
 /**
  * `userDataDir` が存在しない場合はディレクトリを作成する。
@@ -63,13 +63,12 @@ export const tryParseJson = (text: string): unknown | null => {
 };
 
 export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
-  const normalizedHtml = normalizeHtmlForUrlExtraction(html);
-  const match = normalizedHtml.match(/<(?:div|script)[^>]+id=["']embedded-data["'][^>]+data-props=["']([^"']+)["'][^>]*>/i);
+  const match = html.match(/<(?:div|script)[^>]+id=["']embedded-data["'][^>]+data-props=["']([^"']+)["'][^>]*>/i);
   if (!match) {
     return null;
   }
 
-  const jsonText = match[1]!.replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+  const jsonText = normalizeHtmlForUrlExtraction(match[1]!);
   return tryParseJson(jsonText);
 };
 
