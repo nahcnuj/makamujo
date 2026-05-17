@@ -193,7 +193,12 @@ export class NiconamaCommentClient {
     try {
       const page = context.pages()[0] ?? await context.newPage();
       await page.goto(DEFAULT_WATCH_PAGE_BASE_URL, { waitUntil: 'networkidle', timeout: 60_000 });
-      const target = page.getByText('馬可無序').first();
+      const targetLocator = page.getByText('馬可無序');
+      if (await targetLocator.count() === 0) {
+        console.info('[INFO] 馬可無序 was not present on the top page; falling back to fixed watch URL', DEFAULT_FALLBACK_WATCH_URL);
+        return DEFAULT_FALLBACK_WATCH_URL;
+      }
+      const target = targetLocator.first();
       try {
         await target.waitFor({ state: 'visible', timeout: 15_000 });
         await target.hover({ timeout: 15_000 });
@@ -205,22 +210,6 @@ export class NiconamaCommentClient {
       const broadcastLink = page.locator('a:has-text("放送中のページ")').first();
       if (await broadcastLink.count() > 0) {
         const href = await broadcastLink.getAttribute('href');
-        if (href) {
-          return new URL(href, DEFAULT_WATCH_PAGE_BASE_URL).href;
-        }
-      }
-
-      const fallbackLink = page.locator('a[href*="/watch/"]', { hasText: '放送中のページ' }).first();
-      if (await fallbackLink.count() > 0) {
-        const href = await fallbackLink.getAttribute('href');
-        if (href) {
-          return new URL(href, DEFAULT_WATCH_PAGE_BASE_URL).href;
-        }
-      }
-
-      const anyWatchLink = page.locator('a[href*="/watch/"]').first();
-      if (await anyWatchLink.count() > 0) {
-        const href = await anyWatchLink.getAttribute('href');
         if (href) {
           return new URL(href, DEFAULT_WATCH_PAGE_BASE_URL).href;
         }
