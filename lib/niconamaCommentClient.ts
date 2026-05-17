@@ -154,6 +154,18 @@ export class NiconamaCommentClient {
           url: meta.url,
         },
       });
+      // Try to extract any already-rendered comments from the DOM. Many
+      // watch pages render a virtualized comment list (table rows with
+      // `data-comment-type` and `.comment-text` spans). Class names are
+      // often obfuscated, so the evaluator uses resilient selectors.
+      try {
+        const domComments = await this.extractCommentsFromDom(this.#page);
+        if (domComments.length > 0) {
+          this.#callbacks.onComments(domComments);
+        }
+      } catch (err) {
+        this.reportError(err);
+      }
     } catch (err) {
       this.reportError(err);
     }
@@ -256,7 +268,13 @@ export class NiconamaCommentClient {
         const contentType = response.headers()['content-type'] ?? '';
         if (!contentType.includes('application/json')) return;
         const url = response.url();
-        if (!/comment|chat|live|niconama/i.test(url)) return;
+
+        // Avoid matching ad endpoints that include the page URL as a query
+        // parameter. Use the response pathname to determine whether this is
+        // likely a comment/chat endpoint.
+        let pathname = '';
+        try { pathname = new URL(url).pathname; } catch { pathname = ''; }
+        if (!/(?:comment|comments|chat|chats)/i.test(pathname)) return;
 
         const body = await response.json().catch(() => null);
         if (!body) return;
@@ -274,6 +292,132 @@ export class NiconamaCommentClient {
         this.reportError(err);
       }
     });
+
+    // Monitor WebSocket frames for comment-like JSON payloads (real-time comments).
+    page.on('websocket', (ws) => {
+      try {
+        const wsUrl = (ws as any).url?.() ?? '';
+        (ws as any).on?.('framereceived', (message: string) => {
+          try {
+            if (!message || typeof message !== 'string') return;
+            let body: unknown = null;
+            try { body = JSON.parse(message); } catch { body = null; }
+            if (!body) return;
+
+            const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentSignatures);
+            if (comments.length > 0) {
+              console.debug('[DEBUG] NiconamaCommentClient captured comments from websocket:', wsUrl, 'count=', comments.length);
+              this.#callbacks.onComments(comments);
+            } else if (!hasCommentArrayStructure(body)) {
+              console.warn('[WARN] NiconamaCommentClient received a comment-related websocket frame without any comment arrays:', wsUrl);
+            }
+          } catch (err) {
+            this.reportError(err);
+          }
+        });
+      } catch (err) {
+        this.reportError(err);
+      }
+    });
+  }
+
+  /**
+   * ページの DOM を走査してコメント一覧を抽出する。クラス名が変化しても
+   * 動作するよう、`data-comment-type` や `.comment-text` にフォールバックして
+   * テキストを収集する。重複は `#seenCommentSignatures` で除外する。
+   */
+  private async extractCommentsFromDom(page: Page): Promise<AgentComment[]> {
+    if (!page) return [];
+    try {
+      const raw: Array<{ comment: string; no?: number; userId?: string }> = await page.evaluate(() => {
+        const results: Array<{ comment: string; no?: number; userId?: string }> = [];
+        const seen = new Set<string>();
+
+        // Candidate row-like containers that commonly hold comments.
+        const rowSelectors = [
+          '[data-comment-type]',
+          '[data-role="comment"]',
+          '[data-name="comment"]',
+          '[class*="comment-data-grid"] [role="row"]',
+          '[class*="table-row"]',
+          '[role="row"]',
+        ];
+
+        for (const sel of rowSelectors) {
+          for (const el of Array.from(document.querySelectorAll(sel))) {
+            try {
+              const elAny = el as HTMLElement;
+              // Prefer an explicit `.comment-text` if present.
+              let textEl = elAny.querySelector('.comment-text') as HTMLElement | null;
+              if (!textEl) {
+                // Fallbacks: content-area, inner-content, or the first meaningful span
+                textEl = elAny.querySelector('.content-area .comment-text') as HTMLElement | null
+                  || elAny.querySelector('[class*="comment-text"]') as HTMLElement | null
+                  || elAny.querySelector('.content-area') as HTMLElement | null
+                  || elAny.querySelector('span') as HTMLElement | null;
+              }
+              const comment = textEl?.textContent?.trim() ?? '';
+              if (!comment) continue;
+
+              // Attempt to extract a numeric comment number if available.
+              let no: number | undefined;
+              const noEl = elAny.querySelector('.comment-number') || elAny.querySelector('[data-no]') || elAny.querySelector('[data-index]');
+              if (noEl && typeof noEl.textContent === 'string') {
+                const m = noEl.textContent.match(/\d+/);
+                if (m) no = Number.parseInt(m[0], 10);
+              }
+
+              const signature = `${no ?? 'none'}|${comment}`;
+              if (seen.has(signature)) continue;
+              seen.add(signature);
+              results.push({ comment, no, userId: undefined });
+            } catch {
+              // ignore per-row errors
+            }
+          }
+        }
+
+        // As a final fallback, search for standalone comment-text spans.
+        for (const el of Array.from(document.querySelectorAll('span[class*="comment-text"], .comment-text'))) {
+          try {
+            const text = (el as HTMLElement).textContent?.trim() ?? '';
+            if (!text) continue;
+            const row = (el as HTMLElement).closest('[data-comment-type], [role="row"]');
+            let no: number | undefined;
+            const noEl = row?.querySelector('.comment-number') || row?.querySelector('[data-no]');
+            if (noEl && typeof (noEl as HTMLElement).textContent === 'string') {
+              const m = (noEl as HTMLElement).textContent!.match(/\d+/);
+              if (m) no = Number.parseInt(m[0], 10);
+            }
+            const signature = `${no ?? 'none'}|${text}`;
+            if (seen.has(signature)) continue;
+            seen.add(signature);
+            results.push({ comment: text, no, userId: undefined });
+          } catch {
+            // ignore
+          }
+        }
+
+        return results.slice(0, 500);
+      });
+
+      const comments: AgentComment[] = [];
+      for (const item of raw) {
+        const comment = typeof item.comment === 'string' ? item.comment.trim() : '';
+        if (!comment) continue;
+        const no = typeof item.no === 'number' ? item.no : undefined;
+        const userId = item.userId ?? undefined;
+        const signature = `${no ?? 'none'}|${userId ?? 'unknown'}|${comment}`;
+        if (this.#seenCommentSignatures.has(signature)) continue;
+        this.#seenCommentSignatures.add(signature);
+        comments.push({ data: { comment, no, anonymity: false, hasGift: false, userId, origin: item } });
+      }
+
+      return comments;
+    } catch (err) {
+      this.reportError(err);
+      return [];
+    }
   }
 
   /**
