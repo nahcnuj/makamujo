@@ -100,13 +100,28 @@ export const buildNiconamaStreamStateFromStatisticsEvent = (body: unknown): unkn
 };
 
 export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
-  const match = html.match(/<(?:div|script)[^>]+id=["']embedded-data["'][^>]+data-props=["']([^"']+)["'][^>]*>/i);
-  if (!match) {
-    return null;
+  // Find an opening <script> or <div> with id="embedded-data"
+  const openTagMatch = html.match(/<(?:div|script)[^>]*id=["']embedded-data["'][^>]*>/i);
+  if (openTagMatch) {
+    const openTag = openTagMatch[0];
+    // Try to capture data-props attribute regardless of attribute order
+    const attrMatch = openTag.match(/data-props=(["'])(.*?)\1/i);
+    if (attrMatch && attrMatch[2]) {
+      const jsonText = normalizeHtmlForUrlExtraction(attrMatch[2]!);
+      const parsed = tryParseJson(jsonText);
+      if (parsed) return parsed;
+    }
   }
 
-  const jsonText = normalizeHtmlForUrlExtraction(match[1]!);
-  return tryParseJson(jsonText);
+  // Fallback: check for JSON inside the element body
+  const innerMatch = html.match(/<(?:div|script)[^>]*id=["']embedded-data["'][^>]*>([\s\S]*?)<\/(?:div|script)>/i);
+  if (innerMatch && innerMatch[1]) {
+    const jsonText = normalizeHtmlForUrlExtraction(innerMatch[1]!);
+    const parsed = tryParseJson(jsonText);
+    if (parsed) return parsed;
+  }
+
+  return null;
 };
 
 export type NiconamaCommentClientOptions = {
@@ -279,7 +294,9 @@ export class NiconamaCommentClient {
     if (!response.ok) {
       throw new Error(`failed to fetch ${url}: ${response.status}`);
     }
-    return await response.text();
+    const text = await response.text();
+    console.info('[INFO] fetchHtml fetched', { url, length: text.length, snippet: text.slice(0, 400) });
+    return text;
   }
 
   private async resolveWatchUrlFromNiconamaTopPage(): Promise<string | null> {
@@ -355,7 +372,7 @@ export class NiconamaCommentClient {
       this.#callbacks.onComments(initialComments);
     }
 
-    const webSocketUrl = (data as any).site?.state?.relive?.webSocketUrl ?? (data as any).site?.relive?.webSocketUrl;
+    const webSocketUrl = (data as any).site?.state?.relive?.webSocketUrl ?? (data as any).site?.relive?.webSocketUrl ?? (data as any).relive?.webSocketUrl;
     if (!webSocketUrl || typeof webSocketUrl !== 'string') {
       console.warn('[WARN] direct websocket url not found in embedded data', { embeddedData: data });
       return;
