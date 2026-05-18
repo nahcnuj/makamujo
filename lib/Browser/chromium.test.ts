@@ -183,6 +183,7 @@ describe('createClickByElementId', () => {
   const makeLocatorLike = (onClick: () => void) => {
     const locator = {
       first: () => locator,
+      waitFor: async (_opts?: { state?: string; timeout?: number }) => {},
       click: async (_opts?: { timeout?: number }) => { onClick(); },
     };
     return locator;

@@ -219,7 +219,8 @@ export const createRedirectToHomeHandler = (
 
 type LocatorLike = {
   first(): LocatorLike;
-  click(options?: { timeout?: number }): Promise<void>;
+  waitFor?(options?: { state?: string; timeout?: number }): Promise<void>;
+  click(options?: { timeout?: number; force?: boolean }): Promise<void>;
 };
 
 type ClickablePageLike = {
@@ -232,5 +233,7 @@ type ClickablePageLike = {
  */
 export const createClickByElementId = (page: ClickablePageLike) =>
   async (id: string): Promise<void> => {
-    await page.locator(`#${id}`).first().click({ timeout: 5_000 });
+    const locator = page.locator(`#${id}`).first();
+    await locator.waitFor?.({ state: 'visible', timeout: 10_000 });
+    await locator.click({ timeout: 10_000, force: true });
   };

@@ -538,15 +538,7 @@ const makeStreamHandler = (label: string) =>
     return new Response('websocket upgrade unavailable', { status: 501 });
   };
 
-// mainServer is assigned synchronously after `serve()` returns.
-// The runtime check below guards against uninitialized access when startup
-// fails before the server is fully constructed.
-let mainServer: Bun.Server<WsData> | null = null;
-
-const getMainServer = (): Bun.Server<WsData> => {
-  if (!mainServer) throw new Error('Server not yet initialized');
-  return mainServer;
-};
+let server: Bun.Server<WsData> | null = null;
 
 const mainApp = new Hono()
   // Static assets from the public directory
@@ -569,7 +561,7 @@ const mainApp = new Hono()
   // Serve the built frontend (HTML + JS/CSS assets)
   .all('*', async (c) => handleCatchAll(c.req.raw));
 
-const server = serve<WsData>({
+const serverInstance = serve<WsData>({
   port: portNumber,
   async fetch(req: Request, server: Bun.Server<WsData>) {
     const url = new URL(req.url);
@@ -580,7 +572,7 @@ const server = serve<WsData>({
     if (isWsEndpoint && !accept.includes('text/event-stream') && !forceDisableWs) {
       const label = url.pathname;
       try { console.debug(`[DEBUG] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
-      const upgraded = server.upgrade(req, { data: { label } satisfies WsData });
+      const upgraded = serverInstance.upgrade(req, { data: { label } satisfies WsData });
       if (upgraded) {
         // undefined signals Bun that the connection was upgraded to WebSocket
         // and no HTTP response should be sent back.
@@ -604,8 +596,9 @@ const server = serve<WsData>({
     close(ws) { try { wsClients.delete(ws); } catch { } },
   },
 });
+server = serverInstance;
 
-console.log(`🚀 Server running at ${server.url}`);
+console.log(`🚀 Server running at ${serverInstance.url}`);
 
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 if (process.env.NODE_ENV === "production") {
@@ -624,7 +617,7 @@ if (process.env.NODE_ENV === "production") {
 try {
   consoleServer = startConsoleServer({
     broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
-    broadcastingPort: process.env.BROADCASTING_PORT ?? server.port,
+    broadcastingPort: process.env.BROADCASTING_PORT ?? serverInstance.port,
   });
   console.log(`🚀 Console running at ${consoleServer.url}`);
   if (process.env.NODE_ENV === 'production') {
