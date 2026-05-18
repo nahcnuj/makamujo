@@ -111,7 +111,7 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
         continue;
       }
 
-      const tagName = tagNameMatch[1].toLowerCase();
+      const tagName = tagNameMatch[1]!.toLowerCase();
       if (tagName !== 'script' && tagName !== 'div') {
         searchIndex = openIndex + 1;
         continue;
@@ -152,7 +152,7 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
       if (dpIndex === -1) return null;
 
       let cursor = dpIndex + 'data-props='.length;
-      while (cursor < openTag.length && /\s/.test(openTag[cursor])) cursor += 1;
+      while (cursor < openTag.length && /\s/.test(openTag[cursor]!)) cursor += 1;
       const quote = openTag[cursor];
       if (quote !== '"' && quote !== "'") {
         searchIndex = cursor;
