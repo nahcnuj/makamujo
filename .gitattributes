@@ -1,0 +1,5 @@
+# Ensure shell scripts and other executable scripts use LF line endings across platforms
+bin/* text eol=lf
+scripts/* text eol=lf
+tests/**/*.sh text eol=lf
+*.sh text eol=lf
