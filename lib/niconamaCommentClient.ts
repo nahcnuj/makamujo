@@ -1,5 +1,4 @@
 import { existsSync, mkdirSync, statSync } from "node:fs";
-import { setTimeout } from "node:timers/promises";
 import type { AgentComment } from "automated-gameplay-transmitter";
 import { DEFAULT_PLAYWRIGHT_USER_DATA_DIR, DEFAULT_CHROMIUM_EXECUTABLE_PATH, launchPersistentContext } from "./Browser/chromium";
 
@@ -100,53 +99,126 @@ export const buildNiconamaStreamStateFromStatisticsEvent = (body: unknown): unkn
 };
 
 export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
-  // Find an opening <script> or <div> with id="embedded-data"
-  const openTagMatch = html.match(/<(?:div|script)[^>]*id=["']embedded-data["'][^>]*>/i);
-  if (openTagMatch) {
-    const openTag = openTagMatch[0];
+  const findEmbeddedDataOpenTag = (input: string): string | null => {
+    let searchIndex = 0;
+    while (true) {
+      const openIndex = input.indexOf('<', searchIndex);
+      if (openIndex === -1) return null;
+
+      const tagNameMatch = /^[ \t\n\r]*([A-Za-z]+)/.exec(input.slice(openIndex + 1));
+      if (!tagNameMatch) {
+        searchIndex = openIndex + 1;
+        continue;
+      }
+
+      const tagName = tagNameMatch[1].toLowerCase();
+      if (tagName !== 'script' && tagName !== 'div') {
+        searchIndex = openIndex + 1;
+        continue;
+      }
+
+      let cursor = openIndex + 1 + tagNameMatch[0].length;
+      let quoteChar: string | null = null;
+      while (cursor < input.length) {
+        const char = input[cursor];
+        if (quoteChar) {
+          if (char === quoteChar) {
+            quoteChar = null;
+          }
+        } else if (char === '"' || char === "'") {
+          quoteChar = char;
+        } else if (char === '>') {
+          break;
+        }
+        cursor += 1;
+      }
+
+      if (cursor >= input.length) return null;
+
+      const openTag = input.slice(openIndex, cursor + 1);
+      if (/\bid\s*=\s*(['"])embedded-data\1/i.test(openTag)) {
+        return openTag;
+      }
+
+      searchIndex = cursor + 1;
+    }
+  };
+
+  const extractDataPropsValue = (openTag: string): string | null => {
+    let searchIndex = 0;
+    const lowerTag = openTag.toLowerCase();
+    while (true) {
+      const dpIndex = lowerTag.indexOf('data-props=', searchIndex);
+      if (dpIndex === -1) return null;
+
+      let cursor = dpIndex + 'data-props='.length;
+      while (cursor < openTag.length && /\s/.test(openTag[cursor])) cursor += 1;
+      const quote = openTag[cursor];
+      if (quote !== '"' && quote !== "'") {
+        searchIndex = cursor;
+        continue;
+      }
+
+      const valueStart = cursor + 1;
+      let valueEnd = valueStart;
+      while (valueEnd < openTag.length) {
+        const char = openTag[valueEnd];
+        if (char === quote) {
+          return openTag.slice(valueStart, valueEnd);
+        }
+        if (char === '\\' && valueEnd + 1 < openTag.length) {
+          valueEnd += 2;
+          continue;
+        }
+        valueEnd += 1;
+      }
+      return null;
+    }
+  };
+
+  const parseJsonFromRaw = (raw: string): unknown | null => {
+    const normalized = normalizeHtmlForUrlExtraction(raw);
+    const parsed = tryParseJson(normalized);
+    if (parsed) return parsed;
+    try {
+      JSON.parse(normalized);
+    } catch (err) {
+      console.info('[INFO] JSON.parse failed for extracted data-props', {
+        err: String(err),
+        snippet: normalized.slice(0, 400),
+      });
+    }
+    return null;
+  };
+
+  const openTag = findEmbeddedDataOpenTag(html);
+  if (openTag) {
     console.info('[INFO] extractEmbeddedDataFromHtml openTag', openTag.slice(0, 400));
     console.info('[DEBUG] extractEmbeddedDataFromHtml openTag length', openTag.length);
     console.info('[DEBUG] extractEmbeddedDataFromHtml openTag tail', openTag.slice(-200));
     console.info('[DEBUG] extractEmbeddedDataFromHtml html length', html.length);
     console.info('[DEBUG] extractEmbeddedDataFromHtml html tail', html.slice(-200));
-    const dpIndex = openTag.indexOf('data-props=');
-    console.info('[DEBUG] extractEmbeddedDataFromHtml data-props index in openTag', dpIndex);
-    const quoteCharMatch = openTag.match(/data-props=(['"])/i);
-    console.info('[DEBUG] extractEmbeddedDataFromHtml opening quote char', quoteCharMatch && quoteCharMatch[1]);
-    // Try to capture data-props attribute regardless of attribute order.
-    // The previous approach sometimes truncated long attributes when run
-    // under the test harness. Search the entire HTML for the attribute
-    // value as a fallback and prefer the full capture.
-    let attrMatch = openTag.match(/data-props=(['"])([\s\S]*?)\1/i);
-    if (!attrMatch) {
-      // Fallback: search the full HTML in case the opening tag match
-      // does not include the entire attribute string in some runtimes.
-      const globalAttr = html.match(/data-props=(['"])([\s\S]*?)\1/i);
-      if (globalAttr) attrMatch = globalAttr;
-    }
-    if (attrMatch && attrMatch[2]) {
-      console.info('[INFO] extractEmbeddedDataFromHtml raw data-props snippet', attrMatch[2].slice(0, 200));
-      console.info('[DEBUG] extractEmbeddedDataFromHtml raw length', attrMatch[2].length);
-      console.info('[DEBUG] extractEmbeddedDataFromHtml raw tail', attrMatch[2].slice(-40));
-      const jsonText = normalizeHtmlForUrlExtraction(attrMatch[2]!);
-      console.info('[INFO] extractEmbeddedDataFromHtml normalized snippet', jsonText.slice(0, 200));
-      console.info('[DEBUG] extractEmbeddedDataFromHtml normalized length', jsonText.length);
-      console.info('[DEBUG] extractEmbeddedDataFromHtml normalized tail', jsonText.slice(-40));
-      const parsed = tryParseJson(jsonText);
+
+    const rawDataProps = extractDataPropsValue(openTag);
+    if (rawDataProps) {
+      console.info('[DEBUG] extractEmbeddedDataFromHtml raw data-props length', rawDataProps.length);
+      const parsed = parseJsonFromRaw(rawDataProps);
       if (parsed) return parsed;
-      try {
-        JSON.parse(jsonText);
-      } catch (err) {
-        console.info('[INFO] JSON.parse failed for extracted data-props', { err: String(err), snippet: jsonText.slice(0, 400) });
-      }
     }
   }
 
-  // Fallback: check for JSON inside the element body
-  const innerMatch = html.match(/<(?:div|script)[^>]*id=["']embedded-data["'][^>]*>([\s\S]*?)<\/(?:div|script)>/i);
+  const attrMatch = html.match(/data-props=(['"])([\s\S]*?)\1/i);
+  if (attrMatch && attrMatch[2]) {
+    console.info('[INFO] extractEmbeddedDataFromHtml raw data-props snippet', attrMatch[2].slice(0, 200));
+    console.info('[DEBUG] extractEmbeddedDataFromHtml raw length', attrMatch[2].length);
+    console.info('[DEBUG] extractEmbeddedDataFromHtml raw tail', attrMatch[2].slice(-40));
+    const parsed = parseJsonFromRaw(attrMatch[2]!);
+    if (parsed) return parsed;
+  }
+
+  const innerMatch = html.match(/<(?:div|script)[^>]*id=['"]embedded-data['"][^>]*>([\s\S]*?)<\/(?:div|script)>/i);
   if (innerMatch && innerMatch[1]) {
-    const jsonText = normalizeHtmlForUrlExtraction(innerMatch[1]!);
-    const parsed = tryParseJson(jsonText);
+    const parsed = parseJsonFromRaw(innerMatch[1]!);
     if (parsed) return parsed;
   }
 
@@ -177,6 +249,8 @@ export class NiconamaCommentClient {
   #seenCommentSignatures = new Set<string>();
   #directWebSocket: any | null = null;
   #directWebSocketKeepSeatTimer: ReturnType<typeof setInterval> | null = null;
+  #pollTimer: ReturnType<typeof setTimeout> | null = null;
+  #pollCancelResolve: (() => void) | null = null;
   #callbacks: NiconamaCommentClientCallbacks;
 
   constructor(options: NiconamaCommentClientOptions, callbacks: NiconamaCommentClientCallbacks) {
@@ -225,6 +299,7 @@ export class NiconamaCommentClient {
 
     await this.setupDirectWebSocketConnection(watchUrl, embeddedData);
     this.#pollTask = this.pollLoop();
+    console.info('[DEBUG] NiconamaCommentClient.start finished');
   }
 
   public async fetchEmbeddedData(watchUrl?: string): Promise<unknown | null> {
@@ -269,12 +344,38 @@ export class NiconamaCommentClient {
 
   async stop(): Promise<void> {
     this.#stopRequested = true;
+    console.info('[DEBUG] NiconamaCommentClient.stop entered');
+    // Give the poll loop a tick to ensure any sleep timer is installed,
+    // then cancel it so stop() can resolve promptly instead of waiting
+    // the full poll interval.
     if (this.#pollTask) {
-      await this.#pollTask;
+      console.info('[DEBUG] NiconamaCommentClient.stop yielding to event loop before cancelling poll');
+      await new Promise((res) => globalThis.setTimeout(res, 0));
+    }
+
+    // Cancel any in-flight poll sleep so stop() can resolve quickly.
+    try {
+      console.info('[DEBUG] NiconamaCommentClient.stop cancelling pollTimer/promise', { pollTimer: Boolean(this.#pollTimer), hasCancel: Boolean(this.#pollCancelResolve) });
+      if (this.#pollTimer) {
+        clearTimeout(this.#pollTimer as any);
+        this.#pollTimer = null;
+      }
+      if (this.#pollCancelResolve) {
+        const r = this.#pollCancelResolve;
+        this.#pollCancelResolve = null;
+        r();
+      }
+    } catch (e) {
+      console.info('[WARN] NiconamaCommentClient.stop cancel error', e);
+    }
+
+    if (this.#pollTask) {
+      console.info('[DEBUG] NiconamaCommentClient.stop not awaiting pollTask, will clear reference');
       this.#pollTask = null;
     }
     this.clearDirectWebSocket();
     this.#running = false;
+    console.info('[DEBUG] NiconamaCommentClient.stop finished');
   }
 
   isRunning(): boolean {
@@ -442,13 +543,15 @@ export class NiconamaCommentClient {
 
       ws.onclose = (event: { code?: number; reason?: string }) => {
         console.warn('[WARN] direct websocket closed', webSocketUrl, event.code, event.reason);
-        this.clearDirectWebSocket();
+        if (this.#directWebSocket === ws) {
+          this.clearDirectWebSocket();
+        }
         if (!this.#stopRequested) {
-          setTimeout(5_000).then(() => {
+          globalThis.setTimeout(() => {
             if (!this.#stopRequested) {
               void this.setupDirectWebSocketConnection(watchUrl);
             }
-          });
+          }, 5_000);
         }
       };
 
@@ -459,6 +562,7 @@ export class NiconamaCommentClient {
           this.#directWebSocket.send(keepSeatMessage);
         }
       }, 10_000);
+      console.info('[DEBUG] setupDirectWebSocketConnection finished');
     } catch (err) {
       this.reportError(err);
     }
@@ -469,9 +573,14 @@ export class NiconamaCommentClient {
       clearInterval(this.#directWebSocketKeepSeatTimer);
       this.#directWebSocketKeepSeatTimer = null;
     }
-    if (this.#directWebSocket) {
-      try { this.#directWebSocket.close(); } catch { }
-      this.#directWebSocket = null;
+    if (!this.#directWebSocket) return;
+
+    const ws = this.#directWebSocket;
+    this.#directWebSocket = null;
+    try {
+      ws.close();
+    } catch {
+      // ignore
     }
   }
 
@@ -563,7 +672,15 @@ export class NiconamaCommentClient {
 
   async pollLoop(): Promise<void> {
     while (!this.#stopRequested && this.#running) {
-      await setTimeout(this.#pollIntervalMs);
+      // Use a cancellable sleep so `stop()` can abort the wait promptly.
+      await new Promise<void>((resolve) => {
+        this.#pollCancelResolve = resolve;
+        this.#pollTimer = globalThis.setTimeout(() => {
+          this.#pollTimer = null;
+          this.#pollCancelResolve = null;
+          resolve();
+        }, this.#pollIntervalMs) as any;
+      });
       if (this.#stopRequested) break;
       if (!this.#directWebSocket) {
         const watchUrl = await this.resolveWatchUrl();

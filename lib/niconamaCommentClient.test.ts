@@ -27,6 +27,22 @@ describe("extractEmbeddedDataFromHtml", () => {
       site: { state: { relive: { webSocketUrl: 'wss://example.com' } } },
     });
   });
+
+  it("extracts data props when the embedded-data tag spans newlines", () => {
+    const html = '<script id="embedded-data"\n  data-props="{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com/ws&quot;,&quot;comments&quot;:[{&quot;comment&quot;:&quot;hi&quot;,&quot;no&quot;:1}]}}">\n</script>';
+    const extracted = extractEmbeddedDataFromHtml(html);
+    expect(extracted).toEqual({
+      relive: { webSocketUrl: 'wss://example.com/ws', comments: [{ comment: 'hi', no: 1 }] },
+    });
+  });
+
+  it("extracts top-level relive embedded-data JSON", () => {
+    const html = '<script id="embedded-data" data-props="{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com/ws&quot;,&quot;comments&quot;:[{&quot;comment&quot;:&quot;hello&quot;,&quot;no&quot;:2}]}}"></script>';
+    const extracted = extractEmbeddedDataFromHtml(html);
+    expect(extracted).toEqual({
+      relive: { webSocketUrl: 'wss://example.com/ws', comments: [{ comment: 'hello', no: 2 }] },
+    });
+  });
 });
 
 describe("extractWatchUrlFromHtml", () => {

@@ -7,7 +7,7 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
     const originalWebSocket = (globalThis as any).WebSocket;
 
     try {
-      const embeddedHtml = '<script id="embedded-data" data-props="{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.test/ws&quot;,&quot;comments":[{&quot;comment&quot;:&quot;embedded hello&quot;,&quot;no&quot;:10}]}}"></script>';
+      const embeddedHtml = '<script id="embedded-data" data-props="{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.test/ws&quot;,&quot;comments&quot;:[{&quot;comment&quot;:&quot;embedded hello&quot;,&quot;no&quot;:10}]}}"></script>';
       (globalThis as any).fetch = async () => ({ ok: true, text: async () => embeddedHtml });
 
       const sockets: any[] = [];
@@ -81,7 +81,7 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
     const originalWebSocket = (globalThis as any).WebSocket;
 
     try {
-      const embeddedHtml = '<script id="embedded-data" data-props="{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.test/ws&quot;,&quot;comments":[{&quot;comment&quot;:&quot;dup comment&quot;,&quot;no&quot;:5}]}}"></script>';
+      const embeddedHtml = '<script id="embedded-data" data-props="{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.test/ws&quot;,&quot;comments&quot;:[{&quot;comment&quot;:&quot;dup comment&quot;,&quot;no&quot;:5}]}}"></script>';
       (globalThis as any).fetch = async () => ({ ok: true, text: async () => embeddedHtml });
 
       const sockets: any[] = [];
