@@ -30,8 +30,12 @@ test.describe("NiconamaCommentClient fallback watch page", () => {
     expect(commentCount).toBeGreaterThanOrEqual(0);
 
     const initialComments = parseAgentCommentsFromResponseBody(embeddedData);
+
     expect(Array.isArray(initialComments)).toBe(true);
-    expect(initialComments.length).toBeGreaterThanOrEqual(commentCount);
-    expect(typeof initialComments[0]?.data?.comment).toBe("string");
+    expect(initialComments.length).toBeGreaterThan(0);
+    expect(initialComments.length).toBeLessThanOrEqual(commentCount);
+    if (initialComments.length > 0) {
+      expect(typeof initialComments[0]?.data?.comment).toBe("string");
+    }
   });
 });
