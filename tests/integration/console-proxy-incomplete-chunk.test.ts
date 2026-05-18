@@ -1,5 +1,7 @@
 import { test, expect, beforeAll, afterAll } from 'bun:test';
 import { spawn } from 'child_process';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 const BROADCASTING_UPSTREAM_PORT = 8888;
 const MAIN_SERVER_PORT = 7777;
@@ -27,6 +29,11 @@ beforeAll(async () => {
     upstream!.on('exit', (code) => { clearTimeout(timeout); reject(new Error('upstream exited ' + code)); });
   });
 
+  const ipcPath =
+    process.platform === 'win32'
+      ? `\\.\\pipe\\makamujo-test-ipc`
+      : join(tmpdir(), `makamujo-ipc-${process.pid}.sock`);
+
   server = spawn('bun', ['index.ts', '--port', String(MAIN_SERVER_PORT)], {
     env: {
       ...process.env,
@@ -34,9 +41,14 @@ beforeAll(async () => {
       CONSOLE_LOOPBACK_ONLY: '1',
       BROADCASTING_HOST: '127.0.0.1',
       BROADCASTING_PORT: String(BROADCASTING_UPSTREAM_PORT),
-      MAKAMUJO_IPC_PATH: process.platform === 'win32' ? `\\.\\pipe\\makamujo-test-ipc` : `./var/ipc-test.sock`,
+      MAKAMUJO_IPC_PATH: ipcPath,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  let serverStderr = '';
+  server!.stderr!.on('data', (c: any) => {
+    serverStderr += String(c);
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -57,7 +69,10 @@ beforeAll(async () => {
         // Fallback: server started but console URL not yet printed. Keep listening.
       }
     });
-    server!.on('exit', (code) => { clearTimeout(timeout); reject(new Error('server exited ' + code)); });
+    server!.on('exit', (code) => {
+      clearTimeout(timeout);
+      reject(new Error(`server exited ${code}\n${serverStderr}`));
+    });
   });
 });
 
