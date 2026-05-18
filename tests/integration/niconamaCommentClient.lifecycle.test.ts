@@ -3,6 +3,29 @@ import { createNiconamaCommentClient, DEFAULT_WATCH_PAGE_BASE_URL } from "../../
 
 const TEST_WATCH_URL = new URL('watch/test', DEFAULT_WATCH_PAGE_BASE_URL).href;
 
+const createFakePlaywrightContext = () => {
+  const fakePage = {
+    on(_event: string, _callback: any) { },
+    goto: async (_url: string) => {},
+    waitForTimeout: async () => {},
+    close: async () => {},
+    evaluate: async <T>(fn: () => T) => fn(),
+    getByText: () => ({
+      count: async () => 0,
+      first: () => ({ hover: async () => {}, waitFor: async () => {}, count: async () => 0 }),
+    }),
+    locator: () => ({
+      first: () => ({ getAttribute: async () => null, count: async () => 0 }),
+    }),
+    waitFor: async () => {},
+  };
+  return {
+    pages: () => [fakePage],
+    newPage: async () => fakePage,
+    close: async () => {},
+  };
+};
+
 describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
   it("emits embedded-data initial comments and handles websocket messages", async () => {
     const originalFetch = (globalThis as any).fetch;
@@ -44,10 +67,11 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
 
       (globalThis as any).WebSocket = MockWebSocket;
 
+      const launchPersistentContext = async () => createFakePlaywrightContext();
       const collectedComments: any[] = [];
       const collectedMeta: any[] = [];
 
-      const client = createNiconamaCommentClient({ watchUrl: TEST_WATCH_URL }, {
+      const client = createNiconamaCommentClient({ watchUrl: TEST_WATCH_URL, launchPersistentContext }, {
         onComments: (c) => { collectedComments.push(...c); },
         onMeta: (m) => { collectedMeta.push(m); },
         onError: (e) => { throw e; },
@@ -105,9 +129,10 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
       }
       (globalThis as any).WebSocket = MockWebSocket2;
 
+      const launchPersistentContext = async () => createFakePlaywrightContext();
       const collectedComments: any[] = [];
 
-      const client = createNiconamaCommentClient({ watchUrl: TEST_WATCH_URL }, {
+      const client = createNiconamaCommentClient({ watchUrl: TEST_WATCH_URL, launchPersistentContext }, {
         onComments: (c) => { collectedComments.push(...c); },
         onMeta: () => {},
         onError: (e) => { throw e; },

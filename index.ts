@@ -390,8 +390,8 @@ streamer.onGameStateChange(() => {
 // could delay the process becoming responsive to health checks.
 
 const portNumber = parseInt(port ?? "7777", 10);
-if (!Number.isFinite(portNumber) || portNumber < 1 || portNumber > 65535) {
-  console.error(`Invalid port: ${port}. Must be an integer between 1 and 65535.`);
+if (!Number.isFinite(portNumber) || portNumber < 0 || portNumber > 65535) {
+  console.error(`Invalid port: ${port}. Must be an integer between 0 and 65535.`);
   process.exit(1);
 }
 
