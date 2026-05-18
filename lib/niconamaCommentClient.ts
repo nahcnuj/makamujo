@@ -104,12 +104,41 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
   const openTagMatch = html.match(/<(?:div|script)[^>]*id=["']embedded-data["'][^>]*>/i);
   if (openTagMatch) {
     const openTag = openTagMatch[0];
-    // Try to capture data-props attribute regardless of attribute order
-    const attrMatch = openTag.match(/data-props=(["'])(.*?)\1/i);
+    console.info('[INFO] extractEmbeddedDataFromHtml openTag', openTag.slice(0, 400));
+    console.info('[DEBUG] extractEmbeddedDataFromHtml openTag length', openTag.length);
+    console.info('[DEBUG] extractEmbeddedDataFromHtml openTag tail', openTag.slice(-200));
+    console.info('[DEBUG] extractEmbeddedDataFromHtml html length', html.length);
+    console.info('[DEBUG] extractEmbeddedDataFromHtml html tail', html.slice(-200));
+    const dpIndex = openTag.indexOf('data-props=');
+    console.info('[DEBUG] extractEmbeddedDataFromHtml data-props index in openTag', dpIndex);
+    const quoteCharMatch = openTag.match(/data-props=(['"])/i);
+    console.info('[DEBUG] extractEmbeddedDataFromHtml opening quote char', quoteCharMatch && quoteCharMatch[1]);
+    // Try to capture data-props attribute regardless of attribute order.
+    // The previous approach sometimes truncated long attributes when run
+    // under the test harness. Search the entire HTML for the attribute
+    // value as a fallback and prefer the full capture.
+    let attrMatch = openTag.match(/data-props=(['"])([\s\S]*?)\1/i);
+    if (!attrMatch) {
+      // Fallback: search the full HTML in case the opening tag match
+      // does not include the entire attribute string in some runtimes.
+      const globalAttr = html.match(/data-props=(['"])([\s\S]*?)\1/i);
+      if (globalAttr) attrMatch = globalAttr;
+    }
     if (attrMatch && attrMatch[2]) {
+      console.info('[INFO] extractEmbeddedDataFromHtml raw data-props snippet', attrMatch[2].slice(0, 200));
+      console.info('[DEBUG] extractEmbeddedDataFromHtml raw length', attrMatch[2].length);
+      console.info('[DEBUG] extractEmbeddedDataFromHtml raw tail', attrMatch[2].slice(-40));
       const jsonText = normalizeHtmlForUrlExtraction(attrMatch[2]!);
+      console.info('[INFO] extractEmbeddedDataFromHtml normalized snippet', jsonText.slice(0, 200));
+      console.info('[DEBUG] extractEmbeddedDataFromHtml normalized length', jsonText.length);
+      console.info('[DEBUG] extractEmbeddedDataFromHtml normalized tail', jsonText.slice(-40));
       const parsed = tryParseJson(jsonText);
       if (parsed) return parsed;
+      try {
+        JSON.parse(jsonText);
+      } catch (err) {
+        console.info('[INFO] JSON.parse failed for extracted data-props', { err: String(err), snippet: jsonText.slice(0, 400) });
+      }
     }
   }
 
