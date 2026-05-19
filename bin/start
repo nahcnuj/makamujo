@@ -10,7 +10,7 @@ mkdir -p "${PID_DIR}"
 
 cd "${PROJECT_ROOT}"
 
-nohup NODE_ENV=production bun start >"${PROJECT_ROOT}/var/screen.log" 2>&1 &
+NODE_ENV=production nohup bun start >"${PROJECT_ROOT}/var/screen.log" 2>&1 &
 echo $! > "${PID_DIR}/screen"
 
 NODE_ENV=production nohup bun ./bin/x/browser.ts >"${PROJECT_ROOT}/var/browser.log" 2>&1 &
