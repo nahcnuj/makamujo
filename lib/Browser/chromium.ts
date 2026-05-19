@@ -161,7 +161,7 @@ export const create = async (
     evaluate: async (f) => {
       return await page.evaluate(
         (fnSource) => {
-          const evaluated = globalThis.eval(`(${fnSource})`) as (document: Document) => ReturnType<typeof f>;
+          const evaluated = Function('document', `return (${fnSource})(document);`) as (document: Document) => ReturnType<typeof f>;
           return evaluated(document);
         },
         f.toString(),
