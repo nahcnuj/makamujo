@@ -14,7 +14,7 @@ import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { startConsoleServer } from "./console/index";
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
-import { AllowedIP } from "./lib/allowedIP";
+import * as index from "./routes/index";
 import * as speechHistoryRoute from "./routes/api/speech-history";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
 import { handleCatchAll } from "./src/frontendServer";
@@ -118,7 +118,6 @@ const streamer = new MakaMujo(model, tts);
 // when possible.
 let lastPublishedStreamState: unknown = undefined;
 let currentSpeechState = { speech: '', silent: false };
-let niconamaCommentClient: NiconamaCommentClient | null = null;
 // WebSocket clients connected to the broadcasting server.
 const wsClients = new Set<any>();
 
@@ -218,63 +217,6 @@ const getCurrentStreamPayload = () => {
   } as const;
 };
 
-const extractReplyTargetComment = (payload: unknown): unknown => {
-  if (payload && typeof payload === 'object' && 'replyTargetComment' in payload) {
-    return (payload as any).replyTargetComment;
-  }
-  const nestedData = payload && typeof payload === 'object' && 'data' in payload ? (payload as any).data : undefined;
-  if (nestedData && typeof nestedData === 'object' && 'replyTargetComment' in nestedData) {
-    return nestedData.replyTargetComment;
-  }
-  return undefined;
-};
-
-const handlePublishedStreamState = (payload: unknown): void => {
-  const replyTargetComment = extractReplyTargetComment(payload);
-  let published: unknown = payload;
-
-  if (published && typeof published === 'object' && !('type' in published) && 'data' in published) {
-    published = (published as any).data;
-  }
-
-  try {
-    agent.publishStreamState?.(published);
-  } catch (err) {
-    console.warn('[WARN] failed to forward stream state to streamer:', err instanceof Error ? err.message : String(err));
-  }
-
-  try {
-    published = normalizePublishedStreamState(published);
-    if (replyTargetComment !== undefined) {
-      if (published && typeof published === 'object') {
-        (published as any).replyTargetComment = replyTargetComment;
-      } else {
-        published = { replyTargetComment };
-      }
-    }
-  } catch (err) {
-    console.warn('[WARN] failed to normalize published stream state:', err instanceof Error ? err.message : String(err));
-  }
-
-  try {
-    lastPublishedStreamState = published;
-  } catch (err) {
-    console.warn('[WARN] failed to persist published stream state locally:', err instanceof Error ? err.message : String(err));
-  }
-
-  try {
-    broadcastToWsClients(getCurrentStreamPayload());
-  } catch (err) {
-    console.warn('[WARN] failed to broadcast to WebSocket clients:', err instanceof Error ? err.message : String(err));
-  }
-
-  try {
-    sseBroadcast(getCurrentStreamPayload());
-  } catch (err) {
-    console.warn('[WARN] failed to broadcast to SSE clients:', err instanceof Error ? err.message : String(err));
-  }
-};
-
 const normalizeSpeechText = (speech: unknown): string | undefined => {
   if (typeof speech === 'string') {
     return speech;
@@ -303,7 +245,6 @@ let agent: any = {
   publishStreamState: (data: unknown) => { lastPublishedStreamState = data; },
   postComments: (_: unknown) => { },
 };
-let externalAgentInitialized = false;
 
 // Attempt to dynamically load the external agent API. This avoids module
 // evaluation side-effects at import time (such as binding to IPC paths)
@@ -315,7 +256,6 @@ let externalAgentInitialized = false;
       try {
         const externalAgent = mod.createAgentApi(streamer);
         agent = externalAgent;
-        externalAgentInitialized = true;
         console.info('[INFO] external agent API initialized');
       } catch (err) {
         console.warn('[WARN] createAgentApi threw, keeping in-memory fallback:', err instanceof Error ? err.message : String(err));
@@ -421,7 +361,57 @@ const apiApp = new Hono()
         return Response.json({}, { status: 400 });
       }
 
-      handlePublishedStreamState(body);
+      const replyTargetComment = (() => {
+        if (body && typeof body === 'object' && 'replyTargetComment' in body) {
+          return (body as any).replyTargetComment;
+        }
+        const nestedData = body && typeof body === 'object' && 'data' in body ? (body as any).data : undefined;
+        if (nestedData && typeof nestedData === 'object' && 'replyTargetComment' in nestedData) {
+          return (nestedData as any).replyTargetComment;
+        }
+        return undefined;
+      })();
+      let published: unknown = body;
+      if (published && typeof published === 'object' && !('type' in published) && 'data' in published) {
+        published = (published as any).data;
+      }
+
+      try {
+        agent.publishStreamState?.(published);
+      } catch (err) {
+        console.warn('[WARN] failed to forward stream state to streamer:', err instanceof Error ? err.message : String(err));
+      }
+
+      try {
+        published = normalizePublishedStreamState(published);
+        if (replyTargetComment !== undefined) {
+          if (published && typeof published === 'object') {
+            (published as any).replyTargetComment = replyTargetComment;
+          } else {
+            published = { replyTargetComment };
+          }
+        }
+      } catch (err) {
+        console.warn('[WARN] failed to normalize published stream state:', err instanceof Error ? err.message : String(err));
+      }
+
+      try {
+        lastPublishedStreamState = published;
+      } catch (err) {
+        console.warn('[WARN] failed to persist published stream state locally:', err instanceof Error ? err.message : String(err));
+      }
+
+      try {
+        broadcastToWsClients(getCurrentStreamPayload());
+      } catch (err) {
+        console.warn('[WARN] failed to broadcast to WebSocket clients:', err instanceof Error ? err.message : String(err));
+      }
+      try {
+        sseBroadcast(getCurrentStreamPayload());
+      } catch (err) {
+        console.warn('[WARN] failed to broadcast to SSE clients:', err instanceof Error ? err.message : String(err));
+      }
+
       return Response.json({});
     } catch (err) {
       console.error('[ERROR] POST /api/meta handler crashed:', err instanceof Error ? err.stack ?? err.message : String(err));
@@ -538,14 +528,47 @@ const makeStreamHandler = (label: string) =>
     return new Response('websocket upgrade unavailable', { status: 501 });
   };
 
-let server: Bun.Server<WsData> | null = null;
+// mainServer is assigned synchronously after `serve()` returns.
+// The runtime check below guards against uninitialized access when startup
+// fails before the server is fully constructed.
+let mainServer: Bun.Server<WsData> | null = null;
+
+const getMainServer = (): Bun.Server<WsData> => {
+  if (!mainServer) throw new Error('Server not yet initialized');
+  return mainServer;
+};
 
 const mainApp = new Hono()
   // Static assets from the public directory
   .get('/nc433974.png', () => new Response(Bun.file('./src/public/nc433974.png')))
   .get('/favicon-32x32.png', () => new Response(Bun.file('./src/public/favicon-32x32.png')))
-  .post('/', () => new Response(null, { status: 404 }))
-  .put('/', () => new Response(null, { status: 404 }))
+
+  // Root HTTP handlers (broadcast/comment ingestion)
+  .post('/', (c) => index.POST(c.req.raw, getMainServer().requestIP(c.req.raw)))
+  .put('/', async (c) => {
+    const res = await index.PUT(c.req.raw, getMainServer().requestIP(c.req.raw));
+    if (!res.ok) {
+      console.error('response is not ok', res);
+      return res;
+    }
+    const comments = await res.json();
+    if (!Array.isArray(comments)) {
+      console.error('response data was unprocessed', comments);
+      return Response.json({}, { status: 500 });
+    }
+    agent.postComments(comments);
+    broadcastCurrentPayload('onComment');
+
+    if (modelFile) {
+      try {
+        writeFileSync(modelFile, streamer.talkModel.toJSON());
+      } catch (err) {
+        console.warn('[WARN]', 'failed to write model', modelFile, err);
+      }
+    }
+
+    return Response.json({});
+  })
 
   // WebSocket / SSE endpoints
   .get('/api/ws', (c) => makeStreamHandler('/api/ws')(c.req.raw))
@@ -561,7 +584,7 @@ const mainApp = new Hono()
   // Serve the built frontend (HTML + JS/CSS assets)
   .all('*', async (c) => handleCatchAll(c.req.raw));
 
-const serverInstance = serve<WsData>({
+const server = serve<WsData>({
   port: portNumber,
   async fetch(req: Request, server: Bun.Server<WsData>) {
     const url = new URL(req.url);
@@ -572,7 +595,7 @@ const serverInstance = serve<WsData>({
     if (isWsEndpoint && !accept.includes('text/event-stream') && !forceDisableWs) {
       const label = url.pathname;
       try { console.debug(`[DEBUG] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
-      const upgraded = serverInstance.upgrade(req, { data: { label } satisfies WsData });
+      const upgraded = server.upgrade(req, { data: { label } satisfies WsData });
       if (upgraded) {
         // undefined signals Bun that the connection was upgraded to WebSocket
         // and no HTTP response should be sent back.
@@ -596,9 +619,8 @@ const serverInstance = serve<WsData>({
     close(ws) { try { wsClients.delete(ws); } catch { } },
   },
 });
-server = serverInstance;
 
-console.log(`🚀 Server running at ${serverInstance.url}`);
+console.log(`🚀 Server running at ${server.url}`);
 
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 if (process.env.NODE_ENV === "production") {
@@ -617,69 +639,13 @@ if (process.env.NODE_ENV === "production") {
 try {
   consoleServer = startConsoleServer({
     broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
-    broadcastingPort: process.env.BROADCASTING_PORT ?? serverInstance.port,
+    broadcastingPort: process.env.BROADCASTING_PORT ?? server.port,
   });
   console.log(`🚀 Console running at ${consoleServer.url}`);
-  if (process.env.NODE_ENV === 'production') {
-    AllowedIP.set({ family: 'IPv4', address: '127.0.0.1' });
-  }
 } catch (err) {
   const consoleStartupError = err instanceof Error ? (err.stack ?? err.message) : String(err);
   console.error(`[ERROR] CONSOLE_STARTUP_FAILED ${JSON.stringify(consoleStartupError)}`);
   process.exit(1);
-}
-
-try {
-  niconamaCommentClient = createNiconamaCommentClient(
-    {
-      userDataDir: process.env.NICONAMA_USER_DATA_DIR ?? './playwright/.auth/',
-      executablePath: process.env.CHROMIUM_EXECUTABLE_PATH ?? '/usr/bin/chromium',
-      pollIntervalMs: 30_000,
-    },
-    {
-      onMeta: handlePublishedStreamState,
-      onComments: (comments) => {
-        try {
-          agent.postComments(comments);
-        } catch (err) {
-          console.warn('[WARN] agent.postComments threw:', err instanceof Error ? err.message : String(err));
-        }
-
-        // If the agent did not update stream state (e.g. fallback agent),
-        // increment the published comment count so the console reflects activity.
-        try {
-          const afterState = typeof agent.getStreamState === 'function' ? agent.getStreamState() : undefined;
-          const hasCount = afterState && typeof afterState === 'object' && typeof (afterState as any).commentCount === 'number';
-          if (!hasCount) {
-            const payload = getCurrentStreamPayload();
-            const currentCount = typeof payload.commentCount === 'number' ? payload.commentCount : 0;
-            const newCount = currentCount + (Array.isArray(comments) ? comments.length : 0);
-            lastPublishedStreamState = (lastPublishedStreamState && typeof lastPublishedStreamState === 'object') ? { ...lastPublishedStreamState } : {};
-            try { (lastPublishedStreamState as any).commentCount = newCount; } catch { }
-          }
-        } catch (err) {
-          console.warn('[WARN] failed to update fallback commentCount:', err instanceof Error ? err.message : String(err));
-        }
-
-        broadcastCurrentPayload('onComment');
-        if (modelFile) {
-          try {
-            writeFileSync(modelFile, streamer.talkModel.toJSON());
-          } catch (err) {
-            console.warn('[WARN]', 'failed to write model', modelFile, err);
-          }
-        }
-      },
-      onError: (err) => {
-        console.warn('[WARN] niconama comment client error:', err instanceof Error ? err.message : String(err));
-      },
-    },
-  );
-  void niconamaCommentClient.start().catch((err) => {
-    console.warn('[WARN] failed to start niconamaCommentClient:', err instanceof Error ? err.message : String(err));
-  });
-} catch (err) {
-  console.warn('[WARN] failed to initialize niconamaCommentClient:', err instanceof Error ? err.message : String(err));
 }
 
 // Start the stream playback after servers are listening so startup is
@@ -717,11 +683,6 @@ function exitHandler(options: { cleanup: true; exit?: never } | { cleanup?: neve
     }
     if (consoleServer) {
       consoleServer.stop(options.exit);
-    }
-    if (niconamaCommentClient) {
-      void niconamaCommentClient.stop().catch((err) => {
-        console.warn('[WARN] failed to stop niconamaCommentClient:', err instanceof Error ? err.message : String(err));
-      });
     }
   }
 
