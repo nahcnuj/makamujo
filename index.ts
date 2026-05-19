@@ -619,6 +619,7 @@ const server = serve<WsData>({
     close(ws) { try { wsClients.delete(ws); } catch { } },
   },
 });
+mainServer = server;
 
 console.log(`🚀 Server running at ${server.url}`);
 
