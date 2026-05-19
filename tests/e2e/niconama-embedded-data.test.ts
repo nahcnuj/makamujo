@@ -1,14 +1,15 @@
 import { expect, test } from "@playwright/test";
-import { createNiconamaCommentClient, parseAgentCommentsFromResponseBody } from "../../lib/niconamaCommentClient";
+import { createNiconamaCommentClient } from "../../lib/niconamaCommentClient";
 
 const ACTUAL_PROGRAM_WATCH_URL = "https://live.nicovideo.jp/watch/user/14171889";
 
 test.describe("NiconamaCommentClient fallback watch page", () => {
   test("fetches embedded-data from the actual program watch URL and extracts relive websocket URL and initial comments", async () => {
+    const initialComments: any[] = [];
     const client = createNiconamaCommentClient(
       { watchUrl: ACTUAL_PROGRAM_WATCH_URL },
       {
-        onComments: () => {},
+        onComments: (comments) => { initialComments.push(...comments); },
         onMeta: () => {},
         onError: (error) => {
           throw error;
@@ -29,13 +30,21 @@ test.describe("NiconamaCommentClient fallback watch page", () => {
     expect(typeof commentCount).toBe("number");
     expect(commentCount).toBeGreaterThanOrEqual(0);
 
-    const initialComments = parseAgentCommentsFromResponseBody(embeddedData);
+    try {
+      await client.start();
+      const deadline = Date.now() + 30_000;
+      while (initialComments.length === 0 && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
 
-    expect(Array.isArray(initialComments)).toBe(true);
-    expect(initialComments.length).toBeGreaterThan(0);
-    expect(initialComments.length).toBeLessThanOrEqual(commentCount);
-    if (initialComments.length > 0) {
-      expect(typeof initialComments[0]?.data?.comment).toBe("string");
+      expect(Array.isArray(initialComments)).toBe(true);
+      expect(initialComments.length).toBeGreaterThan(0);
+      expect(initialComments.length).toBeLessThanOrEqual(commentCount);
+      if (initialComments.length > 0) {
+        expect(typeof initialComments[0]?.data?.comment).toBe("string");
+      }
+    } finally {
+      await client.stop();
     }
   });
 });
