@@ -225,9 +225,14 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
   return null;
 };
 
+type NiconamaBrowserPageResponse = {
+  status: () => number;
+  text: () => Promise<string>;
+};
+
 type NiconamaBrowserPage = {
   on: (event: string, callback: any) => void;
-  goto: (url: string, options?: Record<string, unknown>) => Promise<void>;
+  goto: (url: string, options?: Record<string, unknown>) => Promise<NiconamaBrowserPageResponse | null>;
   waitForTimeout: (ms: number) => Promise<void>;
   close: () => Promise<void>;
   evaluate: <T>(pageFunction: () => T) => Promise<T>;
@@ -246,6 +251,8 @@ type NiconamaBrowserPage = {
     };
   };
   waitFor: (options: Record<string, unknown>) => Promise<void>;
+  url: () => string;
+  isClosed: () => boolean;
 };
 
 type NiconamaBrowserContext = {
@@ -351,44 +358,82 @@ export class NiconamaCommentClient {
       if (!commentCount || initialComments.length > 0) {
         return embedded;
       }
-      console.debug('[DEBUG] fetchEmbeddedData falling back to Playwright because embedded-data has no comments but commentCount is present', targetUrl, { commentCount });
+      console.debug('[DEBUG] fetchEmbeddedData found embedded-data with commentCount but no initial comments, returning embedded-data directly and relying on Playwright watcher for comments', targetUrl, { commentCount });
+      return embedded;
     }
 
-    // Fallback to Playwright rendering when embedded-data isn't present or is JS-rendered
+    // Fallback to Playwright rendering when embedded-data isn't present or is JS-rendered.
+    // When watch page HTML is already available from the initial fetch, we don't need
+    // a browser-based fallback to acquire embedded-data.
     try {
       console.debug('[DEBUG] fetchEmbeddedData falling back to Playwright', targetUrl);
+      console.debug('[DEBUG] launching Playwright persistent context');
       const context = await this.#launchPersistentContext(this.#userDataDir, {
         executablePath: this.#executablePath,
         headless: true,
         ignoreHTTPSErrors: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        locale: 'ja-JP',
       });
+      console.debug('[DEBUG] Playwright context launched');
       try {
-        const page = context.pages()[0] ?? await context.newPage();
-        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 3_000 });
-        await page.waitForTimeout(1_000);
+        console.debug('[DEBUG] opening new Playwright page');
+        const page = await context.newPage();
+        console.debug('[DEBUG] page opened', { url: page.url(), isClosed: page.isClosed() });
+        console.debug('[DEBUG] navigating to target URL');
+        const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 10_000 });
+        console.debug('[DEBUG] page goto complete', { responseStatus: response?.status(), url: page.url() });
 
-        const dataProps = await page.evaluate(() => {
-          const embedded = document.querySelector('#embedded-data');
-          if (embedded) {
-            return embedded.getAttribute('data-props') ?? embedded.textContent;
+        let parsed: unknown | null = null;
+        if (response) {
+          try {
+            const html = await response.text();
+            console.debug('[DEBUG] Playwright response HTML length', { length: html.length });
+            const embeddedData = extractEmbeddedDataFromHtml(html);
+            if (embeddedData) {
+              parsed = embeddedData;
+            }
+          } catch (err) {
+            console.warn('[WARN] failed to read Playwright navigation response text', err);
           }
-          const fallback = document.querySelector('script[data-props],div[data-props]');
-          return fallback ? fallback.getAttribute('data-props') ?? fallback.textContent : null;
-        });
+        }
 
-        if (!dataProps || typeof dataProps !== 'string') {
-          console.warn('[WARN] embedded-data element not found or missing data-props via Playwright', targetUrl);
+        await page.waitForTimeout(5_000);
+
+        console.debug('[DEBUG] Playwright page loaded, parsed embedded-data', { hasParsedData: Boolean(parsed) });
+
+        const pageComments = [] as string[];
+        console.debug('[DEBUG] page comments evaluated', { pageCommentsLength: pageComments.length });
+
+        const commentObjects = pageComments
+          .filter((comment) => typeof comment === 'string' && comment.trim().length > 0)
+          .map((comment) => ({ comment }));
+
+        let result = parsed;
+        if (commentObjects.length > 0) {
+          const merged = embedded && typeof embedded === 'object' ? { ...(embedded as any) } : {};
+
+          if ((merged as any).site?.state?.relive) {
+            (merged as any).site.state.relive.comments = commentObjects;
+          }
+          if ((merged as any).site?.relive) {
+            (merged as any).site.relive.comments = commentObjects;
+          }
+          if ((merged as any).relive) {
+            (merged as any).relive.comments = commentObjects;
+          }
+
+          if (!result) {
+            result = merged;
+          }
+        }
+
+        if (!result) {
           return null;
         }
 
-        const jsonText = normalizeHtmlForUrlExtraction(dataProps);
-        const parsed = tryParseJson(jsonText);
-        if (!parsed) {
-          console.warn('[WARN] failed to parse embedded-data JSON via Playwright', targetUrl);
-          return null;
-        }
-        return parsed;
+        return result;
       } finally {
         await context.close();
       }
@@ -472,18 +517,45 @@ export class NiconamaCommentClient {
   }
 
   private async fetchHtml(url: string): Promise<string> {
-    const response = await fetch(url, {
-      headers: {
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'User-Agent': 'Mozilla/5.0 (compatible; bun)',
-      },
-    });
-    if (!response.ok) {
-      throw new Error(`failed to fetch ${url}: ${response.status}`);
+    const userAgent = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+    const maxAttempts = 3;
+    let lastErr: unknown = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const response = await fetch(url, {
+          headers: {
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'User-Agent': userAgent,
+          },
+        });
+
+        if (response.ok) {
+          const text = await response.text();
+          console.info('[INFO] fetchHtml fetched', { url, length: text.length, snippet: text.slice(0, 400) });
+          return text;
+        }
+
+        // Retry on server errors (5xx)
+        if (response.status >= 500 && response.status < 600 && attempt < maxAttempts) {
+          lastErr = new Error(`server error ${response.status}`);
+          // exponential-ish backoff
+          await new Promise((res) => setTimeout(res, 200 * attempt));
+          continue;
+        }
+
+        throw new Error(`failed to fetch ${url}: ${response.status}`);
+      } catch (err) {
+        lastErr = err;
+        // If this was the last attempt, rethrow below; otherwise wait and retry.
+        if (attempt < maxAttempts) {
+          await new Promise((res) => setTimeout(res, 200 * attempt));
+          continue;
+        }
+      }
     }
-    const text = await response.text();
-    console.info('[INFO] fetchHtml fetched', { url, length: text.length, snippet: text.slice(0, 400) });
-    return text;
+
+    throw lastErr instanceof Error ? lastErr : new Error('failed to fetch HTML');
   }
 
   private async resolveWatchUrlFromNiconamaTopPage(): Promise<string | null> {
@@ -651,22 +723,46 @@ export class NiconamaCommentClient {
         headless: true,
         ignoreHTTPSErrors: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        locale: 'ja-JP',
       });
 
-      const page = context.pages()[0] ?? await context.newPage();
-
+      const page = await context.newPage();
+      page.on('close', () => {
+        console.debug('[DEBUG] Playwright page closed', { url: page.url() });
+      });
+      page.on('crash', () => {
+        console.debug('[DEBUG] Playwright page crashed', { url: page.url() });
+      });
+      page.on('request', (request: any) => {
+        const url = request.url();
+        if (/comment|wsapi|watch|json|data/i.test(url)) {
+          console.debug('[DEBUG] Playwright request', url);
+        }
+      });
+      page.on('requestfailed', (request: any) => {
+        const url = request.url();
+        if (/comment|wsapi|watch|json|data/i.test(url)) {
+          console.debug('[DEBUG] Playwright request failed', url, request.failure()?.errorText);
+        }
+      });
       page.on('websocket', (socket: any) => {
         const wsUrl = socket.url();
         console.debug('[DEBUG] Playwright websocket connected', wsUrl);
         socket.on('framereceived', (frame: any) => {
           if (typeof frame.payload !== 'string') return;
+          console.debug('[DEBUG] Playwright websocket frame', {
+            url: wsUrl,
+            length: frame.payload.length,
+            snippet: frame.payload.slice(0, 200),
+          });
           this.handlePlaywrightWebSocketFrame(frame.payload, wsUrl);
         });
       });
 
       page.on('response', async (response: any) => {
+        const url = response.url();
         const contentType = (response.headers()['content-type'] ?? '').toLowerCase();
-        if (!contentType.includes('application/json')) return;
 
         let bodyText: string;
         try {
@@ -675,23 +771,40 @@ export class NiconamaCommentClient {
           return;
         }
 
-        if (!bodyText.includes('comment') && !bodyText.includes('comments')) return;
+        const trimmed = bodyText.trim();
+        if (!trimmed || (trimmed[0] !== '{' && trimmed[0] !== '[')) return;
 
         const parsed = tryParseJson(bodyText);
         if (!parsed || typeof parsed !== 'object') return;
+
+        console.debug('[DEBUG] Playwright response received', {
+          url,
+          contentType,
+          length: bodyText.length,
+          snippet: bodyText.slice(0, 200),
+        });
 
         const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentSignatures);
         if (comments.length > 0) {
           this.#callbacks.onComments(comments);
           console.debug('[DEBUG] Playwright response comment payload', {
-            url: response.url(),
+            url,
             count: comments.length,
           });
         }
       });
 
-      await page.goto(watchUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-      await page.waitForTimeout(1_000);
+      let response: any;
+      try {
+        response = await page.goto(watchUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+        console.debug('[DEBUG] Playwright page goto complete', { responseStatus: response?.status(), url: page.url(), waitUntil: 'domcontentloaded' });
+      } catch (err) {
+        console.warn('[WARN] Playwright page domcontentloaded timeout, falling back to navigation commit', err);
+        response = await page.goto(watchUrl, { waitUntil: 'commit', timeout: 30_000 });
+        console.debug('[DEBUG] Playwright page goto complete', { responseStatus: response?.status(), url: page.url(), waitUntil: 'commit' });
+      }
+      await page.waitForTimeout(5_000);
+      console.debug('[DEBUG] Playwright page after goto', { url: page.url(), isClosed: page.isClosed(), pages: context.pages().map((p: any) => p.url()) });
 
       this.#playwrightCommentContext = context;
       this.#playwrightCommentPage = page;
@@ -712,6 +825,87 @@ export class NiconamaCommentClient {
 
     this.#playwrightCommentPage = null;
     this.#playwrightCommentContext = null;
+  }
+
+  private async extractPageComments(page: any): Promise<unknown[]> {
+    try {
+      const pageComments = await page.evaluate(() => {
+        const panel = document.querySelector('[data-name="comment"]') ?? document.querySelector('.comment-panel');
+        if (!panel) return [] as string[];
+
+        const texts = Array.from(panel.querySelectorAll('*'))
+          .map((node) => node.textContent?.trim() ?? '')
+          .filter((text) => text.length > 0 && !/^(\s|コメント|コメント数|コメント一覧)$/.test(text));
+
+        return Array.from(new Set(texts)).slice(0, 20);
+      });
+
+      if (Array.isArray(pageComments) && pageComments.length > 0) {
+        return pageComments
+          .filter((comment) => typeof comment === 'string' && comment.trim().length > 0)
+          .map((comment) => ({ data: { comment: comment.trim() } }));
+      }
+
+      const candidates = await page.evaluate(() => {
+        const results: unknown[] = [];
+
+        const safeParse = (text: string) => {
+          try {
+            return JSON.parse(text);
+          } catch {
+            return null;
+          }
+        };
+
+        const pushIfObject = (value: unknown) => {
+          if (value && typeof value === 'object') {
+            try {
+              const serialized = JSON.parse(JSON.stringify(value));
+              results.push(serialized);
+            } catch {
+              // ignore non-serializable values
+            }
+          }
+        };
+
+        const scanText = (text: string) => {
+          const trimmed = text.trim();
+          if (trimmed[0] === '{' || trimmed[0] === '[') {
+            const parsed = safeParse(trimmed);
+            if (parsed) {
+              pushIfObject(parsed);
+            }
+          }
+        };
+
+        const scriptTags = Array.from(document.querySelectorAll('script'));
+        for (const script of scriptTags) {
+          const text = script.textContent ?? '';
+          if (!text.includes('comment') && !text.includes('comments') && !text.includes('relive') && !text.includes('data-props')) {
+            continue;
+          }
+          scanText(text);
+        }
+
+        const propElements = Array.from(document.querySelectorAll('[data-props]'));
+        for (const element of propElements) {
+          const value = element.getAttribute('data-props');
+          if (value) {
+            scanText(value);
+          }
+        }
+
+        return results;
+      });
+
+      if (!Array.isArray(candidates)) return [];
+
+      const comments = parseAgentCommentsFromResponseBody(candidates, this.#seenCommentSignatures);
+      return comments;
+    } catch (err) {
+      console.debug('[DEBUG] extractPageComments failed', err);
+      return [];
+    }
   }
 
   private handlePlaywrightWebSocketFrame(payload: string, wsUrl: string): void {
@@ -752,7 +946,7 @@ export class NiconamaCommentClient {
 
     const eventType = (body as any).type;
     if (eventType === 'ping') {
-      this.sendDirectWebSocketMessage({ type: 'pong' });
+      this.sendDirectWebSocketMessage({ type: 'keepSeat' });
       return;
     }
 
