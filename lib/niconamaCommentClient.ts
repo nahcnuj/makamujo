@@ -363,11 +363,11 @@ export class NiconamaCommentClient {
       const initialComments = parseAgentCommentsFromResponseBody(embedded);
       const embeddedWebSocketUrl = this.getWebSocketUrlFromEmbeddedData(embedded);
 
-      if (embeddedWebSocketUrl && (!commentCount || initialComments.length > 0)) {
+      if (embeddedWebSocketUrl || initialComments.length > 0) {
         return embedded;
       }
 
-      console.debug('[DEBUG] fetchEmbeddedData found embedded-data without initial comments or websocket URL, falling back to Playwright', targetUrl, {
+      console.debug('[DEBUG] fetchEmbeddedData found embedded-data without websocket URL, falling back to Playwright', targetUrl, {
         commentCount,
         initialCommentsCount: initialComments.length,
         embeddedWebSocketUrl: Boolean(embeddedWebSocketUrl),
@@ -795,13 +795,18 @@ export class NiconamaCommentClient {
         const wsUrl = socket.url();
         console.debug('[DEBUG] Playwright websocket connected', wsUrl);
         socket.on('framereceived', (frame: any) => {
-          if (typeof frame.payload !== 'string') return;
+          let payload = frame.payload;
+          if (payload instanceof ArrayBuffer) {
+            payload = new TextDecoder().decode(payload);
+          } else if (typeof payload !== 'string') {
+            payload = String(payload);
+          }
           console.debug('[DEBUG] Playwright websocket frame', {
             url: wsUrl,
-            length: frame.payload.length,
-            snippet: frame.payload.slice(0, 200),
+            length: payload.length,
+            snippet: payload.slice(0, 200),
           });
-          this.handlePlaywrightWebSocketFrame(frame.payload, wsUrl);
+          this.handlePlaywrightWebSocketFrame(payload, wsUrl);
         });
       });
 
@@ -848,9 +853,22 @@ export class NiconamaCommentClient {
         response = await page.goto(watchUrl, { waitUntil: 'commit', timeout: 30_000 });
         console.debug('[DEBUG] Playwright page goto complete', { responseStatus: response?.status(), url: page.url(), waitUntil: 'commit' });
       }
-      await page.waitForTimeout(5_000);
+      if (!page.isClosed()) {
+        await page.waitForTimeout(1_000);
+      }
       console.debug('[DEBUG] Playwright page after goto', { url: page.url(), isClosed: page.isClosed(), pages: context.pages().map((p: any) => p.url()) });
 
+      if (!page.isClosed()) {
+        const initialPageComments = await this.extractPageComments(page);
+        if (initialPageComments.length > 0) {
+          this.#callbacks.onComments(initialPageComments);
+          console.debug('[DEBUG] Playwright initial page comments extracted', { count: initialPageComments.length, url: page.url() });
+        }
+      }
+
+      if (!page.isClosed()) {
+        await page.waitForTimeout(4_000);
+      }
       this.#playwrightCommentContext = context;
       this.#playwrightCommentPage = page;
     } catch (err) {
@@ -875,7 +893,16 @@ export class NiconamaCommentClient {
   private async extractPageComments(page: any): Promise<AgentComment[]> {
     try {
       const pageComments = await page.evaluate(() => {
-        const panel = document.querySelector('[data-name="comment"]') ?? document.querySelector('.comment-panel');
+        const panelSelectors = [
+          '[data-name="comment"]',
+          '.comment-panel',
+          '[class*=comment]',
+          '[id*=comment]',
+          '[data-comment]',
+        ];
+        const panel = panelSelectors
+          .map((selector) => document.querySelector(selector))
+          .find((node) => node !== null);
         if (!panel) return [] as string[];
 
         const texts = Array.from(panel.querySelectorAll('*'))
@@ -1094,7 +1121,7 @@ export const createNiconamaCommentClient = (
 const isCommentLikeObject = (object: unknown): boolean => {
   if (!object || typeof object !== 'object') return false;
 
-  const text = (object as any).comment ?? (object as any).text ?? (object as any).body ?? (object as any).message;
+  const text = (object as any).comment ?? (object as any).text ?? (object as any).body ?? (object as any).message ?? (object as any).content;
   if (typeof text !== 'string' || text.trim().length === 0) return false;
 
   return (
@@ -1239,7 +1266,7 @@ export const parseAgentCommentsFromResponseBody = (
 
   for (const raw of rawComments) {
     if (!raw || typeof raw !== 'object') continue;
-    const commentText = (raw as any).comment ?? (raw as any).text ?? (raw as any).body ?? (raw as any).message;
+    const commentText = (raw as any).comment ?? (raw as any).text ?? (raw as any).body ?? (raw as any).message ?? (raw as any).content;
     if (typeof commentText !== 'string' || commentText.trim().length === 0) continue;
     const commentData: Record<string, unknown> = {
       comment: commentText,
