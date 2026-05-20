@@ -6,7 +6,7 @@ const TEST_WATCH_URL = new URL('watch/test', DEFAULT_WATCH_PAGE_BASE_URL).href;
 const createFakePlaywrightContext = () => {
   const fakePage = {
     on(_event: string, _callback: any) { },
-    goto: async (_url: string) => {},
+    goto: async (_url: string) => null,
     waitForTimeout: async () => {},
     close: async () => {},
     evaluate: async <T>(fn: () => T) => fn(),
@@ -18,6 +18,8 @@ const createFakePlaywrightContext = () => {
       first: () => ({ getAttribute: async () => null, count: async () => 0 }),
     }),
     waitFor: async () => {},
+    url: () => TEST_WATCH_URL,
+    isClosed: () => false,
   };
   return {
     pages: () => [fakePage],
@@ -205,7 +207,7 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
           if (event === 'websocket') websocketCallback = callback;
           if (event === 'response') responseCallback = callback;
         },
-        goto: async (url: string) => { gotoUrl = url; },
+        goto: async (url: string) => { gotoUrl = url; return null; },
         waitForTimeout: async () => {},
         close: async () => { playwrightClosed = true; },
         evaluate: async <T>(fn: () => T) => fn(),
@@ -217,6 +219,8 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
           first: () => ({ getAttribute: async () => null, count: async () => 0 }),
         }),
         waitFor: async () => {},
+        url: () => TEST_WATCH_URL,
+        isClosed: () => false,
       };
 
       const fakeContext = {
