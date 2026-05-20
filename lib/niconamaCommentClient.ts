@@ -322,6 +322,12 @@ export class NiconamaCommentClient {
     }
 
     const embeddedData = await this.fetchEmbeddedData(watchUrl);
+    console.debug('[DEBUG] NiconamaCommentClient fetched embedded-data in start', {
+      embeddedDataType: embeddedData === null ? 'null' : typeof embeddedData,
+      hasWebSocketUrl: embeddedData && typeof embeddedData === 'object'
+        ? Boolean((embeddedData as any).site?.state?.relive?.webSocketUrl ?? (embeddedData as any).site?.relive?.webSocketUrl ?? (embeddedData as any).relive?.webSocketUrl)
+        : false,
+    });
     if (!embeddedData || typeof embeddedData !== 'object') {
       this.reportError(new Error(`failed to resolve embedded-data from NicoNico watch page: ${watchUrl}`));
       return;
@@ -574,13 +580,28 @@ export class NiconamaCommentClient {
           }
         }
 
-        await page.waitForTimeout(5_000);
-        console.debug('[DEBUG] Playwright page loaded, parsed embedded-data', { hasParsedData: Boolean(parsed) });
+        const pageUrl = page.url();
+        if (!page.isClosed()) {
+          try {
+            await page.waitForTimeout(5_000);
+          } catch (err) {
+            console.warn('[WARN] Playwright waitForTimeout failed', err);
+          }
+        } else {
+          console.warn('[WARN] Playwright page closed before timeout wait', { url: pageUrl });
+        }
+        console.debug('[DEBUG] Playwright page loaded, parsed embedded-data', { hasParsedData: Boolean(parsed), pageClosed: page.isClosed(), url: pageUrl });
 
-        const pageComments = await this.extractPageComments(page);
+        let pageComments: AgentComment[] = [];
+        if (!page.isClosed()) {
+          pageComments = await this.extractPageComments(page);
+        } else {
+          console.debug('[DEBUG] Skipping Playwright page comment extraction because page is closed', { url: pageUrl });
+        }
+
         if (pageComments.length > 0) {
           this.#callbacks.onComments(pageComments);
-          console.debug('[DEBUG] Playwright page comments extracted', { count: pageComments.length, url: page.url() });
+          console.debug('[DEBUG] Playwright page comments extracted', { count: pageComments.length, url: pageUrl });
         }
 
         const commentObjects = pageComments
@@ -609,9 +630,11 @@ export class NiconamaCommentClient {
         }
 
         if (!result) {
+          console.debug('[DEBUG] Playwright fallback did not produce embedded-data, returning existing embedded', { targetUrl, hasParsedData: Boolean(parsed), commentObjectsCount: commentObjects.length });
           return null;
         }
 
+        console.debug('[DEBUG] Playwright fallback returning enriched embedded-data', { targetUrl, commentObjectsCount: commentObjects.length });
         return result;
       } finally {
         await context.close();
