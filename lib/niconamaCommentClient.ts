@@ -321,7 +321,7 @@ export class NiconamaCommentClient {
       return;
     }
 
-    const embeddedData = await this.fetchEmbeddedDataFromPage(watchUrl);
+    const embeddedData = await this.fetchEmbeddedData(watchUrl);
     if (!embeddedData || typeof embeddedData !== 'object') {
       this.reportError(new Error(`failed to resolve embedded-data from NicoNico watch page: ${watchUrl}`));
       return;
@@ -355,92 +355,24 @@ export class NiconamaCommentClient {
         ? (embedded as any).program.statistics.commentCount
         : undefined;
       const initialComments = parseAgentCommentsFromResponseBody(embedded);
-      if (!commentCount || initialComments.length > 0) {
+      const embeddedWebSocketUrl = this.getWebSocketUrlFromEmbeddedData(embedded);
+
+      if (embeddedWebSocketUrl && (!commentCount || initialComments.length > 0)) {
         return embedded;
       }
-      console.debug('[DEBUG] fetchEmbeddedData found embedded-data with commentCount but no initial comments, returning embedded-data directly and relying on Playwright watcher for comments', targetUrl, { commentCount });
-      return embedded;
-    }
 
-    // Fallback to Playwright rendering when embedded-data isn't present or is JS-rendered.
-    // When watch page HTML is already available from the initial fetch, we don't need
-    // a browser-based fallback to acquire embedded-data.
-    try {
-      console.debug('[DEBUG] fetchEmbeddedData falling back to Playwright', targetUrl);
-      console.debug('[DEBUG] launching Playwright persistent context');
-      const context = await this.#launchPersistentContext(this.#userDataDir, {
-        executablePath: this.#executablePath,
-        headless: true,
-        ignoreHTTPSErrors: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        locale: 'ja-JP',
+      console.debug('[DEBUG] fetchEmbeddedData found embedded-data without initial comments or websocket URL, falling back to Playwright', targetUrl, {
+        commentCount,
+        initialCommentsCount: initialComments.length,
+        embeddedWebSocketUrl: Boolean(embeddedWebSocketUrl),
       });
-      console.debug('[DEBUG] Playwright context launched');
-      try {
-        console.debug('[DEBUG] opening new Playwright page');
-        const page = await context.newPage();
-        console.debug('[DEBUG] page opened', { url: page.url(), isClosed: page.isClosed() });
-        console.debug('[DEBUG] navigating to target URL');
-        const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 10_000 });
-        console.debug('[DEBUG] page goto complete', { responseStatus: response?.status(), url: page.url() });
 
-        let parsed: unknown | null = null;
-        if (response) {
-          try {
-            const html = await response.text();
-            console.debug('[DEBUG] Playwright response HTML length', { length: html.length });
-            const embeddedData = extractEmbeddedDataFromHtml(html);
-            if (embeddedData) {
-              parsed = embeddedData;
-            }
-          } catch (err) {
-            console.warn('[WARN] failed to read Playwright navigation response text', err);
-          }
-        }
-
-        await page.waitForTimeout(5_000);
-
-        console.debug('[DEBUG] Playwright page loaded, parsed embedded-data', { hasParsedData: Boolean(parsed) });
-
-        const pageComments = [] as string[];
-        console.debug('[DEBUG] page comments evaluated', { pageCommentsLength: pageComments.length });
-
-        const commentObjects = pageComments
-          .filter((comment) => typeof comment === 'string' && comment.trim().length > 0)
-          .map((comment) => ({ comment }));
-
-        let result = parsed;
-        if (commentObjects.length > 0) {
-          const merged = embedded && typeof embedded === 'object' ? { ...(embedded as any) } : {};
-
-          if ((merged as any).site?.state?.relive) {
-            (merged as any).site.state.relive.comments = commentObjects;
-          }
-          if ((merged as any).site?.relive) {
-            (merged as any).site.relive.comments = commentObjects;
-          }
-          if ((merged as any).relive) {
-            (merged as any).relive.comments = commentObjects;
-          }
-
-          if (!result) {
-            result = merged;
-          }
-        }
-
-        if (!result) {
-          return null;
-        }
-
-        return result;
-      } finally {
-        await context.close();
-      }
-    } catch (err) {
-      this.reportError(err);
-      return null;
+      const enrichedEmbedded = await this.fetchEmbeddedDataWithPlaywright(targetUrl, embedded);
+      return enrichedEmbedded ?? embedded;
     }
+
+    const renderedEmbedded = await this.fetchEmbeddedDataWithPlaywright(targetUrl);
+    return renderedEmbedded;
   }
 
   async stop(): Promise<void> {
@@ -597,6 +529,96 @@ export class NiconamaCommentClient {
       return DEFAULT_FALLBACK_WATCH_URL;
     } finally {
       await context.close();
+    }
+  }
+
+  private getWebSocketUrlFromEmbeddedData(data: unknown): string | undefined {
+    if (!data || typeof data !== 'object') return undefined;
+    return (data as any).site?.state?.relive?.webSocketUrl ??
+      (data as any).site?.relive?.webSocketUrl ??
+      (data as any).relive?.webSocketUrl;
+  }
+
+  private async fetchEmbeddedDataWithPlaywright(targetUrl: string, existingEmbeddedData?: unknown): Promise<unknown | null> {
+    try {
+      console.debug('[DEBUG] fetchEmbeddedData falling back to Playwright', targetUrl);
+      console.debug('[DEBUG] launching Playwright persistent context');
+      const context = await this.#launchPersistentContext(this.#userDataDir, {
+        executablePath: this.#executablePath,
+        headless: true,
+        ignoreHTTPSErrors: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        locale: 'ja-JP',
+      });
+      console.debug('[DEBUG] Playwright context launched');
+      try {
+        console.debug('[DEBUG] opening new Playwright page');
+        const page = await context.newPage();
+        console.debug('[DEBUG] page opened', { url: page.url(), isClosed: page.isClosed() });
+        console.debug('[DEBUG] navigating to target URL');
+        const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 10_000 });
+        console.debug('[DEBUG] page goto complete', { responseStatus: response?.status(), url: page.url() });
+
+        let parsed: unknown | null = null;
+        if (response) {
+          try {
+            const html = await response.text();
+            console.debug('[DEBUG] Playwright response HTML length', { length: html.length });
+            const embeddedData = extractEmbeddedDataFromHtml(html);
+            if (embeddedData) {
+              parsed = embeddedData;
+            }
+          } catch (err) {
+            console.warn('[WARN] failed to read Playwright navigation response text', err);
+          }
+        }
+
+        await page.waitForTimeout(5_000);
+        console.debug('[DEBUG] Playwright page loaded, parsed embedded-data', { hasParsedData: Boolean(parsed) });
+
+        const pageComments = await this.extractPageComments(page);
+        if (pageComments.length > 0) {
+          this.#callbacks.onComments(pageComments);
+          console.debug('[DEBUG] Playwright page comments extracted', { count: pageComments.length, url: page.url() });
+        }
+
+        const commentObjects = pageComments
+          .map((comment) => {
+            const commentText = typeof (comment as any).data?.comment === 'string' ? (comment as any).data.comment : undefined;
+            return commentText ? { comment: commentText } : undefined;
+          })
+          .filter((item): item is { comment: string } => Boolean(item));
+
+        let result = parsed ?? (existingEmbeddedData && typeof existingEmbeddedData === 'object' ? { ...(existingEmbeddedData as any) } : null);
+        if (!result && commentObjects.length > 0) {
+          result = { relive: { comments: commentObjects } };
+        }
+
+        if (commentObjects.length > 0 && result && typeof result === 'object') {
+          const merged = result as any;
+          if ((merged as any).site?.state?.relive) {
+            merged.site.state.relive.comments = commentObjects;
+          }
+          if ((merged as any).site?.relive) {
+            merged.site.relive.comments = commentObjects;
+          }
+          if ((merged as any).relive) {
+            merged.relive.comments = commentObjects;
+          }
+        }
+
+        if (!result) {
+          return null;
+        }
+
+        return result;
+      } finally {
+        await context.close();
+      }
+    } catch (err) {
+      this.reportError(err);
+      return null;
     }
   }
 
@@ -827,7 +849,7 @@ export class NiconamaCommentClient {
     this.#playwrightCommentContext = null;
   }
 
-  private async extractPageComments(page: any): Promise<unknown[]> {
+  private async extractPageComments(page: any): Promise<AgentComment[]> {
     try {
       const pageComments = await page.evaluate(() => {
         const panel = document.querySelector('[data-name="comment"]') ?? document.querySelector('.comment-panel');

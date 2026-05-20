@@ -9,6 +9,7 @@ import {
   hasCommentArrayStructure,
   buildNiconamaStreamStateFromStatisticsEvent,
   parseAgentCommentsFromResponseBody,
+  createNiconamaCommentClient,
 } from "./niconamaCommentClient";
 
 describe("extractEmbeddedDataFromHtml", () => {
@@ -220,6 +221,59 @@ describe("parseAgentCommentsFromResponseBody", () => {
     const parsed = parseAgentCommentsFromResponseBody(body);
 
     expect(parsed).toHaveLength(0);
+  });
+});
+
+describe("fetchEmbeddedData fallback behavior", () => {
+  it("falls back to Playwright when embedded-data lacks websocket url and emits rendered page comments", async () => {
+    const originalFetch = (globalThis as any).fetch;
+    try {
+      const embeddedHtml = '<script id="embedded-data" data-props="{&quot;site&quot;:{&quot;state&quot;:{&quot;relive&quot;:{}},&quot;program&quot;:{&quot;statistics&quot;:{&quot;commentCount&quot;:1}}}}"></script>';
+      (globalThis as any).fetch = async () => ({ ok: true, text: async () => embeddedHtml });
+
+      const renderedComments: any[] = [];
+      const launchPersistentContext = async () => {
+        const fakePage = {
+          goto: async () => ({ status: () => 200, text: async () => '<html><body></body></html>' }),
+          waitForTimeout: async () => {},
+          evaluate: async (fn: any) => {
+            const source = fn.toString();
+            if (source.includes('const panel')) {
+              return ['rendered comment'];
+            }
+            if (source.includes('const results')) {
+              return [];
+            }
+            return [];
+          },
+          on: () => {},
+          url: () => 'https://live.nicovideo.jp/watch/test',
+          isClosed: () => false,
+          close: async () => {},
+        };
+        return {
+          pages: () => [fakePage],
+          newPage: async () => fakePage,
+          close: async () => {},
+        };
+      };
+
+      const onComments: any[] = [];
+      const client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext }, {
+        onComments: (comments) => { onComments.push(...comments); },
+        onMeta: () => {},
+        onError: (error) => { throw error; },
+      });
+
+      const result = await client.fetchEmbeddedData();
+
+      expect(onComments).toHaveLength(1);
+      expect(onComments[0]?.data?.comment).toBe('rendered comment');
+      expect(result).toBeTruthy();
+      expect((result as any).site?.state?.relive?.comments).toEqual([{ comment: 'rendered comment' }]);
+    } finally {
+      (globalThis as any).fetch = originalFetch;
+    }
   });
 });
 
