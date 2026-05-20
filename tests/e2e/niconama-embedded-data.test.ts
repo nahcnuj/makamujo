@@ -37,6 +37,7 @@ test.describe("NiconamaCommentClient fallback watch page", () => {
         while (initialComments.length === 0 && Date.now() < deadline) {
           await new Promise((resolve) => setTimeout(resolve, 100));
         }
+          expect(initialComments.length).toBeGreaterThan(0);
       }
 
       expect(Array.isArray(initialComments)).toBe(true);
