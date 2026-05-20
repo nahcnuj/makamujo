@@ -5,3 +5,5 @@ env = "BUN_PUBLIC_*"
 
 [test]
 coverage = true
+pathIgnorePatterns = ["tmp*", "tmp/**", "tests/e2e/**"]
+coveragePathIgnorePatterns = ["tmp*", "tmp/**", "tests/e2e/**"]
