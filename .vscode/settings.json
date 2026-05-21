@@ -5,7 +5,7 @@
         "bun run test": true,
         "bun run test:e2e": true,
         "bun run test:integration": true,
-        "bun test": true,
+        "bun test": false,
         "cd": true,
         "echo": true,
         "ls": true,
