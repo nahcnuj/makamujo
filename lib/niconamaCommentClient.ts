@@ -595,13 +595,20 @@ export class NiconamaCommentClient {
         let pageComments: AgentComment[] = [];
         if (!page.isClosed()) {
           pageComments = await this.extractPageComments(page);
+          if (pageComments.length > 0) {
+            this.#callbacks.onComments(pageComments);
+            console.debug('[DEBUG] Playwright page comments extracted', { count: pageComments.length, url: pageUrl });
+          }
         } else {
           console.debug('[DEBUG] Skipping Playwright page comment extraction because page is closed', { url: pageUrl });
         }
 
-        if (pageComments.length > 0) {
-          this.#callbacks.onComments(pageComments);
-          console.debug('[DEBUG] Playwright page comments extracted', { count: pageComments.length, url: pageUrl });
+        if (!page.isClosed()) {
+          try {
+            await page.waitForTimeout(5_000);
+          } catch (err) {
+            console.warn('[WARN] Playwright waitForTimeout failed', err);
+          }
         }
 
         const commentObjects = pageComments
@@ -853,22 +860,15 @@ export class NiconamaCommentClient {
         response = await page.goto(watchUrl, { waitUntil: 'commit', timeout: 30_000 });
         console.debug('[DEBUG] Playwright page goto complete', { responseStatus: response?.status(), url: page.url(), waitUntil: 'commit' });
       }
-      if (!page.isClosed()) {
-        await page.waitForTimeout(1_000);
-      }
       console.debug('[DEBUG] Playwright page after goto', { url: page.url(), isClosed: page.isClosed(), pages: context.pages().map((p: any) => p.url()) });
 
-      if (!page.isClosed()) {
-        const initialPageComments = await this.extractPageComments(page);
-        if (initialPageComments.length > 0) {
-          this.#callbacks.onComments(initialPageComments);
-          console.debug('[DEBUG] Playwright initial page comments extracted', { count: initialPageComments.length, url: page.url() });
-        }
+      const initialPageComments = await this.extractPageComments(page);
+      if (initialPageComments.length > 0) {
+        this.#callbacks.onComments(initialPageComments);
+        console.debug('[DEBUG] Playwright initial page comments extracted', { count: initialPageComments.length, url: page.url() });
+        return;
       }
 
-      if (!page.isClosed()) {
-        await page.waitForTimeout(4_000);
-      }
       this.#playwrightCommentContext = context;
       this.#playwrightCommentPage = page;
     } catch (err) {
