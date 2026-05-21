@@ -259,7 +259,7 @@ describe("fetchEmbeddedData fallback behavior", () => {
       };
 
       const onComments: any[] = [];
-      const client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext }, {
+      const client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: launchPersistentContext as any }, {
         onComments: (comments) => { onComments.push(...comments); },
         onMeta: () => {},
         onError: (error) => { throw error; },
