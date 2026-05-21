@@ -482,7 +482,7 @@ export class NiconamaCommentClient {
 
   private extractBodyTextFromHtml(html: string): string | null {
     const bodyMatch = /<body[^>]*>([\s\S]*?)<\/body>/i.exec(html);
-    const source = bodyMatch ? bodyMatch[1] : html;
+    const source = bodyMatch?.[1] ?? html;
     const withoutScripts = source.replace(/<script[\s\S]*?<\/script>/gi, '');
     const withoutStyles = withoutScripts.replace(/<style[\s\S]*?<\/style>/gi, '');
     const text = withoutStyles
@@ -1057,76 +1057,6 @@ export class NiconamaCommentClient {
 
     this.#playwrightCommentPage = null;
     this.#playwrightCommentContext = null;
-  }
-
-  private async extractRenderedPageComments(page: any): Promise<AgentComment[]> {
-    try {
-      const pageComments = await page.evaluate(() => {
-        const selectors = [
-          '[data-name="comment"]',
-          '.comment-panel',
-          '.comment-list',
-          '.comment-area',
-          '.lv-comment',
-          '.comment-item',
-          '.base-comment-list',
-          '[aria-label*="コメント"]',
-          '[role="log"]',
-          '[class*=comment]',
-          '[id*=comment]',
-        ];
-
-        const normalizeLine = (text: string) => text.replace(/\s+/g, ' ').trim();
-        const exclude = (line: string) => ['コメント', 'コメント数', 'コメント一覧'].includes(line);
-        const result = new Set<string>();
-
-        for (const selector of selectors) {
-          const elements = Array.from(document.querySelectorAll(selector));
-          for (const element of elements) {
-            const content = element.textContent ?? '';
-            for (const line of content.split(/\r?\n/)) {
-              const normalized = normalizeLine(line);
-              if (normalized && !exclude(normalized)) {
-                result.add(normalized);
-              }
-            }
-          }
-        }
-
-        if (result.size > 0) {
-          return Array.from(result).slice(0, 50);
-        }
-
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
-        let node = walker.nextNode();
-        while (node) {
-          const text = normalizeLine(node.textContent ?? '');
-          if (text && !exclude(text)) {
-            for (const line of text.split(/\r?\n/)) {
-              const normalized = normalizeLine(line);
-              if (normalized && !exclude(normalized)) {
-                result.add(normalized);
-              }
-            }
-          }
-          node = walker.nextNode();
-        }
-
-        return Array.from(result).slice(0, 50);
-      });
-
-      if (!Array.isArray(pageComments) || pageComments.length === 0) {
-        return [];
-      }
-
-      const deduped = pageComments
-        .filter((comment) => typeof comment === 'string' && comment.trim().length > 0)
-        .map((comment) => comment.trim());
-      return this.getUniquePageComments(deduped);
-    } catch (err) {
-      console.debug('[DEBUG] extractRenderedPageComments failed', err);
-      return [];
-    }
   }
 
   private async tryOpenRenderedCommentPanel(page: any): Promise<void> {

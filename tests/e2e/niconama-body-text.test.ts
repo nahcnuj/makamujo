@@ -16,8 +16,10 @@ test.describe("NiconamaCommentClient rendered body text", () => {
 
     const bodyText = await client.fetchRenderedWatchPageBodyText();
 
+    expect(bodyText).not.toBeNull();
     expect(typeof bodyText).toBe("string");
     expect(bodyText).toBeTruthy();
+    if (bodyText === null) throw new Error("Expected bodyText to be non-null");
     expect(bodyText.trim().length).toBeGreaterThan(0);
   });
 });
