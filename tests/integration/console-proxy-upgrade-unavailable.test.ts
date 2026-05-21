@@ -6,8 +6,7 @@ import { existsSync, writeFileSync, mkdirSync } from "fs";
 // modifying runner timeouts so the test is robust on CI.
 
 test("returns 501 when websocket upgrade unavailable", async () => {
-  const port = 7788;
-  const BASE = `http://127.0.0.1:${port}`;
+  let BASE = '';
 
   if (!existsSync("./var/cookieclicker.txt")) {
     try { mkdirSync("./var", { recursive: true }); } catch {}
@@ -18,7 +17,7 @@ test("returns 501 when websocket upgrade unavailable", async () => {
     ? `\\\\.\\pipe\\makamujo-test-ipc-7788`
     : `./var/ipc-test-7788.sock`;
 
-  const server = spawn(process.platform === "win32" ? "bun.exe" : "bun", ["index.ts", "--port", String(port)], {
+  const server = spawn(process.platform === "win32" ? "bun.exe" : "bun", ["index.ts", "--port", "0"], {
     env: {
       ...process.env,
       NODE_ENV: "production",
@@ -41,7 +40,15 @@ test("returns 501 when websocket upgrade unavailable", async () => {
 
     function onData(chunk: any) {
       buffer += String(chunk);
-      if (buffer.includes('Server running') || buffer.includes('🚀 Server running')) {
+      const match = buffer.match(/🚀 Server running at (https?:\/\/[^\s]+)/);
+      if (match?.[1]) {
+        BASE = match[1];
+        clearTimeout(timeout);
+        cleanup();
+        resolve();
+        return;
+      }
+      if (buffer.includes('Server running')) {
         clearTimeout(timeout);
         cleanup();
         resolve();

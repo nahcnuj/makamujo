@@ -21,6 +21,9 @@
 - 開発サーバー起動: `bun run dev`
 - テスト実行: `bun run test`
 - E2Eテスト実行: `bun run test:e2e`
+- 単一のテストファイルを実行: `bun test path/to/file.test.ts`
+- 単一の E2E テストを実行: `bun run test:e2e tests/e2e/your-test-file.test.ts`
+- TypeScriptスクリプトを実行: `bun ./path/to/script.ts`
 
 その他、package.jsonのscriptsに書かれているスクリプトが実行できます。
 

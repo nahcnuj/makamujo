@@ -27,5 +27,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(port, () => {
-  console.log('mock-upstream ready');
+  const addr = server.address();
+  const boundPort = typeof addr === 'object' && addr ? addr.port : port;
+  console.log(`mock-upstream ready on ${boundPort}`);
 });

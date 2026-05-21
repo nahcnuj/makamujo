@@ -289,10 +289,8 @@ test.describe("console", () => {
     const probeEventStream = async (url: string) => {
       try {
         const probe = await fetch(url, { headers: { accept: 'text/event-stream' } });
-        console.log('[TEST DIAG] probe ->', { url, status: probe.status, contentType: probe.headers.get('content-type') });
         try { probe.body?.cancel?.(); } catch {}
       } catch (err) {
-        console.log('[TEST DIAG] probe failed ->', String(err));
       }
     };
 
@@ -306,9 +304,7 @@ test.describe("console", () => {
       const consoleEnvRes = await fetch(`${CONSOLE_BASE_URL}/console/env`);
       let consoleEnvBody = null;
       try { consoleEnvBody = await consoleEnvRes.json(); } catch {}
-      console.log('[TEST DIAG] /console/env ->', { status: consoleEnvRes.status, body: consoleEnvBody });
     } catch (err) {
-      console.log('[TEST DIAG] /console/env probe failed ->', String(err));
     }
 
     // Install a small init script so we can reliably detect when the
@@ -334,7 +330,6 @@ test.describe("console", () => {
     // browser attempted to connect to.
     await page.waitForFunction(() => (window as any).__sseUrl !== undefined, { timeout: 5_000 });
     const sseUrl = await page.evaluate(() => (window as any).__sseUrl ?? null);
-    console.log('[TEST DIAG] page.__sseUrl ->', sseUrl);
     expect(sseUrl, 'page did not select an SSE URL (proxy or direct) before timeout').toBeTruthy();
 
     // Wait for the page to establish the SSE connection before sending
@@ -375,7 +370,6 @@ test.describe("console", () => {
 
     await page.waitForFunction(() => (window as any).__sseUrl !== undefined, { timeout: 5_000 });
     const sseUrl = await page.evaluate(() => (window as any).__sseUrl ?? null);
-    console.log('[TEST DIAG] page.__sseUrl ->', sseUrl);
     expect(sseUrl, 'page did not select an SSE URL before timeout').toBeTruthy();
 
     await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
@@ -490,8 +484,6 @@ test.describe("console", () => {
 
     let firstMessage: string | null = null;
     try {
-      console.log('[TEST DIAG] wsUrl ->', wsUrl);
-      console.log('[TEST DIAG] broadcastingWsUrl ->', broadcastingWsUrl);
       firstMessage = await page.evaluate(
         async ({ proxyUrl, fallbackUrl }: { proxyUrl: string | null; fallbackUrl: string | null }) => {
           return await new Promise((resolve, reject) => {
@@ -520,7 +512,6 @@ test.describe("console", () => {
         { proxyUrl: wsUrl, fallbackUrl: broadcastingWsUrl },
       );
     } catch (err) {
-      console.log('[TEST DIAG] WS connection attempt failed ->', String(err));
       // As a robust fallback for CI environments where WS upgrades may
       // fail intermittently, try fetching the broadcasting server's
       // /api/meta directly and treat that as the initial payload.
@@ -531,7 +522,6 @@ test.describe("console", () => {
           firstMessage = JSON.stringify(metaJson);
         }
       } catch (fetchErr) {
-        console.log('[TEST DIAG] fallback /api/meta fetch failed ->', String(fetchErr));
       }
       if (!firstMessage) throw err;
     }

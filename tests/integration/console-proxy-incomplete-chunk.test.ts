@@ -3,16 +3,14 @@ import { spawn } from 'child_process';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-const BROADCASTING_UPSTREAM_PORT = 8888;
-const MAIN_SERVER_PORT = 7777;
-
 let upstream: ReturnType<typeof spawn> | null = null;
 let server: ReturnType<typeof spawn> | null = null;
 let consoleBaseUrl: string | undefined = undefined;
+let upstreamPort: number | null = null;
 
 beforeAll(async () => {
   upstream = spawn('bun', ['tests/helpers/mock-upstream-server.ts'], {
-    env: { ...process.env, PORT: String(BROADCASTING_UPSTREAM_PORT) },
+    env: { ...process.env, PORT: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
@@ -21,7 +19,9 @@ beforeAll(async () => {
     let buf = '';
     upstream!.stdout!.on('data', (c: any) => {
       buf += String(c);
-      if (buf.includes('mock-upstream ready')) {
+      const match = buf.match(/mock-upstream ready on (\d+)/);
+      if (match) {
+        upstreamPort = Number(match[1]);
         clearTimeout(timeout);
         resolve();
       }
@@ -29,18 +29,22 @@ beforeAll(async () => {
     upstream!.on('exit', (code) => { clearTimeout(timeout); reject(new Error('upstream exited ' + code)); });
   });
 
+  if (!upstreamPort) {
+    throw new Error('Failed to resolve mock upstream port');
+  }
+
   const ipcPath =
     process.platform === 'win32'
       ? `\\.\\pipe\\makamujo-test-ipc`
       : join(tmpdir(), `makamujo-ipc-${process.pid}.sock`);
 
-  server = spawn('bun', ['index.ts', '--port', String(MAIN_SERVER_PORT)], {
+  server = spawn('bun', ['index.ts', '--port', '0'], {
     env: {
       ...process.env,
       NODE_ENV: 'production',
       CONSOLE_LOOPBACK_ONLY: '1',
       BROADCASTING_HOST: '127.0.0.1',
-      BROADCASTING_PORT: String(BROADCASTING_UPSTREAM_PORT),
+      BROADCASTING_PORT: String(upstreamPort),
       MAKAMUJO_IPC_PATH: ipcPath,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -86,7 +90,7 @@ afterAll(() => {
 const READ_TIMEOUT_MS = 4000;
 
 test('proxy maintains SSE connection and reconnects when upstream drops', async () => {
-  const base = consoleBaseUrl ?? `http://127.0.0.1:${MAIN_SERVER_PORT}`;
+  const base = consoleBaseUrl ?? 'http://127.0.0.1:7777';
   const res = await fetch(`${base}/console/api/ws`, { headers: { accept: 'text/event-stream' } });
   expect(res.ok).toBeTruthy();
   const body: any = res.body;

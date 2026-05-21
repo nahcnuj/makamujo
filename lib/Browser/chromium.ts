@@ -32,7 +32,12 @@ export const launchPersistentContext = async (
     args,
   };
 
-  return chromium.launchPersistentContext(userDataDir, launchOpts as any);
+  try {
+    return await playwright.chromium.launchPersistentContext(userDataDir, launchOpts as any);
+  } catch (firstErr) {
+    console.warn('[WARN] playwright.chromium persistent context failed, retrying with chromium-extra stealth', firstErr);
+    return await chromium.launchPersistentContext(userDataDir, launchOpts as any);
+  }
 };
 
 export const create = async (

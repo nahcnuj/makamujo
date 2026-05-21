@@ -2,7 +2,7 @@ import { test, expect, beforeAll, afterAll } from "bun:test";
 import { spawn } from "child_process";
 import { existsSync, writeFileSync, mkdirSync } from "fs";
 
-const BROADCASTING_BASE_URL = `http://127.0.0.1:7777`;
+let BROADCASTING_BASE_URL = '';
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 
 // Integration test runner default timeouts can be too short on CI runners.
@@ -21,7 +21,7 @@ beforeAll(async () => {
     ? `\\.\\pipe\\makamujo-test-ipc`
     : `./var/ipc-test.sock`;
 
-  server = spawn(process.platform === "win32" ? "bun.exe" : "bun", ["index.ts", "--port", "7777"], {
+  server = spawn(process.platform === "win32" ? "bun.exe" : "bun", ["index.ts", "--port", "0"], {
     env: {
       ...process.env,
       NODE_ENV: "production",
@@ -56,8 +56,12 @@ beforeAll(async () => {
 
     function onData(chunk: any) {
       buffer += String(chunk);
-      if (!serverRunning && (buffer.includes('Server running') || buffer.includes('🚀 Server running'))) {
-        serverRunning = true;
+      if (!serverRunning) {
+        const m = buffer.match(/🚀 Server running at (https?:\/\/[^\s]+)/);
+        if (m?.[1]) {
+          BROADCASTING_BASE_URL = m[1];
+          serverRunning = true;
+        }
       }
       // The external agent initialization completes with one of these messages.
       if (!agentReady && (
@@ -132,7 +136,9 @@ test("proxy forwards WebSocket upgrades to broadcasting server", async () => {
     return;
   }
 
-  const wsUrl = `ws://127.0.0.1:7777/console/api/ws`;
+  const broadcastingBaseUrl = new URL(BROADCASTING_BASE_URL);
+  const wsProtocol = broadcastingBaseUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${wsProtocol}//${broadcastingBaseUrl.host}/console/api/ws`;
   const firstMessage = await new Promise<any>((resolve, reject) => {
     const ws = new WebSocket(wsUrl);
     const timeout = setTimeout(() => { try { ws.close(); } catch {} ; reject(new Error('timeout')); }, 5000);

@@ -1,10 +1,12 @@
-import { existsSync, mkdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, statSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { AgentComment } from "automated-gameplay-transmitter";
 import { DEFAULT_PLAYWRIGHT_USER_DATA_DIR, DEFAULT_CHROMIUM_EXECUTABLE_PATH, launchPersistentContext } from "./Browser/chromium";
 
 const DEFAULT_POLL_INTERVAL_MS = 30_000;
-const DEFAULT_WATCH_PAGE_BASE_URL = 'https://live.nicovideo.jp/';
-const DEFAULT_FALLBACK_WATCH_URL = 'https://live.nicovideo.jp/watch/user/14171889';
+export const DEFAULT_WATCH_PAGE_BASE_URL = 'https://live.nicovideo.jp/';
+export const DEFAULT_FALLBACK_WATCH_URL = 'https://live.nicovideo.jp/watch/user/14171889';
 
 /**
  * `userDataDir` が存在しない場合はディレクトリを作成する。
@@ -225,11 +227,52 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
   return null;
 };
 
+type NiconamaBrowserPageResponse = {
+  status: () => number;
+  text: () => Promise<string>;
+};
+
+type NiconamaBrowserPage = {
+  on: (event: string, callback: any) => void;
+  goto: (url: string, options?: Record<string, unknown>) => Promise<NiconamaBrowserPageResponse | null>;
+  close: () => Promise<void>;
+  evaluate: <T>(pageFunction: () => T) => Promise<T>;
+  getByText: (text: string) => {
+    count: () => Promise<number>;
+    first: () => {
+      hover: (options?: { timeout?: number }) => Promise<void>;
+      waitFor: (options: Record<string, unknown>) => Promise<void>;
+      count: () => Promise<number>;
+    };
+  };
+  locator: (selector: string) => {
+    first: () => {
+      getAttribute: (name: string) => Promise<string | null>;
+      count: () => Promise<number>;
+    };
+  };
+  waitFor: (options: Record<string, unknown>) => Promise<void>;
+  waitForTimeout: (ms: number) => Promise<void>;
+  waitForLoadState?: (state?: string, options?: Record<string, unknown>) => Promise<void>;
+  waitForSelector?: (selector: string, options?: Record<string, unknown>) => Promise<unknown>;
+  url: () => string;
+  isClosed: () => boolean;
+};
+
+type NiconamaBrowserContext = {
+  pages: () => NiconamaBrowserPage[];
+  newPage: () => Promise<NiconamaBrowserPage>;
+  close: () => Promise<void>;
+};
+
+type NiconamaLaunchPersistentContext = (userDataDir: string, options?: Record<string, unknown>) => Promise<NiconamaBrowserContext>;
+
 export type NiconamaCommentClientOptions = {
   userDataDir?: string;
   executablePath?: string;
   watchUrl?: string;
   pollIntervalMs?: number;
+  launchPersistentContext?: NiconamaLaunchPersistentContext;
 };
 
 type NiconamaCommentClientCallbacks = {
@@ -246,11 +289,15 @@ export class NiconamaCommentClient {
   #running = false;
   #stopRequested = false;
   #pollTask: Promise<void> | null = null;
-  #seenCommentSignatures = new Set<string>();
+  #seenCommentIdentifiers = new Set<string>();
   #directWebSocket: any | null = null;
   #directWebSocketKeepSeatTimer: ReturnType<typeof setInterval> | null = null;
+  #playwrightCommentContext: any | null = null;
+  #playwrightCommentPage: any | null = null;
+  #playwrightPageCommentPollTimer: ReturnType<typeof setInterval> | null = null;
   #pollTimer: ReturnType<typeof setTimeout> | null = null;
   #pollCancelResolve: (() => void) | null = null;
+  #launchPersistentContext: NiconamaLaunchPersistentContext;
   #callbacks: NiconamaCommentClientCallbacks;
 
   constructor(options: NiconamaCommentClientOptions, callbacks: NiconamaCommentClientCallbacks) {
@@ -258,6 +305,7 @@ export class NiconamaCommentClient {
     this.#watchUrl = options.watchUrl;
     this.#executablePath = options.executablePath ?? DEFAULT_CHROMIUM_EXECUTABLE_PATH;
     this.#pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+    this.#launchPersistentContext = options.launchPersistentContext ?? (launchPersistentContext as unknown as NiconamaLaunchPersistentContext);
     this.#callbacks = callbacks;
   }
 
@@ -278,7 +326,13 @@ export class NiconamaCommentClient {
       return;
     }
 
-    const embeddedData = await this.fetchEmbeddedDataFromPage(watchUrl);
+    const embeddedData = await this.fetchEmbeddedData(watchUrl);
+    console.debug('[DEBUG] NiconamaCommentClient fetched embedded-data in start', {
+      embeddedDataType: embeddedData === null ? 'null' : typeof embeddedData,
+      hasWebSocketUrl: embeddedData && typeof embeddedData === 'object'
+        ? Boolean((embeddedData as any).site?.state?.relive?.webSocketUrl ?? (embeddedData as any).site?.relive?.webSocketUrl ?? (embeddedData as any).relive?.webSocketUrl)
+        : false,
+    });
     if (!embeddedData || typeof embeddedData !== 'object') {
       this.reportError(new Error(`failed to resolve embedded-data from NicoNico watch page: ${watchUrl}`));
       return;
@@ -298,6 +352,9 @@ export class NiconamaCommentClient {
     });
 
     await this.setupDirectWebSocketConnection(watchUrl, embeddedData);
+    if (!this.#directWebSocket) {
+      await this.setupPlaywrightCommentWatcher(watchUrl);
+    }
     this.#pollTask = this.pollLoop();
     console.info('[DEBUG] NiconamaCommentClient.start finished');
   }
@@ -306,40 +363,135 @@ export class NiconamaCommentClient {
     const targetUrl = watchUrl ?? this.#watchUrl ?? DEFAULT_FALLBACK_WATCH_URL;
     // Try fetching the page HTML first (fast, no browser required)
     const embedded = await this.fetchEmbeddedDataFromPage(targetUrl);
-    if (embedded) return embedded;
+    if (embedded) {
+      const commentCount = typeof (embedded as any).program?.statistics?.commentCount === 'number'
+        ? (embedded as any).program.statistics.commentCount
+        : undefined;
+      const initialComments = parseAgentCommentsFromResponseBody(embedded);
+      const embeddedWebSocketUrl = this.getWebSocketUrlFromEmbeddedData(embedded);
 
-    // Fallback to Playwright rendering when embedded-data isn't present or is JS-rendered
+      if (embeddedWebSocketUrl || initialComments.length > 0) {
+        return embedded;
+      }
+
+      console.debug('[DEBUG] fetchEmbeddedData found embedded-data without websocket URL, falling back to Playwright', targetUrl, {
+        commentCount,
+        initialCommentsCount: initialComments.length,
+        embeddedWebSocketUrl: Boolean(embeddedWebSocketUrl),
+      });
+
+      const enrichedEmbedded = await this.fetchEmbeddedDataWithPlaywright(targetUrl, embedded);
+      return enrichedEmbedded ?? embedded;
+    }
+
+    const renderedEmbedded = await this.fetchEmbeddedDataWithPlaywright(targetUrl);
+    return renderedEmbedded;
+  }
+
+  public async fetchRenderedWatchPageBodyText(watchUrl?: string): Promise<string | null> {
+    const targetUrl = watchUrl ?? this.#watchUrl ?? DEFAULT_FALLBACK_WATCH_URL;
+    const staticHtml = await this.fetchHtml(targetUrl).catch(() => null);
+    if (typeof staticHtml === 'string') {
+      const staticBodyText = this.extractBodyTextFromHtml(staticHtml);
+      if (staticBodyText) {
+        return staticBodyText;
+      }
+    }
+
+    const tempUserDataDir = mkdtempSync(join(tmpdir(), 'niconama-body-text-'));
+    let context: any = null;
+
     try {
-      console.debug('[DEBUG] fetchEmbeddedData falling back to Playwright', targetUrl);
-      const context = await launchPersistentContext(this.#userDataDir, {
+      context = await this.#launchPersistentContext(tempUserDataDir, {
         executablePath: this.#executablePath,
         headless: true,
         ignoreHTTPSErrors: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        locale: 'ja-JP',
       });
-      try {
-        const page = context.pages()[0] ?? await context.newPage();
-        await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 60_000 });
-        const el = await page.$('#embedded-data');
-        if (!el) {
-          console.warn('[WARN] embedded-data element not found via Playwright', targetUrl);
-          return null;
-        }
-        const dataProps = await el.getAttribute('data-props');
-        if (!dataProps) {
-          console.warn('[WARN] embedded-data element missing data-props attribute', targetUrl);
-          return null;
-        }
-        const jsonText = normalizeHtmlForUrlExtraction(dataProps);
-        const parsed = tryParseJson(jsonText);
-        return parsed ?? null;
-      } finally {
-        await context.close();
+
+      const page = await context.newPage();
+      const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 });
+      if (!response || response.status() >= 400) {
+        console.warn('[WARN] fetchRenderedWatchPageBodyText failed to navigate', { targetUrl, status: response?.status?.() });
+        return null;
       }
+
+      const activePages = context.pages().filter((p: any) => !p.isClosed());
+      for (const currentPage of activePages) {
+        if (currentPage.isClosed()) continue;
+        const bodyText = await this.getBodyTextFromPage(currentPage);
+        if (bodyText) {
+          return bodyText;
+        }
+      }
+
+      for (const currentPage of activePages) {
+        if (currentPage.isClosed()) continue;
+        try {
+          await currentPage.waitForTimeout(2_000).catch(() => undefined);
+          await currentPage.waitForLoadState?.('networkidle', { timeout: 10_000 }).catch(() => undefined);
+        } catch {
+          // ignore
+        }
+        const bodyText = await this.getBodyTextFromPage(currentPage);
+        if (bodyText) {
+          return bodyText;
+        }
+      }
+
+      return null;
     } catch (err) {
       this.reportError(err);
       return null;
+    } finally {
+      if (context) {
+        await context.close().catch(() => undefined);
+      }
+      rmSync(tempUserDataDir, { recursive: true, force: true });
     }
+  }
+
+  private async getBodyTextFromPage(page: any): Promise<string | null> {
+    if (typeof page.isClosed === 'function' && page.isClosed()) {
+      return null;
+    }
+
+    try {
+      const locator = page.locator?.('body');
+      if (locator && typeof locator.allTextContents === 'function') {
+        const contents = await locator.allTextContents();
+        if (Array.isArray(contents) && contents.length > 0) {
+          return contents.join('');
+        }
+      }
+    } catch (err) {
+      console.debug('[DEBUG] getBodyTextFromPage locator.allTextContents failed', err);
+    }
+
+    try {
+      if (typeof page.evaluate === 'function') {
+        const bodyText = await page.evaluate(() => document.body?.textContent ?? null);
+        return typeof bodyText === 'string' ? bodyText : null;
+      }
+    } catch (err) {
+      console.debug('[DEBUG] getBodyTextFromPage page.evaluate failed', err);
+    }
+
+    return null;
+  }
+
+  private extractBodyTextFromHtml(html: string): string | null {
+    const bodyMatch = /<body[^>]*>([\s\S]*?)<\/body>/i.exec(html);
+    const source = bodyMatch?.[1] ?? html;
+    const withoutScripts = source.replace(/<script[\s\S]*?<\/script>/gi, '');
+    const withoutStyles = withoutScripts.replace(/<style[\s\S]*?<\/style>/gi, '');
+    const text = withoutStyles
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return text.length > 0 ? text : null;
   }
 
   async stop(): Promise<void> {
@@ -374,6 +526,7 @@ export class NiconamaCommentClient {
       this.#pollTask = null;
     }
     this.clearDirectWebSocket();
+    await this.clearPlaywrightCommentWatcher();
     this.#running = false;
     console.info('[DEBUG] NiconamaCommentClient.stop finished');
   }
@@ -415,23 +568,50 @@ export class NiconamaCommentClient {
   }
 
   private async fetchHtml(url: string): Promise<string> {
-    const response = await fetch(url, {
-      headers: {
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'User-Agent': 'Mozilla/5.0 (compatible; bun)',
-      },
-    });
-    if (!response.ok) {
-      throw new Error(`failed to fetch ${url}: ${response.status}`);
+    const userAgent = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+    const maxAttempts = 3;
+    let lastErr: unknown = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const response = await fetch(url, {
+          headers: {
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'User-Agent': userAgent,
+          },
+        });
+
+        if (response.ok) {
+          const text = await response.text();
+          console.debug('[DEBUG] fetchHtml fetched', { url, status: response.status, length: text.length });
+          return text;
+        }
+
+        // Retry on server errors (5xx)
+        if (response.status >= 500 && response.status < 600 && attempt < maxAttempts) {
+          lastErr = new Error(`server error ${response.status}`);
+          // exponential-ish backoff
+          await new Promise((res) => setTimeout(res, 200 * attempt));
+          continue;
+        }
+
+        throw new Error(`failed to fetch ${url}: ${response.status}`);
+      } catch (err) {
+        lastErr = err;
+        // If this was the last attempt, rethrow below; otherwise wait and retry.
+        if (attempt < maxAttempts) {
+          await new Promise((res) => setTimeout(res, 200 * attempt));
+          continue;
+        }
+      }
     }
-    const text = await response.text();
-    console.info('[INFO] fetchHtml fetched', { url, length: text.length, snippet: text.slice(0, 400) });
-    return text;
+
+    throw lastErr instanceof Error ? lastErr : new Error('failed to fetch HTML');
   }
 
   private async resolveWatchUrlFromNiconamaTopPage(): Promise<string | null> {
     console.debug('[DEBUG] resolveWatchUrlWithPlaywright opening Niconama top page', DEFAULT_WATCH_PAGE_BASE_URL);
-    const context = await launchPersistentContext(this.#userDataDir, {
+    const context = await this.#launchPersistentContext(this.#userDataDir, {
       executablePath: this.#executablePath,
       headless: true,
       ignoreHTTPSErrors: true,
@@ -440,7 +620,7 @@ export class NiconamaCommentClient {
 
     try {
       const page = context.pages()[0] ?? await context.newPage();
-      await page.goto(DEFAULT_WATCH_PAGE_BASE_URL, { waitUntil: 'networkidle', timeout: 60_000 });
+      await page.goto(DEFAULT_WATCH_PAGE_BASE_URL, { waitUntil: 'domcontentloaded', timeout: 3_000 });
       const targetLocator = page.getByText('馬可無序');
       if (await targetLocator.count() === 0) {
         console.info('[INFO] 馬可無序 was not present on the top page; falling back to fixed watch URL', DEFAULT_FALLBACK_WATCH_URL);
@@ -471,6 +651,140 @@ export class NiconamaCommentClient {
     }
   }
 
+  private getWebSocketUrlFromEmbeddedData(data: unknown): string | undefined {
+    if (!data || typeof data !== 'object') return undefined;
+    return (data as any).site?.state?.relive?.webSocketUrl ??
+      (data as any).site?.relive?.webSocketUrl ??
+      (data as any).relive?.webSocketUrl;
+  }
+
+  private async fetchEmbeddedDataWithPlaywright(targetUrl: string, existingEmbeddedData?: unknown): Promise<unknown | null> {
+    try {
+      console.debug('[DEBUG] fetchEmbeddedData falling back to Playwright', targetUrl);
+      console.debug('[DEBUG] launching Playwright persistent context');
+      const context = await this.#launchPersistentContext(this.#userDataDir, {
+        executablePath: this.#executablePath,
+        headless: true,
+        ignoreHTTPSErrors: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        locale: 'ja-JP',
+      });
+      console.debug('[DEBUG] Playwright context launched');
+      try {
+        console.debug('[DEBUG] opening new Playwright page');
+        const page = await context.newPage();
+        console.debug('[DEBUG] page opened', { url: page.url(), isClosed: page.isClosed() });
+        console.debug('[DEBUG] navigating to target URL');
+        const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 10_000 });
+        console.debug('[DEBUG] page goto complete', { responseStatus: response?.status(), url: page.url() });
+
+        let parsed: unknown | null = null;
+        if (response) {
+          try {
+            const html = await response.text();
+            console.debug('[DEBUG] Playwright response HTML length', { length: html.length });
+            const embeddedData = extractEmbeddedDataFromHtml(html);
+            if (embeddedData) {
+              parsed = embeddedData;
+            }
+          } catch (err) {
+            console.warn('[WARN] failed to read Playwright navigation response text', err);
+          }
+        }
+
+        const pageUrl = page.url();
+        let immediateComments: AgentComment[] = [];
+        if (!page.isClosed()) {
+          await this.tryOpenRenderedCommentPanel(page);
+          try {
+            immediateComments = await this.extractPageComments(page);
+            if (immediateComments.length > 0) {
+              this.#callbacks.onComments(immediateComments);
+              console.debug('[DEBUG] Playwright immediate page comments extracted', { count: immediateComments.length, url: pageUrl });
+            }
+          } catch (err) {
+            console.debug('[DEBUG] Playwright immediate page comment extraction failed', err);
+          }
+        }
+
+        if (!page.isClosed()) {
+          try {
+            await page.waitForTimeout(5_000);
+          } catch (err) {
+            console.warn('[WARN] Playwright waitForTimeout failed', err);
+          }
+        } else {
+          console.warn('[WARN] Playwright page closed before timeout wait', { url: pageUrl });
+        }
+        console.debug('[DEBUG] Playwright page loaded, parsed embedded-data', { hasParsedData: Boolean(parsed), pageClosed: page.isClosed(), url: pageUrl });
+
+        let pageComments: AgentComment[] = [];
+        if (!page.isClosed()) {
+          try {
+            await page.waitForLoadState?.('networkidle', { timeout: 15_000 });
+          } catch {
+            console.debug('[DEBUG] Playwright page networkidle wait failed or timed out', { url: pageUrl });
+          }
+          pageComments = await this.pollPageComments(page, 1_000);
+          if (pageComments.length > 0) {
+            this.#callbacks.onComments(pageComments);
+            console.debug('[DEBUG] Playwright page comments extracted', { count: pageComments.length, url: pageUrl });
+          }
+        } else {
+          console.debug('[DEBUG] Skipping Playwright page comment extraction because page is closed', { url: pageUrl });
+        }
+
+        if (!page.isClosed()) {
+          try {
+            await page.waitForTimeout(5_000);
+          } catch (err) {
+            console.warn('[WARN] Playwright waitForTimeout failed', err);
+          }
+        }
+
+        const allPageComments = [...immediateComments, ...pageComments];
+        const commentObjects = allPageComments
+          .map((comment) => {
+            const commentText = typeof (comment as any).data?.comment === 'string' ? (comment as any).data.comment : undefined;
+            return commentText ? { comment: commentText } : undefined;
+          })
+          .filter((item): item is { comment: string } => Boolean(item));
+
+        let result = parsed ?? (existingEmbeddedData && typeof existingEmbeddedData === 'object' ? { ...(existingEmbeddedData as any) } : null);
+        if (!result && commentObjects.length > 0) {
+          result = { relive: { comments: commentObjects } };
+        }
+
+        if (commentObjects.length > 0 && result && typeof result === 'object') {
+          const merged = result as any;
+          if ((merged as any).site?.state?.relive) {
+            merged.site.state.relive.comments = commentObjects;
+          }
+          if ((merged as any).site?.relive) {
+            merged.site.relive.comments = commentObjects;
+          }
+          if ((merged as any).relive) {
+            merged.relive.comments = commentObjects;
+          }
+        }
+
+        if (!result) {
+          console.debug('[DEBUG] Playwright fallback did not produce embedded-data, returning existing embedded', { targetUrl, hasParsedData: Boolean(parsed), commentObjectsCount: commentObjects.length });
+          return null;
+        }
+
+        console.debug('[DEBUG] Playwright fallback returning enriched embedded-data', { targetUrl, commentObjectsCount: commentObjects.length });
+        return result;
+      } finally {
+        await context.close();
+      }
+    } catch (err) {
+      this.reportError(err);
+      return null;
+    }
+  }
+
   private async fetchEmbeddedDataFromPage(watchUrl: string): Promise<unknown | null> {
     try {
       const html = await this.fetchHtml(watchUrl);
@@ -496,7 +810,7 @@ export class NiconamaCommentClient {
       return;
     }
 
-    const initialComments = parseAgentCommentsFromResponseBody(data, this.#seenCommentSignatures);
+    const initialComments = parseAgentCommentsFromResponseBody(data, this.#seenCommentIdentifiers);
     if (initialComments.length > 0) {
       console.debug('[DEBUG] direct websocket initial comments from embedded data', { count: initialComments.length, watchUrl });
       this.#callbacks.onComments(initialComments);
@@ -511,7 +825,8 @@ export class NiconamaCommentClient {
     try {
       const WebSocketClass = (globalThis as any).WebSocket;
       if (typeof WebSocketClass !== 'function') {
-        throw new Error('WebSocket is not available in this runtime');
+        console.warn('[WARN] direct websocket not available in this runtime, skipping direct websocket connection', { watchUrl });
+        return;
       }
 
       console.debug('[DEBUG] direct websocket creating socket', webSocketUrl);
@@ -584,6 +899,451 @@ export class NiconamaCommentClient {
     }
   }
 
+  private async setupPlaywrightCommentWatcher(watchUrl: string): Promise<void> {
+    if (this.#playwrightCommentContext) return;
+
+    try {
+      console.debug('[DEBUG] starting Playwright comment watcher', watchUrl);
+      const context = await this.#launchPersistentContext(this.#userDataDir, {
+        executablePath: this.#executablePath,
+        headless: true,
+        ignoreHTTPSErrors: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        locale: 'ja-JP',
+      });
+
+      let page = await context.newPage();
+      page.on('close', () => {
+        console.debug('[DEBUG] Playwright page closed', { url: page.url() });
+      });
+      page.on('crash', () => {
+        console.debug('[DEBUG] Playwright page crashed', { url: page.url() });
+      });
+      page.on('request', (request: any) => {
+        const url = request.url();
+        if (/comment|wsapi|watch|json|data/i.test(url)) {
+          console.debug('[DEBUG] Playwright request', url);
+        }
+      });
+      page.on('requestfailed', (request: any) => {
+        const url = request.url();
+        if (/comment|wsapi|watch|json|data/i.test(url)) {
+          console.debug('[DEBUG] Playwright request failed', url, request.failure()?.errorText);
+        }
+      });
+      page.on('websocket', (socket: any) => {
+        const wsUrl = socket.url();
+        console.debug('[DEBUG] Playwright websocket connected', wsUrl);
+        socket.on('framereceived', (frame: any) => {
+          let payload = frame.payload;
+          if (payload instanceof ArrayBuffer) {
+            payload = new TextDecoder().decode(payload);
+          } else if (typeof payload !== 'string') {
+            payload = String(payload);
+          }
+          console.debug('[DEBUG] Playwright websocket frame', {
+            url: wsUrl,
+            length: payload.length,
+            snippet: payload.slice(0, 200),
+          });
+          this.handlePlaywrightWebSocketFrame(payload, wsUrl);
+        });
+      });
+
+      page.on('response', async (response: any) => {
+        const url = response.url();
+        const contentType = (response.headers()['content-type'] ?? '').toLowerCase();
+        const isLikelyJsonResponse = contentType.includes('json') || /comment|wsapi|embedded|watch|data/i.test(url);
+        if (!isLikelyJsonResponse) return;
+
+        let bodyText: string;
+        try {
+          bodyText = await response.text();
+        } catch {
+          return;
+        }
+
+        const trimmed = bodyText.trim();
+        if (!trimmed || (trimmed[0] !== '{' && trimmed[0] !== '[')) return;
+
+        const parsed = tryParseJson(bodyText);
+        if (!parsed || typeof parsed !== 'object') return;
+
+        console.debug('[DEBUG] Playwright response received', {
+          url,
+          contentType,
+          length: bodyText.length,
+          snippet: bodyText.slice(0, 200),
+        });
+
+        const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
+        if (comments.length > 0) {
+          this.#callbacks.onComments(comments);
+          console.debug('[DEBUG] Playwright response comment payload', {
+            url,
+            count: comments.length,
+          });
+        }
+      });
+
+      let response: any;
+      try {
+        response = await page.goto(watchUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+        console.debug('[DEBUG] Playwright page goto complete', { responseStatus: response?.status(), url: page.url(), waitUntil: 'domcontentloaded' });
+      } catch (err) {
+        console.warn('[WARN] Playwright page domcontentloaded timeout, falling back to navigation commit', err);
+        response = await page.goto(watchUrl, { waitUntil: 'commit', timeout: 30_000 });
+        console.debug('[DEBUG] Playwright page goto complete', { responseStatus: response?.status(), url: page.url(), waitUntil: 'commit' });
+      }
+      console.debug('[DEBUG] Playwright page after goto', { url: page.url(), isClosed: page.isClosed(), pages: context.pages().map((p: any) => p.url()) });
+
+      if (!page.isClosed()) {
+        await this.tryOpenRenderedCommentPanel(page);
+        try {
+          const immediateComments = await this.extractPageComments(page);
+          if (immediateComments.length > 0) {
+            this.#callbacks.onComments(immediateComments);
+            console.debug('[DEBUG] Playwright immediate page comments extracted', { count: immediateComments.length, url: page.url() });
+          }
+        } catch (err) {
+          console.debug('[DEBUG] Playwright immediate page comment extraction failed', err);
+        }
+      }
+
+      if (!page.isClosed()) {
+        try {
+          await page.waitForLoadState?.('networkidle', { timeout: 15_000 });
+        } catch {
+          console.debug('[DEBUG] Playwright networkidle wait failed or timed out', { url: page.url() });
+        }
+      }
+
+      if (!page.isClosed()) {
+        await this.waitForAnyCommentSelector(page, 15_000).catch(() => undefined);
+      }
+
+      const initialPageComments = await this.pollPageComments(page, 1_000);
+      if (initialPageComments.length > 0) {
+        this.#callbacks.onComments(initialPageComments);
+        console.debug('[DEBUG] Playwright initial page comments extracted', { count: initialPageComments.length, url: page.url() });
+      }
+
+      if (page.isClosed()) {
+        const survivingPage = context.pages().find((p: any) => !p.isClosed());
+        if (survivingPage) {
+          console.warn('[WARN] Playwright page closed after initial load; switching to surviving page', { url: watchUrl, survivingUrl: survivingPage.url() });
+          page = survivingPage;
+        } else {
+          console.warn('[WARN] Playwright page closed before watcher installation could complete', { url: watchUrl });
+          await context.close();
+          return;
+        }
+      }
+
+      this.#playwrightCommentContext = context;
+      this.#playwrightCommentPage = page;
+      this.startPlaywrightPagePolling(page);
+    } catch (err) {
+      console.warn('[WARN] failed to start Playwright comment watcher', err);
+      await this.clearPlaywrightCommentWatcher();
+    }
+  }
+
+  private async clearPlaywrightCommentWatcher(): Promise<void> {
+    this.clearPlaywrightPagePolling();
+    if (!this.#playwrightCommentContext) return;
+
+    try {
+      await this.#playwrightCommentContext.close();
+    } catch (err) {
+      console.warn('[WARN] failed to close Playwright comment watcher', err);
+    }
+
+    this.#playwrightCommentPage = null;
+    this.#playwrightCommentContext = null;
+  }
+
+  private async tryOpenRenderedCommentPanel(page: any): Promise<void> {
+    try {
+      const commentButton = await page.$('[data-name="comment"], .comment-tab, .comment-panel button');
+      if (!commentButton) return;
+      await commentButton.click({ timeout: 2_000, force: true }).catch(() => undefined);
+    } catch (err) {
+      console.debug('[DEBUG] tryOpenRenderedCommentPanel failed', err);
+    }
+  }
+
+  private async scanRenderedFrameForComments(frame: any): Promise<string[]> {
+    try {
+      const pageComments = await frame.evaluate(() => {
+        const selectors = [
+          '[data-name="comment"]',
+          '.comment-panel',
+          '.comment-list',
+          '.comment-area',
+          '.lv-comment',
+          '.comment-item',
+          '.base-comment-list',
+          '[aria-label*="コメント"]',
+          '[role="log"]',
+          '[class*=comment]',
+          '[id*=comment]',
+        ];
+
+        const normalize = (text: string) => text.replace(/\s+/gu, ' ').trim();
+        const exclude = (line: string) => ['コメント', 'コメント数', 'コメント一覧'].includes(line);
+        const results = new Set<string>();
+
+        for (const selector of selectors) {
+          const elements = Array.from(document.querySelectorAll(selector));
+          for (const element of elements) {
+            const content = element.textContent ?? '';
+            for (const line of content.split(/\r?\n/)) {
+              const normalized = normalize(line);
+              if (normalized && !exclude(normalized)) {
+                results.add(normalized);
+              }
+            }
+          }
+        }
+
+        if (results.size > 0) {
+          return Array.from(results).slice(0, 50);
+        }
+
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null as any);
+        let node: Node | null = walker.nextNode();
+        while (node) {
+          const text = normalize(node.textContent ?? '');
+          if (text && !exclude(text)) {
+            for (const line of text.split(/\r?\n/)) {
+              const normalized = normalize(line);
+              if (normalized && !exclude(normalized)) {
+                results.add(normalized);
+              }
+            }
+          }
+          node = walker.nextNode();
+        }
+
+        return Array.from(results).slice(0, 50);
+      });
+
+      if (!Array.isArray(pageComments) || pageComments.length === 0) {
+        return [];
+      }
+
+      return pageComments.filter((comment) => typeof comment === 'string' && comment.trim().length > 0).map((comment) => comment.trim());
+    } catch {
+      return [];
+    }
+  }
+
+  private async extractRenderedPageComments(page: any): Promise<AgentComment[]> {
+    try {
+      const commentLines = new Set<string>();
+      const mainComments = await this.scanRenderedFrameForComments(page);
+      for (const comment of mainComments) {
+        commentLines.add(comment);
+      }
+
+      const frames = typeof page.frames === 'function' ? page.frames() : [];
+      for (const frame of frames) {
+        if (!frame || frame.url?.() === page.url?.()) continue;
+        const frameComments = await this.scanRenderedFrameForComments(frame).catch(() => []);
+        for (const comment of frameComments) {
+          commentLines.add(comment);
+        }
+      }
+
+      if (commentLines.size === 0) {
+        return [];
+      }
+
+      return this.getUniquePageComments(Array.from(commentLines));
+    } catch (err) {
+      console.debug('[DEBUG] extractRenderedPageComments failed', err);
+      return [];
+    }
+  }
+
+  private async extractPageComments(page: any): Promise<AgentComment[]> {
+    try {
+      const renderedComments = await this.extractRenderedPageComments(page);
+      if (renderedComments.length > 0) {
+        return renderedComments;
+      }
+
+      const candidates = await page.evaluate(() => {
+        const results: unknown[] = [];
+
+        const safeParse = (text: string) => {
+          try {
+            return JSON.parse(text);
+          } catch {
+            return null;
+          }
+        };
+
+        const pushIfObject = (value: unknown) => {
+          if (value && typeof value === 'object') {
+            try {
+              const serialized = JSON.parse(JSON.stringify(value));
+              results.push(serialized);
+            } catch {
+              // ignore non-serializable values
+            }
+          }
+        };
+
+        const scanText = (text: string) => {
+          const trimmed = text.trim();
+          if (trimmed[0] === '{' || trimmed[0] === '[') {
+            const parsed = safeParse(trimmed);
+            if (parsed) {
+              pushIfObject(parsed);
+            }
+          }
+        };
+
+        const scriptTags = Array.from(document.querySelectorAll('script'));
+        for (const script of scriptTags) {
+          const text = script.textContent ?? '';
+          if (!text.includes('comment') && !text.includes('comments') && !text.includes('relive') && !text.includes('data-props')) {
+            continue;
+          }
+          scanText(text);
+        }
+
+        const propElements = Array.from(document.querySelectorAll('[data-props]'));
+        for (const element of propElements) {
+          const value = element.getAttribute('data-props');
+          if (value) {
+            scanText(value);
+          }
+        }
+
+        return results;
+      });
+
+      if (!Array.isArray(candidates)) return [];
+
+      const comments = parseAgentCommentsFromResponseBody(candidates, this.#seenCommentIdentifiers);
+      return comments;
+    } catch (err) {
+      console.debug('[DEBUG] extractPageComments failed', err);
+      return [];
+    }
+  }
+
+  private async pollPageComments(page: any, intervalMs = 1_000, maxAttempts = 5): Promise<AgentComment[]> {
+    let attempts = 0;
+    while (!page.isClosed() && attempts < maxAttempts) {
+      attempts += 1;
+      try {
+        const pageComments = await this.extractPageComments(page);
+        if (pageComments.length > 0) {
+          return pageComments;
+        }
+      } catch (err) {
+        console.debug('[DEBUG] pollPageComments failed', err);
+        if (page.isClosed()) {
+          break;
+        }
+      }
+
+      try {
+        await page.waitForTimeout(intervalMs);
+      } catch {
+        break;
+      }
+    }
+    return [];
+  }
+
+  private startPlaywrightPagePolling(page: any): void {
+    if (this.#playwrightPageCommentPollTimer) return;
+
+    this.#playwrightPageCommentPollTimer = setInterval(async () => {
+      if (!page || page.isClosed?.()) {
+        this.clearPlaywrightPagePolling();
+        return;
+      }
+
+      try {
+        const comments = await this.extractPageComments(page);
+        if (comments.length > 0) {
+          this.#callbacks.onComments(comments);
+          console.debug('[DEBUG] Playwright page polling comments', { count: comments.length, url: page.url() });
+        }
+      } catch (err) {
+        console.debug('[DEBUG] Playwright page polling failed', err);
+      }
+    }, 5_000);
+  }
+
+  private clearPlaywrightPagePolling(): void {
+    if (!this.#playwrightPageCommentPollTimer) return;
+    clearInterval(this.#playwrightPageCommentPollTimer);
+    this.#playwrightPageCommentPollTimer = null;
+  }
+
+  private getUniquePageComments(comments: string[]): AgentComment[] {
+    const results: AgentComment[] = [];
+
+    for (const comment of comments) {
+      if (comment.length === 0) continue;
+      const identifier = `none|unknown|${comment}`;
+      if (this.#seenCommentIdentifiers.has(identifier)) continue;
+      this.#seenCommentIdentifiers.add(identifier);
+      results.push({ data: { comment } });
+    }
+
+    return results;
+  }
+
+  private async waitForAnyCommentSelector(page: any, timeoutMs: number): Promise<void> {
+    const selectors = [
+      '[data-name="comment"]',
+      '.comment-panel',
+      '[class*=comment]',
+      '[id*=comment]',
+      '[data-comment]',
+      '[data-testid*="comment"]',
+      '[aria-label*="コメント"]',
+      '[role="log"]',
+      '[class*=Comment]',
+      '[id*=Comment]',
+    ];
+
+    if (typeof page.waitForSelector !== 'function') {
+      return;
+    }
+
+    const waiters = selectors.map((selector) =>
+      Promise.resolve(page.waitForSelector(selector, { timeout: timeoutMs })).catch(() => null),
+    );
+    await Promise.race(waiters);
+  }
+
+  private handlePlaywrightWebSocketFrame(payload: string, wsUrl: string): void {
+    let body: unknown = null;
+    try {
+      body = JSON.parse(payload);
+    } catch (err) {
+      return;
+    }
+
+    if (!body || typeof body !== 'object') return;
+
+    const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentIdentifiers);
+    if (comments.length === 0) return;
+
+    this.#callbacks.onComments(comments);
+    console.debug('[DEBUG] Playwright websocket comment payload', { wsUrl, count: comments.length });
+  }
+
   private handleDirectWebSocketMessage(message: string, wsUrl: string): void {
     if (!message) {
       console.debug('[DEBUG] direct websocket empty message received', wsUrl);
@@ -605,7 +1365,7 @@ export class NiconamaCommentClient {
 
     const eventType = (body as any).type;
     if (eventType === 'ping') {
-      this.sendDirectWebSocketMessage({ type: 'pong' });
+      this.sendDirectWebSocketMessage({ type: 'keepSeat' });
       return;
     }
 
@@ -634,7 +1394,7 @@ export class NiconamaCommentClient {
         break;
     }
 
-    const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentSignatures, eventType);
+    const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentIdentifiers, eventType);
     if (comments.length > 0) {
       this.#callbacks.onComments(comments);
       if (knownEventType) {
@@ -707,8 +1467,20 @@ export const createNiconamaCommentClient = (
 
 const isCommentLikeObject = (object: unknown): boolean => {
   if (!object || typeof object !== 'object') return false;
-  const text = (object as any).comment ?? (object as any).text ?? (object as any).body ?? (object as any).message;
-  return typeof text === 'string' && text.trim().length > 0;
+
+  const text = (object as any).comment ?? (object as any).text ?? (object as any).body ?? (object as any).message ?? (object as any).content;
+  if (typeof text !== 'string' || text.trim().length === 0) return false;
+
+  return (
+    typeof (object as any).no === 'number' ||
+    typeof (object as any).num === 'number' ||
+    typeof (object as any).userId === 'string' ||
+    typeof (object as any).user_id === 'string' ||
+    (object as any).anonymity !== undefined ||
+    (object as any).isAnonymous !== undefined ||
+    (object as any).hasGift !== undefined ||
+    (object as any).gift !== undefined
+  );
 };
 
 const collectNestedCommentArrays = (
@@ -791,7 +1563,7 @@ const collectCommentLikeObjects = (body: unknown, depth = 0, maxDepth = 4): unkn
 
 export const parseAgentCommentsFromResponseBody = (
   body: unknown,
-  seenCommentSignatures: Set<string> = new Set<string>(),
+  seenCommentIdentifiers: Set<string> = new Set<string>(),
   eventType?: string,
 ): AgentComment[] => {
   if (!body || typeof body !== 'object') return [];
@@ -837,11 +1609,11 @@ export const parseAgentCommentsFromResponseBody = (
   }
 
   const comments: AgentComment[] = [];
-  const seenSignatures = seenCommentSignatures;
+  const seenIdentifiers = seenCommentIdentifiers;
 
   for (const raw of rawComments) {
     if (!raw || typeof raw !== 'object') continue;
-    const commentText = (raw as any).comment ?? (raw as any).text ?? (raw as any).body ?? (raw as any).message;
+    const commentText = (raw as any).comment ?? (raw as any).text ?? (raw as any).body ?? (raw as any).message ?? (raw as any).content;
     if (typeof commentText !== 'string' || commentText.trim().length === 0) continue;
     const commentData: Record<string, unknown> = {
       comment: commentText,
@@ -851,9 +1623,9 @@ export const parseAgentCommentsFromResponseBody = (
       userId: (raw as any).userId ?? (raw as any).user_id ?? undefined,
       origin: raw,
     };
-    const signature = `${commentData.no ?? 'none'}|${commentData.userId ?? 'unknown'}|${commentData.comment}`;
-    if (seenSignatures.has(signature)) continue;
-    seenSignatures.add(signature);
+    const identifier = `${commentData.no ?? 'none'}|${commentData.userId ?? 'unknown'}|${commentData.comment}`;
+    if (seenIdentifiers.has(identifier)) continue;
+    seenIdentifiers.add(identifier);
     comments.push({ data: commentData });
   }
 
