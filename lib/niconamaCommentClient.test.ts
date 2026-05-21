@@ -179,7 +179,7 @@ describe("parseAgentCommentsFromResponseBody", () => {
     });
   });
 
-  it("deduplicates repeated comments with the same signature", () => {
+  it("deduplicates repeated comments with the same identifier", () => {
     const body = {
       comments: [
         { comment: "hello", no: 5, anonymity: false, hasGift: false },
@@ -193,17 +193,17 @@ describe("parseAgentCommentsFromResponseBody", () => {
     expect(parsed[0]?.data.comment).toBe("hello");
   });
 
-  it("deduplicates repeated comments across separate parse calls when sharing the same signature cache", () => {
+  it("deduplicates repeated comments across separate parse calls when sharing the same identifier cache", () => {
     const body1 = {
       comments: [{ comment: "hello", no: 5, anonymity: false, hasGift: false }],
     };
     const body2 = {
       comments: [{ comment: "hello", no: 5, anonymity: false, hasGift: false }],
     };
-    const seenSignatures = new Set<string>();
+    const seenIdentifiers = new Set<string>();
 
-    const firstParsed = parseAgentCommentsFromResponseBody(body1, seenSignatures);
-    const secondParsed = parseAgentCommentsFromResponseBody(body2, seenSignatures);
+    const firstParsed = parseAgentCommentsFromResponseBody(body1, seenIdentifiers);
+    const secondParsed = parseAgentCommentsFromResponseBody(body2, seenIdentifiers);
 
     expect(firstParsed).toHaveLength(1);
     expect(secondParsed).toHaveLength(0);
@@ -236,9 +236,11 @@ describe("fetchEmbeddedData fallback behavior", () => {
         const fakePage = {
           goto: async () => ({ status: () => 200, text: async () => '<html><body></body></html>' }),
           waitForTimeout: async () => {},
+          waitForLoadState: async () => {},
+          $: async () => null,
           evaluate: async (fn: any) => {
             const source = fn.toString();
-            if (source.includes('const panel')) {
+            if (source.includes('const selectors') || source.includes('const panel')) {
               return ['rendered comment'];
             }
             if (source.includes('const results')) {
@@ -274,6 +276,54 @@ describe("fetchEmbeddedData fallback behavior", () => {
     } finally {
       (globalThis as any).fetch = originalFetch;
     }
+  });
+});
+
+describe('fetchRenderedWatchPageBodyText', () => {
+  it('returns body text from Playwright body locator allTextContents', async () => {
+    const fakePage = {
+      goto: async () => ({ status: () => 200, text: async () => '<html><body>test</body></html>' }),
+      waitForTimeout: async () => {},
+      waitForLoadState: async () => {},
+      locator: (_selector: string) => ({ allTextContents: async () => ['  フォロー中の番組一覧', '放送中'] }),
+      evaluate: async () => null,
+      url: () => 'https://live.nicovideo.jp/watch/test',
+      isClosed: () => false,
+      close: async () => {},
+    };
+    const launchPersistentContext = async () => ({ pages: () => [fakePage], newPage: async () => fakePage, close: async () => {} });
+
+    const client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: launchPersistentContext as any }, {
+      onComments: () => {},
+      onMeta: () => {},
+      onError: (error) => { throw error; },
+    });
+
+    const text = await client.fetchRenderedWatchPageBodyText();
+    expect(text).toBe('  フォロー中の番組一覧放送中');
+  });
+
+  it('falls back to evaluate when locator.allTextContents is not available', async () => {
+    const fakePage = {
+      goto: async () => ({ status: () => 200, text: async () => '<html><body>test</body></html>' }),
+      waitForTimeout: async () => {},
+      waitForLoadState: async () => {},
+      locator: (_selector: string) => ({}),
+      evaluate: async () => 'fallback body',
+      url: () => 'https://live.nicovideo.jp/watch/test',
+      isClosed: () => false,
+      close: async () => {},
+    };
+    const launchPersistentContext = async () => ({ pages: () => [fakePage], newPage: async () => fakePage, close: async () => {} });
+
+    const client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: launchPersistentContext as any }, {
+      onComments: () => {},
+      onMeta: () => {},
+      onError: (error) => { throw error; },
+    });
+
+    const text = await client.fetchRenderedWatchPageBodyText();
+    expect(text).toBe('fallback body');
   });
 });
 

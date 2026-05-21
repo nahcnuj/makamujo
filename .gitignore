@@ -149,6 +149,8 @@ playwright*/
 
 debug*
 
+inspect*
+
 tmp*/
 tmp-*
 tmp_*
@@ -160,4 +162,6 @@ test_*
 playwright*
 !playwright.config.ts
 
+*.cjs
+*.mjs
 *.py

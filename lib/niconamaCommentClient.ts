@@ -1,4 +1,6 @@
-import { existsSync, mkdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, statSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { AgentComment } from "automated-gameplay-transmitter";
 import { DEFAULT_PLAYWRIGHT_USER_DATA_DIR, DEFAULT_CHROMIUM_EXECUTABLE_PATH, launchPersistentContext } from "./Browser/chromium";
 
@@ -233,7 +235,6 @@ type NiconamaBrowserPageResponse = {
 type NiconamaBrowserPage = {
   on: (event: string, callback: any) => void;
   goto: (url: string, options?: Record<string, unknown>) => Promise<NiconamaBrowserPageResponse | null>;
-  waitForTimeout: (ms: number) => Promise<void>;
   close: () => Promise<void>;
   evaluate: <T>(pageFunction: () => T) => Promise<T>;
   getByText: (text: string) => {
@@ -251,6 +252,9 @@ type NiconamaBrowserPage = {
     };
   };
   waitFor: (options: Record<string, unknown>) => Promise<void>;
+  waitForTimeout: (ms: number) => Promise<void>;
+  waitForLoadState?: (state?: string, options?: Record<string, unknown>) => Promise<void>;
+  waitForSelector?: (selector: string, options?: Record<string, unknown>) => Promise<unknown>;
   url: () => string;
   isClosed: () => boolean;
 };
@@ -285,7 +289,7 @@ export class NiconamaCommentClient {
   #running = false;
   #stopRequested = false;
   #pollTask: Promise<void> | null = null;
-  #seenCommentSignatures = new Set<string>();
+  #seenCommentIdentifiers = new Set<string>();
   #directWebSocket: any | null = null;
   #directWebSocketKeepSeatTimer: ReturnType<typeof setInterval> | null = null;
   #playwrightCommentContext: any | null = null;
@@ -380,6 +384,112 @@ export class NiconamaCommentClient {
 
     const renderedEmbedded = await this.fetchEmbeddedDataWithPlaywright(targetUrl);
     return renderedEmbedded;
+  }
+
+  public async fetchRenderedWatchPageBodyText(watchUrl?: string): Promise<string | null> {
+    const targetUrl = watchUrl ?? this.#watchUrl ?? DEFAULT_FALLBACK_WATCH_URL;
+    const staticHtml = await this.fetchHtml(targetUrl).catch(() => null);
+    if (typeof staticHtml === 'string') {
+      const staticBodyText = this.extractBodyTextFromHtml(staticHtml);
+      if (staticBodyText) {
+        return staticBodyText;
+      }
+    }
+
+    const tempUserDataDir = mkdtempSync(join(tmpdir(), 'niconama-body-text-'));
+    let context: any = null;
+
+    try {
+      context = await this.#launchPersistentContext(tempUserDataDir, {
+        executablePath: this.#executablePath,
+        headless: true,
+        ignoreHTTPSErrors: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        locale: 'ja-JP',
+      });
+
+      const page = await context.newPage();
+      const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 });
+      if (!response || response.status() >= 400) {
+        console.warn('[WARN] fetchRenderedWatchPageBodyText failed to navigate', { targetUrl, status: response?.status?.() });
+        return null;
+      }
+
+      const activePages = context.pages().filter((p: any) => !p.isClosed());
+      for (const currentPage of activePages) {
+        if (currentPage.isClosed()) continue;
+        const bodyText = await this.getBodyTextFromPage(currentPage);
+        if (bodyText) {
+          return bodyText;
+        }
+      }
+
+      for (const currentPage of activePages) {
+        if (currentPage.isClosed()) continue;
+        try {
+          await currentPage.waitForTimeout(2_000).catch(() => undefined);
+          await currentPage.waitForLoadState?.('networkidle', { timeout: 10_000 }).catch(() => undefined);
+        } catch {
+          // ignore
+        }
+        const bodyText = await this.getBodyTextFromPage(currentPage);
+        if (bodyText) {
+          return bodyText;
+        }
+      }
+
+      return null;
+    } catch (err) {
+      this.reportError(err);
+      return null;
+    } finally {
+      if (context) {
+        await context.close().catch(() => undefined);
+      }
+      rmSync(tempUserDataDir, { recursive: true, force: true });
+    }
+  }
+
+  private async getBodyTextFromPage(page: any): Promise<string | null> {
+    if (typeof page.isClosed === 'function' && page.isClosed()) {
+      return null;
+    }
+
+    try {
+      const locator = page.locator?.('body');
+      if (locator && typeof locator.allTextContents === 'function') {
+        const contents = await locator.allTextContents();
+        if (Array.isArray(contents) && contents.length > 0) {
+          return contents.join('');
+        }
+      }
+    } catch (err) {
+      console.debug('[DEBUG] getBodyTextFromPage locator.allTextContents failed', err);
+    }
+
+    try {
+      if (typeof page.evaluate === 'function') {
+        const bodyText = await page.evaluate(() => document.body?.textContent ?? null);
+        return typeof bodyText === 'string' ? bodyText : null;
+      }
+    } catch (err) {
+      console.debug('[DEBUG] getBodyTextFromPage page.evaluate failed', err);
+    }
+
+    return null;
+  }
+
+  private extractBodyTextFromHtml(html: string): string | null {
+    const bodyMatch = /<body[^>]*>([\s\S]*?)<\/body>/i.exec(html);
+    const source = bodyMatch ? bodyMatch[1] : html;
+    const withoutScripts = source.replace(/<script[\s\S]*?<\/script>/gi, '');
+    const withoutStyles = withoutScripts.replace(/<style[\s\S]*?<\/style>/gi, '');
+    const text = withoutStyles
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return text.length > 0 ? text : null;
   }
 
   async stop(): Promise<void> {
@@ -582,6 +692,20 @@ export class NiconamaCommentClient {
         }
 
         const pageUrl = page.url();
+        let immediateComments: AgentComment[] = [];
+        if (!page.isClosed()) {
+          await this.tryOpenRenderedCommentPanel(page);
+          try {
+            immediateComments = await this.extractPageComments(page);
+            if (immediateComments.length > 0) {
+              this.#callbacks.onComments(immediateComments);
+              console.debug('[DEBUG] Playwright immediate page comments extracted', { count: immediateComments.length, url: pageUrl });
+            }
+          } catch (err) {
+            console.debug('[DEBUG] Playwright immediate page comment extraction failed', err);
+          }
+        }
+
         if (!page.isClosed()) {
           try {
             await page.waitForTimeout(5_000);
@@ -595,7 +719,12 @@ export class NiconamaCommentClient {
 
         let pageComments: AgentComment[] = [];
         if (!page.isClosed()) {
-          pageComments = await this.pollPageComments(page, 10_000, 1_000);
+          try {
+            await page.waitForLoadState?.('networkidle', { timeout: 15_000 });
+          } catch {
+            console.debug('[DEBUG] Playwright page networkidle wait failed or timed out', { url: pageUrl });
+          }
+          pageComments = await this.pollPageComments(page, 1_000);
           if (pageComments.length > 0) {
             this.#callbacks.onComments(pageComments);
             console.debug('[DEBUG] Playwright page comments extracted', { count: pageComments.length, url: pageUrl });
@@ -612,7 +741,8 @@ export class NiconamaCommentClient {
           }
         }
 
-        const commentObjects = pageComments
+        const allPageComments = [...immediateComments, ...pageComments];
+        const commentObjects = allPageComments
           .map((comment) => {
             const commentText = typeof (comment as any).data?.comment === 'string' ? (comment as any).data.comment : undefined;
             return commentText ? { comment: commentText } : undefined;
@@ -678,7 +808,7 @@ export class NiconamaCommentClient {
       return;
     }
 
-    const initialComments = parseAgentCommentsFromResponseBody(data, this.#seenCommentSignatures);
+    const initialComments = parseAgentCommentsFromResponseBody(data, this.#seenCommentIdentifiers);
     if (initialComments.length > 0) {
       console.debug('[DEBUG] direct websocket initial comments from embedded data', { count: initialComments.length, watchUrl });
       this.#callbacks.onComments(initialComments);
@@ -780,7 +910,7 @@ export class NiconamaCommentClient {
         locale: 'ja-JP',
       });
 
-      const page = await context.newPage();
+      let page = await context.newPage();
       page.on('close', () => {
         console.debug('[DEBUG] Playwright page closed', { url: page.url() });
       });
@@ -842,7 +972,7 @@ export class NiconamaCommentClient {
           snippet: bodyText.slice(0, 200),
         });
 
-        const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentSignatures);
+        const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
         if (comments.length > 0) {
           this.#callbacks.onComments(comments);
           console.debug('[DEBUG] Playwright response comment payload', {
@@ -863,16 +993,47 @@ export class NiconamaCommentClient {
       }
       console.debug('[DEBUG] Playwright page after goto', { url: page.url(), isClosed: page.isClosed(), pages: context.pages().map((p: any) => p.url()) });
 
-      const initialPageComments = await this.extractPageComments(page);
+      if (!page.isClosed()) {
+        await this.tryOpenRenderedCommentPanel(page);
+        try {
+          const immediateComments = await this.extractPageComments(page);
+          if (immediateComments.length > 0) {
+            this.#callbacks.onComments(immediateComments);
+            console.debug('[DEBUG] Playwright immediate page comments extracted', { count: immediateComments.length, url: page.url() });
+          }
+        } catch (err) {
+          console.debug('[DEBUG] Playwright immediate page comment extraction failed', err);
+        }
+      }
+
+      if (!page.isClosed()) {
+        try {
+          await page.waitForLoadState?.('networkidle', { timeout: 15_000 });
+        } catch {
+          console.debug('[DEBUG] Playwright networkidle wait failed or timed out', { url: page.url() });
+        }
+      }
+
+      if (!page.isClosed()) {
+        await this.waitForAnyCommentSelector(page, 15_000).catch(() => undefined);
+      }
+
+      const initialPageComments = await this.pollPageComments(page, 1_000);
       if (initialPageComments.length > 0) {
         this.#callbacks.onComments(initialPageComments);
         console.debug('[DEBUG] Playwright initial page comments extracted', { count: initialPageComments.length, url: page.url() });
       }
 
       if (page.isClosed()) {
-        console.warn('[WARN] Playwright page closed before watcher installation could complete', { url: watchUrl });
-        await context.close();
-        return;
+        const survivingPage = context.pages().find((p: any) => !p.isClosed());
+        if (survivingPage) {
+          console.warn('[WARN] Playwright page closed after initial load; switching to surviving page', { url: watchUrl, survivingUrl: survivingPage.url() });
+          page = survivingPage;
+        } else {
+          console.warn('[WARN] Playwright page closed before watcher installation could complete', { url: watchUrl });
+          await context.close();
+          return;
+        }
       }
 
       this.#playwrightCommentContext = context;
@@ -898,32 +1059,185 @@ export class NiconamaCommentClient {
     this.#playwrightCommentContext = null;
   }
 
-  private async extractPageComments(page: any): Promise<AgentComment[]> {
+  private async extractRenderedPageComments(page: any): Promise<AgentComment[]> {
     try {
       const pageComments = await page.evaluate(() => {
-        const panelSelectors = [
+        const selectors = [
           '[data-name="comment"]',
           '.comment-panel',
+          '.comment-list',
+          '.comment-area',
+          '.lv-comment',
+          '.comment-item',
+          '.base-comment-list',
+          '[aria-label*="コメント"]',
+          '[role="log"]',
           '[class*=comment]',
           '[id*=comment]',
-          '[data-comment]',
         ];
-        const panel = panelSelectors
-          .map((selector) => document.querySelector(selector))
-          .find((node) => node !== null);
-        if (!panel) return [] as string[];
 
-        const texts = Array.from(panel.querySelectorAll('*'))
-          .map((node) => node.textContent?.trim() ?? '')
-          .filter((text) => text.length > 0 && !/^(\s|コメント|コメント数|コメント一覧)$/.test(text));
+        const normalizeLine = (text: string) => text.replace(/\s+/g, ' ').trim();
+        const exclude = (line: string) => ['コメント', 'コメント数', 'コメント一覧'].includes(line);
+        const result = new Set<string>();
 
-        return Array.from(new Set(texts)).slice(0, 20);
+        for (const selector of selectors) {
+          const elements = Array.from(document.querySelectorAll(selector));
+          for (const element of elements) {
+            const content = element.textContent ?? '';
+            for (const line of content.split(/\r?\n/)) {
+              const normalized = normalizeLine(line);
+              if (normalized && !exclude(normalized)) {
+                result.add(normalized);
+              }
+            }
+          }
+        }
+
+        if (result.size > 0) {
+          return Array.from(result).slice(0, 50);
+        }
+
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+        let node = walker.nextNode();
+        while (node) {
+          const text = normalizeLine(node.textContent ?? '');
+          if (text && !exclude(text)) {
+            for (const line of text.split(/\r?\n/)) {
+              const normalized = normalizeLine(line);
+              if (normalized && !exclude(normalized)) {
+                result.add(normalized);
+              }
+            }
+          }
+          node = walker.nextNode();
+        }
+
+        return Array.from(result).slice(0, 50);
       });
 
-      if (Array.isArray(pageComments) && pageComments.length > 0) {
-        return pageComments
-          .filter((comment) => typeof comment === 'string' && comment.trim().length > 0)
-          .map((comment) => ({ data: { comment: comment.trim() } }));
+      if (!Array.isArray(pageComments) || pageComments.length === 0) {
+        return [];
+      }
+
+      const deduped = pageComments
+        .filter((comment) => typeof comment === 'string' && comment.trim().length > 0)
+        .map((comment) => comment.trim());
+      return this.getUniquePageComments(deduped);
+    } catch (err) {
+      console.debug('[DEBUG] extractRenderedPageComments failed', err);
+      return [];
+    }
+  }
+
+  private async tryOpenRenderedCommentPanel(page: any): Promise<void> {
+    try {
+      const commentButton = await page.$('[data-name="comment"], .comment-tab, .comment-panel button');
+      if (!commentButton) return;
+      await commentButton.click({ timeout: 2_000, force: true }).catch(() => undefined);
+    } catch (err) {
+      console.debug('[DEBUG] tryOpenRenderedCommentPanel failed', err);
+    }
+  }
+
+  private async scanRenderedFrameForComments(frame: any): Promise<string[]> {
+    try {
+      const pageComments = await frame.evaluate(() => {
+        const selectors = [
+          '[data-name="comment"]',
+          '.comment-panel',
+          '.comment-list',
+          '.comment-area',
+          '.lv-comment',
+          '.comment-item',
+          '.base-comment-list',
+          '[aria-label*="コメント"]',
+          '[role="log"]',
+          '[class*=comment]',
+          '[id*=comment]',
+        ];
+
+        const normalize = (text: string) => text.replace(/\s+/gu, ' ').trim();
+        const exclude = (line: string) => ['コメント', 'コメント数', 'コメント一覧'].includes(line);
+        const results = new Set<string>();
+
+        for (const selector of selectors) {
+          const elements = Array.from(document.querySelectorAll(selector));
+          for (const element of elements) {
+            const content = element.textContent ?? '';
+            for (const line of content.split(/\r?\n/)) {
+              const normalized = normalize(line);
+              if (normalized && !exclude(normalized)) {
+                results.add(normalized);
+              }
+            }
+          }
+        }
+
+        if (results.size > 0) {
+          return Array.from(results).slice(0, 50);
+        }
+
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null as any);
+        let node: Node | null = walker.nextNode();
+        while (node) {
+          const text = normalize(node.textContent ?? '');
+          if (text && !exclude(text)) {
+            for (const line of text.split(/\r?\n/)) {
+              const normalized = normalize(line);
+              if (normalized && !exclude(normalized)) {
+                results.add(normalized);
+              }
+            }
+          }
+          node = walker.nextNode();
+        }
+
+        return Array.from(results).slice(0, 50);
+      });
+
+      if (!Array.isArray(pageComments) || pageComments.length === 0) {
+        return [];
+      }
+
+      return pageComments.filter((comment) => typeof comment === 'string' && comment.trim().length > 0).map((comment) => comment.trim());
+    } catch {
+      return [];
+    }
+  }
+
+  private async extractRenderedPageComments(page: any): Promise<AgentComment[]> {
+    try {
+      const commentLines = new Set<string>();
+      const mainComments = await this.scanRenderedFrameForComments(page);
+      for (const comment of mainComments) {
+        commentLines.add(comment);
+      }
+
+      const frames = typeof page.frames === 'function' ? page.frames() : [];
+      for (const frame of frames) {
+        if (!frame || frame.url?.() === page.url?.()) continue;
+        const frameComments = await this.scanRenderedFrameForComments(frame).catch(() => []);
+        for (const comment of frameComments) {
+          commentLines.add(comment);
+        }
+      }
+
+      if (commentLines.size === 0) {
+        return [];
+      }
+
+      return this.getUniquePageComments(Array.from(commentLines));
+    } catch (err) {
+      console.debug('[DEBUG] extractRenderedPageComments failed', err);
+      return [];
+    }
+  }
+
+  private async extractPageComments(page: any): Promise<AgentComment[]> {
+    try {
+      const renderedComments = await this.extractRenderedPageComments(page);
+      if (renderedComments.length > 0) {
+        return renderedComments;
       }
 
       const candidates = await page.evaluate(() => {
@@ -980,7 +1294,7 @@ export class NiconamaCommentClient {
 
       if (!Array.isArray(candidates)) return [];
 
-      const comments = parseAgentCommentsFromResponseBody(candidates, this.#seenCommentSignatures);
+      const comments = parseAgentCommentsFromResponseBody(candidates, this.#seenCommentIdentifiers);
       return comments;
     } catch (err) {
       console.debug('[DEBUG] extractPageComments failed', err);
@@ -988,9 +1302,10 @@ export class NiconamaCommentClient {
     }
   }
 
-  private async pollPageComments(page: any, timeoutMs = 20_000, intervalMs = 1_000): Promise<AgentComment[]> {
-    const deadline = Date.now() + timeoutMs;
-    while (!page.isClosed() && Date.now() < deadline) {
+  private async pollPageComments(page: any, intervalMs = 1_000, maxAttempts = 5): Promise<AgentComment[]> {
+    let attempts = 0;
+    while (!page.isClosed() && attempts < maxAttempts) {
+      attempts += 1;
       try {
         const pageComments = await this.extractPageComments(page);
         if (pageComments.length > 0) {
@@ -1039,6 +1354,44 @@ export class NiconamaCommentClient {
     this.#playwrightPageCommentPollTimer = null;
   }
 
+  private getUniquePageComments(comments: string[]): AgentComment[] {
+    const results: AgentComment[] = [];
+
+    for (const comment of comments) {
+      if (comment.length === 0) continue;
+      const identifier = `none|unknown|${comment}`;
+      if (this.#seenCommentIdentifiers.has(identifier)) continue;
+      this.#seenCommentIdentifiers.add(identifier);
+      results.push({ data: { comment } });
+    }
+
+    return results;
+  }
+
+  private async waitForAnyCommentSelector(page: any, timeoutMs: number): Promise<void> {
+    const selectors = [
+      '[data-name="comment"]',
+      '.comment-panel',
+      '[class*=comment]',
+      '[id*=comment]',
+      '[data-comment]',
+      '[data-testid*="comment"]',
+      '[aria-label*="コメント"]',
+      '[role="log"]',
+      '[class*=Comment]',
+      '[id*=Comment]',
+    ];
+
+    if (typeof page.waitForSelector !== 'function') {
+      return;
+    }
+
+    const waiters = selectors.map((selector) =>
+      Promise.resolve(page.waitForSelector(selector, { timeout: timeoutMs })).catch(() => null),
+    );
+    await Promise.race(waiters);
+  }
+
   private handlePlaywrightWebSocketFrame(payload: string, wsUrl: string): void {
     let body: unknown = null;
     try {
@@ -1049,7 +1402,7 @@ export class NiconamaCommentClient {
 
     if (!body || typeof body !== 'object') return;
 
-    const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentSignatures);
+    const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentIdentifiers);
     if (comments.length === 0) return;
 
     this.#callbacks.onComments(comments);
@@ -1106,7 +1459,7 @@ export class NiconamaCommentClient {
         break;
     }
 
-    const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentSignatures, eventType);
+    const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentIdentifiers, eventType);
     if (comments.length > 0) {
       this.#callbacks.onComments(comments);
       if (knownEventType) {
@@ -1275,7 +1628,7 @@ const collectCommentLikeObjects = (body: unknown, depth = 0, maxDepth = 4): unkn
 
 export const parseAgentCommentsFromResponseBody = (
   body: unknown,
-  seenCommentSignatures: Set<string> = new Set<string>(),
+  seenCommentIdentifiers: Set<string> = new Set<string>(),
   eventType?: string,
 ): AgentComment[] => {
   if (!body || typeof body !== 'object') return [];
@@ -1321,7 +1674,7 @@ export const parseAgentCommentsFromResponseBody = (
   }
 
   const comments: AgentComment[] = [];
-  const seenSignatures = seenCommentSignatures;
+  const seenIdentifiers = seenCommentIdentifiers;
 
   for (const raw of rawComments) {
     if (!raw || typeof raw !== 'object') continue;
@@ -1335,9 +1688,9 @@ export const parseAgentCommentsFromResponseBody = (
       userId: (raw as any).userId ?? (raw as any).user_id ?? undefined,
       origin: raw,
     };
-    const signature = `${commentData.no ?? 'none'}|${commentData.userId ?? 'unknown'}|${commentData.comment}`;
-    if (seenSignatures.has(signature)) continue;
-    seenSignatures.add(signature);
+    const identifier = `${commentData.no ?? 'none'}|${commentData.userId ?? 'unknown'}|${commentData.comment}`;
+    if (seenIdentifiers.has(identifier)) continue;
+    seenIdentifiers.add(identifier);
     comments.push({ data: commentData });
   }
 
