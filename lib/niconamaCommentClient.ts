@@ -352,8 +352,14 @@ export class NiconamaCommentClient {
     });
 
     await this.setupDirectWebSocketConnection(watchUrl, embeddedData);
-    if (!this.#directWebSocket) {
-      await this.setupPlaywrightCommentWatcher(watchUrl);
+    await this.setupPlaywrightCommentWatcher(watchUrl, false);
+    // After watchers are installed, perform an immediate re-scan to catch any
+    // comments that arrived between the initial embedded-data fetch and the
+    // watcher installation. `seenCommentIdentifiers` prevents duplicates.
+    try {
+      await this.performImmediateRescan(watchUrl).catch(() => undefined);
+    } catch {
+      // ignore
     }
     this.#pollTask = this.pollLoop();
     console.info('[DEBUG] NiconamaCommentClient.start finished');
@@ -583,7 +589,7 @@ export class NiconamaCommentClient {
 
         if (response.ok) {
           const text = await response.text();
-          console.debug('[DEBUG] fetchHtml fetched', { url, status: response.status, length: text.length });
+          console.info('[INFO] fetchHtml fetched', { url, length: text.length, snippet: text.slice(0, 400) });
           return text;
         }
 
@@ -899,11 +905,11 @@ export class NiconamaCommentClient {
     }
   }
 
-  private async setupPlaywrightCommentWatcher(watchUrl: string): Promise<void> {
+  private async setupPlaywrightCommentWatcher(watchUrl: string, skipRenderedPageComments = false): Promise<void> {
     if (this.#playwrightCommentContext) return;
 
     try {
-      console.debug('[DEBUG] starting Playwright comment watcher', watchUrl);
+      console.debug('[DEBUG] starting Playwright comment watcher', watchUrl, { skipRenderedPageComments });
       const context = await this.#launchPersistentContext(this.#userDataDir, {
         executablePath: this.#executablePath,
         headless: true,
@@ -954,8 +960,6 @@ export class NiconamaCommentClient {
       page.on('response', async (response: any) => {
         const url = response.url();
         const contentType = (response.headers()['content-type'] ?? '').toLowerCase();
-        const isLikelyJsonResponse = contentType.includes('json') || /comment|wsapi|embedded|watch|data/i.test(url);
-        if (!isLikelyJsonResponse) return;
 
         let bodyText: string;
         try {
@@ -998,7 +1002,7 @@ export class NiconamaCommentClient {
       }
       console.debug('[DEBUG] Playwright page after goto', { url: page.url(), isClosed: page.isClosed(), pages: context.pages().map((p: any) => p.url()) });
 
-      if (!page.isClosed()) {
+      if (!skipRenderedPageComments && !page.isClosed()) {
         await this.tryOpenRenderedCommentPanel(page);
         try {
           const immediateComments = await this.extractPageComments(page);
@@ -1019,14 +1023,16 @@ export class NiconamaCommentClient {
         }
       }
 
-      if (!page.isClosed()) {
+      if (!skipRenderedPageComments && !page.isClosed()) {
         await this.waitForAnyCommentSelector(page, 15_000).catch(() => undefined);
       }
 
-      const initialPageComments = await this.pollPageComments(page, 1_000);
-      if (initialPageComments.length > 0) {
-        this.#callbacks.onComments(initialPageComments);
-        console.debug('[DEBUG] Playwright initial page comments extracted', { count: initialPageComments.length, url: page.url() });
+      if (!skipRenderedPageComments) {
+        const initialPageComments = await this.pollPageComments(page, 1_000);
+        if (initialPageComments.length > 0) {
+          this.#callbacks.onComments(initialPageComments);
+          console.debug('[DEBUG] Playwright initial page comments extracted', { count: initialPageComments.length, url: page.url() });
+        }
       }
 
       if (page.isClosed()) {
@@ -1043,7 +1049,9 @@ export class NiconamaCommentClient {
 
       this.#playwrightCommentContext = context;
       this.#playwrightCommentPage = page;
-      this.startPlaywrightPagePolling(page);
+      if (!skipRenderedPageComments) {
+        this.startPlaywrightPagePolling(page);
+      }
     } catch (err) {
       console.warn('[WARN] failed to start Playwright comment watcher', err);
       await this.clearPlaywrightCommentWatcher();
@@ -1085,7 +1093,7 @@ export class NiconamaCommentClient {
           '.lv-comment',
           '.comment-item',
           '.base-comment-list',
-          '[aria-label*="コメント"]',
+          '[aria-label*=\"コメント\"]',
           '[role="log"]',
           '[class*=comment]',
           '[id*=comment]',
@@ -1095,36 +1103,22 @@ export class NiconamaCommentClient {
         const exclude = (line: string) => ['コメント', 'コメント数', 'コメント一覧'].includes(line);
         const results = new Set<string>();
 
+        const chooseCommentLine = (lines: string[]): string | null => {
+          const candidates = lines.filter((line) => line.length > 0 && !exclude(line));
+          if (candidates.length === 0) return null;
+          return candidates.sort((a, b) => b.length - a.length)[0];
+        };
+
         for (const selector of selectors) {
           const elements = Array.from(document.querySelectorAll(selector));
           for (const element of elements) {
             const content = element.textContent ?? '';
-            for (const line of content.split(/\r?\n/)) {
-              const normalized = normalize(line);
-              if (normalized && !exclude(normalized)) {
-                results.add(normalized);
-              }
+            const lines = content.split(/\r?\n/).map(normalize).filter((line) => line.length > 0 && !exclude(line));
+            const comment = chooseCommentLine(lines);
+            if (comment) {
+              results.add(comment);
             }
           }
-        }
-
-        if (results.size > 0) {
-          return Array.from(results).slice(0, 50);
-        }
-
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null as any);
-        let node: Node | null = walker.nextNode();
-        while (node) {
-          const text = normalize(node.textContent ?? '');
-          if (text && !exclude(text)) {
-            for (const line of text.split(/\r?\n/)) {
-              const normalized = normalize(line);
-              if (normalized && !exclude(normalized)) {
-                results.add(normalized);
-              }
-            }
-          }
-          node = walker.nextNode();
         }
 
         return Array.from(results).slice(0, 50);
@@ -1342,6 +1336,20 @@ export class NiconamaCommentClient {
 
     this.#callbacks.onComments(comments);
     console.debug('[DEBUG] Playwright websocket comment payload', { wsUrl, count: comments.length });
+  }
+
+  private async performImmediateRescan(watchUrl: string): Promise<void> {
+    try {
+      const data = await this.fetchEmbeddedData(watchUrl).catch(() => null);
+      if (!data) return;
+      const comments = parseAgentCommentsFromResponseBody(data, this.#seenCommentIdentifiers);
+      if (comments.length > 0) {
+        this.#callbacks.onComments(comments);
+        console.debug('[DEBUG] performImmediateRescan comments extracted', { count: comments.length, watchUrl });
+      }
+    } catch (err) {
+      this.reportError(err);
+    }
   }
 
   private handleDirectWebSocketMessage(message: string, wsUrl: string): void {

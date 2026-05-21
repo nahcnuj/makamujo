@@ -14,9 +14,17 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
   const rows: AgentStatusRow[] = [];
 
   const niconamaState = stateResponse?.niconama;
+  // Prefer an explicit top-level `commentCount`, otherwise fall back to
+  // the `niconama.meta.total.comments` value which some producers emit.
+  const resolvedCommentCount = typeof stateResponse?.commentCount === 'number'
+    ? stateResponse!.commentCount
+    : typeof niconamaState?.meta?.total?.comments === 'number'
+      ? niconamaState!.meta!.total!.comments
+      : undefined;
+
   if (niconamaState && Object.keys(niconamaState).length > 0) {
     rows.push(
-      { label: "配信指標", hideLabel: true, valueComponent: createLiveDeliveryMetricsValueComponent(niconamaState, stateResponse?.commentCount) },
+      { label: "配信指標", hideLabel: true, valueComponent: createLiveDeliveryMetricsValueComponent(niconamaState, resolvedCommentCount) },
     );
   }
 
