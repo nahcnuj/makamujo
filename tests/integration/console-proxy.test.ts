@@ -61,8 +61,6 @@ beforeAll(async () => {
         if (m?.[1]) {
           BROADCASTING_BASE_URL = m[1];
           serverRunning = true;
-        } else if (buffer.includes('Server running')) {
-          serverRunning = true;
         }
       }
       // The external agent initialization completes with one of these messages.
@@ -138,7 +136,9 @@ test("proxy forwards WebSocket upgrades to broadcasting server", async () => {
     return;
   }
 
-  const wsUrl = `ws://127.0.0.1:7777/console/api/ws`;
+  const broadcastingBaseUrl = new URL(BROADCASTING_BASE_URL);
+  const wsProtocol = broadcastingBaseUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${wsProtocol}//${broadcastingBaseUrl.host}/console/api/ws`;
   const firstMessage = await new Promise<any>((resolve, reject) => {
     const ws = new WebSocket(wsUrl);
     const timeout = setTimeout(() => { try { ws.close(); } catch {} ; reject(new Error('timeout')); }, 5000);

@@ -198,36 +198,7 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
     try {
       const embeddedHtml = '<script id="embedded-data" data-props="{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com/ws&quot;}}"></script>';
       (globalThis as any).fetch = async () => ({ ok: true, text: async () => embeddedHtml });
-
-      const sockets: any[] = [];
-      class MockWebSocket {
-        static OPEN = 1;
-        static CLOSED = 3;
-        public readyState: number;
-        public url: string;
-        public onopen: (() => void) | null = null;
-        public onmessage: ((ev: { data: unknown }) => void) | null = null;
-        public onclose: ((ev: { code?: number; reason?: string }) => void) | null = null;
-
-        constructor(url: string) {
-          this.url = url;
-          this.readyState = MockWebSocket.OPEN;
-          sockets.push(this);
-          setTimeout(() => { this.onopen && this.onopen(); }, 0);
-        }
-
-        send(_data: unknown) { /* noop */ }
-
-        close() {
-          this.readyState = MockWebSocket.CLOSED;
-          if (this.onclose) this.onclose({ code: 1000, reason: 'closed' });
-        }
-
-        triggerMessage(obj: unknown) {
-          if (this.onmessage) this.onmessage({ data: JSON.stringify(obj) });
-        }
-      }
-      (globalThis as any).WebSocket = MockWebSocket;
+      delete (globalThis as any).WebSocket;
 
       let websocketCallback: any = null;
       let responseCallback: any = null;
@@ -300,7 +271,6 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
 
       expect(collectedComments.some((c) => c.data.comment === 'page websocket comment')).toBe(true);
       expect(collectedComments.some((c) => c.data.comment === 'page response comment')).toBe(true);
-      expect(sockets[0]).toBeTruthy();
 
       await client.stop();
       expect(playwrightClosed).toBe(true);

@@ -352,7 +352,9 @@ export class NiconamaCommentClient {
     });
 
     await this.setupDirectWebSocketConnection(watchUrl, embeddedData);
-    await this.setupPlaywrightCommentWatcher(watchUrl);
+    if (!this.#directWebSocket) {
+      await this.setupPlaywrightCommentWatcher(watchUrl);
+    }
     this.#pollTask = this.pollLoop();
     console.info('[DEBUG] NiconamaCommentClient.start finished');
   }
@@ -581,7 +583,7 @@ export class NiconamaCommentClient {
 
         if (response.ok) {
           const text = await response.text();
-          console.info('[INFO] fetchHtml fetched', { url, length: text.length, snippet: text.slice(0, 400) });
+          console.debug('[DEBUG] fetchHtml fetched', { url, status: response.status, length: text.length });
           return text;
         }
 
@@ -952,6 +954,8 @@ export class NiconamaCommentClient {
       page.on('response', async (response: any) => {
         const url = response.url();
         const contentType = (response.headers()['content-type'] ?? '').toLowerCase();
+        const isLikelyJsonResponse = contentType.includes('json') || /comment|wsapi|embedded|watch|data/i.test(url);
+        if (!isLikelyJsonResponse) return;
 
         let bodyText: string;
         try {
