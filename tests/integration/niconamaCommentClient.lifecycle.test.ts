@@ -159,6 +159,38 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
     }
   });
 
+  it("skips direct websocket when runtime WebSocket support is unavailable", async () => {
+    const originalFetch = (globalThis as any).fetch;
+    const originalWebSocket = (globalThis as any).WebSocket;
+
+    try {
+      const embeddedHtml = '<script id="embedded-data" data-props="{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com/ws&quot;,&quot;comments&quot;:[{&quot;comment&quot;:&quot;embedded hello&quot;,&quot;no&quot;:10}]}}"></script>';
+      (globalThis as any).fetch = async () => ({ ok: true, text: async () => embeddedHtml });
+      delete (globalThis as any).WebSocket;
+
+      const launchPersistentContext = async () => createFakePlaywrightContext();
+      const collectedComments: any[] = [];
+      const collectedMeta: any[] = [];
+
+      const client = createNiconamaCommentClient({ watchUrl: TEST_WATCH_URL, launchPersistentContext }, {
+        onComments: (c) => { collectedComments.push(...c); },
+        onMeta: (m) => { collectedMeta.push(m); },
+        onError: (e) => { throw e; },
+      });
+
+      await client.start();
+      await new Promise((res) => setTimeout(res, 20));
+
+      expect(collectedComments.length).toBeGreaterThanOrEqual(1);
+      expect(collectedMeta.length).toBeGreaterThanOrEqual(1);
+
+      await client.stop();
+    } finally {
+      (globalThis as any).fetch = originalFetch;
+      (globalThis as any).WebSocket = originalWebSocket;
+    }
+  });
+
   it("starts Playwright comment watcher and emits page comments from websocket frames and responses", async () => {
     const originalFetch = (globalThis as any).fetch;
     const originalWebSocket = (globalThis as any).WebSocket;

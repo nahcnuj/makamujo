@@ -823,7 +823,8 @@ export class NiconamaCommentClient {
     try {
       const WebSocketClass = (globalThis as any).WebSocket;
       if (typeof WebSocketClass !== 'function') {
-        throw new Error('WebSocket is not available in this runtime');
+        console.warn('[WARN] direct websocket not available in this runtime, skipping direct websocket connection', { watchUrl });
+        return;
       }
 
       console.debug('[DEBUG] direct websocket creating socket', webSocketUrl);
