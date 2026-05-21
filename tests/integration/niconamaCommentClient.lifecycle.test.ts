@@ -9,7 +9,7 @@ const createFakePlaywrightContext = () => {
     goto: async (_url: string) => null,
     waitForTimeout: async () => {},
     close: async () => {},
-    evaluate: async <T>(fn: () => T) => fn(),
+    evaluate: async <T>(_fn: () => T) => [] as unknown as T,
     getByText: () => ({
       count: async () => 0,
       first: () => ({ hover: async () => {}, waitFor: async () => {}, count: async () => 0 }),
@@ -210,7 +210,7 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
         goto: async (url: string) => { gotoUrl = url; return null; },
         waitForTimeout: async () => {},
         close: async () => { playwrightClosed = true; },
-        evaluate: async <T>(fn: () => T) => fn(),
+        evaluate: async <T>(_fn: () => T) => [] as unknown as T,
         getByText: () => ({
           count: async () => 0,
           first: () => ({ hover: async () => {}, waitFor: async () => {}, count: async () => 0 }),

@@ -290,6 +290,7 @@ export class NiconamaCommentClient {
   #directWebSocketKeepSeatTimer: ReturnType<typeof setInterval> | null = null;
   #playwrightCommentContext: any | null = null;
   #playwrightCommentPage: any | null = null;
+  #playwrightPageCommentPollTimer: ReturnType<typeof setInterval> | null = null;
   #pollTimer: ReturnType<typeof setTimeout> | null = null;
   #pollCancelResolve: (() => void) | null = null;
   #launchPersistentContext: NiconamaLaunchPersistentContext;
@@ -594,7 +595,7 @@ export class NiconamaCommentClient {
 
         let pageComments: AgentComment[] = [];
         if (!page.isClosed()) {
-          pageComments = await this.extractPageComments(page);
+          pageComments = await this.pollPageComments(page, 10_000, 1_000);
           if (pageComments.length > 0) {
             this.#callbacks.onComments(pageComments);
             console.debug('[DEBUG] Playwright page comments extracted', { count: pageComments.length, url: pageUrl });
@@ -866,11 +867,17 @@ export class NiconamaCommentClient {
       if (initialPageComments.length > 0) {
         this.#callbacks.onComments(initialPageComments);
         console.debug('[DEBUG] Playwright initial page comments extracted', { count: initialPageComments.length, url: page.url() });
+      }
+
+      if (page.isClosed()) {
+        console.warn('[WARN] Playwright page closed before watcher installation could complete', { url: watchUrl });
+        await context.close();
         return;
       }
 
       this.#playwrightCommentContext = context;
       this.#playwrightCommentPage = page;
+      this.startPlaywrightPagePolling(page);
     } catch (err) {
       console.warn('[WARN] failed to start Playwright comment watcher', err);
       await this.clearPlaywrightCommentWatcher();
@@ -878,6 +885,7 @@ export class NiconamaCommentClient {
   }
 
   private async clearPlaywrightCommentWatcher(): Promise<void> {
+    this.clearPlaywrightPagePolling();
     if (!this.#playwrightCommentContext) return;
 
     try {
@@ -978,6 +986,57 @@ export class NiconamaCommentClient {
       console.debug('[DEBUG] extractPageComments failed', err);
       return [];
     }
+  }
+
+  private async pollPageComments(page: any, timeoutMs = 20_000, intervalMs = 1_000): Promise<AgentComment[]> {
+    const deadline = Date.now() + timeoutMs;
+    while (!page.isClosed() && Date.now() < deadline) {
+      try {
+        const pageComments = await this.extractPageComments(page);
+        if (pageComments.length > 0) {
+          return pageComments;
+        }
+      } catch (err) {
+        console.debug('[DEBUG] pollPageComments failed', err);
+        if (page.isClosed()) {
+          break;
+        }
+      }
+
+      try {
+        await page.waitForTimeout(intervalMs);
+      } catch {
+        break;
+      }
+    }
+    return [];
+  }
+
+  private startPlaywrightPagePolling(page: any): void {
+    if (this.#playwrightPageCommentPollTimer) return;
+
+    this.#playwrightPageCommentPollTimer = setInterval(async () => {
+      if (!page || page.isClosed?.()) {
+        this.clearPlaywrightPagePolling();
+        return;
+      }
+
+      try {
+        const comments = await this.extractPageComments(page);
+        if (comments.length > 0) {
+          this.#callbacks.onComments(comments);
+          console.debug('[DEBUG] Playwright page polling comments', { count: comments.length, url: page.url() });
+        }
+      } catch (err) {
+        console.debug('[DEBUG] Playwright page polling failed', err);
+      }
+    }, 5_000);
+  }
+
+  private clearPlaywrightPagePolling(): void {
+    if (!this.#playwrightPageCommentPollTimer) return;
+    clearInterval(this.#playwrightPageCommentPollTimer);
+    this.#playwrightPageCommentPollTimer = null;
   }
 
   private handlePlaywrightWebSocketFrame(payload: string, wsUrl: string): void {
