@@ -352,15 +352,13 @@ export class NiconamaCommentClient {
     });
 
     await this.setupDirectWebSocketConnection(watchUrl, embeddedData);
-    await this.setupPlaywrightCommentWatcher(watchUrl, false);
+    if (!this.#directWebSocket) {
+      await this.setupPlaywrightCommentWatcher(watchUrl);
+    }
     // After watchers are installed, perform an immediate re-scan to catch any
     // comments that arrived between the initial embedded-data fetch and the
     // watcher installation. `seenCommentIdentifiers` prevents duplicates.
-    try {
-      await this.performImmediateRescan(watchUrl).catch(() => undefined);
-    } catch {
-      // ignore
-    }
+    await this.performImmediateRescan(watchUrl).catch(() => undefined);
     this.#pollTask = this.pollLoop();
     console.info('[DEBUG] NiconamaCommentClient.start finished');
   }
@@ -589,7 +587,7 @@ export class NiconamaCommentClient {
 
         if (response.ok) {
           const text = await response.text();
-          console.info('[INFO] fetchHtml fetched', { url, length: text.length, snippet: text.slice(0, 400) });
+          console.debug('[DEBUG] fetchHtml fetched', { url, length: text.length });
           return text;
         }
 
@@ -905,11 +903,11 @@ export class NiconamaCommentClient {
     }
   }
 
-  private async setupPlaywrightCommentWatcher(watchUrl: string, skipRenderedPageComments = false): Promise<void> {
+  private async setupPlaywrightCommentWatcher(watchUrl: string): Promise<void> {
     if (this.#playwrightCommentContext) return;
 
     try {
-      console.debug('[DEBUG] starting Playwright comment watcher', watchUrl, { skipRenderedPageComments });
+      console.debug('[DEBUG] starting Playwright comment watcher', watchUrl);
       const context = await this.#launchPersistentContext(this.#userDataDir, {
         executablePath: this.#executablePath,
         headless: true,
@@ -1002,7 +1000,7 @@ export class NiconamaCommentClient {
       }
       console.debug('[DEBUG] Playwright page after goto', { url: page.url(), isClosed: page.isClosed(), pages: context.pages().map((p: any) => p.url()) });
 
-      if (!skipRenderedPageComments && !page.isClosed()) {
+      if (!page.isClosed()) {
         await this.tryOpenRenderedCommentPanel(page);
         try {
           const immediateComments = await this.extractPageComments(page);
@@ -1023,16 +1021,14 @@ export class NiconamaCommentClient {
         }
       }
 
-      if (!skipRenderedPageComments && !page.isClosed()) {
+      if (!page.isClosed()) {
         await this.waitForAnyCommentSelector(page, 15_000).catch(() => undefined);
       }
 
-      if (!skipRenderedPageComments) {
-        const initialPageComments = await this.pollPageComments(page, 1_000);
-        if (initialPageComments.length > 0) {
-          this.#callbacks.onComments(initialPageComments);
-          console.debug('[DEBUG] Playwright initial page comments extracted', { count: initialPageComments.length, url: page.url() });
-        }
+      const initialPageComments = await this.pollPageComments(page, 1_000);
+      if (initialPageComments.length > 0) {
+        this.#callbacks.onComments(initialPageComments);
+        console.debug('[DEBUG] Playwright initial page comments extracted', { count: initialPageComments.length, url: page.url() });
       }
 
       if (page.isClosed()) {
@@ -1049,9 +1045,7 @@ export class NiconamaCommentClient {
 
       this.#playwrightCommentContext = context;
       this.#playwrightCommentPage = page;
-      if (!skipRenderedPageComments) {
-        this.startPlaywrightPagePolling(page);
-      }
+      this.startPlaywrightPagePolling(page);
     } catch (err) {
       console.warn('[WARN] failed to start Playwright comment watcher', err);
       await this.clearPlaywrightCommentWatcher();
@@ -1340,7 +1334,7 @@ export class NiconamaCommentClient {
 
   private async performImmediateRescan(watchUrl: string): Promise<void> {
     try {
-      const data = await this.fetchEmbeddedData(watchUrl).catch(() => null);
+      const data = await this.fetchEmbeddedDataFromPage(watchUrl).catch(() => null);
       if (!data) return;
       const comments = parseAgentCommentsFromResponseBody(data, this.#seenCommentIdentifiers);
       if (comments.length > 0) {
