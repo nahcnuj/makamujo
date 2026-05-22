@@ -236,4 +236,19 @@ describe("createAgentStatusRows", () => {
     const rows = createAgentStatusRows({ currentGame: null });
     expect(rows.find((row) => row.label === "ゲーム情報")).toBeUndefined();
   });
+
+  it("falls back to niconama.meta.total.comments when top-level commentCount is missing", () => {
+    const rows = createAgentStatusRows({
+      niconama: {
+        type: "live",
+        meta: { total: { listeners: 3, comments: 99 } },
+      },
+    } as any);
+
+    const liveRow = rows.find((r) => r.label === "配信指標");
+    expect(liveRow).toBeDefined();
+    const html = renderToString(<>{liveRow!.valueComponent}</>);
+    expect(html).toContain("コメント数");
+    expect(html).toContain("99");
+  });
 });
