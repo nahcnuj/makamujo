@@ -1,57 +1,32 @@
 # systemd unit for makamujo
 
-This directory contains a systemd service file to run the application using `bin/start` and `bin/stop`.
+This directory contains the systemd unit file and documentation for installing `makamujo` using the included `Makefile`.
 
-## Install (system-wide)
+## Install (recommended via Makefile)
 
-Recommended (portable): install to `/opt`
+Use the top-level `Makefile` to install to `/opt` (default) and enable the systemd unit.
 
-1. Copy application files to `/opt` and install the unit:
-
-```sh
-sudo mkdir -p /opt/makamujo/bin
-sudo cp -a ./bin/start-with-xauth.sh ./bin/start ./bin/stop /opt/makamujo/bin/
-sudo chown -R root:root /opt/makamujo
-sudo chmod +x /opt/makamujo/bin/*.sh /opt/makamujo/bin/start /opt/makamujo/bin/stop
-sudo cp ./etc/systemd/makamujo.service /etc/systemd/system/makamujo.service
-```
-
-2. Reload systemd and enable/start the service:
+Run as root (or via `sudo`):
 
 ```sh
-sudo systemctl daemon-reload
-sudo systemctl enable --now makamujo.service
+sudo make install
 ```
 
-3. Stop the service:
+To uninstall:
 
 ```sh
-sudo systemctl stop makamujo.service
+sudo make uninstall
 ```
 
-4. View logs (journalctl):
+To install to a custom prefix (example):
 
 ```sh
-sudo journalctl -u makamujo.service -f
+sudo make install PREFIX=/srv/makamujo
 ```
 
-Alternative (quick): leave files in the repository
-
-If you already copied the unit from the repo and prefer to keep files in-place under the repository path, update the installed unit to point at `./workspaces/makamujo` before reloading:
-
-```sh
-sudo sed -i 's|ExecStart=.*|ExecStart=/workspaces/makamujo/bin/start-with-xauth.sh|' /etc/systemd/system/makamujo.service
-sudo sed -i 's|ExecStop=.*|ExecStop=/workspaces/makamujo/bin/stop|' /etc/systemd/system/makamujo.service
-sudo systemctl daemon-reload
-sudo systemctl restart makamujo.service
-sudo journalctl -u makamujo.service -f
-```
-
-Note: the version of `makamujo.service` included in this repository has `ExecStart`/`ExecStop` pointing at `/opt/makamujo` by default. If you install to a different path, edit the unit file accordingly before copying it to `/etc/systemd/system/`.
-
-## Makefile install
-
-This repository includes a top-level `Makefile` that automates the `/opt` installation and systemd enable steps.
+Notes:
+- The default install path is `/opt/makamujo`. The included unit file expects binaries under `/opt/makamujo/bin`.
+- If you change the install prefix, update the installed systemd unit (`/etc/systemd/system/makamujo.service`) so `ExecStart`/`ExecStop` point to the correct paths, then run `sudo systemctl daemon-reload`.
 
 Usage (run as root or via sudo):
 
