@@ -3,15 +3,17 @@ Description=makamujo service
 After=graphical.target
 Wants=graphical.target
 
+# Service runs multiple backgrounded processes and the start script exits.
+# Use oneshot + RemainAfterExit so systemd considers the service active
+# while background processes run and ExecStop can stop them.
 [Service]
-Type=simple
+Type=oneshot
+RemainAfterExit=yes
 WorkingDirectory=/opt/makamujo
 User=root
 Environment=DISPLAY=:0
 ExecStart=/opt/makamujo/bin/start-with-xauth.sh
 ExecStop=/opt/makamujo/bin/stop
-Restart=on-failure
-RestartSec=5
 StandardOutput=journal
 StandardError=journal
 # If you want to run it as a different user, change `User=` and set `XAUTHORITY` accordingly:

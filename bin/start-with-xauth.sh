@@ -56,7 +56,7 @@ fi
 readarray -t pids < <(pgrep -f 'Xorg|Xwayland|gnome-session|startkde|Xsession' 2>/dev/null || true)
 for pid in "${pids[@]}"; do
   if [ -r "/proc/$pid/environ" ]; then
-    xauth=$(tr '\0' '\n' < "/proc/$pid/environ" | awk -F= '$1=="XAUTHORITY"{print $2; exit}')
+    xauth=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | awk -F= '$1=="XAUTHORITY"{print $2; exit}')
     if [ -n "$xauth" ] && [ -e "$xauth" ]; then
       export XAUTHORITY="$xauth"
       log "Found XAUTHORITY in /proc/$pid/environ: $XAUTHORITY"
