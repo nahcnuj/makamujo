@@ -29,7 +29,30 @@ kill_tree() {
   wait_until_process_exits "$1"
 }
 
+# If systemd managed the processes as transient units, prefer stopping them
+SYSTEMCTL_AVAILABLE=0
+if command -v systemctl >/dev/null 2>&1; then
+  SYSTEMCTL_AVAILABLE=1
+fi
+
 for pid_file in "${PID_DIR}/obs" "${PID_DIR}/browser" "${PID_DIR}/screen"; do
+  name=$(basename "$pid_file")
+  unit="makamujo-${name}.service"
+  if [ "$SYSTEMCTL_AVAILABLE" -eq 1 ]; then
+    # try stopping the transient unit; ignore errors and fall back to PID kill
+    if systemctl stop "$unit" 2>/dev/null; then
+      # wait for systemd to stop it
+      for i in 1 2 3 4 5 6 7 8 9 10; do
+        if ! systemctl is-active --quiet "$unit" 2>/dev/null; then
+          break
+        fi
+        sleep 0.1
+      done
+      rm -f "$pid_file"
+      continue
+    fi
+  fi
+
   if [ -f "$pid_file" ]; then
     pid=$(cat "$pid_file")
     if [ -n "$pid" ]; then

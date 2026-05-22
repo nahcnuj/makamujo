@@ -19,11 +19,44 @@ export CONSOLE_BASIC_AUTH_PASSWORD="${PASSWORD}"
 echo "Console Basic auth username: admin"
 echo "Console Basic auth password: ${PASSWORD}"
 
-NODE_ENV=production nohup bun start >"${PROJECT_ROOT}/var/screen.log" 2>&1 &
-echo $! > "${PID_DIR}/screen"
+# Prefer starting subprocesses as transient systemd units so their logs
+# are captured by the journal and manageable via systemctl. If systemd is
+# not available, fall back to the original nohup-based behavior.
+USE_SYSTEMD=0
+if command -v systemd-run >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1; then
+  USE_SYSTEMD=1
+fi
 
-NODE_ENV=production nohup bun ./bin/x/browser.ts >"${PROJECT_ROOT}/var/browser.log" 2>&1 &
-echo $! > "${PID_DIR}/browser"
+start_cmd() {
+  name="$1"; logfile="$2"; shift 2
+  if [ "$USE_SYSTEMD" -eq 1 ]; then
+    unit="makamujo-${name}"
+    # Run the command under systemd as a transient service; set WorkingDirectory
+    # so the command runs from the project root. Use env when needed.
+    if systemd-run --unit="$unit" --description="makamujo ${name}" --property=WorkingDirectory="$PROJECT_ROOT" -- "$@" >/dev/null 2>&1; then
+      # try to record MainPID for compatibility with existing stop logic
+      for i in 1 2 3 4 5 6 7 8 9 10; do
+        pid=$(systemctl show -p MainPID --value "${unit}.service" 2>/dev/null || true)
+        if [ -n "$pid" ] && [ "$pid" -ne 0 ] 2>/dev/null; then
+          echo "$pid" > "${PID_DIR}/${name}"
+          break
+        fi
+        sleep 0.2
+      done
+    else
+      # fallback to nohup if systemd-run failed
+      nohup "$@" >"${logfile}" 2>&1 &
+      echo $! > "${PID_DIR}/${name}"
+    fi
+  else
+    nohup "$@" >"${logfile}" 2>&1 &
+    echo $! > "${PID_DIR}/${name}"
+  fi
+}
 
-nohup ./bin/x/obs >"${PROJECT_ROOT}/var/obs.log" 2>&1 &
-echo $! > "${PID_DIR}/obs"
+# Start processes (keeps compatibility with previous behavior)
+start_cmd screen "${PROJECT_ROOT}/var/screen.log" /usr/bin/env NODE_ENV=production bun start
+start_cmd browser "${PROJECT_ROOT}/var/browser.log" /usr/bin/env NODE_ENV=production bun ./bin/x/browser.ts
+start_cmd obs "${PROJECT_ROOT}/var/obs.log" ./bin/x/obs
+
+exit 0
