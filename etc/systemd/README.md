@@ -4,10 +4,16 @@ This directory contains a systemd service file to run the application using `bin
 
 ## Install (system-wide)
 
-1. Copy the service file to the systemd system directory:
+Recommended (portable): install to `/opt`
+
+1. Copy application files to `/opt` and install the unit:
 
 ```sh
-sudo cp /workspaces/makamujo/etc/systemd/makamujo.service /etc/systemd/system/makamujo.service
+sudo mkdir -p /opt/makamujo/bin
+sudo cp -a ./bin/start-with-xauth.sh ./bin/start ./bin/stop /opt/makamujo/bin/
+sudo chown -R root:root /opt/makamujo
+sudo chmod +x /opt/makamujo/bin/*.sh /opt/makamujo/bin/start /opt/makamujo/bin/stop
+sudo cp ./etc/systemd/makamujo.service /etc/systemd/system/makamujo.service
 ```
 
 2. Reload systemd and enable/start the service:
@@ -28,6 +34,20 @@ sudo systemctl stop makamujo.service
 ```sh
 sudo journalctl -u makamujo.service -f
 ```
+
+Alternative (quick): leave files in the repository
+
+If you already copied the unit from the repo and prefer to keep files in-place under the repository path, update the installed unit to point at `./workspaces/makamujo` before reloading:
+
+```sh
+sudo sed -i 's|ExecStart=.*|ExecStart=/workspaces/makamujo/bin/start-with-xauth.sh|' /etc/systemd/system/makamujo.service
+sudo sed -i 's|ExecStop=.*|ExecStop=/workspaces/makamujo/bin/stop|' /etc/systemd/system/makamujo.service
+sudo systemctl daemon-reload
+sudo systemctl restart makamujo.service
+sudo journalctl -u makamujo.service -f
+```
+
+Note: the version of `makamujo.service` included in this repository has `ExecStart`/`ExecStop` pointing at `/opt/makamujo` by default. If you install to a different path, edit the unit file accordingly before copying it to `/etc/systemd/system/`.
 
 ## Notes
 
