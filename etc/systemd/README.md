@@ -1,33 +1,46 @@
 # systemd unit for makamujo
 
-This directory contains a systemd service file to run the application using `bin/start` and `bin/stop`.
+This directory contains the systemd unit file and documentation for installing `makamujo` using the included `Makefile`.
 
-## Install (system-wide)
+## Install (recommended via Makefile)
 
-1. Copy the service file to the systemd system directory:
+Use the top-level `Makefile` to install to `/opt` (default) and enable the systemd unit.
 
-```sh
-sudo cp /workspaces/makamujo/etc/systemd/makamujo.service /etc/systemd/system/makamujo.service
-```
-
-2. Reload systemd and enable/start the service:
+Run as root (or via `sudo`):
 
 ```sh
-sudo systemctl daemon-reload
-sudo systemctl enable --now makamujo.service
+sudo make install
 ```
 
-3. Stop the service:
+To uninstall:
 
 ```sh
-sudo systemctl stop makamujo.service
+sudo make uninstall
 ```
 
-4. View logs (journalctl):
+To install to a custom prefix (example):
 
 ```sh
-sudo journalctl -u makamujo.service -f
+sudo make install PREFIX=/srv/makamujo
 ```
+
+Notes:
+- The default install path is `/opt/makamujo`. The included unit file expects binaries under `/opt/makamujo/bin`.
+- If you change the install prefix, update the installed systemd unit (`/etc/systemd/system/makamujo.service`) so `ExecStart`/`ExecStop` point to the correct paths, then run `sudo systemctl daemon-reload`.
+
+Usage (run as root or via sudo):
+
+```sh
+sudo make install           # installs files to /opt/makamujo and enables the service
+sudo make uninstall         # disables the service and removes installed files
+
+# To install to a custom prefix:
+sudo make install PREFIX=/srv/makamujo
+```
+
+Notes:
+- `make install` will copy `bin/*` to `$(PREFIX)/bin` (default `/opt/makamujo/bin`) and copy the unit file to `/etc/systemd/system/makamujo.service` then reload and enable the service.
+- If you prefer to keep files in the repository path, see the "Alternative (quick)" section above.
 
 ## Notes
 

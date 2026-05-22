@@ -5,11 +5,11 @@ Wants=graphical.target
 
 [Service]
 Type=simple
-WorkingDirectory=/workspaces/makamujo
+WorkingDirectory=/opt/makamujo
 User=root
 Environment=DISPLAY=:0
-ExecStart=/workspaces/makamujo/bin/start-with-xauth.sh
-ExecStop=/workspaces/makamujo/bin/stop
+ExecStart=/opt/makamujo/bin/start-with-xauth.sh
+ExecStop=/opt/makamujo/bin/stop
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
