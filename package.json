@@ -17,7 +17,7 @@
     "start": "NODE_ENV=production bun bootstrap.ts --port=7777",
     "typecheck": "tsc --noEmit",
     "test:unit": "bun test lib/ src/ routes/ console/src/",
-    "test": "bun run test:*",
+    "test": "bash -lc \"for s in $(node -p \\\"Object.keys(require('./package.json').scripts).filter(s=>s.startsWith('test:')).join(' ')\\\"); do bun run $s || exit 1; done\"",
     "test:integration": "bun test tests/integration/",
     "test:bin": "bash tests/bin/stop.test.sh",
     "pretest:e2e": "playwright install --with-deps chromium && if [ -n \"${CI:-}\" ]; then bash scripts/setup-e2e-tls.sh; fi",
