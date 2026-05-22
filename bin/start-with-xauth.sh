@@ -28,7 +28,6 @@ if command -v loginctl >/dev/null 2>&1; then
     if [ "$active" != "yes" ]; then
       continue
     fi
-    type=$(loginctl show-session "$sid" -p Type --value 2>/dev/null || true)
     display_loginctl=$(loginctl show-session "$sid" -p Display --value 2>/dev/null || true)
     user=$(loginctl show-session "$sid" -p Name --value 2>/dev/null || true)
     uid=$(id -u "$user" 2>/dev/null || true)
@@ -51,10 +50,10 @@ if command -v loginctl >/dev/null 2>&1; then
 fi
 
 # Search for Xorg/Xwayland/desktop session processes and inspect env/cmdline
-pids=$(pgrep -f 'Xorg|Xwayland|gnome-session|startkde|Xsession' 2>/dev/null || true)
-for pid in $pids; do
+readarray -t pids < <(pgrep -f 'Xorg|Xwayland|gnome-session|startkde|Xsession' 2>/dev/null || true)
+for pid in "${pids[@]}"; do
   if [ -r "/proc/$pid/environ" ]; then
-    xauth=$(tr '\0' '\n' < /proc/$pid/environ | awk -F= '$1=="XAUTHORITY"{print $2; exit}')
+    xauth=$(tr '\0' '\n' < "/proc/$pid/environ" | awk -F= '$1=="XAUTHORITY"{print $2; exit}')
     if [ -n "$xauth" ] && [ -e "$xauth" ]; then
       export XAUTHORITY="$xauth"
       log "Found XAUTHORITY in /proc/$pid/environ: $XAUTHORITY"
@@ -62,7 +61,7 @@ for pid in $pids; do
     fi
   fi
   if [ -r "/proc/$pid/cmdline" ]; then
-    cmd=$(tr '\0' ' ' < /proc/$pid/cmdline)
+    cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline")
     if echo "$cmd" | grep -q -- '-auth'; then
       xauth=$(echo "$cmd" | sed -n 's/.*-auth \([^ ]*\).*/\1/p' | awk '{print $1}')
       if [ -n "$xauth" ] && [ -e "$xauth" ]; then
@@ -76,13 +75,16 @@ done
 
 # Fallback: pick the most recently modified .Xauthority under /home or /root
 best=""
-for f in /home/*/.Xauthority /root/.Xauthority 2>/dev/null; do
+# Use nullglob so the for-loop doesn't iterate over literal patterns when no files exist
+shopt -s nullglob
+for f in /home/*/.Xauthority /root/.Xauthority; do
   if [ -e "$f" ]; then
     if [ -z "$best" ] || [ "$f" -nt "$best" ]; then
       best="$f"
     fi
   fi
 done
+shopt -u nullglob
 if [ -n "$best" ]; then
   export XAUTHORITY="$best"
   log "Using latest .Xauthority: $XAUTHORITY"
