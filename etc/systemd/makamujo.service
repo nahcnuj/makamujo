@@ -1,0 +1,23 @@
+[Unit]
+Description=makamujo service
+After=graphical.target
+Wants=graphical.target
+
+[Service]
+Type=simple
+WorkingDirectory=/workspaces/makamujo
+User=root
+Environment=DISPLAY=:0
+ExecStart=/workspaces/makamujo/bin/start-with-xauth.sh
+ExecStop=/workspaces/makamujo/bin/stop
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+# If you want to run it as a different user, change `User=` and set `XAUTHORITY` accordingly:
+# User=yourusername
+# Environment=DISPLAY=:0
+# Environment=XAUTHORITY=/home/yourusername/.Xauthority
+
+[Install]
+WantedBy=graphical.target
