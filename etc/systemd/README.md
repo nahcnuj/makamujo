@@ -49,6 +49,24 @@ sudo journalctl -u makamujo.service -f
 
 Note: the version of `makamujo.service` included in this repository has `ExecStart`/`ExecStop` pointing at `/opt/makamujo` by default. If you install to a different path, edit the unit file accordingly before copying it to `/etc/systemd/system/`.
 
+## Makefile install
+
+This repository includes a top-level `Makefile` that automates the `/opt` installation and systemd enable steps.
+
+Usage (run as root or via sudo):
+
+```sh
+sudo make install           # installs files to /opt/makamujo and enables the service
+sudo make uninstall         # disables the service and removes installed files
+
+# To install to a custom prefix:
+sudo make install PREFIX=/srv/makamujo
+```
+
+Notes:
+- `make install` will copy `bin/*` to `$(PREFIX)/bin` (default `/opt/makamujo/bin`) and copy the unit file to `/etc/systemd/system/makamujo.service` then reload and enable the service.
+- If you prefer to keep files in the repository path, see the "Alternative (quick)" section above.
+
 ## Notes
 
 - `bin/start` requires an X Window session. The unit is configured to start after `graphical.target` so it will wait for the graphical session.
