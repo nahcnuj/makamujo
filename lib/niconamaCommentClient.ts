@@ -1106,7 +1106,7 @@ export class NiconamaCommentClient {
         const chooseCommentLine = (lines: string[]): string | null => {
           const candidates = lines.filter((line) => line.length > 0 && !exclude(line));
           if (candidates.length === 0) return null;
-          return candidates.sort((a, b) => b.length - a.length)[0];
+          return candidates.sort((a, b) => b.length - a.length)[0] ?? null;
         };
 
         for (const selector of selectors) {
