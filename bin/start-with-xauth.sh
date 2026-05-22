@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ORIG_START="/workspaces/makamujo/bin/start"
+# Determine repository root relative to this script so installation path can move
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ORIG_START="$REPO_ROOT/bin/start"
 ARGS=("$@")
 log() { echo "[start-wrapper] $*" >&2; }
 
