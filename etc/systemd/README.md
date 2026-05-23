@@ -25,7 +25,7 @@ If you want the persistent Xorg/VNC services installed by `make install`, use th
 sudo make install
 ```
 
-The `make install` target copies all `etc/systemd/*.service` units to `/etc/systemd/system/` and enables `makamujo.service`.
+The `make install` target copies all `etc/systemd/*.service` units to `/etc/systemd/system/`, installs Bun dependencies under `/opt/makamujo`, and enables `makamujo.service`.
 
 `makamujo.service` now also controls `xorg10.service` and `x11vnc-10.service` when those units are installed. Restarting or stopping `makamujo.service` will propagate to the persistent display services.
 
