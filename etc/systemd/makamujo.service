@@ -1,7 +1,7 @@
 [Unit]
 Description=makamujo service
-After=graphical.target
-Wants=graphical.target
+After=graphical.target xorg10.service x11vnc-10.service
+Wants=graphical.target xorg10.service x11vnc-10.service
 
 # Service runs multiple backgrounded processes and the start script exits.
 # Use oneshot + RemainAfterExit so systemd considers the service active

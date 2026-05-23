@@ -27,7 +27,9 @@ sudo make install
 
 The `make install` target copies all `etc/systemd/*.service` units to `/etc/systemd/system/` and enables `makamujo.service`.
 
-If you want to enable the persistent display services as well:
+`makamujo.service` now also controls `xorg10.service` and `x11vnc-10.service` when those units are installed. Restarting or stopping `makamujo.service` will propagate to the persistent display services.
+
+If you want to enable the persistent display services as standalone units in addition to `makamujo.service`:
 
 ```sh
 sudo systemctl enable --now xorg10.service x11vnc-10.service

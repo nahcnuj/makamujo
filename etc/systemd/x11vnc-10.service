@@ -2,6 +2,7 @@
 Description=x11vnc for Xorg :10
 After=xorg10.service
 Requires=xorg10.service
+PartOf=makamujo.service
 
 [Service]
 Type=simple

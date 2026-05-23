@@ -2,6 +2,7 @@
 Description=Persistent Xorg server on :10
 After=network.target
 Wants=network.target
+PartOf=makamujo.service
 
 [Service]
 Type=simple
