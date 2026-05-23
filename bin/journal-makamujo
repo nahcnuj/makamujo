@@ -10,4 +10,4 @@ for u in $UNITS; do
   JARGS="$JARGS -u $u"
 done
 
-exec journalctl $JARGS "$@"
+exec journalctl --no-pager -f $JARGS
