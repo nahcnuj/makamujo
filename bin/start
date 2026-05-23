@@ -37,8 +37,30 @@ start_cmd() {
   if [ "$USE_SYSTEMD" -eq 1 ]; then
     unit="makamujo-${name}"
     # Run the command under systemd as a transient service; set WorkingDirectory
-    # so the command runs from the project root. Use env when needed.
-    if systemd-run --unit="$unit" --description="makamujo ${name}" --property=WorkingDirectory="$PROJECT_ROOT" -- "$@" >/dev/null 2>&1; then
+    # so the command runs from the project root. Pass relevant GUI/dbus
+    # environment variables explicitly because systemd-run may not inherit
+    # them reliably from the caller.
+    setenv_args=""
+    if [ -n "${DISPLAY:-}" ]; then
+      setenv_args="$setenv_args --setenv=DISPLAY=${DISPLAY}"
+    fi
+    if [ -n "${XAUTHORITY:-}" ]; then
+      setenv_args="$setenv_args --setenv=XAUTHORITY=${XAUTHORITY}"
+    fi
+    if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+      setenv_args="$setenv_args --setenv=DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS}"
+    fi
+    if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+      setenv_args="$setenv_args --setenv=XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}"
+    fi
+    if [ -n "${PULSE_SERVER:-}" ]; then
+      setenv_args="$setenv_args --setenv=PULSE_SERVER=${PULSE_SERVER}"
+    fi
+    if [ -n "${PULSE_CLIENTCONFIG:-}" ]; then
+      setenv_args="$setenv_args --setenv=PULSE_CLIENTCONFIG=${PULSE_CLIENTCONFIG}"
+    fi
+
+    if systemd-run --unit="$unit" --description="makamujo ${name}" --property=WorkingDirectory="$PROJECT_ROOT" $setenv_args -- "$@" >/dev/null 2>&1; then
       # try to record MainPID for compatibility with existing stop logic
       retries=0
       while [ "$retries" -lt 10 ]; do
