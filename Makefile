@@ -2,7 +2,7 @@
 
 PREFIX ?= /opt/makamujo
 UNIT_DIR ?= /etc/systemd/system
-INSTALL_BIN = bin/start-with-xauth.sh bin/start bin/stop
+INSTALL_BIN = bin/start-with-xauth.sh bin/start bin/stop bin/x
 INSTALL_DATA = obs-studio
 SERVICE = makamujo.service
 UNIT_SRC = etc/systemd/$(SERVICE)
