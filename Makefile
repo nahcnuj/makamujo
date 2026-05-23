@@ -2,10 +2,10 @@
 
 PREFIX ?= /opt/makamujo
 UNIT_DIR ?= /etc/systemd/system
-INSTALL_BIN = bin/start-with-xauth.sh bin/start bin/stop bin/x
+INSTALL_BIN = bin/start-with-xauth.sh bin/start bin/stop bin/x bin/xorg10 bin/x11vnc-10
 INSTALL_DATA = package.json bunfig.toml tsconfig.json bootstrap.ts index.ts lib routes src console obs-studio
 SERVICE = makamujo.service
-UNIT_SRC = etc/systemd/$(SERVICE)
+UNIT_FILES = $(shell ls etc/systemd/*.service 2>/dev/null)
 
 .PHONY: all install install-app install-systemd uninstall uninstall-app uninstall-systemd help
 
@@ -29,9 +29,9 @@ install-app:
 	@chmod +x "$(PREFIX)/bin/"*
 
 install-systemd:
-	@echo "Installing systemd unit to $(UNIT_DIR)"
+	@echo "Installing systemd units to $(UNIT_DIR)"
 	@if [ "$$(id -u)" -ne 0 ]; then echo "This target requires root: run 'sudo make install'"; exit 1; fi
-	@cp "$(UNIT_SRC)" "$(UNIT_DIR)/$(SERVICE)"
+	@cp -a etc/systemd/*.service "$(UNIT_DIR)/"
 	@systemctl daemon-reload
 	@systemctl enable --now "$(SERVICE)"
 
@@ -39,9 +39,9 @@ uninstall: uninstall-systemd uninstall-app
 	@echo "Uninstalled"
 
 uninstall-systemd:
-	@echo "Removing systemd unit"
+	@echo "Removing systemd units"
 	-@systemctl disable --now "$(SERVICE)" 2>/dev/null || true
-	-@rm -f "$(UNIT_DIR)/$(SERVICE)" || true
+	-@for unit in etc/systemd/*.service; do rm -f "$(UNIT_DIR)/$$(basename "$$unit")"; done
 	@systemctl daemon-reload
 
 uninstall-app:
