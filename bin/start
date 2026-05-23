@@ -41,6 +41,7 @@ start_cmd() {
     # environment variables explicitly because systemd-run may not inherit
     # them reliably from the caller.
     setenv_args=""
+    setenv_args="$setenv_args --setenv=PATH=/usr/local/bin:/usr/bin:/bin"
     if [ -n "${DISPLAY:-}" ]; then
       setenv_args="$setenv_args --setenv=DISPLAY=${DISPLAY}"
     fi
@@ -85,8 +86,8 @@ start_cmd() {
 }
 
 # Start processes (keeps compatibility with previous behavior)
-start_cmd screen "${PROJECT_ROOT}/var/screen.log" /usr/bin/env NODE_ENV=production "${BUN_PATH}" start
-start_cmd browser "${PROJECT_ROOT}/var/browser.log" /usr/bin/env NODE_ENV=production "${BUN_PATH}" "${PROJECT_ROOT}/bin/x/browser.ts"
-start_cmd obs "${PROJECT_ROOT}/var/obs.log" /usr/bin/env "${PROJECT_ROOT}/bin/x/obs"
+start_cmd screen "${PROJECT_ROOT}/var/screen.log" /usr/bin/env NODE_ENV=production "${BUN_PATH}" --cwd "${PROJECT_ROOT}" start
+start_cmd browser "${PROJECT_ROOT}/var/browser.log" /usr/bin/env NODE_ENV=production "${BUN_PATH}" --cwd "${PROJECT_ROOT}" "${PROJECT_ROOT}/bin/x/browser.ts"
+start_cmd obs "${PROJECT_ROOT}/var/obs.log" "${PROJECT_ROOT}/bin/x/obs"
 
 exit 0
