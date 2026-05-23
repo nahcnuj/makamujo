@@ -36,6 +36,20 @@ install-systemd:
 	@cp -a etc/systemd/*.service "$(UNIT_DIR)/"
 	@systemctl daemon-reload
 	@systemctl enable --now "$(SERVICE)"
+	@echo ""
+	@echo "================================================================="
+	@echo "管理コンソールパスワード:"
+	@bash -lc 'journalctl -u makamujo.service -n 20 --no-pager | grep "Console Basic auth password" | tail -n 1 | sed -E "s/^.*Console Basic auth password: //"'
+	@echo ""
+	@echo "通常は restart で再起動されるはずです。"
+	@echo "もしサービスが failed のまま残る場合は次のコマンドで状態をリセットしてください:"
+	@echo "  sudo systemctl stop makamujo.service"
+	@echo "  sudo systemctl reset-failed makamujo.service makamujo-obs.service makamujo-browser.service makamujo-screen.service"
+	@echo "  sudo systemctl daemon-reload"
+	@echo "  sudo systemctl start makamujo.service"
+	@echo "  sudo systemctl status makamujo.service makamujo-obs.service makamujo-browser.service makamujo-screen.service --no-pager -l"
+	@echo "  sudo journalctl -u makamujo.service -u makamujo-obs.service -u makamujo-browser.service -u makamujo-screen.service --since '5 minutes ago'"
+	@echo "================================================================="
 
 uninstall: uninstall-systemd uninstall-app
 	@echo "Uninstalled"
