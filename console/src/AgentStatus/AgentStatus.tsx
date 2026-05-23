@@ -2,12 +2,13 @@ import { Container } from "../agt-compat";
 import { useCallback, useLayoutEffect, useState } from "hono/jsx";
 import type { AgentStatusSection, AgentStateResponse } from "./types";
 import {
+  AGENT_STATE_MOCK_BASE_RESPONSE,
   AGENT_STATE_MOCK_NOTICE_MESSAGE,
   INVALID_AGENT_STATE_RESPONSE_ERROR,
-  createMockAgentStateResponse,
+  isAgentStateMockNoGameQueryEnabled,
   isAgentStateMockQueryEnabled,
-  shouldUseMockAgentState,
   parseAgentStateResponse,
+  shouldUseMockAgentState,
   startAgentStateAutoRefresh,
 } from "./agentStatusState";
 import { createAgentStatusSections } from "./createAgentStatusSections";
@@ -32,7 +33,10 @@ export const AgentStatus = () => {
     setIsLoadingAgentState(true);
     try {
       if (shouldUseMockAgentState()) {
-        setAgentStateResponse(createMockAgentStateResponse());
+        const mockAgentStateResponse = isAgentStateMockNoGameQueryEnabled(window.location.search)
+          ? { ...AGENT_STATE_MOCK_BASE_RESPONSE, currentGame: null }
+          : AGENT_STATE_MOCK_BASE_RESPONSE;
+        setAgentStateResponse(mockAgentStateResponse);
         setAgentStatusError(null);
         setIsShowingMockAgentState(true);
         setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
