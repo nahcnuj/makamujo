@@ -26,6 +26,10 @@ import { installConsoleLogger } from "./lib/consoleLogger";
 
 const console = installConsoleLogger();
 
+let server: Bun.Server<unknown> | null = null;
+let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
+let niconamaCommentClient: NiconamaCommentClient | null = null;
+
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
 process.on('SIGUSR1', signalHandler.bind(null, { exit: true }));
@@ -124,7 +128,6 @@ const streamer = new MakaMujo(model, tts);
 // when possible.
 let lastPublishedStreamState: unknown = undefined;
 let currentSpeechState = { speech: '', silent: false };
-let niconamaCommentClient: NiconamaCommentClient | null = null;
 // WebSocket clients connected to the broadcasting server.
 const wsClients = new Set<any>();
 
@@ -544,8 +547,6 @@ const makeStreamHandler = (label: string) =>
     return new Response('websocket upgrade unavailable', { status: 501 });
   };
 
-let server: Bun.Server<WsData> | null = null;
-
 const mainApp = new Hono()
   // Static assets from the public directory
   .get('/nc433974.png', () => new Response(Bun.file('./src/public/nc433974.png')))
@@ -606,7 +607,6 @@ server = serverInstance;
 
 console.log(`🚀 Server running at ${serverInstance.url}`);
 
-let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 if (process.env.NODE_ENV === "production") {
   void (async () => {
     try {
