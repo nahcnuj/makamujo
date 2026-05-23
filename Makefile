@@ -3,6 +3,7 @@
 PREFIX ?= /opt/makamujo
 UNIT_DIR ?= /etc/systemd/system
 INSTALL_BIN = bin/start-with-xauth.sh bin/start bin/stop
+INSTALL_DATA = obs-studio
 SERVICE = makamujo.service
 UNIT_SRC = etc/systemd/$(SERVICE)
 
@@ -18,6 +19,7 @@ install-app:
 	@if [ "$$(id -u)" -ne 0 ]; then echo "This target requires root: run 'sudo make install'"; exit 1; fi
 	@mkdir -p "$(PREFIX)/bin"
 	@cp -a $(INSTALL_BIN) "$(PREFIX)/bin/"
+	@cp -a $(INSTALL_DATA) "$(PREFIX)/"
 	@chown -R root:root "$(PREFIX)"
 	@chmod +x "$(PREFIX)/bin/"*
 
