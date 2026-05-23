@@ -2,7 +2,14 @@
 
 set -eu
 
+SCRIPT_PATH=$(cd "$(dirname "$0")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_PATH/.." && pwd)
+OBS_CONFIG_DIR="$REPO_ROOT/obs-studio"
+
 flatpak run -vv \
     --share=network \
+    --filesystem="$OBS_CONFIG_DIR" \
+    --env=XDG_CONFIG_HOME="$REPO_ROOT" \
+    --env=XDG_DATA_HOME="$REPO_ROOT" \
     com.obsproject.Studio \
     "$@"
