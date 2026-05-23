@@ -10,6 +10,11 @@ mkdir -p "${PID_DIR}"
 
 cd "${PROJECT_ROOT}"
 
+BUN_PATH=$(command -v bun 2>/dev/null || true)
+if [ -z "${BUN_PATH}" ]; then
+  BUN_PATH="bun"
+fi
+
 PASSWORD=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)
 if [ -z "${PASSWORD}" ]; then
   echo 'Failed to generate console password' >&2
@@ -57,8 +62,8 @@ start_cmd() {
 }
 
 # Start processes (keeps compatibility with previous behavior)
-start_cmd screen "${PROJECT_ROOT}/var/screen.log" /usr/bin/env NODE_ENV=production bun start
-start_cmd browser "${PROJECT_ROOT}/var/browser.log" /usr/bin/env NODE_ENV=production bun ./bin/x/browser.ts
+start_cmd screen "${PROJECT_ROOT}/var/screen.log" /usr/bin/env NODE_ENV=production "${BUN_PATH}" start
+start_cmd browser "${PROJECT_ROOT}/var/browser.log" /usr/bin/env NODE_ENV=production "${BUN_PATH}" ./bin/x/browser.ts
 start_cmd obs "${PROJECT_ROOT}/var/obs.log" ./bin/x/obs
 
 exit 0
