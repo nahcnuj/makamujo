@@ -35,12 +35,14 @@ start_cmd() {
     # so the command runs from the project root. Use env when needed.
     if systemd-run --unit="$unit" --description="makamujo ${name}" --property=WorkingDirectory="$PROJECT_ROOT" -- "$@" >/dev/null 2>&1; then
       # try to record MainPID for compatibility with existing stop logic
-      for i in 1 2 3 4 5 6 7 8 9 10; do
+      retries=0
+      while [ "$retries" -lt 10 ]; do
         pid=$(systemctl show -p MainPID --value "${unit}.service" 2>/dev/null || true)
         if [ -n "$pid" ] && [ "$pid" -ne 0 ] 2>/dev/null; then
           echo "$pid" > "${PID_DIR}/${name}"
           break
         fi
+        retries=$((retries + 1))
         sleep 0.2
       done
     else

@@ -42,10 +42,12 @@ for pid_file in "${PID_DIR}/obs" "${PID_DIR}/browser" "${PID_DIR}/screen"; do
     # try stopping the transient unit; ignore errors and fall back to PID kill
     if systemctl stop "$unit" 2>/dev/null; then
       # wait for systemd to stop it
-      for i in 1 2 3 4 5 6 7 8 9 10; do
+      retries=0
+      while [ "$retries" -lt 10 ]; do
         if ! systemctl is-active --quiet "$unit" 2>/dev/null; then
           break
         fi
+        retries=$((retries + 1))
         sleep 0.1
       done
       rm -f "$pid_file"
