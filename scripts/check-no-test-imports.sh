@@ -9,7 +9,7 @@ PATTERN="['\"][^'\"]*tests/[^'\"]*['\"]"
 found=0
 for d in $SEARCH_DIRS; do
   if [ -d "$d" ]; then
-    matches=$(grep -nE --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.mjs' --include='*.cjs' -R "$PATTERN" "$d" || true)
+    matches=$(grep -nE --exclude-dir=node_modules --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.mjs' --include='*.cjs' -R "$PATTERN" "$d" || true)
     if [ -n "$matches" ]; then
       echo "\nForbidden imports found in directory: $d"
       echo "$matches"

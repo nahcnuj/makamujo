@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, mock } from "bun:test";
 import { renderToString } from "hono/jsx/dom/server";
 import {
   AGENT_STATE_REFRESH_INTERVAL_MS,
-  createMockAgentStateResponse,
   createAgentStatusSections,
   createAgentStatusRows,
   isAgentStateMockQueryEnabled,
@@ -378,7 +377,7 @@ describe("createAgentStatusRows", () => {
 
 describe("createAgentStatusSections", () => {
   it("categorizes rows into delivery, markov-model, and game sections", () => {
-    const sections = createAgentStatusSections(createMockAgentStateResponse());
+    const sections = createAgentStatusSections(cloneAgentStateResponseMockFixture());
 
     expect(sections).toHaveLength(3);
     const liveDeliverySection = sections.find((section) => section.title === "配信状況");
@@ -448,9 +447,9 @@ describe("createAgentStatusSections", () => {
   });
 });
 
-describe("createMockAgentStateResponse", () => {
-  it("returns deterministic mock state for screenshot capture", () => {
-    expect(createMockAgentStateResponse()).toEqual(cloneAgentStateResponseMockFixture());
+describe("agent state fixture", () => {
+  it("provides deterministic mock state for screenshot capture", () => {
+    expect(cloneAgentStateResponseMockFixture().niconama?.meta?.title).toBe("配信エージェント状態モック");
   });
 });
 
