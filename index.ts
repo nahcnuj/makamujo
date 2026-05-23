@@ -213,15 +213,19 @@ const getCurrentStreamPayload = () => {
     : agentBase.replyTargetComment && typeof agentBase.replyTargetComment === 'object'
       ? agentBase.replyTargetComment
       : undefined;
+  const tryResolveNiconama = (src: unknown) => {
+    const resolved = resolveNiconamaFromState(src as any) as any;
+    if (resolved && typeof resolved === "object" && Object.keys(resolved).length > 0) return resolved;
+    return undefined;
+  };
 
-  const niconamaNormalized = resolveNiconamaFromState(base as any) as any;
-  // If the resolved niconama payload is an empty object, omit the field
-  // from the emitted payload to make it explicit that no niconama data
-  // is available. Some consumers treat `{}` as present but empty which
-  // can cause confusing UI behaviour.
-  const niconamaFinal = niconamaNormalized && typeof niconamaNormalized === 'object' && Object.keys(niconamaNormalized).length === 0
-    ? undefined
-    : niconamaNormalized;
+  // Prefer published payload but fall back to the agent's internal
+  // stream state or the streamer's state so consumers receive useful
+  // metadata instead of `{}` or an empty/omitted field.
+  const niconamaFromPublished = tryResolveNiconama(base);
+  const niconamaFromAgent = tryResolveNiconama(agentBase);
+  const niconamaFromStreamer = tryResolveNiconama(streamer.streamState);
+  const niconamaFinal = niconamaFromPublished ?? niconamaFromAgent ?? niconamaFromStreamer ?? undefined;
 
   return {
     niconama: niconamaFinal,
