@@ -32,10 +32,6 @@ if command -v systemd-run >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&
   USE_SYSTEMD=1
 fi
 
-quote_for_sh() {
-  printf '%s' "$1" | sed "s/'/'\"'\"'/g"
-}
-
 start_cmd() {
   name="$1"; logfile="$2"; shift 2
   if [ "$USE_SYSTEMD" -eq 1 ]; then
@@ -46,52 +42,26 @@ start_cmd() {
     # them reliably from the caller.
     setenv_args=""
     if [ -n "${DISPLAY:-}" ]; then
-      setenv_args="$setenv_args --setenv=DISPLAY='$(quote_for_sh "${DISPLAY}")'"
+      setenv_args="$setenv_args --setenv=DISPLAY=${DISPLAY}"
     fi
     if [ -n "${XAUTHORITY:-}" ]; then
-      setenv_args="$setenv_args --setenv=XAUTHORITY='$(quote_for_sh "${XAUTHORITY}")'"
+      setenv_args="$setenv_args --setenv=XAUTHORITY=${XAUTHORITY}"
     fi
     if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
-      setenv_args="$setenv_args --setenv=DBUS_SESSION_BUS_ADDRESS='$(quote_for_sh "${DBUS_SESSION_BUS_ADDRESS}")'"
+      setenv_args="$setenv_args --setenv=DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS}"
     fi
     if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
-      setenv_args="$setenv_args --setenv=XDG_RUNTIME_DIR='$(quote_for_sh "${XDG_RUNTIME_DIR}")'"
+      setenv_args="$setenv_args --setenv=XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}"
     fi
     if [ -n "${PULSE_SERVER:-}" ]; then
-      setenv_args="$setenv_args --setenv=PULSE_SERVER='$(quote_for_sh "${PULSE_SERVER}")'"
+      setenv_args="$setenv_args --setenv=PULSE_SERVER=${PULSE_SERVER}"
     fi
     if [ -n "${PULSE_CLIENTCONFIG:-}" ]; then
-      setenv_args="$setenv_args --setenv=PULSE_CLIENTCONFIG='$(quote_for_sh "${PULSE_CLIENTCONFIG}")'"
+      setenv_args="$setenv_args --setenv=PULSE_CLIENTCONFIG=${PULSE_CLIENTCONFIG}"
     fi
 
-    run_cmd="cd '$(quote_for_sh "${PROJECT_ROOT}")' && exec"
-    for arg in "$@"; do
-      run_cmd="$run_cmd '$(quote_for_sh "$arg")'"
-    done
-
-    eval_cmd="systemd-run --unit='${unit}' --description='makamujo ${name}' --property=WorkingDirectory='$(quote_for_sh "${PROJECT_ROOT}")'"
-    if [ -n "${DISPLAY:-}" ]; then
-      eval_cmd="$eval_cmd --setenv=DISPLAY='$(quote_for_sh "${DISPLAY}")'"
-    fi
-    if [ -n "${XAUTHORITY:-}" ]; then
-      eval_cmd="$eval_cmd --setenv=XAUTHORITY='$(quote_for_sh "${XAUTHORITY}")'"
-    fi
-    if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
-      eval_cmd="$eval_cmd --setenv=DBUS_SESSION_BUS_ADDRESS='$(quote_for_sh "${DBUS_SESSION_BUS_ADDRESS}")'"
-    fi
-    if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
-      eval_cmd="$eval_cmd --setenv=XDG_RUNTIME_DIR='$(quote_for_sh "${XDG_RUNTIME_DIR}")'"
-    fi
-    if [ -n "${PULSE_SERVER:-}" ]; then
-      eval_cmd="$eval_cmd --setenv=PULSE_SERVER='$(quote_for_sh "${PULSE_SERVER}")'"
-    fi
-    if [ -n "${PULSE_CLIENTCONFIG:-}" ]; then
-      eval_cmd="$eval_cmd --setenv=PULSE_CLIENTCONFIG='$(quote_for_sh "${PULSE_CLIENTCONFIG}")'"
-    fi
-
-    eval_cmd="$eval_cmd -- /bin/sh -lc '$run_cmd'"
-    # shellcheck disable=SC2086,SC2090
-    if eval "$eval_cmd" >/dev/null 2>&1; then
+    # shellcheck disable=SC2086
+    if systemd-run --unit="$unit" --description="makamujo ${name}" --property=WorkingDirectory="$PROJECT_ROOT" $setenv_args -- "$@" >/dev/null 2>&1; then
       # try to record MainPID for compatibility with existing stop logic
       retries=0
       while [ "$retries" -lt 10 ]; do
@@ -115,7 +85,7 @@ start_cmd() {
 }
 
 # Start processes (keeps compatibility with previous behavior)
-start_cmd screen "${PROJECT_ROOT}/var/screen.log" /bin/sh -c "cd '$(quote_for_sh "${PROJECT_ROOT}")' && exec /usr/bin/env NODE_ENV=production '$(quote_for_sh "${BUN_PATH}")' start"
+start_cmd screen "${PROJECT_ROOT}/var/screen.log" /usr/bin/env NODE_ENV=production "${BUN_PATH}" start
 start_cmd browser "${PROJECT_ROOT}/var/browser.log" /usr/bin/env NODE_ENV=production "${BUN_PATH}" "${PROJECT_ROOT}/bin/x/browser.ts"
 start_cmd obs "${PROJECT_ROOT}/var/obs.log" /usr/bin/env "${PROJECT_ROOT}/bin/x/obs"
 
