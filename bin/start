@@ -64,7 +64,34 @@ start_cmd() {
       setenv_args="$setenv_args --setenv=PULSE_CLIENTCONFIG='$(quote_for_sh "${PULSE_CLIENTCONFIG}")'"
     fi
 
-    if eval "systemd-run --unit=\"$unit\" --description=\"makamujo ${name}\" --property=WorkingDirectory=\"$PROJECT_ROOT\" $setenv_args -- \"\$@\" >/dev/null 2>&1"; then
+    run_cmd="cd '$(quote_for_sh "${PROJECT_ROOT}")' && exec"
+    for arg in "$@"; do
+      run_cmd="$run_cmd '$(quote_for_sh "$arg")'"
+    done
+
+    eval_cmd="systemd-run --unit='${unit}' --description='makamujo ${name}' --property=WorkingDirectory='$(quote_for_sh "${PROJECT_ROOT}")'"
+    if [ -n "${DISPLAY:-}" ]; then
+      eval_cmd="$eval_cmd --setenv=DISPLAY='$(quote_for_sh "${DISPLAY}")'"
+    fi
+    if [ -n "${XAUTHORITY:-}" ]; then
+      eval_cmd="$eval_cmd --setenv=XAUTHORITY='$(quote_for_sh "${XAUTHORITY}")'"
+    fi
+    if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+      eval_cmd="$eval_cmd --setenv=DBUS_SESSION_BUS_ADDRESS='$(quote_for_sh "${DBUS_SESSION_BUS_ADDRESS}")'"
+    fi
+    if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+      eval_cmd="$eval_cmd --setenv=XDG_RUNTIME_DIR='$(quote_for_sh "${XDG_RUNTIME_DIR}")'"
+    fi
+    if [ -n "${PULSE_SERVER:-}" ]; then
+      eval_cmd="$eval_cmd --setenv=PULSE_SERVER='$(quote_for_sh "${PULSE_SERVER}")'"
+    fi
+    if [ -n "${PULSE_CLIENTCONFIG:-}" ]; then
+      eval_cmd="$eval_cmd --setenv=PULSE_CLIENTCONFIG='$(quote_for_sh "${PULSE_CLIENTCONFIG}")'"
+    fi
+
+    eval_cmd="$eval_cmd -- /bin/sh -lc '$run_cmd'"
+    # shellcheck disable=SC2086,SC2090
+    if eval "$eval_cmd" >/dev/null 2>&1; then
       # try to record MainPID for compatibility with existing stop logic
       retries=0
       while [ "$retries" -lt 10 ]; do
@@ -88,8 +115,8 @@ start_cmd() {
 }
 
 # Start processes (keeps compatibility with previous behavior)
-start_cmd screen "${PROJECT_ROOT}/var/screen.log" /usr/bin/env NODE_ENV=production "${BUN_PATH}" start
-start_cmd browser "${PROJECT_ROOT}/var/browser.log" /usr/bin/env NODE_ENV=production "${BUN_PATH}" ./bin/x/browser.ts
-start_cmd obs "${PROJECT_ROOT}/var/obs.log" ./bin/x/obs
+start_cmd screen "${PROJECT_ROOT}/var/screen.log" /bin/sh -c "cd '$(quote_for_sh "${PROJECT_ROOT}")' && exec /usr/bin/env NODE_ENV=production '$(quote_for_sh "${BUN_PATH}")' start"
+start_cmd browser "${PROJECT_ROOT}/var/browser.log" /usr/bin/env NODE_ENV=production "${BUN_PATH}" "${PROJECT_ROOT}/bin/x/browser.ts"
+start_cmd obs "${PROJECT_ROOT}/var/obs.log" /usr/bin/env "${PROJECT_ROOT}/bin/x/obs"
 
 exit 0
