@@ -4,6 +4,7 @@ import { existsSync, writeFileSync, createWriteStream, mkdirSync } from "fs";
 import { createServer } from "node:net";
 import { join } from "path";
 import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
+import { installDeterministicEventSource } from "../../fixtures/installDeterministicEventSource";
 
 let CONSOLE_BASE_URL = `https://127.0.0.1`;
 let BROADCASTING_BASE_URL = `http://127.0.0.1:7777`;
@@ -203,6 +204,19 @@ test.afterAll(() => {
 });
 
 test.describe("console", () => {
+  const installAgentStateMockStream = async (
+    page: import("@playwright/test").Page,
+    options?: { withoutCurrentGame?: boolean },
+  ) => {
+    const mockResponse = options?.withoutCurrentGame
+      ? { ...cloneAgentStateResponseMockFixture(), currentGame: null }
+      : cloneAgentStateResponseMockFixture();
+    await page.addInitScript(
+      installDeterministicEventSource,
+      { responseText: JSON.stringify(mockResponse) },
+    );
+  };
+
   test("serves /console/robots.txt", async ({ request }) => {
     const res = await request.get(`${CONSOLE_BASE_URL}/console/robots.txt`);
     expect(res.ok()).toBeTruthy();
@@ -221,9 +235,8 @@ test.describe("console", () => {
   test("renders the console app in a browser", async ({ page }) => {
     const viewport = { width: 1280, height: 1000 };
     await page.setViewportSize(viewport);
-    // Load the console in mock mode so the UI renders deterministic agent
-    // state without relying on the server or WebSocket timing.
-    await page.goto(`${CONSOLE_BASE_URL}/console/?agentStateMock=1`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await installAgentStateMockStream(page);
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
     expect(await page.title()).toContain(EXPECTED_CONSOLE_TITLE);
     const rootElement = await page.$("#root");
     expect(rootElement).not.toBeNull();
@@ -281,7 +294,8 @@ test.describe("console", () => {
   });
 
   test("renders a heading containing プレイ中 even when currentGame is missing", async ({ page }) => {
-    await page.goto(`${CONSOLE_BASE_URL}/console/?agentStateMock=1&agentStateMockNoGame=1`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await installAgentStateMockStream(page, { withoutCurrentGame: true });
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
     await expect(page.getByRole("heading", { name: /プレイ中/ })).toBeVisible();
   });
 

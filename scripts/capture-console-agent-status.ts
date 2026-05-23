@@ -3,10 +3,12 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { app as consoleApp, websocket as consoleWebsocket } from "../routes/console/index";
+import { cloneAgentStateResponseMockFixture } from "../tests/fixtures/agentStateResponseMock";
+import { installDeterministicEventSource } from "../tests/fixtures/installDeterministicEventSource";
 
 const ROOT_DIR = path.resolve(import.meta.dir, "..");
 const DEFAULT_OUTPUT_PATH = path.join(ROOT_DIR, "var", "screenshots", "console-agent-status-mock.png");
-const CONSOLE_PATH = "/console/?agentStateMock=1";
+const CONSOLE_PATH = "/console/";
 const SCREENSHOT_VIEWPORT = { width: 1500, height: 980 } as const;
 
 const ensureJapaneseFonts = () => {
@@ -32,6 +34,11 @@ const captureScreenshot = async (url: string, outputPath: string) => {
   const browser = await chromium.launch();
   const page = await browser.newPage({ ignoreHTTPSErrors: true, viewport: SCREENSHOT_VIEWPORT });
   try {
+    const response = cloneAgentStateResponseMockFixture();
+    await page.addInitScript(
+      installDeterministicEventSource,
+      { responseText: JSON.stringify(response) },
+    );
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20_000 });
     await page.getByRole("heading", { name: "馬可無序" }).waitFor();
     await Promise.race([
