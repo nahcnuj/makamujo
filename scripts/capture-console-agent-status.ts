@@ -3,6 +3,8 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { app as consoleApp, websocket as consoleWebsocket } from "../routes/console/index";
+import { AGENT_STATE_MOCK_RESPONSE_WINDOW_KEY } from "../console/src/AgentStatus";
+import { cloneAgentStateResponseMockFixture } from "../tests/fixtures/agentStateResponseMock";
 
 const ROOT_DIR = path.resolve(import.meta.dir, "..");
 const DEFAULT_OUTPUT_PATH = path.join(ROOT_DIR, "var", "screenshots", "console-agent-status-mock.png");
@@ -32,6 +34,12 @@ const captureScreenshot = async (url: string, outputPath: string) => {
   const browser = await chromium.launch();
   const page = await browser.newPage({ ignoreHTTPSErrors: true, viewport: SCREENSHOT_VIEWPORT });
   try {
+    await page.addInitScript(
+      ({ windowKey, response }) => {
+        (window as unknown as Record<string, unknown>)[windowKey] = response;
+      },
+      { windowKey: AGENT_STATE_MOCK_RESPONSE_WINDOW_KEY, response: cloneAgentStateResponseMockFixture() },
+    );
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20_000 });
     await page.getByRole("heading", { name: "馬可無序" }).waitFor();
     await Promise.race([

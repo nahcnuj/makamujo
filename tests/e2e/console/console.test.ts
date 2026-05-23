@@ -4,6 +4,7 @@ import { existsSync, writeFileSync, createWriteStream, mkdirSync } from "fs";
 import { createServer } from "node:net";
 import { join } from "path";
 import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
+import { AGENT_STATE_MOCK_RESPONSE_WINDOW_KEY } from "../../../console/src/AgentStatus";
 
 let CONSOLE_BASE_URL = `https://127.0.0.1`;
 let BROADCASTING_BASE_URL = `http://127.0.0.1:7777`;
@@ -203,6 +204,16 @@ test.afterAll(() => {
 });
 
 test.describe("console", () => {
+  const installAgentStateMock = async (page: import("@playwright/test").Page) => {
+    const mockResponse = cloneAgentStateResponseMockFixture();
+    await page.addInitScript(
+      ({ windowKey, response }) => {
+        (window as unknown as Record<string, unknown>)[windowKey] = response;
+      },
+      { windowKey: AGENT_STATE_MOCK_RESPONSE_WINDOW_KEY, response: mockResponse },
+    );
+  };
+
   test("serves /console/robots.txt", async ({ request }) => {
     const res = await request.get(`${CONSOLE_BASE_URL}/console/robots.txt`);
     expect(res.ok()).toBeTruthy();
@@ -221,6 +232,7 @@ test.describe("console", () => {
   test("renders the console app in a browser", async ({ page }) => {
     const viewport = { width: 1280, height: 1000 };
     await page.setViewportSize(viewport);
+    await installAgentStateMock(page);
     // Load the console in mock mode so the UI renders deterministic agent
     // state without relying on the server or WebSocket timing.
     await page.goto(`${CONSOLE_BASE_URL}/console/?agentStateMock=1`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
@@ -281,6 +293,7 @@ test.describe("console", () => {
   });
 
   test("renders a heading containing プレイ中 even when currentGame is missing", async ({ page }) => {
+    await installAgentStateMock(page);
     await page.goto(`${CONSOLE_BASE_URL}/console/?agentStateMock=1&agentStateMockNoGame=1`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
     await expect(page.getByRole("heading", { name: /プレイ中/ })).toBeVisible();
   });

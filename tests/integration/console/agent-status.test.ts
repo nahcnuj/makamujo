@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import { renderToString } from "hono/jsx/dom/server";
 import {
+  AGENT_STATE_MOCK_RESPONSE_WINDOW_KEY,
   AGENT_STATE_REFRESH_INTERVAL_MS,
   createAgentStatusSections,
   createAgentStatusRows,
   isAgentStateMockQueryEnabled,
   parseAgentStateResponse,
+  readAgentStateMockResponseFromWindow,
   shouldUseMockAgentState,
   startAgentStateAutoRefresh,
 } from "../../../console/src/AgentStatus";
@@ -456,6 +458,22 @@ describe("agent state fixture", () => {
 describe("isAgentStateMockQueryEnabled", () => {
   it("returns true when the query includes agentStateMock=1", () => {
     expect(isAgentStateMockQueryEnabled("?agentStateMock=1")).toBe(true);
+  });
+
+  describe("readAgentStateMockResponseFromWindow", () => {
+    it("returns a clone from window mock payload", () => {
+      const sourceResponse = cloneAgentStateResponseMockFixture();
+      const sourceWindow = {
+        [AGENT_STATE_MOCK_RESPONSE_WINDOW_KEY]: sourceResponse,
+      } as unknown as Window;
+      const clonedResponse = readAgentStateMockResponseFromWindow(sourceWindow);
+      expect(clonedResponse).toEqual(sourceResponse);
+      expect(clonedResponse).not.toBe(sourceResponse);
+    });
+
+    it("throws when window mock payload is missing", () => {
+      expect(() => readAgentStateMockResponseFromWindow({} as Window)).toThrow("モックデータが設定されていません。");
+    });
   });
 
   it("returns false when the query omits or changes the flag value", () => {
