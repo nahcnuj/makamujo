@@ -3,7 +3,7 @@
 PREFIX ?= /opt/makamujo
 UNIT_DIR ?= /etc/systemd/system
 INSTALL_BIN = bin/start-with-xauth.sh bin/start bin/stop bin/x
-INSTALL_DATA = package.json bun.lockb bunfig.toml tsconfig.json bootstrap.ts index.ts lib routes src console obs-studio
+INSTALL_DATA = package.json bunfig.toml tsconfig.json bootstrap.ts index.ts lib routes src console obs-studio
 SERVICE = makamujo.service
 UNIT_SRC = etc/systemd/$(SERVICE)
 
@@ -20,6 +20,11 @@ install-app:
 	@mkdir -p "$(PREFIX)/bin"
 	@cp -a $(INSTALL_BIN) "$(PREFIX)/bin/"
 	@cp -a $(INSTALL_DATA) "$(PREFIX)/"
+	@if [ -e bun.lock ]; then \
+		cp -a bun.lock "$(PREFIX)/"; \
+	elif [ -e bun.lockb ]; then \
+		cp -a bun.lockb "$(PREFIX)/"; \
+	fi
 	@chown -R root:root "$(PREFIX)"
 	@chmod +x "$(PREFIX)/bin/"*
 
