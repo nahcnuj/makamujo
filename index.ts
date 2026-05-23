@@ -7,6 +7,7 @@ import { serve } from "bun";
 import { Hono } from "hono";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 // Use the global `setInterval` timer instead of the Node
 // `timers/promises` async iterator. The async iterator can behave
 // inconsistently across runtimes; using a classic timer keeps the
@@ -62,9 +63,11 @@ process.on('uncaughtException', (err) => {
   exitHandler({ exit: true }, 1);
 });
 
+const PROJECT_ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)));
+
 const { values: {
-  model: modelFile,
-  data: dataFile,
+  model: modelFileArg,
+  data: dataFileArg,
   port,
 } } = parseArgs({
   options: {
@@ -86,6 +89,9 @@ const { values: {
     },
   },
 });
+
+const modelFile = resolve(PROJECT_ROOT, modelFileArg);
+const dataFile = resolve(PROJECT_ROOT, dataFileArg);
 
 // Rely on Bun's `--hot` and Bun.build watch mode in development.
 
@@ -703,7 +709,7 @@ try {
 // Start the stream playback after servers are listening so startup is
 // responsive for health checks used by tests and CI.
 try {
-  streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
+  streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }), { savePath: dataFile });
 } catch (err) {
   console.warn('[WARN] streamer.play failed during startup:', err instanceof Error ? err.message : String(err));
 }

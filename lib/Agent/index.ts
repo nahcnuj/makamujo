@@ -73,13 +73,13 @@ export class MakaMujo {
     this.#tts = tts;
   }
 
-  play(name: GameName, data?: string) {
+  play(name: GameName, data?: string, options?: { savePath?: string }) {
     const solver = Games[name].solver({
       type: 'initialize',
       data,
     }, {
       onSave: [
-        (text) => writeFileSync('./var/cookieclicker.txt', text),
+        (text) => writeFileSync(options?.savePath ?? './var/cookieclicker.txt', text),
       ],
       isSilent: () => !this.speechable,
     });
