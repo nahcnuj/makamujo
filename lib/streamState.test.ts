@@ -102,4 +102,16 @@ describe("normalizePublishedStreamState", () => {
     expect(normalized.meta.title).toBe('NicoTitle');
     expect(normalized.type).toBe('live');
   });
+
+  it("extracts metadata from currentGame.state when niconama/meta missing", () => {
+    const state = {
+      currentGame: { name: 'CookieClicker', state: { title: 'CookieClicker - play', url: 'https://orteil.dashnet.org/cookieclicker/', timestamp: 1779541505333 } },
+    } as any;
+
+    const normalized = resolveNiconamaFromState(state) as Record<string, any>;
+    expect(normalized).toHaveProperty('meta');
+    expect(normalized.meta.title).toBe('CookieClicker - play');
+    expect(normalized.meta.url).toBe('https://orteil.dashnet.org/cookieclicker/');
+    expect(normalized.meta.start).toBe(1779541505333);
+  });
 });

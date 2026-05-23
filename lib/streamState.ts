@@ -86,5 +86,32 @@ export const resolveNiconamaFromState = (src: unknown): unknown => {
     } as any;
   }
 
+  // If the payload embeds stream-like metadata inside `currentGame.state`,
+  // promote it into a `niconama.meta`-like structure so consumers that expect
+  // `niconama.meta.title/url/start` can still display stream info even when
+  // the upstream source placed those values under the current game state.
+  try {
+    const cg = payload.currentGame;
+    const gameState = cg && typeof cg === 'object' && cg.state && typeof cg.state === 'object' ? cg.state : undefined;
+    if (gameState) {
+      const title = typeof gameState.title === 'string' ? gameState.title : undefined;
+      const url = typeof gameState.url === 'string' ? gameState.url : undefined;
+      const start = typeof gameState.timestamp === 'number' ? gameState.timestamp : (typeof gameState.start === 'number' ? gameState.start : undefined);
+      if (title || url || typeof start === 'number') {
+        return {
+          type: typeof payload.type === 'string' ? payload.type : undefined,
+          meta: {
+            title,
+            url,
+            start,
+            total: payload.meta?.total ?? payload.total ?? undefined,
+          },
+        } as any;
+      }
+    }
+  } catch {
+    // ignore and fall through to empty
+  }
+
   return {};
 };

@@ -213,11 +213,22 @@ const getCurrentStreamPayload = () => {
     : agentBase.replyTargetComment && typeof agentBase.replyTargetComment === 'object'
       ? agentBase.replyTargetComment
       : undefined;
+  const tryResolveNiconama = (src: unknown) => {
+    const resolved = resolveNiconamaFromState(src as any) as any;
+    if (resolved && typeof resolved === "object" && Object.keys(resolved).length > 0) return resolved;
+    return undefined;
+  };
 
-  const niconamaNormalized = resolveNiconamaFromState(base as any) as any;
+  // Prefer published payload but fall back to the agent's internal
+  // stream state or the streamer's state so consumers receive useful
+  // metadata instead of `{}` or an empty/omitted field.
+  const niconamaFromPublished = tryResolveNiconama(base);
+  const niconamaFromAgent = tryResolveNiconama(agentBase);
+  const niconamaFromStreamer = tryResolveNiconama(streamer.streamState);
+  const niconamaFinal = niconamaFromPublished ?? niconamaFromAgent ?? niconamaFromStreamer ?? undefined;
 
   return {
-    niconama: niconamaNormalized,
+    niconama: niconamaFinal,
     canSpeak: base.canSpeak ?? streamer.canSpeak,
     currentGame: base.currentGame ?? streamer.currentGame ?? null,
     nGram: base.nGram ?? streamer.currentNGramSize,
