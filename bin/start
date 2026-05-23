@@ -32,6 +32,10 @@ if command -v systemd-run >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&
   USE_SYSTEMD=1
 fi
 
+quote_for_sh() {
+  printf '%s' "$1" | sed "s/'/'\"'\"'/g"
+}
+
 start_cmd() {
   name="$1"; logfile="$2"; shift 2
   if [ "$USE_SYSTEMD" -eq 1 ]; then
@@ -42,25 +46,25 @@ start_cmd() {
     # them reliably from the caller.
     setenv_args=""
     if [ -n "${DISPLAY:-}" ]; then
-      setenv_args="$setenv_args --setenv=DISPLAY=${DISPLAY}"
+      setenv_args="$setenv_args --setenv=DISPLAY='$(quote_for_sh "${DISPLAY}")'"
     fi
     if [ -n "${XAUTHORITY:-}" ]; then
-      setenv_args="$setenv_args --setenv=XAUTHORITY=${XAUTHORITY}"
+      setenv_args="$setenv_args --setenv=XAUTHORITY='$(quote_for_sh "${XAUTHORITY}")'"
     fi
     if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
-      setenv_args="$setenv_args --setenv=DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS}"
+      setenv_args="$setenv_args --setenv=DBUS_SESSION_BUS_ADDRESS='$(quote_for_sh "${DBUS_SESSION_BUS_ADDRESS}")'"
     fi
     if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
-      setenv_args="$setenv_args --setenv=XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}"
+      setenv_args="$setenv_args --setenv=XDG_RUNTIME_DIR='$(quote_for_sh "${XDG_RUNTIME_DIR}")'"
     fi
     if [ -n "${PULSE_SERVER:-}" ]; then
-      setenv_args="$setenv_args --setenv=PULSE_SERVER=${PULSE_SERVER}"
+      setenv_args="$setenv_args --setenv=PULSE_SERVER='$(quote_for_sh "${PULSE_SERVER}")'"
     fi
     if [ -n "${PULSE_CLIENTCONFIG:-}" ]; then
-      setenv_args="$setenv_args --setenv=PULSE_CLIENTCONFIG=${PULSE_CLIENTCONFIG}"
+      setenv_args="$setenv_args --setenv=PULSE_CLIENTCONFIG='$(quote_for_sh "${PULSE_CLIENTCONFIG}")'"
     fi
 
-    if systemd-run --unit="$unit" --description="makamujo ${name}" --property=WorkingDirectory="$PROJECT_ROOT" $setenv_args -- "$@" >/dev/null 2>&1; then
+    if eval "systemd-run --unit=\"$unit\" --description=\"makamujo ${name}\" --property=WorkingDirectory=\"$PROJECT_ROOT\" $setenv_args -- \"\$@\" >/dev/null 2>&1"; then
       # try to record MainPID for compatibility with existing stop logic
       retries=0
       while [ "$retries" -lt 10 ]; do
