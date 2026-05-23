@@ -413,6 +413,85 @@ test.describe("console", () => {
     await expect(detailsLocator).toContainText('返信', { timeout: 10_000 });
   });
 
+  test("shows stream title and link when posted as top-level title/url/start", async ({ page, request }) => {
+    await page.route('**/*fonts*', (route) => route.abort());
+    await page.route('**/*fonts.googleapis.com*', (route) => route.abort());
+
+    await page.addInitScript(() => {
+      const OrigEventSource = (window as any).EventSource;
+      Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
+      (window as any).EventSource = function (url: string) {
+        const es = new OrigEventSource(url);
+        try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
+        return es;
+      } as any;
+      try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
+    });
+
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: 'domcontentloaded', timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await page.waitForFunction(() => (window as any).__sseUrl !== undefined, { timeout: 5_000 });
+    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
+
+    const payload = {
+      title: 'Legacy Top Title',
+      url: 'https://example.com/legacy',
+      start: 1700000000,
+    };
+
+    const broadcastRes = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    expect(broadcastRes.ok, `broadcast POST failed: ${broadcastRes.status}`).toBeTruthy();
+
+    const streamTitleLocator = page.getByTestId('agent-status-stream-title');
+    await streamTitleLocator.waitFor({ timeout: 10_000 });
+    const titleText = await streamTitleLocator.textContent();
+    expect(titleText).toContain('Legacy Top Title');
+
+    const href = await streamTitleLocator.getAttribute('href');
+    expect(href).toBe('https://example.com/legacy');
+
+    const startTimeLocator = page.getByTestId('agent-status-start-time');
+    await startTimeLocator.waitFor({ timeout: 10_000 });
+    const startText = await startTimeLocator.textContent();
+    expect(startText).toContain('開始');
+  });
+
+  test("promotes niconama.title into niconama.meta when meta is missing", async ({ page, request }) => {
+    await page.route('**/*fonts*', (route) => route.abort());
+    await page.route('**/*fonts.googleapis.com*', (route) => route.abort());
+
+    await page.addInitScript(() => {
+      const OrigEventSource = (window as any).EventSource;
+      Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
+      (window as any).EventSource = function (url: string) {
+        const es = new OrigEventSource(url);
+        try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
+        return es;
+      } as any;
+      try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
+    });
+
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: 'domcontentloaded', timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await page.waitForFunction(() => (window as any).__sseUrl !== undefined, { timeout: 5_000 });
+    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
+
+    const payload = { niconama: { type: 'live', title: 'NicoLegacyTitle' } };
+    const broadcastRes = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    expect(broadcastRes.ok, `broadcast POST failed: ${broadcastRes.status}`).toBeTruthy();
+
+    const streamTitleLocator = page.getByTestId('agent-status-stream-title');
+    await streamTitleLocator.waitFor({ timeout: 10_000 });
+    const titleText = await streamTitleLocator.textContent();
+    expect(titleText).toContain('NicoLegacyTitle');
+  });
+
   test("keeps SSE connection open while the console browser tab is open", async ({ page, request }) => {
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
