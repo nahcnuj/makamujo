@@ -8,6 +8,8 @@ This directory contains a systemd service file to run the application using `bin
 
 ```sh
 sudo cp /workspaces/makamujo/etc/systemd/makamujo.service /etc/systemd/system/makamujo.service
+sudo cp /workspaces/makamujo/etc/systemd/xorg10.service /etc/systemd/system/xorg10.service
+sudo cp /workspaces/makamujo/etc/systemd/x11vnc-10.service /etc/systemd/system/x11vnc-10.service
 ```
 
 2. Reload systemd and enable/start the service:
@@ -15,6 +17,26 @@ sudo cp /workspaces/makamujo/etc/systemd/makamujo.service /etc/systemd/system/ma
 ```sh
 sudo systemctl daemon-reload
 sudo systemctl enable --now makamujo.service
+```
+
+If you want the persistent Xorg/VNC services installed by `make install`, use the top-level make target instead:
+
+```sh
+sudo make install
+```
+
+The `make install` target copies all `etc/systemd/*.service` units to `/etc/systemd/system/` and enables `makamujo.service`.
+
+If you want to enable the persistent display services as well:
+
+```sh
+sudo systemctl enable --now xorg10.service x11vnc-10.service
+```
+
+3. Stop the service:
+
+```sh
+sudo systemctl stop makamujo.service
 ```
 
 3. Stop the service:
