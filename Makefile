@@ -2,7 +2,7 @@
 
 PREFIX ?= /opt/makamujo
 UNIT_DIR ?= /etc/systemd/system
-INSTALL_BIN = bin/start-with-xauth.sh bin/start bin/stop bin/x bin/xorg10 bin/x11vnc-10
+INSTALL_BIN = bin/start-with-xauth.sh bin/start bin/stop bin/x bin/xorg10 bin/x11vnc-10 bin/obs-studio
 INSTALL_DATA = package.json bunfig.toml tsconfig.json bootstrap.ts index.ts lib routes src console obs-studio
 SERVICE = makamujo.service
 UNIT_FILES = $(shell ls etc/systemd/*.service 2>/dev/null)
