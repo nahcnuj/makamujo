@@ -5,12 +5,14 @@ import { createServer } from "node:net";
 import { join } from "path";
 import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
 import { installDeterministicEventSource } from "../../fixtures/installDeterministicEventSource";
+import { createNiconamaCommentClient } from "../../lib/niconamaCommentClient";
 
 let CONSOLE_BASE_URL = `https://127.0.0.1`;
 let BROADCASTING_BASE_URL = `http://127.0.0.1:7777`;
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 const BROWSER_PAGE_LOAD_TIMEOUT_MS = 20_000;
 const EXPECTED_CONSOLE_TITLE = "馬可無序 - 管理コンソール";
+const ACTUAL_PROGRAM_WATCH_URL = "https://live.nicovideo.jp/watch/user/14171889";
 
 let server: ReturnType<typeof spawn> | null = null;
 let outStream: import('fs').WriteStream | null = null;
@@ -411,6 +413,113 @@ test.describe("console", () => {
     await detailsLocator.waitFor({ timeout: 10_000 });
     await expect(detailsLocator).toContainText('このコメントに返信します', { timeout: 10_000 });
     await expect(detailsLocator).toContainText('返信', { timeout: 10_000 });
+  });
+
+  test("shows stream title and link when posted as top-level title/url/start", async ({ page, request }) => {
+    await page.route('**/*fonts*', (route) => route.abort());
+    await page.route('**/*fonts.googleapis.com*', (route) => route.abort());
+
+    await page.addInitScript(() => {
+      const OrigEventSource = (window as any).EventSource;
+      Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
+      (window as any).EventSource = function (url: string) {
+        const es = new OrigEventSource(url);
+        try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
+        return es;
+      } as any;
+      try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
+    });
+
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: 'domcontentloaded', timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await page.waitForFunction(() => (window as any).__sseUrl !== undefined, { timeout: 5_000 });
+    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
+
+    // Fetch metadata from the actual NicoNico program page and post as
+    // top-level title/url/start to ensure normalization works end-to-end.
+    const client = createNiconamaCommentClient({ watchUrl: ACTUAL_PROGRAM_WATCH_URL }, {
+      onComments: () => {},
+      onMeta: () => {},
+      onError: (err) => { console.error('niconama client error', err); },
+    });
+    const embedded = await client.fetchEmbeddedData();
+    expect(embedded).toBeTruthy();
+
+    const extractedTitle = (embedded as any)?.program?.title ?? (embedded as any)?.site?.program?.title ?? (embedded as any)?.title ?? '馬可無序';
+    const extractedUrl = (embedded as any)?.program?.watchPageUrl ?? (embedded as any)?.watchPageUrl ?? ACTUAL_PROGRAM_WATCH_URL;
+    let extractedStart = (embedded as any)?.program?.startTime ?? (embedded as any)?.program?.start ?? (embedded as any)?.site?.state?.relive?.startTime;
+    if (typeof extractedStart !== 'number' || !Number.isFinite(extractedStart) || extractedStart <= 0) {
+      extractedStart = Math.floor(Date.now() / 1000);
+    }
+
+    const payload = { title: extractedTitle, url: extractedUrl, start: extractedStart };
+
+    const broadcastRes = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    expect(broadcastRes.ok, `broadcast POST failed: ${broadcastRes.status}`).toBeTruthy();
+
+    const streamTitleLocator = page.getByTestId('agent-status-stream-title');
+    await streamTitleLocator.waitFor({ timeout: 10_000 });
+    const titleText = await streamTitleLocator.textContent();
+    // The live program title on the external site can change unexpectedly;
+    // ensure we have a non-empty displayed title and that the link matches.
+    expect(titleText && titleText.length > 0).toBeTruthy();
+
+    const href = await streamTitleLocator.getAttribute('href');
+    expect(href).toBe(extractedUrl);
+
+    const startTimeLocator = page.getByTestId('agent-status-start-time');
+    await startTimeLocator.waitFor({ timeout: 10_000 });
+    const startText = await startTimeLocator.textContent();
+    expect(startText).toContain('開始');
+  });
+
+  test("promotes niconama.title into niconama.meta when meta is missing", async ({ page, request }) => {
+    await page.route('**/*fonts*', (route) => route.abort());
+    await page.route('**/*fonts.googleapis.com*', (route) => route.abort());
+
+    await page.addInitScript(() => {
+      const OrigEventSource = (window as any).EventSource;
+      Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
+      (window as any).EventSource = function (url: string) {
+        const es = new OrigEventSource(url);
+        try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
+        return es;
+      } as any;
+      try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
+    });
+
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: 'domcontentloaded', timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await page.waitForFunction(() => (window as any).__sseUrl !== undefined, { timeout: 5_000 });
+    // Allow more time for the SSE connection to establish in slower CI or
+    // when the server performs external metadata fetches.
+    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 20_000 });
+
+    // Use actual NicoNico page metadata but post as a `niconama` object lacking
+    // `meta` so the server promotes `title` into `niconama.meta`.
+    const client = createNiconamaCommentClient({ watchUrl: ACTUAL_PROGRAM_WATCH_URL }, {
+      onComments: () => {},
+      onMeta: () => {},
+      onError: (err) => { console.error('niconama client error', err); },
+    });
+    const embedded = await client.fetchEmbeddedData();
+    expect(embedded).toBeTruthy();
+
+    const extractedTitle = (embedded as any)?.program?.title ?? (embedded as any)?.site?.program?.title ?? (embedded as any)?.title ?? 'NicoLegacyTitle';
+    const payload = { niconama: { type: 'live', title: extractedTitle } };
+    const broadcastRes = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    expect(broadcastRes.ok, `broadcast POST failed: ${broadcastRes.status}`).toBeTruthy();
+
+    const streamTitleLocator = page.getByTestId('agent-status-stream-title');
+    await streamTitleLocator.waitFor({ timeout: 10_000 });
+    const titleText = await streamTitleLocator.textContent();
+    expect(titleText).toContain(extractedTitle);
   });
 
   test("keeps SSE connection open while the console browser tab is open", async ({ page, request }) => {

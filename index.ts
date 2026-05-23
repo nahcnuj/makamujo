@@ -20,7 +20,7 @@ import * as speechHistoryRoute from "./routes/api/speech-history";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
 import { handleCatchAll } from "./src/frontendServer";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
-import { normalizePublishedStreamState } from "./lib/streamState";
+import { normalizePublishedStreamState, resolveNiconamaFromState } from "./lib/streamState";
 import { createNiconamaCommentClient, type NiconamaCommentClient } from "./lib/niconamaCommentClient";
 import { installConsoleLogger } from "./lib/consoleLogger";
 
@@ -214,8 +214,10 @@ const getCurrentStreamPayload = () => {
       ? agentBase.replyTargetComment
       : undefined;
 
+  const niconamaNormalized = resolveNiconamaFromState(base as any) as any;
+
   return {
-    niconama: base.niconama ?? {},
+    niconama: niconamaNormalized,
     canSpeak: base.canSpeak ?? streamer.canSpeak,
     currentGame: base.currentGame ?? streamer.currentGame ?? null,
     nGram: base.nGram ?? streamer.currentNGramSize,
