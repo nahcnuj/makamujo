@@ -1,8 +1,9 @@
-import { AGENT_STATE_MOCK_BASE_RESPONSE, createAgentStatusRows, createAgentStatusSections } from "../console/src/AgentStatus";
+import { createAgentStatusRows, createAgentStatusSections } from "../console/src/AgentStatus";
+import { cloneAgentStateResponseMockFixture } from "../tests/fixtures/agentStateResponseMock";
 
 (async () => {
   try {
-    const state = { ...AGENT_STATE_MOCK_BASE_RESPONSE };
+    const state = cloneAgentStateResponseMockFixture();
     const rows = createAgentStatusRows(state as any);
     console.log("ROWS:\n", JSON.stringify(rows, null, 2));
     const sections = createAgentStatusSections(state as any);

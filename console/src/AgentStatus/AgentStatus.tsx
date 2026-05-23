@@ -2,7 +2,6 @@ import { Container } from "../agt-compat";
 import { useCallback, useLayoutEffect, useState } from "hono/jsx";
 import type { AgentStatusSection, AgentStateResponse } from "./types";
 import {
-  AGENT_STATE_MOCK_BASE_RESPONSE,
   AGENT_STATE_MOCK_NOTICE_MESSAGE,
   INVALID_AGENT_STATE_RESPONSE_ERROR,
   isAgentStateMockNoGameQueryEnabled,
@@ -21,6 +20,31 @@ import { AgentStatusHeader } from "./AgentStatusHeader";
 import { formatStreamStartTime } from "./agentStatusUtils";
 
 const AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS = "grid-rows-[auto_minmax(0,1fr)]";
+const AGENT_STATE_MOCK_BASE_RESPONSE: AgentStateResponse = {
+  niconama: {
+    type: "live",
+    meta: {
+      title: "配信エージェント状態モック (dev)",
+      url: "https://example.com/watch/mock",
+      start: 1_717_000_000,
+      total: {
+        listeners: 0,
+        gift: 0,
+        ad: 0,
+      },
+    },
+  },
+  commentCount: 0,
+  canSpeak: false,
+  currentGame: {
+    name: "org.dashnet.orteil/cookieclicker",
+    state: { status: "idle" },
+  },
+  nGram: 4,
+  nGramRaw: 4,
+  speech: { speech: "", silent: false },
+  speechHistory: [],
+};
 
 export const AgentStatus = () => {
   const [agentStateResponse, setAgentStateResponse] = useState<AgentStateResponse | null>(null);
@@ -33,9 +57,10 @@ export const AgentStatus = () => {
     setIsLoadingAgentState(true);
     try {
       if (shouldUseMockAgentState()) {
-        const mockAgentStateResponse = isAgentStateMockNoGameQueryEnabled(window.location.search)
-          ? { ...AGENT_STATE_MOCK_BASE_RESPONSE, currentGame: null }
-          : AGENT_STATE_MOCK_BASE_RESPONSE;
+        const mockAgentStateResponse = structuredClone(AGENT_STATE_MOCK_BASE_RESPONSE);
+        if (isAgentStateMockNoGameQueryEnabled(window.location.search)) {
+          mockAgentStateResponse.currentGame = null;
+        }
         setAgentStateResponse(mockAgentStateResponse);
         setAgentStatusError(null);
         setIsShowingMockAgentState(true);

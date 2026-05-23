@@ -8,32 +8,6 @@ const EVENT_SOURCE_CLOSED = typeof EventSource !== "undefined" ? EventSource.CLO
 
 const AGENT_STATE_MOCK_NO_GAME_QUERY_KEY = "agentStateMockNoGame";
 
-export const AGENT_STATE_MOCK_BASE_RESPONSE: AgentStateResponse = {
-  niconama: {
-    type: "live",
-    meta: {
-      title: "配信エージェント状態モック (dev)",
-      url: "https://example.com/watch/mock",
-      start: 1_717_000_000,
-      total: {
-        listeners: 0,
-        gift: 0,
-        ad: 0,
-      },
-    },
-  },
-  commentCount: 0,
-  canSpeak: false,
-  currentGame: {
-    name: "org.dashnet.orteil/cookieclicker",
-    state: { status: "idle" },
-  },
-  nGram: 4,
-  nGramRaw: 4,
-  speech: { speech: "", silent: false },
-  speechHistory: [],
-};
-
 export const isAgentStateMockNoGameQueryEnabled = (searchParams: string): boolean => {
   return new URLSearchParams(searchParams).get(AGENT_STATE_MOCK_NO_GAME_QUERY_KEY) === "1";
 };
