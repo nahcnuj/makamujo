@@ -4,7 +4,6 @@ import { existsSync, writeFileSync, createWriteStream, mkdirSync } from "fs";
 import { createServer } from "node:net";
 import { join } from "path";
 import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
-import { AGENT_STATE_MOCK_RESPONSE_WINDOW_KEY } from "../../../console/src/AgentStatus";
 
 let CONSOLE_BASE_URL = `https://127.0.0.1`;
 let BROADCASTING_BASE_URL = `http://127.0.0.1:7777`;
@@ -204,13 +203,43 @@ test.afterAll(() => {
 });
 
 test.describe("console", () => {
-  const installAgentStateMock = async (page: import("@playwright/test").Page) => {
-    const mockResponse = cloneAgentStateResponseMockFixture();
+  const installAgentStateMockStream = async (
+    page: import("@playwright/test").Page,
+    options?: { withoutCurrentGame?: boolean },
+  ) => {
+    const mockResponse = options?.withoutCurrentGame
+      ? { ...cloneAgentStateResponseMockFixture(), currentGame: null }
+      : cloneAgentStateResponseMockFixture();
     await page.addInitScript(
-      ({ windowKey, response }) => {
-        (window as unknown as Record<string, unknown>)[windowKey] = response;
+      ({ response }) => {
+        const responseText = JSON.stringify(response);
+        class MockEventSource {
+          static CONNECTING = 0;
+          static OPEN = 1;
+          static CLOSED = 2;
+          url: string;
+          readyState = MockEventSource.CONNECTING;
+          onopen: ((event: Event) => void) | null = null;
+          onmessage: ((event: MessageEvent<string>) => void) | null = null;
+          onerror: ((event: Event) => void) | null = null;
+          constructor(url: string | URL) {
+            this.url = String(url);
+            setTimeout(() => {
+              if (this.readyState === MockEventSource.CLOSED) {
+                return;
+              }
+              this.readyState = MockEventSource.OPEN;
+              this.onopen?.(new Event("open"));
+              this.onmessage?.(new MessageEvent("message", { data: responseText }));
+            }, 0);
+          }
+          close() {
+            this.readyState = MockEventSource.CLOSED;
+          }
+        }
+        (window as unknown as { EventSource: unknown }).EventSource = MockEventSource;
       },
-      { windowKey: AGENT_STATE_MOCK_RESPONSE_WINDOW_KEY, response: mockResponse },
+      { response: mockResponse },
     );
   };
 
@@ -232,10 +261,8 @@ test.describe("console", () => {
   test("renders the console app in a browser", async ({ page }) => {
     const viewport = { width: 1280, height: 1000 };
     await page.setViewportSize(viewport);
-    await installAgentStateMock(page);
-    // Load the console in mock mode so the UI renders deterministic agent
-    // state without relying on the server or WebSocket timing.
-    await page.goto(`${CONSOLE_BASE_URL}/console/?agentStateMock=1`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await installAgentStateMockStream(page);
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
     expect(await page.title()).toContain(EXPECTED_CONSOLE_TITLE);
     const rootElement = await page.$("#root");
     expect(rootElement).not.toBeNull();
@@ -293,8 +320,8 @@ test.describe("console", () => {
   });
 
   test("renders a heading containing プレイ中 even when currentGame is missing", async ({ page }) => {
-    await installAgentStateMock(page);
-    await page.goto(`${CONSOLE_BASE_URL}/console/?agentStateMock=1&agentStateMockNoGame=1`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await installAgentStateMockStream(page, { withoutCurrentGame: true });
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
     await expect(page.getByRole("heading", { name: /プレイ中/ })).toBeVisible();
   });
 

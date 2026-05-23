@@ -1,15 +1,9 @@
 import { Container } from "../agt-compat";
-import { useCallback, useLayoutEffect, useState } from "hono/jsx";
+import { useLayoutEffect, useState } from "hono/jsx";
 import type { AgentStatusSection, AgentStateResponse } from "./types";
 import {
-  AGENT_STATE_MOCK_NOTICE_MESSAGE,
   INVALID_AGENT_STATE_RESPONSE_ERROR,
-  isAgentStateMockNoGameQueryEnabled,
-  isAgentStateMockQueryEnabled,
   parseAgentStateResponse,
-  readAgentStateMockResponseFromWindow,
-  shouldUseMockAgentState,
-  startAgentStateAutoRefresh,
 } from "./agentStatusState";
 import { createAgentStatusSections } from "./createAgentStatusSections";
 import { GameStatusSection } from "./GameStatusSection";
@@ -27,47 +21,9 @@ export const AgentStatus = () => {
   const [agentStatusError, setAgentStatusError] = useState<string | null>(null);
   const [lastUpdatedTime, setLastUpdatedTime] = useState("");
   const [isLoadingAgentState, setIsLoadingAgentState] = useState(false);
-  const [isShowingMockAgentState, setIsShowingMockAgentState] = useState(false);
-
-  const fetchAgentState = useCallback(async () => {
-    setIsLoadingAgentState(true);
-    try {
-      if (shouldUseMockAgentState()) {
-        const mockAgentStateResponse = readAgentStateMockResponseFromWindow(window);
-        if (isAgentStateMockNoGameQueryEnabled(window.location.search)) {
-          mockAgentStateResponse.currentGame = null;
-        }
-        setAgentStateResponse(mockAgentStateResponse);
-        setAgentStatusError(null);
-        setIsShowingMockAgentState(true);
-        setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
-        return;
-      }
-
-      throw new Error("ライブ更新はSSEでのみ提供されます。");
-    } catch (error) {
-      const errorMessage =
-        error instanceof SyntaxError
-          ? INVALID_AGENT_STATE_RESPONSE_ERROR
-          : error instanceof Error
-            ? error.message
-            : String(error);
-      setAgentStatusError(errorMessage);
-      setAgentStateResponse(null);
-      setIsShowingMockAgentState(false);
-      setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
-    } finally {
-      setIsLoadingAgentState(false);
-    }
-  }, []);
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
-
-    if (shouldUseMockAgentState()) {
-      void fetchAgentState();
-      return startAgentStateAutoRefresh(fetchAgentState);
-    }
 
     setIsLoadingAgentState(false);
     setAgentStatusError(null);
@@ -92,7 +48,6 @@ export const AgentStatus = () => {
           const responseData = parseAgentStateResponse(String(ev.data));
           setAgentStateResponse(responseData);
           setAgentStatusError(null);
-          setIsShowingMockAgentState(false);
           setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
         } catch {
           setAgentStatusError(INVALID_AGENT_STATE_RESPONSE_ERROR);
@@ -112,7 +67,7 @@ export const AgentStatus = () => {
     return () => {
       try { es?.close(); } catch {}
     };
-  }, [fetchAgentState]);
+  }, []);
 
   const streamTitle = agentStateResponse?.niconama?.meta?.title;
   const streamUrl = agentStateResponse?.niconama?.meta?.url;
