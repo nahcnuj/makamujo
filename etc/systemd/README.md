@@ -41,12 +41,6 @@ sudo systemctl enable --now xorg10.service x11vnc-10.service
 sudo systemctl stop makamujo.service
 ```
 
-3. Stop the service:
-
-```sh
-sudo systemctl stop makamujo.service
-```
-
 4. View logs (journalctl):
 
 ```sh
