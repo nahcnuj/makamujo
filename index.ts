@@ -215,9 +215,16 @@ const getCurrentStreamPayload = () => {
       : undefined;
 
   const niconamaNormalized = resolveNiconamaFromState(base as any) as any;
+  // If the resolved niconama payload is an empty object, omit the field
+  // from the emitted payload to make it explicit that no niconama data
+  // is available. Some consumers treat `{}` as present but empty which
+  // can cause confusing UI behaviour.
+  const niconamaFinal = niconamaNormalized && typeof niconamaNormalized === 'object' && Object.keys(niconamaNormalized).length === 0
+    ? undefined
+    : niconamaNormalized;
 
   return {
-    niconama: niconamaNormalized,
+    niconama: niconamaFinal,
     canSpeak: base.canSpeak ?? streamer.canSpeak,
     currentGame: base.currentGame ?? streamer.currentGame ?? null,
     nGram: base.nGram ?? streamer.currentNGramSize,
