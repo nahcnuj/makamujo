@@ -25,6 +25,8 @@ install-app:
 	elif [ -e bun.lockb ]; then \
 		cp -a bun.lockb "$(PREFIX)/"; \
 	fi
+	@echo "Installing Bun dependencies in $(PREFIX)"
+	@cd "$(PREFIX)" && if command -v bun >/dev/null 2>&1; then bun install --production; else echo "Warning: bun not found in PATH, skipping dependency install"; fi
 	@chown -R root:root "$(PREFIX)"
 	@chmod +x "$(PREFIX)/bin/"*
 
