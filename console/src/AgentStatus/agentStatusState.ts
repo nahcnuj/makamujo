@@ -31,8 +31,8 @@ export const createMockAgentStateResponse = (): AgentStateResponse => {
       name: "org.dashnet.orteil/cookieclicker",
       state: { status: "idle" },
     },
-    nGram: 1,
-    nGramRaw: 1,
+    nGram: 4,
+    nGramRaw: 4,
     speech: { speech: "", silent: false },
     speechHistory: [],
   };
