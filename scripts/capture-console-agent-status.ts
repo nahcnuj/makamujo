@@ -4,6 +4,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { app as consoleApp, websocket as consoleWebsocket } from "../routes/console/index";
 import { cloneAgentStateResponseMockFixture } from "../tests/fixtures/agentStateResponseMock";
+import { installDeterministicEventSource } from "../tests/fixtures/installDeterministicEventSource";
 
 const ROOT_DIR = path.resolve(import.meta.dir, "..");
 const DEFAULT_OUTPUT_PATH = path.join(ROOT_DIR, "var", "screenshots", "console-agent-status-mock.png");
@@ -35,31 +36,7 @@ const captureScreenshot = async (url: string, outputPath: string) => {
   try {
     const response = cloneAgentStateResponseMockFixture();
     await page.addInitScript(
-      ({ responseText }) => {
-        class MockEventSource {
-          static CONNECTING = 0;
-          static OPEN = 1;
-          static CLOSED = 2;
-          readyState = MockEventSource.CONNECTING;
-          onopen: ((event: Event) => void) | null = null;
-          onmessage: ((event: MessageEvent<string>) => void) | null = null;
-          onerror: ((event: Event) => void) | null = null;
-          constructor() {
-            setTimeout(() => {
-              if (this.readyState === MockEventSource.CLOSED) {
-                return;
-              }
-              this.readyState = MockEventSource.OPEN;
-              this.onopen?.(new Event("open"));
-              this.onmessage?.(new MessageEvent("message", { data: responseText }));
-            }, 0);
-          }
-          close() {
-            this.readyState = MockEventSource.CLOSED;
-          }
-        }
-        (window as unknown as { EventSource: unknown }).EventSource = MockEventSource;
-      },
+      installDeterministicEventSource,
       { responseText: JSON.stringify(response) },
     );
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20_000 });

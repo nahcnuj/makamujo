@@ -4,6 +4,7 @@ import { existsSync, writeFileSync, createWriteStream, mkdirSync } from "fs";
 import { createServer } from "node:net";
 import { join } from "path";
 import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
+import { installDeterministicEventSource } from "../../fixtures/installDeterministicEventSource";
 
 let CONSOLE_BASE_URL = `https://127.0.0.1`;
 let BROADCASTING_BASE_URL = `http://127.0.0.1:7777`;
@@ -211,35 +212,8 @@ test.describe("console", () => {
       ? { ...cloneAgentStateResponseMockFixture(), currentGame: null }
       : cloneAgentStateResponseMockFixture();
     await page.addInitScript(
-      ({ response }) => {
-        const responseText = JSON.stringify(response);
-        class MockEventSource {
-          static CONNECTING = 0;
-          static OPEN = 1;
-          static CLOSED = 2;
-          url: string;
-          readyState = MockEventSource.CONNECTING;
-          onopen: ((event: Event) => void) | null = null;
-          onmessage: ((event: MessageEvent<string>) => void) | null = null;
-          onerror: ((event: Event) => void) | null = null;
-          constructor(url: string | URL) {
-            this.url = String(url);
-            setTimeout(() => {
-              if (this.readyState === MockEventSource.CLOSED) {
-                return;
-              }
-              this.readyState = MockEventSource.OPEN;
-              this.onopen?.(new Event("open"));
-              this.onmessage?.(new MessageEvent("message", { data: responseText }));
-            }, 0);
-          }
-          close() {
-            this.readyState = MockEventSource.CLOSED;
-          }
-        }
-        (window as unknown as { EventSource: unknown }).EventSource = MockEventSource;
-      },
-      { response: mockResponse },
+      installDeterministicEventSource,
+      { responseText: JSON.stringify(mockResponse) },
     );
   };
 
