@@ -49,3 +49,42 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
 
   return rawState;
 };
+
+/**
+ * Normalize various payload shapes into a consistent `niconama` object where
+ * `niconama.meta` contains `title`, `url`, and `start` when those values are
+ * present either at top-level or within a `niconama` object that lacks `meta`.
+ */
+export const resolveNiconamaFromState = (src: unknown): unknown => {
+  if (!src || typeof src !== 'object') return {};
+
+  const payload = src as any;
+
+  if (payload.niconama && typeof payload.niconama === 'object') {
+    const n = { ...payload.niconama } as any;
+    if ((!n.meta || typeof n.meta !== 'object') && (n.title || n.url || n.start || n.startTime)) {
+      n.meta = {
+        title: typeof n.title === 'string' ? n.title : undefined,
+        url: typeof n.url === 'string' ? n.url : undefined,
+        start: typeof n.start === 'number' ? n.start : (typeof n.startTime === 'number' ? n.startTime : undefined),
+        total: n.meta?.total ?? n.total ?? undefined,
+      } as any;
+    }
+    return n;
+  }
+
+  const hasTopLevelFields = typeof payload.title === 'string' || typeof payload.url === 'string' || typeof payload.start === 'number' || typeof payload.startTime === 'number';
+  if (hasTopLevelFields) {
+    return {
+      type: typeof payload.type === 'string' ? payload.type : undefined,
+      meta: {
+        title: typeof payload.title === 'string' ? payload.title : undefined,
+        url: typeof payload.url === 'string' ? payload.url : undefined,
+        start: typeof payload.start === 'number' ? payload.start : (typeof payload.startTime === 'number' ? payload.startTime : undefined),
+        total: payload.meta?.total ?? payload.total ?? undefined,
+      },
+    } as any;
+  }
+
+  return {};
+};

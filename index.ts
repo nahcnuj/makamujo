@@ -20,7 +20,7 @@ import * as speechHistoryRoute from "./routes/api/speech-history";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
 import { handleCatchAll } from "./src/frontendServer";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
-import { normalizePublishedStreamState } from "./lib/streamState";
+import { normalizePublishedStreamState, resolveNiconamaFromState } from "./lib/streamState";
 import { createNiconamaCommentClient, type NiconamaCommentClient } from "./lib/niconamaCommentClient";
 import { installConsoleLogger } from "./lib/consoleLogger";
 
@@ -214,47 +214,7 @@ const getCurrentStreamPayload = () => {
       ? agentBase.replyTargetComment
       : undefined;
 
-  // Normalize various legacy/alternate shapes so the console frontend can
-  // consistently read `niconama.meta.title`, `niconama.meta.url`, and
-  // `niconama.meta.start` regardless of how the upstream publishes them.
-  const resolveNiconama = (src: any) => {
-    if (!src || typeof src !== 'object') return {};
-
-    // If the payload already contains a well-formed `niconama` object, prefer it.
-    if (src.niconama && typeof src.niconama === 'object') {
-      const n = { ...src.niconama } as any;
-      // If `meta` is missing but title/url/start exist at the top-level of
-      // the `niconama` object, promote them into `meta` for consistent access.
-      if ((!n.meta || typeof n.meta !== 'object') && (n.title || n.url || n.start || n.startTime)) {
-        n.meta = {
-          title: typeof n.title === 'string' ? n.title : undefined,
-          url: typeof n.url === 'string' ? n.url : undefined,
-          start: typeof n.start === 'number' ? n.start : (typeof n.startTime === 'number' ? n.startTime : undefined),
-          total: n.meta?.total ?? n.total ?? undefined,
-        } as any;
-      }
-      return n;
-    }
-
-    // Otherwise, if the base object itself contains title/url/start fields,
-    // map them into a minimal `niconama.meta` shape so the UI can read them.
-    const hasTopLevelFields = typeof src.title === 'string' || typeof src.url === 'string' || typeof src.start === 'number' || typeof src.startTime === 'number';
-    if (hasTopLevelFields) {
-      return {
-        type: typeof src.type === 'string' ? src.type : undefined,
-        meta: {
-          title: typeof src.title === 'string' ? src.title : undefined,
-          url: typeof src.url === 'string' ? src.url : undefined,
-          start: typeof src.start === 'number' ? src.start : (typeof src.startTime === 'number' ? src.startTime : undefined),
-          total: src.meta?.total ?? src.total ?? undefined,
-        },
-      } as any;
-    }
-
-    return {};
-  };
-
-  const niconamaNormalized = resolveNiconama(base);
+  const niconamaNormalized = resolveNiconamaFromState(base as any) as any;
 
   return {
     niconama: niconamaNormalized,

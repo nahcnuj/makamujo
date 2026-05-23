@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { normalizePublishedStreamState } from "./streamState";
+import { normalizePublishedStreamState, resolveNiconamaFromState } from "./streamState";
 
 describe("normalizePublishedStreamState", () => {
   it("preserves replyTargetComment for legacy niconama payloads", () => {
@@ -74,5 +74,32 @@ describe("normalizePublishedStreamState", () => {
     expect(normalized.replyTargetComment).toEqual(legacyState.replyTargetComment);
     expect(normalized.commentCount).toBe(7);
     expect(normalized).toHaveProperty("niconama");
+  });
+
+  it("maps top-level title/url/start into niconama.meta", () => {
+    const state = {
+      title: "TopLevelTitle",
+      url: "https://example.com/live",
+      start: 1700000000,
+    };
+
+    const normalized = resolveNiconamaFromState(state) as Record<string, any>;
+
+    expect(normalized).toHaveProperty('meta');
+    expect(normalized.meta.title).toBe('TopLevelTitle');
+    expect(normalized.meta.url).toBe('https://example.com/live');
+    expect(normalized.meta.start).toBe(1700000000);
+  });
+
+  it("promotes niconama.title into niconama.meta when meta is missing", () => {
+    const state = {
+      niconama: { type: 'live', title: 'NicoTitle' },
+    } as any;
+
+    const normalized = resolveNiconamaFromState(state) as Record<string, any>;
+
+    expect(normalized).toHaveProperty('meta');
+    expect(normalized.meta.title).toBe('NicoTitle');
+    expect(normalized.type).toBe('live');
   });
 });
