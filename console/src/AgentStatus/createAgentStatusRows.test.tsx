@@ -251,4 +251,26 @@ describe("createAgentStatusRows", () => {
     expect(html).toContain("コメント数");
     expect(html).toContain("99");
   });
+
+  it("renders game section when currentGame present even if niconama is empty", () => {
+    const rows = createAgentStatusRows({
+      niconama: {},
+      currentGame: { name: "CookieClicker", state: { clickableElementIds: ["ascendButton"], cookies: 123 } },
+    } as any);
+
+    const gameRow = rows.find((row) => row.label === "ゲーム情報");
+    expect(gameRow).toBeDefined();
+  });
+
+  it("does not render live delivery row when niconama empty but still shows markov/game rows", () => {
+    const rows = createAgentStatusRows({
+      niconama: {},
+      currentGame: { name: "CookieClicker", state: { ascendNumber: 1 } },
+      speech: { speech: "テスト発話", silent: false },
+    } as any);
+
+    expect(rows.find((r) => r.label === "配信指標")).toBeUndefined();
+    expect(rows.find((r) => r.label === "ゲーム情報")).toBeDefined();
+    expect(rows.find((r) => r.label === "発話内容")).toBeDefined();
+  });
 });
