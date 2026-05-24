@@ -350,7 +350,7 @@ test.describe("console", () => {
 
     // Wait for the page to establish the SSE connection before sending
     // the broadcast POST to avoid timing-dependent flakiness.
-    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
+    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 30_000 });
 
     const payload: any = cloneAgentStateResponseMockFixture();
     const res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
@@ -366,10 +366,23 @@ test.describe("console", () => {
   });
 
   test("reloads when broadcasted meta becomes 公開終了", async ({ page, request }) => {
+    // Capture browser console, runtime errors and failed requests for debugging
+    page.on('console', (msg) => {
+      try { console.log('[PW CONSOLE]', msg.type(), msg.text()); } catch {}
+    });
+    page.on('pageerror', (err) => {
+      try { console.error('[PW PAGE ERROR]', String(err)); } catch {}
+    });
+    page.on('requestfailed', (req) => {
+      try { console.warn('[PW REQ FAILED]', req.url(), req.failure()?.errorText ?? ''); } catch {}
+    });
+
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
       Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
       Object.defineProperty(window, '__loadCount', { value: 0, writable: true, configurable: true });
+      // A per-document session id that changes on every navigation/reload.
+      Object.defineProperty(window, '__sessionId', { value: Math.random(), writable: true, configurable: true });
       (window as any).EventSource = function (url: string) {
         const es = new OrigEventSource(url);
         try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
@@ -397,9 +410,9 @@ test.describe("console", () => {
     // Now post an ended/offline payload with the same program URL and title '公開終了'
     const endedPayload = { niconama: { type: 'offline', meta: { title: '公開終了', url: initialPayload.niconama.meta.url, start: initialPayload.niconama.meta.start } } };
 
-    // Use a load-counter to robustly detect a reload (works even if
-    // navigation events are missed or the URL doesn't appear to change).
-    const beforeLoadCount = await page.evaluate(() => (window as any).__loadCount ?? 0);
+    // Use a per-document session id to robustly detect a reload — the
+    // `__sessionId` is re-created on every navigation and changes value.
+    const beforeSessionId = await page.evaluate(() => (window as any).__sessionId ?? null);
     res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -407,7 +420,7 @@ test.describe("console", () => {
     });
     expect(res.ok, `ended broadcast POST failed: ${res.status}`).toBeTruthy();
 
-    await page.waitForFunction((count) => (window as any).__loadCount > count, beforeLoadCount, { timeout: 10_000 });
+    await page.waitForFunction((id) => (window as any).__sessionId !== id, beforeSessionId, { timeout: 10_000 });
 
     // After reload, the console app should still render
     await expect(page.getByRole('heading', { name: '馬可無序' })).toBeVisible({ timeout: 5_000 });

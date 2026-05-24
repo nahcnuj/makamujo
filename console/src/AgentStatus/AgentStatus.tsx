@@ -1,5 +1,5 @@
 import { Container } from "../agt-compat";
-import { useLayoutEffect, useState } from "hono/jsx";
+import { useLayoutEffect, useState, useRef } from "hono/jsx";
 import type { AgentStatusSection, AgentStateResponse } from "./types";
 import {
   INVALID_AGENT_STATE_RESPONSE_ERROR,
@@ -21,6 +21,8 @@ export const AgentStatus = () => {
   const [agentStatusError, setAgentStatusError] = useState<string | null>(null);
   const [lastUpdatedTime, setLastUpdatedTime] = useState("");
   const [isLoadingAgentState, setIsLoadingAgentState] = useState(false);
+  const prevTypeRef = useRef<string | undefined>(undefined);
+  const prevMetaUrlRef = useRef<string | undefined>(undefined);
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
@@ -45,7 +47,51 @@ export const AgentStatus = () => {
       };
       es.onmessage = (ev: MessageEvent) => {
         try {
+          try { console.debug('[DEBUG] SSE onmessage data ->', String(ev.data)); } catch {}
           const responseData = parseAgentStateResponse(String(ev.data));
+          try { console.debug('[DEBUG] parsed SSE niconama ->', responseData?.niconama); } catch {}
+
+          try {
+            console.debug('[DIAG] onmessage detection state ->', {
+              prevType: prevTypeRef.current,
+              prevUrl: prevMetaUrlRef.current,
+              currentType: responseData?.niconama?.type,
+              currentUrl: responseData?.niconama?.meta?.url,
+              currentTitle: responseData?.niconama?.meta?.title,
+            });
+          } catch {}
+
+          // Detect end-of-program and reload the page when appropriate.
+          try {
+            const currentType = responseData?.niconama?.type;
+            const currentUrl = responseData?.niconama?.meta?.url as string | undefined;
+            const currentTitle = responseData?.niconama?.meta?.title as string | undefined;
+
+            const prevType = prevTypeRef.current;
+            const prevUrl = prevMetaUrlRef.current;
+
+            if (currentType === 'offline' && prevType === 'live') {
+              try {
+                try { console.debug('[DIAG] reload triggered: prevType ->', prevType, 'currentType ->', currentType, 'prevUrl ->', prevUrl, 'currentUrl ->', currentUrl); } catch {}
+                window.location.reload();
+                return;
+              } catch {}
+            }
+
+            if (currentTitle && currentTitle.includes('公開終了') && prevUrl && prevUrl === currentUrl) {
+              try {
+                try { console.debug('[DIAG] reload triggered by title 公開終了: title ->', currentTitle, 'prevUrl ->', prevUrl, 'currentUrl ->', currentUrl); } catch {}
+                window.location.reload();
+                return;
+              } catch {}
+            }
+
+            prevTypeRef.current = currentType;
+            prevMetaUrlRef.current = currentUrl;
+          } catch (e) {
+            // ignore detection errors
+          }
+
           setAgentStateResponse(responseData);
           setAgentStatusError(null);
           setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
