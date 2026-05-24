@@ -902,6 +902,18 @@ export class NiconamaCommentClient {
             return;
           }
 
+          // Handle ArrayBuffer views (Uint8Array, Buffer, DataView, etc.)
+          try {
+            if (ArrayBuffer.isView(data)) {
+              const payload = new TextDecoder().decode(data as ArrayBufferView);
+              console.debug('[DEBUG] direct websocket received ArrayBufferView', { wsUrl: webSocketUrl, payloadLength: payload.length });
+              this.handleDirectWebSocketMessage(payload, webSocketUrl);
+              return;
+            }
+          } catch (err) {
+            console.debug('[DEBUG] ArrayBuffer.isView check failed or decode failed', err);
+          }
+
           // Handle ArrayBuffer
           if (data instanceof ArrayBuffer) {
             const payload = new TextDecoder().decode(data);
