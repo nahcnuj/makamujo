@@ -3,7 +3,7 @@ import { rmSync } from "node:fs";
 
 import { createNiconamaCommentClient } from "../../lib/niconamaCommentClient";
 
-const ACTUAL_PROGRAM_WATCH_URL = process.env.NICONAMA_TEST_WATCH_URL ?? "https://live.nicovideo.jp/watch/user/14171889";
+const ACTUAL_PROGRAM_WATCH_URL = "https://live.nicovideo.jp/watch/user/14171889";
 
 test.describe("NiconamaCommentClient E2E (live)", () => {
   test.setTimeout(120000);
