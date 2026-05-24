@@ -367,6 +367,14 @@ export class NiconamaCommentClient {
     const targetUrl = watchUrl ?? this.#watchUrl ?? DEFAULT_FALLBACK_WATCH_URL;
     // Try fetching the page HTML first (fast, no browser required)
     const embedded = await this.fetchEmbeddedDataFromPage(targetUrl);
+    // If the earlier fetch returned a sentinel indicating the program has
+    // ended, treat that as a valid result so the client can continue
+    // operating (e.g. start polling for the next program) instead of
+    // aborting startup.
+    if (embedded && typeof embedded === 'object' && (embedded as any).programEnded) {
+      return embedded;
+    }
+
     if (embedded) {
       const commentCount = typeof (embedded as any).program?.statistics?.commentCount === 'number'
         ? (embedded as any).program.statistics.commentCount
@@ -792,6 +800,34 @@ export class NiconamaCommentClient {
   private async fetchEmbeddedDataFromPage(watchUrl: string): Promise<unknown | null> {
     try {
       const html = await this.fetchHtml(watchUrl);
+
+      // If the watch page contains an explicit "公開終了" marker, notify
+      // consumers via `onMeta` and return a sentinel object so callers can
+      // continue operating (e.g. start polling) instead of aborting.
+      try {
+        if (typeof html === 'string' && html.indexOf('公開終了') !== -1) {
+          try {
+            this.#callbacks.onMeta({
+              type: 'niconama',
+              data: {
+                isLive: false,
+                title: '公開終了',
+                startTime: Date.now(),
+                total: 0,
+                points: { gift: 0, ad: 0 },
+                url: watchUrl,
+              },
+            });
+          } catch (cbErr) {
+            this.reportError(cbErr);
+          }
+          return { programEnded: true, url: watchUrl };
+        }
+      } catch (e) {
+        // fall through to regular parsing on unexpected errors
+        this.reportError(e);
+      }
+
       const embeddedData = extractEmbeddedDataFromHtml(html);
       if (!embeddedData) {
         console.warn('[WARN] embedded-data element not found', watchUrl);
