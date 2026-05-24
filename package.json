@@ -33,7 +33,8 @@
     "playwright": "^1.59.1",
     "playwright-extra": "^4.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "tailwindcss": "^4.3.0"
+    "tailwindcss": "^4.3.0",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
