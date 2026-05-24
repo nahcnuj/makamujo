@@ -5,13 +5,15 @@ import { createNiconamaCommentClient } from "../../lib/niconamaCommentClient";
 
 const ACTUAL_PROGRAM_WATCH_URL = "https://live.nicovideo.jp/watch/user/14171889";
 
+process.env = Object.freeze(process.env);
+
 test.describe("NiconamaCommentClient E2E (live)", () => {
   test.setTimeout(120000);
 
   test("start client and receive at least one comment (mirrors run-niconama-client.ts)", async () => {
     const received: any[] = [];
     const client = createNiconamaCommentClient({ watchUrl: ACTUAL_PROGRAM_WATCH_URL, userDataDir: './tmp/niconama-user-data-e2e' }, {
-      onComments: (comments) => { received.push(...comments); },
+      onComments: (comments) => { console.debug('[TEST] onComments', comments); received.push(...comments); console.debug('[TEST] received length', received.length); },
       onMeta: () => {},
       onError: (err) => { throw err; },
     });
