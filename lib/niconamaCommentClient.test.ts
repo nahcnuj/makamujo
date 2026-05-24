@@ -287,7 +287,7 @@ describe("detect program end in fetched HTML", () => {
       (globalThis as any).fetch = async () => ({ ok: true, text: async () => embeddedHtml });
 
       const metas: any[] = [];
-      const client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: async () => ({ pages: () => [], newPage: async () => ({}), close: async () => {} }) }, {
+      const client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: (async () => ({ pages: () => [], newPage: async () => ({}), close: async () => {} })) as any }, {
         onComments: () => {},
         onMeta: (m) => { metas.push(m); },
         onError: (err) => { throw err; },
