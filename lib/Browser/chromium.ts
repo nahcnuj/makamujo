@@ -205,6 +205,25 @@ type ClickablePageLike = {
  */
 export const createClickByElementId = (page: ClickablePageLike) =>
   async (id: string): Promise<void> => {
+    // Prefer a DOM-evaluated click when available (real Playwright Page)
+    // to avoid visibility/stability flakiness. Fall back to the locator
+    // approach used in tests which provides a minimal `locator()` API.
+    const anyPage = page as any;
+    if (typeof anyPage.evaluate === 'function') {
+      const clicked = await anyPage.evaluate((targetId: string) => {
+        const els = Array.from(document.querySelectorAll(`#${CSS.escape(targetId)}`));
+        const el = els[0] as HTMLElement | undefined;
+        if (!el) return false;
+        el.click();
+        return true;
+      }, id);
+      if (!clicked) {
+        throw new Error(`createClickByElementId: element with id "${id}" not found`);
+      }
+      return;
+    }
+
+    // Fallback for test doubles that only expose `locator()`.
     await page.locator(`#${id}`).first().click({ timeout: 5_000 });
   };
 

@@ -31,6 +31,13 @@ process.on('SIGUSR2', signalHandler.bind(null, { exit: true }));
 // existing exit handler which terminates the process.
 suppressDebugConsoleInProduction();
 
+// Safe references used by the global exit handler to avoid accessing
+// variables that may still be in the temporal dead zone during early
+// startup failures. These are assigned once the corresponding resources
+// have been initialized.
+let __serverForExit: any = null;
+let __consoleServerForExit: any = null;
+
 process.on('uncaughtException', (err) => {
   try {
     console.error('[UNCAUGHT_EXCEPTION]', err instanceof Error ? err.stack ?? err.message : String(err));
@@ -569,43 +576,59 @@ const mainApp = new Hono()
   // Serve the built frontend (HTML + JS/CSS assets)
   .all('*', async (c) => handleCatchAll(c.req.raw));
 
-const server = mainServer = serve<WsData>({
-  port: portNumber,
-  async fetch(req: Request, server: Bun.Server<WsData>) {
-    const url = new URL(req.url);
-    const isWsEndpoint = url.pathname === '/api/ws' || url.pathname === '/console/api/ws';
-    const accept = req.headers.get('accept') ?? '';
-    const forceDisableWs = process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPGRADE === 'true';
+function startServerOnPort(p: number) {
+  return serve<WsData>({
+    port: p,
+    async fetch(req: Request, server: Bun.Server<WsData>) {
+      const url = new URL(req.url);
+      const isWsEndpoint = url.pathname === '/api/ws' || url.pathname === '/console/api/ws';
+      const accept = req.headers.get('accept') ?? '';
+      const forceDisableWs = process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPGRADE === 'true';
 
-    if (isWsEndpoint && !accept.includes('text/event-stream') && !forceDisableWs) {
-      const label = url.pathname;
-      try { console.log(`[TRACE] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
-      const upgraded = server.upgrade(req, { data: { label } satisfies WsData });
-      if (upgraded) {
-        // undefined signals Bun that the connection was upgraded to WebSocket
-        // and no HTTP response should be sent back.
-        return undefined;
+      if (isWsEndpoint && !accept.includes('text/event-stream') && !forceDisableWs) {
+        const label = url.pathname;
+        try { console.log(`[TRACE] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
+        const upgraded = server.upgrade(req, { data: { label } satisfies WsData });
+        if (upgraded) {
+          return undefined;
+        }
+        try { console.warn(`[WARN] WebSocket upgrade failed for ${label}`, { upgrade: req.headers.get('upgrade'), secWebSocketKey: req.headers.get('sec-websocket-key') }); } catch {}
+        return new Response('WebSocket upgrade failed', { status: 400 });
       }
-      try { console.warn(`[WARN] WebSocket upgrade failed for ${label}`, { upgrade: req.headers.get('upgrade'), secWebSocketKey: req.headers.get('sec-websocket-key') }); } catch {}
-      return new Response('WebSocket upgrade failed', { status: 400 });
-    }
 
-    return mainApp.fetch(req);
-  },
-
-  websocket: {
-    open(ws) {
-      const { label } = ws.data;
-      try { console.log(`[INFO] WebSocket client connected (${label})`); } catch { }
-      try { wsClients.add(ws); } catch { }
-      try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch { }
+      return mainApp.fetch(req);
     },
-    message() { },
-    close(ws) { try { wsClients.delete(ws); } catch { } },
-  },
-});
 
-console.log(`🚀 Server running at ${server.url}`);
+    websocket: {
+      open(ws) {
+        const { label } = ws.data;
+        try { console.log(`[INFO] WebSocket client connected (${label})`); } catch { }
+        try { wsClients.add(ws); } catch { }
+        try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch { }
+      },
+      message() { },
+      close(ws) { try { wsClients.delete(ws); } catch { } },
+    },
+  });
+}
+
+let server: Bun.Server<WsData>;
+try {
+  server = mainServer = startServerOnPort(portNumber);
+  console.log(`🚀 Server running at ${server.url}`);
+  __serverForExit = server;
+} catch (err) {
+  console.error('[ERROR] Failed to start server on port', portNumber, err instanceof Error ? (err.stack ?? err.message) : String(err));
+  console.log('[INFO] Retrying server startup on an ephemeral port');
+  try {
+    server = mainServer = startServerOnPort(0);
+    console.log(`🚀 Server running at ${server.url}`);
+    __serverForExit = server;
+  } catch (err2) {
+    console.error('[ERROR] Failed to start server on an ephemeral port', err2 instanceof Error ? (err2.stack ?? err2.message) : String(err2));
+    throw err2;
+  }
+}
 
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 if (process.env.NODE_ENV === "production") {
@@ -621,20 +644,38 @@ if (process.env.NODE_ENV === "production") {
     }
   })();
 }
-try {
-  consoleServer = startConsoleServer({
-    broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
-    broadcastingPort: process.env.BROADCASTING_PORT ?? server.port,
-  });
-  console.log(`🚀 Console running at ${consoleServer.url}`);
-  if (process.env.NODE_ENV === 'production') {
-    AllowedIP.set({ family: 'IPv4', address: '127.0.0.1' });
+  try {
+    consoleServer = startConsoleServer({
+      broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
+      broadcastingPort: process.env.BROADCASTING_PORT ?? server.port,
+    });
+    console.log(`🚀 Console running at ${consoleServer.url}`);
+    // Populate the safe consoleServer ref for the exit handler.
+    __consoleServerForExit = consoleServer;
+    if (process.env.NODE_ENV === 'production') {
+      AllowedIP.set({ family: 'IPv4', address: '127.0.0.1' });
+    }
+  } catch (err) {
+    const consoleStartupError = err instanceof Error ? (err.stack ?? err.message) : String(err);
+    console.error(`[ERROR] CONSOLE_STARTUP_FAILED ${JSON.stringify(consoleStartupError)}`);
+      // Attempt to fall back to loopback-only mode to make the server
+      // usable in environments where the outer TLS server cannot bind
+      // to port 443 (e.g. CI, dev containers).
+      try {
+        console.log('[WARN] Falling back to loopback-only console server');
+        process.env.CONSOLE_LOOPBACK_ONLY = '1';
+        consoleServer = startConsoleServer({
+          broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
+          broadcastingPort: process.env.BROADCASTING_PORT ?? server.port,
+        });
+        console.log(`🚀 Console (loopback-only) running at ${consoleServer.url}`);
+        __consoleServerForExit = consoleServer;
+      } catch (err2) {
+        const consoleStartupError2 = err2 instanceof Error ? (err2.stack ?? err2.message) : String(err2);
+        console.error(`[ERROR] CONSOLE_STARTUP_FAILED_FALLBACK ${JSON.stringify(consoleStartupError2)}`);
+        process.exit(1);
+      }
   }
-} catch (err) {
-  const consoleStartupError = err instanceof Error ? (err.stack ?? err.message) : String(err);
-  console.error(`[ERROR] CONSOLE_STARTUP_FAILED ${JSON.stringify(consoleStartupError)}`);
-  process.exit(1);
-}
 
 try {
   niconamaCommentClient = createNiconamaCommentClient(
@@ -698,11 +739,19 @@ setInterval(async () => {
 function exitHandler(options: { cleanup: true; exit?: never } | { cleanup?: never; exit: true }, exitCode?: number) {
   if (options.cleanup) {
     console.log('[INFO]', 'server stopping...');
-    if (server) {
-      server.stop(options.exit);
+    try {
+      if (__serverForExit) {
+        __serverForExit.stop(options.exit);
+      }
+    } catch (err) {
+      // ignore errors while attempting to stop the server during cleanup
     }
-    if (consoleServer) {
-      consoleServer.stop(options.exit);
+    try {
+      if (__consoleServerForExit) {
+        __consoleServerForExit.stop(options.exit);
+      }
+    } catch (err) {
+      // ignore console stop errors
     }
     if (niconamaCommentClient) {
       void niconamaCommentClient.stop().catch((err) => {

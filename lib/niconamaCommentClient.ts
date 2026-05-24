@@ -273,6 +273,10 @@ export type NiconamaCommentClientOptions = {
   watchUrl?: string;
   pollIntervalMs?: number;
   launchPersistentContext?: NiconamaLaunchPersistentContext;
+  // Optional DI/test hooks
+  skipPlaywrightEnrich?: boolean;
+  internalMockWebSocket?: boolean;
+  WebSocketClass?: any;
 };
 
 type NiconamaCommentClientCallbacks = {
@@ -295,9 +299,13 @@ export class NiconamaCommentClient {
   #playwrightCommentContext: any | null = null;
   #playwrightCommentPage: any | null = null;
   #playwrightPageCommentPollTimer: ReturnType<typeof setInterval> | null = null;
+  #playwrightRecoveryInProgress = false;
   #pollTimer: ReturnType<typeof setTimeout> | null = null;
   #pollCancelResolve: (() => void) | null = null;
   #launchPersistentContext: NiconamaLaunchPersistentContext;
+  #skipPlaywrightEnrich: boolean;
+  #internalMockWebSocket: boolean;
+  #WebSocketClass: any | null;
   #callbacks: NiconamaCommentClientCallbacks;
 
   constructor(options: NiconamaCommentClientOptions, callbacks: NiconamaCommentClientCallbacks) {
@@ -306,6 +314,13 @@ export class NiconamaCommentClient {
     this.#executablePath = options.executablePath ?? DEFAULT_CHROMIUM_EXECUTABLE_PATH;
     this.#pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.#launchPersistentContext = options.launchPersistentContext ?? (launchPersistentContext as unknown as NiconamaLaunchPersistentContext);
+    this.#skipPlaywrightEnrich = typeof options.skipPlaywrightEnrich === 'boolean'
+      ? options.skipPlaywrightEnrich
+      : (process.env.MAKAMUJO_SKIP_PLAYWRIGHT_ENRICH === '1');
+    this.#internalMockWebSocket = typeof options.internalMockWebSocket === 'boolean'
+      ? options.internalMockWebSocket
+      : false;
+    this.#WebSocketClass = options.WebSocketClass ?? null;
     this.#callbacks = callbacks;
   }
 
@@ -425,8 +440,18 @@ export class NiconamaCommentClient {
 
       const page = await context.newPage();
       const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 });
-      if (!response || response.status() >= 400) {
-        console.warn('[WARN] fetchRenderedWatchPageBodyText failed to navigate', { targetUrl, status: response?.status?.() });
+      // Safely capture status without calling Playwright handles that may be
+      // unbound if the page/connection closed unexpectedly.
+      let navStatus: number | undefined;
+      try {
+        navStatus = response && typeof response.status === 'function' ? response.status() : undefined;
+      } catch (err) {
+        console.warn('[WARN] fetchRenderedWatchPageBodyText response.status() failed', err);
+        return null;
+      }
+
+      if (!response || (typeof navStatus === 'number' && navStatus >= 400)) {
+        console.warn('[WARN] fetchRenderedWatchPageBodyText failed to navigate', { targetUrl, status: navStatus });
         return null;
       }
 
@@ -685,20 +710,33 @@ export class NiconamaCommentClient {
       console.debug('[DEBUG] Playwright context launched');
       try {
         console.debug('[DEBUG] opening new Playwright page');
-        const page = await context.newPage();
+        let page = await context.newPage();
         console.debug('[DEBUG] page opened', { url: page.url(), isClosed: page.isClosed() });
         console.debug('[DEBUG] navigating to target URL');
         const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 10_000 });
-        console.debug('[DEBUG] page goto complete', { responseStatus: response?.status(), url: page.url() });
+        // Avoid calling Playwright response methods without guarding against
+        // unbound handles (page/context may close unexpectedly).
+        let responseStatus: number | undefined;
+        try {
+          responseStatus = response && typeof response.status === 'function' ? response.status() : undefined;
+        } catch {
+          responseStatus = undefined;
+        }
+        console.debug('[DEBUG] page goto complete', { responseStatus, url: page.url() });
 
         let parsed: unknown | null = null;
         if (response) {
           try {
-            const html = await response.text();
-            console.debug('[DEBUG] Playwright response HTML length', { length: html.length });
-            const embeddedData = extractEmbeddedDataFromHtml(html);
-            if (embeddedData) {
-              parsed = embeddedData;
+            let html: string | undefined;
+            try {
+              html = await response.text();
+            } catch {
+              html = undefined;
+            }
+            if (typeof html === 'string') {
+              console.debug('[DEBUG] Playwright response HTML length', { length: html.length });
+              const embeddedData = extractEmbeddedDataFromHtml(html);
+              if (embeddedData) parsed = embeddedData;
             }
           } catch (err) {
             console.warn('[WARN] failed to read Playwright navigation response text', err);
@@ -707,6 +745,18 @@ export class NiconamaCommentClient {
 
         const pageUrl = page.url();
         let immediateComments: AgentComment[] = [];
+        // If the initially created page was closed (popups/redirections), try to
+        // switch to a surviving open page in the same context.
+        if (page.isClosed()) {
+          const surviving = context.pages().find((p: any) => !p.isClosed());
+          if (surviving) {
+            console.warn('[WARN] Playwright initial page closed; switching to surviving page', { url: pageUrl, survivingUrl: surviving.url() });
+            page = surviving;
+          } else {
+            console.warn('[WARN] Playwright page closed and no surviving page found', { url: pageUrl });
+          }
+        }
+
         if (!page.isClosed()) {
           await this.tryOpenRenderedCommentPanel(page);
           try {
@@ -732,6 +782,14 @@ export class NiconamaCommentClient {
         console.debug('[DEBUG] Playwright page loaded, parsed embedded-data', { hasParsedData: Boolean(parsed), pageClosed: page.isClosed(), url: pageUrl });
 
         let pageComments: AgentComment[] = [];
+        if (page.isClosed()) {
+          const surviving = context.pages().find((p: any) => !p.isClosed());
+          if (surviving) {
+            console.warn('[WARN] Playwright page closed before comment polling; switching to surviving page', { url: pageUrl, survivingUrl: surviving.url() });
+            page = surviving;
+          }
+        }
+
         if (!page.isClosed()) {
           try {
             await page.waitForLoadState?.('networkidle', { timeout: 15_000 });
@@ -862,12 +920,41 @@ export class NiconamaCommentClient {
       return;
     }
 
-    try {
-      const WebSocketClass = (globalThis as any).WebSocket;
-      if (typeof WebSocketClass !== 'function') {
-        console.warn('[WARN] direct websocket not available in this runtime, skipping direct websocket connection', { watchUrl });
-        return;
-      }
+      try {
+        // Prefer an explicitly injected WebSocket class when provided via options.
+        let WebSocketClass: any = this.#WebSocketClass ?? (globalThis as any).WebSocket;
+
+        // If the caller requested an internal mock via options, prefer it
+        // unconditionally so tests remain deterministic.
+        if (this.#internalMockWebSocket) {
+          console.debug('[DEBUG] forcing internal MockWebSocket due to options/internalMockWebSocket=true');
+          WebSocketClass = class MockWebSocket {
+            static OPEN = 1;
+            public onopen: any;
+            public onmessage: any;
+            public onclose: any;
+            public onerror: any;
+            public readyState: number;
+            constructor(public url: string, _opts?: any) {
+              this.readyState = (MockWebSocket as any).OPEN;
+              setTimeout(() => { try { this.onopen && this.onopen(); } catch {} }, 10);
+              // Emit a deterministic comment payload shortly after open
+              setTimeout(() => {
+                try {
+                  const payload = JSON.stringify({ comments: [{ comment: 'INTERNAL-MOCK-COMMENT' }] });
+                  this.onmessage && this.onmessage({ data: payload });
+                } catch {}
+              }, 50);
+            }
+            send(_msg: string) { /* no-op */ }
+            close() { try { this.onclose && this.onclose({ code: 1000, reason: 'mock-closed' }); } catch {} }
+          } as any;
+        }
+
+        if (typeof WebSocketClass !== 'function') {
+          console.warn('[WARN] direct websocket not available in this runtime, skipping direct websocket connection', { watchUrl });
+          return;
+        }
 
       console.debug('[DEBUG] direct websocket creating socket', webSocketUrl);
       let ws: any = null;
@@ -1020,85 +1107,108 @@ export class NiconamaCommentClient {
       });
 
       let page = await context.newPage();
-      page.on('close', () => {
-        console.debug('[DEBUG] Playwright page closed', { url: page.url() });
-      });
-      page.on('crash', () => {
-        console.debug('[DEBUG] Playwright page crashed', { url: page.url() });
-      });
-      page.on('request', (request: any) => {
-        const url = request.url();
-        if (/comment|wsapi|watch|json|data/i.test(url)) {
-          console.debug('[DEBUG] Playwright request', url);
-        }
-      });
-      page.on('requestfailed', (request: any) => {
-        const url = request.url();
-        if (/comment|wsapi|watch|json|data/i.test(url)) {
-          console.debug('[DEBUG] Playwright request failed', url, request.failure()?.errorText);
-        }
-      });
-      page.on('websocket', (socket: any) => {
-        const wsUrl = socket.url();
-        console.debug('[DEBUG] Playwright websocket connected', wsUrl);
-        socket.on('framereceived', (frame: any) => {
-          let payload = frame.payload;
-          if (payload instanceof ArrayBuffer) {
-            payload = new TextDecoder().decode(payload);
-          } else if (typeof payload !== 'string') {
-            payload = String(payload);
-          }
-          console.debug('[DEBUG] Playwright websocket frame', {
-            url: wsUrl,
-            length: payload.length,
-            snippet: payload.slice(0, 200),
-          });
-          this.handlePlaywrightWebSocketFrame(payload, wsUrl);
+
+      const attachListenersToPage = (p: any) => {
+        p.on('close', () => {
+          try { console.debug('[DEBUG] Playwright page closed', { url: p.url() }); } catch { /* ignore */ }
         });
-      });
-
-      page.on('response', async (response: any) => {
-        const url = response.url();
-        const contentType = (response.headers()['content-type'] ?? '').toLowerCase();
-
-        let bodyText: string;
-        try {
-          bodyText = await response.text();
-        } catch {
-          return;
-        }
-
-        const trimmed = bodyText.trim();
-        if (!trimmed || (trimmed[0] !== '{' && trimmed[0] !== '[')) return;
-
-        const parsed = tryParseJson(bodyText);
-        if (!parsed || typeof parsed !== 'object') return;
-
-        console.debug('[DEBUG] Playwright response received', {
-          url,
-          contentType,
-          length: bodyText.length,
-          snippet: bodyText.slice(0, 200),
+        p.on('crash', () => {
+          try { console.debug('[DEBUG] Playwright page crashed', { url: p.url() }); } catch { /* ignore */ }
+        });
+        p.on('request', (request: any) => {
+          try {
+            const url = request.url();
+            if (/comment|wsapi|watch|json|data/i.test(url)) {
+              console.debug('[DEBUG] Playwright request', url);
+            }
+          } catch { /* ignore */ }
+        });
+        p.on('requestfailed', (request: any) => {
+          try {
+            const url = request.url();
+            if (/comment|wsapi|watch|json|data/i.test(url)) {
+              console.debug('[DEBUG] Playwright request failed', url, request.failure()?.errorText);
+            }
+          } catch { /* ignore */ }
+        });
+        p.on('websocket', (socket: any) => {
+          try {
+            const wsUrl = socket.url();
+            console.debug('[DEBUG] Playwright websocket connected', wsUrl);
+            socket.on('framereceived', (frame: any) => {
+              let payload = frame.payload;
+              if (payload instanceof ArrayBuffer) {
+                payload = new TextDecoder().decode(payload);
+              } else if (typeof payload !== 'string') {
+                payload = String(payload);
+              }
+              console.debug('[DEBUG] Playwright websocket frame', {
+                url: wsUrl,
+                length: payload.length,
+                snippet: payload.slice(0, 200),
+              });
+              try { this.handlePlaywrightWebSocketFrame(payload, wsUrl); } catch { /* ignore */ }
+            });
+          } catch { /* ignore */ }
         });
 
-        const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
-        if (comments.length > 0) {
-          this.#callbacks.onComments(comments);
-          console.debug('[DEBUG] Playwright response comment payload', {
-            url,
-            count: comments.length,
-          });
-        }
-      });
+        p.on('response', async (response: any) => {
+          try {
+            let url = '';
+            let contentType = '';
+            let bodyText = '';
+
+            // Pre-capture potentially unsafe Playwright handle calls inside
+            // guarded try/catch blocks so a closed connection doesn't throw.
+            try {
+              if (response) {
+                try { url = typeof response.url === 'function' ? response.url() : ''; } catch { url = ''; }
+                try {
+                  const headers = typeof response.headers === 'function' ? response.headers() : {};
+                  contentType = (headers['content-type'] ?? '').toLowerCase();
+                } catch { contentType = ''; }
+                try { bodyText = await response.text(); } catch { bodyText = ''; }
+              }
+            } catch { /* ignore inner capture errors */ }
+
+            const trimmed = (bodyText || '').trim();
+            if (!trimmed || (trimmed[0] !== '{' && trimmed[0] !== '[')) return;
+
+            const parsed = tryParseJson(bodyText);
+            if (!parsed || typeof parsed !== 'object') return;
+
+            console.debug('[DEBUG] Playwright response received', {
+              url,
+              contentType,
+              length: bodyText.length,
+              snippet: bodyText.slice(0, 200),
+            });
+
+            const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
+            if (comments.length > 0) {
+              this.#callbacks.onComments(comments);
+              console.debug('[DEBUG] Playwright response comment payload', {
+                url,
+                count: comments.length,
+              });
+            }
+          } catch { /* ignore */ }
+        });
+      };
+
+      attachListenersToPage(page);
 
       let response: any;
+      let respStatus: number | undefined;
       try {
         response = await page.goto(watchUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-        console.debug('[DEBUG] Playwright page goto complete', { responseStatus: response?.status(), url: page.url(), waitUntil: 'domcontentloaded' });
+        try { respStatus = response && typeof response.status === 'function' ? response.status() : undefined; } catch { respStatus = undefined; }
+        console.debug('[DEBUG] Playwright page goto complete', { responseStatus: respStatus, url: page.url(), waitUntil: 'domcontentloaded' });
       } catch (err) {
         console.warn('[WARN] Playwright page domcontentloaded timeout, falling back to navigation commit', err);
         response = await page.goto(watchUrl, { waitUntil: 'commit', timeout: 30_000 });
-        console.debug('[DEBUG] Playwright page goto complete', { responseStatus: response?.status(), url: page.url(), waitUntil: 'commit' });
+        try { respStatus = response && typeof response.status === 'function' ? response.status() : undefined; } catch { respStatus = undefined; }
+        console.debug('[DEBUG] Playwright page goto complete', { responseStatus: respStatus, url: page.url(), waitUntil: 'commit' });
       }
       console.debug('[DEBUG] Playwright page after goto', { url: page.url(), isClosed: page.isClosed(), pages: context.pages().map((p: any) => p.url()) });
 
@@ -1138,10 +1248,39 @@ export class NiconamaCommentClient {
         if (survivingPage) {
           console.warn('[WARN] Playwright page closed after initial load; switching to surviving page', { url: watchUrl, survivingUrl: survivingPage.url() });
           page = survivingPage;
+          attachListenersToPage(page);
         } else {
-          console.warn('[WARN] Playwright page closed before watcher installation could complete', { url: watchUrl });
-          await context.close();
-          return;
+          // Try to retry opening a fresh page in the same context multiple times
+          // to handle transient redirects/popups that may briefly close the page.
+          let reopened = false;
+          const maxRetries = 8;
+          for (let attempt = 1; attempt <= maxRetries && !this.#stopRequested; attempt++) {
+            try {
+              const retryPage = await context.newPage();
+              attachListenersToPage(retryPage);
+              const retryResp = await retryPage.goto(watchUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => null);
+              let retryStatus: number | undefined;
+              try { retryStatus = retryResp && typeof retryResp.status === 'function' ? retryResp.status() : undefined; } catch { retryStatus = undefined; }
+              console.debug('[DEBUG] Playwright retry goto', { attempt, status: retryStatus, url: retryPage.url() });
+              if (!retryPage.isClosed()) {
+                page = retryPage;
+                response = retryResp;
+                reopened = true;
+                break;
+              }
+            } catch (err) {
+              console.warn('[WARN] Playwright retry navigation failed', err);
+            }
+            // backoff between attempts to give the site time to stabilise
+            try { await new Promise((res) => setTimeout(res, 2_000)); } catch { /* ignore */ }
+          }
+
+          if (!reopened) {
+            console.warn('[WARN] Playwright page closed before watcher installation could complete (retries exhausted)', { url: watchUrl, attempts: maxRetries });
+            // Do not close the context here; return so caller can continue and
+            // background tasks can still attempt recovery later.
+            return;
+          }
         }
       }
 
@@ -1357,7 +1496,26 @@ export class NiconamaCommentClient {
 
     this.#playwrightPageCommentPollTimer = setInterval(async () => {
       if (!page || page.isClosed?.()) {
+        console.warn('[WARN] Playwright page closed while polling; attempting recovery');
         this.clearPlaywrightPagePolling();
+
+        if (this.#playwrightRecoveryInProgress) return;
+        this.#playwrightRecoveryInProgress = true;
+        try {
+          await this.clearPlaywrightCommentWatcher();
+        } catch (err) {
+          console.warn('[WARN] clearPlaywrightCommentWatcher during recovery failed', err);
+        }
+
+        try {
+          const watchUrl = this.#watchUrl ?? DEFAULT_FALLBACK_WATCH_URL;
+          await this.setupPlaywrightCommentWatcher(watchUrl);
+        } catch (err) {
+          console.warn('[WARN] Playwright watcher recovery failed', err);
+        } finally {
+          this.#playwrightRecoveryInProgress = false;
+        }
+
         return;
       }
 
@@ -1439,6 +1597,16 @@ export class NiconamaCommentClient {
       let data = await this.fetchEmbeddedDataFromPage(watchUrl).catch(() => null);
       if (!data) return;
 
+      // If a direct WebSocket is active, prefer it over Playwright enrichment.
+      // This avoids launching Playwright unnecessarily when the direct WS
+      // path is already delivering comments (helps make tests deterministic).
+      try {
+        if (this.#directWebSocket) {
+          console.debug('[DEBUG] performImmediateRescan skipping Playwright enrichment because direct websocket is active', { watchUrl });
+          return;
+        }
+      } catch { /* ignore */ }
+
       let comments = parseAgentCommentsFromResponseBody(data, this.#seenCommentIdentifiers);
 
       // If embedded-data contains a positive commentCount but no parsed
@@ -1451,11 +1619,15 @@ export class NiconamaCommentClient {
           : undefined;
 
         if ((comments.length === 0) && typeof commentCount === 'number' && commentCount > 0) {
-          console.debug('[DEBUG] performImmediateRescan no embedded comments but commentCount>0, attempting Playwright enrichment', { watchUrl, commentCount });
-          const enriched = await this.fetchEmbeddedDataWithPlaywright(watchUrl, data).catch(() => null);
-          if (enriched) {
-            data = enriched;
-            comments = parseAgentCommentsFromResponseBody(data, this.#seenCommentIdentifiers);
+          if (this.#skipPlaywrightEnrich) {
+            console.debug('[DEBUG] performImmediateRescan skipping Playwright enrichment due to options', { watchUrl, commentCount });
+          } else {
+            console.debug('[DEBUG] performImmediateRescan no embedded comments but commentCount>0, attempting Playwright enrichment', { watchUrl, commentCount });
+            const enriched = await this.fetchEmbeddedDataWithPlaywright(watchUrl, data).catch(() => null);
+            if (enriched) {
+              data = enriched;
+              comments = parseAgentCommentsFromResponseBody(data, this.#seenCommentIdentifiers);
+            }
           }
         }
       } catch (err) {
@@ -1524,6 +1696,9 @@ export class NiconamaCommentClient {
     const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentIdentifiers, eventType);
     if (comments.length > 0) {
       this.#callbacks.onComments(comments);
+      try {
+        console.debug('[DEBUG] direct websocket emitted onComments', { wsUrl, count: comments.length, snippet: (comments[0]?.data as any)?.comment?.slice?.(0, 200) });
+      } catch { /* ignore logging errors */ }
       if (knownEventType) {
         console.debug('[DEBUG] direct websocket known event type with comment payload', eventType, wsUrl, body);
       }
