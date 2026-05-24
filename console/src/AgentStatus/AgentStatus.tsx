@@ -1,5 +1,5 @@
 import { Container } from "../agt-compat";
-import { useLayoutEffect, useState } from "hono/jsx";
+import { useLayoutEffect, useState, useRef } from "hono/jsx";
 import type { AgentStatusSection, AgentStateResponse } from "./types";
 import {
   INVALID_AGENT_STATE_RESPONSE_ERROR,
@@ -21,6 +21,7 @@ export const AgentStatus = () => {
   const [agentStatusError, setAgentStatusError] = useState<string | null>(null);
   const [lastUpdatedTime, setLastUpdatedTime] = useState("");
   const [isLoadingAgentState, setIsLoadingAgentState] = useState(false);
+  const prevTypeRef = useRef<string | undefined>(undefined);
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
@@ -32,7 +33,6 @@ export const AgentStatus = () => {
     (async () => {
       const sseUrl = "/console/api/ws";
       try { (window as any).__sseUrl = sseUrl; } catch {}
-      try { console.debug("[DEBUG] AgentStatus connecting EventSource ->", sseUrl); } catch {}
       try {
         es = new EventSource(sseUrl);
       } catch {
@@ -46,6 +46,38 @@ export const AgentStatus = () => {
       es.onmessage = (ev: MessageEvent) => {
         try {
           const responseData = parseAgentStateResponse(String(ev.data));
+
+          // Detect end-of-program and reload the page when appropriate.
+          try {
+            const currentType = responseData?.niconama?.type;
+            const currentUrl = responseData?.niconama?.meta?.url as string | undefined;
+            const currentTitle = responseData?.niconama?.meta?.title as string | undefined;
+
+            const prevType = prevTypeRef.current;
+
+            if (currentType === 'offline' && prevType === 'live') {
+              try {
+                window.location.reload();
+                return;
+              } catch {}
+            }
+
+            if (currentTitle && currentTitle.includes('公開終了') && currentUrl) {
+              try {
+                const endedKey = `program-ended-${currentUrl}`;
+                if (!sessionStorage.getItem(endedKey)) {
+                  sessionStorage.setItem(endedKey, '1');
+                  window.location.reload();
+                  return;
+                }
+              } catch {}
+            }
+
+            prevTypeRef.current = currentType;
+          } catch (e) {
+            // ignore detection errors
+          }
+
           setAgentStateResponse(responseData);
           setAgentStatusError(null);
           setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));

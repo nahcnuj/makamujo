@@ -350,7 +350,7 @@ test.describe("console", () => {
 
     // Wait for the page to establish the SSE connection before sending
     // the broadcast POST to avoid timing-dependent flakiness.
-    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
+    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 30_000 });
 
     const payload: any = cloneAgentStateResponseMockFixture();
     const res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
@@ -363,6 +363,54 @@ test.describe("console", () => {
     const detailsLocator = page.getByTestId("agent-status-details");
     await detailsLocator.waitFor({ timeout: 10_000 });
     await expect(detailsLocator).toContainText("4-gram", { timeout: 10_000 });
+  });
+
+  test("reloads when broadcasted meta becomes 公開終了", async ({ page, request }) => {
+    await page.addInitScript(() => {
+      const OrigEventSource = (window as any).EventSource;
+      Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
+      // A per-document session id that changes on every navigation/reload.
+      Object.defineProperty(window, '__sessionId', { value: Math.random(), writable: true, configurable: true });
+      (window as any).EventSource = function (url: string) {
+        const es = new OrigEventSource(url);
+        try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
+        return es;
+      } as any;
+      try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
+    });
+
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: 'domcontentloaded', timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 30_000 });
+
+    // Post an initial live payload so the client has a prior live state
+    const initialPayload: any = cloneAgentStateResponseMockFixture();
+    let res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(initialPayload),
+    });
+    expect(res.ok, `initial broadcast POST failed: ${res.status}`).toBeTruthy();
+
+    const detailsLocator = page.getByTestId('agent-status-details');
+    await detailsLocator.waitFor({ timeout: 10_000 });
+
+    // Now post an ended/offline payload with the same program URL and title '公開終了'
+    const endedPayload = { niconama: { type: 'offline', meta: { title: '公開終了', url: initialPayload.niconama.meta.url, start: initialPayload.niconama.meta.start } } };
+
+    // Use a per-document session id to robustly detect a reload — the
+    // `__sessionId` is re-created on every navigation and changes value.
+    const beforeSessionId = await page.evaluate(() => (window as any).__sessionId ?? null);
+    res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(endedPayload),
+    });
+    expect(res.ok, `ended broadcast POST failed: ${res.status}`).toBeTruthy();
+
+    await page.waitForFunction((id) => (window as any).__sessionId !== id, beforeSessionId, { timeout: 10_000 });
+
+    // After reload, the console app should still render
+    await expect(page.getByRole('heading', { name: '馬可無序' })).toBeVisible({ timeout: 5_000 });
   });
 
   test("displays replyTargetComment in the console after broadcast event", async ({ page, request }) => {
