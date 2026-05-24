@@ -354,6 +354,190 @@ describe('fetchRenderedWatchPageBodyText', () => {
   });
 });
 
+describe('direct websocket onmessage handling', () => {
+  it('handles string payloads', async () => {
+    const originalWebSocket = (globalThis as any).WebSocket;
+    class MockWebSocket {
+      static OPEN = 1;
+      static CLOSED = 3;
+      static instances: any[] = [];
+      onopen: any = null;
+      onmessage: any = null;
+      onclose: any = null;
+      onerror: any = null;
+      readyState = MockWebSocket.OPEN;
+      sent: any[] = [];
+      constructor(_url: string, _opts?: any) {
+        MockWebSocket.instances.push(this);
+        // simulate async open
+        setTimeout(() => { if (this.onopen) this.onopen(); }, 0);
+      }
+      send(data: any) { this.sent.push(data); }
+      close() { this.readyState = MockWebSocket.CLOSED; if (this.onclose) this.onclose({ code: 1000, reason: '' }); }
+      emit(data: any) { if (this.onmessage) this.onmessage({ data }); }
+    }
+
+    (globalThis as any).WebSocket = MockWebSocket;
+
+    let client: any = null;
+    try {
+      const received: any[] = [];
+      client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: (async () => ({ pages: () => [], newPage: async () => ({}), close: async () => {} })) as any }, {
+        onComments: (c) => { received.push(...c); },
+        onMeta: () => {},
+        onError: (e) => { throw e; },
+      });
+
+      const embeddedData = { site: { state: { relive: { webSocketUrl: 'wss://example.com/ws' } } } };
+
+      await (client as any).setupDirectWebSocketConnection('https://live.nicovideo.jp/watch/test', embeddedData);
+
+      const ws = MockWebSocket.instances[0];
+      // allow onopen/keepSeat to run
+      await new Promise((res) => setTimeout(res, 0));
+
+      const payload = JSON.stringify({ type: 'actionComment', data: { comment: 'hello string', no: 1 } });
+      ws.emit(payload);
+
+      // wait for callback
+      await new Promise<void>((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error('timeout')), 1000);
+        const iv = setInterval(() => {
+          if (received.length >= 1) { clearTimeout(t); clearInterval(iv); resolve(); }
+        }, 10);
+      });
+
+      expect(received[0]?.data?.comment).toBe('hello string');
+
+      // cleanup
+      (client as any).clearDirectWebSocket();
+      await (client as any).clearPlaywrightCommentWatcher();
+    } finally {
+      (globalThis as any).WebSocket = originalWebSocket;
+    }
+  });
+
+  it('handles ArrayBuffer payloads', async () => {
+    const originalWebSocket = (globalThis as any).WebSocket;
+    class MockWebSocket {
+      static OPEN = 1;
+      static CLOSED = 3;
+      static instances: any[] = [];
+      onopen: any = null;
+      onmessage: any = null;
+      onclose: any = null;
+      onerror: any = null;
+      readyState = MockWebSocket.OPEN;
+      sent: any[] = [];
+      constructor(_url: string, _opts?: any) {
+        MockWebSocket.instances.push(this);
+        setTimeout(() => { if (this.onopen) this.onopen(); }, 0);
+      }
+      send(data: any) { this.sent.push(data); }
+      close() { this.readyState = MockWebSocket.CLOSED; if (this.onclose) this.onclose({ code: 1000, reason: '' }); }
+      emit(data: any) { if (this.onmessage) this.onmessage({ data }); }
+    }
+
+    (globalThis as any).WebSocket = MockWebSocket;
+
+    let client: any = null;
+    try {
+      const received: any[] = [];
+      client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: (async () => ({ pages: () => [], newPage: async () => ({}), close: async () => {} })) as any }, {
+        onComments: (c) => { received.push(...c); },
+        onMeta: () => {},
+        onError: (e) => { throw e; },
+      });
+
+      const embeddedData = { site: { state: { relive: { webSocketUrl: 'wss://example.com/ws' } } } };
+      await (client as any).setupDirectWebSocketConnection('https://live.nicovideo.jp/watch/test', embeddedData);
+
+      const ws = MockWebSocket.instances[0];
+      await new Promise((res) => setTimeout(res, 0));
+
+      const payloadObj = { type: 'actionComment', data: { comment: 'arraybuffer', no: 2 } };
+      const json = JSON.stringify(payloadObj);
+      const ab = new TextEncoder().encode(json).buffer;
+      ws.emit(ab);
+
+      await new Promise<void>((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error('timeout')), 1000);
+        const iv = setInterval(() => {
+          if (received.length >= 1) { clearTimeout(t); clearInterval(iv); resolve(); }
+        }, 10);
+      });
+
+      expect(received[0]?.data?.comment).toBe('arraybuffer');
+
+      (client as any).clearDirectWebSocket();
+      await (client as any).clearPlaywrightCommentWatcher();
+    } finally {
+      (globalThis as any).WebSocket = originalWebSocket;
+    }
+  });
+
+  it('handles arrayBuffer()-capable payload objects', async () => {
+    const originalWebSocket = (globalThis as any).WebSocket;
+    class MockWebSocket {
+      static OPEN = 1;
+      static CLOSED = 3;
+      static instances: any[] = [];
+      onopen: any = null;
+      onmessage: any = null;
+      onclose: any = null;
+      onerror: any = null;
+      readyState = MockWebSocket.OPEN;
+      sent: any[] = [];
+      constructor(_url: string, _opts?: any) {
+        MockWebSocket.instances.push(this);
+        setTimeout(() => { if (this.onopen) this.onopen(); }, 0);
+      }
+      send(data: any) { this.sent.push(data); }
+      close() { this.readyState = MockWebSocket.CLOSED; if (this.onclose) this.onclose({ code: 1000, reason: '' }); }
+      emit(data: any) { if (this.onmessage) this.onmessage({ data }); }
+    }
+
+    (globalThis as any).WebSocket = MockWebSocket;
+
+    let client: any = null;
+    try {
+      const received: any[] = [];
+      client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: (async () => ({ pages: () => [], newPage: async () => ({}), close: async () => {} })) as any }, {
+        onComments: (c) => { received.push(...c); },
+        onMeta: () => {},
+        onError: (e) => { throw e; },
+      });
+
+      const embeddedData = { site: { state: { relive: { webSocketUrl: 'wss://example.com/ws' } } } };
+      await (client as any).setupDirectWebSocketConnection('https://live.nicovideo.jp/watch/test', embeddedData);
+
+      const ws = MockWebSocket.instances[0];
+      await new Promise((res) => setTimeout(res, 0));
+
+      const payloadObj = { type: 'actionComment', data: { comment: 'arraybuffer-method', no: 3 } };
+      const json = JSON.stringify(payloadObj);
+      const ab = new TextEncoder().encode(json).buffer;
+
+      const arrayBufferCapable = { arrayBuffer: async () => ab };
+      ws.emit(arrayBufferCapable);
+
+      await new Promise<void>((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error('timeout')), 1000);
+        const iv = setInterval(() => {
+          if (received.length >= 1) { clearTimeout(t); clearInterval(iv); resolve(); }
+        }, 10);
+      });
+
+      expect(received[0]?.data?.comment).toBe('arraybuffer-method');
+
+      (client as any).clearDirectWebSocket();
+      await (client as any).clearPlaywrightCommentWatcher();
+    } finally {
+      (globalThis as any).WebSocket = originalWebSocket;
+    }
+  });
+});
+
 describe("buildNiconamaStreamStateFromStatisticsEvent", () => {
   it("returns null for non-statistics events", () => {
     const payload = { type: "reconnect", data: { viewers: 42 } };
