@@ -296,6 +296,8 @@ export class NiconamaCommentClient {
   #seenCommentIdentifiers = new Set<string>();
   #directWebSocket: any | null = null;
   #directWebSocketKeepSeatTimer: ReturnType<typeof setInterval> | null = null;
+  #directWebSocketQueue: unknown[] = [];
+  #directWebSocketReady = false;
   #playwrightCommentContext: any | null = null;
   #playwrightCommentPage: any | null = null;
   #playwrightPageCommentPollTimer: ReturnType<typeof setInterval> | null = null;
@@ -397,25 +399,7 @@ export class NiconamaCommentClient {
     // watcher installation. `seenCommentIdentifiers` prevents duplicates.
     await this.performImmediateRescan(watchUrl).catch(() => undefined);
     this.#pollTask = this.pollLoop();
-    // Watchdog: if no comments arrived within 10s in non-production and
-    // no internalMockWebSocket is active, emit a deterministic fallback
-    // comment so E2E tests that require at least one comment can pass.
-    try {
-      const shouldUseFallback = !this.#internalMockWebSocket && (process.env.NODE_ENV !== 'production');
-      if (shouldUseFallback) {
-        setTimeout(() => {
-          try {
-            if (this.#stopRequested) return;
-            if (this.#hasEmittedComments) return;
-            console.info('[INFO] emitting deterministic fallback comment for test determinism');
-            const mock: AgentComment = { source: 'internal-fallback', data: { comment: 'INTERNAL-FALLBACK-COMMENT' } } as any;
-            this.emitOnComments([mock]);
-          } catch (e) { this.reportError(e); }
-        }, 10_000);
-      }
-    } catch (e) {
-      /* ignore watchdog setup errors */
-    }
+    // No deterministic fallback in start(): prefer real behavior.
     console.info('[DEBUG] NiconamaCommentClient.start finished');
   }
 
@@ -1124,7 +1108,14 @@ export class NiconamaCommentClient {
 
       ws.onopen = () => {
         console.info('[INFO] direct websocket established', webSocketUrl);
-        this.sendDirectWebSocketMessage({ type: 'keepSeat' });
+        // Mark the socket ready and flush any queued messages
+        try {
+          this.#directWebSocketReady = true;
+          while (this.#directWebSocketQueue.length > 0) {
+            const msg = this.#directWebSocketQueue.shift();
+            try { ws.send(JSON.stringify(msg)); } catch (e) { /* ignore per-message errors */ }
+          }
+        } catch (e) { /* ignore */ }
       };
 
       ws.onmessage = (event: any) => {
@@ -1210,13 +1201,9 @@ export class NiconamaCommentClient {
 
       this.#directWebSocketKeepSeatTimer = setInterval(() => {
         try {
-          if (this.#directWebSocket && this.#directWebSocket.readyState === WebSocketClass.OPEN) {
-            const keepSeatMessage = JSON.stringify({ type: 'keepSeat' });
-            console.debug('[DEBUG] direct websocket sending message', keepSeatMessage);
-            this.#directWebSocket.send(keepSeatMessage);
-          }
+          this.sendDirectWebSocketMessage({ type: 'keepSeat' });
         } catch (err) {
-          console.warn('[WARN] failed to send keepSeat message', err);
+          console.warn('[WARN] failed to enqueue keepSeat message', err);
         }
       }, 10_000);
       console.info('[DEBUG] setupDirectWebSocketConnection finished');
@@ -1965,24 +1952,30 @@ export class NiconamaCommentClient {
         const data = (body as any).data;
         if (data && typeof data === 'object' && typeof data.audienceToken === 'string') {
           const wait = typeof data.waitTimeSec === 'number' ? Math.max(0, data.waitTimeSec) : 0;
-          try {
-            const newWsUrl = typeof wsUrl === 'string' ? String(wsUrl).replace(/audience_token=[^&]+/, `audience_token=${encodeURIComponent(data.audienceToken)}`) : wsUrl;
-            console.info('[INFO] direct websocket following reconnect instruction', { from: wsUrl, to: newWsUrl, wait });
-            // Close current socket and schedule reconnection
-            try { this.clearDirectWebSocket(); } catch { /* ignore */ }
-            setTimeout(() => {
-              if (this.#stopRequested) return;
-              try {
-                // Try to establish a new websocket directly using the new URL
-                // by calling setupDirectWebSocketConnection with current watch URL.
-                // This will re-resolve embedded data and prefer the new endpoint.
-                const watchUrl = this.#watchUrl ?? DEFAULT_FALLBACK_WATCH_URL;
-                void this.setupDirectWebSocketConnection(watchUrl).catch(() => undefined);
-              } catch { /* ignore */ }
-            }, wait * 1000);
-          } catch (e) {
-            /* ignore reconnect follow errors */
-          }
+            try {
+              // Prefer a server-provided websocket URL if present in the payload.
+              const serverUrl = (data as any)?.webSocketUrl ?? (data as any)?.wsUrl ?? (data as any)?.url;
+              const newWsUrl = typeof serverUrl === 'string' && serverUrl.length > 0
+                ? serverUrl
+                : (typeof wsUrl === 'string' ? String(wsUrl).replace(/audience_token=[^&]+/, `audience_token=${encodeURIComponent(data.audienceToken)}`) : wsUrl);
+              console.info('[INFO] direct websocket following reconnect instruction', { from: wsUrl, to: newWsUrl, wait });
+              // Defer clearing the current socket slightly to avoid closing while
+              // still processing the current message; schedule reconnect.
+              setTimeout(() => {
+                try { this.clearDirectWebSocket(); } catch { /* ignore */ }
+              }, 0);
+              setTimeout(() => {
+                if (this.#stopRequested) return;
+                try {
+                  // Attempt to establish a new websocket; pass through the
+                  // watch URL so setup can re-resolve embedded data if needed.
+                  const watchUrl = this.#watchUrl ?? DEFAULT_FALLBACK_WATCH_URL;
+                  void this.setupDirectWebSocketConnection(watchUrl).catch(() => undefined);
+                } catch { /* ignore */ }
+              }, Math.max(0, wait * 1000));
+            } catch (e) {
+              /* ignore reconnect follow errors */
+            }
         }
       } catch { /* ignore */ }
       return;
@@ -1997,12 +1990,21 @@ export class NiconamaCommentClient {
   }
 
   private sendDirectWebSocketMessage(message: unknown): void {
-    if (!this.#directWebSocket) return;
     try {
-      console.debug('[DEBUG] direct websocket sending message', message);
-      this.#directWebSocket.send(JSON.stringify(message));
+      const serialized = JSON.stringify(message);
+      console.debug('[DEBUG] direct websocket enqueue/send message', serialized);
+      if (this.#directWebSocket && this.#directWebSocketReady) {
+        try {
+          this.#directWebSocket.send(serialized);
+          return;
+        } catch (err) {
+          console.warn('[WARN] direct websocket send failed, queuing', err);
+        }
+      }
+      // Queue the raw message object for later flush when socket opens
+      this.#directWebSocketQueue.push(message);
     } catch (err) {
-      console.warn('[WARN] failed to send direct websocket message', err);
+      console.warn('[WARN] failed to enqueue direct websocket message', err);
     }
   }
 
