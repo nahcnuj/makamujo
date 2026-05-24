@@ -279,6 +279,33 @@ describe("fetchEmbeddedData fallback behavior", () => {
   });
 });
 
+describe("detect program end in fetched HTML", () => {
+  it("emits onMeta and returns sentinel when page contains 公開終了", async () => {
+    const originalFetch = (globalThis as any).fetch;
+    try {
+      const embeddedHtml = '<html><body>この番組は公開終了しました。 公開終了</body></html>';
+      (globalThis as any).fetch = async () => ({ ok: true, text: async () => embeddedHtml });
+
+      const metas: any[] = [];
+      const client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: async () => ({ pages: () => [], newPage: async () => ({}), close: async () => {} }) }, {
+        onComments: () => {},
+        onMeta: (m) => { metas.push(m); },
+        onError: (err) => { throw err; },
+      });
+
+      const result = await client.fetchEmbeddedData();
+
+      expect(metas.length).toBeGreaterThan(0);
+      expect(metas[0]).toEqual(expect.objectContaining({ type: 'niconama' }));
+      expect((metas[0] as any).data.isLive).toBe(false);
+      expect((metas[0] as any).data.title).toBe('公開終了');
+      expect(result).toEqual({ programEnded: true, url: 'https://live.nicovideo.jp/watch/test' });
+    } finally {
+      (globalThis as any).fetch = originalFetch;
+    }
+  });
+});
+
 describe('fetchRenderedWatchPageBodyText', () => {
   it('returns body text from Playwright body locator allTextContents', async () => {
     const fakePage = {
