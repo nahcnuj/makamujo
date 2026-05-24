@@ -89,12 +89,10 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
   });
 
   const prevTypeRef = useRef<string | undefined>(undefined);
-  const prevMetaUrlRef = useRef<string | undefined>(undefined);
   const prevTitleRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const currentType = streamState && typeof streamState === 'object' ? (streamState as any).type : undefined;
-    const currentUrl = streamState && typeof streamState === 'object' && (streamState as any).meta && typeof (streamState as any).meta.url === 'string' ? (streamState as any).meta.url as string : undefined;
     const currentTitle = streamState && typeof streamState === 'object' && (streamState as any).meta && typeof (streamState as any).meta.title === 'string' ? (streamState as any).meta.title as string : undefined;
 
     const prevType = prevTypeRef.current;
@@ -118,7 +116,6 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
     }
 
     prevTypeRef.current = currentType;
-    prevMetaUrlRef.current = currentUrl;
     prevTitleRef.current = currentTitle;
   }, [streamState]);
 

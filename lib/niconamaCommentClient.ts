@@ -813,7 +813,7 @@ export class NiconamaCommentClient {
       // consumers via `onMeta` and return a sentinel object so callers can
       // continue operating (e.g. start polling) instead of aborting.
       try {
-        if (typeof html === 'string' && html.indexOf('公開終了') !== -1) {
+        if (typeof html === 'string' && html.includes('公開終了')) {
           try {
             this.#callbacks.onMeta({
               type: 'niconama',
