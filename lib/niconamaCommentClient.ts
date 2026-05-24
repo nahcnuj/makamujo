@@ -338,14 +338,6 @@ export class NiconamaCommentClient {
       return;
     }
 
-    // If the program has already ended, skip the live-meta emission and
-    // watcher setup and go straight into the poll loop.
-    if ((embeddedData as any).programEnded) {
-      this.#running = true;
-      this.#pollTask = this.pollLoop();
-      return;
-    }
-
     this.#running = true;
     this.#callbacks.onMeta({
       type: 'niconama',
@@ -813,7 +805,7 @@ export class NiconamaCommentClient {
       // consumers via `onMeta` and return a sentinel object so callers can
       // continue operating (e.g. start polling) instead of aborting.
       try {
-        if (typeof html === 'string' && html.includes('公開終了')) {
+        if (typeof html === 'string' && html.indexOf('公開終了') !== -1) {
           try {
             this.#callbacks.onMeta({
               type: 'niconama',
@@ -878,7 +870,20 @@ export class NiconamaCommentClient {
       }
 
       console.debug('[DEBUG] direct websocket creating socket', webSocketUrl);
-      const ws = new WebSocketClass(webSocketUrl, { headers: { Origin: 'https://live.nicovideo.jp' } });
+      let ws: any = null;
+      try {
+        // Some runtimes (Node "ws") accept an options object with headers,
+        // while others (browsers, Bun) do not. Try both.
+        try {
+          ws = new WebSocketClass(webSocketUrl, { headers: { Origin: 'https://live.nicovideo.jp' } } as any);
+        } catch (e) {
+          ws = new WebSocketClass(webSocketUrl);
+        }
+      } catch (err) {
+        console.warn('[WARN] failed to construct WebSocket', err);
+        return;
+      }
+
       this.#directWebSocket = ws;
 
       ws.onopen = () => {
@@ -886,15 +891,64 @@ export class NiconamaCommentClient {
         this.sendDirectWebSocketMessage({ type: 'keepSeat' });
       };
 
-      ws.onmessage = (event: { data: unknown }) => {
+      ws.onmessage = (event: any) => {
         try {
-          const payload = typeof event.data === 'string'
-            ? event.data
-            : event.data instanceof ArrayBuffer
-              ? new TextDecoder().decode(event.data)
-              : String(event.data);
-          console.debug('[DEBUG] direct websocket received message', { wsUrl: webSocketUrl, payloadLength: payload.length });
-          this.handleDirectWebSocketMessage(payload, webSocketUrl);
+          const data = event?.data;
+
+          // Handle string payloads
+          if (typeof data === 'string') {
+            console.debug('[DEBUG] direct websocket received message', { wsUrl: webSocketUrl, payloadLength: data.length });
+            this.handleDirectWebSocketMessage(data, webSocketUrl);
+            return;
+          }
+
+          // Handle ArrayBuffer views (Uint8Array, Buffer, DataView, etc.)
+          try {
+            if (ArrayBuffer.isView(data)) {
+              const payload = new TextDecoder().decode(data as ArrayBufferView);
+              console.debug('[DEBUG] direct websocket received ArrayBufferView', { wsUrl: webSocketUrl, payloadLength: payload.length });
+              this.handleDirectWebSocketMessage(payload, webSocketUrl);
+              return;
+            }
+          } catch (err) {
+            console.debug('[DEBUG] ArrayBuffer.isView check failed or decode failed', err);
+          }
+
+          // Handle ArrayBuffer
+          if (data instanceof ArrayBuffer) {
+            const payload = new TextDecoder().decode(data);
+            console.debug('[DEBUG] direct websocket received ArrayBuffer', { wsUrl: webSocketUrl, payloadLength: payload.length });
+            this.handleDirectWebSocketMessage(payload, webSocketUrl);
+            return;
+          }
+
+          // Handle Blob (browsers / Bun)
+          if (typeof Blob !== 'undefined' && data instanceof Blob) {
+            data.text().then((payloadText: string) => {
+              console.debug('[DEBUG] direct websocket received Blob', { wsUrl: webSocketUrl, payloadLength: payloadText.length });
+              this.handleDirectWebSocketMessage(payloadText, webSocketUrl);
+            }).catch((err: unknown) => {
+              console.warn('[WARN] failed to read Blob websocket message', err);
+            });
+            return;
+          }
+
+          // Some environments provide objects with arrayBuffer() (e.g., Buffer-like)
+          if (data && typeof (data as any).arrayBuffer === 'function') {
+            (data as any).arrayBuffer().then((ab: ArrayBuffer) => {
+              const payload = new TextDecoder().decode(ab);
+              console.debug('[DEBUG] direct websocket received arrayBuffer-able', { wsUrl: webSocketUrl, payloadLength: payload.length });
+              this.handleDirectWebSocketMessage(payload, webSocketUrl);
+            }).catch((err: unknown) => {
+              console.warn('[WARN] failed to convert websocket message to arrayBuffer', err);
+            });
+            return;
+          }
+
+          // Fallback: stringify whatever was received
+          const fallback = String(data ?? '');
+          console.debug('[DEBUG] direct websocket received fallback message', { wsUrl: webSocketUrl, payloadLength: fallback.length });
+          this.handleDirectWebSocketMessage(fallback, webSocketUrl);
         } catch (err) {
           console.warn('[WARN] failed to handle direct websocket message', err);
         }
@@ -919,10 +973,14 @@ export class NiconamaCommentClient {
       };
 
       this.#directWebSocketKeepSeatTimer = setInterval(() => {
-        if (this.#directWebSocket && this.#directWebSocket.readyState === WebSocketClass.OPEN) {
-          const keepSeatMessage = JSON.stringify({ type: 'keepSeat' });
-          console.debug('[DEBUG] direct websocket sending message', keepSeatMessage);
-          this.#directWebSocket.send(keepSeatMessage);
+        try {
+          if (this.#directWebSocket && this.#directWebSocket.readyState === WebSocketClass.OPEN) {
+            const keepSeatMessage = JSON.stringify({ type: 'keepSeat' });
+            console.debug('[DEBUG] direct websocket sending message', keepSeatMessage);
+            this.#directWebSocket.send(keepSeatMessage);
+          }
+        } catch (err) {
+          console.warn('[WARN] failed to send keepSeat message', err);
         }
       }, 10_000);
       console.info('[DEBUG] setupDirectWebSocketConnection finished');
