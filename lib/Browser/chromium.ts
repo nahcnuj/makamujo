@@ -207,3 +207,20 @@ export const createClickByElementId = (page: ClickablePageLike) =>
   async (id: string): Promise<void> => {
     await page.locator(`#${id}`).first().click({ timeout: 5_000 });
   };
+
+// Defaults used by other modules.
+export const DEFAULT_PLAYWRIGHT_USER_DATA_DIR = process.env.PLAYWRIGHT_USER_DATA_DIR ?? '/tmp/playwright-user-data';
+export const DEFAULT_CHROMIUM_EXECUTABLE_PATH = process.env.CHROMIUM_EXECUTABLE_PATH ?? '';
+
+// Provide a launchPersistentContext helper that prefers playwright-extra's
+// chromium wrapper but falls back to Playwright's chromium implementation.
+export const launchPersistentContext = async (userDataDir: string, options: Record<string, unknown> = {}) => {
+  try {
+    if (typeof (chromium as any).launchPersistentContext === 'function') {
+      return await (chromium as any).launchPersistentContext(userDataDir, options as any);
+    }
+    return await playwright.chromium.launchPersistentContext(userDataDir, options as any);
+  } catch (err) {
+    throw err;
+  }
+};
