@@ -369,12 +369,14 @@ test.describe("console", () => {
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
       Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
+      Object.defineProperty(window, '__loadCount', { value: 0, writable: true, configurable: true });
       (window as any).EventSource = function (url: string) {
         const es = new OrigEventSource(url);
         try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
         return es;
       } as any;
       try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
+      try { window.addEventListener('load', () => { (window as any).__loadCount = ((window as any).__loadCount || 0) + 1; }); } catch {}
     });
 
     await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: 'domcontentloaded', timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
@@ -395,7 +397,9 @@ test.describe("console", () => {
     // Now post an ended/offline payload with the same program URL and title '公開終了'
     const endedPayload = { niconama: { type: 'offline', meta: { title: '公開終了', url: initialPayload.niconama.meta.url, start: initialPayload.niconama.meta.start } } };
 
-    const navigationPromise = page.waitForNavigation({ timeout: 10_000 });
+    // Use a load-counter to robustly detect a reload (works even if
+    // navigation events are missed or the URL doesn't appear to change).
+    const beforeLoadCount = await page.evaluate(() => (window as any).__loadCount ?? 0);
     res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -403,7 +407,7 @@ test.describe("console", () => {
     });
     expect(res.ok, `ended broadcast POST failed: ${res.status}`).toBeTruthy();
 
-    await navigationPromise;
+    await page.waitForFunction((count) => (window as any).__loadCount > count, beforeLoadCount, { timeout: 10_000 });
 
     // After reload, the console app should still render
     await expect(page.getByRole('heading', { name: '馬可無序' })).toBeVisible({ timeout: 5_000 });
