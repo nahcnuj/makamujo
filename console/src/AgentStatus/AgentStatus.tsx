@@ -22,7 +22,6 @@ export const AgentStatus = () => {
   const [lastUpdatedTime, setLastUpdatedTime] = useState("");
   const [isLoadingAgentState, setIsLoadingAgentState] = useState(false);
   const prevTypeRef = useRef<string | undefined>(undefined);
-  const prevMetaUrlRef = useRef<string | undefined>(undefined);
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
@@ -34,7 +33,6 @@ export const AgentStatus = () => {
     (async () => {
       const sseUrl = "/console/api/ws";
       try { (window as any).__sseUrl = sseUrl; } catch {}
-      try { console.debug("[DEBUG] AgentStatus connecting EventSource ->", sseUrl); } catch {}
       try {
         es = new EventSource(sseUrl);
       } catch {
@@ -47,19 +45,7 @@ export const AgentStatus = () => {
       };
       es.onmessage = (ev: MessageEvent) => {
         try {
-          try { console.debug('[DEBUG] SSE onmessage data ->', String(ev.data)); } catch {}
           const responseData = parseAgentStateResponse(String(ev.data));
-          try { console.debug('[DEBUG] parsed SSE niconama ->', responseData?.niconama); } catch {}
-
-          try {
-            console.debug('[DIAG] onmessage detection state ->', {
-              prevType: prevTypeRef.current,
-              prevUrl: prevMetaUrlRef.current,
-              currentType: responseData?.niconama?.type,
-              currentUrl: responseData?.niconama?.meta?.url,
-              currentTitle: responseData?.niconama?.meta?.title,
-            });
-          } catch {}
 
           // Detect end-of-program and reload the page when appropriate.
           try {
@@ -68,26 +54,26 @@ export const AgentStatus = () => {
             const currentTitle = responseData?.niconama?.meta?.title as string | undefined;
 
             const prevType = prevTypeRef.current;
-            const prevUrl = prevMetaUrlRef.current;
 
             if (currentType === 'offline' && prevType === 'live') {
               try {
-                try { console.debug('[DIAG] reload triggered: prevType ->', prevType, 'currentType ->', currentType, 'prevUrl ->', prevUrl, 'currentUrl ->', currentUrl); } catch {}
                 window.location.reload();
                 return;
               } catch {}
             }
 
-            if (currentTitle && currentTitle.includes('公開終了') && prevUrl && prevUrl === currentUrl) {
+            if (currentTitle && currentTitle.includes('公開終了') && currentUrl) {
               try {
-                try { console.debug('[DIAG] reload triggered by title 公開終了: title ->', currentTitle, 'prevUrl ->', prevUrl, 'currentUrl ->', currentUrl); } catch {}
-                window.location.reload();
-                return;
+                const endedKey = `program-ended-${currentUrl}`;
+                if (!sessionStorage.getItem(endedKey)) {
+                  sessionStorage.setItem(endedKey, '1');
+                  window.location.reload();
+                  return;
+                }
               } catch {}
             }
 
             prevTypeRef.current = currentType;
-            prevMetaUrlRef.current = currentUrl;
           } catch (e) {
             // ignore detection errors
           }

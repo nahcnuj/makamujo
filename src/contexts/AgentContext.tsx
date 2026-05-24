@@ -90,6 +90,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
 
   const prevTypeRef = useRef<string | undefined>(undefined);
   const prevMetaUrlRef = useRef<string | undefined>(undefined);
+  const prevTitleRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const currentType = streamState && typeof streamState === 'object' ? (streamState as any).type : undefined;
@@ -97,17 +98,18 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
     const currentTitle = streamState && typeof streamState === 'object' && (streamState as any).meta && typeof (streamState as any).meta.title === 'string' ? (streamState as any).meta.title as string : undefined;
 
     const prevType = prevTypeRef.current;
-    const prevUrl = prevMetaUrlRef.current;
+    const prevTitle = prevTitleRef.current;
 
     // Reload when the stream transitions from live -> offline, or when the
-    // same program URL becomes marked with the explicit "公開終了" marker.
+    // same program URL becomes marked with the explicit "公開終了" marker
+    // for the first time (title transitions from non-ended to ended).
     try {
       if (currentType === 'offline' && prevType === 'live') {
         window.location.reload();
         return;
       }
 
-      if (currentTitle && currentTitle.includes('公開終了') && prevUrl && prevUrl === currentUrl) {
+      if (currentTitle?.includes('公開終了') && !prevTitle?.includes('公開終了')) {
         window.location.reload();
         return;
       }
@@ -117,6 +119,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
 
     prevTypeRef.current = currentType;
     prevMetaUrlRef.current = currentUrl;
+    prevTitleRef.current = currentTitle;
   }, [streamState]);
 
   return (

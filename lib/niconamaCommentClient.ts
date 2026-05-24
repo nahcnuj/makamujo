@@ -338,6 +338,14 @@ export class NiconamaCommentClient {
       return;
     }
 
+    // If the program has already ended, skip the live-meta emission and
+    // watcher setup and go straight into the poll loop.
+    if ((embeddedData as any).programEnded) {
+      this.#running = true;
+      this.#pollTask = this.pollLoop();
+      return;
+    }
+
     this.#running = true;
     this.#callbacks.onMeta({
       type: 'niconama',

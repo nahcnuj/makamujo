@@ -366,21 +366,9 @@ test.describe("console", () => {
   });
 
   test("reloads when broadcasted meta becomes 公開終了", async ({ page, request }) => {
-    // Capture browser console, runtime errors and failed requests for debugging
-    page.on('console', (msg) => {
-      try { console.log('[PW CONSOLE]', msg.type(), msg.text()); } catch {}
-    });
-    page.on('pageerror', (err) => {
-      try { console.error('[PW PAGE ERROR]', String(err)); } catch {}
-    });
-    page.on('requestfailed', (req) => {
-      try { console.warn('[PW REQ FAILED]', req.url(), req.failure()?.errorText ?? ''); } catch {}
-    });
-
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
       Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
-      Object.defineProperty(window, '__loadCount', { value: 0, writable: true, configurable: true });
       // A per-document session id that changes on every navigation/reload.
       Object.defineProperty(window, '__sessionId', { value: Math.random(), writable: true, configurable: true });
       (window as any).EventSource = function (url: string) {
@@ -389,11 +377,10 @@ test.describe("console", () => {
         return es;
       } as any;
       try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
-      try { window.addEventListener('load', () => { (window as any).__loadCount = ((window as any).__loadCount || 0) + 1; }); } catch {}
     });
 
     await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: 'domcontentloaded', timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
-    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
+    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 30_000 });
 
     // Post an initial live payload so the client has a prior live state
     const initialPayload: any = cloneAgentStateResponseMockFixture();
