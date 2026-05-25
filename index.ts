@@ -25,10 +25,25 @@ import { createNiconamaCommentClient, type NiconamaCommentClient } from "./lib/n
 import { installConsoleLogger } from "./lib/consoleLogger";
 
 const console = installConsoleLogger();
-
 let server: Bun.Server<unknown> | null = null;
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 let niconamaCommentClient: NiconamaCommentClient | null = null;
+
+// Start the console server once the variables are declared to avoid using
+// block-scoped variables before their declaration (which breaks TypeScript).
+try {
+  consoleServer = startConsoleServer({
+    broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
+    broadcastingPort: process.env.BROADCASTING_PORT ?? serverInstance?.port,
+  });
+  console.log(`🚀 Console running at ${consoleServer.url}`);
+  __consoleServerForExit = consoleServer;
+  if (process.env.NODE_ENV === 'production') {
+    AllowedIP.set({ family: 'IPv4', address: '127.0.0.1' });
+  }
+} catch (err) {
+  console.warn('[WARN] failed to start console server:', err instanceof Error ? err.message : String(err));
+}
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
@@ -36,6 +51,13 @@ process.on('SIGUSR1', signalHandler.bind(null, { exit: true }));
 process.on('SIGUSR2', signalHandler.bind(null, { exit: true }));
 // Log uncaught exceptions for better diagnostics before invoking the
 // existing exit handler which terminates the process.
+
+// Safe references used by the global exit handler to avoid accessing
+// variables that may still be in the temporal dead zone during early
+// startup failures. These are assigned once the corresponding resources
+// have been initialized.
+let __serverForExit: any = null;
+let __consoleServerForExit: any = null;
 
 process.on('uncaughtException', (err) => {
   try {
@@ -107,72 +129,6 @@ const model = (file => {
     return new MarkovChainModel();
   }
 })(modelFile);
-
-const tts = process.platform !== 'win32' ?
-  (() => {
-    const htsvoiceFile = '/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice';
-    const dictionaryDir = '/var/lib/mecab/dic/open-jtalk/naist-jdic';
-    return new TTS({
-      htsvoiceFile,
-      dictionaryDir,
-    });
-  })() :
-  new FallbackTTS();
-
-const streamer = new MakaMujo(model, tts);
-
-// Provide an in-memory fallback agent synchronously so the rest of the
-// server initialization can reference `agent` without awaiting a dynamic
-// import. We'll try to dynamically import and initialize the real
-// `automated-gameplay-transmitter` agent later and replace this fallback
-// when possible.
-let lastPublishedStreamState: unknown = undefined;
-let currentSpeechState = { speech: '', silent: false };
-// WebSocket clients connected to the broadcasting server.
-const wsClients = new Set<any>();
-
-// Server-Sent Events (SSE) clients: store controller objects so we can
-// push `data: ...\n\n` frames to each connected client.
-const sseClients = new Set<ReadableStreamDefaultController<string>>();
-
-/**
- * Create a ReadableStream that registers its controller in `sseClients` and
- * removes it when the client disconnects (cancel) or when the handler rejects.
- * Centralising the creation avoids duplicating the closure-capture pattern.
- */
-const createSseStream = (label: string) => {
-  let ctl: ReadableStreamDefaultController<string> | undefined;
-  return new ReadableStream<string>({
-    start(controller) {
-      try { console.log(`[INFO] SSE client connected (${label})`); } catch { }
-      ctl = controller;
-      sseClients.add(controller);
-      try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch { }
-    },
-    cancel() { if (ctl) { try { sseClients.delete(ctl); } catch { } ctl = undefined; } },
-  });
-};
-
-const sseBroadcast = (payload: unknown) => {
-  if (sseClients.size === 0) return;
-  const frame = `data: ${JSON.stringify(payload)}\n\n`;
-  for (const controller of Array.from(sseClients)) {
-    try {
-      // Evict clients under backpressure (desiredSize <= 0) to avoid blocking
-      // the event loop when a slow or unread connection fills its TCP send buffer.
-      // null means the stream is already closed/errored; treat that like healthy.
-      if ((controller.desiredSize ?? 1) <= 0) {
-        try { controller.close(); } catch { }
-        sseClients.delete(controller);
-        continue;
-      }
-      controller.enqueue(frame);
-    } catch (err) {
-      try { controller.close(); } catch { }
-      try { sseClients.delete(controller); } catch { }
-    }
-  }
-};
 
 const broadcastToWsClients = (payload: unknown) => {
   const message = JSON.stringify(payload);
@@ -598,13 +554,10 @@ const serverInstance = serve<WsData>({
         // and no HTTP response should be sent back.
         return undefined;
       }
-      try { console.warn(`[WARN] WebSocket upgrade failed for ${label}`, { upgrade: req.headers.get('upgrade'), secWebSocketKey: req.headers.get('sec-websocket-key') }); } catch {}
-      return new Response('WebSocket upgrade failed', { status: 400 });
     }
 
     return mainApp.fetch(req);
   },
-
   websocket: {
     open(ws) {
       const { label } = ws.data;
@@ -616,8 +569,8 @@ const serverInstance = serve<WsData>({
     close(ws) { try { wsClients.delete(ws); } catch { } },
   },
 });
-server = serverInstance;
-
+server = serverInstance as any;
+__serverForExit = serverInstance as any;
 console.log(`🚀 Server running at ${serverInstance.url}`);
 
 if (process.env.NODE_ENV === "production") {
@@ -633,20 +586,7 @@ if (process.env.NODE_ENV === "production") {
     }
   })();
 }
-try {
-  consoleServer = startConsoleServer({
-    broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
-    broadcastingPort: process.env.BROADCASTING_PORT ?? serverInstance.port,
-  });
-  console.log(`🚀 Console running at ${consoleServer.url}`);
-  if (process.env.NODE_ENV === 'production') {
-    AllowedIP.set({ family: 'IPv4', address: '127.0.0.1' });
-  }
-} catch (err) {
-  const consoleStartupError = err instanceof Error ? (err.stack ?? err.message) : String(err);
-  console.error(`[ERROR] CONSOLE_STARTUP_FAILED ${JSON.stringify(consoleStartupError)}`);
-  process.exit(1);
-}
+
 
 try {
   niconamaCommentClient = createNiconamaCommentClient(
@@ -749,11 +689,19 @@ setInterval(async () => {
 function exitHandler(options: { cleanup: true; exit?: never } | { cleanup?: never; exit: true }, exitCode?: number) {
   if (options.cleanup) {
     console.log('[INFO]', 'server stopping...');
-    if (server) {
-      server.stop(options.exit);
+    try {
+      if (__serverForExit) {
+        __serverForExit.stop(options.exit);
+      }
+    } catch (err) {
+      // ignore errors while attempting to stop the server during cleanup
     }
-    if (consoleServer) {
-      consoleServer.stop(options.exit);
+    try {
+      if (__consoleServerForExit) {
+        __consoleServerForExit.stop(options.exit);
+      }
+    } catch (err) {
+      // ignore console stop errors
     }
     if (niconamaCommentClient) {
       void niconamaCommentClient.stop().catch((err) => {
