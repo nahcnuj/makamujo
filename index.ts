@@ -29,22 +29,6 @@ let server: Bun.Server<unknown> | null = null;
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 let niconamaCommentClient: NiconamaCommentClient | null = null;
 
-// Start the console server once the variables are declared to avoid using
-// block-scoped variables before their declaration (which breaks TypeScript).
-try {
-  consoleServer = startConsoleServer({
-    broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
-    broadcastingPort: process.env.BROADCASTING_PORT ?? serverInstance?.port,
-  });
-  console.log(`🚀 Console running at ${consoleServer.url}`);
-  __consoleServerForExit = consoleServer;
-  if (process.env.NODE_ENV === 'production') {
-    AllowedIP.set({ family: 'IPv4', address: '127.0.0.1' });
-  }
-} catch (err) {
-  console.warn('[WARN] failed to start console server:', err instanceof Error ? err.message : String(err));
-}
-
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
 process.on('SIGUSR1', signalHandler.bind(null, { exit: true }));
@@ -58,6 +42,23 @@ process.on('SIGUSR2', signalHandler.bind(null, { exit: true }));
 // have been initialized.
 let __serverForExit: any = null;
 let __consoleServerForExit: any = null;
+
+// Start the console server once the safe references exist to avoid
+// temporal-dead-zone errors when referencing `serverInstance` or
+// `__consoleServerForExit` during initialization.
+try {
+  consoleServer = startConsoleServer({
+    broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
+    broadcastingPort: process.env.BROADCASTING_PORT ?? undefined,
+  });
+  console.log(`🚀 Console running at ${consoleServer.url}`);
+  __consoleServerForExit = consoleServer;
+  if (process.env.NODE_ENV === 'production') {
+    AllowedIP.set({ family: 'IPv4', address: '127.0.0.1' });
+  }
+} catch (err) {
+  console.warn('[WARN] failed to start console server:', err instanceof Error ? err.message : String(err));
+}
 
 process.on('uncaughtException', (err) => {
   try {
