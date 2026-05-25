@@ -8,38 +8,6 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
 export const chromium = $_.use(StealthPlugin());
 
-export const DEFAULT_PLAYWRIGHT_USER_DATA_DIR = './playwright/.auth/';
-export const DEFAULT_CHROMIUM_EXECUTABLE_PATH = '/usr/bin/chromium';
-
-export const launchPersistentContext = async (
-  userDataDir: string,
-  options: Record<string, unknown> = {},
-) => {
-  const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '60000', 10);
-  const args = [
-    '--hide-scrollbars',
-    '--window-size=1024,576',
-    '--window-position=1280,600',
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    ...(Array.isArray(options.args) ? (options.args as string[]) : []),
-  ];
-  const launchOpts = {
-    ...options,
-    executablePath: options.executablePath ?? DEFAULT_CHROMIUM_EXECUTABLE_PATH,
-    headless: options.headless ?? process.env.CHROMIUM_HEADLESS === '1',
-    timeout: launchTimeout,
-    args,
-  };
-
-  try {
-    return await playwright.chromium.launchPersistentContext(userDataDir, launchOpts as any);
-  } catch (firstErr) {
-    console.warn('[WARN] playwright.chromium persistent context failed, retrying with chromium-extra stealth', firstErr);
-    return await chromium.launchPersistentContext(userDataDir, launchOpts as any);
-  }
-};
-
 export const create = async (
   executablePath?: string,
   viewport: ViewportSize = {
@@ -224,8 +192,7 @@ export const createRedirectToHomeHandler = (
 
 type LocatorLike = {
   first(): LocatorLike;
-  waitFor?(options?: { state?: string; timeout?: number }): Promise<void>;
-  click(options?: { timeout?: number; force?: boolean }): Promise<void>;
+  click(options?: { timeout?: number }): Promise<void>;
 };
 
 type ClickablePageLike = {
@@ -238,7 +205,6 @@ type ClickablePageLike = {
  */
 export const createClickByElementId = (page: ClickablePageLike) =>
   async (id: string): Promise<void> => {
-<<<<<<< HEAD
     // Prefer a DOM-evaluated click when available (real Playwright Page)
     // to avoid visibility/stability flakiness. Fall back to the locator
     // approach used in tests which provides a minimal `locator()` API.
@@ -259,11 +225,6 @@ export const createClickByElementId = (page: ClickablePageLike) =>
 
     // Fallback for test doubles that only expose `locator()`.
     await page.locator(`#${id}`).first().click({ timeout: 5_000 });
-=======
-    const locator = page.locator(`#${id}`).first();
-    await locator.waitFor?.({ state: 'visible', timeout: 10_000 });
-    await locator.click({ timeout: 10_000, force: true });
->>>>>>> origin/main
   };
 
 // Defaults used by other modules.
