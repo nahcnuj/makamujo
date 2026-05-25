@@ -10,11 +10,89 @@ mkdir -p "${PID_DIR}"
 
 cd "${PROJECT_ROOT}"
 
+<<<<<<< HEAD
 NODE_ENV=production nohup bun start >"${PROJECT_ROOT}/var/screen.log" 2>&1 &
 echo $! > "${PID_DIR}/screen"
+=======
+BUN_PATH=$(command -v bun 2>/dev/null || true)
+if [ -z "${BUN_PATH}" ]; then
+  BUN_PATH="bun"
+fi
+>>>>>>> origin/main
 
-nohup bun ./bin/x/browser.ts >"${PROJECT_ROOT}/var/browser.log" 2>&1 &
-echo $! > "${PID_DIR}/browser"
+PASSWORD=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)
+if [ -z "${PASSWORD}" ]; then
+  echo 'Failed to generate console password' >&2
+  exit 1
+fi
+export CONSOLE_BASIC_AUTH_PASSWORD="${PASSWORD}"
+echo "Console Basic auth username: admin"
+echo "Console Basic auth password: ${PASSWORD}"
 
-nohup ./bin/x/obs >"${PROJECT_ROOT}/var/obs.log" 2>&1 &
-echo $! > "${PID_DIR}/obs"
+# Prefer starting subprocesses as transient systemd units so their logs
+# are captured by the journal and manageable via systemctl. If systemd is
+# not available, fall back to the original nohup-based behavior.
+USE_SYSTEMD=0
+if command -v systemd-run >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1; then
+  USE_SYSTEMD=1
+fi
+
+start_cmd() {
+  name="$1"; logfile="$2"; shift 2
+  if [ "$USE_SYSTEMD" -eq 1 ]; then
+    unit="makamujo-${name}"
+    # Run the command under systemd as a transient service; set WorkingDirectory
+    # so the command runs from the project root. Pass relevant GUI/dbus
+    # environment variables explicitly because systemd-run may not inherit
+    # them reliably from the caller.
+    setenv_args=""
+    setenv_args="$setenv_args --setenv=PATH=/usr/local/bin:/usr/bin:/bin"
+    if [ -n "${DISPLAY:-}" ]; then
+      setenv_args="$setenv_args --setenv=DISPLAY=${DISPLAY}"
+    fi
+    if [ -n "${XAUTHORITY:-}" ]; then
+      setenv_args="$setenv_args --setenv=XAUTHORITY=${XAUTHORITY}"
+    fi
+    if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+      setenv_args="$setenv_args --setenv=DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS}"
+    fi
+    if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+      setenv_args="$setenv_args --setenv=XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}"
+    fi
+    if [ -n "${PULSE_SERVER:-}" ]; then
+      setenv_args="$setenv_args --setenv=PULSE_SERVER=${PULSE_SERVER}"
+    fi
+    if [ -n "${PULSE_CLIENTCONFIG:-}" ]; then
+      setenv_args="$setenv_args --setenv=PULSE_CLIENTCONFIG=${PULSE_CLIENTCONFIG}"
+    fi
+
+    # shellcheck disable=SC2086
+    if systemd-run --unit="$unit" --description="makamujo ${name}" --property=WorkingDirectory="$PROJECT_ROOT" $setenv_args -- "$@" >/dev/null 2>&1; then
+      # try to record MainPID for compatibility with existing stop logic
+      retries=0
+      while [ "$retries" -lt 10 ]; do
+        pid=$(systemctl show -p MainPID --value "${unit}.service" 2>/dev/null || true)
+        if [ -n "$pid" ] && [ "$pid" -ne 0 ] 2>/dev/null; then
+          echo "$pid" > "${PID_DIR}/${name}"
+          break
+        fi
+        retries=$((retries + 1))
+        sleep 0.2
+      done
+    else
+      # fallback to nohup if systemd-run failed
+      nohup "$@" >"${logfile}" 2>&1 &
+      echo $! > "${PID_DIR}/${name}"
+    fi
+  else
+    nohup "$@" >"${logfile}" 2>&1 &
+    echo $! > "${PID_DIR}/${name}"
+  fi
+}
+
+# Start processes (keeps compatibility with previous behavior)
+start_cmd screen "${PROJECT_ROOT}/var/screen.log" /bin/sh -lc "cd '${PROJECT_ROOT}' && NODE_ENV=production '${BUN_PATH}' start"
+start_cmd browser "${PROJECT_ROOT}/var/browser.log" /bin/sh -lc "cd '${PROJECT_ROOT}' && NODE_ENV=production '${BUN_PATH}' '${PROJECT_ROOT}/bin/x/browser.ts'"
+start_cmd obs "${PROJECT_ROOT}/var/obs.log" /bin/sh -lc "cd '${PROJECT_ROOT}' && '${PROJECT_ROOT}/bin/x/obs'"
+
+exit 0

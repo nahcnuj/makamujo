@@ -1,7 +1,6 @@
 import { serve } from "bun";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { AllowedIP } from "../lib/allowedIP";
 import { createDailyRotatingJsonLogger, formatUnknownError } from "../lib/consoleLogger";
 import * as consoleRoutes from "../routes/console/index";
 
@@ -38,6 +37,37 @@ export function createAccessDeniedRedirectResponse(requestURL: URL): Response {
 
 export function isConsoleIPRestrictionEnabled(): boolean {
   return process.env.NODE_ENV === 'production';
+}
+
+function createConsoleUnauthorizedResponse(): Response {
+  return new Response('Unauthorized', {
+    status: 401,
+    headers: { 'WWW-Authenticate': 'Basic realm="console"' },
+  });
+}
+
+function parseBasicAuthCredentials(value: string | null): { username: string; password: string } | null {
+  if (!value) return null;
+  const parts = value.split(' ');
+  if (parts.length !== 2 || parts[0] !== 'Basic') return null;
+  const encoded = parts[1];
+  if (!encoded) return null;
+
+  let decoded: string;
+  try {
+    decoded = Buffer.from(encoded, 'base64').toString('utf8');
+  } catch {
+    return null;
+  }
+
+  const [username, password] = decoded.split(':');
+  if (username === undefined || password === undefined) return null;
+  return { username, password };
+}
+
+function hasValidConsoleAuthorization(authorizationHeader: string | null, expectedPassword: string): boolean {
+  const credentials = parseBasicAuthCredentials(authorizationHeader);
+  return credentials !== null && credentials.username === 'admin' && credentials.password === expectedPassword;
 }
 
 export function createLoopbackProxyHeaders(originalHeaders: Headers): Headers {
@@ -112,6 +142,8 @@ export function startConsoleServer({
   });
 
   const loopbackConsolePort = loopbackServer.port;
+  const consoleBasicAuthPassword = process.env.CONSOLE_BASIC_AUTH_PASSWORD;
+  const consoleAccessControlEnabled = isConsoleIPRestrictionEnabled();
 
   // If running in loopback-only mode (used by tests), return the loopback
   // server without attempting to start the outer TLS-enabled server.
@@ -122,6 +154,11 @@ export function startConsoleServer({
         loopbackServer.stop(closeActiveConnections);
       },
     };
+  }
+
+  if (consoleAccessControlEnabled && !consoleBasicAuthPassword) {
+    loopbackServer.stop(true);
+    throw new Error('Console basic auth password is required in production via CONSOLE_BASIC_AUTH_PASSWORD.');
   }
 
   // Fail fast if TLS cert/key files are missing before starting the outer server.
@@ -135,7 +172,7 @@ export function startConsoleServer({
   }
 
   // Outer console server: exposed publicly on port 443.
-  // Checks the client IP against the shared allowlist before proxying to the loopback server.
+  // Protects access with Basic authentication before proxying to the loopback server.
   type OuterWsData = {
     loopbackWsUrl: string;
     protocols: string[] | undefined;
@@ -188,14 +225,12 @@ export function startConsoleServer({
         const ip = server.requestIP(req);
         const clientIpAddress = ip ? `${ip.family}/${ip.address}` : 'unknown';
         let statusCode = 500;
-        const consoleIpRestrictionEnabled = isConsoleIPRestrictionEnabled();
-        if (consoleIpRestrictionEnabled && (!ip || !AllowedIP.equals(ip))) {
-          const redirectResponse = createAccessDeniedRedirectResponse(requestURL);
-          statusCode = redirectResponse.status;
+
+        if (consoleAccessControlEnabled && !hasValidConsoleAuthorization(req.headers.get('authorization'), consoleBasicAuthPassword ?? '')) {
+          statusCode = 401;
           errorLogger.write({
-            event: 'console_access_denied',
+            event: 'console_unauthorized',
             clientIp: clientIpAddress,
-            allowedIp: AllowedIP.toString(),
             method: req.method,
             path: requestURL.pathname,
             query: requestURL.search,
@@ -213,8 +248,7 @@ export function startConsoleServer({
             userAgent,
             referer,
           });
-          console.error(`got ${clientIpAddress}, want ${AllowedIP.toString()}`);
-          return redirectResponse;
+          return createConsoleUnauthorizedResponse();
         }
 
         try {

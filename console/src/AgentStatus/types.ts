@@ -32,6 +32,7 @@ export type AgentStateResponse = {
         listeners?: number
         gift?: number
         ad?: number
+        comments?: number
       }
     }
   }

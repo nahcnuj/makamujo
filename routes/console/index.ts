@@ -126,18 +126,18 @@ async function serveConsoleAppHtml(): Promise<Response> {
 }
 
 try {
-  console.log('[DEBUG] routes/console initializing');
+  console.debug('[DEBUG] routes/console initializing');
 } catch {}
 
 export const { upgradeWebSocket, websocket } = createBunWebSocket();
 
 export const app = new Hono()
   .get('/console/api/ws', async (c, next) => {
-    try { console.log('[TRACE] incoming request headers ->', Object.fromEntries(c.req.raw.headers)); } catch {}
+    try { console.debug('[DEBUG] incoming request headers ->', Object.fromEntries(c.req.raw.headers)); } catch {}
     try {
       const proxyBase = computeProxyBase(c.req.raw);
       const proxyUrl = computeProxyUrl(c.req.raw, proxyBase);
-      try { console.log('[DEBUG] /console/api/ws proxy ->', { url: proxyUrl, method: c.req.method, accept: c.req.header('accept'), upgrade: c.req.header('upgrade'), secWebSocketKey: c.req.header('sec-websocket-key'), secWebSocketProtocol: c.req.header('sec-websocket-protocol') }); } catch {}
+      try { console.debug('[DEBUG] /console/api/ws proxy ->', { url: proxyUrl, method: c.req.method, accept: c.req.header('accept'), upgrade: c.req.header('upgrade'), secWebSocketKey: c.req.header('sec-websocket-key'), secWebSocketProtocol: c.req.header('sec-websocket-protocol') }); } catch {}
 
       const upgradeHeader = (c.req.header('upgrade') ?? '').toLowerCase();
       const hasSecWebSocketKey = !!c.req.header('sec-websocket-key');
@@ -159,11 +159,11 @@ export const app = new Hono()
       onOpen(_event, ws) {
         (async () => {
           try {
-            try { console.log('[DEBUG] websocket upgrade accepted; starting SSE->WS forwarder'); } catch {}
+            try { console.debug('[DEBUG] websocket upgrade accepted; starting SSE->WS forwarder'); } catch {}
             const sseUrl = `${proxyBase}/console/api/ws`;
-            try { console.log('[DEBUG] opening upstream SSE fetch ->', sseUrl); } catch {}
+            try { console.debug('[DEBUG] opening upstream SSE fetch ->', sseUrl); } catch {}
             const res = await fetch(sseUrl, { headers: { accept: 'text/event-stream' } });
-            try { console.log('[DEBUG] upstream SSE response ->', { status: res.status, contentType: res.headers.get('content-type') }); } catch {}
+            try { console.debug('[DEBUG] upstream SSE response ->', { status: res.status, contentType: res.headers.get('content-type') }); } catch {}
             try {
               const metaJson = await fetchMetaSnapshot(proxyBase);
               try { ws.send(JSON.stringify(metaJson)); } catch {}

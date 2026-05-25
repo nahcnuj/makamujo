@@ -10,7 +10,7 @@ type ProxyServer = {
   close(callback?: (err?: Error) => void): void;
 };
 
-const PORT = 17779;
+const PORT = 0;
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 const IDLE_STATE_TIMEOUT_MS = 90_000;
 
@@ -166,6 +166,7 @@ test.describe("Full IPC operation", () => {
           env: {
             ...process.env,
             NODE_ENV: "production",
+            CONSOLE_LOOPBACK_ONLY: '1',
             MAKAMUJO_IPC_PATH: serverIpcPath,
           },
           stdio: ["ignore", "pipe", "pipe"],

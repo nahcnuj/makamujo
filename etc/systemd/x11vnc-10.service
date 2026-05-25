@@ -1,0 +1,16 @@
+[Unit]
+Description=x11vnc for Xorg :10
+After=xorg10.service
+Requires=xorg10.service
+PartOf=makamujo.service
+
+[Service]
+Type=simple
+User=root
+Environment=DISPLAY=:10
+ExecStart=/opt/makamujo/bin/x11vnc-10
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

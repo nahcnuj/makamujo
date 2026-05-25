@@ -7,6 +7,7 @@ import { serve } from "bun";
 import { Hono } from "hono";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 // Use the global `setInterval` timer instead of the Node
 // `timers/promises` async iterator. The async iterator can behave
 // inconsistently across runtimes; using a classic timer keeps the
@@ -19,9 +20,28 @@ import * as speechHistoryRoute from "./routes/api/speech-history";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
 import { handleCatchAll } from "./src/frontendServer";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
-import { normalizePublishedStreamState } from "./lib/streamState";
+import { normalizePublishedStreamState, resolveNiconamaFromState } from "./lib/streamState";
 import { createNiconamaCommentClient, type NiconamaCommentClient } from "./lib/niconamaCommentClient";
-import { suppressDebugConsoleInProduction } from "./lib/debugConsole";
+import { installConsoleLogger } from "./lib/consoleLogger";
+
+const console = installConsoleLogger();
+
+  try {
+    consoleServer = startConsoleServer({
+      broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
+      broadcastingPort: process.env.BROADCASTING_PORT ?? serverInstance.port,
+    });
+    console.log(`🚀 Console running at ${consoleServer.url}`);
+    __consoleServerForExit = consoleServer;
+    if (process.env.NODE_ENV === 'production') {
+      AllowedIP.set({ family: 'IPv4', address: '127.0.0.1' });
+    }
+  } catch (err) {
+    console.warn('[WARN] failed to start console server:', err instanceof Error ? err.message : String(err));
+  }
+let server: Bun.Server<unknown> | null = null;
+let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
+let niconamaCommentClient: NiconamaCommentClient | null = null;
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
@@ -29,7 +49,6 @@ process.on('SIGUSR1', signalHandler.bind(null, { exit: true }));
 process.on('SIGUSR2', signalHandler.bind(null, { exit: true }));
 // Log uncaught exceptions for better diagnostics before invoking the
 // existing exit handler which terminates the process.
-suppressDebugConsoleInProduction();
 
 // Safe references used by the global exit handler to avoid accessing
 // variables that may still be in the temporal dead zone during early
@@ -68,9 +87,11 @@ process.on('uncaughtException', (err) => {
   exitHandler({ exit: true }, 1);
 });
 
+const PROJECT_ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)));
+
 const { values: {
-  model: modelFile,
-  data: dataFile,
+  model: modelFileArg,
+  data: dataFileArg,
   port,
 } } = parseArgs({
   options: {
@@ -93,6 +114,9 @@ const { values: {
   },
 });
 
+const modelFile = resolve(PROJECT_ROOT, modelFileArg);
+const dataFile = resolve(PROJECT_ROOT, dataFileArg);
+
 // Rely on Bun's `--hot` and Bun.build watch mode in development.
 
 const model = (file => {
@@ -103,74 +127,6 @@ const model = (file => {
     return new MarkovChainModel();
   }
 })(modelFile);
-
-const tts = process.platform !== 'win32' ?
-  (() => {
-    const htsvoiceFile = '/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice';
-    const dictionaryDir = '/var/lib/mecab/dic/open-jtalk/naist-jdic';
-    return new TTS({
-      htsvoiceFile,
-      dictionaryDir,
-    });
-  })() :
-  new FallbackTTS();
-
-const streamer = new MakaMujo(model, tts);
-
-// Provide an in-memory fallback agent synchronously so the rest of the
-// server initialization can reference `agent` without awaiting a dynamic
-// import. We'll try to dynamically import and initialize the real
-// `automated-gameplay-transmitter` agent later and replace this fallback
-// when possible.
-let lastPublishedStreamState: unknown = undefined;
-let currentSpeechState = { speech: '', silent: false };
-let niconamaCommentClient: NiconamaCommentClient | null = null;
-// WebSocket clients connected to the broadcasting server.
-const wsClients = new Set<any>();
-
-// Server-Sent Events (SSE) clients: store controller objects so we can
-// push `data: ...\n\n` frames to each connected client.
-const sseClients = new Set<ReadableStreamDefaultController<string>>();
-
-/**
- * Create a ReadableStream that registers its controller in `sseClients` and
- * removes it when the client disconnects (cancel) or when the handler rejects.
- * Centralising the creation avoids duplicating the closure-capture pattern.
- */
-const createSseStream = (label: string) => {
-  let ctl: ReadableStreamDefaultController<string> | undefined;
-  return new ReadableStream<string>({
-    start(controller) {
-      try { console.log(`[INFO] SSE client connected (${label})`); } catch { }
-      ctl = controller;
-      sseClients.add(controller);
-      try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch { }
-    },
-    cancel() { if (ctl) { try { sseClients.delete(ctl); } catch { } ctl = undefined; } },
-  });
-};
-
-const sseBroadcast = (payload: unknown) => {
-  if (sseClients.size === 0) return;
-  const frame = `data: ${JSON.stringify(payload)}\n\n`;
-  try { console.log('[INFO] sseBroadcast -> sseClients count=', sseClients.size); } catch { }
-  for (const controller of Array.from(sseClients)) {
-    try {
-      // Evict clients under backpressure (desiredSize <= 0) to avoid blocking
-      // the event loop when a slow or unread connection fills its TCP send buffer.
-      // null means the stream is already closed/errored; treat that like healthy.
-      if ((controller.desiredSize ?? 1) <= 0) {
-        try { controller.close(); } catch { }
-        sseClients.delete(controller);
-        continue;
-      }
-      controller.enqueue(frame);
-    } catch (err) {
-      try { controller.close(); } catch { }
-      try { sseClients.delete(controller); } catch { }
-    }
-  }
-};
 
 const broadcastToWsClients = (payload: unknown) => {
   const message = JSON.stringify(payload);
@@ -211,9 +167,22 @@ const getCurrentStreamPayload = () => {
     : agentBase.replyTargetComment && typeof agentBase.replyTargetComment === 'object'
       ? agentBase.replyTargetComment
       : undefined;
+  const tryResolveNiconama = (src: unknown) => {
+    const resolved = resolveNiconamaFromState(src as any) as any;
+    if (resolved && typeof resolved === "object" && Object.keys(resolved).length > 0) return resolved;
+    return undefined;
+  };
+
+  // Prefer published payload but fall back to the agent's internal
+  // stream state or the streamer's state so consumers receive useful
+  // metadata instead of `{}` or an empty/omitted field.
+  const niconamaFromPublished = tryResolveNiconama(base);
+  const niconamaFromAgent = tryResolveNiconama(agentBase);
+  const niconamaFromStreamer = tryResolveNiconama(streamer.streamState);
+  const niconamaFinal = niconamaFromPublished ?? niconamaFromAgent ?? niconamaFromStreamer ?? undefined;
 
   return {
-    niconama: base.niconama ?? {},
+    niconama: niconamaFinal,
     canSpeak: base.canSpeak ?? streamer.canSpeak,
     currentGame: base.currentGame ?? streamer.currentGame ?? null,
     nGram: base.nGram ?? streamer.currentNGramSize,
@@ -310,6 +279,7 @@ let agent: any = {
   publishStreamState: (data: unknown) => { lastPublishedStreamState = data; },
   postComments: (_: unknown) => { },
 };
+let externalAgentInitialized = false;
 
 // Attempt to dynamically load the external agent API. This avoids module
 // evaluation side-effects at import time (such as binding to IPC paths)
@@ -321,6 +291,7 @@ let agent: any = {
       try {
         const externalAgent = mod.createAgentApi(streamer);
         agent = externalAgent;
+        externalAgentInitialized = true;
         console.info('[INFO] external agent API initialized');
       } catch (err) {
         console.warn('[WARN] createAgentApi threw, keeping in-memory fallback:', err instanceof Error ? err.message : String(err));
@@ -395,8 +366,8 @@ streamer.onGameStateChange(() => {
 // could delay the process becoming responsive to health checks.
 
 const portNumber = parseInt(port ?? "7777", 10);
-if (!Number.isFinite(portNumber) || portNumber < 1 || portNumber > 65535) {
-  console.error(`Invalid port: ${port}. Must be an integer between 1 and 65535.`);
+if (!Number.isFinite(portNumber) || portNumber < 0 || portNumber > 65535) {
+  console.error(`Invalid port: ${port}. Must be an integer between 0 and 65535.`);
   process.exit(1);
 }
 
@@ -528,7 +499,7 @@ function getMainAssetContentType(filePath: string): string | undefined {
 const makeStreamHandler = (label: string) =>
   (req: Request): Response => {
     const accept = req.headers.get('accept') ?? '';
-    try { console.log(`[TRACE] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
+    try { console.debug(`[DEBUG] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
     if (accept.includes('text/event-stream')) {
       return new Response(createSseStream(label), {
         headers: {
@@ -542,18 +513,6 @@ const makeStreamHandler = (label: string) =>
     }
     return new Response('websocket upgrade unavailable', { status: 501 });
   };
-
-// mainServer is assigned synchronously via `const server = mainServer = serve(...)`
-// below. Route handlers only run when requests arrive (after the event-loop
-// yields), so mainServer is always defined by the time a handler executes.
-// The non-null assertion (!) is therefore safe; the runtime check below
-// provides an extra guard for unexpected scenarios.
-let mainServer!: Bun.Server<WsData>;
-
-const getMainServer = (): Bun.Server<WsData> => {
-  if (!mainServer) throw new Error('Server not yet initialized');
-  return mainServer;
-};
 
 const mainApp = new Hono()
   // Static assets from the public directory
@@ -576,61 +535,42 @@ const mainApp = new Hono()
   // Serve the built frontend (HTML + JS/CSS assets)
   .all('*', async (c) => handleCatchAll(c.req.raw));
 
-function startServerOnPort(p: number) {
-  return serve<WsData>({
-    port: p,
-    async fetch(req: Request, server: Bun.Server<WsData>) {
-      const url = new URL(req.url);
-      const isWsEndpoint = url.pathname === '/api/ws' || url.pathname === '/console/api/ws';
-      const accept = req.headers.get('accept') ?? '';
-      const forceDisableWs = process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPGRADE === 'true';
+const serverInstance = serve<WsData>({
+  port: portNumber,
+  async fetch(req: Request, server: Bun.Server<WsData>) {
+    const url = new URL(req.url);
+    const isWsEndpoint = url.pathname === '/api/ws' || url.pathname === '/console/api/ws';
+    const accept = req.headers.get('accept') ?? '';
+    const forceDisableWs = process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPGRADE === 'true';
 
-      if (isWsEndpoint && !accept.includes('text/event-stream') && !forceDisableWs) {
-        const label = url.pathname;
-        try { console.log(`[TRACE] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
-        const upgraded = server.upgrade(req, { data: { label } satisfies WsData });
-        if (upgraded) {
-          return undefined;
-        }
-        try { console.warn(`[WARN] WebSocket upgrade failed for ${label}`, { upgrade: req.headers.get('upgrade'), secWebSocketKey: req.headers.get('sec-websocket-key') }); } catch {}
-        return new Response('WebSocket upgrade failed', { status: 400 });
+    if (isWsEndpoint && !accept.includes('text/event-stream') && !forceDisableWs) {
+      const label = url.pathname;
+      try { console.debug(`[DEBUG] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
+      const upgraded = serverInstance.upgrade(req, { data: { label } satisfies WsData });
+      if (upgraded) {
+        // undefined signals Bun that the connection was upgraded to WebSocket
+        // and no HTTP response should be sent back.
+        return undefined;
       }
+    }
 
-      return mainApp.fetch(req);
+    return mainApp.fetch(req);
+  },
+  websocket: {
+    open(ws) {
+      const { label } = ws.data;
+      try { console.log(`[INFO] WebSocket client connected (${label})`); } catch { }
+      try { wsClients.add(ws); } catch { }
+      try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch { }
     },
+    message() { },
+    close(ws) { try { wsClients.delete(ws); } catch { } },
+  },
+});
+server = serverInstance as any;
+__serverForExit = serverInstance as any;
+console.log(`🚀 Server running at ${serverInstance.url}`);
 
-    websocket: {
-      open(ws) {
-        const { label } = ws.data;
-        try { console.log(`[INFO] WebSocket client connected (${label})`); } catch { }
-        try { wsClients.add(ws); } catch { }
-        try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch { }
-      },
-      message() { },
-      close(ws) { try { wsClients.delete(ws); } catch { } },
-    },
-  });
-}
-
-let server: Bun.Server<WsData>;
-try {
-  server = mainServer = startServerOnPort(portNumber);
-  console.log(`🚀 Server running at ${server.url}`);
-  __serverForExit = server;
-} catch (err) {
-  console.error('[ERROR] Failed to start server on port', portNumber, err instanceof Error ? (err.stack ?? err.message) : String(err));
-  console.log('[INFO] Retrying server startup on an ephemeral port');
-  try {
-    server = mainServer = startServerOnPort(0);
-    console.log(`🚀 Server running at ${server.url}`);
-    __serverForExit = server;
-  } catch (err2) {
-    console.error('[ERROR] Failed to start server on an ephemeral port', err2 instanceof Error ? (err2.stack ?? err2.message) : String(err2));
-    throw err2;
-  }
-}
-
-let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 if (process.env.NODE_ENV === "production") {
   void (async () => {
     try {
@@ -644,50 +584,58 @@ if (process.env.NODE_ENV === "production") {
     }
   })();
 }
-  try {
-    consoleServer = startConsoleServer({
-      broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
-      broadcastingPort: process.env.BROADCASTING_PORT ?? server.port,
-    });
-    console.log(`🚀 Console running at ${consoleServer.url}`);
-    // Populate the safe consoleServer ref for the exit handler.
-    __consoleServerForExit = consoleServer;
-    if (process.env.NODE_ENV === 'production') {
-      AllowedIP.set({ family: 'IPv4', address: '127.0.0.1' });
-    }
-  } catch (err) {
-    const consoleStartupError = err instanceof Error ? (err.stack ?? err.message) : String(err);
-    console.error(`[ERROR] CONSOLE_STARTUP_FAILED ${JSON.stringify(consoleStartupError)}`);
-      // Attempt to fall back to loopback-only mode to make the server
-      // usable in environments where the outer TLS server cannot bind
-      // to port 443 (e.g. CI, dev containers).
-      try {
-        console.log('[WARN] Falling back to loopback-only console server');
-        process.env.CONSOLE_LOOPBACK_ONLY = '1';
-        consoleServer = startConsoleServer({
-          broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
-          broadcastingPort: process.env.BROADCASTING_PORT ?? server.port,
-        });
-        console.log(`🚀 Console (loopback-only) running at ${consoleServer.url}`);
-        __consoleServerForExit = consoleServer;
-      } catch (err2) {
-        const consoleStartupError2 = err2 instanceof Error ? (err2.stack ?? err2.message) : String(err2);
-        console.error(`[ERROR] CONSOLE_STARTUP_FAILED_FALLBACK ${JSON.stringify(consoleStartupError2)}`);
-        process.exit(1);
-      }
-  }
+
 
 try {
   niconamaCommentClient = createNiconamaCommentClient(
     {
       userDataDir: process.env.NICONAMA_USER_DATA_DIR ?? './playwright/.auth/',
-      executablePath: process.env.CHROMIUM_EXECUTABLE_PATH,
+      executablePath: process.env.CHROMIUM_EXECUTABLE_PATH ?? '/usr/bin/chromium',
       pollIntervalMs: 30_000,
     },
     {
       onMeta: handlePublishedStreamState,
       onComments: (comments) => {
-        agent.postComments(comments);
+        try {
+          agent.postComments(comments);
+        } catch (err) {
+          console.warn('[WARN] agent.postComments threw:', err instanceof Error ? err.message : String(err));
+        }
+
+        // If the agent did not update stream state (e.g. fallback agent),
+        // increment the published comment count so the console reflects activity.
+        try {
+          const afterState = typeof agent.getStreamState === 'function' ? agent.getStreamState() : undefined;
+          const hasCount = afterState && typeof afterState === 'object' && typeof (afterState as any).commentCount === 'number';
+          if (!hasCount) {
+            const payload = getCurrentStreamPayload();
+            const currentCount = typeof payload.commentCount === 'number' ? payload.commentCount : 0;
+            const increment = Array.isArray(comments) ? comments.length : 0;
+            const newCount = currentCount + increment;
+
+            // Ensure lastPublishedStreamState is an object we can modify.
+            lastPublishedStreamState = (lastPublishedStreamState && typeof lastPublishedStreamState === 'object') ? { ...lastPublishedStreamState } : {};
+            try {
+              // Update top-level commentCount (used by some consumers)
+              (lastPublishedStreamState as any).commentCount = newCount;
+            } catch { }
+
+            try {
+              // Also update nested niconama.meta.total.comments for consumers
+              // that expect the value there.
+              if (!(lastPublishedStreamState as any).niconama || typeof (lastPublishedStreamState as any).niconama !== 'object') {
+                (lastPublishedStreamState as any).niconama = { meta: { total: { comments: newCount } } };
+              } else {
+                const meta = (lastPublishedStreamState as any).niconama.meta = (lastPublishedStreamState as any).niconama.meta ?? {};
+                meta.total = meta.total ?? {};
+                meta.total.comments = newCount;
+              }
+            } catch { }
+          }
+        } catch (err) {
+          console.warn('[WARN] failed to update fallback commentCount:', err instanceof Error ? err.message : String(err));
+        }
+
         broadcastCurrentPayload('onComment');
         if (modelFile) {
           try {
@@ -712,7 +660,7 @@ try {
 // Start the stream playback after servers are listening so startup is
 // responsive for health checks used by tests and CI.
 try {
-  streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
+  streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }), { savePath: dataFile });
 } catch (err) {
   console.warn('[WARN] streamer.play failed during startup:', err instanceof Error ? err.message : String(err));
 }

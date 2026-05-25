@@ -1,0 +1,21 @@
+#!/usr/bin/env sh
+set -eu
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+XORG_BIN="$(command -v Xorg 2>/dev/null || true)"
+if [ -z "$XORG_BIN" ] && [ -x "/usr/lib/xorg/Xorg" ]; then
+  XORG_BIN="/usr/lib/xorg/Xorg"
+fi
+if [ -z "$XORG_BIN" ]; then
+  echo "Xorg binary not found" >&2
+  exit 1
+fi
+
+AUTH_FILE="${AUTH_FILE:-/root/.Xauthority}"
+if [ ! -e "$AUTH_FILE" ]; then
+  echo "Warning: XAUTHORITY file not found: $AUTH_FILE" >&2
+fi
+
+exec "$XORG_BIN" :10 -auth "$AUTH_FILE" -noreset -nolisten tcp -logfile /var/log/Xorg.10.log

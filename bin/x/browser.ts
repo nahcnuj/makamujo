@@ -8,6 +8,9 @@ import { ServerGames as Games } from "../../lib/Agent/games/server";
 import { create } from "../../lib/Browser/chromium";
 import { createRetrySender } from "../../lib/Browser/socket";
 import { getDefaultBrowserPath } from "../../lib/Browser/getDefaultBrowserPath";
+import { createConsoleLogger } from "../../lib/consoleLogger";
+
+const console = createConsoleLogger();
 
 const { values: {
   file,
@@ -46,6 +49,7 @@ const { values: {
 
 // When --display is not given, auto-detect the display from the first X11
 // socket found in /tmp/.X11-unix/ (e.g. xrdp uses :10, not :0).
+
 const resolvedDisplay = display ?? (() => {
   try {
     const x11UnixDir = '/tmp/.X11-unix';
@@ -60,6 +64,7 @@ const resolvedDisplay = display ?? (() => {
 if (resolvedDisplay) {
   process.env.DISPLAY = resolvedDisplay;
 }
+
 if (xauthority) {
   process.env.XAUTHORITY = xauthority;
 } else if (resolvedDisplay !== undefined) {

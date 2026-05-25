@@ -13,7 +13,9 @@
         "playwright": "^1.59.1",
         "playwright-extra": "^4.3.6",
         "puppeteer-extra-plugin-stealth": "^2.11.2",
+        "react": "^19.2.6",
         "tailwindcss": "^4.3.0",
+        "tsx": "^4.21.0",
       },
       "devDependencies": {
         "@playwright/test": "^1.59.1",
@@ -21,8 +23,6 @@
         "@types/jsdom": "^28.0.1",
         "@types/node": "^24.12.3",
         "jsdom": "^29.1.1",
-        "react": "^19.2.6",
-        "tsx": "^4.21.0",
         "typescript": "^6.0.3",
       },
     },
@@ -186,7 +186,7 @@
 
     "fs.realpath": ["fs.realpath@1.0.0", "", {}, "sha512-OO0pH2lK6a0hZnAdau5ItzHPI6pUlvI7jMVnxUQRtw4owF2wk8lOSabtGDCTP4Ggrg2MbGnWO9X8K1t4+fGMDw=="],
 
-    "fsevents": ["fsevents@2.3.3", "", { "os": "darwin" }, "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw=="],
+    "fsevents": ["fsevents@2.3.2", "", { "os": "darwin" }, "sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA=="],
 
     "get-tsconfig": ["get-tsconfig@4.14.0", "", { "dependencies": { "resolve-pkg-maps": "^1.0.0" } }, "sha512-yTb+8DXzDREzgvYmh6s9vHsSVCHeC0G3PI5bEXNBHtmshPnO+S5O7qgLEOn0I5QvMy6kpZN8K1NKGyilLb93wA=="],
 
@@ -316,11 +316,11 @@
 
     "mixin-object/for-in": ["for-in@0.1.8", "", {}, "sha512-F0to7vbBSHP8E3l6dCjxNOLuSFAACIxFy3UehTUlG7svlXi37HHsDkyVcHo0Pq8QwrE+pXvWSVX3ZT1T9wAZ9g=="],
 
-    "playwright/fsevents": ["fsevents@2.3.2", "", { "os": "darwin" }, "sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA=="],
-
     "shallow-clone/kind-of": ["kind-of@2.0.1", "", { "dependencies": { "is-buffer": "^1.0.2" } }, "sha512-0u8i1NZ/mg0b+W3MGGw5I7+6Eib2nx72S/QvXa0hYjEkjTknYmEYQJwGu3mLC0BrhtJjtQafTkyRUQ75Kx0LVg=="],
 
     "shallow-clone/lazy-cache": ["lazy-cache@0.2.7", "", {}, "sha512-gkX52wvU/R8DVMMt78ATVPFMJqfW8FPz1GZ1sVHBVQHmu/WvhIWE4cE1GBzhJNFicDeYhnwp6Rl35BcAIM3YOQ=="],
+
+    "tsx/fsevents": ["fsevents@2.3.3", "", { "os": "darwin" }, "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw=="],
 
     "@types/jsdom/@types/node/undici-types": ["undici-types@7.16.0", "", {}, "sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw=="],
 

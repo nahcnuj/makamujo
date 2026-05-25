@@ -1,0 +1,16 @@
+[Unit]
+Description=Persistent Xorg server on :10
+After=network.target
+Wants=network.target
+PartOf=makamujo.service
+
+[Service]
+Type=simple
+User=root
+Environment=DISPLAY=:10
+ExecStart=/opt/makamujo/bin/xorg10
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

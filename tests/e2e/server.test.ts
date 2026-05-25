@@ -2,10 +2,11 @@ import { expect, test } from "@playwright/test";
 import { spawn } from "child_process";
 import { existsSync, writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
+import net from "node:net";
 import { createReceiverWithPath, createSenderWithPath } from "../../lib/Browser/socket";
 
-const PORT = 17777;
-const BASE_URL = `http://localhost:${PORT}`;
+let PORT = 0;
+let BASE_URL = '';
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 
 let server: ReturnType<typeof spawn> | null = null;
@@ -51,6 +52,26 @@ test.beforeAll(async () => {
   if (!existsSync("./var/cookieclicker.txt")) {
     writeFileSync("./var/cookieclicker.txt", "");
   }
+  PORT = await new Promise<number>((resolve, reject) => {
+    const probe = net.createServer();
+    probe.on('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const address = probe.address();
+      if (!address || typeof address === 'string') {
+        probe.close(() => reject(new Error('failed to acquire a free port')));
+        return;
+      }
+      const port = address.port;
+      probe.close((closeErr) => {
+        if (closeErr) {
+          reject(closeErr);
+        } else {
+          resolve(port);
+        }
+      });
+    });
+  });
+  BASE_URL = `http://127.0.0.1:${PORT}`;
   // Use a unique IPC path per server run to avoid conflicts on Windows.
   const randomId = Date.now().toString(36) + Math.random().toString(36).slice(2);
   const ipcPath = process.platform === "win32"

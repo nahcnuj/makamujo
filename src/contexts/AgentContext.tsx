@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type PropsWithChildren } from "hono/jsx/dom";
+import { createContext, useContext, useState, useEffect, useRef, type PropsWithChildren } from "hono/jsx/dom";
 import type { Games } from "../../lib/Agent/games";
 import type { AgentState } from "../../lib/Agent/State";
 import { useInterval } from "../hooks/useInterval";
@@ -87,6 +87,37 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
       });
     setStreamStateFromMetaApiResponse(res, setStreamState);
   });
+
+  const prevTypeRef = useRef<string | undefined>(undefined);
+  const prevTitleRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    const currentType = streamState && typeof streamState === 'object' ? (streamState as any).type : undefined;
+    const currentTitle = streamState && typeof streamState === 'object' && (streamState as any).meta && typeof (streamState as any).meta.title === 'string' ? (streamState as any).meta.title as string : undefined;
+
+    const prevType = prevTypeRef.current;
+    const prevTitle = prevTitleRef.current;
+
+    // Reload when the stream transitions from live -> offline, or when the
+    // same program URL becomes marked with the explicit "公開終了" marker
+    // for the first time (title transitions from non-ended to ended).
+    try {
+      if (currentType === 'offline' && prevType === 'live') {
+        window.location.reload();
+        return;
+      }
+
+      if (currentTitle?.includes('公開終了') && !prevTitle?.includes('公開終了')) {
+        window.location.reload();
+        return;
+      }
+    } catch (e) {
+      // ignore reload errors in environments where window is unavailable
+    }
+
+    prevTypeRef.current = currentType;
+    prevTitleRef.current = currentTitle;
+  }, [streamState]);
 
   return (
     <AgentContext.Provider value={{ speech, silent, streamState, playing }}>
