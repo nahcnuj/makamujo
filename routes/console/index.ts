@@ -132,6 +132,19 @@ try {
 export const { upgradeWebSocket, websocket } = createBunWebSocket();
 
 export const app = new Hono()
+  // Ensure /api/meta is available on the loopback console server by proxying
+  // requests to the broadcasting server. Some test setups may point the
+  // broadcasting base URL at the console loopback; forwarding here ensures
+  // a JSON response is always returned.
+  .get('/api/meta', async (c) => {
+    try {
+      const proxyBase = computeProxyBase(c.req.raw);
+      const res = await fetch(`${proxyBase}/api/meta`);
+      return res;
+    } catch (err) {
+      return new Response('{}', { status: 502, headers: { 'content-type': 'application/json' } });
+    }
+  })
   .get('/console/api/ws', async (c, next) => {
     try { console.debug('[DEBUG] incoming request headers ->', Object.fromEntries(c.req.raw.headers)); } catch {}
     try {
@@ -147,6 +160,38 @@ export const app = new Hono()
       }
 
       const proxyHeaders = buildProxyHeaders(c.req.raw, proxyBase);
+      // Detect self-proxying loops: if the proxy target origin equals the
+      // incoming request origin, avoid proxying back to the same server and
+      // instead return a minimal SSE stream directly. This prevents infinite
+      // request recursion when the broadcasting server delegates to the
+      // console routes running in the same process.
+      try {
+        const incomingOrigin = new URL(c.req.raw.url).origin;
+        const targetOrigin = new URL(proxyUrl).origin;
+        if (incomingOrigin === targetOrigin) {
+          const encoder = new TextEncoder();
+          let _controller: ReadableStreamDefaultController | null = null;
+          const stream = new ReadableStream({
+            start(controller) {
+              _controller = controller;
+              try { controller.enqueue(encoder.encode(': connected\n\n')); } catch {}
+            },
+            cancel() {
+              try { _controller?.close(); } catch {}
+            },
+          });
+          return new Response(stream, {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              Connection: 'keep-alive',
+              'Access-Control-Allow-Origin': '*',
+            },
+          });
+        }
+      } catch { }
+
       return proxyConsoleApiWsRequest(c.req.raw, proxyUrl, proxyHeaders);
     } catch (err) {
       return new Response('proxy failed', { status: 502 });

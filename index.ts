@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 // process alive reliably.
 import { parseArgs } from "node:util";
 import { startConsoleServer } from "./console/index";
+import * as consoleRoutes from './routes/console/index';
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import { AllowedIP } from "./lib/allowedIP";
 import * as speechHistoryRoute from "./routes/api/speech-history";
@@ -29,21 +30,8 @@ let server: Bun.Server<unknown> | null = null;
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 let niconamaCommentClient: NiconamaCommentClient | null = null;
 
-// Start the console server once the variables are declared to avoid using
-// block-scoped variables before their declaration (which breaks TypeScript).
-try {
-  consoleServer = startConsoleServer({
-    broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
-    broadcastingPort: process.env.BROADCASTING_PORT ?? serverInstance?.port,
-  });
-  console.log(`🚀 Console running at ${consoleServer.url}`);
-  __consoleServerForExit = consoleServer;
-  if (process.env.NODE_ENV === 'production') {
-    AllowedIP.set({ family: 'IPv4', address: '127.0.0.1' });
-  }
-} catch (err) {
-  console.warn('[WARN] failed to start console server:', err instanceof Error ? err.message : String(err));
-}
+// Console server will be started after the main server is initialized
+// so that the broadcasting port can be passed to the console proxy.
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
@@ -59,22 +47,7 @@ process.on('SIGUSR2', signalHandler.bind(null, { exit: true }));
 let __serverForExit: any = null;
 let __consoleServerForExit: any = null;
 
-// Start the console server once the safe references exist to avoid
-// temporal-dead-zone errors when referencing `serverInstance` or
-// `__consoleServerForExit` during initialization.
-try {
-  consoleServer = startConsoleServer({
-    broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
-    broadcastingPort: process.env.BROADCASTING_PORT ?? undefined,
-  });
-  console.log(`🚀 Console running at ${consoleServer.url}`);
-  __consoleServerForExit = consoleServer;
-  if (process.env.NODE_ENV === 'production') {
-    AllowedIP.set({ family: 'IPv4', address: '127.0.0.1' });
-  }
-} catch (err) {
-  console.warn('[WARN] failed to start console server:', err instanceof Error ? err.message : String(err));
-}
+// Console server already started above; skip repeated initialization.
 
 process.on('uncaughtException', (err) => {
   try {
@@ -146,6 +119,42 @@ const model = (file => {
     return new MarkovChainModel();
   }
 })(modelFile);
+
+// Streamer instance used throughout the server. Use the fallback TTS
+// implementation initially; this may be replaced by an external agent
+// integration later if available.
+const streamer = new MakaMujo(model, new FallbackTTS());
+
+// Global stream state and client registries used by SSE/WS endpoints.
+let lastPublishedStreamState: unknown = undefined;
+const wsClients = new Set<any>();
+const sseClients = new Set<ReadableStreamDefaultController<Uint8Array>>();
+const sseEncoder = new TextEncoder();
+
+function createSseStream(_label: string) {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      sseClients.add(controller);
+      try { controller.enqueue(sseEncoder.encode(': connected\n\n')); } catch {}
+    },
+    cancel() {
+      // Remove any controllers that are closed or canceled.
+      try { sseClients.forEach((c) => { try { if ((c as any).desiredSize === null) sseClients.delete(c); } catch {} }); } catch {}
+    },
+  });
+}
+
+function sseBroadcast(payload: unknown) {
+  const data = JSON.stringify(payload ?? {});
+  const chunk = sseEncoder.encode(`data: ${data}\n\n`);
+  for (const c of Array.from(sseClients)) {
+    try {
+      c.enqueue(chunk);
+    } catch (err) {
+      try { sseClients.delete(c); } catch {}
+    }
+  }
+}
 
 const broadcastToWsClients = (payload: unknown) => {
   const message = JSON.stringify(payload);
@@ -289,6 +298,8 @@ const normalizeSpeechText = (speech: unknown): string | undefined => {
 
   return undefined;
 };
+// Current speech state exposed to the console agent API.
+let currentSpeechState: { speech: string; silent: boolean } | undefined = undefined;
 
 let agent: any = {
   setSpeech: (text: string) => { currentSpeechState = { speech: text, silent: false }; },
@@ -404,7 +415,15 @@ const apiApp = new Hono()
     return Response.json(agent.getGame() ?? {});
   })
   .get('/api/meta', () => {
-    return Response.json(getCurrentStreamPayload());
+    try { console.log('[DEBUG] GET /api/meta invoked'); } catch {}
+    try {
+      const payload = getCurrentStreamPayload();
+      try { console.log('[DEBUG] GET /api/meta payload ->', { keys: Object.keys(payload || {}) }); } catch {}
+      return Response.json(payload);
+    } catch (err) {
+      try { console.error('[ERROR] GET /api/meta failed to produce JSON payload:', err instanceof Error ? err.stack ?? err.message : String(err)); } catch {}
+      return new Response(JSON.stringify({}), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
   })
   .post('/api/meta', async (c) => {
     try {
@@ -542,7 +561,10 @@ const mainApp = new Hono()
 
   // WebSocket / SSE endpoints
   .get('/api/ws', (c) => makeStreamHandler('/api/ws')(c.req.raw))
-  .get('/console/api/ws', (c) => makeStreamHandler('/console/api/ws')(c.req.raw))
+  // Delegate /console/api/ws to the console routes so the proxy logic
+  // (including upstream probing and resilient SSE proxying) executes
+  // using the console module's helper functions.
+  .get('/console/api/ws', (c) => consoleRoutes.app.fetch(c.req.raw))
   .get('/index.css', async (c) => {
     const css = await compileTailwindCss('src/index.css');
     return createCssResponse(css, c.req.raw);
@@ -554,9 +576,9 @@ const mainApp = new Hono()
   // Serve the built frontend (HTML + JS/CSS assets)
   .all('*', async (c) => handleCatchAll(c.req.raw));
 
-const serverInstance = serve<WsData>({
+const serverInstance: any = serve<WsData>({
   port: portNumber,
-  async fetch(req: Request, server: Bun.Server<WsData>) {
+  async fetch(req: Request, server: Bun.Server<WsData>): Promise<Response | undefined> {
     const url = new URL(req.url);
     const isWsEndpoint = url.pathname === '/api/ws' || url.pathname === '/console/api/ws';
     const accept = req.headers.get('accept') ?? '';
@@ -589,6 +611,21 @@ const serverInstance = serve<WsData>({
 server = serverInstance as any;
 __serverForExit = serverInstance as any;
 console.log(`🚀 Server running at ${serverInstance.url}`);
+
+// Start the console server now that the broadcasting server port is known
+try {
+  consoleServer = startConsoleServer({
+    broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
+    broadcastingPort: serverInstance.port,
+  });
+  console.log(`🚀 Console running at ${consoleServer.url}`);
+  __consoleServerForExit = consoleServer;
+  if (process.env.NODE_ENV === 'production') {
+    AllowedIP.set({ family: 'IPv4', address: '127.0.0.1' });
+  }
+} catch (err) {
+  console.warn('[WARN] failed to start console server:', err instanceof Error ? err.message : String(err));
+}
 
 if (process.env.NODE_ENV === "production") {
   void (async () => {

@@ -115,7 +115,10 @@ export function computeProxyUrl(req: Request, proxyBase: string) {
     const hostForParse = req.headers.get('host') ?? `${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
     parsed = new URL(req.url, `http://${hostForParse}`);
   }
-  return `${proxyBase}/console/api/ws${parsed.search ?? ''}`;
+  // Ensure we don't produce duplicate slashes when joining base and pathname
+  const base = proxyBase.endsWith('/') ? proxyBase.slice(0, -1) : proxyBase;
+  const pathname = parsed.pathname.startsWith('/') ? parsed.pathname : `/${parsed.pathname}`;
+  return `${base}${pathname}${parsed.search ?? ''}`;
 }
 
 export async function fetchMetaSnapshot(proxyBase: string): Promise<any> {
@@ -297,7 +300,9 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
   ) {
     const probe = await fetch(proxyUrl.toString(), { method: 'GET', headers: proxyHeaders });
     const contentType = probe.headers.get('content-type') ?? '';
+    try { console.debug('[DEBUG] probe upstream ->', { url: proxyUrl, status: probe.status, contentType }); } catch {}
     if (!probe.ok || !contentType.includes('text/event-stream')) {
+      try { console.warn('[WARN] upstream probe returned non-SSE or non-ok; passing through', { url: proxyUrl, status: probe.status, contentType }); } catch {}
       // Upstream returned a non-SSE or error response — pass it through as-is.
       return streamUpstreamResponse(probe);
     }
