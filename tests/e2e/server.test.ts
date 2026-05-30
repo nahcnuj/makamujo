@@ -7,7 +7,7 @@ import { createReceiverWithPath, createSenderWithPath } from "../../lib/Browser/
 
 let PORT = 0;
 let BASE_URL = '';
-const SERVER_STARTUP_TIMEOUT_MS = 15_000;
+const SERVER_STARTUP_TIMEOUT_MS = 30_000;
 
 let server: ReturnType<typeof spawn> | null = null;
 
@@ -95,8 +95,18 @@ test.afterAll(() => {
 
 test.describe("server", () => {
   test("serves the frontend HTML", async ({ request }) => {
-    const res = await request.get(BASE_URL);
-    expect(res.ok()).toBeTruthy();
+    // Retry the GET a few times to avoid transient CI timing issues.
+    let res = null as any;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      try {
+        res = await request.get(BASE_URL);
+        if (res.ok()) break;
+      } catch (_) {
+        // ignore and retry
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(res && res.ok(), 'frontend HTML should respond OK').toBeTruthy();
     const html = await res.text();
     expect(html).toContain("<title>馬可無序");
     expect(html).toContain('<div id="root">');

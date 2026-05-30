@@ -241,13 +241,17 @@ export class NiconamaCommentClient {
         });
       } catch {}
       const initialComments = parseAgentCommentsFromResponseBody(embedded);
+      // Treat the synthetic placeholder comment '(コメントあり)' as not a real
+      // initial comment so that we still attempt Playwright fallbacks when the
+      // embedded metadata only reports a count but no bodies.
+      const initialRealComments = (initialComments || []).filter((c: any) => !(c && c.data && c.data.comment === '(コメントあり)'));
       const embeddedWebSocketUrl = this.getWebSocketUrlFromEmbeddedData(embedded);
       const embeddedFrontendId = this.getFrontendIdFromEmbeddedData(embedded);
       if (embeddedWebSocketUrl && embeddedFrontendId) {
         (embedded as any).webSocketUrl = this.buildWebSocketUrlWithFrontendId(embeddedWebSocketUrl, embeddedFrontendId);
       }
 
-      if (embeddedWebSocketUrl || initialComments.length > 0) {
+      if (embeddedWebSocketUrl || initialRealComments.length > 0) {
         return embedded;
       }
 
@@ -659,6 +663,33 @@ export class NiconamaCommentClient {
                 this.#callbacks.onComments(parsedComments);
               } catch {}
               return enriched;
+            }
+
+            // If the rendered-frame scan didn't find comments, try the more
+            // aggressive page-evaluate-based extraction which looks for
+            // script/data-props and other embedded JSON that some pages use.
+            try {
+              const pageComments = await (async () => {
+                try {
+                  const { extractPageComments } = await import('./niconamaCommentClient.playwright');
+                  return await extractPageComments(page, this.#seenCommentIdentifiers).catch(() => [] as any[]);
+                } catch {
+                  return [] as any[];
+                }
+              })();
+              if (Array.isArray(pageComments) && pageComments.length > 0) {
+                const enriched2 = existingEmbeddedData && typeof existingEmbeddedData === 'object' ? JSON.parse(JSON.stringify(existingEmbeddedData)) : { site: { state: { relive: {} } } };
+                try {
+                  (enriched2 as any).site = (enriched2 as any).site ?? {};
+                  (enriched2 as any).site.state = (enriched2 as any).site.state ?? {};
+                  (enriched2 as any).site.state.relive = (enriched2 as any).site.state.relive ?? {};
+                  (enriched2 as any).site.state.relive.comments = pageComments.map((c: any) => (c && c.data) ? c.data : { comment: String(c) });
+                } catch {}
+                try { this.#callbacks.onComments(pageComments); } catch {}
+                return enriched2;
+              }
+            } catch {
+              // ignore page-eval extraction errors
             }
 
             try {
