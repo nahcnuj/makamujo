@@ -2,8 +2,7 @@ import { appendFileSync } from 'node:fs';
 
 const appendDebugLog = (...args: unknown[]) => {
   try {
-    if (process.env.CONSOLE_PROXY_DEBUG_LOG !== '1') return;
-    appendFileSync('/tmp/console-proxy-debug.log', `${args.map(String).join(' ')}\n`);
+    appendFileSync('/tmp/console-proxy-debug.log', args.map(String).join(' ') + '\n');
   } catch {
     // ignore
   }
@@ -410,10 +409,7 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
           responseHeaders.set('cache-control', 'no-cache');
           return new Response(null, { status: headRes.status, headers: responseHeaders });
         }
-        // Treat non-OK or non-SSE HEAD responses as probe failures so the
-        // GET fallback code in the catch block is exercised (conservative
-        // behavior expected by callers).
-        throw new Error(`upstream HEAD probe did not return SSE (status=${headRes.status}, ct=${ct})`);
+        // Otherwise, fall through to GET fallback below.
       } finally {
         clearTimeout(timeout);
       }

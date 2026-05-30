@@ -870,9 +870,85 @@ try {
   console.warn('[WARN] failed to schedule niconamaCommentClient delayed start:', err instanceof Error ? err.message : String(err));
 }
 
-// Consolidated niconama client startup: the retry-loop scheduler above
-// handles initialization and retries. Previous single-shot delayed start
-// was removed to avoid double-initialization and duplicate browser instances.
+// Small startup delay before launching the external nicovideo comment client.
+// This reduces a race where the client's callbacks run before broadcasting
+// helpers and mirrored state are fully initialized, causing initial payloads
+// sent to newly-connected clients to omit `niconama` intermittently in E2E.
+try {
+  const startDelayMs = Number(process.env.NICONAMA_START_DELAY_MS ?? '350');
+  setTimeout(() => {
+    try {
+      if (!niconamaCommentClient) {
+        niconamaCommentClient = createNiconamaCommentClient(
+          {
+            userDataDir: process.env.NICONAMA_USER_DATA_DIR ?? './playwright/.auth/',
+            executablePath: process.env.CHROMIUM_EXECUTABLE_PATH ?? '/usr/bin/chromium',
+            pollIntervalMs: 30_000,
+          },
+          {
+            onMeta: handlePublishedStreamState,
+            onComments: (comments) => {
+              try {
+                agent.postComments(comments);
+              } catch (err) {
+                console.warn('[WARN] agent.postComments threw:', err instanceof Error ? err.message : String(err));
+              }
+
+              try {
+                const afterState = typeof agent.getStreamState === 'function' ? agent.getStreamState() : undefined;
+                const hasCount = afterState && typeof afterState === 'object' && typeof (afterState as any).commentCount === 'number';
+                if (!hasCount) {
+                  const payload = getCurrentStreamPayload();
+                  const currentCount = typeof payload.commentCount === 'number' ? payload.commentCount : 0;
+                  const increment = Array.isArray(comments) ? comments.length : 0;
+                  const newCount = currentCount + increment;
+
+                  lastPublishedStreamState = (lastPublishedStreamState && typeof lastPublishedStreamState === 'object') ? { ...lastPublishedStreamState } : {};
+                  try {
+                    (lastPublishedStreamState as any).commentCount = newCount;
+                  } catch {}
+
+                  try {
+                    if (!(lastPublishedStreamState as any).niconama || typeof (lastPublishedStreamState as any).niconama !== 'object') {
+                      (lastPublishedStreamState as any).niconama = { meta: { total: { comments: newCount } } };
+                    } else {
+                      const meta = (lastPublishedStreamState as any).niconama.meta = (lastPublishedStreamState as any).niconama.meta ?? {};
+                      meta.total = meta.total ?? {};
+                      meta.total.comments = newCount;
+                    }
+                  } catch {}
+                }
+              } catch (err) {
+                console.warn('[WARN] failed to update fallback commentCount:', err instanceof Error ? err.message : String(err));
+              }
+
+              broadcastCurrentPayload('onComment');
+              if (modelFile) {
+                try {
+                  writeFileSync(modelFile, streamer.talkModel.toJSON());
+                } catch (err) {
+                  console.warn('[WARN]', 'failed to write model', modelFile, err);
+                }
+              }
+            },
+            onError: (err) => {
+              console.warn('[WARN] niconama comment client error:', err instanceof Error ? err.message : String(err));
+            },
+          },
+        );
+
+        void niconamaCommentClient.start().catch((err) => {
+          console.warn('[WARN] failed to start delayed niconamaCommentClient:', err instanceof Error ? err.message : String(err));
+        });
+      }
+    } catch (err) {
+      console.warn('[WARN] delayed niconamaCommentClient init failed:', err instanceof Error ? err.message : String(err));
+    }
+  }, startDelayMs);
+} catch (err) {
+  // If the delay setup fails for any reason, log and continue.
+  console.warn('[WARN] failed to schedule niconamaCommentClient delayed start:', err instanceof Error ? err.message : String(err));
+}
 
 // Start the stream playback after servers are listening so startup is
 // responsive for health checks used by tests and CI.
