@@ -202,8 +202,8 @@ test.afterAll(() => {
     currentServer.kill();
   }
   server = null;
-  try { currentServer?.stdout?.unpipe(outStream); } catch {}
-  try { currentServer?.stderr?.unpipe(errStream); } catch {}
+  try { currentServer?.stdout?.unpipe(outStream ?? undefined); } catch {}
+  try { currentServer?.stderr?.unpipe(errStream ?? undefined); } catch {}
   try { outStream?.end(); } catch {}
   try { errStream?.end(); } catch {}
 });
