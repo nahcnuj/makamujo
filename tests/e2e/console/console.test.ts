@@ -162,8 +162,8 @@ test.beforeAll(async ({ request }) => {
   const errPath = `./var/test-logs/console-server-${ts}.err.log`;
   outStream = createWriteStream(outPath);
   errStream = createWriteStream(errPath);
-  server.stdout?.pipe(outStream);
-  server.stderr?.pipe(errStream);
+  server.stdout?.pipe(outStream, { end: false });
+  server.stderr?.pipe(errStream, { end: false });
 
   const { consoleUrl, serverUrl } = await waitForServerReady();
   if (consoleUrl) {
@@ -197,10 +197,13 @@ test.beforeAll(async ({ request }) => {
 });
 
 test.afterAll(() => {
-  if (server && !server.killed) {
-    server.kill();
+  const currentServer = server;
+  if (currentServer && !currentServer.killed) {
+    currentServer.kill();
   }
   server = null;
+  try { currentServer?.stdout?.unpipe(outStream); } catch {}
+  try { currentServer?.stderr?.unpipe(errStream); } catch {}
   try { outStream?.end(); } catch {}
   try { errStream?.end(); } catch {}
 });
