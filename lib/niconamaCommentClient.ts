@@ -55,6 +55,8 @@ type NiconamaBrowserPage = {
   waitForTimeout: (ms: number) => Promise<void>;
   waitForLoadState?: (state?: string, options?: Record<string, unknown>) => Promise<void>;
   waitForSelector?: (selector: string, options?: Record<string, unknown>) => Promise<unknown>;
+  setDefaultTimeout?: (ms: number) => void;
+  screenshot?: (options?: { path?: string }) => Promise<unknown>;
   url: () => string;
   isClosed: () => boolean;
 };
@@ -63,6 +65,7 @@ type NiconamaBrowserContext = {
   pages: () => NiconamaBrowserPage[];
   newPage: () => Promise<NiconamaBrowserPage>;
   close: () => Promise<void>;
+  on?: (event: string, callback: any) => void;
 };
 
 type NiconamaLaunchPersistentContext = (userDataDir: string, options?: Record<string, unknown>) => Promise<NiconamaBrowserContext>;
@@ -219,15 +222,29 @@ export class NiconamaCommentClient {
     }
 
     if (embedded) {
-          const rawTop = (embedded as any).program?.statistics?.commentCount;
-          const rawSite = (embedded as any).site?.program?.statistics?.commentCount;
-          const commentCount = typeof rawTop === 'number' ? rawTop : (typeof rawTop === 'string' ? Number(rawTop) : (typeof rawSite === 'number' ? rawSite : (typeof rawSite === 'string' ? Number(rawSite) : undefined)));
-        console.debug('[DEBUG] fetchEmbeddedData embedded program/statistics presence', { hasProgram: Boolean((embedded as any).program), hasStatistics: Boolean((embedded as any).program?.statistics), rawValue: (embedded as any).program?.statistics?.commentCount });
+      const rawTop = (embedded as any).program?.statistics?.commentCount;
+      const rawSite = (embedded as any).site?.program?.statistics?.commentCount;
+      const commentCount = typeof rawTop === 'number'
+        ? rawTop
+        : (typeof rawTop === 'string'
+          ? Number(rawTop)
+          : (typeof rawSite === 'number'
+            ? rawSite
+            : (typeof rawSite === 'string'
+              ? Number(rawSite)
+              : undefined)));
+      try {
+        console.debug('[DEBUG] fetchEmbeddedData embedded program/statistics presence', {
+          hasProgram: Boolean((embedded as any).program),
+          hasStatistics: Boolean((embedded as any).program?.statistics),
+          rawValue: (embedded as any).program?.statistics?.commentCount,
+        });
+      } catch {}
       const initialComments = parseAgentCommentsFromResponseBody(embedded);
       const embeddedWebSocketUrl = this.getWebSocketUrlFromEmbeddedData(embedded);
       const embeddedFrontendId = this.getFrontendIdFromEmbeddedData(embedded);
       if (embeddedWebSocketUrl && embeddedFrontendId) {
-        embedded.webSocketUrl = this.buildWebSocketUrlWithFrontendId(embeddedWebSocketUrl, embeddedFrontendId);
+        (embedded as any).webSocketUrl = this.buildWebSocketUrlWithFrontendId(embeddedWebSocketUrl, embeddedFrontendId);
       }
 
       if (embeddedWebSocketUrl || initialComments.length > 0) {
@@ -236,9 +253,6 @@ export class NiconamaCommentClient {
 
       try { console.debug('[DEBUG] fetchEmbeddedData attempting polling APIs before Playwright', targetUrl, { commentCount, initialCommentsCount: initialComments.length, embeddedWebSocketUrl: Boolean(embeddedWebSocketUrl) }); } catch {}
 
-      // Try an immediate aggressive poll for comments via polling APIs before
-      // starting Playwright (best-effort). This increases chance of passing
-      // e2e tests without needing a Playwright-rendered page.
       try {
         const singleTry = await this.fetchCommentsFromPollingApis(embedded).catch(() => [] as AgentComment[]);
         if (Array.isArray(singleTry) && singleTry.length > 0) {
@@ -246,9 +260,7 @@ export class NiconamaCommentClient {
           console.debug('[DEBUG] fetchEmbeddedData comments found from polling APIs', { count: singleTry.length, targetUrl });
           return embedded;
         }
-        // If the embedded program statistics indicate comments exist but the
-        // polling APIs returned nothing, skip the aggressive polling delay and
-        // proceed to Playwright immediately to extract rendered comments.
+
         if (typeof commentCount === 'number' && commentCount > 0) {
           console.debug('[DEBUG] fetchEmbeddedData skipping aggressive polling due to program commentCount, falling back to Playwright', { commentCount, targetUrl });
         } else {
@@ -270,7 +282,6 @@ export class NiconamaCommentClient {
       }
 
       try { console.debug('[DEBUG] fetchEmbeddedData falling back to Playwright', targetUrl, { commentCount, initialCommentsCount: initialComments.length, embeddedWebSocketUrl: Boolean(embeddedWebSocketUrl) }); } catch {}
-
       try { console.debug('[DEBUG] fetchEmbeddedData invoking fetchEmbeddedDataWithPlaywright', { targetUrl }); } catch {}
       const enrichedEmbedded = await this.fetchEmbeddedDataWithPlaywright(targetUrl, embedded);
       try { console.debug('[DEBUG] fetchEmbeddedData fetchEmbeddedDataWithPlaywright ->', enrichedEmbedded ? 'found' : 'not-found'); } catch {}
@@ -602,10 +613,9 @@ export class NiconamaCommentClient {
         // Default function imported at module scope is `launchPersistentContext`.
         // If a different function was provided via constructor options,
         // `this.#launchPersistentContext` will be a different reference.
-        if (this.#launchPersistentContext) {
-          const tmpDir = mkdtempSync(join(tmpdir(), 'niconama-playwright-'));
-          let context: any = null;
-          try {
+        const tmpDir = mkdtempSync(join(tmpdir(), 'niconama-playwright-'));
+        let context: any = null;
+        try {
             context = await this.#launchPersistentContext(tmpDir, {
               executablePath: this.#executablePath,
               headless: true,
@@ -667,7 +677,6 @@ export class NiconamaCommentClient {
             try { await context?.close?.(); } catch {}
             try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
           }
-        }
       } catch (e) {
         console.warn('[WARN] in-process Playwright extraction failed, falling back to external helper', e && (e as any).message ? (e as any).message : String(e));
       }
@@ -1067,12 +1076,10 @@ export class NiconamaCommentClient {
               console.warn('[WARN] recreating Playwright context due to page close', { url: watchUrl });
               try { await context.close(); } catch (e) { /* ignore */ }
               // attempt to export trace for debugging
-              try {
+                      try {
                 const tmpDir = mkdtempSync(join(tmpdir(), 'playwright-trace-'));
                 const tracePath = join(tmpDir, 'trace.zip');
-                try { await (newContext as any).tracing?.stop?.().catch?.(() => undefined); } catch {}
-                try { await (newContext as any).tracing?.export?.({ path: tracePath }).catch?.(() => undefined); } catch {}
-                console.info('[INFO] exported playwright trace', tracePath);
+                console.info('[INFO] prepared playwright trace path', tracePath);
               } catch (traceErr) {
                 // ignore trace export errors
               }
@@ -1851,7 +1858,7 @@ export class NiconamaCommentClient {
     try {
       const msg = JSON.stringify(message);
       console.debug('[DEBUG] direct websocket sending message', message);
-      if (!this.#directWebSocket || this.#directWebSocket.readyState !== (this.#directWebSocket.constructor?.OPEN ?? 1)) {
+      if (!this.#directWebSocket || this.#directWebSocket.readyState !== 1) {
         // Queue messages until the socket opens to avoid 'not open' errors
         this.#directWebSocketQueue.push(msg);
         return;

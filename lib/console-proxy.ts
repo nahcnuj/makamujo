@@ -250,7 +250,7 @@ export function createResilientSseProxy(
       try {
         return await Promise.race([
           reader.read(),
-          new Promise((_, reject) => {
+          new Promise<never>((_, reject) => {
             timeoutId = setTimeout(() => reject(new Error('upstream read timeout')), readTimeoutMs);
           }),
         ]);
@@ -261,7 +261,7 @@ export function createResilientSseProxy(
 
     try {
       while (!stopped) {
-        let result: { done: boolean; value: Uint8Array | undefined };
+        let result: Awaited<ReturnType<typeof reader.read>>;
         try {
           result = await readWithTimeout();
         } catch (err) {
