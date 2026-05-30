@@ -154,44 +154,20 @@ export const app = new Hono()
 
       const upgradeHeader = (c.req.header('upgrade') ?? '').toLowerCase();
       const hasSecWebSocketKey = !!c.req.header('sec-websocket-key');
+      const forceDisableWs = process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPGRADE === 'true';
       if (upgradeHeader === 'websocket' || hasSecWebSocketKey) {
+        if (forceDisableWs) {
+          return new Response('websocket upgrade unavailable', { status: 501 });
+        }
         // Hand off to the upgradeWebSocket middleware below.
         return next();
       }
 
       const proxyHeaders = buildProxyHeaders(c.req.raw, proxyBase);
-      // Detect self-proxying loops: if the proxy target origin equals the
-      // incoming request origin, avoid proxying back to the same server and
-      // instead return a minimal SSE stream directly. This prevents infinite
-      // request recursion when the broadcasting server delegates to the
-      // console routes running in the same process.
-      try {
-        const incomingOrigin = new URL(c.req.raw.url).origin;
-        const targetOrigin = new URL(proxyUrl).origin;
-        if (incomingOrigin === targetOrigin) {
-          const encoder = new TextEncoder();
-          let _controller: ReadableStreamDefaultController | null = null;
-          const stream = new ReadableStream({
-            start(controller) {
-              _controller = controller;
-              try { controller.enqueue(encoder.encode(': connected\n\n')); } catch {}
-            },
-            cancel() {
-              try { _controller?.close(); } catch {}
-            },
-          });
-          return new Response(stream, {
-            status: 200,
-            headers: {
-              'Content-Type': 'text/event-stream',
-              'Cache-Control': 'no-cache',
-              Connection: 'keep-alive',
-              'Access-Control-Allow-Origin': '*',
-            },
-          });
-        }
-      } catch { }
-
+      // Proxy the request to the broadcasting server so the console client
+      // receives the upstream SSE stream (with resilient reconnects) or the
+      // proxied HTTP response. Avoid special-casing self-proxying here to
+      // ensure console clients get the authoritative upstream events.
       return proxyConsoleApiWsRequest(c.req.raw, proxyUrl, proxyHeaders);
     } catch (err) {
       return new Response('proxy failed', { status: 502 });
@@ -212,6 +188,19 @@ export const app = new Hono()
             try {
               const metaJson = await fetchMetaSnapshot(proxyBase);
               try { ws.send(JSON.stringify(metaJson)); } catch {}
+
+              // If the proxied HTTP snapshot lacked `niconama`, prefer the
+              // authoritative local payload mirror when available so WebSocket
+              // upgrade clients receive immediate stream metadata.
+              try {
+                if (!metaJson || typeof metaJson !== 'object' || !(metaJson as any).niconama) {
+                  const local = (globalThis as any).__getCurrentStreamPayload?.();
+                  if (local && typeof local === 'object' && (local as any).niconama) {
+                    try { ws.send(JSON.stringify(local)); } catch {}
+                    try { console.debug('[DIAG] websocket sent local mirrored payload with niconama'); } catch {}
+                  }
+                }
+              } catch {}
             } catch (err) {
               try { console.warn('[DIAG] failed to send initial meta snapshot', String(err)); } catch {}
             }

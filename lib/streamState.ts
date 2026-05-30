@@ -37,6 +37,14 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
   }
 
   if ('niconama' in rawState && rawState.niconama && typeof rawState.niconama === 'object') {
+    try {
+      const resolved = resolveNiconamaFromState({ niconama: rawState.niconama });
+      if (resolved && typeof resolved === 'object') {
+        return { ...rawState, niconama: resolved };
+      }
+    } catch {
+      // fall through to return rawState unchanged
+    }
     return rawState;
   }
 
