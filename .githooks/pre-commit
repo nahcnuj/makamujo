@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Pre-commit hook for makamujo
+# Runs the required repository checks before allowing a commit.
+
+if [ "${SKIP_PRE_COMMIT:-}" = "1" ]; then
+  echo "SKIP_PRE_COMMIT=1 detected, skipping pre-commit checks."
+  exit 0
+fi
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "Running pre-commit checks..."
+
+bun --version >/dev/null 2>&1
+bun run typecheck
+bun run test
+bun run test:integration
+bun run pretest:e2e
+bun run test:e2e
+
+echo "Pre-commit checks passed."
