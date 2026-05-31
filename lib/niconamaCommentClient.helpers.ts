@@ -329,6 +329,14 @@ export const parseAgentCommentsFromResponseBody = (
   return comments;
 };
 
+const parseCommentNumberFromText = (text: string): number | undefined => {
+  const normalized = text.trimStart();
+  const match = normalized.match(/^#(\d+)[ 　]+/);
+  if (!match) return undefined;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : undefined;
+};
+
 export const getCommentTextFromAgentComment = (comment: unknown): string | null => {
   if (!comment || typeof comment !== 'object') return null;
   const value = (comment as any).data ?? comment;
@@ -350,20 +358,23 @@ export const getCommentTextFromAgentComment = (comment: unknown): string | null 
     ? value.no
     : typeof value?.num === 'number'
       ? value.num
-      : undefined;
+      : parseCommentNumberFromText(trimmed);
   return stripCommentNumberPrefix(trimmed, no);
 };
 
 const stripCommentNumberPrefix = (text: string, number: number | undefined): string => {
-  if (typeof number !== 'number' || !Number.isFinite(number)) {
-    return text;
-  }
-  const exactPrefix = `#${number}`;
   const normalized = text.trimStart();
+  const resolvedNumber = typeof number === 'number' && Number.isFinite(number)
+    ? number
+    : parseCommentNumberFromText(normalized);
+  if (typeof resolvedNumber !== 'number') {
+    return normalized;
+  }
+  const exactPrefix = `#${resolvedNumber}`;
   if (normalized.startsWith(`${exactPrefix} `) || normalized.startsWith(`${exactPrefix}　`)) {
     return normalized.slice(exactPrefix.length).trimStart();
   }
-  const zeroPaddedPrefix = new RegExp(`^#0*${number}[ 　]+`);
+  const zeroPaddedPrefix = new RegExp(`^#0*${resolvedNumber}[ 　]+`);
   if (zeroPaddedPrefix.test(normalized)) {
     return normalized.replace(zeroPaddedPrefix, '').trimStart();
   }
@@ -372,12 +383,17 @@ const stripCommentNumberPrefix = (text: string, number: number | undefined): str
 
 export const getAgentCommentNumber = (comment: unknown): number | undefined => {
   if (!comment || typeof comment !== 'object') return undefined;
-  const data = (comment as any).data;
-  const no = typeof data?.no === 'number'
-    ? data.no
-    : typeof data?.num === 'number'
-      ? data.num
+  const value = (comment as any).data ?? comment;
+  const rawText = typeof value?.comment === 'string'
+    ? value.comment
+    : typeof value?.text === 'string'
+      ? value.text
       : undefined;
+  const no = typeof value?.no === 'number'
+    ? value.no
+    : typeof value?.num === 'number'
+      ? value.num
+      : parseCommentNumberFromText(rawText ?? '');
   return typeof no === 'number' && Number.isFinite(no) ? no : undefined;
 };
 
