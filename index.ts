@@ -284,6 +284,10 @@ const getCurrentStreamPayload = () => {
   const niconamaFromStreamer = tryResolveNiconama(streamer.streamState);
   const niconamaFinal = niconamaFromPublished ?? niconamaFromAgent ?? niconamaFromStreamer ?? undefined;
 
+  const explicitSpeechHistory = Array.isArray(base.speechHistory) && base.speechHistory.length > 0
+    ? base.speechHistory
+    : generatedSpeechHistory;
+
   return {
     niconama: niconamaFinal,
     canSpeak: base.canSpeak ?? streamer.canSpeak,
@@ -291,7 +295,7 @@ const getCurrentStreamPayload = () => {
     nGram: base.nGram ?? streamer.currentNGramSize,
     nGramRaw: base.nGramRaw ?? streamer.currentNGramSizeRaw,
     speech: base.speech ?? agent.getSpeech(),
-    speechHistory: (Array.isArray(base.speechHistory) ? base.speechHistory : generatedSpeechHistory).slice(0, GENERATED_SPEECH_HISTORY_SSE_SIZE),
+    speechHistory: explicitSpeechHistory.slice(0, GENERATED_SPEECH_HISTORY_SSE_SIZE),
     replyTargetComment,
     commentCount: base.commentCount ?? streamer.streamState?.meta?.total?.comments,
   } as const;
