@@ -4,7 +4,6 @@ set -eu
 
 SCRIPT_PATH=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_PATH/.." && pwd)
-OBS_CONFIG_DIR="$REPO_ROOT/obs-studio"
 
 mkdir -p "$REPO_ROOT/.cache"
 
