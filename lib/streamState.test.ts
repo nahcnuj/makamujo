@@ -76,6 +76,24 @@ describe("normalizePublishedStreamState", () => {
     expect(normalized).toHaveProperty("niconama");
   });
 
+  it("preserves comments count from legacy niconama.total object", () => {
+    const legacyState = {
+      type: "niconama",
+      data: {
+        isLive: true,
+        title: "legacy",
+        startTime: 0,
+        total: { listeners: 10, comments: 4 },
+        points: { gift: 1, ad: 2 },
+        url: "https://example.com",
+      },
+    };
+
+    const normalized = normalizePublishedStreamState(legacyState) as Record<string, any>;
+
+    expect(normalized.niconama.meta.total).toEqual({ listeners: 10, comments: 4, gift: 1, ad: 2 });
+  });
+
   it("maps top-level title/url/start into niconama.meta", () => {
     const state = {
       title: "TopLevelTitle",

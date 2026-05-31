@@ -1,3 +1,5 @@
+import { computeProxyBase } from "../../../lib/console-proxy";
+
 /**
  * Base URL of the broadcasting app API that serves `/api/meta`.
  * Override with `BROADCASTING_AGENT_API_BASE_URL` when the console and
@@ -11,7 +13,7 @@ const getBroadcastingAgentBaseUrl = (req?: Request): string => {
     return process.env.BROADCASTING_AGENT_API_BASE_URL;
   }
   if (req) {
-    return new URL("/api/meta", req.url).origin;
+    return computeProxyBase(req);
   }
   return "http://127.0.0.1:7777";
 };
