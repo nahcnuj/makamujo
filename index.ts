@@ -233,7 +233,20 @@ let agent: any = {
   getGame: () => null,
   getStreamState: () => lastPublishedStreamState,
   publishStreamState: (data: unknown) => { lastPublishedStreamState = data; },
-  postComments: (_: unknown) => { },
+  postComments: (comments: unknown) => {
+    try {
+      // Forward received comments to the internal streamer so the agent
+      // can learn and speak in response. `streamer.listen` accepts an
+      // array of AgentComment objects.
+      if (Array.isArray(comments)) {
+        streamer.listen(comments as any);
+      } else if (comments) {
+        streamer.listen([comments] as any);
+      }
+    } catch (e) {
+      // swallow errors in the fallback to avoid crashing startup
+    }
+  },
 };
 
 const getCurrentStreamPayload = () => {

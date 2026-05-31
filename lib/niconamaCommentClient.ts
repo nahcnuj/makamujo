@@ -1724,6 +1724,20 @@ export class NiconamaCommentClient {
       return;
     }
 
+    // Append raw frame to a temp log for deeper post-mortem analysis
+    try {
+      try {
+        // use require to avoid top-level await in non-async function
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const fs = require('fs');
+        const ts = new Date().toISOString();
+        const snippet = String(message).slice(0, 200).replace(/\n/g, ' ');
+        fs.appendFileSync('/tmp/niconama-ws-raw.log', `${ts} ${wsUrl} ${snippet}\n`);
+      } catch (e) {
+        // ignore fs errors
+      }
+    } catch {}
+
     let body: unknown = null;
     try {
       body = JSON.parse(message);

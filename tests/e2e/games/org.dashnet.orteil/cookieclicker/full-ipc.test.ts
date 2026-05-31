@@ -115,12 +115,12 @@ test.describe("Full IPC operation", () => {
           const start = Date.now();
 
           const attempt = () => {
-            proxyLogStream.write(`[proxy] attempt connect to backend ipc ${path}\n`);
+            try { proxyLogStream.write(`[proxy] attempt connect to backend ipc ${path}\n`); } catch {}
             const s = createConnection(path);
             let settled = false;
 
             s.once("connect", () => {
-              proxyLogStream.write(`[proxy] connected to backend ipc ${path}\n`);
+              try { proxyLogStream.write(`[proxy] connected to backend ipc ${path}\n`); } catch {}
               if (!settled) {
                 settled = true;
                 resolve(s);
@@ -128,7 +128,7 @@ test.describe("Full IPC operation", () => {
             });
 
             s.once("error", (err: Error) => {
-              proxyLogStream.write(`[proxy] backend connect error: ${err && err.message}\n`);
+              try { proxyLogStream.write(`[proxy] backend connect error: ${err && err.message}\n`); } catch {}
               try { s.destroy(); } catch {}
               if (Date.now() - start >= timeoutMs) {
                 if (!settled) {
@@ -147,13 +147,13 @@ test.describe("Full IPC operation", () => {
 
       const proxyReady = new Promise<void>((resolve, reject) => {
         proxyServer = createServer((browserSocket) => {
-          proxyLogStream.write('[proxy] browser socket accepted\n');
+          try { proxyLogStream.write('[proxy] browser socket accepted\n'); } catch {}
           (async () => {
             let backendSocket: Socket;
             try {
               backendSocket = await createConnectionWithRetry(serverIpcPath);
             } catch (err) {
-              proxyLogStream.write('[proxy] failed to connect backend; destroying browser socket\n');
+              try { proxyLogStream.write('[proxy] failed to connect backend; destroying browser socket\n'); } catch {}
               try { browserSocket.destroy(); } catch {}
               return;
             }
@@ -284,7 +284,7 @@ test.describe("Full IPC operation", () => {
       browserProcess.stdout?.on('data', (chunk: Buffer) => {
         try {
           const s = chunk.toString();
-          browserOutStream.write(s);
+          try { browserOutStream.write(s); } catch {}
           const m = s.match(/got reply\s*(\{[\s\S]*\})/);
           if (m && typeof m[1] === 'string') {
             try {
