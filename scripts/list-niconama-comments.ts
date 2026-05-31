@@ -1,6 +1,30 @@
-import { createNiconamaCommentClient } from "../lib/niconamaCommentClient";
+import { createNiconamaCommentClient, filterAgentCommentsWithText, getCommentTextFromAgentComment } from "../lib/niconamaCommentClient";
 
 const WATCH_URL = process.env.NICONAMA_TEST_WATCH_URL ?? "https://live.nicovideo.jp/watch/user/14171889";
+
+const isSuspectedMetadataComment = (text: string): boolean => {
+  const normalized = text.trim();
+  return normalized === 'コメントするにはログインしてください'
+    || normalized === '(コメントあり)'
+    || /^[0-9]+$/.test(normalized)
+    || /^\d+コメント(?:\s*コメントするにはログインしてください)?$/.test(normalized)
+    || /ログインしてください$/u.test(normalized);
+};
+
+const buildUniqueComments = (comments: unknown[]): any[] => {
+  const seen = new Set<string>();
+  const unique: any[] = [];
+  for (const item of comments) {
+    const text = getCommentTextFromAgentComment(item);
+    if (!text) continue;
+    const value = item && typeof item === 'object' ? (item as any).data ?? item : item;
+    const key = `${value?.no ?? 'none'}|${value?.userId ?? value?.user_id ?? 'unknown'}|${text}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(value);
+  }
+  return unique;
+};
 
 async function main() {
   const collected: any[] = [];
@@ -23,9 +47,8 @@ async function main() {
   while (Date.now() - start < waitMs) {
     // stop early if we received any real comment bodies
     if (collected.some((c) => {
-      const data = c?.data ?? c;
-      const text = String(data?.comment ?? data?.text ?? '');
-      return text.length > 0 && text !== '(コメントあり)';
+      const text = getCommentTextFromAgentComment(c);
+      return text !== null && !isSuspectedMetadataComment(text);
     })) break;
     await new Promise((r) => setTimeout(r, 500));
   }
@@ -40,23 +63,16 @@ async function main() {
     }
   } catch (e) { /* ignore */ }
 
-  // Deduplicate by text+no+userId
-  const seen = new Set<string>();
-  const unique = [] as any[];
-  for (const item of collected) {
-    const data = item?.data ?? item;
-    const text = String(data?.comment ?? data?.text ?? '');
-    // ignore the synthetic placeholder
-    if (text === '(コメントあり)') continue;
-    const key = `${data?.no ?? 'none'}|${data?.userId ?? 'unknown'}|${text}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(data);
-  }
+  const filtered = filterAgentCommentsWithText(collected as any);
+  const unique = buildUniqueComments(filtered);
+  let hasRealComments = unique.some((item) => {
+    const text = getCommentTextFromAgentComment(item);
+    return text !== null && !isSuspectedMetadataComment(text);
+  });
 
   // If we still have no real comments, attempt a Playwright-rendered
   // HTML fetch and re-parse embedded data from the rendered body.
-  if (unique.length === 0) {
+  if (!hasRealComments) {
     try {
       const rendered = await client.fetchRenderedWatchPageBodyText(WATCH_URL);
       if (rendered) {
@@ -71,53 +87,38 @@ async function main() {
       /* ignore */
     }
 
-    // rebuild unique after rendered attempt
-    seen.clear();
+    const filteredAgain = filterAgentCommentsWithText(collected as any);
     unique.length = 0;
-    for (const item of collected) {
-      const data = item?.data ?? item;
-      const text = String(data?.comment ?? data?.text ?? '');
-      if (text === '(コメントあり)') continue;
-      const key = `${data?.no ?? 'none'}|${data?.userId ?? 'unknown'}|${text}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      unique.push(data);
-    }
+    unique.push(...buildUniqueComments(filteredAgain));
   }
 
   // If still no real comments, wait a bit longer while keeping the
   // direct websocket open to allow live frames to arrive.
-  if (unique.length === 0) {
+  if (!hasRealComments) {
     console.log('No comment bodies found yet — waiting 60s for live frames...');
     const extraWaitStart = Date.now();
     const extraWaitMs = 60_000;
     while (Date.now() - extraWaitStart < extraWaitMs) {
       if (collected.some((c) => {
-        const data = c?.data ?? c;
-        const text = String(data?.comment ?? data?.text ?? '');
-        return text.length > 0 && text !== '(コメントあり)';
+        const text = getCommentTextFromAgentComment(c);
+        return text !== null && !isSuspectedMetadataComment(text);
       })) break;
       // poll every 1s
       // eslint-disable-next-line no-await-in-loop
       await new Promise((r) => setTimeout(r, 1_000));
     }
 
-    // rebuild unique again
-    seen.clear();
+    const filteredAgain = filterAgentCommentsWithText(collected as any);
     unique.length = 0;
-    for (const item of collected) {
-      const data = item?.data ?? item;
-      const text = String(data?.comment ?? data?.text ?? '');
-      if (text === '(コメントあり)') continue;
-      const key = `${data?.no ?? 'none'}|${data?.userId ?? 'unknown'}|${text}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      unique.push(data);
-    }
+    unique.push(...buildUniqueComments(filteredAgain));
+    hasRealComments = unique.some((item) => {
+      const text = getCommentTextFromAgentComment(item);
+      return text !== null && !isSuspectedMetadataComment(text);
+    });
   }
 
   // If still empty, attempt extracting rendered page comments via Playwright
-  if (unique.length === 0) {
+  if (!hasRealComments) {
     console.log('No comments yet — polling rendered extraction for up to 5 minutes...');
     const maxMs = Number(process.env.LIST_DURATION_MS ?? 300_000);
     const intervalMs = Number(process.env.LIST_INTERVAL_MS ?? 5_000);
@@ -138,20 +139,14 @@ async function main() {
         // ignore per-iteration errors
       }
 
-      // rebuild unique
-      seen.clear();
+      const filteredAgain = filterAgentCommentsWithText(collected as any);
       unique.length = 0;
-      for (const item of collected) {
-        const data = item?.data ?? item;
-        const text = String(data?.comment ?? data?.text ?? '');
-        if (text === '(コメントあり)') continue;
-        const key = `${data?.no ?? 'none'}|${data?.userId ?? 'unknown'}|${text}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        unique.push(data);
-      }
+      unique.push(...buildUniqueComments(filteredAgain));
 
-      if (unique.length > 0) break;
+      if (unique.length > 0 && unique.some((item) => {
+        const text = getCommentTextFromAgentComment(item);
+        return text !== null && !isSuspectedMetadataComment(text);
+      })) break;
       // wait before next attempt
       // eslint-disable-next-line no-await-in-loop
       await new Promise((r) => setTimeout(r, intervalMs));
@@ -201,28 +196,29 @@ async function main() {
       // JSON fragments we may have missed earlier.
       tryParseFromLog('/tmp/niconama-ws-raw.log');
 
-      // If we found real comments, add them to collected and rebuild unique
       if (candidateComments.length > 0) {
         for (const c of candidateComments) collected.push(c);
-        seen.clear();
+        const filteredAgain = filterAgentCommentsWithText(collected as any);
         unique.length = 0;
-        for (const item of collected) {
-          const data = item?.data ?? item;
-          const text = String(data?.comment ?? data?.text ?? '');
-          if (text === '(コメントあり)') continue;
-          const key = `${data?.no ?? 'none'}|${data?.userId ?? 'unknown'}|${text}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          unique.push(data);
-        }
+        unique.push(...buildUniqueComments(filteredAgain));
+        hasRealComments = unique.some((item) => {
+          const text = getCommentTextFromAgentComment(item);
+          return text !== null && !isSuspectedMetadataComment(text);
+        });
       }
     } catch (e) {
       /* ignore */
     }
   }
 
-  console.log(`Collected ${unique.length} unique comments:`);
-  for (const c of unique) {
+  const realUnique = unique.filter((item) => {
+    const text = getCommentTextFromAgentComment(item);
+    return text !== null && !isSuspectedMetadataComment(text);
+  });
+  const finalComments = realUnique.length > 0 ? realUnique : unique;
+
+  console.log(`Collected ${finalComments.length} unique comments:`);
+  for (const c of finalComments) {
     console.log('-', c);
   }
 

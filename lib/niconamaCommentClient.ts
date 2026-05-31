@@ -147,15 +147,15 @@ export class NiconamaCommentClient {
       this.reportError(err);
       embeddedData = null;
     }
+    const hasWebSocketUrl = embeddedData && typeof embeddedData === 'object'
+      ? Boolean((embeddedData as any).site?.state?.relive?.webSocketUrl ?? (embeddedData as any).site?.relive?.webSocketUrl ?? (embeddedData as any).relive?.webSocketUrl)
+      : false;
     console.debug('[DEBUG] NiconamaCommentClient fetched embedded-data in start', {
       embeddedDataType: embeddedData === null ? 'null' : typeof embeddedData,
-      hasWebSocketUrl: embeddedData && typeof embeddedData === 'object'
-        ? Boolean((embeddedData as any).site?.state?.relive?.webSocketUrl ?? (embeddedData as any).site?.relive?.webSocketUrl ?? (embeddedData as any).relive?.webSocketUrl)
-        : false,
+      hasWebSocketUrl,
     });
     if (!embeddedData || typeof embeddedData !== 'object') {
-      this.reportError(new Error(`failed to resolve embedded-data from NicoNico watch page: ${watchUrl}`));
-      return;
+      console.warn('[WARN] failed to resolve embedded-data from NicoNico watch page, proceeding with Playwright fallback', { watchUrl });
     }
 
     this.#running = true;

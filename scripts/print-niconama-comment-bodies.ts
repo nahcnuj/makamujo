@@ -1,4 +1,4 @@
-import { createNiconamaCommentClient, getCommentTextFromAgentComment } from '../lib/niconamaCommentClient';
+import { createNiconamaCommentClient, filterAgentCommentsWithText, getCommentTextFromAgentComment } from '../lib/niconamaCommentClient';
 
 const WATCH_URL = process.argv[2] ?? process.env.NICONAMA_WATCH_URL ?? 'https://live.nicovideo.jp/watch/user/14171889';
 const USER_DATA_DIR = process.env.NICONAMA_USER_DATA_DIR ?? './tmp/niconama-user-data';
@@ -37,6 +37,20 @@ async function main() {
   });
 
   await client.start();
+
+  try {
+    const renderedComments = await client.fetchRenderedPageComments(WATCH_URL).catch(() => [] as any[]);
+    for (const comment of filterAgentCommentsWithText(renderedComments)) {
+      const text = extractCommentText(comment);
+      if (!text) continue;
+      const key = buildCommentKey(comment, text);
+      if (printed.has(key)) continue;
+      printed.add(key);
+      console.log(text);
+    }
+  } catch (e) {
+    // ignore fallback extraction failures
+  }
 
   if (typeof DURATION_MS === 'number' && !Number.isNaN(DURATION_MS)) {
     setTimeout(async () => {
