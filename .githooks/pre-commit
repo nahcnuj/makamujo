@@ -38,7 +38,6 @@ fi
 run_and_log_stderr bun run typecheck
 run_and_log_stderr bun run test
 run_and_log_stderr bun run test:integration
-run_and_log_stderr bun run pretest:e2e
 run_and_log_stderr bun run test:e2e
 
 CHECKS_PASSED=1
