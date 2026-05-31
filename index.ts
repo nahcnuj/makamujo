@@ -840,29 +840,29 @@ const handleNiconamaComments = (comments: unknown) => {
   }
 
   try {
-    const afterState = typeof agent.getStreamState === 'function' ? agent.getStreamState() : undefined;
-    const hasCount = afterState && typeof afterState === 'object' && typeof (afterState as any).commentCount === 'number';
-    if (!hasCount) {
-      const payload = getCurrentStreamPayload();
-      const currentCount = typeof payload.commentCount === 'number' ? payload.commentCount : 0;
-      const increment = Array.isArray(comments) ? comments.length : 0;
-      const newCount = currentCount + increment;
+    const payload = getCurrentStreamPayload();
+    const currentCount = typeof payload.commentCount === 'number'
+      ? payload.commentCount
+      : typeof payload.niconama?.meta?.total?.comments === 'number'
+        ? payload.niconama.meta.total.comments
+        : 0;
+    const increment = Array.isArray(comments) ? comments.length : 0;
+    const newCount = currentCount + increment;
 
-      lastPublishedStreamState = (lastPublishedStreamState && typeof lastPublishedStreamState === 'object') ? { ...lastPublishedStreamState } : {};
-      try {
-        (lastPublishedStreamState as any).commentCount = newCount;
-      } catch {}
+    lastPublishedStreamState = (lastPublishedStreamState && typeof lastPublishedStreamState === 'object') ? { ...lastPublishedStreamState } : {};
+    try {
+      (lastPublishedStreamState as any).commentCount = newCount;
+    } catch {}
 
-      try {
-        if (!(lastPublishedStreamState as any).niconama || typeof (lastPublishedStreamState as any).niconama !== 'object') {
-          (lastPublishedStreamState as any).niconama = { meta: { total: { comments: newCount } } };
-        } else {
-          const meta = (lastPublishedStreamState as any).niconama.meta = (lastPublishedStreamState as any).niconama.meta ?? {};
-          meta.total = meta.total ?? {};
-          meta.total.comments = newCount;
-        }
-      } catch {}
-    }
+    try {
+      if (!(lastPublishedStreamState as any).niconama || typeof (lastPublishedStreamState as any).niconama !== 'object') {
+        (lastPublishedStreamState as any).niconama = { meta: { total: { comments: newCount } } };
+      } else {
+        const meta = (lastPublishedStreamState as any).niconama.meta = (lastPublishedStreamState as any).niconama.meta ?? {};
+        meta.total = meta.total ?? {};
+        meta.total.comments = newCount;
+      }
+    } catch {}
   } catch (err) {
     console.warn('[WARN] failed to update fallback commentCount:', err instanceof Error ? err.message : String(err));
   }
