@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { renderToString } from "hono/jsx/dom/server";
 import { createAgentStatusRows } from "./createAgentStatusRows";
 import { MarkovModelStatusSection } from "./MarkovModelStatusSection";
+import { createReplyTargetCommentValueComponent } from "./agentStatusUtils";
 
 describe("createAgentStatusRows", () => {
   it("returns readable status rows when niconama metadata exists", () => {
@@ -196,6 +197,13 @@ describe("createAgentStatusRows", () => {
     expect(html).toContain("します");
     expect(html).toContain("返信");
     expect(html).toContain("bg-emerald-300/30");
+  });
+
+  it("normalizes numbered prefixes in reply target comments", () => {
+    const html = renderToString(<>{createReplyTargetCommentValueComponent({ text: "#2 コメント1わこつ2しかのこのこのここしたんたん", pickedTopic: "" })}</>);
+
+    expect(html).toContain("コメント1わこつ2しかのこのこのここしたんたん");
+    expect(html).not.toContain("#2 ");
   });
 
   it("does not render a standalone reply row when speech history exists", () => {
@@ -421,6 +429,36 @@ describe("createAgentStatusRows", () => {
     expect(html).toContain("<span class=\"text-emerald-200\">#2</span>");
     expect(html).toContain("こんにちは");
     expect(html).toContain("テストコメント");
+  });
+
+  it("does not duplicate reply target comment when it matches a recent comment", () => {
+    const rows = createAgentStatusRows(
+      {
+        recentComments: [
+          { data: { no: 1, comment: "わこつ" } },
+        ],
+        replyTargetComment: { text: "わこつ", pickedTopic: "" },
+      } as any,
+      { showRecentComments: true, toggleRecentComments: () => {} },
+    );
+
+    expect(rows.find((row) => row.label === "最近のコメント")).toBeDefined();
+    expect(rows.find((row) => row.label === "返信先コメント")).toBeUndefined();
+  });
+
+  it("does not duplicate reply target comment when it matches a numbered recent comment prefix", () => {
+    const rows = createAgentStatusRows(
+      {
+        recentComments: [
+          { data: { no: 2, comment: "#2 わこつ" } },
+        ],
+        replyTargetComment: { text: "#2 わこつ", pickedTopic: "" },
+      } as any,
+      { showRecentComments: true, toggleRecentComments: () => {} },
+    );
+
+    expect(rows.find((row) => row.label === "最近のコメント")).toBeDefined();
+    expect(rows.find((row) => row.label === "返信先コメント")).toBeUndefined();
   });
 
   it("renders game section when currentGame present even if niconama is empty", () => {

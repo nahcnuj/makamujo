@@ -7,6 +7,7 @@ import {
   createSpeechHistoryDisplayItems,
   formatNGramValue,
   getSpeechUnavailableIndicator,
+  normalizeReplyTargetCommentText,
   normalizeSpeechText,
 } from "./agentStatusUtils";
 import { getAgentCommentNumber, getCommentTextFromAgentComment } from "../../../lib/niconamaCommentClient.helpers";
@@ -107,6 +108,15 @@ export const createAgentStatusRows = (
     ? stateResponse.replyTargetComment
     : undefined;
 
+  const isSameAsRecentComment = (replyCommentText: string): boolean => {
+    const normalizedReplyText = normalizeReplyTargetCommentText(replyCommentText) ?? replyCommentText.trim();
+    return recentComments.some((comment) => {
+      const commentText = getCommentTextFromAgentComment(comment);
+      if (!commentText) return false;
+      return commentText.trim() === normalizedReplyText;
+    });
+  };
+
   const isSpeechSilent = stateResponse?.speech?.silent === true;
   const speechHistoryItems = createSpeechHistoryDisplayItems(stateResponse?.speechHistory);
   const shouldShowRecentComments = options?.showRecentComments !== false;
@@ -128,7 +138,7 @@ export const createAgentStatusRows = (
         />
       ),
     });
-  } else if (replyTargetComment) {
+  } else if (replyTargetComment && !isSameAsRecentComment(replyTargetComment.text ?? '')) {
     rows.push({
       label: "返信先コメント",
       valueComponent: createReplyTargetCommentValueComponent(replyTargetComment),

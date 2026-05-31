@@ -100,10 +100,16 @@ const createHighlightedCommentLines = (commentText: string, pickedTopic: string)
   ));
 };
 
+export const normalizeReplyTargetCommentText = (text: string | undefined): string | undefined => {
+  if (typeof text !== 'string') return undefined;
+  const normalized = text.trim();
+  return normalized.replace(/^#\d+[ 　]+/, '').trimStart() || undefined;
+};
+
 export const createReplyTargetCommentValueComponent = (
   replyTargetComment: AgentStateResponse["replyTargetComment"],
 ): Child => {
-  const text = replyTargetComment?.text?.trim();
+  const text = normalizeReplyTargetCommentText(replyTargetComment?.text);
   const pickedTopic = replyTargetComment?.pickedTopic?.trim();
   if (!text) {
     return <span>-</span>;
@@ -135,6 +141,21 @@ export const createReplyTargetCommentValueComponent = (
 
 import { formatAgentCommentEntry } from "../../../lib/niconamaCommentClient.helpers";
 
+const createRecentCommentEntryComponent = (entry: string): Child => {
+  const match = entry.match(/^#(\d+)\b(?:\s*)([\s\S]*)$/);
+  if (!match) {
+    return entry;
+  }
+
+  const [, number, remainder] = match;
+  return (
+    <>
+      <span className="text-emerald-200">#{number}</span>
+      {remainder ? ` ${remainder}` : null}
+    </>
+  );
+};
+
 export const createRecentCommentsValueComponent = (
   recentComments: AgentStateResponse["recentComments"],
 ): Child => {
@@ -147,26 +168,14 @@ export const createRecentCommentsValueComponent = (
   return (
     <div className="space-y-2">
       {commentsToRender.map((comment, index) => {
-        const number = getAgentCommentNumber(comment);
-        const text = getCommentTextFromAgentComment(comment) ?? '-';
-        const normalizedText = number !== undefined && text.startsWith(`#${number} `)
-          ? text.slice(String(number).length + 2)
-          : text;
+        const entry = formatAgentCommentEntry(comment) ?? '-';
 
         return (
           <p
             key={`recent-comment-${index}`}
             className="break-words whitespace-pre-wrap rounded-md border border-emerald-300/30 bg-emerald-950/30 px-3 py-2 text-sm"
           >
-            {number !== undefined ? (
-              <>
-                <span className="text-emerald-200">#{number}</span>
-                {' '}
-                <span>{normalizedText}</span>
-              </>
-            ) : (
-              normalizedText
-            )}
+            {createRecentCommentEntryComponent(entry)}
           </p>
         );
       })}
