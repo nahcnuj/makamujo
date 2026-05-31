@@ -4,9 +4,6 @@ set -eu
 
 SCRIPT_PATH=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_PATH/.." && pwd)
-
-mkdir -p "$REPO_ROOT/.cache"
-
 mkdir -p "$REPO_ROOT/.cache"
 
 flatpak run -vv \
