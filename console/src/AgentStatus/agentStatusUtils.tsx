@@ -1,5 +1,6 @@
 import type { AgentStateResponse } from "./types";
 import type { Child, CSSProperties } from "hono/jsx";
+import { getAgentCommentNumber, getCommentTextFromAgentComment } from "../../../lib/niconamaCommentClient.helpers";
 
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
@@ -132,7 +133,7 @@ export const createReplyTargetCommentValueComponent = (
   );
 };
 
-import { getAgentCommentNumber, getCommentTextFromAgentComment } from "../../../lib/niconamaCommentClient.helpers";
+import { formatAgentCommentEntry } from "../../../lib/niconamaCommentClient.helpers";
 
 export const createRecentCommentsValueComponent = (
   recentComments: AgentStateResponse["recentComments"],
@@ -141,20 +142,31 @@ export const createRecentCommentsValueComponent = (
     return <span>-</span>;
   }
 
+  const commentsToRender = [...recentComments].reverse();
+
   return (
     <div className="space-y-2">
-      {recentComments.map((comment, index) => {
-        const text = getCommentTextFromAgentComment(comment);
+      {commentsToRender.map((comment, index) => {
         const number = getAgentCommentNumber(comment);
-        const display = typeof number === 'number'
-          ? `#${number} ${text ?? '-'}`
-          : text ?? '-';
+        const text = getCommentTextFromAgentComment(comment) ?? '-';
+        const normalizedText = number !== undefined && text.startsWith(`#${number} `)
+          ? text.slice(String(number).length + 2)
+          : text;
+
         return (
           <p
             key={`recent-comment-${index}`}
             className="break-words whitespace-pre-wrap rounded-md border border-emerald-300/30 bg-emerald-950/30 px-3 py-2 text-sm"
           >
-            {display}
+            {number !== undefined ? (
+              <>
+                <span className="text-emerald-200">#{number}</span>
+                {' '}
+                <span>{normalizedText}</span>
+              </>
+            ) : (
+              normalizedText
+            )}
           </p>
         );
       })}
@@ -318,10 +330,10 @@ export const createLiveDeliveryMetricsValueComponent = (
           type="button"
           onClick={toggleRecentComments}
           aria-expanded={isRecentCommentsOpen ? "true" : "false"}
-          className="rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm transition hover:bg-emerald-950/70"
+          className="text-sm underline decoration-emerald-300/50 underline-offset-2 transition hover:text-emerald-50"
           title="クリックで最近のコメントを表示/非表示"
         >
-          {formatMetricValue(commentCount)} {isRecentCommentsOpen ? "▲" : "▼"}
+          {formatMetricValue(commentCount)}
         </button>
       ) : (
         formatMetricValue(commentCount)

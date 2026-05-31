@@ -209,6 +209,25 @@ describe("parseAgentCommentsFromResponseBody", () => {
     expect(secondParsed).toHaveLength(0);
   });
 
+  it("merges numeric-only comment entries into the previous comment object", () => {
+    const body = {
+      comments: [
+        { comment: "ジュニアアイドル" },
+        { comment: "16" },
+      ],
+    };
+
+    const parsed = parseAgentCommentsFromResponseBody(body);
+
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toEqual({
+      data: expect.objectContaining({
+        comment: "ジュニアアイドル",
+        no: 16,
+      }),
+    });
+  });
+
   it("returns an empty result for an empty top-level comments array", () => {
     const body = { comments: [] };
     const parsed = parseAgentCommentsFromResponseBody(body);

@@ -45,4 +45,9 @@ describe('Niconama comment helpers', () => {
     expect(formatAgentCommentEntry({ data: { comment: 'world' } })).toBe('world');
     expect(formatAgentCommentEntry({ data: { comment: '(コメントあり)' } })).toBeNull();
   });
+
+  it('does not duplicate comment numbers when text already begins with the same prefix', () => {
+    expect(formatAgentCommentEntry({ data: { comment: '#123 hello', no: 123 } })).toBe('#123 hello');
+    expect(formatAgentCommentEntry({ data: { comment: '#99 こんにちは', no: 99 } })).toBe('#99 こんにちは');
+  });
 });

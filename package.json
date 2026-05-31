@@ -12,7 +12,7 @@
     "hono/jsx/jsx-dev-runtime": "hono/jsx/dom/jsx-dev-runtime"
   },
   "scripts": {
-    "dev": "bun --hot index.ts --port=8777",
+    "dev": "CONSOLE_TLS_CERT=var/e2e-tls/fullchain.pem CONSOLE_TLS_KEY=var/e2e-tls/privkey.pem bun --hot index.ts --port=8777",
     "setup": "bun --version && bun ci && bun run typecheck",
     "start": "NODE_ENV=production bun index.ts --port=7777",
     "typecheck": "tsc --noEmit",

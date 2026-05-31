@@ -200,6 +200,46 @@ const collectCommentLikeObjects = (body: unknown, depth = 0, maxDepth = 4): unkn
   return results;
 };
 
+const isNumericCommentText = (commentText: unknown): commentText is string => {
+  return typeof commentText === 'string' && /^[0-9]+(?:,[0-9]{3})*$/.test(commentText.trim());
+};
+
+const mergeNumericCommentEntries = (rawComments: unknown[]): unknown[] => {
+  const merged: unknown[] = [];
+
+  for (const raw of rawComments) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      merged.push(raw);
+      continue;
+    }
+
+    const currentText = (raw as any).comment;
+    if (isNumericCommentText(currentText)) {
+      const previous = merged[merged.length - 1];
+      if (previous && typeof previous === 'object' && !Array.isArray(previous)) {
+        const previousText = (previous as any).comment;
+        const previousNumber = typeof (previous as any).no === 'number'
+          ? (previous as any).no
+          : typeof (previous as any).num === 'number'
+            ? (previous as any).num
+            : undefined;
+
+        if (typeof previousText === 'string' && !isNumericCommentText(previousText) && previousNumber === undefined) {
+          merged[merged.length - 1] = {
+            ...previous,
+            no: Number(currentText.replace(/,/g, '')),
+          };
+          continue;
+        }
+      }
+    }
+
+    merged.push(raw);
+  }
+
+  return merged;
+};
+
 export const hasCommentArrayStructure = (body: unknown): boolean => {
   if (!body || typeof body !== 'object') return false;
   const candidateArrays = [
@@ -258,9 +298,11 @@ export const parseAgentCommentsFromResponseBody = (
   if (rawComments.length === 0) {
     rawComments.push(...collectCommentLikeObjects(body));
   }
+
+  const normalizedRawComments = mergeNumericCommentEntries(rawComments);
   const comments: any[] = [];
   const seenIdentifiers = seenCommentIdentifiers;
-  for (const raw of rawComments) {
+  for (const raw of normalizedRawComments) {
     if (!raw || typeof raw !== 'object') continue;
     const commentText = (raw as any).comment ?? (raw as any).text ?? (raw as any).body ?? (raw as any).message ?? (raw as any).content;
     if (typeof commentText !== 'string' || commentText.trim().length === 0) continue;
@@ -307,6 +349,17 @@ export const getCommentTextFromAgentComment = (comment: unknown): string | null 
   return trimmed;
 };
 
+const stripCommentNumberPrefix = (text: string, number: number | undefined): string => {
+  if (typeof number !== 'number' || !Number.isFinite(number)) {
+    return text;
+  }
+  const prefix = `#${number} `;
+  if (text.startsWith(prefix)) {
+    return text.slice(prefix.length).trimStart();
+  }
+  return text;
+};
+
 export const getAgentCommentNumber = (comment: unknown): number | undefined => {
   if (!comment || typeof comment !== 'object') return undefined;
   const data = (comment as any).data;
@@ -322,7 +375,8 @@ export const formatAgentCommentEntry = (comment: unknown): string | null => {
   const text = getCommentTextFromAgentComment(comment);
   if (!text) return null;
   const no = getAgentCommentNumber(comment);
-  return typeof no === 'number' ? `#${no} ${text}` : text;
+  const normalizedText = stripCommentNumberPrefix(text, no);
+  return typeof no === 'number' ? `#${no} ${normalizedText}` : normalizedText;
 };
 
 export const filterAgentCommentsWithText = (comments: AgentComment[]): AgentComment[] =>

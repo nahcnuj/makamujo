@@ -298,7 +298,7 @@ const getCurrentStreamPayload = () => {
     nGram: base.nGram ?? streamer.currentNGramSize,
     nGramRaw: base.nGramRaw ?? streamer.currentNGramSizeRaw,
     speech: base.speech ?? agent.getSpeech(),
-    speechHistory: explicitSpeechHistory.slice(0, GENERATED_SPEECH_HISTORY_SSE_SIZE),
+    speechHistory: explicitSpeechHistory,
     replyTargetComment,
     commentCount: base.commentCount ?? streamer.streamState?.meta?.total?.comments,
     recentComments: base.recentComments ?? agentBase.recentComments,
@@ -480,9 +480,7 @@ let externalAgentInitialized = false;
     console.warn('[WARN] dynamic import failed, continuing with in-memory fallback agent:', err instanceof Error ? err.message : String(err));
   }
 })();
-// Keep a larger buffer in memory for pagination while limiting the SSE payload size.
-const GENERATED_SPEECH_HISTORY_BUFFER_SIZE = 200;
-const GENERATED_SPEECH_HISTORY_SSE_SIZE = 20;
+// Keep speech history indefinitely in memory; do not cap the buffer or SSE payload.
 const generatedSpeechHistory: SpeechHistoryEntry[] = [];
 let generatedSpeechHistorySequence = 0;
 
@@ -504,9 +502,6 @@ streamer.onSpeech(async (event) => {
     nGramRaw,
     nodes: traceNodes,
   });
-  if (generatedSpeechHistory.length > GENERATED_SPEECH_HISTORY_BUFFER_SIZE) {
-    generatedSpeechHistory.length = GENERATED_SPEECH_HISTORY_BUFFER_SIZE;
-  }
   if (clearSpeechTimer) {
     clearTimeout(clearSpeechTimer);
     clearSpeechTimer = undefined;
@@ -860,7 +855,7 @@ const handleNiconamaComments = (comments: unknown) => {
       const existingRecent = Array.isArray((lastPublishedStreamState as any).recentComments)
         ? [...(lastPublishedStreamState as any).recentComments]
         : [];
-      const recentComments = [...existingRecent, ...filteredComments].slice(-20);
+      const recentComments = [...existingRecent, ...filteredComments];
       (lastPublishedStreamState as any).recentComments = recentComments;
     } catch {}
 
