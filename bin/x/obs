@@ -2,8 +2,18 @@
 
 set -eu
 
-SCRIPT_PATH=$(dirname "$0")
+SCRIPT_PATH=$(cd "$(dirname "$0")" && pwd)
 OBS_STUDIO="${SCRIPT_PATH}/../obs-studio"
+OBS_CONFIG_DIR="${SCRIPT_PATH}/../../obs-studio"
+
+if [ ! -d "$OBS_CONFIG_DIR" ]; then
+  echo "OBS config directory not found: $OBS_CONFIG_DIR" >&2
+  exit 1
+fi
+if [ ! -f "$OBS_CONFIG_DIR/basic/profiles/Makamujo/basic.ini" ]; then
+  echo "OBS basic.ini not found: $OBS_CONFIG_DIR/basic/profiles/Makamujo/basic.ini" >&2
+  exit 1
+fi
 
 _DISPLAY_EXPLICIT=''
 _XAUTHORITY_EXPLICIT=''
