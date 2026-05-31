@@ -23,7 +23,7 @@ import type { SpeechHistoryEntry } from "./routes/api/speech-history";
 import { handleCatchAll } from "./src/frontendServer";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
 import { normalizePublishedStreamState, resolveNiconamaFromState } from "./lib/streamState";
-import { createNiconamaCommentClient, filterAgentCommentsWithText, type NiconamaCommentClient } from "./lib/niconamaCommentClient";
+import { createNiconamaCommentClient, filterAgentCommentsWithText, getCommentTextFromAgentComment, type NiconamaCommentClient } from "./lib/niconamaCommentClient";
 import { installConsoleLogger } from "./lib/consoleLogger";
 
 const console = installConsoleLogger();
@@ -287,6 +287,8 @@ const getCurrentStreamPayload = () => {
   const explicitSpeechHistory = Array.isArray(base.speechHistory) && base.speechHistory.length > 0
     ? base.speechHistory
     : generatedSpeechHistory;
+
+  speechHistoryRoute.setSpeechHistoryRef(explicitSpeechHistory);
 
   const payload = {
     niconama: niconamaFinal,
@@ -802,6 +804,92 @@ if (process.env.NODE_ENV === "production") {
 }
 
 
+const NICONAMA_WATCH_URL = process.env.NICONAMA_WATCH_URL ?? process.env.NICONAMA_TEST_WATCH_URL;
+const NICONAMA_USER_DATA_DIR = process.env.NICONAMA_USER_DATA_DIR ?? './playwright/.auth/';
+const NICONAMA_CHROMIUM_EXECUTABLE_PATH = process.env.CHROMIUM_EXECUTABLE_PATH ?? '/usr/bin/chromium';
+const DEBUG_NICONAMA_COMMENTS = process.env.DEBUG_NICONAMA_COMMENTS === '1';
+
+const createNiconamaClientOptions = () => {
+  const options: any = {
+    userDataDir: NICONAMA_USER_DATA_DIR,
+    executablePath: NICONAMA_CHROMIUM_EXECUTABLE_PATH,
+    pollIntervalMs: 30_000,
+  };
+  if (typeof NICONAMA_WATCH_URL === 'string' && NICONAMA_WATCH_URL.length > 0) {
+    options.watchUrl = NICONAMA_WATCH_URL;
+  }
+  return options;
+};
+
+const handleNiconamaComments = (comments: unknown) => {
+  const filteredComments = filterAgentCommentsWithText(comments as any);
+  if (DEBUG_NICONAMA_COMMENTS) {
+    for (const comment of filteredComments) {
+      const text = getCommentTextFromAgentComment(comment);
+      if (text) {
+        console.log('[NICONAMA COMMENT]', text);
+      }
+    }
+  }
+  if (filteredComments.length > 0) {
+    try {
+      agent.postComments(filteredComments);
+    } catch (err) {
+      console.warn('[WARN] agent.postComments threw:', err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  try {
+    const afterState = typeof agent.getStreamState === 'function' ? agent.getStreamState() : undefined;
+    const hasCount = afterState && typeof afterState === 'object' && typeof (afterState as any).commentCount === 'number';
+    if (!hasCount) {
+      const payload = getCurrentStreamPayload();
+      const currentCount = typeof payload.commentCount === 'number' ? payload.commentCount : 0;
+      const increment = Array.isArray(comments) ? comments.length : 0;
+      const newCount = currentCount + increment;
+
+      lastPublishedStreamState = (lastPublishedStreamState && typeof lastPublishedStreamState === 'object') ? { ...lastPublishedStreamState } : {};
+      try {
+        (lastPublishedStreamState as any).commentCount = newCount;
+      } catch {}
+
+      try {
+        if (!(lastPublishedStreamState as any).niconama || typeof (lastPublishedStreamState as any).niconama !== 'object') {
+          (lastPublishedStreamState as any).niconama = { meta: { total: { comments: newCount } } };
+        } else {
+          const meta = (lastPublishedStreamState as any).niconama.meta = (lastPublishedStreamState as any).niconama.meta ?? {};
+          meta.total = meta.total ?? {};
+          meta.total.comments = newCount;
+        }
+      } catch {}
+    }
+  } catch (err) {
+    console.warn('[WARN] failed to update fallback commentCount:', err instanceof Error ? err.message : String(err));
+  }
+
+  broadcastCurrentPayload('onComment');
+  if (modelFile) {
+    try {
+      writeFileSync(modelFile, streamer.talkModel.toJSON());
+    } catch (err) {
+      console.warn('[WARN]', 'failed to write model', modelFile, err);
+    }
+  }
+};
+
+const createNiconamaCommentClientIfNeeded = () => {
+  return createNiconamaCommentClient(
+    createNiconamaClientOptions(),
+    {
+      onMeta: handlePublishedStreamState,
+      onComments: handleNiconamaComments,
+      onError: (err) => {
+        console.warn('[WARN] niconama comment client error:', err instanceof Error ? err.message : String(err));
+      },
+    },
+  );
+};
+
 // Defer creation/start of the niconama client until after servers are
 // responsive. A retry loop with backoff handles transient Playwright
 // navigation failures seen in CI (e.g., slow page load or timeouts).
@@ -813,69 +901,9 @@ try {
     while (attempt < maxRetries) {
       attempt += 1;
       try {
-        niconamaCommentClient = createNiconamaCommentClient(
-          {
-            userDataDir: process.env.NICONAMA_USER_DATA_DIR ?? './playwright/.auth/',
-            executablePath: process.env.CHROMIUM_EXECUTABLE_PATH ?? '/usr/bin/chromium',
-            pollIntervalMs: 30_000,
-          },
-          {
-            onMeta: handlePublishedStreamState,
-            onComments: (comments) => {
-              const filteredComments = filterAgentCommentsWithText(comments);
-              if (filteredComments.length > 0) {
-                try {
-                  agent.postComments(filteredComments);
-                } catch (err) {
-                  console.warn('[WARN] agent.postComments threw:', err instanceof Error ? err.message : String(err));
-                }
-              }
-
-              try {
-                const afterState = typeof agent.getStreamState === 'function' ? agent.getStreamState() : undefined;
-                const hasCount = afterState && typeof afterState === 'object' && typeof (afterState as any).commentCount === 'number';
-                if (!hasCount) {
-                  const payload = getCurrentStreamPayload();
-                  const currentCount = typeof payload.commentCount === 'number' ? payload.commentCount : 0;
-                  const increment = Array.isArray(comments) ? comments.length : 0;
-                  const newCount = currentCount + increment;
-
-                  lastPublishedStreamState = (lastPublishedStreamState && typeof lastPublishedStreamState === 'object') ? { ...lastPublishedStreamState } : {};
-                  try {
-                    (lastPublishedStreamState as any).commentCount = newCount;
-                  } catch {}
-
-                  try {
-                    if (!(lastPublishedStreamState as any).niconama || typeof (lastPublishedStreamState as any).niconama !== 'object') {
-                      (lastPublishedStreamState as any).niconama = { meta: { total: { comments: newCount } } };
-                    } else {
-                      const meta = (lastPublishedStreamState as any).niconama.meta = (lastPublishedStreamState as any).niconama.meta ?? {};
-                      meta.total = meta.total ?? {};
-                      meta.total.comments = newCount;
-                    }
-                  } catch {}
-                }
-              } catch (err) {
-                console.warn('[WARN] failed to update fallback commentCount:', err instanceof Error ? err.message : String(err));
-              }
-
-              broadcastCurrentPayload('onComment');
-              if (modelFile) {
-                try {
-                  writeFileSync(modelFile, streamer.talkModel.toJSON());
-                } catch (err) {
-                  console.warn('[WARN]', 'failed to write model', modelFile, err);
-                }
-              }
-            },
-            onError: (err) => {
-              console.warn('[WARN] niconama comment client error:', err instanceof Error ? err.message : String(err));
-            },
-          },
-        );
-
+        niconamaCommentClient = createNiconamaCommentClientIfNeeded();
         await niconamaCommentClient.start();
-        console.info('[INFO] niconamaCommentClient started successfully');
+        console.info('[INFO] niconamaCommentClient started successfully', { watchUrl: NICONAMA_WATCH_URL ?? 'unset' });
         break;
       } catch (err) {
         console.warn('[WARN] niconamaCommentClient start attempt failed:', err instanceof Error ? err.message : String(err), 'attempt=', attempt);
@@ -901,67 +929,7 @@ try {
   setTimeout(() => {
     try {
       if (!niconamaCommentClient) {
-        niconamaCommentClient = createNiconamaCommentClient(
-          {
-            userDataDir: process.env.NICONAMA_USER_DATA_DIR ?? './playwright/.auth/',
-            executablePath: process.env.CHROMIUM_EXECUTABLE_PATH ?? '/usr/bin/chromium',
-            pollIntervalMs: 30_000,
-          },
-          {
-            onMeta: handlePublishedStreamState,
-            onComments: (comments) => {
-              const filteredComments = filterAgentCommentsWithText(comments);
-              if (filteredComments.length > 0) {
-                try {
-                  agent.postComments(filteredComments);
-                } catch (err) {
-                  console.warn('[WARN] agent.postComments threw:', err instanceof Error ? err.message : String(err));
-                }
-              }
-
-              try {
-                const afterState = typeof agent.getStreamState === 'function' ? agent.getStreamState() : undefined;
-                const hasCount = afterState && typeof afterState === 'object' && typeof (afterState as any).commentCount === 'number';
-                if (!hasCount) {
-                  const payload = getCurrentStreamPayload();
-                  const currentCount = typeof payload.commentCount === 'number' ? payload.commentCount : 0;
-                  const increment = Array.isArray(comments) ? comments.length : 0;
-                  const newCount = currentCount + increment;
-
-                  lastPublishedStreamState = (lastPublishedStreamState && typeof lastPublishedStreamState === 'object') ? { ...lastPublishedStreamState } : {};
-                  try {
-                    (lastPublishedStreamState as any).commentCount = newCount;
-                  } catch {}
-
-                  try {
-                    if (!(lastPublishedStreamState as any).niconama || typeof (lastPublishedStreamState as any).niconama !== 'object') {
-                      (lastPublishedStreamState as any).niconama = { meta: { total: { comments: newCount } } };
-                    } else {
-                      const meta = (lastPublishedStreamState as any).niconama.meta = (lastPublishedStreamState as any).niconama.meta ?? {};
-                      meta.total = meta.total ?? {};
-                      meta.total.comments = newCount;
-                    }
-                  } catch {}
-                }
-              } catch (err) {
-                console.warn('[WARN] failed to update fallback commentCount:', err instanceof Error ? err.message : String(err));
-              }
-
-              broadcastCurrentPayload('onComment');
-              if (modelFile) {
-                try {
-                  writeFileSync(modelFile, streamer.talkModel.toJSON());
-                } catch (err) {
-                  console.warn('[WARN]', 'failed to write model', modelFile, err);
-                }
-              }
-            },
-            onError: (err) => {
-              console.warn('[WARN] niconama comment client error:', err instanceof Error ? err.message : String(err));
-            },
-          },
-        );
-
+        niconamaCommentClient = createNiconamaCommentClientIfNeeded();
         void niconamaCommentClient.start().catch((err) => {
           console.warn('[WARN] failed to start delayed niconamaCommentClient:', err instanceof Error ? err.message : String(err));
         });
