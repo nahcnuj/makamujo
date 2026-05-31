@@ -229,7 +229,7 @@ export const app = new Hono()
     };
   }))
   .get('/console/robots.txt', () => robotsTxt.clone())
-  .get('/console/api/agent-state', () => agentState.GET())
+  .get('/console/api/agent-state', (c) => agentState.GET(c.req.raw))
   .get('/console/api/speech-history', (c) => speechHistory.GET(c.req.raw))
   .get('/console/index.css', async (c) => {
     const css = await compileTailwindCss('console/src/index.css');
