@@ -7,6 +7,8 @@ REPO_ROOT=$(cd "$SCRIPT_PATH/.." && pwd)
 
 mkdir -p "$REPO_ROOT/.cache"
 
+mkdir -p "$REPO_ROOT/.cache"
+
 flatpak run -vv \
     --share=network \
     --filesystem="$REPO_ROOT" \
