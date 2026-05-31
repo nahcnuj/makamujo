@@ -288,7 +288,7 @@ const getCurrentStreamPayload = () => {
     ? base.speechHistory
     : generatedSpeechHistory;
 
-  return {
+  const payload = {
     niconama: niconamaFinal,
     canSpeak: base.canSpeak ?? streamer.canSpeak,
     currentGame: base.currentGame ?? streamer.currentGame ?? null,
@@ -304,6 +304,8 @@ const getCurrentStreamPayload = () => {
   // current payload without performing an HTTP fetch which may race with
   // in-flight published state updates.
   try { (globalThis as any).__getCurrentStreamPayload = getCurrentStreamPayload; } catch {}
+
+  return payload;
 };
 
 const extractReplyTargetComment = (payload: unknown): unknown => {
