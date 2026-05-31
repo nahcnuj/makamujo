@@ -132,6 +132,19 @@ try {
 export const { upgradeWebSocket, websocket } = createBunWebSocket();
 
 export const app = new Hono()
+  // Ensure /api/meta is available on the loopback console server by proxying
+  // requests to the broadcasting server. Some test setups may point the
+  // broadcasting base URL at the console loopback; forwarding here ensures
+  // a JSON response is always returned.
+  .get('/api/meta', async (c) => {
+    try {
+      const proxyBase = computeProxyBase(c.req.raw);
+      const res = await fetch(`${proxyBase}/api/meta`);
+      return res;
+    } catch (err) {
+      return new Response('{}', { status: 502, headers: { 'content-type': 'application/json' } });
+    }
+  })
   .get('/console/api/ws', async (c, next) => {
     try { console.debug('[DEBUG] incoming request headers ->', Object.fromEntries(c.req.raw.headers)); } catch {}
     try {
@@ -141,12 +154,20 @@ export const app = new Hono()
 
       const upgradeHeader = (c.req.header('upgrade') ?? '').toLowerCase();
       const hasSecWebSocketKey = !!c.req.header('sec-websocket-key');
+      const forceDisableWs = process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPGRADE === 'true';
       if (upgradeHeader === 'websocket' || hasSecWebSocketKey) {
+        if (forceDisableWs) {
+          return new Response('websocket upgrade unavailable', { status: 501 });
+        }
         // Hand off to the upgradeWebSocket middleware below.
         return next();
       }
 
       const proxyHeaders = buildProxyHeaders(c.req.raw, proxyBase);
+      // Proxy the request to the broadcasting server so the console client
+      // receives the upstream SSE stream (with resilient reconnects) or the
+      // proxied HTTP response. Avoid special-casing self-proxying here to
+      // ensure console clients get the authoritative upstream events.
       return proxyConsoleApiWsRequest(c.req.raw, proxyUrl, proxyHeaders);
     } catch (err) {
       return new Response('proxy failed', { status: 502 });
@@ -167,6 +188,19 @@ export const app = new Hono()
             try {
               const metaJson = await fetchMetaSnapshot(proxyBase);
               try { ws.send(JSON.stringify(metaJson)); } catch {}
+
+              // If the proxied HTTP snapshot lacked `niconama`, prefer the
+              // authoritative local payload mirror when available so WebSocket
+              // upgrade clients receive immediate stream metadata.
+              try {
+                if (!metaJson || typeof metaJson !== 'object' || !(metaJson as any).niconama) {
+                  const local = (globalThis as any).__getCurrentStreamPayload?.();
+                  if (local && typeof local === 'object' && (local as any).niconama) {
+                    try { ws.send(JSON.stringify(local)); } catch {}
+                    try { console.debug('[DIAG] websocket sent local mirrored payload with niconama'); } catch {}
+                  }
+                }
+              } catch {}
             } catch (err) {
               try { console.warn('[DIAG] failed to send initial meta snapshot', String(err)); } catch {}
             }
@@ -195,12 +229,13 @@ export const app = new Hono()
     };
   }))
   .get('/console/robots.txt', () => robotsTxt.clone())
-  .get('/console/api/agent-state', () => agentState.GET())
+  .get('/console/api/agent-state', (c) => agentState.GET(c.req.raw))
   .get('/console/api/speech-history', (c) => speechHistory.GET(c.req.raw))
   .get('/console/index.css', async (c) => {
     const css = await compileTailwindCss('console/src/index.css');
     return createCssResponse(css, c.req.raw);
   })
   .get('/console/frontend.js', async (c) => await serveConsoleAsset(c.req.raw) ?? new Response('Not Found', { status: 404 }))
+  .get('/console', () => serveConsoleAppHtml())
   .get('/console/frontend.css', async (c) => await serveConsoleAsset(c.req.raw) ?? new Response('Not Found', { status: 404 }))
   .get('/console/*', () => serveConsoleAppHtml());

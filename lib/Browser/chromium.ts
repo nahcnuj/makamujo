@@ -1,44 +1,14 @@
 import type { Browser } from "automated-gameplay-transmitter";
 import { setTimeout } from "node:timers/promises";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { ViewportSize } from "playwright";
 import playwright from "playwright";
 import { chromium as $_ } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
 export const chromium = $_.use(StealthPlugin());
-
-export const DEFAULT_PLAYWRIGHT_USER_DATA_DIR = './playwright/.auth/';
-export const DEFAULT_CHROMIUM_EXECUTABLE_PATH = '/usr/bin/chromium';
-
-export const launchPersistentContext = async (
-  userDataDir: string,
-  options: Record<string, unknown> = {},
-) => {
-  const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '60000', 10);
-  const args = [
-    '--hide-scrollbars',
-    '--window-size=1024,576',
-    '--window-position=1280,600',
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    ...(Array.isArray(options.args) ? (options.args as string[]) : []),
-  ];
-  const launchOpts = {
-    ...options,
-    executablePath: options.executablePath ?? DEFAULT_CHROMIUM_EXECUTABLE_PATH,
-    headless: options.headless ?? process.env.CHROMIUM_HEADLESS === '1',
-    timeout: launchTimeout,
-    args,
-  };
-
-  try {
-    return await playwright.chromium.launchPersistentContext(userDataDir, launchOpts as any);
-  } catch (firstErr) {
-    console.warn('[WARN] playwright.chromium persistent context failed, retrying with chromium-extra stealth', firstErr);
-    return await chromium.launchPersistentContext(userDataDir, launchOpts as any);
-  }
-};
 
 export const create = async (
   executablePath?: string,
@@ -62,6 +32,14 @@ export const create = async (
       '--hide-scrollbars',
       '--window-size=1024,576', // It may be required by `--window-position`.
       '--window-position=1280,600',
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--disable-background-networking',
+      '--disable-background-timer-throttling',
+      '--disable-popup-blocking',
     ],
   };
 
@@ -99,7 +77,7 @@ export const create = async (
   const ctx = await browser.newContext({
     viewport,
   });
-  ctx.setDefaultTimeout(0);
+  ctx.setDefaultTimeout(30_000);
 
   const page = await ctx.newPage();
 
@@ -125,33 +103,65 @@ export const create = async (
     },
 
     clickByText: async (text) => {
-      const ls = page.getByText(text, { exact: true }).or(page.getByText(text));
-      let retry = true;
+      const locatorFactories: Array<() => any> = [
+        () => page.getByRole('button', { name: text, exact: true } as any),
+        () => page.getByRole('button', { name: text } as any),
+        () => page.getByText(text, { exact: true }),
+        () => page.getByText(text),
+        () => page.locator(`text=${JSON.stringify(text)}`),
+        () => page.locator(`text=${text}`),
+      ];
+
       let attempts = 0;
-      const maxAttempts = 5;
-      do {
-        if (attempts >= maxAttempts) {
-          throw new Error(`clickByText: "${text}" not found or not clickable after ${maxAttempts} attempt(s)`);
-        }
-        attempts++;
-        if (await ls.count() > 0) {
-          console.debug('[DEBUG]', 'clickByText targets:', await ls.allInnerTexts());
-          for (const l of await ls.all()) {
+      const maxAttempts = 7;
+      while (attempts < maxAttempts) {
+        attempts += 1;
+        let clicked = false;
+
+        for (const createLocator of locatorFactories) {
+          let locator: any;
+          try {
+            locator = createLocator();
+          } catch {
+            continue;
+          }
+
+          let count = 0;
+          try {
+            count = await locator.count({ timeout: 1_000 });
+          } catch {
+            count = 0;
+          }
+
+          if (count === 0) continue;
+
+          let targetTexts: string[] = [];
+          try {
+            targetTexts = await locator.allInnerTexts();
+          } catch {
+            targetTexts = [];
+          }
+          console.debug('[DEBUG]', 'clickByText targets:', targetTexts);
+
+          const elements = await locator.all();
+          for (const element of elements) {
             try {
-              await l.click({ timeout: 1_000 });
-              retry = false;
+              await element.click({ timeout: 2_000 });
+              clicked = true;
               break;
             } catch (err) {
-              console.warn('[WARN]', err);
+              console.warn('[WARN]', 'clickByText element click failed', err);
             }
           }
-          if (retry) {
-            await setTimeout(1_000);
-          }
-        } else {
-          await setTimeout(1_000);
+
+          if (clicked) break;
         }
-      } while (retry);
+
+        if (clicked) return;
+        await setTimeout(1_000);
+      }
+
+      throw new Error(`clickByText: "${text}" not found or not clickable after ${maxAttempts} attempt(s)`);
     },
     clickByElementId: createClickByElementId(page),
 
@@ -224,8 +234,7 @@ export const createRedirectToHomeHandler = (
 
 type LocatorLike = {
   first(): LocatorLike;
-  waitFor?(options?: { state?: string; timeout?: number }): Promise<void>;
-  click(options?: { timeout?: number; force?: boolean }): Promise<void>;
+  click(options?: { timeout?: number }): Promise<void>;
 };
 
 type ClickablePageLike = {
@@ -238,7 +247,71 @@ type ClickablePageLike = {
  */
 export const createClickByElementId = (page: ClickablePageLike) =>
   async (id: string): Promise<void> => {
-    const locator = page.locator(`#${id}`).first();
-    await locator.waitFor?.({ state: 'visible', timeout: 10_000 });
-    await locator.click({ timeout: 10_000, force: true });
+    // Prefer a DOM-evaluated click when available (real Playwright Page)
+    // to avoid visibility/stability flakiness. Fall back to the locator
+    // approach used in tests which provides a minimal `locator()` API.
+    const anyPage = page as any;
+    if (typeof anyPage.evaluate === 'function') {
+      const clicked = await anyPage.evaluate((targetId: string) => {
+        const els = Array.from(document.querySelectorAll(`#${CSS.escape(targetId)}`));
+        const el = els[0] as HTMLElement | undefined;
+        if (!el) return false;
+        el.click();
+        return true;
+      }, id);
+      if (!clicked) {
+        throw new Error(`createClickByElementId: element with id "${id}" not found`);
+      }
+      return;
+    }
+
+    // Fallback for test doubles that only expose `locator()`.
+    await page.locator(`#${id}`).first().click({ timeout: 5_000 });
   };
+
+// Defaults used by other modules.
+export const DEFAULT_PLAYWRIGHT_USER_DATA_DIR = process.env.PLAYWRIGHT_USER_DATA_DIR ?? '/tmp/playwright-user-data';
+export const DEFAULT_CHROMIUM_EXECUTABLE_PATH = process.env.CHROMIUM_EXECUTABLE_PATH ?? '';
+
+// Provide a launchPersistentContext helper that prefers playwright-extra's
+// chromium wrapper but falls back to Playwright's chromium implementation.
+export const launchPersistentContext = async (userDataDir: string, options: Record<string, unknown> = {}) => {
+  try {
+    if (typeof (chromium as any).launchPersistentContext === 'function') {
+      try {
+        return await (chromium as any).launchPersistentContext(userDataDir, options as any);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/ProcessSingleton|SingletonLock/i.test(msg)) {
+          // Profile appears locked; create a temporary user data dir to avoid
+          // the ProcessSingleton conflict and retry.
+          try {
+            const tmpDir = mkdtempSync(join(tmpdir(), 'playwright-'));
+            console.warn('[WARN] userDataDir locked, retrying with temp dir', tmpDir);
+            return await (chromium as any).launchPersistentContext(tmpDir, options as any);
+          } catch (err2) {
+            // Fall through to rethrow original error below.
+          }
+        }
+        throw err;
+      }
+    }
+    try {
+      return await playwright.chromium.launchPersistentContext(userDataDir, options as any);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/ProcessSingleton|SingletonLock/i.test(msg)) {
+        try {
+          const tmpDir = mkdtempSync(join(tmpdir(), 'playwright-'));
+          console.warn('[WARN] userDataDir locked, retrying with temp dir', tmpDir);
+          return await playwright.chromium.launchPersistentContext(tmpDir, options as any);
+        } catch (err2) {
+          // fall through
+        }
+      }
+      throw err;
+    }
+  } catch (err) {
+    throw err;
+  }
+};

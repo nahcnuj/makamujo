@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import { GET } from "./agent-state";
+import { setBroadcastingTarget } from "../../../lib/console-proxy";
 
 const originalFetch = globalThis.fetch;
 const originalSetTimeout = globalThis.setTimeout;
@@ -13,6 +14,7 @@ afterEach(() => {
 
 describe("GET /console/api/agent-state", () => {
   it("returns the response from /api/meta", async () => {
+    setBroadcastingTarget('127.0.0.1', 8777);
     globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
       expect(init?.signal).toBeDefined();
       return Response.json({
@@ -23,7 +25,7 @@ describe("GET /console/api/agent-state", () => {
       });
     }) as unknown as typeof fetch;
 
-    const res = await GET();
+    const res = await GET(new Request("http://127.0.0.1:8777/console/api/agent-state"));
     expect(res.ok).toBe(true);
     const data = await res.json();
     expect(data).toEqual({
@@ -32,6 +34,19 @@ describe("GET /console/api/agent-state", () => {
         title: "test",
       },
     });
+  });
+
+  it("uses the configured broadcasting target when BROADCASTING_AGENT_API_BASE_URL is not set", async () => {
+    setBroadcastingTarget('127.0.0.1', 7777);
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe("http://127.0.0.1:7777/api/meta");
+      expect(init?.signal).toBeDefined();
+      return Response.json({ ok: true });
+    }) as unknown as typeof fetch;
+
+    const res = await GET(new Request("http://127.0.0.1:8777/console/api/agent-state"));
+    expect(res.ok).toBe(true);
+    await res.json();
   });
 
   it("returns 502 when /api/meta responds with non-ok status", async () => {

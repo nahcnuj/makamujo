@@ -1,5 +1,18 @@
 # AGENTS.md
 
+## Copilot instructions
+This file serves as the primary repository-specific instruction source for GitHub Copilot and related agents.
+Do not modify `.github/copilot-instructions.md`; keep that reference file unchanged and maintain any existing symlink behavior.
+
+### Required checks before commit
+- `bun run typecheck`
+- `bun run test`
+- `bun run test:integration`
+- `bun run test:e2e`
+
+> Note: This repository does not currently define a `test:unit` npm script in `package.json`.
+> The CI uses `bun run test` as the unit test suite.
+
 ## 目的
 このファイルはAIエージェント専用の指示書です。
 あなたが作業を始める前に参照し、正確に作業できるようにプロジェクトのコンテキストやルールを提供します。

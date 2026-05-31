@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Pre-commit hook for makamujo
+# Runs the required repository checks before allowing a commit.
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "Running pre-commit checks..."
+
+STDERR_LOG="$(mktemp -t pre-commit-stderr.XXXXXX)"
+
+CHECKS_PASSED=0
+cleanup() {
+  if [ "$CHECKS_PASSED" -eq 1 ]; then
+    rm -f "$STDERR_LOG"
+  fi
+}
+trap cleanup EXIT
+
+run_and_log_stderr() {
+  echo "==> $*"
+  if "$@" 2>>"$STDERR_LOG"; then
+    return 0
+  else
+    echo "Pre-commit check failed: $*" >&2
+    echo "Read the stderr log file to identify issue(s): $STDERR_LOG" >&2
+    exit 1
+  fi
+}
+
+# Ensure bun is available (its stderr goes to the log on failure).
+if ! bun --version >/dev/null 2>>"$STDERR_LOG"; then
+  echo "bun not available; see stderr log at: $STDERR_LOG" >&2
+  exit 1
+fi
+
+run_and_log_stderr bun run typecheck
+run_and_log_stderr bun run test
+run_and_log_stderr bun run test:integration
+run_and_log_stderr bun run pretest:e2e
+run_and_log_stderr bun run test:e2e
+
+CHECKS_PASSED=1
+SUCCESS=1
+echo "Pre-commit checks passed."

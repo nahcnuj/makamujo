@@ -1,5 +1,6 @@
 import type { AgentStateResponse } from "./types";
 import type { Child, CSSProperties } from "hono/jsx";
+import { getAgentCommentNumber, getCommentTextFromAgentComment } from "../../../lib/niconamaCommentClient.helpers";
 
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
@@ -128,6 +129,47 @@ export const createReplyTargetCommentValueComponent = (
           )
         ))}
       </p>
+    </div>
+  );
+};
+
+import { formatAgentCommentEntry } from "../../../lib/niconamaCommentClient.helpers";
+
+export const createRecentCommentsValueComponent = (
+  recentComments: AgentStateResponse["recentComments"],
+): Child => {
+  if (!Array.isArray(recentComments) || recentComments.length === 0) {
+    return <span>-</span>;
+  }
+
+  const commentsToRender = [...recentComments].reverse();
+
+  return (
+    <div className="space-y-2">
+      {commentsToRender.map((comment, index) => {
+        const number = getAgentCommentNumber(comment);
+        const text = getCommentTextFromAgentComment(comment) ?? '-';
+        const normalizedText = number !== undefined && text.startsWith(`#${number} `)
+          ? text.slice(String(number).length + 2)
+          : text;
+
+        return (
+          <p
+            key={`recent-comment-${index}`}
+            className="break-words whitespace-pre-wrap rounded-md border border-emerald-300/30 bg-emerald-950/30 px-3 py-2 text-sm"
+          >
+            {number !== undefined ? (
+              <>
+                <span className="text-emerald-200">#{number}</span>
+                {' '}
+                <span>{normalizedText}</span>
+              </>
+            ) : (
+              normalizedText
+            )}
+          </p>
+        );
+      })}
     </div>
   );
 };
@@ -275,11 +317,28 @@ export const createSpeechHistoryValueComponent = (
 export const createLiveDeliveryMetricsValueComponent = (
   niconamaState: AgentStateResponse["niconama"],
   commentCount: AgentStateResponse["commentCount"],
+  isRecentCommentsOpen?: boolean,
+  toggleRecentComments?: (() => void),
 ): Child => {
   const liveMetricItems = [
     { label: "配信状況", value: formatStateLabel(niconamaState?.type) },
     { label: "視聴者数", value: formatMetricValue(niconamaState?.meta?.total?.listeners) },
-    { label: "コメント数", value: formatMetricValue(commentCount) },
+    {
+      label: "コメント数",
+      valueComponent: toggleRecentComments ? (
+        <button
+          type="button"
+          onClick={toggleRecentComments}
+          aria-expanded={isRecentCommentsOpen ? "true" : "false"}
+          className="text-sm underline decoration-emerald-300/50 underline-offset-2 transition hover:text-emerald-50"
+          title="クリックで最近のコメントを表示/非表示"
+        >
+          {formatMetricValue(commentCount)}
+        </button>
+      ) : (
+        formatMetricValue(commentCount)
+      ),
+    },
     { label: "ギフト", value: formatMetricValue(niconamaState?.meta?.total?.gift) },
     { label: "広告", value: formatMetricValue(niconamaState?.meta?.total?.ad) },
   ];
@@ -297,7 +356,7 @@ export const createLiveDeliveryMetricsValueComponent = (
       ))}
       {liveMetricItems.map((liveMetricItem) => (
         <p key={`value-${liveMetricItem.label}`} className="text-center whitespace-nowrap">
-          {liveMetricItem.value}
+          {liveMetricItem.valueComponent ?? liveMetricItem.value}
         </p>
       ))}
     </div>

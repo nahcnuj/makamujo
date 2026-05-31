@@ -3,7 +3,7 @@ import { createAgentStatusRows } from "./createAgentStatusRows";
 import { LIVE_DELIVERY_SECTION_TITLE } from "./LiveDeliveryStatusSection";
 import { MARKOV_MODEL_SECTION_TITLE } from "./MarkovModelStatusSection";
 
-const LIVE_DELIVERY_ROW_LABELS = ["配信指標", "タイトル", "配信URL", "開始時刻", "発話内容"] as const;
+const LIVE_DELIVERY_ROW_LABELS = ["配信指標", "タイトル", "配信URL", "開始時刻", "発話内容", "最近のコメント"] as const;
 const MARKOV_MODEL_ROW_LABELS = ["生成N-gram", "返信先コメント", "これまでの発話"] as const;
 const GAME_ROW_LABELS = ["ゲーム情報"] as const;
 
@@ -12,8 +12,14 @@ const LIVE_DELIVERY_ROW_LABEL_SET = createLabelSet(LIVE_DELIVERY_ROW_LABELS);
 const MARKOV_MODEL_ROW_LABEL_SET = createLabelSet(MARKOV_MODEL_ROW_LABELS);
 const GAME_ROW_LABEL_SET = createLabelSet(GAME_ROW_LABELS);
 
-export const createAgentStatusSections = (stateResponse: AgentStateResponse | null): AgentStatusSection[] => {
-  const rows = createAgentStatusRows(stateResponse);
+export const createAgentStatusSections = (
+  stateResponse: AgentStateResponse | null,
+  options?: {
+    showRecentComments?: boolean;
+    toggleRecentComments?: () => void;
+  },
+): AgentStatusSection[] => {
+  const rows = createAgentStatusRows(stateResponse, options);
   const liveDeliveryRows = rows.filter((row) => LIVE_DELIVERY_ROW_LABEL_SET.has(row.label));
   const markovModelRows = rows.filter((row) => MARKOV_MODEL_ROW_LABEL_SET.has(row.label));
   const gameRows = rows.filter((row) => GAME_ROW_LABEL_SET.has(row.label));

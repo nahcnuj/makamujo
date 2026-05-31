@@ -252,6 +252,177 @@ describe("createAgentStatusRows", () => {
     expect(html).toContain("99");
   });
 
+  it("does not include the recent comments row when the panel is closed", () => {
+    const rows = createAgentStatusRows({
+      recentComments: [
+        { data: { no: 1, comment: "こんにちは" } },
+      ],
+    } as any, { showRecentComments: false, toggleRecentComments: () => {} });
+
+    expect(rows.find((row) => row.label === "最近のコメント")).toBeUndefined();
+  });
+
+  it("includes the recent comments row when the panel is open", () => {
+    const rows = createAgentStatusRows({
+      recentComments: [
+        { data: { no: 1, comment: "こんにちは" } },
+      ],
+    } as any, { showRecentComments: true, toggleRecentComments: () => {} });
+
+    const recentRow = rows.find((row) => row.label === "最近のコメント");
+    expect(recentRow).toBeDefined();
+    const html = renderToString(<>{recentRow!.valueComponent}</>);
+    expect(html).toContain("<span class=\"text-emerald-200\">#1</span>");
+    expect(html).toContain("こんにちは");
+  });
+
+  it("renders recent comments newest first", () => {
+    const rows = createAgentStatusRows({
+      recentComments: [
+        { data: { no: 1, comment: "古いコメント" } },
+        { data: { no: 2, comment: "新しいコメント" } },
+      ],
+    } as any, { showRecentComments: true, toggleRecentComments: () => {} });
+
+    const recentRow = rows.find((row) => row.label === "最近のコメント");
+    expect(recentRow).toBeDefined();
+    const html = renderToString(<>{recentRow!.valueComponent}</>);
+    const firstIndex = html.indexOf("<span class=\"text-emerald-200\">#2</span>");
+    const secondIndex = html.indexOf("<span class=\"text-emerald-200\">#1</span>");
+    expect(firstIndex).toBeGreaterThanOrEqual(0);
+    expect(secondIndex).toBeGreaterThan(firstIndex);
+  });
+
+  it("renders comment count as a toggle button when a toggle callback is provided", () => {
+    const rows = createAgentStatusRows(
+      {
+        niconama: { type: "live", meta: { total: { listeners: 3, comments: 99 } } },
+      } as any,
+      { showRecentComments: false, toggleRecentComments: () => {} },
+    );
+
+    const liveRow = rows.find((row) => row.label === "配信指標");
+    expect(liveRow).toBeDefined();
+    const html = renderToString(<>{liveRow!.valueComponent}</>);
+    expect(html).toContain("<button");
+    expect(html).toContain("99");
+  });
+
+  it("uses the explicit stream comment count when available", () => {
+    const rows = createAgentStatusRows(
+      {
+        niconama: { type: "live", meta: { total: { listeners: 3, comments: 99 } } },
+        commentCount: 80,
+        recentComments: [
+          { data: { no: 1, comment: "こんにちは" } },
+          { data: { no: 2, comment: "テストコメント" } },
+        ],
+      } as any,
+      { showRecentComments: false, toggleRecentComments: () => {} },
+    );
+
+    const liveRow = rows.find((row) => row.label === "配信指標");
+    expect(liveRow).toBeDefined();
+    const html = renderToString(<>{liveRow!.valueComponent}</>);
+    expect(html).toContain(">80</button>");
+  });
+
+  it("falls back to recent comment count when no explicit total is available", () => {
+    const rows = createAgentStatusRows(
+      {
+        niconama: { type: "live", meta: { total: { listeners: 3 } } },
+        recentComments: [
+          { data: { no: 1, comment: "こんにちは" } },
+          { data: { no: 2, comment: "テストコメント" } },
+        ],
+      } as any,
+      { showRecentComments: false, toggleRecentComments: () => {} },
+    );
+
+    const liveRow = rows.find((row) => row.label === "配信指標");
+    expect(liveRow).toBeDefined();
+    const html = renderToString(<>{liveRow!.valueComponent}</>);
+    expect(html).toContain(">2</button>");
+  });
+
+  it("renders the same number of recent comment items as the comment count", () => {
+    const rows = createAgentStatusRows(
+      {
+        niconama: { type: "live", meta: { total: { listeners: 3, comments: 99 } } },
+        recentComments: [
+          { data: { no: 1, comment: "こんにちは" } },
+          { data: { no: 2, comment: "テストコメント" } },
+          { data: { no: 3, comment: "こんばんは" } },
+        ],
+      } as any,
+      { showRecentComments: true, toggleRecentComments: () => {} },
+    );
+
+    const liveRow = rows.find((row) => row.label === "配信指標");
+    expect(liveRow).toBeDefined();
+    const liveHtml = renderToString(<>{liveRow!.valueComponent}</>);
+    expect(liveHtml).toContain("3");
+
+    const recentRow = rows.find((row) => row.label === "最近のコメント");
+    expect(recentRow).toBeDefined();
+    const recentHtml = renderToString(<>{recentRow!.valueComponent}</>);
+    expect((recentHtml.match(/<p\b/g) ?? []).length).toBe(3);
+  });
+
+  it("renders comment numbers with the last-updated color", () => {
+    const rows = createAgentStatusRows(
+      {
+        recentComments: [
+          { data: { no: 12, comment: "テストコメント" } },
+        ],
+      } as any,
+      { showRecentComments: true, toggleRecentComments: () => {} },
+    );
+
+    const recentRow = rows.find((row) => row.label === "最近のコメント");
+    expect(recentRow).toBeDefined();
+    const html = renderToString(<>{recentRow!.valueComponent}</>);
+    expect(html).toContain("<span class=\"text-emerald-200\">#12</span>");
+    expect(html).toContain("テストコメント");
+  });
+
+  it("merges a standalone numeric comment into the previous text comment when they appear as a pair", () => {
+    const rows = createAgentStatusRows(
+      {
+        niconama: { type: "live", meta: { total: { listeners: 1, comments: 2 } } },
+        recentComments: [
+          { data: { comment: "ジュニアアイドル" } },
+          { data: { comment: "16" } },
+        ],
+      } as any,
+      { showRecentComments: true, toggleRecentComments: () => {} },
+    );
+
+    const recentRow = rows.find((row) => row.label === "最近のコメント");
+    expect(recentRow).toBeDefined();
+    const recentHtml = renderToString(<>{recentRow!.valueComponent}</>);
+    expect(recentHtml).toContain("<span class=\"text-emerald-200\">#16</span>");
+    expect(recentHtml).toContain("ジュニアアイドル");
+    expect((recentHtml.match(/<p\b/g) ?? []).length).toBe(1);
+  });
+
+  it("renders recent comments when the panel is open", () => {
+    const rows = createAgentStatusRows({
+      recentComments: [
+        { data: { no: 1, comment: "こんにちは" } },
+        { data: { no: 2, comment: "テストコメント" } },
+      ],
+    } as any, { showRecentComments: true, toggleRecentComments: () => {} });
+
+    const recentRow = rows.find((row) => row.label === "最近のコメント");
+    expect(recentRow).toBeDefined();
+    const html = renderToString(<>{recentRow!.valueComponent}</>);
+    expect(html).toContain("<span class=\"text-emerald-200\">#1</span>");
+    expect(html).toContain("<span class=\"text-emerald-200\">#2</span>");
+    expect(html).toContain("こんにちは");
+    expect(html).toContain("テストコメント");
+  });
+
   it("renders game section when currentGame present even if niconama is empty", () => {
     const rows = createAgentStatusRows({
       niconama: {},

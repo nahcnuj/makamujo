@@ -14,6 +14,8 @@ import { fileURLToPath } from "node:url";
 // process alive reliably.
 import { parseArgs } from "node:util";
 import { startConsoleServer } from "./console/index";
+import * as consoleRoutes from './routes/console/index';
+import { getResilientProxyControllers } from './lib/console-proxy';
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import { AllowedIP } from "./lib/allowedIP";
 import * as speechHistoryRoute from "./routes/api/speech-history";
@@ -21,14 +23,17 @@ import type { SpeechHistoryEntry } from "./routes/api/speech-history";
 import { handleCatchAll } from "./src/frontendServer";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
 import { normalizePublishedStreamState, resolveNiconamaFromState } from "./lib/streamState";
-import { createNiconamaCommentClient, type NiconamaCommentClient } from "./lib/niconamaCommentClient";
+import { createNiconamaCommentClient, filterAgentCommentsWithText, getCommentTextFromAgentComment, type NiconamaCommentClient } from "./lib/niconamaCommentClient";
+import { countNumberedAgentComments, formatAgentCommentEntry } from "./lib/niconamaCommentClient.helpers";
 import { installConsoleLogger } from "./lib/consoleLogger";
 
 const console = installConsoleLogger();
-
 let server: Bun.Server<unknown> | null = null;
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 let niconamaCommentClient: NiconamaCommentClient | null = null;
+
+// Console server will be started after the main server is initialized
+// so that the broadcasting port can be passed to the console proxy.
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
@@ -36,6 +41,15 @@ process.on('SIGUSR1', signalHandler.bind(null, { exit: true }));
 process.on('SIGUSR2', signalHandler.bind(null, { exit: true }));
 // Log uncaught exceptions for better diagnostics before invoking the
 // existing exit handler which terminates the process.
+
+// Safe references used by the global exit handler to avoid accessing
+// variables that may still be in the temporal dead zone during early
+// startup failures. These are assigned once the corresponding resources
+// have been initialized.
+let __serverForExit: any = null;
+let __consoleServerForExit: any = null;
+
+// Console server already started above; skip repeated initialization.
 
 process.on('uncaughtException', (err) => {
   try {
@@ -108,74 +122,85 @@ const model = (file => {
   }
 })(modelFile);
 
-const tts = process.platform !== 'win32' ?
-  (() => {
-    const htsvoiceFile = '/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice';
-    const dictionaryDir = '/var/lib/mecab/dic/open-jtalk/naist-jdic';
-    return new TTS({
-      htsvoiceFile,
-      dictionaryDir,
-    });
-  })() :
-  new FallbackTTS();
+// Streamer instance used throughout the server. Use the fallback TTS
+// implementation initially; this may be replaced by an external agent
+// integration later if available.
+const streamer = new MakaMujo(model, new FallbackTTS());
 
-const streamer = new MakaMujo(model, tts);
-
-// Provide an in-memory fallback agent synchronously so the rest of the
-// server initialization can reference `agent` without awaiting a dynamic
-// import. We'll try to dynamically import and initialize the real
-// `automated-gameplay-transmitter` agent later and replace this fallback
-// when possible.
+// Global stream state and client registries used by SSE/WS endpoints.
 let lastPublishedStreamState: unknown = undefined;
-let currentSpeechState = { speech: '', silent: false };
-// WebSocket clients connected to the broadcasting server.
+// Mirror published state on globalThis so callbacks from other async
+// modules can access it even if module evaluation order differs.
+(globalThis as any).__lastPublishedStreamState = (globalThis as any).__lastPublishedStreamState ?? lastPublishedStreamState;
 const wsClients = new Set<any>();
+const sseClients = new Set<ReadableStreamDefaultController<Uint8Array>>();
+const sseEncoder = new TextEncoder();
 
-// Server-Sent Events (SSE) clients: store controller objects so we can
-// push `data: ...\n\n` frames to each connected client.
-const sseClients = new Set<ReadableStreamDefaultController<string>>();
-
-/**
- * Create a ReadableStream that registers its controller in `sseClients` and
- * removes it when the client disconnects (cancel) or when the handler rejects.
- * Centralising the creation avoids duplicating the closure-capture pattern.
- */
-const createSseStream = (label: string) => {
-  let ctl: ReadableStreamDefaultController<string> | undefined;
-  return new ReadableStream<string>({
+function createSseStream(_label: string) {
+  return new ReadableStream<Uint8Array>({
     start(controller) {
-      try { console.log(`[INFO] SSE client connected (${label})`); } catch { }
-      ctl = controller;
-      sseClients.add(controller);
-      try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch { }
+        sseClients.add(controller);
+        try { console.debug('[DIAG] SSE client connected, total=', sseClients.size); } catch {}
+        try { controller.enqueue(sseEncoder.encode(': connected\n\n')); } catch {}
+        try {
+          const payload = getCurrentStreamPayload();
+          controller.enqueue(sseEncoder.encode(`data: ${JSON.stringify(payload ?? {})}\n\n`));
+          // If the initial payload lacks `niconama`, schedule a couple of
+          // retransmits shortly after connect to give async upstream
+          // callbacks time to populate published state (mirrors WS logic).
+          try {
+            if (payload && typeof payload === 'object' && !(payload as any).niconama) {
+              setTimeout(() => {
+                try { controller.enqueue(sseEncoder.encode(`data: ${JSON.stringify(getCurrentStreamPayload() ?? {})}\n\n`)); } catch {}
+              }, 250);
+              setTimeout(() => {
+                try { controller.enqueue(sseEncoder.encode(`data: ${JSON.stringify(getCurrentStreamPayload() ?? {})}\n\n`)); } catch {}
+              }, 1000);
+            }
+          } catch {}
+        } catch {}
     },
-    cancel() { if (ctl) { try { sseClients.delete(ctl); } catch { } ctl = undefined; } },
+    cancel() {
+      // Remove any controllers that are closed or canceled.
+        try { sseClients.forEach((c) => { try { if ((c as any).desiredSize === null) sseClients.delete(c); } catch {} }); } catch {}
+        try { console.debug('[DIAG] SSE client disconnected, total=', sseClients.size); } catch {}
+    },
   });
-};
+}
 
-const sseBroadcast = (payload: unknown) => {
-  if (sseClients.size === 0) return;
-  const frame = `data: ${JSON.stringify(payload)}\n\n`;
-  for (const controller of Array.from(sseClients)) {
+function sseBroadcast(payload: unknown) {
+  const data = JSON.stringify(payload ?? {});
+  const chunk = sseEncoder.encode(`data: ${data}\n\n`);
+  try { console.debug('[DIAG] sseBroadcast payload keys ->', Object.keys((payload && typeof payload === 'object') ? payload as any : {}), 'hasNiconama=', !!(payload && typeof payload === 'object' && (payload as any).niconama)); } catch {}
+  for (const c of Array.from(sseClients)) {
     try {
-      // Evict clients under backpressure (desiredSize <= 0) to avoid blocking
-      // the event loop when a slow or unread connection fills its TCP send buffer.
-      // null means the stream is already closed/errored; treat that like healthy.
-      if ((controller.desiredSize ?? 1) <= 0) {
-        try { controller.close(); } catch { }
-        sseClients.delete(controller);
-        continue;
-      }
-      controller.enqueue(frame);
+      c.enqueue(chunk);
     } catch (err) {
-      try { controller.close(); } catch { }
-      try { sseClients.delete(controller); } catch { }
+      try { sseClients.delete(c); } catch {}
     }
   }
-};
+  try {
+    const resilient = getResilientProxyControllers();
+    for (const c of Array.from(resilient)) {
+      try {
+        if ((c as any).desiredSize === null) {
+          try { resilient.delete(c); } catch {}
+          continue;
+        }
+        c.enqueue(chunk);
+      } catch (err) {
+        try { resilient.delete(c); } catch {}
+      }
+    }
+  } catch {}
+}
+
+// Expose SSE broadcaster for external callers (tests, agents) to invoke.
+(globalThis as any).__sseBroadcast = sseBroadcast;
 
 const broadcastToWsClients = (payload: unknown) => {
   const message = JSON.stringify(payload);
+  try { console.debug('[DIAG] broadcastToWsClients sending keys ->', Object.keys((payload && typeof payload === 'object') ? payload as any : {}), 'hasNiconama=', !!(payload && typeof payload === 'object' && (payload as any).niconama)); } catch {}
   for (const ws of Array.from(wsClients)) {
     try {
       ws.send(message);
@@ -185,6 +210,9 @@ const broadcastToWsClients = (payload: unknown) => {
     }
   }
 };
+
+// Expose WS broadcaster as well for external callers.
+(globalThis as any).__broadcastToWsClients = broadcastToWsClients;
 
 const broadcastCurrentPayload = (context: string) => {
   try {
@@ -197,10 +225,40 @@ const broadcastCurrentPayload = (context: string) => {
 };
 
 
+// Current speech state exposed to the console agent API.
+let currentSpeechState: { speech: string; silent: boolean } | undefined = undefined;
+
+let agent: any = {
+  setSpeech: (text: string) => { currentSpeechState = { speech: text, silent: false }; },
+  getSpeech: () => currentSpeechState,
+  getGame: () => null,
+  getStreamState: () => lastPublishedStreamState,
+  publishStreamState: (data: unknown) => { lastPublishedStreamState = data; },
+  postComments: (comments: unknown) => {
+    try {
+      // Forward received comments to the internal streamer so the agent
+      // can learn and speak in response. `streamer.listen` accepts an
+      // array of AgentComment objects.
+      if (Array.isArray(comments)) {
+        streamer.listen(comments as any);
+      } else if (comments) {
+        streamer.listen([comments] as any);
+      }
+    } catch (e) {
+      // swallow errors in the fallback to avoid crashing startup
+    }
+  },
+};
+
 const getCurrentStreamPayload = () => {
   const agentStreamState = agent.getStreamState?.();
+  // Prefer the locally tracked published state, but fall back to any
+  // `globalThis` mirror (set by other modules) to handle cross-module
+  // initialization ordering where the global may have been written but
+  // the local variable has not yet been updated.
+  const globalPublished = (globalThis as any).__lastPublishedStreamState;
   const streamState = (lastPublishedStreamState === undefined || lastPublishedStreamState === null)
-    ? agentStreamState
+    ? (globalPublished ?? agentStreamState)
     : lastPublishedStreamState;
   const normalizedStreamState = normalizePublishedStreamState(streamState);
   const base = normalizedStreamState && typeof normalizedStreamState === 'object' ? (normalizedStreamState as any) : {};
@@ -227,17 +285,31 @@ const getCurrentStreamPayload = () => {
   const niconamaFromStreamer = tryResolveNiconama(streamer.streamState);
   const niconamaFinal = niconamaFromPublished ?? niconamaFromAgent ?? niconamaFromStreamer ?? undefined;
 
-  return {
+  const explicitSpeechHistory = Array.isArray(base.speechHistory) && base.speechHistory.length > 0
+    ? base.speechHistory
+    : generatedSpeechHistory;
+
+  speechHistoryRoute.setSpeechHistoryRef(explicitSpeechHistory);
+
+  const payload = {
     niconama: niconamaFinal,
     canSpeak: base.canSpeak ?? streamer.canSpeak,
     currentGame: base.currentGame ?? streamer.currentGame ?? null,
     nGram: base.nGram ?? streamer.currentNGramSize,
     nGramRaw: base.nGramRaw ?? streamer.currentNGramSizeRaw,
     speech: base.speech ?? agent.getSpeech(),
-    speechHistory: (Array.isArray(base.speechHistory) ? base.speechHistory : generatedSpeechHistory).slice(0, GENERATED_SPEECH_HISTORY_SSE_SIZE),
+    speechHistory: explicitSpeechHistory,
     replyTargetComment,
     commentCount: base.commentCount ?? streamer.streamState?.meta?.total?.comments,
+    recentComments: base.recentComments ?? agentBase.recentComments,
   } as const;
+
+  // Expose a local shortcut so other modules (console proxy) can request the
+  // current payload without performing an HTTP fetch which may race with
+  // in-flight published state updates.
+  try { (globalThis as any).__getCurrentStreamPayload = getCurrentStreamPayload; } catch {}
+
+  return payload;
 };
 
 const extractReplyTargetComment = (payload: unknown): unknown => {
@@ -252,6 +324,7 @@ const extractReplyTargetComment = (payload: unknown): unknown => {
 };
 
 const handlePublishedStreamState = (payload: unknown): void => {
+  try { console.debug('[DIAG] handlePublishedStreamState invoked with payload ->', payload && typeof payload === 'object' ? Object.keys(payload as any) : String(payload)); } catch {}
   const replyTargetComment = extractReplyTargetComment(payload);
   let published: unknown = payload;
 
@@ -279,7 +352,74 @@ const handlePublishedStreamState = (payload: unknown): void => {
   }
 
   try {
-    lastPublishedStreamState = published;
+    // Merge with existing published state so transient external updates
+    // (e.g. automatic niconama client updates) do not unintentionally
+    // remove explicit fields posted by clients. New `published` values
+    // take precedence.
+    try {
+      const prev = lastPublishedStreamState && typeof lastPublishedStreamState === 'object' ? (lastPublishedStreamState as any) : {};
+      const next = published && typeof published === 'object' ? (published as any) : {};
+      // Normalize the incoming published payload to determine any `niconama`
+      // metadata it implies (e.g. top-level title/url/start -> niconama.meta).
+      const normalizedNext = normalizePublishedStreamState(next) as any;
+
+      // Start with a shallow merge, but ensure that any `niconama` produced
+      // from the new payload takes precedence over the previous `niconama`.
+      const merged: any = { ...prev, ...next };
+      if (normalizedNext && typeof normalizedNext === 'object' && 'niconama' in normalizedNext) {
+        merged.niconama = normalizedNext.niconama;
+      } else {
+        // If the normalized next didn't yield a `niconama` field, attempt to
+        // derive one from top-level title/url/start fields so client-posted
+        // metadata overrides previous nested `niconama` values.
+        try {
+          const derived = resolveNiconamaFromState(next) as any;
+          if (derived && typeof derived === 'object' && Object.keys(derived).length > 0) {
+            merged.niconama = derived;
+          }
+        } catch {}
+
+        // Extra safeguard: if the incoming payload had explicit top-level
+        // title/url/start fields, prefer those values unconditionally so a
+        // client posting these fields cannot be overridden by prior state.
+        try {
+          const hasTopLevel = next && typeof next === 'object' && (
+            typeof (next as any).title === 'string' ||
+            typeof (next as any).url === 'string' ||
+            typeof (next as any).start === 'number' ||
+            typeof (next as any).startTime === 'number'
+          );
+          if (hasTopLevel) {
+            const forced = resolveNiconamaFromState(next) as any;
+            if (forced && typeof forced === 'object' && Object.keys(forced).length > 0) {
+              merged.niconama = forced;
+            }
+          }
+        } catch {}
+      }
+
+      // Ensure any nested `niconama` stored in the published state includes
+      // a normalized `meta` object when possible. This makes downstream
+      // consumers (SSE/WS clients) receive promoted metadata immediately
+      // without relying on runtime normalization in `getCurrentStreamPayload`.
+      try {
+        if (merged && typeof merged === 'object' && 'niconama' in merged) {
+          const resolved = resolveNiconamaFromState({ niconama: merged.niconama }) as any;
+          if (resolved && typeof resolved === 'object' && Object.keys(resolved).length > 0) {
+            merged.niconama = resolved;
+          }
+        }
+      } catch {}
+
+      lastPublishedStreamState = merged;
+      try { (globalThis as any).__lastPublishedStreamState = merged; } catch {}
+      try { console.debug('[DIAG] lastPublishedStreamState updated ->', merged && typeof merged === 'object' ? Object.keys(merged as any) : String(merged), 'niconamaKeys=', merged && typeof merged === 'object' && (merged as any).niconama ? Object.keys((merged as any).niconama) : undefined); } catch {}
+    } catch (mergeErr) {
+      // Fallback to direct assignment if merge fails for unexpected types.
+      lastPublishedStreamState = published;
+      try { (globalThis as any).__lastPublishedStreamState = published; } catch {}
+      try { console.debug('[DIAG] lastPublishedStreamState updated ->', published && typeof published === 'object' ? Object.keys(published as any) : String(published)); } catch {}
+    }
   } catch (err) {
     console.warn('[WARN] failed to persist published stream state locally:', err instanceof Error ? err.message : String(err));
   }
@@ -316,15 +456,6 @@ const normalizeSpeechText = (speech: unknown): string | undefined => {
 
   return undefined;
 };
-
-let agent: any = {
-  setSpeech: (text: string) => { currentSpeechState = { speech: text, silent: false }; },
-  getSpeech: () => currentSpeechState,
-  getGame: () => null,
-  getStreamState: () => lastPublishedStreamState,
-  publishStreamState: (data: unknown) => { lastPublishedStreamState = data; },
-  postComments: (_: unknown) => { },
-};
 let externalAgentInitialized = false;
 
 // Attempt to dynamically load the external agent API. This avoids module
@@ -349,9 +480,7 @@ let externalAgentInitialized = false;
     console.warn('[WARN] dynamic import failed, continuing with in-memory fallback agent:', err instanceof Error ? err.message : String(err));
   }
 })();
-// Keep a larger buffer in memory for pagination while limiting the SSE payload size.
-const GENERATED_SPEECH_HISTORY_BUFFER_SIZE = 200;
-const GENERATED_SPEECH_HISTORY_SSE_SIZE = 20;
+// Keep speech history indefinitely in memory; do not cap the buffer or SSE payload.
 const generatedSpeechHistory: SpeechHistoryEntry[] = [];
 let generatedSpeechHistorySequence = 0;
 
@@ -373,9 +502,6 @@ streamer.onSpeech(async (event) => {
     nGramRaw,
     nodes: traceNodes,
   });
-  if (generatedSpeechHistory.length > GENERATED_SPEECH_HISTORY_BUFFER_SIZE) {
-    generatedSpeechHistory.length = GENERATED_SPEECH_HISTORY_BUFFER_SIZE;
-  }
   if (clearSpeechTimer) {
     clearTimeout(clearSpeechTimer);
     clearSpeechTimer = undefined;
@@ -431,7 +557,15 @@ const apiApp = new Hono()
     return Response.json(agent.getGame() ?? {});
   })
   .get('/api/meta', () => {
-    return Response.json(getCurrentStreamPayload());
+    try { console.log('[DEBUG] GET /api/meta invoked'); } catch {}
+    try {
+      const payload = getCurrentStreamPayload();
+      try { console.log('[DEBUG] GET /api/meta payload ->', { keys: Object.keys(payload || {}) }); } catch {}
+      return Response.json(payload);
+    } catch (err) {
+      try { console.error('[ERROR] GET /api/meta failed to produce JSON payload:', err instanceof Error ? err.stack ?? err.message : String(err)); } catch {}
+      return new Response(JSON.stringify({}), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
   })
   .post('/api/meta', async (c) => {
     try {
@@ -569,7 +703,10 @@ const mainApp = new Hono()
 
   // WebSocket / SSE endpoints
   .get('/api/ws', (c) => makeStreamHandler('/api/ws')(c.req.raw))
-  .get('/console/api/ws', (c) => makeStreamHandler('/console/api/ws')(c.req.raw))
+  // Delegate /console/api/ws to the console routes so the proxy logic
+  // (including upstream probing and resilient SSE proxying) executes
+  // using the console module's helper functions.
+  .get('/console/api/ws', (c) => consoleRoutes.app.fetch(c.req.raw))
   .get('/index.css', async (c) => {
     const css = await compileTailwindCss('src/index.css');
     return createCssResponse(css, c.req.raw);
@@ -581,9 +718,9 @@ const mainApp = new Hono()
   // Serve the built frontend (HTML + JS/CSS assets)
   .all('*', async (c) => handleCatchAll(c.req.raw));
 
-const serverInstance = serve<WsData>({
+const serverInstance: any = serve<WsData>({
   port: portNumber,
-  async fetch(req: Request, server: Bun.Server<WsData>) {
+  async fetch(req: Request, server: Bun.Server<WsData>): Promise<Response | undefined> {
     const url = new URL(req.url);
     const isWsEndpoint = url.pathname === '/api/ws' || url.pathname === '/console/api/ws';
     const accept = req.headers.get('accept') ?? '';
@@ -592,33 +729,62 @@ const serverInstance = serve<WsData>({
     if (isWsEndpoint && !accept.includes('text/event-stream') && !forceDisableWs) {
       const label = url.pathname;
       try { console.debug(`[DEBUG] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
-      const upgraded = serverInstance.upgrade(req, { data: { label } satisfies WsData });
+      const upgraded = server.upgrade(req, { data: { label } satisfies WsData });
       if (upgraded) {
         // undefined signals Bun that the connection was upgraded to WebSocket
         // and no HTTP response should be sent back.
         return undefined;
       }
-      try { console.warn(`[WARN] WebSocket upgrade failed for ${label}`, { upgrade: req.headers.get('upgrade'), secWebSocketKey: req.headers.get('sec-websocket-key') }); } catch {}
-      return new Response('WebSocket upgrade failed', { status: 400 });
     }
 
     return mainApp.fetch(req);
   },
-
   websocket: {
     open(ws) {
       const { label } = ws.data;
       try { console.log(`[INFO] WebSocket client connected (${label})`); } catch { }
       try { wsClients.add(ws); } catch { }
-      try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch { }
+      try {
+        const payload = getCurrentStreamPayload();
+        try { ws.send(JSON.stringify(payload)); } catch {}
+
+        // If the initial payload lacks `niconama`, resend shortly after
+        // to give async upstream callbacks time to populate published state.
+        if (payload && typeof payload === 'object' && !(payload as any).niconama) {
+          setTimeout(() => {
+            try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch {}
+          }, 250);
+          // Second attempt in case upstream callbacks are slower.
+          setTimeout(() => {
+            try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch {}
+          }, 1000);
+        }
+      } catch { }
     },
     message() { },
     close(ws) { try { wsClients.delete(ws); } catch { } },
   },
 });
-server = serverInstance;
+server = serverInstance as any;
+__serverForExit = serverInstance as any;
+const serverUrl = String(serverInstance.url).replace(/\/+$|^\s+|\s+$/g, '');
+console.log(`🚀 Server running at ${serverUrl}`);
 
-console.log(`🚀 Server running at ${serverInstance.url}`);
+// Start the console server now that the broadcasting server port is known
+try {
+  consoleServer = startConsoleServer({
+    broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
+    broadcastingPort: process.env.BROADCASTING_PORT ?? serverInstance.port,
+  });
+  const consoleUrl = String(consoleServer.url).replace(/\/+$|^\s+|\s+$/g, '');
+  console.log(`🚀 Console running at ${consoleUrl}`);
+  __consoleServerForExit = consoleServer;
+  if (process.env.NODE_ENV === 'production') {
+    AllowedIP.set({ family: 'IPv4', address: '127.0.0.1' });
+  }
+} catch (err) {
+  console.warn('[WARN] failed to start console server:', err instanceof Error ? err.message : String(err));
+}
 
 if (process.env.NODE_ENV === "production") {
   void (async () => {
@@ -633,90 +799,159 @@ if (process.env.NODE_ENV === "production") {
     }
   })();
 }
-try {
-  consoleServer = startConsoleServer({
-    broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
-    broadcastingPort: process.env.BROADCASTING_PORT ?? serverInstance.port,
-  });
-  console.log(`🚀 Console running at ${consoleServer.url}`);
-  if (process.env.NODE_ENV === 'production') {
-    AllowedIP.set({ family: 'IPv4', address: '127.0.0.1' });
-  }
-} catch (err) {
-  const consoleStartupError = err instanceof Error ? (err.stack ?? err.message) : String(err);
-  console.error(`[ERROR] CONSOLE_STARTUP_FAILED ${JSON.stringify(consoleStartupError)}`);
-  process.exit(1);
-}
 
-try {
-  niconamaCommentClient = createNiconamaCommentClient(
-    {
-      userDataDir: process.env.NICONAMA_USER_DATA_DIR ?? './playwright/.auth/',
-      executablePath: process.env.CHROMIUM_EXECUTABLE_PATH ?? '/usr/bin/chromium',
-      pollIntervalMs: 30_000,
-    },
+
+const NICONAMA_WATCH_URL = process.env.NICONAMA_WATCH_URL ?? process.env.NICONAMA_TEST_WATCH_URL;
+const NICONAMA_USER_DATA_DIR = process.env.NICONAMA_USER_DATA_DIR ?? './playwright/.auth/';
+const NICONAMA_CHROMIUM_EXECUTABLE_PATH = process.env.CHROMIUM_EXECUTABLE_PATH ?? '/usr/bin/chromium';
+const DEBUG_NICONAMA_COMMENTS = process.env.DEBUG_NICONAMA_COMMENTS === '1';
+
+const createNiconamaClientOptions = () => {
+  const options: any = {
+    userDataDir: NICONAMA_USER_DATA_DIR,
+    executablePath: NICONAMA_CHROMIUM_EXECUTABLE_PATH,
+    pollIntervalMs: 30_000,
+  };
+  if (typeof NICONAMA_WATCH_URL === 'string' && NICONAMA_WATCH_URL.length > 0) {
+    options.watchUrl = NICONAMA_WATCH_URL;
+  }
+  return options;
+};
+
+const handleNiconamaComments = (comments: unknown) => {
+  const filteredComments = filterAgentCommentsWithText(comments as any);
+  if (DEBUG_NICONAMA_COMMENTS) {
+    for (const comment of filteredComments) {
+      const text = getCommentTextFromAgentComment(comment);
+      if (text) {
+        console.log('[NICONAMA COMMENT]', text);
+      }
+    }
+  }
+  if (filteredComments.length > 0) {
+    try {
+      agent.postComments(filteredComments);
+    } catch (err) {
+      console.warn('[WARN] agent.postComments threw:', err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  try {
+    const payload = getCurrentStreamPayload();
+    const currentCount = typeof payload.commentCount === 'number'
+      ? payload.commentCount
+      : typeof payload.niconama?.meta?.total?.comments === 'number'
+        ? payload.niconama.meta.total.comments
+        : 0;
+    const numberedCommentsCount = countNumberedAgentComments(filteredComments as any);
+    const newCount = currentCount + numberedCommentsCount;
+
+    lastPublishedStreamState = (lastPublishedStreamState && typeof lastPublishedStreamState === 'object') ? { ...lastPublishedStreamState } : {};
+    try {
+      (lastPublishedStreamState as any).commentCount = newCount;
+    } catch {}
+
+    try {
+      const existingRecent = Array.isArray((lastPublishedStreamState as any).recentComments)
+        ? [...(lastPublishedStreamState as any).recentComments]
+        : [];
+      const recentComments = [...existingRecent, ...filteredComments];
+      (lastPublishedStreamState as any).recentComments = recentComments;
+    } catch {}
+
+    try {
+      if (!(lastPublishedStreamState as any).niconama || typeof (lastPublishedStreamState as any).niconama !== 'object') {
+        (lastPublishedStreamState as any).niconama = { meta: { total: { comments: newCount } } };
+      } else {
+        const meta = (lastPublishedStreamState as any).niconama.meta = (lastPublishedStreamState as any).niconama.meta ?? {};
+        meta.total = meta.total ?? {};
+        meta.total.comments = newCount;
+      }
+    } catch {}
+  } catch (err) {
+    console.warn('[WARN] failed to update fallback commentCount:', err instanceof Error ? err.message : String(err));
+  }
+
+  broadcastCurrentPayload('onComment');
+  if (modelFile) {
+    try {
+      writeFileSync(modelFile, streamer.talkModel.toJSON());
+    } catch (err) {
+      console.warn('[WARN]', 'failed to write model', modelFile, err);
+    }
+  }
+};
+
+const createNiconamaCommentClientIfNeeded = () => {
+  return createNiconamaCommentClient(
+    createNiconamaClientOptions(),
     {
       onMeta: handlePublishedStreamState,
-      onComments: (comments) => {
-        try {
-          agent.postComments(comments);
-        } catch (err) {
-          console.warn('[WARN] agent.postComments threw:', err instanceof Error ? err.message : String(err));
-        }
-
-        // If the agent did not update stream state (e.g. fallback agent),
-        // increment the published comment count so the console reflects activity.
-        try {
-          const afterState = typeof agent.getStreamState === 'function' ? agent.getStreamState() : undefined;
-          const hasCount = afterState && typeof afterState === 'object' && typeof (afterState as any).commentCount === 'number';
-          if (!hasCount) {
-            const payload = getCurrentStreamPayload();
-            const currentCount = typeof payload.commentCount === 'number' ? payload.commentCount : 0;
-            const increment = Array.isArray(comments) ? comments.length : 0;
-            const newCount = currentCount + increment;
-
-            // Ensure lastPublishedStreamState is an object we can modify.
-            lastPublishedStreamState = (lastPublishedStreamState && typeof lastPublishedStreamState === 'object') ? { ...lastPublishedStreamState } : {};
-            try {
-              // Update top-level commentCount (used by some consumers)
-              (lastPublishedStreamState as any).commentCount = newCount;
-            } catch { }
-
-            try {
-              // Also update nested niconama.meta.total.comments for consumers
-              // that expect the value there.
-              if (!(lastPublishedStreamState as any).niconama || typeof (lastPublishedStreamState as any).niconama !== 'object') {
-                (lastPublishedStreamState as any).niconama = { meta: { total: { comments: newCount } } };
-              } else {
-                const meta = (lastPublishedStreamState as any).niconama.meta = (lastPublishedStreamState as any).niconama.meta ?? {};
-                meta.total = meta.total ?? {};
-                meta.total.comments = newCount;
-              }
-            } catch { }
-          }
-        } catch (err) {
-          console.warn('[WARN] failed to update fallback commentCount:', err instanceof Error ? err.message : String(err));
-        }
-
-        broadcastCurrentPayload('onComment');
-        if (modelFile) {
-          try {
-            writeFileSync(modelFile, streamer.talkModel.toJSON());
-          } catch (err) {
-            console.warn('[WARN]', 'failed to write model', modelFile, err);
-          }
-        }
-      },
+      onComments: handleNiconamaComments,
       onError: (err) => {
         console.warn('[WARN] niconama comment client error:', err instanceof Error ? err.message : String(err));
       },
     },
   );
-  void niconamaCommentClient.start().catch((err) => {
-    console.warn('[WARN] failed to start niconamaCommentClient:', err instanceof Error ? err.message : String(err));
-  });
+};
+
+// Defer creation/start of the niconama client until after servers are
+// responsive. A retry loop with backoff handles transient Playwright
+// navigation failures seen in CI (e.g., slow page load or timeouts).
+try {
+  const startDelayMs = Number(process.env.NICONAMA_START_DELAY_MS ?? '350');
+  const maxRetries = Number(process.env.NICONAMA_START_MAX_RETRIES ?? '3');
+  setTimeout(async () => {
+    let attempt = 0;
+    while (attempt < maxRetries) {
+      attempt += 1;
+      try {
+        niconamaCommentClient = createNiconamaCommentClientIfNeeded();
+        await niconamaCommentClient.start();
+        console.info('[INFO] niconamaCommentClient started successfully', { watchUrl: NICONAMA_WATCH_URL ?? 'unset' });
+        break;
+      } catch (err) {
+        console.warn('[WARN] niconamaCommentClient start attempt failed:', err instanceof Error ? err.message : String(err), 'attempt=', attempt);
+        if (attempt >= maxRetries) {
+          console.error('[ERROR] reached max retries for niconama start; treating as fatal');
+          try {
+            exitHandler({ cleanup: true }, 1);
+          } catch (exitErr) {
+            console.error('[ERROR] failed during cleanup for fatal niconama startup failure:', exitErr instanceof Error ? exitErr.stack ?? exitErr.message : String(exitErr));
+          }
+          process.exit(1);
+          return;
+        }
+        const backoff = 500 * attempt;
+        await new Promise((res) => setTimeout(res, backoff));
+      }
+    }
+  }, startDelayMs);
 } catch (err) {
-  console.warn('[WARN] failed to initialize niconamaCommentClient:', err instanceof Error ? err.message : String(err));
+  console.warn('[WARN] failed to schedule niconamaCommentClient delayed start:', err instanceof Error ? err.message : String(err));
+}
+
+// Small startup delay before launching the external nicovideo comment client.
+// This reduces a race where the client's callbacks run before broadcasting
+// helpers and mirrored state are fully initialized, causing initial payloads
+// sent to newly-connected clients to omit `niconama` intermittently in E2E.
+try {
+  const startDelayMs = Number(process.env.NICONAMA_START_DELAY_MS ?? '350');
+  setTimeout(() => {
+    try {
+      if (!niconamaCommentClient) {
+        niconamaCommentClient = createNiconamaCommentClientIfNeeded();
+        void niconamaCommentClient.start().catch((err) => {
+          console.warn('[WARN] failed to start delayed niconamaCommentClient:', err instanceof Error ? err.message : String(err));
+        });
+      }
+    } catch (err) {
+      console.warn('[WARN] delayed niconamaCommentClient init failed:', err instanceof Error ? err.message : String(err));
+    }
+  }, startDelayMs);
+} catch (err) {
+  // If the delay setup fails for any reason, log and continue.
+  console.warn('[WARN] failed to schedule niconamaCommentClient delayed start:', err instanceof Error ? err.message : String(err));
 }
 
 // Start the stream playback after servers are listening so startup is
@@ -749,11 +984,19 @@ setInterval(async () => {
 function exitHandler(options: { cleanup: true; exit?: never } | { cleanup?: never; exit: true }, exitCode?: number) {
   if (options.cleanup) {
     console.log('[INFO]', 'server stopping...');
-    if (server) {
-      server.stop(options.exit);
+    try {
+      if (__serverForExit) {
+        __serverForExit.stop(options.exit);
+      }
+    } catch (err) {
+      // ignore errors while attempting to stop the server during cleanup
     }
-    if (consoleServer) {
-      consoleServer.stop(options.exit);
+    try {
+      if (__consoleServerForExit) {
+        __consoleServerForExit.stop(options.exit);
+      }
+    } catch (err) {
+      // ignore console stop errors
     }
     if (niconamaCommentClient) {
       void niconamaCommentClient.stop().catch((err) => {

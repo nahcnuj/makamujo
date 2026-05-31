@@ -13,6 +13,15 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
     const total: Record<string, unknown> = {};
     if (typeof data?.total === 'number') {
       total.listeners = data.total;
+    } else if (data?.total && typeof data.total === 'object') {
+      const totalObj = data.total as Record<string, unknown>;
+      if (typeof totalObj.listeners === 'number') total.listeners = totalObj.listeners;
+      if (typeof totalObj.comments === 'number') total.comments = totalObj.comments;
+      if (typeof totalObj.gift === 'number') total.gift = totalObj.gift;
+      if (typeof totalObj.ad === 'number') total.ad = totalObj.ad;
+    }
+    if (typeof data?.comments === 'number') {
+      total.comments = data.comments;
     }
     if (data?.points && typeof (data.points as Record<string, unknown>).gift !== 'undefined') {
       total.gift = (data.points as Record<string, unknown>).gift;
@@ -37,6 +46,14 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
   }
 
   if ('niconama' in rawState && rawState.niconama && typeof rawState.niconama === 'object') {
+    try {
+      const resolved = resolveNiconamaFromState({ niconama: rawState.niconama });
+      if (resolved && typeof resolved === 'object') {
+        return { ...rawState, niconama: resolved };
+      }
+    } catch {
+      // fall through to return rawState unchanged
+    }
     return rawState;
   }
 

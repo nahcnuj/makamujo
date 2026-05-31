@@ -65,15 +65,22 @@ start_cmd() {
     if systemd-run --unit="$unit" --description="makamujo ${name}" --property=WorkingDirectory="$PROJECT_ROOT" $setenv_args -- "$@" >/dev/null 2>&1; then
       # try to record MainPID for compatibility with existing stop logic
       retries=0
+      success=0
       while [ "$retries" -lt 10 ]; do
         pid=$(systemctl show -p MainPID --value "${unit}.service" 2>/dev/null || true)
         if [ -n "$pid" ] && [ "$pid" -ne 0 ] 2>/dev/null; then
           echo "$pid" > "${PID_DIR}/${name}"
+          success=1
           break
         fi
         retries=$((retries + 1))
         sleep 0.2
       done
+      if [ "$success" -ne 1 ]; then
+        echo "[WARN] systemd-run started ${name} but MainPID was unavailable; falling back to nohup" >&2
+        nohup "$@" >"${logfile}" 2>&1 &
+        echo $! > "${PID_DIR}/${name}"
+      fi
     else
       # fallback to nohup if systemd-run failed
       nohup "$@" >"${logfile}" 2>&1 &
