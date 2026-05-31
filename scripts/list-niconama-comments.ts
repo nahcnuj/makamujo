@@ -116,6 +116,48 @@ async function main() {
     }
   }
 
+  // If still empty, attempt extracting rendered page comments via Playwright
+  if (unique.length === 0) {
+    console.log('No comments yet — polling rendered extraction for up to 5 minutes...');
+    const maxMs = Number(process.env.LIST_DURATION_MS ?? 300_000);
+    const intervalMs = Number(process.env.LIST_INTERVAL_MS ?? 5_000);
+    const loopStart = Date.now();
+    while (Date.now() - loopStart < maxMs) {
+      try {
+        const renderedComments = await client.fetchRenderedPageComments(WATCH_URL);
+        if (Array.isArray(renderedComments) && renderedComments.length > 0) {
+          for (const c of renderedComments) collected.push(c);
+        }
+        const embedded = await client.fetchEmbeddedData().catch(() => null);
+        if (embedded) {
+          const { parseAgentCommentsFromResponseBody } = await import('../lib/niconamaCommentClient');
+          const embeddedComments = parseAgentCommentsFromResponseBody(embedded);
+          for (const c of embeddedComments) collected.push(c);
+        }
+      } catch (e) {
+        // ignore per-iteration errors
+      }
+
+      // rebuild unique
+      seen.clear();
+      unique.length = 0;
+      for (const item of collected) {
+        const data = item?.data ?? item;
+        const text = String(data?.comment ?? data?.text ?? '');
+        if (text === '(コメントあり)') continue;
+        const key = `${data?.no ?? 'none'}|${data?.userId ?? 'unknown'}|${text}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(data);
+      }
+
+      if (unique.length > 0) break;
+      // wait before next attempt
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+  }
+
   // Final attempt: if we still only have the synthetic placeholder,
   // run the Playwright capture script briefly and parse logs for
   // comment-like JSON payloads. If we find real bodies, prefer them.
@@ -154,6 +196,10 @@ async function main() {
 
       tryParseFromLog('/tmp/playwright-ws.log');
       tryParseFromLog('/tmp/playwright-net.log');
+      // Also inspect the direct WebSocket raw frame log which the client
+      // appends to during runtime. This can contain NDJSON snippets and
+      // JSON fragments we may have missed earlier.
+      tryParseFromLog('/tmp/niconama-ws-raw.log');
 
       // If we found real comments, add them to collected and rebuild unique
       if (candidateComments.length > 0) {

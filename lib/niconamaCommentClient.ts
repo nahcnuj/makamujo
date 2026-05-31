@@ -13,6 +13,8 @@ import {
   extractEmbeddedDataFromHtml,
   hasCommentArrayStructure,
   parseAgentCommentsFromResponseBody,
+  filterAgentCommentsWithText,
+  getCommentTextFromAgentComment,
 } from './niconamaCommentClient.helpers';
 import {
   addNiconamaPlaywrightInitScript,
@@ -169,9 +171,28 @@ export class NiconamaCommentClient {
       },
     });
 
-    // Start the direct WebSocket connection immediately so we can receive
-    // live frames as soon as possible. Install Playwright watcher in the
-    // background to enrich or fallback when needed.
+    // At startup, try to deliver any existing comments before opening the
+    // live WebSocket so consumers receive pre-existing messages first.
+    try {
+      const initialComments = parseAgentCommentsFromResponseBody(embeddedData, this.#seenCommentIdentifiers);
+      if (initialComments.length > 0) {
+        this.#callbacks.onComments(initialComments);
+      }
+    } catch (err) {
+      console.warn('[WARN] error while checking embedded initial comments', err);
+    }
+    try {
+      const polled = await this.fetchCommentsFromPollingApis(embeddedData).catch(() => [] as any[]);
+      if (Array.isArray(polled) && polled.length > 0) {
+        this.#callbacks.onComments(polled);
+        console.debug('[DEBUG] delivered comments from polling APIs at startup', { count: polled.length, watchUrl });
+      }
+    } catch (e) {
+      // ignore polling errors at startup
+    }
+
+    // Start the direct WebSocket connection to receive live frames and
+    // install Playwright watcher in the background to enrich or fallback.
     await this.setupDirectWebSocketConnection(watchUrl, embeddedData);
     try {
       this.#playwrightWatcherTask = this.setupPlaywrightCommentWatcher(watchUrl)
@@ -184,17 +205,10 @@ export class NiconamaCommentClient {
     } catch (err) {
       console.warn('[WARN] failed to schedule Playwright watcher', err);
     }
-    try {
-      const initialComments = parseAgentCommentsFromResponseBody(embeddedData, this.#seenCommentIdentifiers);
-      if (initialComments.length > 0) {
-        this.#callbacks.onComments(initialComments);
-      }
-    } catch (err) {
-      console.warn('[WARN] error while checking embedded initial comments', err);
-    }
+
     // After watchers are installed, perform an immediate re-scan in the
     // background to catch any comments that arrived between the initial
-    // embedded-data fetch and the watcher installation.
+    // fetch and the watcher installation.
     void this.performImmediateRescan(watchUrl).catch(() => undefined);
     this.#pollTask = this.pollLoop();
     console.info('[DEBUG] NiconamaCommentClient.start finished');
@@ -388,6 +402,40 @@ export class NiconamaCommentClient {
         await context.close().catch(() => undefined);
       }
       rmSync(tempUserDataDir, { recursive: true, force: true });
+    }
+  }
+
+  public async fetchRenderedPageComments(watchUrl?: string): Promise<AgentComment[]> {
+    const targetUrl = watchUrl ?? this.#watchUrl ?? DEFAULT_FALLBACK_WATCH_URL;
+    const tempUserDataDir = mkdtempSync(join(tmpdir(), 'niconama-page-comments-'));
+    let context: any = null;
+    try {
+      context = await this.#launchPersistentContext(tempUserDataDir, {
+        executablePath: this.#executablePath,
+        headless: true,
+        ignoreHTTPSErrors: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        locale: 'ja-JP',
+      });
+
+      const page = await context.newPage();
+      await addNiconamaPlaywrightInitScript(page);
+      const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 20_000 }).catch(() => null);
+      if (!response) return [];
+
+      // Give the page some time to render dynamic comment panels
+      try { await page.waitForLoadState?.('networkidle', { timeout: 10_000 }); } catch {}
+      try { await page.waitForTimeout?.(2_000); } catch {}
+
+      const comments = await extractPageComments(page, this.#seenCommentIdentifiers).catch(() => []);
+      return comments;
+    } catch (err) {
+      this.reportError(err);
+      return [];
+    } finally {
+      if (context) await context.close().catch(() => undefined);
+      try { rmSync(tempUserDataDir, { recursive: true, force: true }); } catch {}
     }
   }
 
@@ -1982,6 +2030,8 @@ export {
   extractEmbeddedDataFromHtml,
   hasCommentArrayStructure,
   parseAgentCommentsFromResponseBody,
+  filterAgentCommentsWithText,
+  getCommentTextFromAgentComment,
   DEFAULT_WATCH_PAGE_BASE_URL,
   DEFAULT_FALLBACK_WATCH_URL,
 };

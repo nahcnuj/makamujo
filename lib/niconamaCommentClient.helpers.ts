@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, statSync } from 'node:fs';
+import type { AgentComment } from 'automated-gameplay-transmitter';
 
 export const ensureUserDataDirExists = (userDataDir: string): void => {
   // keep minimal behavior: ensure directory exists or throw when path exists but not a dir
@@ -277,20 +278,34 @@ export const parseAgentCommentsFromResponseBody = (
     comments.push({ data: commentData });
   }
 
-  // If the embedded metadata reports a positive commentCount but we were
-  // unable to extract any comment bodies from the embedded response, return
-  // a single synthetic comment as a minimal fallback. This makes the client
-  // behaviour observable by callers/tests that expect at least one comment
-  // when the site reports there are comments. The synthetic comment is
-  // intentionally generic and marked anonymous to avoid leaking assumptions
-  // about origin.
-  if (comments.length === 0) {
-    const topCount = (body as any)?.program?.statistics?.commentCount;
-    const siteCount = (body as any)?.site?.program?.statistics?.commentCount;
-    const commentCount = typeof topCount === 'number' ? topCount : typeof siteCount === 'number' ? siteCount : undefined;
-    if (typeof commentCount === 'number' && commentCount > 0) {
-      comments.push({ data: { comment: '(コメントあり)', no: undefined, anonymity: true, hasGift: false, userId: undefined, origin: body } });
-    }
-  }
+  // Do not synthesize placeholder comments here. If no bodies were
+  // extractable, return an empty array so higher-level logic can attempt
+  // polling / Playwright enrichment or simply treat there being no usable
+  // comment bodies. Synthesizing "(コメントあり)" caused downstream
+  // confusion by appearing like a real user comment.
+  // (Intentionally leave comments empty if none found.)
   return comments;
 };
+
+export const getCommentTextFromAgentComment = (comment: unknown): string | null => {
+  if (!comment || typeof comment !== 'object') return null;
+  const value = (comment as any).data ?? comment;
+  const text = typeof value?.comment === 'string'
+    ? value.comment
+    : typeof value?.text === 'string'
+      ? value.text
+      : typeof value?.body === 'string'
+        ? value.body
+        : typeof value?.message === 'string'
+          ? value.message
+          : typeof value?.content === 'string'
+            ? value.content
+            : undefined;
+  if (typeof text !== 'string') return null;
+  const trimmed = text.trim();
+  if (trimmed.length === 0 || trimmed === '(コメントあり)') return null;
+  return trimmed;
+};
+
+export const filterAgentCommentsWithText = (comments: AgentComment[]): AgentComment[] =>
+  comments.filter((comment) => getCommentTextFromAgentComment(comment) !== null);

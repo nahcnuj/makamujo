@@ -23,7 +23,7 @@ import type { SpeechHistoryEntry } from "./routes/api/speech-history";
 import { handleCatchAll } from "./src/frontendServer";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
 import { normalizePublishedStreamState, resolveNiconamaFromState } from "./lib/streamState";
-import { createNiconamaCommentClient, type NiconamaCommentClient } from "./lib/niconamaCommentClient";
+import { createNiconamaCommentClient, filterAgentCommentsWithText, type NiconamaCommentClient } from "./lib/niconamaCommentClient";
 import { installConsoleLogger } from "./lib/consoleLogger";
 
 const console = installConsoleLogger();
@@ -816,10 +816,13 @@ try {
           {
             onMeta: handlePublishedStreamState,
             onComments: (comments) => {
-              try {
-                agent.postComments(comments);
-              } catch (err) {
-                console.warn('[WARN] agent.postComments threw:', err instanceof Error ? err.message : String(err));
+              const filteredComments = filterAgentCommentsWithText(comments);
+              if (filteredComments.length > 0) {
+                try {
+                  agent.postComments(filteredComments);
+                } catch (err) {
+                  console.warn('[WARN] agent.postComments threw:', err instanceof Error ? err.message : String(err));
+                }
               }
 
               try {
@@ -901,10 +904,13 @@ try {
           {
             onMeta: handlePublishedStreamState,
             onComments: (comments) => {
-              try {
-                agent.postComments(comments);
-              } catch (err) {
-                console.warn('[WARN] agent.postComments threw:', err instanceof Error ? err.message : String(err));
+              const filteredComments = filterAgentCommentsWithText(comments);
+              if (filteredComments.length > 0) {
+                try {
+                  agent.postComments(filteredComments);
+                } catch (err) {
+                  console.warn('[WARN] agent.postComments threw:', err instanceof Error ? err.message : String(err));
+                }
               }
 
               try {

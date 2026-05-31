@@ -20,11 +20,12 @@
     "test:integration": "bun test tests/integration/",
     "test:debug-ipc": "bun ./scripts/debug-full-ipc.ts",
     "test:bin": "bash tests/bin/stop.test.sh",
-    "pretest:e2e": "playwright install --with-deps chromium && if [ -n \"${CI:-}\" ]; then bash scripts/setup-e2e-tls.sh; fi",
+    "pretest:e2e": "playwright install --with-deps chromium >/dev/null && if [ -n \"${CI:-}\" ]; then bash scripts/setup-e2e-tls.sh; fi",
     "test:e2e": "CONSOLE_TLS_CERT=var/e2e-tls/fullchain.pem CONSOLE_TLS_KEY=var/e2e-tls/privkey.pem playwright test tests/e2e --timeout=60000",
     "browser": "node --import tsx ./bin/x/browser.ts",
     "generate-ogp": "bun run scripts/generate-ogp.ts",
-    "screenshot:console-agent-status": "bun run scripts/capture-console-agent-status.ts"
+    "screenshot:console-agent-status": "bun run scripts/capture-console-agent-status.ts",
+    "print-comments": "bun run scripts/print-niconama-comment-bodies.ts"
   },
   "dependencies": {
     "@playwright/browser-chromium": "^1.59.1",
