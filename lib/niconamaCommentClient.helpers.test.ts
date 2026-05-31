@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { filterAgentCommentsWithText, getCommentTextFromAgentComment } from './niconamaCommentClient';
+import { countNumberedAgentComments, filterAgentCommentsWithText, formatAgentCommentEntry, getCommentTextFromAgentComment } from './niconamaCommentClient.helpers';
 
 describe('Niconama comment helpers', () => {
   it('extracts trimmed text from AgentComment-like objects', () => {
@@ -27,5 +27,22 @@ describe('Niconama comment helpers', () => {
       'first comment',
       'second comment',
     ]);
+  });
+
+  it('counts only numbered comments', () => {
+    const comments = [
+      { data: { comment: 'hello', no: 1 } },
+      { data: { comment: 'ad message', type: 'ad' } },
+      { data: { comment: 'world', num: 2 } },
+      { data: { comment: 'no number' } },
+    ];
+
+    expect(countNumberedAgentComments(comments as any)).toBe(2);
+  });
+
+  it('formats recent comment entries with numbers when available', () => {
+    expect(formatAgentCommentEntry({ data: { comment: 'hello', no: 123 } })).toBe('#123 hello');
+    expect(formatAgentCommentEntry({ data: { comment: 'world' } })).toBe('world');
+    expect(formatAgentCommentEntry({ data: { comment: '(コメントあり)' } })).toBeNull();
   });
 });

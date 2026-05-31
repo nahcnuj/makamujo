@@ -203,25 +203,6 @@ export class MakaMujo {
     for (const { data } of comments) {
       const commentData = data as CommentData;
       const comment = commentData.comment.normalize('NFC').trim();
-
-      // Filter out common placeholder or non-content comments that sometimes
-      // appear in parsed sources (e.g. "(コメントあり)"). These are not
-      // meaningful viewer input and should not trigger learning or speech.
-      const isPlaceholderComment = (() => {
-        if (comment.length === 0) return true;
-        // Remove surrounding whitespace for simple comparisons
-        const normalizedNoSpace = comment.replace(/\s+/g, '');
-        const placeholders = ['コメントあり', '(コメントあり)', '非表示', '(非表示)'];
-        if (placeholders.includes(normalizedNoSpace)) return true;
-        // Ignore extremely short comments (likely noise or markers)
-        if ([...comment].length <= 1) return true;
-        return false;
-      })();
-
-      if (isPlaceholderComment) {
-        console.debug('[DEBUG]', 'ignored placeholder comment', JSON.stringify(comment));
-        continue;
-      }
       console.debug('[DEBUG]', 'comment', JSON.stringify(data, null, 0));
 
       // Update last comment timestamp for any received comment that counts as activity.

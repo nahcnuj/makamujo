@@ -24,6 +24,7 @@ import { handleCatchAll } from "./src/frontendServer";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
 import { normalizePublishedStreamState, resolveNiconamaFromState } from "./lib/streamState";
 import { createNiconamaCommentClient, filterAgentCommentsWithText, getCommentTextFromAgentComment, type NiconamaCommentClient } from "./lib/niconamaCommentClient";
+import { countNumberedAgentComments, formatAgentCommentEntry } from "./lib/niconamaCommentClient.helpers";
 import { installConsoleLogger } from "./lib/consoleLogger";
 
 const console = installConsoleLogger();
@@ -300,6 +301,7 @@ const getCurrentStreamPayload = () => {
     speechHistory: explicitSpeechHistory.slice(0, GENERATED_SPEECH_HISTORY_SSE_SIZE),
     replyTargetComment,
     commentCount: base.commentCount ?? streamer.streamState?.meta?.total?.comments,
+    recentComments: base.recentComments ?? agentBase.recentComments,
   } as const;
 
   // Expose a local shortcut so other modules (console proxy) can request the
@@ -846,12 +848,20 @@ const handleNiconamaComments = (comments: unknown) => {
       : typeof payload.niconama?.meta?.total?.comments === 'number'
         ? payload.niconama.meta.total.comments
         : 0;
-    const increment = Array.isArray(comments) ? comments.length : 0;
-    const newCount = currentCount + increment;
+    const numberedCommentsCount = countNumberedAgentComments(filteredComments as any);
+    const newCount = currentCount + numberedCommentsCount;
 
     lastPublishedStreamState = (lastPublishedStreamState && typeof lastPublishedStreamState === 'object') ? { ...lastPublishedStreamState } : {};
     try {
       (lastPublishedStreamState as any).commentCount = newCount;
+    } catch {}
+
+    try {
+      const existingRecent = Array.isArray((lastPublishedStreamState as any).recentComments)
+        ? [...(lastPublishedStreamState as any).recentComments]
+        : [];
+      const recentComments = [...existingRecent, ...filteredComments].slice(-20);
+      (lastPublishedStreamState as any).recentComments = recentComments;
     } catch {}
 
     try {
@@ -908,8 +918,14 @@ try {
       } catch (err) {
         console.warn('[WARN] niconamaCommentClient start attempt failed:', err instanceof Error ? err.message : String(err), 'attempt=', attempt);
         if (attempt >= maxRetries) {
-          console.warn('[WARN] reached max retries for niconama start; giving up for now');
-          break;
+          console.error('[ERROR] reached max retries for niconama start; treating as fatal');
+          try {
+            exitHandler({ cleanup: true }, 1);
+          } catch (exitErr) {
+            console.error('[ERROR] failed during cleanup for fatal niconama startup failure:', exitErr instanceof Error ? exitErr.stack ?? exitErr.message : String(exitErr));
+          }
+          process.exit(1);
+          return;
         }
         const backoff = 500 * attempt;
         await new Promise((res) => setTimeout(res, backoff));

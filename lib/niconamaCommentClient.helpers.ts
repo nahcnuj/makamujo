@@ -307,5 +307,26 @@ export const getCommentTextFromAgentComment = (comment: unknown): string | null 
   return trimmed;
 };
 
+export const getAgentCommentNumber = (comment: unknown): number | undefined => {
+  if (!comment || typeof comment !== 'object') return undefined;
+  const data = (comment as any).data;
+  const no = typeof data?.no === 'number'
+    ? data.no
+    : typeof data?.num === 'number'
+      ? data.num
+      : undefined;
+  return typeof no === 'number' && Number.isFinite(no) ? no : undefined;
+};
+
+export const formatAgentCommentEntry = (comment: unknown): string | null => {
+  const text = getCommentTextFromAgentComment(comment);
+  if (!text) return null;
+  const no = getAgentCommentNumber(comment);
+  return typeof no === 'number' ? `#${no} ${text}` : text;
+};
+
 export const filterAgentCommentsWithText = (comments: AgentComment[]): AgentComment[] =>
   comments.filter((comment) => getCommentTextFromAgentComment(comment) !== null);
+
+export const countNumberedAgentComments = (comments: AgentComment[]): number =>
+  comments.filter((comment) => getAgentCommentNumber(comment) !== undefined).length;

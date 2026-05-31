@@ -137,7 +137,7 @@ export function startConsoleServer({
   const loopbackServer = serve({
     port: 0, // OS assigns a random available port
     hostname: '127.0.0.1',
-    fetch: consoleRoutes.app.fetch,
+    fetch: (req: Request) => consoleRoutes.app.fetch(req),
     websocket: consoleRoutes.websocket,
   });
 

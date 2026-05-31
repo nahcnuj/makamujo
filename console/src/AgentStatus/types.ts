@@ -1,4 +1,5 @@
 import type { Child } from "hono/jsx";
+import type { AgentComment } from "automated-gameplay-transmitter";
 
 export type AgentStatusRow = {
   label: string
@@ -63,4 +64,5 @@ export type AgentStateResponse = {
     pickedTopic?: string
   }
   commentCount?: number
+  recentComments?: AgentComment[]
 };

@@ -2,6 +2,7 @@ import type { AgentStateResponse, AgentStatusRow } from "./types";
 import {
   createCurrentGameInfoValueComponent,
   createLiveDeliveryMetricsValueComponent,
+  createRecentCommentsValueComponent,
   createReplyTargetCommentValueComponent,
   createSpeechHistoryDisplayItems,
   formatNGramValue,
@@ -10,7 +11,13 @@ import {
 } from "./agentStatusUtils";
 import { SpeechHistoryList } from "./SpeechHistoryList";
 
-export const createAgentStatusRows = (stateResponse: AgentStateResponse | null): AgentStatusRow[] => {
+export const createAgentStatusRows = (
+  stateResponse: AgentStateResponse | null,
+  options?: {
+    showRecentComments?: boolean;
+    toggleRecentComments?: () => void;
+  },
+): AgentStatusRow[] => {
   const rows: AgentStatusRow[] = [];
 
   const niconamaState = stateResponse?.niconama;
@@ -24,7 +31,16 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
 
   if (niconamaState && Object.keys(niconamaState).length > 0) {
     rows.push(
-      { label: "配信指標", hideLabel: true, valueComponent: createLiveDeliveryMetricsValueComponent(niconamaState, resolvedCommentCount) },
+      {
+        label: "配信指標",
+        hideLabel: true,
+        valueComponent: createLiveDeliveryMetricsValueComponent(
+          niconamaState,
+          resolvedCommentCount,
+          options?.showRecentComments,
+          options?.toggleRecentComments,
+        ),
+      },
     );
   }
 
@@ -53,8 +69,19 @@ export const createAgentStatusRows = (stateResponse: AgentStateResponse | null):
     ? stateResponse.replyTargetComment
     : undefined;
 
+  const recentComments = Array.isArray(stateResponse?.recentComments)
+    ? stateResponse.recentComments.filter((item): item is import("automated-gameplay-transmitter").AgentComment => typeof item === 'object' && item !== null)
+    : [];
+
   const isSpeechSilent = stateResponse?.speech?.silent === true;
   const speechHistoryItems = createSpeechHistoryDisplayItems(stateResponse?.speechHistory);
+  if (recentComments.length > 0 && options?.showRecentComments) {
+    rows.push({
+      label: "最近のコメント",
+      valueComponent: createRecentCommentsValueComponent(recentComments),
+    });
+  }
+
   if (speechHistoryItems.length > 0) {
     rows.push({
       label: "これまでの発話",

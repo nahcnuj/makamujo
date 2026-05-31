@@ -107,7 +107,15 @@ export const AgentStatus = () => {
     ? formatStreamStartTime(agentStateResponse.niconama.meta.start)
     : undefined;
 
-  const agentStatusSections = createAgentStatusSections(agentStateResponse);
+  const [isRecentCommentsOpen, setIsRecentCommentsOpen] = useState(false);
+  const toggleRecentComments = () => {
+    setIsRecentCommentsOpen((current) => !current);
+  };
+
+  const agentStatusSections = createAgentStatusSections(agentStateResponse, {
+    showRecentComments: isRecentCommentsOpen,
+    toggleRecentComments,
+  });
   const sectionMap = agentStatusSections.reduce<Partial<Record<AgentStatusSection["title"], AgentStatusSection>>>(
     (accumulatedSections, section) => {
       accumulatedSections[section.title] = section;

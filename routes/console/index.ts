@@ -236,5 +236,6 @@ export const app = new Hono()
     return createCssResponse(css, c.req.raw);
   })
   .get('/console/frontend.js', async (c) => await serveConsoleAsset(c.req.raw) ?? new Response('Not Found', { status: 404 }))
+  .get('/console', () => serveConsoleAppHtml())
   .get('/console/frontend.css', async (c) => await serveConsoleAsset(c.req.raw) ?? new Response('Not Found', { status: 404 }))
   .get('/console/*', () => serveConsoleAppHtml());

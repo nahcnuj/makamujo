@@ -252,6 +252,59 @@ describe("createAgentStatusRows", () => {
     expect(html).toContain("99");
   });
 
+  it("does not include the recent comments row when the panel is closed", () => {
+    const rows = createAgentStatusRows({
+      recentComments: [
+        { data: { no: 1, comment: "こんにちは" } },
+      ],
+    } as any, { showRecentComments: false, toggleRecentComments: () => {} });
+
+    expect(rows.find((row) => row.label === "最近のコメント")).toBeUndefined();
+  });
+
+  it("includes the recent comments row when the panel is open", () => {
+    const rows = createAgentStatusRows({
+      recentComments: [
+        { data: { no: 1, comment: "こんにちは" } },
+      ],
+    } as any, { showRecentComments: true, toggleRecentComments: () => {} });
+
+    const recentRow = rows.find((row) => row.label === "最近のコメント");
+    expect(recentRow).toBeDefined();
+    const html = renderToString(<>{recentRow!.valueComponent}</>);
+    expect(html).toContain("#1 こんにちは");
+  });
+
+  it("renders comment count as a toggle button when a toggle callback is provided", () => {
+    const rows = createAgentStatusRows(
+      {
+        niconama: { type: "live", meta: { total: { listeners: 3, comments: 99 } } },
+      } as any,
+      { showRecentComments: false, toggleRecentComments: () => {} },
+    );
+
+    const liveRow = rows.find((row) => row.label === "配信指標");
+    expect(liveRow).toBeDefined();
+    const html = renderToString(<>{liveRow!.valueComponent}</>);
+    expect(html).toContain("<button");
+    expect(html).toContain("99");
+  });
+
+  it("renders recent comments when the panel is open", () => {
+    const rows = createAgentStatusRows({
+      recentComments: [
+        { data: { no: 1, comment: "こんにちは" } },
+        { data: { no: 2, comment: "テストコメント" } },
+      ],
+    } as any, { showRecentComments: true, toggleRecentComments: () => {} });
+
+    const recentRow = rows.find((row) => row.label === "最近のコメント");
+    expect(recentRow).toBeDefined();
+    const html = renderToString(<>{recentRow!.valueComponent}</>);
+    expect(html).toContain("#1 こんにちは");
+    expect(html).toContain("#2 テストコメント");
+  });
+
   it("renders game section when currentGame present even if niconama is empty", () => {
     const rows = createAgentStatusRows({
       niconama: {},

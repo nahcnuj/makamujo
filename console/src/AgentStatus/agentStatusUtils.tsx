@@ -132,6 +132,36 @@ export const createReplyTargetCommentValueComponent = (
   );
 };
 
+import { getAgentCommentNumber, getCommentTextFromAgentComment } from "../../../lib/niconamaCommentClient.helpers";
+
+export const createRecentCommentsValueComponent = (
+  recentComments: AgentStateResponse["recentComments"],
+): Child => {
+  if (!Array.isArray(recentComments) || recentComments.length === 0) {
+    return <span>-</span>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {recentComments.map((comment, index) => {
+        const text = getCommentTextFromAgentComment(comment);
+        const number = getAgentCommentNumber(comment);
+        const display = typeof number === 'number'
+          ? `#${number} ${text ?? '-'}`
+          : text ?? '-';
+        return (
+          <p
+            key={`recent-comment-${index}`}
+            className="break-words whitespace-pre-wrap rounded-md border border-emerald-300/30 bg-emerald-950/30 px-3 py-2 text-sm"
+          >
+            {display}
+          </p>
+        );
+      })}
+    </div>
+  );
+};
+
 const formatSpeechHistoryNGramLabel = (nGram: number | undefined): string => {
   if (nGram === undefined || !Number.isFinite(nGram) || nGram < 1) {
     return "-";
@@ -275,11 +305,28 @@ export const createSpeechHistoryValueComponent = (
 export const createLiveDeliveryMetricsValueComponent = (
   niconamaState: AgentStateResponse["niconama"],
   commentCount: AgentStateResponse["commentCount"],
+  isRecentCommentsOpen?: boolean,
+  toggleRecentComments?: (() => void),
 ): Child => {
   const liveMetricItems = [
     { label: "配信状況", value: formatStateLabel(niconamaState?.type) },
     { label: "視聴者数", value: formatMetricValue(niconamaState?.meta?.total?.listeners) },
-    { label: "コメント数", value: formatMetricValue(commentCount) },
+    {
+      label: "コメント数",
+      valueComponent: toggleRecentComments ? (
+        <button
+          type="button"
+          onClick={toggleRecentComments}
+          aria-expanded={isRecentCommentsOpen ? "true" : "false"}
+          className="rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm transition hover:bg-emerald-950/70"
+          title="クリックで最近のコメントを表示/非表示"
+        >
+          {formatMetricValue(commentCount)} {isRecentCommentsOpen ? "▲" : "▼"}
+        </button>
+      ) : (
+        formatMetricValue(commentCount)
+      ),
+    },
     { label: "ギフト", value: formatMetricValue(niconamaState?.meta?.total?.gift) },
     { label: "広告", value: formatMetricValue(niconamaState?.meta?.total?.ad) },
   ];
@@ -297,7 +344,7 @@ export const createLiveDeliveryMetricsValueComponent = (
       ))}
       {liveMetricItems.map((liveMetricItem) => (
         <p key={`value-${liveMetricItem.label}`} className="text-center whitespace-nowrap">
-          {liveMetricItem.value}
+          {liveMetricItem.valueComponent ?? liveMetricItem.value}
         </p>
       ))}
     </div>
