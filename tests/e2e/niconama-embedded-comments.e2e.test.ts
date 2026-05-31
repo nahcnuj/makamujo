@@ -4,8 +4,10 @@ import { rmSync } from "node:fs";
 import { createNiconamaCommentClient } from "../../lib/niconamaCommentClient";
 
 const ACTUAL_PROGRAM_WATCH_URL = process.env.NICONAMA_TEST_WATCH_URL ?? "https://live.nicovideo.jp/watch/user/14171889";
+const ENABLE_LIVE_NICONAMA_TESTS = process.env.NICONAMA_LIVE_TESTS === '1';
 
 test.describe("NiconamaCommentClient E2E (live)", () => {
+  test.skip(!ENABLE_LIVE_NICONAMA_TESTS, "Live NicoNico tests require NICONAMA_LIVE_TESTS=1");
   test.setTimeout(120000);
 
   test("start client and receive at least one comment (mirrors run-niconama-client.ts)", async () => {

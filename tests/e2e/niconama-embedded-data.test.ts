@@ -2,8 +2,10 @@ import { expect, test } from "@playwright/test";
 import { createNiconamaCommentClient, parseAgentCommentsFromResponseBody } from "../../lib/niconamaCommentClient";
 
 const ACTUAL_PROGRAM_WATCH_URL = "https://live.nicovideo.jp/watch/user/14171889";
+const ENABLE_LIVE_NICONAMA_TESTS = process.env.NICONAMA_LIVE_TESTS === '1';
 
 test.describe("NiconamaCommentClient fallback watch page", () => {
+  test.skip(!ENABLE_LIVE_NICONAMA_TESTS, "Live NicoNico tests require NICONAMA_LIVE_TESTS=1");
   test("fetches embedded-data from the actual program watch URL and extracts relive websocket URL and initial comments", async () => {
     const initialComments: any[] = [];
     const client = createNiconamaCommentClient(

@@ -122,10 +122,28 @@ const model = (file => {
   }
 })(modelFile);
 
-// Streamer instance used throughout the server. Use the fallback TTS
-// implementation initially; this may be replaced by an external agent
-// integration later if available.
-const streamer = new MakaMujo(model, new FallbackTTS());
+const openJTalkHtsvoiceFile = process.env.OPEN_JTALK_HTSVOICE_FILE ?? '/usr/share/hts-voice/mei/mei_normal.htsvoice';
+const openJTalkDictionaryDir = process.env.OPEN_JTALK_DICTIONARY_DIR ?? '/var/lib/mecab/dic/open-jtalk';
+const isOpenJTalkConfigured = existsSync(openJTalkHtsvoiceFile) && existsSync(openJTalkDictionaryDir);
+const allowFallbackTts = process.env.MAKAMUJO_ALLOW_FALLBACK_TTS === '1';
+const requireOpenJTalkAssets = process.env.NODE_ENV === 'production' && !allowFallbackTts;
+
+let tts = new FallbackTTS();
+if (isOpenJTalkConfigured) {
+  tts = new TTS({ htsvoiceFile: openJTalkHtsvoiceFile, dictionaryDir: openJTalkDictionaryDir });
+} else {
+  if (requireOpenJTalkAssets) {
+    const message = 'OpenJTalk assets are required in production. Please configure OPEN_JTALK_HTSVOICE_FILE and OPEN_JTALK_DICTIONARY_DIR correctly.';
+    console.error('[FATAL]', message, { htsvoiceFile: openJTalkHtsvoiceFile, dictionaryDir: openJTalkDictionaryDir });
+    process.exit(1);
+  }
+  console.warn('[WARN]', 'OpenJTalk is not configured or the configured assets are missing. Falling back to FallbackTTS.', {
+    htsvoiceFile: openJTalkHtsvoiceFile,
+    dictionaryDir: openJTalkDictionaryDir,
+  });
+}
+
+const streamer = new MakaMujo(model, tts);
 
 // Global stream state and client registries used by SSE/WS endpoints.
 let lastPublishedStreamState: unknown = undefined;

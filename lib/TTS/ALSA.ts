@@ -9,7 +9,7 @@ export const play = async (file: `${string}.wav`) => {
       '-q',
       file,
     ]);
-  } catch {
-    // do nothing
+  } catch (err) {
+    console.warn('[WARN]', 'ALSA playback failed', { file, error: err instanceof Error ? err.message : String(err) });
   }
 };
