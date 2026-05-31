@@ -346,18 +346,28 @@ export const getCommentTextFromAgentComment = (comment: unknown): string | null 
   if (typeof text !== 'string') return null;
   const trimmed = text.trim();
   if (trimmed.length === 0 || trimmed === '(コメントあり)') return null;
-  return trimmed;
+  const no = typeof value?.no === 'number'
+    ? value.no
+    : typeof value?.num === 'number'
+      ? value.num
+      : undefined;
+  return stripCommentNumberPrefix(trimmed, no);
 };
 
 const stripCommentNumberPrefix = (text: string, number: number | undefined): string => {
   if (typeof number !== 'number' || !Number.isFinite(number)) {
     return text;
   }
-  const prefix = `#${number} `;
-  if (text.startsWith(prefix)) {
-    return text.slice(prefix.length).trimStart();
+  const exactPrefix = `#${number}`;
+  const normalized = text.trimStart();
+  if (normalized.startsWith(`${exactPrefix} `) || normalized.startsWith(`${exactPrefix}　`)) {
+    return normalized.slice(exactPrefix.length).trimStart();
   }
-  return text;
+  const zeroPaddedPrefix = new RegExp(`^#0*${number}[ 　]+`);
+  if (zeroPaddedPrefix.test(normalized)) {
+    return normalized.replace(zeroPaddedPrefix, '').trimStart();
+  }
+  return normalized;
 };
 
 export const getAgentCommentNumber = (comment: unknown): number | undefined => {

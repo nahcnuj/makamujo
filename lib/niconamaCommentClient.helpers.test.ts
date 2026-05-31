@@ -46,6 +46,11 @@ describe('Niconama comment helpers', () => {
     expect(formatAgentCommentEntry({ data: { comment: '(コメントあり)' } })).toBeNull();
   });
 
+  it('normalizes comment text with a matching numbered prefix', () => {
+    expect(getCommentTextFromAgentComment({ data: { comment: '#2 こんにちは', no: 2 } })).toBe('こんにちは');
+    expect(formatAgentCommentEntry({ data: { comment: '#2 こんにちは', no: 2 } })).toBe('#2 こんにちは');
+  });
+
   it('does not duplicate comment numbers when text already begins with the same prefix', () => {
     expect(formatAgentCommentEntry({ data: { comment: '#123 hello', no: 123 } })).toBe('#123 hello');
     expect(formatAgentCommentEntry({ data: { comment: '#99 こんにちは', no: 99 } })).toBe('#99 こんにちは');
