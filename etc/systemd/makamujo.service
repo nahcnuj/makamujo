@@ -13,7 +13,7 @@ WorkingDirectory=/opt/makamujo
 User=root
 Environment=PATH=/root/.bun/bin:/usr/local/bin:/usr/bin:/bin
 Environment=NODE_ENV=production
-Environment=DISPLAY=:0
+Environment=DISPLAY=:10
 ExecStart=/opt/makamujo/bin/start-with-xauth.sh
 ExecStop=/opt/makamujo/bin/stop
 StandardOutput=journal

@@ -50,6 +50,7 @@ sudo journalctl -u makamujo.service -f
 ## Notes
 
 - `bin/start` requires an X Window session. The unit is configured to start after `graphical.target` so it will wait for the graphical session.
+- This service assumes the persistent Xorg display is on `:10` to match `xorg10.service` and `x11vnc-10.service`.
 - If `bin/start` must run as a non-root user and access the X display, edit the service and add `User=yourusername` and suitable `Environment=` settings (for example `DISPLAY` and `XAUTHORITY`).
 - Adjust `WorkingDirectory` and `ExecStart` paths if you install the application to a different location.
 
