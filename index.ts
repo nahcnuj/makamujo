@@ -122,7 +122,7 @@ const model = (file => {
   }
 })(modelFile);
 
-const openJTalkHtsvoiceFile = process.env.OPEN_JTALK_HTSVOICE_FILE ?? '/usr/share/hts-voice/mei/mei_normal.htsvoice';
+const openJTalkHtsvoiceFile = process.env.OPEN_JTALK_HTSVOICE_FILE ?? '/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice';
 const openJTalkDictionaryDir = process.env.OPEN_JTALK_DICTIONARY_DIR ?? '/var/lib/mecab/dic/open-jtalk';
 const isOpenJTalkConfigured = existsSync(openJTalkHtsvoiceFile) && existsSync(openJTalkDictionaryDir);
 const allowFallbackTts = process.env.MAKAMUJO_ALLOW_FALLBACK_TTS === '1';
