@@ -1218,11 +1218,11 @@ export class NiconamaCommentClient {
             console.debug('[DEBUG] Playwright request', url);
           }
         });
-        // Per-response handlers were removed because Playwright `Response`
-        // objects can become detached during context teardown and accessing
-        // them (e.g. `response.text()`) sometimes throws "not bound in the
-        // connection" errors. We capture comment payloads via websocket
-        // frames and by polling `page.content()` instead.
+        // Playwright `Response` objects can become detached during teardown, so
+        // per-response processing is best-effort and fully guarded.
+        // We primarily capture comment payloads via websocket frames and by
+        // polling `page.content()`, and additionally parse some responses here.
+        // (All errors are swallowed to avoid "not bound in the connection".)
         // Route interception is intentionally omitted here in the watcher because
         // the page may be closed by remote content while Playwright is shutting
         // down; route teardown can trigger CDP errors during cleanup.
@@ -1522,12 +1522,6 @@ export class NiconamaCommentClient {
           try {
             if (page && typeof page.removeAllListeners === 'function') {
               try { page.removeAllListeners(); } catch {}
-            } else if (page && typeof page.off === 'function') {
-              try { page.off('close', () => {}); } catch {}
-              try { page.off('crash', () => {}); } catch {}
-              try { page.off('request', () => {}); } catch {}
-              try { page.off('requestfailed', () => {}); } catch {}
-              try { page.off('websocket', () => {}); } catch {}
             }
             try { await page.close(); } catch {}
           } catch {}
