@@ -16,7 +16,9 @@ import { parseArgs } from "node:util";
 import { startConsoleServer } from "./console/index";
 import * as consoleRoutes from './routes/console/index';
 import { getResilientProxyControllers } from './lib/console-proxy';
-import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
+import { FallbackTTS, MakaMujo, MarkovChainModel } from "./lib/server";
+import OpenJTalkTTS from "./lib/TTS";
+import type { TTS } from "./lib/Agent";
 import { AllowedIP } from "./lib/allowedIP";
 import * as speechHistoryRoute from "./routes/api/speech-history";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
@@ -122,26 +124,36 @@ const model = (file => {
   }
 })(modelFile);
 
-const openJTalkHtsvoiceFile = process.env.OPEN_JTALK_HTSVOICE_FILE ?? '/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice';
-const openJTalkDictionaryDir = process.env.OPEN_JTALK_DICTIONARY_DIR ?? '/var/lib/mecab/dic/open-jtalk';
-const isOpenJTalkConfigured = existsSync(openJTalkHtsvoiceFile) && existsSync(openJTalkDictionaryDir);
+const DEFAULT_OPEN_JTALK_DICTIONARY_DIR = '/var/lib/mecab/dic/open-jtalk/naist-jdic';
+const openJTalkHtsvoiceFile = '/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice';
+const openJTalkDictionaryDir = existsSync(DEFAULT_OPEN_JTALK_DICTIONARY_DIR)
+  ? DEFAULT_OPEN_JTALK_DICTIONARY_DIR
+  : undefined;
+const isOpenJTalkConfigured = openJTalkHtsvoiceFile !== undefined && openJTalkDictionaryDir !== undefined;
 const allowFallbackTts = process.env.MAKAMUJO_ALLOW_FALLBACK_TTS === '1';
 const requireOpenJTalkAssets = process.env.NODE_ENV === 'production' && !allowFallbackTts;
 
-let tts = new FallbackTTS();
+let tts: TTS = new FallbackTTS();
 if (isOpenJTalkConfigured) {
-  tts = new TTS({ htsvoiceFile: openJTalkHtsvoiceFile, dictionaryDir: openJTalkDictionaryDir });
+  tts = new OpenJTalkTTS({ htsvoiceFile: openJTalkHtsvoiceFile, dictionaryDir: openJTalkDictionaryDir });
 } else {
+  const commonConfig = {
+    resolvedHtsvoiceFile: openJTalkHtsvoiceFile,
+    resolvedDictionaryDir: openJTalkDictionaryDir,
+  };
   if (requireOpenJTalkAssets) {
-    const message = 'OpenJTalk assets are required in production. Please configure OPEN_JTALK_HTSVOICE_FILE and OPEN_JTALK_DICTIONARY_DIR correctly.';
-    console.error('[FATAL]', message, { htsvoiceFile: openJTalkHtsvoiceFile, dictionaryDir: openJTalkDictionaryDir });
+    const message = 'OpenJTalk assets are required in production. Please install the fixed OpenJTalk HTS voice and dictionary files.';
+    console.error('[FATAL]', message, commonConfig);
     process.exit(1);
   }
-  console.warn('[WARN]', 'OpenJTalk is not configured or the configured assets are missing. Falling back to FallbackTTS.', {
-    htsvoiceFile: openJTalkHtsvoiceFile,
-    dictionaryDir: openJTalkDictionaryDir,
-  });
+  console.warn('[WARN]', 'OpenJTalk is not configured or the configured assets are missing. Falling back to FallbackTTS.', commonConfig);
 }
+console.info('[INFO]', 'selected TTS backend', {
+  backend: isOpenJTalkConfigured ? 'OpenJTalk' : 'FallbackTTS',
+  htsvoiceFile: openJTalkHtsvoiceFile,
+  dictionaryDir: openJTalkDictionaryDir,
+  allowFallbackTts,
+});
 
 const streamer = new MakaMujo(model, tts);
 
