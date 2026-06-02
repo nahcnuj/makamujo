@@ -26,6 +26,7 @@ import { normalizePublishedStreamState, resolveNiconamaFromState } from "./lib/s
 import { createNiconamaCommentClient, filterAgentCommentsWithText, getCommentTextFromAgentComment, type NiconamaCommentClient } from "./lib/niconamaCommentClient";
 import { countNumberedAgentComments, formatAgentCommentEntry } from "./lib/niconamaCommentClient.helpers";
 import { installConsoleLogger } from "./lib/consoleLogger";
+import { resolveOpenJTalkAssets } from "./lib/TTS/openJTalkAssets";
 
 const console = installConsoleLogger();
 let server: Bun.Server<unknown> | null = null;
@@ -122,9 +123,16 @@ const model = (file => {
   }
 })(modelFile);
 
-const openJTalkHtsvoiceFile = process.env.OPEN_JTALK_HTSVOICE_FILE ?? '/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice';
-const openJTalkDictionaryDir = process.env.OPEN_JTALK_DICTIONARY_DIR ?? '/var/lib/mecab/dic/open-jtalk';
-const isOpenJTalkConfigured = existsSync(openJTalkHtsvoiceFile) && existsSync(openJTalkDictionaryDir);
+const {
+  htsvoiceFile: openJTalkHtsvoiceFile,
+  dictionaryDir: openJTalkDictionaryDir,
+  isConfigured: isOpenJTalkConfigured,
+  checkedHtsvoiceFiles,
+  checkedDictionaryDirs,
+} = resolveOpenJTalkAssets({
+  htsvoiceFile: process.env.OPEN_JTALK_HTSVOICE_FILE,
+  dictionaryDir: process.env.OPEN_JTALK_DICTIONARY_DIR,
+});
 const allowFallbackTts = process.env.MAKAMUJO_ALLOW_FALLBACK_TTS === '1';
 const requireOpenJTalkAssets = process.env.NODE_ENV === 'production' && !allowFallbackTts;
 
@@ -134,12 +142,19 @@ if (isOpenJTalkConfigured) {
 } else {
   if (requireOpenJTalkAssets) {
     const message = 'OpenJTalk assets are required in production. Please configure OPEN_JTALK_HTSVOICE_FILE and OPEN_JTALK_DICTIONARY_DIR correctly.';
-    console.error('[FATAL]', message, { htsvoiceFile: openJTalkHtsvoiceFile, dictionaryDir: openJTalkDictionaryDir });
+    console.error('[FATAL]', message, {
+      htsvoiceFile: openJTalkHtsvoiceFile,
+      dictionaryDir: openJTalkDictionaryDir,
+      checkedHtsvoiceFiles,
+      checkedDictionaryDirs,
+    });
     process.exit(1);
   }
   console.warn('[WARN]', 'OpenJTalk is not configured or the configured assets are missing. Falling back to FallbackTTS.', {
     htsvoiceFile: openJTalkHtsvoiceFile,
     dictionaryDir: openJTalkDictionaryDir,
+    checkedHtsvoiceFiles,
+    checkedDictionaryDirs,
   });
 }
 
