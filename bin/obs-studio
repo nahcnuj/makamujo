@@ -5,13 +5,29 @@ set -eu
 SCRIPT_PATH=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_PATH/.." && pwd)
 
-mkdir -p "$REPO_ROOT/.cache"
+# OBS config and cache directories
+OBS_CONFIG_DIR="$REPO_ROOT/obs-studio"
+OBS_CACHE_DIR="$REPO_ROOT/.cache"
+
+if [ ! -d "$OBS_CONFIG_DIR" ]; then
+  echo "OBS config directory not found: $OBS_CONFIG_DIR" >&2
+  exit 1
+fi
+
+if [ ! -f "$OBS_CONFIG_DIR/basic/profiles/Makamujo/basic.ini" ]; then
+  echo "OBS basic.ini not found: $OBS_CONFIG_DIR/basic/profiles/Makamujo/basic.ini" >&2
+  exit 1
+fi
+
+mkdir -p "$OBS_CACHE_DIR"
 
 flatpak run -vv \
     --share=network \
     --filesystem="$REPO_ROOT" \
+    --filesystem="$OBS_CONFIG_DIR" \
+    --filesystem="$OBS_CACHE_DIR" \
     --env=XDG_CONFIG_HOME="$REPO_ROOT" \
     --env=XDG_DATA_HOME="$REPO_ROOT" \
-    --env=XDG_CACHE_HOME="$REPO_ROOT/.cache" \
+    --env=XDG_CACHE_HOME="$OBS_CACHE_DIR" \
     com.obsproject.Studio \
     "$@"

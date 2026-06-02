@@ -9,6 +9,7 @@ Do not modify `.github/copilot-instructions.md`; keep that reference file unchan
 - `bun run test`
 - `bun run test:integration`
 - `bun run test:e2e`
+- If a pre-push hook runs and fails, inspect the hook execution log to understand the failure.
 
 > Note: This repository does not currently define a `test:unit` npm script in `package.json`.
 > The CI uses `bun run test` as the unit test suite.

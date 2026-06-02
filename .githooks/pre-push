@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Pre-commit hook for makamujo
-# Runs the required repository checks before allowing a commit.
+# Pre-push hook for makamujo
+# Runs the required repository checks before allowing a push.
 
 cd "$(git rev-parse --show-toplevel)"
 
-echo "Running pre-commit checks..."
+echo "Running pre-push checks..."
 
-STDERR_LOG="$(mktemp -t pre-commit-stderr.XXXXXX)"
+STDERR_LOG="$(mktemp -t pre-push-stderr.XXXXXX)"
 
 CHECKS_PASSED=0
 cleanup() {
@@ -23,7 +23,7 @@ run_and_log_stderr() {
   if "$@" 2>>"$STDERR_LOG"; then
     return 0
   else
-    echo "Pre-commit check failed: $*" >&2
+    echo "Pre-push check failed: $*" >&2
     echo "Read the stderr log file to identify issue(s): $STDERR_LOG" >&2
     exit 1
   fi
@@ -42,4 +42,4 @@ run_and_log_stderr bun run test:e2e
 
 CHECKS_PASSED=1
 SUCCESS=1
-echo "Pre-commit checks passed."
+echo "Pre-push checks passed."

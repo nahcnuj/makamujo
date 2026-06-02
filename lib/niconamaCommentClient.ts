@@ -1218,32 +1218,11 @@ export class NiconamaCommentClient {
             console.debug('[DEBUG] Playwright request', url);
           }
         });
-        pageRef.on('response', (response: any) => {
-          void (async () => {
-            try {
-              if (pageRef.isClosed?.()) return;
-              const url = typeof response.url === 'function' ? response.url() : String(response.url);
-              const headers = typeof response.headers === 'function' ? response.headers() : response.headers;
-              const contentType = headers && typeof headers === 'object' ? String(headers['content-type'] || headers['Content-Type'] || '') : '';
-              if (/comment|wsapi|watch|json|data/i.test(url) || /json|javascript|text/.test(contentType)) {
-                console.debug('[DEBUG] Playwright response', { url, contentType });
-              }
-              if (!contentType || !/json|javascript|text/.test(contentType)) {
-                return;
-              }
-              const text = await response.text();
-              if (!text || typeof text !== 'string') return;
-              const parsed = tryParseJson(text);
-              if (!parsed) return;
-              const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
-              if (comments.length === 0) return;
-              this.#callbacks.onComments(comments);
-              console.debug('[DEBUG] Playwright response comment payload', { url, count: comments.length });
-            } catch {
-              // ignore detached or invalid response objects
-            }
-          })();
-        });
+        // Playwright `Response` objects can become detached during teardown, so
+        // per-response processing is best-effort and fully guarded.
+        // We primarily capture comment payloads via websocket frames and by
+        // polling `page.content()`, and additionally parse some responses here.
+        // (All errors are swallowed to avoid "not bound in the connection".)
         // Route interception is intentionally omitted here in the watcher because
         // the page may be closed by remote content while Playwright is shutting
         // down; route teardown can trigger CDP errors during cleanup.
@@ -1251,6 +1230,53 @@ export class NiconamaCommentClient {
           const url = request.url();
           if (/comment|wsapi|watch|json|data/i.test(url)) {
             console.debug('[DEBUG] Playwright request failed', url, request.failure?.()?.errorText);
+          }
+        });
+        // Best-effort per-response processing: attach a response listener
+        // but guard all async reads to avoid Playwright "not bound in the
+        // connection" errors during teardown. We swallow all errors and
+        // only attempt lightweight, best-effort parsing of JSON/html bodies.
+        pageRef.on('response', (response: any) => {
+          try {
+            const tryProcess = async () => {
+              try {
+                if (pageRef.isClosed?.()) return;
+                if (!response || typeof response.text !== 'function') return;
+                // Quick header/url heuristic to avoid reading large irrelevant bodies
+                let ct = '';
+                try { ct = typeof response.headers === 'function' ? (response.headers()['content-type'] || '') : ''; } catch {}
+                const url = (typeof response.url === 'function') ? response.url() : '';
+                if (!/json|html|javascript|text/i.test(ct) && !/comment|wsapi|watch|json|data/i.test(url)) {
+                  return;
+                }
+                const bodyText = await response.text().catch(() => null);
+                if (!bodyText) return;
+                const parsed = tryParseJson(bodyText);
+                if (parsed) {
+                  const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
+                  if (comments.length > 0) {
+                    this.#callbacks.onComments(comments);
+                    console.debug('[DEBUG] Playwright response comment payload', { url, count: comments.length });
+                    return;
+                  }
+                }
+                try {
+                  const extracted = extractEmbeddedDataFromHtml(bodyText);
+                  if (extracted) {
+                    const comments2 = parseAgentCommentsFromResponseBody(extracted, this.#seenCommentIdentifiers);
+                    if (comments2.length > 0) {
+                      this.#callbacks.onComments(comments2);
+                      console.debug('[DEBUG] Playwright response embedded-data comment payload', { url, count: comments2.length });
+                    }
+                  }
+                } catch {}
+              } catch (err) {
+                console.debug('[DEBUG] Playwright response processing failed', err);
+              }
+            };
+            void tryProcess();
+          } catch (err) {
+            // swallow
           }
         });
         pageRef.on('websocket', (socket: any) => {
@@ -1479,19 +1505,23 @@ export class NiconamaCommentClient {
   private async clearPlaywrightCommentWatcher(): Promise<void> {
     this.clearPlaywrightPagePolling();
     if (!this.#playwrightCommentContext) return;
-
     try {
-      const pages = typeof this.#playwrightCommentContext.pages === 'function'
-        ? this.#playwrightCommentContext.pages()
-        : [];
-      for (const page of pages) {
-        try {
-          await page.close();
-        } catch {
-          // ignore page close failures
+      try {
+        const pages = typeof this.#playwrightCommentContext.pages === 'function'
+          ? this.#playwrightCommentContext.pages()
+          : [];
+        for (const page of pages) {
+          try {
+            if (page && typeof page.removeAllListeners === 'function') {
+              try { page.removeAllListeners(); } catch {}
+            }
+            try { await page.close(); } catch {}
+          } catch {}
         }
+      } catch {}
+      if (typeof this.#playwrightCommentContext.close === 'function') {
+        await this.#playwrightCommentContext.close();
       }
-      await this.#playwrightCommentContext.close();
     } catch (err) {
       console.warn('[WARN] failed to close Playwright comment watcher', err);
     }
