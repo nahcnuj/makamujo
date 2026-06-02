@@ -1232,59 +1232,51 @@ export class NiconamaCommentClient {
             console.debug('[DEBUG] Playwright request failed', url, request.failure?.()?.errorText);
           }
         });
-        // Install a guarded per-response listener. Reading Playwright
-        // Response objects can throw if they become detached during
-        // context/page teardown; therefore all access here is wrapped
-        // in try/catch and the async body-read is isolated so errors
-        // don't propagate to the caller or crash the process.
+        // Best-effort per-response processing: attach a response listener
+        // but guard all async reads to avoid Playwright "not bound in the
+        // connection" errors during teardown. We swallow all errors and
+        // only attempt lightweight, best-effort parsing of JSON/html bodies.
         pageRef.on('response', (response: any) => {
           try {
-            const safeUrl = (typeof response.url === 'function') ? String(response.url()) : String(response?.url);
-            if (!/comment|wsapi|watch|json|data|playwright/.test(safeUrl) && !/application\/(json|javascript)/i.test(String(response.headers?.()['content-type'] ?? ''))) {
-              return;
-            }
-            (async () => {
+            const tryProcess = async () => {
               try {
+                if (pageRef.isClosed?.()) return;
                 if (!response || typeof response.text !== 'function') return;
-                const body = await response.text().catch(() => null);
-                if (!body) return;
-                // Try to parse JSON payloads first
-                const parsed = tryParseJson(body) ?? undefined;
+                // Quick header/url heuristic to avoid reading large irrelevant bodies
+                let ct = '';
+                try { ct = typeof response.headers === 'function' ? (response.headers()['content-type'] || '') : ''; } catch {}
+                const url = (typeof response.url === 'function') ? response.url() : '';
+                if (!/json|html|javascript|text/i.test(ct) && !/comment|wsapi|watch|json|data/i.test(url)) {
+                  return;
+                }
+                const bodyText = await response.text().catch(() => null);
+                if (!bodyText) return;
+                const parsed = tryParseJson(bodyText);
                 if (parsed) {
-                  try {
-                    const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
-                    if (Array.isArray(comments) && comments.length > 0) {
-                      this.#callbacks.onComments(comments);
-                      console.debug('[DEBUG] Playwright response comment payload', { url: safeUrl, count: comments.length });
-                    }
+                  const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
+                  if (comments.length > 0) {
+                    this.#callbacks.onComments(comments);
+                    console.debug('[DEBUG] Playwright response comment payload', { url, count: comments.length });
                     return;
-                  } catch (e) {
-                    // ignore parse errors
                   }
                 }
-
-                // As a last resort, treat the body as HTML and try to extract
-                // embedded comments from it.
                 try {
-                  const extracted = extractEmbeddedDataFromHtml(body);
+                  const extracted = extractEmbeddedDataFromHtml(bodyText);
                   if (extracted) {
                     const comments2 = parseAgentCommentsFromResponseBody(extracted, this.#seenCommentIdentifiers);
-                    if (Array.isArray(comments2) && comments2.length > 0) {
+                    if (comments2.length > 0) {
                       this.#callbacks.onComments(comments2);
-                      console.debug('[DEBUG] Playwright response embedded-data comments', { url: safeUrl, count: comments2.length });
+                      console.debug('[DEBUG] Playwright response embedded-data comment payload', { url, count: comments2.length });
                     }
                   }
-                } catch (e) {
-                  // ignore
-                }
-              } catch (e) {
-                // swallow any errors reading/parsing response bodies to avoid
-                // crashing when Playwright objects detach during teardown.
-                console.debug('[DEBUG] ignored Playwright response processing error', e && (e as any).message ? (e as any).message : String(e));
+                } catch {}
+              } catch (err) {
+                console.debug('[DEBUG] Playwright response processing failed', err);
               }
-            })();
+            };
+            void tryProcess();
           } catch (err) {
-            // ignore any synchronous errors
+            // swallow
           }
         });
         pageRef.on('websocket', (socket: any) => {
