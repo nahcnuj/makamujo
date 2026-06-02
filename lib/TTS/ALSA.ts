@@ -11,5 +11,6 @@ export const play = async (file: `${string}.wav`) => {
     ]);
   } catch (err) {
     console.warn('[WARN]', 'ALSA playback failed', { file, error: err instanceof Error ? err.message : String(err) });
+    throw err;
   }
 };

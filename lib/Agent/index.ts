@@ -156,6 +156,7 @@ export class MakaMujo {
       const trimmedText = event.text.trim();
       if (trimmedText.length > 0) {
         const ttsTask = this.#tts.speech(trimmedText, { additionalHalfTone: 3, speakingRate: 1.2 }).catch((err) => {
+          console.error('[ERROR]', 'TTS playback failed', err instanceof Error ? err.message : String(err));
           for (const h of this.#ttsErrorHandlers) {
             try { void h(trimmedText, err); } catch (_) { /* ignore handler errors */ }
           }
