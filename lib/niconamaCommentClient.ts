@@ -1218,32 +1218,11 @@ export class NiconamaCommentClient {
             console.debug('[DEBUG] Playwright request', url);
           }
         });
-        pageRef.on('response', (response: any) => {
-          void (async () => {
-            try {
-              if (pageRef.isClosed?.()) return;
-              const url = typeof response.url === 'function' ? response.url() : String(response.url);
-              const headers = typeof response.headers === 'function' ? response.headers() : response.headers;
-              const contentType = headers && typeof headers === 'object' ? String(headers['content-type'] || headers['Content-Type'] || '') : '';
-              if (/comment|wsapi|watch|json|data/i.test(url) || /json|javascript|text/.test(contentType)) {
-                console.debug('[DEBUG] Playwright response', { url, contentType });
-              }
-              if (!contentType || !/json|javascript|text/.test(contentType)) {
-                return;
-              }
-              const text = await response.text();
-              if (!text || typeof text !== 'string') return;
-              const parsed = tryParseJson(text);
-              if (!parsed) return;
-              const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
-              if (comments.length === 0) return;
-              this.#callbacks.onComments(comments);
-              console.debug('[DEBUG] Playwright response comment payload', { url, count: comments.length });
-            } catch {
-              // ignore detached or invalid response objects
-            }
-          })();
-        });
+        // Per-response handlers were removed because Playwright `Response`
+        // objects can become detached during context teardown and accessing
+        // them (e.g. `response.text()`) sometimes throws "not bound in the
+        // connection" errors. We capture comment payloads via websocket
+        // frames and by polling `page.content()` instead.
         // Route interception is intentionally omitted here in the watcher because
         // the page may be closed by remote content while Playwright is shutting
         // down; route teardown can trigger CDP errors during cleanup.
@@ -1479,19 +1458,29 @@ export class NiconamaCommentClient {
   private async clearPlaywrightCommentWatcher(): Promise<void> {
     this.clearPlaywrightPagePolling();
     if (!this.#playwrightCommentContext) return;
-
     try {
-      const pages = typeof this.#playwrightCommentContext.pages === 'function'
-        ? this.#playwrightCommentContext.pages()
-        : [];
-      for (const page of pages) {
-        try {
-          await page.close();
-        } catch {
-          // ignore page close failures
+      try {
+        const pages = typeof this.#playwrightCommentContext.pages === 'function'
+          ? this.#playwrightCommentContext.pages()
+          : [];
+        for (const page of pages) {
+          try {
+            if (page && typeof page.removeAllListeners === 'function') {
+              try { page.removeAllListeners(); } catch {}
+            } else if (page && typeof page.off === 'function') {
+              try { page.off('close', () => {}); } catch {}
+              try { page.off('crash', () => {}); } catch {}
+              try { page.off('request', () => {}); } catch {}
+              try { page.off('requestfailed', () => {}); } catch {}
+              try { page.off('websocket', () => {}); } catch {}
+            }
+            try { await page.close(); } catch {}
+          } catch {}
         }
+      } catch {}
+      if (typeof this.#playwrightCommentContext.close === 'function') {
+        await this.#playwrightCommentContext.close();
       }
-      await this.#playwrightCommentContext.close();
     } catch (err) {
       console.warn('[WARN] failed to close Playwright comment watcher', err);
     }
