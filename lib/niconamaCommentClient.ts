@@ -1232,53 +1232,6 @@ export class NiconamaCommentClient {
             console.debug('[DEBUG] Playwright request failed', url, request.failure?.()?.errorText);
           }
         });
-        // Best-effort per-response processing: attach a response listener
-        // but guard all async reads to avoid Playwright "not bound in the
-        // connection" errors during teardown. We swallow all errors and
-        // only attempt lightweight, best-effort parsing of JSON/html bodies.
-        pageRef.on('response', (response: any) => {
-          try {
-            const tryProcess = async () => {
-              try {
-                if (pageRef.isClosed?.()) return;
-                if (!response || typeof response.text !== 'function') return;
-                // Quick header/url heuristic to avoid reading large irrelevant bodies
-                let ct = '';
-                try { ct = typeof response.headers === 'function' ? (response.headers()['content-type'] || '') : ''; } catch {}
-                const url = (typeof response.url === 'function') ? response.url() : '';
-                if (!/json|html|javascript|text/i.test(ct) && !/comment|wsapi|watch|json|data/i.test(url)) {
-                  return;
-                }
-                const bodyText = await response.text().catch(() => null);
-                if (!bodyText) return;
-                const parsed = tryParseJson(bodyText);
-                if (parsed) {
-                  const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
-                  if (comments.length > 0) {
-                    this.#callbacks.onComments(comments);
-                    console.debug('[DEBUG] Playwright response comment payload', { url, count: comments.length });
-                    return;
-                  }
-                }
-                try {
-                  const extracted = extractEmbeddedDataFromHtml(bodyText);
-                  if (extracted) {
-                    const comments2 = parseAgentCommentsFromResponseBody(extracted, this.#seenCommentIdentifiers);
-                    if (comments2.length > 0) {
-                      this.#callbacks.onComments(comments2);
-                      console.debug('[DEBUG] Playwright response embedded-data comment payload', { url, count: comments2.length });
-                    }
-                  }
-                } catch {}
-              } catch (err) {
-                console.debug('[DEBUG] Playwright response processing failed', err);
-              }
-            };
-            void tryProcess();
-          } catch (err) {
-            // swallow
-          }
-        });
         pageRef.on('websocket', (socket: any) => {
           const wsUrl = socket.url();
           console.debug('[DEBUG] Playwright websocket connected', wsUrl);
