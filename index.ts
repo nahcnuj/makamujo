@@ -125,31 +125,37 @@ const model = (file => {
 })(modelFile);
 
 const DEFAULT_OPEN_JTALK_DICTIONARY_DIR = '/var/lib/mecab/dic/open-jtalk/naist-jdic';
-const openJTalkHtsvoiceFile = '/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice';
+const DEFAULT_OPEN_JTALK_HTSVOICE_FILE = '/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice';
 const openJTalkDictionaryDir = existsSync(DEFAULT_OPEN_JTALK_DICTIONARY_DIR)
   ? DEFAULT_OPEN_JTALK_DICTIONARY_DIR
   : undefined;
-const isOpenJTalkConfigured = openJTalkHtsvoiceFile !== undefined && openJTalkDictionaryDir !== undefined;
+const openJTalkHtsvoiceFile = existsSync(DEFAULT_OPEN_JTALK_HTSVOICE_FILE)
+  ? DEFAULT_OPEN_JTALK_HTSVOICE_FILE
+  : undefined;
 const allowFallbackTts = process.env.MAKAMUJO_ALLOW_FALLBACK_TTS === '1';
 const requireOpenJTalkAssets = process.env.NODE_ENV === 'production' && !allowFallbackTts;
 
 let tts: TTS = new FallbackTTS();
-if (isOpenJTalkConfigured) {
+if (openJTalkDictionaryDir && openJTalkHtsvoiceFile) {
   tts = new OpenJTalkTTS({ htsvoiceFile: openJTalkHtsvoiceFile, dictionaryDir: openJTalkDictionaryDir });
 } else {
   const commonConfig = {
-    resolvedHtsvoiceFile: openJTalkHtsvoiceFile,
-    resolvedDictionaryDir: openJTalkDictionaryDir,
+    expectedDictionaryDir: DEFAULT_OPEN_JTALK_DICTIONARY_DIR,
+    dictionaryDirExists: openJTalkDictionaryDir !== undefined,
+    expectedHtsvoiceFile: DEFAULT_OPEN_JTALK_HTSVOICE_FILE,
+    htsvoiceFileExists: openJTalkHtsvoiceFile !== undefined,
   };
+
   if (requireOpenJTalkAssets) {
     const message = 'OpenJTalk assets are required in production. Please install the fixed OpenJTalk HTS voice and dictionary files.';
     console.error('[FATAL]', message, commonConfig);
     process.exit(1);
   }
+
   console.warn('[WARN]', 'OpenJTalk is not configured or the configured assets are missing. Falling back to FallbackTTS.', commonConfig);
 }
 console.info('[INFO]', 'selected TTS backend', {
-  backend: isOpenJTalkConfigured ? 'OpenJTalk' : 'FallbackTTS',
+  backend: openJTalkDictionaryDir && openJTalkHtsvoiceFile ? 'OpenJTalk' : 'FallbackTTS',
   htsvoiceFile: openJTalkHtsvoiceFile,
   dictionaryDir: openJTalkDictionaryDir,
   allowFallbackTts,
