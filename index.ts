@@ -26,7 +26,7 @@ import { handleCatchAll } from "./src/frontendServer";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
 import { normalizePublishedStreamState, resolveNiconamaFromState } from "./lib/streamState";
 import { createNiconamaCommentClient, filterAgentCommentsWithText, getCommentTextFromAgentComment, type NiconamaCommentClient } from "./lib/niconamaCommentClient";
-import { countNumberedAgentComments, formatAgentCommentEntry } from "./lib/niconamaCommentClient.helpers";
+import { countNumberedAgentComments, formatAgentCommentEntry, coerceToAgentComments } from "./lib/niconamaCommentClient.helpers";
 import { installConsoleLogger } from "./lib/consoleLogger";
 
 const console = installConsoleLogger();
@@ -855,7 +855,8 @@ const createNiconamaClientOptions = () => {
 };
 
 const handleNiconamaComments = (comments: unknown) => {
-  const filteredComments = filterAgentCommentsWithText(comments as any);
+  const parsed = coerceToAgentComments(comments);
+  const filteredComments = filterAgentCommentsWithText(parsed as any);
   if (DEBUG_NICONAMA_COMMENTS) {
     for (const comment of filteredComments) {
       const text = getCommentTextFromAgentComment(comment);
@@ -864,12 +865,11 @@ const handleNiconamaComments = (comments: unknown) => {
       }
     }
   }
-  if (filteredComments.length > 0) {
-    try {
-      agent.postComments(filteredComments);
-    } catch (err) {
-      console.warn('[WARN] agent.postComments threw:', err instanceof Error ? err.message : String(err));
-    }
+
+  try {
+    agent.postComments(parsed);
+  } catch (err) {
+    console.warn('[WARN] agent.postComments threw:', err instanceof Error ? err.message : String(err));
   }
 
   try {
