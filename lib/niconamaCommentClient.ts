@@ -1232,6 +1232,46 @@ export class NiconamaCommentClient {
             console.debug('[DEBUG] Playwright request failed', url, request.failure?.()?.errorText);
           }
         });
+        pageRef.on('response', (response: any) => {
+          try {
+            const tryProcess = async () => {
+              if (this.#stopRequested) return;
+              if (pageRef.isClosed?.()) return;
+              if (!response || typeof response.text !== 'function') return;
+              let url = '';
+              try { url = typeof response.url === 'function' ? response.url() : ''; } catch { return; }
+              let ct = '';
+              try { ct = typeof response.headers === 'function' ? (response.headers()['content-type'] || '') : ''; } catch {}
+              if (!/json|html|javascript|text/i.test(ct) && !/comment|wsapi|watch|json|data/i.test(url)) {
+                return;
+              }
+              const bodyText = await response.text().catch(() => null);
+              if (!bodyText) return;
+              const parsed = tryParseJson(bodyText);
+              if (parsed) {
+                const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
+                if (comments.length > 0) {
+                  this.#callbacks.onComments(comments);
+                  console.debug('[DEBUG] Playwright response comment payload', { url, count: comments.length });
+                  return;
+                }
+              }
+              try {
+                const extracted = extractEmbeddedDataFromHtml(bodyText);
+                if (extracted) {
+                  const comments2 = parseAgentCommentsFromResponseBody(extracted, this.#seenCommentIdentifiers);
+                  if (comments2.length > 0) {
+                    this.#callbacks.onComments(comments2);
+                    console.debug('[DEBUG] Playwright response embedded-data comment payload', { url, count: comments2.length });
+                  }
+                }
+              } catch {}
+            };
+            void tryProcess().catch(() => undefined);
+          } catch {
+            // swallow
+          }
+        });
         pageRef.on('websocket', (socket: any) => {
           const wsUrl = socket.url();
           console.debug('[DEBUG] Playwright websocket connected', wsUrl);
