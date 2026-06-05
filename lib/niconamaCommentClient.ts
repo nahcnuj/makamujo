@@ -175,6 +175,7 @@ export class NiconamaCommentClient {
     // live WebSocket so consumers receive pre-existing messages first.
     try {
       const initialComments = parseAgentCommentsFromResponseBody(embeddedData, this.#seenCommentIdentifiers);
+      try { console.debug('[DEBUG] startup initialComments count', { count: initialComments.length }); } catch {}
       if (initialComments.length > 0) {
         this.#callbacks.onComments(initialComments);
       }
@@ -195,21 +196,45 @@ export class NiconamaCommentClient {
     // install Playwright watcher in the background to enrich or fallback.
     await this.setupDirectWebSocketConnection(watchUrl, embeddedData);
     try {
-      this.#playwrightWatcherTask = this.setupPlaywrightCommentWatcher(watchUrl)
-        .catch((err) => {
-          console.warn('[WARN] setupPlaywrightCommentWatcher failed (background)', err);
-        })
-        .finally(() => {
-          this.#playwrightWatcherTask = null;
-        });
+      const disablePlaywright = process.env.NICONAMA_DISABLE_PLAYWRIGHT_FALLBACK === '1';
+      if (!disablePlaywright) {
+        this.#playwrightWatcherTask = this.setupPlaywrightCommentWatcher(watchUrl)
+          .catch((err) => {
+            console.warn('[WARN] setupPlaywrightCommentWatcher failed (background)', err);
+          })
+          .finally(() => {
+            this.#playwrightWatcherTask = null;
+          });
+      } else {
+        console.debug('[DEBUG] Playwright fallback disabled by environment (NICONAMA_DISABLE_PLAYWRIGHT_FALLBACK=1)');
+      }
     } catch (err) {
       console.warn('[WARN] failed to schedule Playwright watcher', err);
     }
 
-    // After watchers are installed, perform an immediate re-scan in the
-    // background to catch any comments that arrived between the initial
-    // fetch and the watcher installation.
-    void this.performImmediateRescan(watchUrl).catch(() => undefined);
+    // After watchers are installed, perform an immediate re-scan to catch
+    // any comments that arrived between the initial fetch and the watcher
+    // installation. If the embedded metadata reports a positive comment
+    // count, wait a short, bounded time for the rescan so e2e tests that
+    // expect initial comments are less likely to race on background tasks.
+    try {
+      const reportedCount = (embeddedData && typeof embeddedData === 'object')
+        ? (typeof (embeddedData as any).program?.statistics?.commentCount === 'number'
+          ? (embeddedData as any).program.statistics.commentCount
+          : undefined)
+        : undefined;
+      if (typeof reportedCount === 'number' && reportedCount > 0) {
+        // Wait up to 2s for an immediate rescan to complete and deliver comments.
+        await Promise.race([
+          this.performImmediateRescan(watchUrl),
+          new Promise((res) => setTimeout(res, 2000)),
+        ]).catch(() => undefined);
+      } else {
+        void this.performImmediateRescan(watchUrl).catch(() => undefined);
+      }
+    } catch (e) {
+      // ignore rescan errors
+    }
     this.#pollTask = this.pollLoop();
     console.info('[DEBUG] NiconamaCommentClient.start finished');
   }
@@ -1622,20 +1647,25 @@ export class NiconamaCommentClient {
 
       // If static extraction didn't find comments, try the Playwright-rendered enrichment
       try {
-        // Try Playwright enrichment a few times because transient page-closes
-        // or WAF-induced navigation failures sometimes prevent a single
-        // attempt from harvesting comments.
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          const enriched = await this.fetchEmbeddedDataWithPlaywright(watchUrl, staticData).catch(() => null);
-          if (enriched) {
-            const comments2 = parseAgentCommentsFromResponseBody(enriched, this.#seenCommentIdentifiers);
-            if (comments2.length > 0) {
-              this.#callbacks.onComments(comments2);
-              console.debug('[DEBUG] performImmediateRescan comments extracted (playwright)', { count: comments2.length, watchUrl, attempt });
-              return;
+        const disablePlaywright = process.env.NICONAMA_DISABLE_PLAYWRIGHT_FALLBACK === '1';
+        if (!disablePlaywright) {
+          // Try Playwright enrichment a few times because transient page-closes
+          // or WAF-induced navigation failures sometimes prevent a single
+          // attempt from harvesting comments.
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            const enriched = await this.fetchEmbeddedDataWithPlaywright(watchUrl, staticData).catch(() => null);
+            if (enriched) {
+              const comments2 = parseAgentCommentsFromResponseBody(enriched, this.#seenCommentIdentifiers);
+              if (comments2.length > 0) {
+                this.#callbacks.onComments(comments2);
+                console.debug('[DEBUG] performImmediateRescan comments extracted (playwright)', { count: comments2.length, watchUrl, attempt });
+                return;
+              }
             }
+            await new Promise((r) => setTimeout(r, 500 * attempt));
           }
-          await new Promise((r) => setTimeout(r, 500 * attempt));
+        } else {
+          console.debug('[DEBUG] skipping Playwright enrichment (disabled via NICONAMA_DISABLE_PLAYWRIGHT_FALLBACK)');
         }
       } catch (e) {
         // ignore
