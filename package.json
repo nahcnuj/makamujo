@@ -29,7 +29,7 @@
     "print-comments": "bun run scripts/print-niconama-comment-bodies.ts"
   },
   "dependencies": {
-    "@playwright/browser-chromium": "^1.59.1",
+    "@playwright/browser-chromium": "^1.60.0",
     "automated-gameplay-transmitter": "^0.6.4",
     "bun-plugin-tailwind": "^0.1.2",
     "hono": "4.12.18",
