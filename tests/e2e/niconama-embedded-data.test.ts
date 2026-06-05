@@ -45,4 +45,30 @@ test.describe("NiconamaCommentClient fallback watch page", () => {
       await client.stop();
     }
   });
+
+  test("receives embedded initial comments at startup", async () => {
+    const initialComments: any[] = [];
+    const client = createNiconamaCommentClient(
+      { watchUrl: ACTUAL_PROGRAM_WATCH_URL },
+      {
+        onComments: (comments) => { initialComments.push(...comments); },
+        onMeta: () => {},
+        onError: (error) => { throw error; },
+      },
+    );
+
+    const embeddedData = await client.fetchEmbeddedData();
+    expect(embeddedData).toBeTruthy();
+    const commentCount = (embeddedData as any).program?.statistics?.commentCount;
+    expect(typeof commentCount).toBe("number");
+    expect(commentCount).toBeGreaterThan(0);
+
+    try {
+      await client.start();
+      expect(initialComments.length).toBeGreaterThan(0);
+      expect(typeof initialComments[0]?.data?.comment).toBe("string");
+    } finally {
+      await client.stop();
+    }
+  });
 });
