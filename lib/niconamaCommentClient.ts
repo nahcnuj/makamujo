@@ -115,7 +115,6 @@ export class NiconamaCommentClient {
   #playwrightWatcherTask: Promise<void> | null = null;
   #pollTimer: ReturnType<typeof setTimeout> | null = null;
   #pollCancelResolve: (() => void) | null = null;
-  #metricsTimer: ReturnType<typeof setInterval> | null = null;
   #launchPersistentContext: NiconamaLaunchPersistentContext;
   #enablePlaywrightFallback = true;
   #callbacks: NiconamaCommentClientCallbacks;
@@ -289,25 +288,6 @@ export class NiconamaCommentClient {
       // ignore rescan errors
     }
     this.#pollTask = this.pollLoop();
-    // Start a lightweight periodic metrics logger to aid in long-run
-    // diagnostics (memory + seen identifiers size).
-    // Enable via NICONAMA_ENABLE_METRICS=1 to avoid production noise.
-    try {
-      if (!this.#metricsTimer && process.env.NICONAMA_ENABLE_METRICS) {
-        this.#metricsTimer = setInterval(() => {
-          try {
-            const mem = (typeof process !== 'undefined' && typeof (process as any).memoryUsage === 'function')
-              ? (process as any).memoryUsage()
-              : null;
-            console.debug('[METRICS] memorySnapshot', mem ? { rss: mem.rss, heapUsed: mem.heapUsed } : null, { seen: this.#seenCommentIdentifiers.size });
-          } catch (e) {
-            // ignore metrics errors
-          }
-        }, 60_000);
-      }
-    } catch (e) {
-      // ignore
-    }
     console.info('[DEBUG] NiconamaCommentClient.start finished');
   }
 
@@ -583,14 +563,6 @@ export class NiconamaCommentClient {
         // ignore watcher cleanup failures
       }
       this.#playwrightWatcherTask = null;
-    }
-    try {
-      if (this.#metricsTimer) {
-        clearInterval(this.#metricsTimer);
-        this.#metricsTimer = null;
-      }
-    } catch (e) {
-      // ignore
     }
     this.#running = false;
     console.info('[DEBUG] NiconamaCommentClient.stop finished');
