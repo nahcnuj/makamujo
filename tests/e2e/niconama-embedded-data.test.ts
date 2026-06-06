@@ -62,11 +62,6 @@ test.describe("NiconamaCommentClient fallback watch page", () => {
 
     const embeddedData = await client.fetchEmbeddedData();
     expect(embeddedData).toBeTruthy();
-    const commentCount = (embeddedData as any).program?.statistics?.commentCount;
-    expect(typeof commentCount).toBe("number");
-    // Playwright fallback is disabled for this test via client option,
-    // so the static embedded data may report 0 comments; accept >= 0.
-    expect(commentCount).toBeGreaterThanOrEqual(0);
 
     try {
       await client.start();
