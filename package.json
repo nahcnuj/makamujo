@@ -29,24 +29,24 @@
     "print-comments": "bun run scripts/print-niconama-comment-bodies.ts"
   },
   "dependencies": {
-    "@playwright/browser-chromium": "^1.59.1",
+    "@playwright/browser-chromium": "^1.60.0",
     "automated-gameplay-transmitter": "^0.6.4",
     "bun-plugin-tailwind": "^0.1.2",
-    "hono": "4.12.18",
-    "playwright": "^1.59.1",
+    "hono": "4.12.23",
+    "playwright": "^1.60.0",
     "playwright-extra": "^4.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "tailwindcss": "^4.3.0",
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.1",
+    "@playwright/test": "^1.60.0",
     "@types/bun": "latest",
-    "@types/jsdom": "^28.0.1",
-    "@types/node": "^24.12.3",
+    "@types/jsdom": "^28.0.3",
+    "@types/node": "^25.9.2",
     "jsdom": "^29.1.1",
-    "react": "^19.2.6",
-    "tsx": "^4.21.0",
+    "react": "^19.2.7",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   }
 }
