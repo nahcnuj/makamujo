@@ -35,10 +35,17 @@ if ! bun --version >/dev/null 2>>"$STDERR_LOG"; then
   exit 1
 fi
 
-run_and_log_stderr bun run typecheck
-run_and_log_stderr bun run test
-run_and_log_stderr bun run test:integration
-run_and_log_stderr bun run test:e2e
+# Use the system bun binary explicitly to avoid executing a local wrapper in node_modules/.bin
+BUN_BIN=$(command -v bun || true)
+if [ -z "$BUN_BIN" ]; then
+  echo "bun not found in PATH; see stderr log at: $STDERR_LOG" >&2
+  exit 1
+fi
+
+run_and_log_stderr "$BUN_BIN" run typecheck
+run_and_log_stderr "$BUN_BIN" test lib/ src/ routes/ console/src/
+run_and_log_stderr env MAKAMUJO_ALLOW_FALLBACK_TTS=1 "$BUN_BIN" test tests/integration/
+run_and_log_stderr "$BUN_BIN" run test:e2e
 
 CHECKS_PASSED=1
 SUCCESS=1
