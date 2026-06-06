@@ -1,0 +1,16 @@
+[Unit]
+Description=makamujo OBS service
+After=makamujo-browser.service
+PartOf=makamujo.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/makamujo
+User=root
+Environment=PATH=/root/.bun/bin:/usr/local/bin:/usr/bin:/bin
+Environment=DISPLAY=:10
+ExecStart=/bin/sh -lc "cd '/opt/makamujo' && '/opt/makamujo/bin/x/obs'"
+StandardOutput=journal
+StandardError=journal
+Restart=on-failure
+RestartSec=5s

@@ -1,11 +1,11 @@
 [Unit]
 Description=makamujo service
 After=graphical.target xorg10.service x11vnc-10.service
-Wants=graphical.target xorg10.service x11vnc-10.service
+Wants=graphical.target xorg10.service x11vnc-10.service makamujo-screen.service makamujo-browser.service makamujo-obs.service
+PartOf=graphical.target
 
-# Service runs multiple backgrounded processes and the start script exits.
-# Use oneshot + RemainAfterExit so systemd considers the service active
-# while background processes run and ExecStop can stop them.
+# Service coordinates child services (screen, browser, obs) through dependency ordering.
+# systemd will start them according to After= directives in their definitions.
 [Service]
 Type=oneshot
 RemainAfterExit=yes
@@ -14,8 +14,7 @@ User=root
 Environment=PATH=/root/.bun/bin:/usr/local/bin:/usr/bin:/bin
 Environment=NODE_ENV=production
 Environment=DISPLAY=:10
-ExecStart=/opt/makamujo/bin/start-with-xauth.sh
-ExecStop=/opt/makamujo/bin/stop
+ExecStart=/bin/true
 StandardOutput=journal
 StandardError=journal
 # If you want to run it as a different user, change `User=` and set `XAUTHORITY` accordingly:
