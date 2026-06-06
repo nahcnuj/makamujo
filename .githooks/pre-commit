@@ -21,18 +21,18 @@ elif command -v npm >/dev/null 2>&1; then
 elif [ -x "./node_modules/.bin/biome" ]; then
   RUNNER="local"
 else
-  echo "biome not found. Install it with 'bun add -d biome' or 'npm i -D biome'" >&2
+  echo "biome not found. Install it with 'bun add -d @biomejs/biome' or 'npm i -D @biomejs/biome'" >&2
   exit 1
 fi
 
 echo "$STAGED_FILES" | while IFS= read -r file; do
   echo "Formatting $file"
   if [ "$RUNNER" = "bun" ]; then
-    bun run format -- "$file" || true
+    bun run format -- "$file"
   elif [ "$RUNNER" = "npm" ]; then
-    npm run format -- "$file" || true
+    npm run format -- "$file"
   else
-    ./node_modules/.bin/biome format "$file" || true
+    ./node_modules/.bin/biome format --write "$file"
   fi
   git add -- "$file"
 done
