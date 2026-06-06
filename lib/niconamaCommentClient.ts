@@ -82,6 +82,10 @@ export type NiconamaCommentClientOptions = {
   watchUrl?: string;
   pollIntervalMs?: number;
   launchPersistentContext?: NiconamaLaunchPersistentContext;
+  // When set to false, the client will not launch Playwright-based
+  // fallbacks or enrichment and will rely solely on direct websocket
+  // connections and polling APIs. Default: `true`.
+  enablePlaywrightFallback?: boolean;
 };
 
 type NiconamaCommentClientCallbacks = {
@@ -112,6 +116,7 @@ export class NiconamaCommentClient {
   #pollTimer: ReturnType<typeof setTimeout> | null = null;
   #pollCancelResolve: (() => void) | null = null;
   #launchPersistentContext: NiconamaLaunchPersistentContext;
+  #enablePlaywrightFallback = true;
   #callbacks: NiconamaCommentClientCallbacks;
 
   constructor(options: NiconamaCommentClientOptions, callbacks: NiconamaCommentClientCallbacks) {
@@ -120,6 +125,7 @@ export class NiconamaCommentClient {
     this.#executablePath = options.executablePath ?? DEFAULT_CHROMIUM_EXECUTABLE_PATH;
     this.#pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.#launchPersistentContext = options.launchPersistentContext ?? (launchPersistentContext as unknown as NiconamaLaunchPersistentContext);
+    this.#enablePlaywrightFallback = options.enablePlaywrightFallback ?? true;
     this.#callbacks = callbacks;
   }
 
@@ -196,8 +202,7 @@ export class NiconamaCommentClient {
     // install Playwright watcher in the background to enrich or fallback.
     await this.setupDirectWebSocketConnection(watchUrl, embeddedData);
     try {
-      const disablePlaywright = process.env.NICONAMA_DISABLE_PLAYWRIGHT_FALLBACK === '1';
-      if (!disablePlaywright) {
+      if (this.#enablePlaywrightFallback) {
         this.#playwrightWatcherTask = this.setupPlaywrightCommentWatcher(watchUrl)
           .catch((err) => {
             console.warn('[WARN] setupPlaywrightCommentWatcher failed (background)', err);
@@ -206,7 +211,7 @@ export class NiconamaCommentClient {
             this.#playwrightWatcherTask = null;
           });
       } else {
-        console.debug('[DEBUG] Playwright fallback disabled by environment (NICONAMA_DISABLE_PLAYWRIGHT_FALLBACK=1)');
+        console.debug('[DEBUG] Playwright fallback disabled via options (enablePlaywrightFallback=false)');
       }
     } catch (err) {
       console.warn('[WARN] failed to schedule Playwright watcher', err);
@@ -325,10 +330,13 @@ export class NiconamaCommentClient {
       }
 
       try { console.debug('[DEBUG] fetchEmbeddedData falling back to Playwright', targetUrl, { commentCount, initialCommentsCount: initialComments.length, embeddedWebSocketUrl: Boolean(embeddedWebSocketUrl) }); } catch {}
-      try { console.debug('[DEBUG] fetchEmbeddedData invoking fetchEmbeddedDataWithPlaywright', { targetUrl }); } catch {}
-      const enrichedEmbedded = await this.fetchEmbeddedDataWithPlaywright(targetUrl, embedded);
-      try { console.debug('[DEBUG] fetchEmbeddedData fetchEmbeddedDataWithPlaywright ->', enrichedEmbedded ? 'found' : 'not-found'); } catch {}
-      return enrichedEmbedded ?? embedded;
+      if (this.#enablePlaywrightFallback) {
+        try { console.debug('[DEBUG] fetchEmbeddedData invoking fetchEmbeddedDataWithPlaywright', { targetUrl }); } catch {}
+        const enrichedEmbedded = await this.fetchEmbeddedDataWithPlaywright(targetUrl, embedded);
+        try { console.debug('[DEBUG] fetchEmbeddedData fetchEmbeddedDataWithPlaywright ->', enrichedEmbedded ? 'found' : 'not-found'); } catch {}
+        return enrichedEmbedded ?? embedded;
+      }
+      return embedded;
     }
 
     // If static extraction failed entirely, try aggressive polling before
@@ -357,6 +365,10 @@ export class NiconamaCommentClient {
     }
 
     try { console.debug('[DEBUG] fetchEmbeddedData invoking fetchEmbeddedDataWithPlaywright (no static embedded)', { targetUrl }); } catch {}
+    if (!this.#enablePlaywrightFallback) {
+      console.debug('[DEBUG] skipping Playwright fetchEmbeddedDataWithPlaywright (disabled via enablePlaywrightFallback=false)');
+      return null;
+    }
     const renderedEmbedded = await this.fetchEmbeddedDataWithPlaywright(targetUrl);
     try { console.debug('[DEBUG] fetchEmbeddedData fetchEmbeddedDataWithPlaywright (no static embedded) ->', renderedEmbedded ? 'found' : 'not-found'); } catch {}
     return renderedEmbedded;
@@ -1647,8 +1659,7 @@ export class NiconamaCommentClient {
 
       // If static extraction didn't find comments, try the Playwright-rendered enrichment
       try {
-        const disablePlaywright = process.env.NICONAMA_DISABLE_PLAYWRIGHT_FALLBACK === '1';
-        if (!disablePlaywright) {
+        if (this.#enablePlaywrightFallback) {
           // Try Playwright enrichment a few times because transient page-closes
           // or WAF-induced navigation failures sometimes prevent a single
           // attempt from harvesting comments.
@@ -1665,7 +1676,7 @@ export class NiconamaCommentClient {
             await new Promise((r) => setTimeout(r, 500 * attempt));
           }
         } else {
-          console.debug('[DEBUG] skipping Playwright enrichment (disabled via NICONAMA_DISABLE_PLAYWRIGHT_FALLBACK)');
+          console.debug('[DEBUG] skipping Playwright enrichment (disabled via enablePlaywrightFallback=false)');
         }
       } catch (e) {
         // ignore
