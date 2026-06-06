@@ -1007,6 +1007,9 @@ export class NiconamaCommentClient {
       return;
     }
     this.#directWebSocketAudienceToken = this.extractAudienceTokenFromWebSocketUrl(webSocketUrl);
+    if (!this.#directWebSocketAudienceToken) {
+      console.warn('[WARN] direct websocket failed to extract audience token from url', { webSocketUrl, watchUrl });
+    }
 
     try {
       let WebSocketClass: any = (globalThis as any).WebSocket;
@@ -1065,7 +1068,13 @@ export class NiconamaCommentClient {
         } catch (e) {
           // ignore draining errors
         }
-        this.sendDirectWebSocketMessage({ type: 'keepSeat', audienceToken: this.#directWebSocketAudienceToken });
+        const keepSeatMessage = { type: 'keepSeat' } as any;
+        if (this.#directWebSocketAudienceToken) {
+          keepSeatMessage.audienceToken = this.#directWebSocketAudienceToken;
+        } else {
+          console.warn('[WARN] direct websocket sending keepSeat without audience token - server may force reconnect', { webSocketUrl });
+        }
+        this.sendDirectWebSocketMessage(keepSeatMessage);
       };
 
       ws.onmessage = (event: any) => {
