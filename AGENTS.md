@@ -35,8 +35,10 @@ Do not modify `.github/copilot-instructions.md`; keep that reference file unchan
 - 開発サーバー起動: `bun run dev`
 - テスト実行: `bun run test`
 - E2Eテスト実行: `bun run test:e2e`
+- E2Eテストの特定ケース実行: `bun run test:e2e:specify -- {test_path_or_pattern}`
+  - 例: `bun run test:e2e:specify -- tests/e2e/console.test.ts` （特定ファイルを実行）
+  - 例: `bun run test:e2e:specify -- --grep "pattern"` （パターンマッチで実行）
 - 単一のテストファイルを実行: `bun test path/to/file.test.ts`
-- 単一の E2E テストを実行: `bun run test:e2e tests/e2e/your-test-file.test.ts`
 - TypeScriptスクリプトを実行: `bun ./path/to/script.ts`
 
 その他、package.jsonのscriptsに書かれているスクリプトが実行できます。
