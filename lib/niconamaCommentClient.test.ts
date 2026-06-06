@@ -288,6 +288,15 @@ describe("fetchEmbeddedData fallback behavior", () => {
 
       const result = await client.fetchEmbeddedData();
 
+      // deliverComments is now scheduled asynchronously; wait briefly
+      // for the callback to be invoked to avoid flakiness in tests.
+      await new Promise<void>((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error('timeout waiting for onComments')), 1000);
+        const iv = setInterval(() => {
+          if (onComments.length >= 1) { clearTimeout(t); clearInterval(iv); resolve(); }
+        }, 10);
+      });
+
       expect(onComments).toHaveLength(1);
       expect(onComments[0]?.data?.comment).toBe('rendered comment');
       expect(result).toBeTruthy();
