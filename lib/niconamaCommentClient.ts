@@ -118,6 +118,12 @@ export class NiconamaCommentClient {
   #launchPersistentContext: NiconamaLaunchPersistentContext;
   #enablePlaywrightFallback = true;
   #callbacks: NiconamaCommentClientCallbacks;
+  #deliveryMetrics = {
+    commentBatches: 0,
+    commentItems: 0,
+    metaMessages: 0,
+    callbackErrors: 0,
+  };
 
   constructor(options: NiconamaCommentClientOptions, callbacks: NiconamaCommentClientCallbacks) {
     this.#userDataDir = options.userDataDir ?? DEFAULT_PLAYWRIGHT_USER_DATA_DIR;
@@ -165,7 +171,7 @@ export class NiconamaCommentClient {
     }
 
     this.#running = true;
-    this.#callbacks.onMeta({
+    this.deliverMeta({
       type: 'niconama',
       data: {
         isLive: true,
@@ -183,7 +189,7 @@ export class NiconamaCommentClient {
       const initialComments = parseAgentCommentsFromResponseBody(embeddedData, this.#seenCommentIdentifiers);
       try { console.debug('[DEBUG] startup initialComments count', { count: initialComments.length }); } catch {}
       if (initialComments.length > 0) {
-        this.#callbacks.onComments(initialComments);
+        this.deliverComments(initialComments);
       }
     } catch (err) {
       console.warn('[WARN] error while checking embedded initial comments', err);
@@ -191,7 +197,7 @@ export class NiconamaCommentClient {
     try {
       const polled = await this.fetchCommentsFromPollingApis(embeddedData).catch(() => [] as any[]);
       if (Array.isArray(polled) && polled.length > 0) {
-        this.#callbacks.onComments(polled);
+        this.deliverComments(polled);
         console.debug('[DEBUG] delivered comments from polling APIs at startup', { count: polled.length, watchUrl });
       }
     } catch (e) {
@@ -304,7 +310,7 @@ export class NiconamaCommentClient {
       try {
         const singleTry = await this.fetchCommentsFromPollingApis(embedded).catch(() => [] as AgentComment[]);
         if (Array.isArray(singleTry) && singleTry.length > 0) {
-          this.#callbacks.onComments(singleTry);
+          this.deliverComments(singleTry);
           console.debug('[DEBUG] fetchEmbeddedData comments found from polling APIs', { count: singleTry.length, targetUrl });
           return embedded;
         }
@@ -318,7 +324,7 @@ export class NiconamaCommentClient {
           while (Date.now() - startTime < aggressiveTimeoutMs) {
             const commentsFromApi = await this.fetchCommentsFromPollingApis(embedded).catch(() => [] as AgentComment[]);
             if (Array.isArray(commentsFromApi) && commentsFromApi.length > 0) {
-              this.#callbacks.onComments(commentsFromApi);
+              this.deliverComments(commentsFromApi);
               console.debug('[DEBUG] fetchEmbeddedData comments found from polling APIs (aggressive)', { count: commentsFromApi.length, targetUrl });
               return embedded;
             }
@@ -344,7 +350,7 @@ export class NiconamaCommentClient {
     try {
       const singleTry = await this.fetchCommentsFromPollingApis(null).catch(() => [] as AgentComment[]);
       if (Array.isArray(singleTry) && singleTry.length > 0) {
-        this.#callbacks.onComments(singleTry);
+        this.deliverComments(singleTry);
         console.debug('[DEBUG] fetchEmbeddedData comments found from polling APIs (no static embedded)', { count: singleTry.length, targetUrl });
         return null;
       }
@@ -354,7 +360,7 @@ export class NiconamaCommentClient {
       while (Date.now() - startTime < aggressiveTimeoutMs) {
         const commentsFromApi = await this.fetchCommentsFromPollingApis(null).catch(() => [] as AgentComment[]);
         if (Array.isArray(commentsFromApi) && commentsFromApi.length > 0) {
-          this.#callbacks.onComments(commentsFromApi);
+          this.deliverComments(commentsFromApi);
           console.debug('[DEBUG] fetchEmbeddedData comments found from polling APIs (aggressive, no static)', { count: commentsFromApi.length, targetUrl });
           return null;
         }
@@ -745,7 +751,7 @@ export class NiconamaCommentClient {
               } catch {}
               try {
                 const parsedComments = (enriched as any).site.state.relive.comments.map((c: any) => ({ data: c }));
-                this.#callbacks.onComments(parsedComments);
+                this.deliverComments(parsedComments);
               } catch {}
               return enriched;
             }
@@ -770,7 +776,7 @@ export class NiconamaCommentClient {
                   (enriched2 as any).site.state.relive = (enriched2 as any).site.state.relive ?? {};
                   (enriched2 as any).site.state.relive.comments = pageComments.map((c: any) => (c && c.data) ? c.data : { comment: String(c) });
                 } catch {}
-                try { this.#callbacks.onComments(pageComments); } catch {}
+                this.deliverComments(pageComments);
                 return enriched2;
               }
             } catch {
@@ -883,7 +889,7 @@ export class NiconamaCommentClient {
       try {
         if (typeof html === 'string' && html.indexOf('公開終了') !== -1) {
           try {
-            this.#callbacks.onMeta({
+            this.deliverMeta({
               type: 'niconama',
               data: {
                 isLive: false,
@@ -943,7 +949,7 @@ export class NiconamaCommentClient {
       const initialComments = parseAgentCommentsFromResponseBody(data, this.#seenCommentIdentifiers);
       if (initialComments.length > 0) {
         console.debug('[DEBUG] direct websocket initial comments from embedded data', { count: initialComments.length, watchUrl });
-        this.#callbacks.onComments(initialComments);
+        this.deliverComments(initialComments);
       }
       webSocketUrl = this.getWebSocketUrlFromEmbeddedData(data);
       const frontendId = this.getFrontendIdFromEmbeddedData(data);
@@ -1024,6 +1030,10 @@ export class NiconamaCommentClient {
       ws.onmessage = (event: any) => {
         try {
           const data = event?.data;
+          if (data == null) {
+            console.debug('[DEBUG] direct websocket received empty event payload', { wsUrl: webSocketUrl });
+            return;
+          }
 
           // Handle string payloads
           if (typeof data === 'string') {
@@ -1085,11 +1095,13 @@ export class NiconamaCommentClient {
       };
 
       ws.onerror = (event: unknown) => {
-        console.warn('[WARN] direct websocket error', event);
+        console.warn('[WARN] direct websocket error', event ?? '(no event)');
       };
 
-      ws.onclose = (event: { code?: number; reason?: string }) => {
-        console.warn('[WARN] direct websocket closed', webSocketUrl, event.code, event.reason);
+      ws.onclose = (event: { code?: number; reason?: string } | null | undefined) => {
+        const code = typeof event?.code === 'number' ? event.code : undefined;
+        const reason = typeof event?.reason === 'string' ? event.reason : '';
+        console.warn('[WARN] direct websocket closed', webSocketUrl, code, reason);
         if (this.#directWebSocket === ws) {
           this.clearDirectWebSocket();
         }
@@ -1288,7 +1300,7 @@ export class NiconamaCommentClient {
               if (parsed) {
                 const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
                 if (comments.length > 0) {
-                  this.#callbacks.onComments(comments);
+                  this.deliverComments(comments);
                   console.debug('[DEBUG] Playwright response comment payload', { url, count: comments.length });
                   return;
                 }
@@ -1298,7 +1310,7 @@ export class NiconamaCommentClient {
                 if (extracted) {
                   const comments2 = parseAgentCommentsFromResponseBody(extracted, this.#seenCommentIdentifiers);
                   if (comments2.length > 0) {
-                    this.#callbacks.onComments(comments2);
+                    this.deliverComments(comments2);
                     console.debug('[DEBUG] Playwright response embedded-data comment payload', { url, count: comments2.length });
                   }
                 }
@@ -1454,7 +1466,7 @@ export class NiconamaCommentClient {
         try {
           const immediateComments = await this.extractPageComments(page);
           if (immediateComments.length > 0) {
-            this.#callbacks.onComments(immediateComments);
+            this.deliverComments(immediateComments);
             try { console.debug('[DEBUG] Playwright immediate page comments extracted', { count: immediateComments.length, url: page.url() }); } catch { console.debug('[DEBUG] Playwright immediate page comments extracted', { count: immediateComments.length, url: 'unknown' }); }
           }
         } catch (err) {
@@ -1488,7 +1500,7 @@ export class NiconamaCommentClient {
       }
       const initialPageComments = await this.pollPageComments(page, 1_000, 30);
       if (initialPageComments.length > 0) {
-        this.#callbacks.onComments(initialPageComments);
+        this.deliverComments(initialPageComments);
         try { console.debug('[DEBUG] Playwright initial page comments extracted', { count: initialPageComments.length, url: page.url() }); } catch { console.debug('[DEBUG] Playwright initial page comments extracted', { count: initialPageComments.length, url: 'unknown' }); }
       }
 
@@ -1574,7 +1586,9 @@ export class NiconamaCommentClient {
 
   private startPlaywrightPagePolling(page: any): void {
     if (this.#playwrightPageCommentPollTimer) return;
-    this.#playwrightPageCommentPollTimer = startPlaywrightPagePolling(page, this.#seenCommentIdentifiers, this.#callbacks.onComments);
+    this.#playwrightPageCommentPollTimer = startPlaywrightPagePolling(page, this.#seenCommentIdentifiers, (comments) => {
+      this.deliverComments(comments);
+    });
   }
 
   private clearPlaywrightPagePolling(): void {
@@ -1599,7 +1613,7 @@ export class NiconamaCommentClient {
         if (!p) continue;
         const comments = parseAgentCommentsFromResponseBody(p, this.#seenCommentIdentifiers);
         if (comments.length > 0) {
-          this.#callbacks.onComments(comments);
+          this.deliverComments(comments);
           console.debug('[DEBUG] Playwright websocket NDJSON comment payload', { wsUrl, count: comments.length });
           return;
         }
@@ -1612,7 +1626,7 @@ export class NiconamaCommentClient {
     const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
     if (comments.length === 0) return;
 
-    this.#callbacks.onComments(comments);
+    this.deliverComments(comments);
     console.debug('[DEBUG] Playwright websocket comment payload', { wsUrl, count: comments.length });
   }
 
@@ -1623,7 +1637,7 @@ export class NiconamaCommentClient {
       if (staticData) {
         const comments = parseAgentCommentsFromResponseBody(staticData, this.#seenCommentIdentifiers);
         if (comments.length > 0) {
-          this.#callbacks.onComments(comments);
+          this.deliverComments(comments);
           console.debug('[DEBUG] performImmediateRescan comments extracted (static)', { count: comments.length, watchUrl });
           return;
         }
@@ -1636,7 +1650,7 @@ export class NiconamaCommentClient {
       try {
         const singleTry = await this.fetchCommentsFromPollingApis(staticData).catch(() => [] as AgentComment[]);
         if (Array.isArray(singleTry) && singleTry.length > 0) {
-          this.#callbacks.onComments(singleTry);
+          this.deliverComments(singleTry);
           console.debug('[DEBUG] performImmediateRescan comments extracted (polling-api)', { count: singleTry.length, watchUrl });
           return;
         }
@@ -1647,7 +1661,7 @@ export class NiconamaCommentClient {
         while (Date.now() - startTime < aggressiveTimeoutMs) {
           const commentsFromApi = await this.fetchCommentsFromPollingApis(staticData).catch(() => [] as AgentComment[]);
           if (Array.isArray(commentsFromApi) && commentsFromApi.length > 0) {
-            this.#callbacks.onComments(commentsFromApi);
+            this.deliverComments(commentsFromApi);
             console.debug('[DEBUG] performImmediateRescan comments extracted (polling-api aggressive)', { count: commentsFromApi.length, watchUrl });
             return;
           }
@@ -1668,7 +1682,7 @@ export class NiconamaCommentClient {
             if (enriched) {
               const comments2 = parseAgentCommentsFromResponseBody(enriched, this.#seenCommentIdentifiers);
               if (comments2.length > 0) {
-                this.#callbacks.onComments(comments2);
+                this.deliverComments(comments2);
                 console.debug('[DEBUG] performImmediateRescan comments extracted (playwright)', { count: comments2.length, watchUrl, attempt });
                 return;
               }
@@ -1867,7 +1881,7 @@ export class NiconamaCommentClient {
         anyFound = true;
         const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
         if (comments.length > 0) {
-          this.#callbacks.onComments(comments);
+          this.deliverComments(comments);
           console.debug('[DEBUG] direct websocket NDJSON comment payload', wsUrl, { count: comments.length });
           return;
         }
@@ -1906,7 +1920,7 @@ export class NiconamaCommentClient {
       case 'statistics': {
         const metaState = buildNiconamaStreamStateFromStatisticsEvent(body);
         if (metaState) {
-          this.#callbacks.onMeta(metaState);
+          this.deliverMeta(metaState);
         }
         try {
           const stats = (body as any)?.data;
@@ -1991,7 +2005,7 @@ export class NiconamaCommentClient {
 
     const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentIdentifiers, eventType);
     if (comments.length > 0) {
-      this.#callbacks.onComments(comments);
+      this.deliverComments(comments);
       if (knownEventType) {
         console.debug('[DEBUG] direct websocket known event type with comment payload', eventType, wsUrl, body);
       }
@@ -2071,9 +2085,68 @@ export class NiconamaCommentClient {
     }
   }
 
+  private scheduleDelivery(task: () => void): void {
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(task);
+      return;
+    }
+    void Promise.resolve().then(task);
+  }
+
+  private getDeliveryMetricsSnapshot(): Record<string, number> {
+    return {
+      commentBatches: this.#deliveryMetrics.commentBatches,
+      commentItems: this.#deliveryMetrics.commentItems,
+      metaMessages: this.#deliveryMetrics.metaMessages,
+      callbackErrors: this.#deliveryMetrics.callbackErrors,
+    };
+  }
+
+  private deliverComments(comments: AgentComment[]): void {
+    if (!Array.isArray(comments) || comments.length === 0) return;
+    this.#deliveryMetrics.commentBatches += 1;
+    this.#deliveryMetrics.commentItems += comments.length;
+    this.scheduleDelivery(() => {
+      try {
+        this.#callbacks.onComments(comments);
+      } catch (error) {
+        this.handleCallbackError('onComments', error);
+      }
+    });
+  }
+
+  private deliverMeta(state: unknown): void {
+    this.#deliveryMetrics.metaMessages += 1;
+    this.scheduleDelivery(() => {
+      try {
+        this.#callbacks.onMeta(state);
+      } catch (error) {
+        this.handleCallbackError('onMeta', error);
+      }
+    });
+  }
+
+  private handleCallbackError(callbackName: 'onComments' | 'onMeta', error: unknown): void {
+    this.#deliveryMetrics.callbackErrors += 1;
+    console.warn('[WARN] NiconamaCommentClient callback failed', {
+      callbackName,
+      metrics: this.getDeliveryMetricsSnapshot(),
+      error: error instanceof Error ? error.message : String(error),
+    });
+    this.reportError(error);
+  }
+
   private reportError(error: unknown): void {
     if (typeof this.#callbacks.onError === 'function') {
-      this.#callbacks.onError(error);
+      try {
+        this.#callbacks.onError(error);
+      } catch (callbackError) {
+        console.warn('[WARN] NiconamaCommentClient onError callback failed', {
+          error: callbackError instanceof Error ? callbackError.message : String(callbackError),
+          originalError: error instanceof Error ? error.message : String(error),
+          metrics: this.getDeliveryMetricsSnapshot(),
+        });
+      }
     } else {
       console.warn('[WARN] NiconamaCommentClient error:', error instanceof Error ? error.message : String(error));
     }

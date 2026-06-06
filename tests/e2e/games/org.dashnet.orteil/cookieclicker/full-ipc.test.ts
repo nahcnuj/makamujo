@@ -220,6 +220,7 @@ test.describe("Full IPC operation", () => {
           env: {
             ...process.env,
             NODE_ENV: "production",
+            NICONAMA_START_MAX_RETRIES: "0",
             CONSOLE_LOOPBACK_ONLY: '1',
             MAKAMUJO_IPC_PATH: serverIpcPath,
           },

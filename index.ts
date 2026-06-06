@@ -937,9 +937,10 @@ const createNiconamaCommentClientIfNeeded = () => {
 try {
   const startDelayMs = Number(process.env.NICONAMA_START_DELAY_MS ?? '350');
   const maxRetries = Number(process.env.NICONAMA_START_MAX_RETRIES ?? '3');
+  const maxAttempts = Number.isFinite(maxRetries) && maxRetries > 0 ? maxRetries : 1;
   setTimeout(async () => {
     let attempt = 0;
-    while (attempt < maxRetries) {
+    while (attempt < maxAttempts) {
       attempt += 1;
       try {
         niconamaCommentClient = createNiconamaCommentClientIfNeeded();
@@ -948,14 +949,8 @@ try {
         break;
       } catch (err) {
         console.warn('[WARN] niconamaCommentClient start attempt failed:', err instanceof Error ? err.message : String(err), 'attempt=', attempt);
-        if (attempt >= maxRetries) {
-          console.error('[ERROR] reached max retries for niconama start; treating as fatal');
-          try {
-            exitHandler({ cleanup: true }, 1);
-          } catch (exitErr) {
-            console.error('[ERROR] failed during cleanup for fatal niconama startup failure:', exitErr instanceof Error ? exitErr.stack ?? exitErr.message : String(exitErr));
-          }
-          process.exit(1);
+        if (attempt >= maxAttempts) {
+          console.error('[ERROR] exhausted niconama startup attempts; continuing without live comment client');
           return;
         }
         const backoff = 500 * attempt;
@@ -964,29 +959,6 @@ try {
     }
   }, startDelayMs);
 } catch (err) {
-  console.warn('[WARN] failed to schedule niconamaCommentClient delayed start:', err instanceof Error ? err.message : String(err));
-}
-
-// Small startup delay before launching the external nicovideo comment client.
-// This reduces a race where the client's callbacks run before broadcasting
-// helpers and mirrored state are fully initialized, causing initial payloads
-// sent to newly-connected clients to omit `niconama` intermittently in E2E.
-try {
-  const startDelayMs = Number(process.env.NICONAMA_START_DELAY_MS ?? '350');
-  setTimeout(() => {
-    try {
-      if (!niconamaCommentClient) {
-        niconamaCommentClient = createNiconamaCommentClientIfNeeded();
-        void niconamaCommentClient.start().catch((err) => {
-          console.warn('[WARN] failed to start delayed niconamaCommentClient:', err instanceof Error ? err.message : String(err));
-        });
-      }
-    } catch (err) {
-      console.warn('[WARN] delayed niconamaCommentClient init failed:', err instanceof Error ? err.message : String(err));
-    }
-  }, startDelayMs);
-} catch (err) {
-  // If the delay setup fails for any reason, log and continue.
   console.warn('[WARN] failed to schedule niconamaCommentClient delayed start:', err instanceof Error ? err.message : String(err));
 }
 

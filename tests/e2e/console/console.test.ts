@@ -144,6 +144,7 @@ test.beforeAll(async ({ request }) => {
       env: {
         ...process.env,
         NODE_ENV: "production",
+        NICONAMA_START_MAX_RETRIES: "0",
         CONSOLE_TLS_CERT: process.env.CONSOLE_TLS_CERT,
         CONSOLE_TLS_KEY: process.env.CONSOLE_TLS_KEY,
         CONSOLE_LOOPBACK_ONLY: '1',

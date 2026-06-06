@@ -191,6 +191,64 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
     }
   });
 
+  it("keeps startup resilient when comment delivery throws", async () => {
+    const originalFetch = (globalThis as any).fetch;
+    const originalWebSocket = (globalThis as any).WebSocket;
+
+    try {
+      const embeddedHtml = '<script id="embedded-data" data-props="{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com/ws&quot;,&quot;comments&quot;:[{&quot;comment&quot;:&quot;embedded hello&quot;,&quot;no&quot;:10}]}}"></script>';
+      (globalThis as any).fetch = async () => ({ ok: true, text: async () => embeddedHtml });
+
+      const sockets: any[] = [];
+      class MockWebSocket3 {
+        static OPEN = 1;
+        static CLOSED = 3;
+        public readyState: number;
+        public onopen: (() => void) | null = null;
+        public onmessage: ((ev: { data: unknown } | null) => void) | null = null;
+        public onclose: ((ev: { code?: number; reason?: string } | null) => void) | null = null;
+
+        constructor(_url: string) {
+          this.readyState = MockWebSocket3.OPEN;
+          sockets.push(this);
+          setTimeout(() => { this.onopen && this.onopen(); }, 0);
+        }
+
+        send() {}
+
+        close() {
+          this.readyState = MockWebSocket3.CLOSED;
+          if (this.onclose) this.onclose(null);
+        }
+      }
+      (globalThis as any).WebSocket = MockWebSocket3;
+
+      const launchPersistentContext = async () => createFakePlaywrightContext();
+      const deliveryErrors: unknown[] = [];
+
+      const client = createNiconamaCommentClient({ watchUrl: TEST_WATCH_URL, launchPersistentContext }, {
+        onComments: () => { throw new Error('delivery failed'); },
+        onMeta: () => {},
+        onError: (e) => { deliveryErrors.push(e); },
+      });
+
+      await client.start();
+      await new Promise((res) => setTimeout(res, 20));
+
+      expect(deliveryErrors).toHaveLength(1);
+      expect((deliveryErrors[0] as Error).message).toBe('delivery failed');
+
+      const ws = sockets[0];
+      expect(() => ws.onmessage && ws.onmessage(null)).not.toThrow();
+      expect(() => ws.onclose && ws.onclose(null)).not.toThrow();
+
+      await client.stop();
+    } finally {
+      (globalThis as any).fetch = originalFetch;
+      (globalThis as any).WebSocket = originalWebSocket;
+    }
+  });
+
   it("starts Playwright comment watcher and emits page comments from websocket frames and responses", async () => {
     const originalFetch = (globalThis as any).fetch;
     const originalWebSocket = (globalThis as any).WebSocket;

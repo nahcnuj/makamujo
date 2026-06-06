@@ -79,7 +79,7 @@ test.beforeAll(async () => {
     : join(process.cwd(), "var", `ipc-${randomId}.sock`);
 
   server = spawn(process.platform === "win32" ? "bun.exe" : "bun", ["index.ts", "--port", String(PORT)], {
-    env: { ...process.env, NODE_ENV: "production", CONSOLE_LOOPBACK_ONLY: '1', MAKAMUJO_IPC_PATH: ipcPath },
+    env: { ...process.env, NODE_ENV: "production", NICONAMA_START_MAX_RETRIES: '0', CONSOLE_LOOPBACK_ONLY: '1', MAKAMUJO_IPC_PATH: ipcPath },
     stdio: ["ignore", "pipe", "pipe"],
   });
 
