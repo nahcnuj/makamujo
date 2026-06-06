@@ -37,8 +37,9 @@ if [ -z "$BUN_BIN" ]; then
 fi
 
 run_and_log_stderr "$BUN_BIN" run typecheck
-run_and_log_stderr "$BUN_BIN" run test
-run_and_log_stderr "$BUN_BIN" run test:integration
+# Run tests directly with the system bun binary to avoid nested `bun` invocations
+run_and_log_stderr "$BUN_BIN" test lib/ src/ routes/ console/src/
+run_and_log_stderr env MAKAMUJO_ALLOW_FALLBACK_TTS=1 "$BUN_BIN" test tests/integration/
 run_and_log_stderr "$BUN_BIN" run test:e2e
 
 CHECKS_PASSED=1
