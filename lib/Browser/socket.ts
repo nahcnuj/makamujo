@@ -1,22 +1,26 @@
-import { Action, type State } from "automated-gameplay-transmitter";
-import { createReceiver as receiver, createSender as sender } from "automated-gameplay-transmitter/server";
-
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import type { Socket } from "node:net";
 import { join } from "node:path";
+import type { Action, State } from "automated-gameplay-transmitter";
+import {
+  createReceiver as receiver,
+  createSender as sender,
+} from "automated-gameplay-transmitter/server";
 
 const unixSocketDir = join(process.cwd(), "var");
 if (!existsSync(unixSocketDir)) {
   mkdirSync(unixSocketDir, { recursive: true });
 }
 
-export const defaultSocketPath = process.env.MAKAMUJO_IPC_PATH
-  ?? (process.platform === "win32"
-    ? '\\\\.\\pipe\\makamujo-ipc'
+export const defaultSocketPath =
+  process.env.MAKAMUJO_IPC_PATH ??
+  (process.platform === "win32"
+    ? "\\\\.\\pipe\\makamujo-ipc"
     : join(unixSocketDir, "unix.sock"));
 
 export const createSender = sender<State, Action.Action>(defaultSocketPath);
-export const createSenderWithPath = (path: string) => sender<State, Action.Action>(path);
+export const createSenderWithPath = (path: string) =>
+  sender<State, Action.Action>(path);
 
 /**
  * Removes a stale Unix socket file so that the next `server.listen()` call
@@ -27,7 +31,9 @@ const removeStaleSocketFile = (path: string) => {
   if (process.platform !== "win32" && existsSync(path)) {
     try {
       unlinkSync(path);
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
   }
 };
 
@@ -62,7 +68,8 @@ export const createReceiverWithPath = (path: string) => {
  *          to re-send the initial state so the server can restart the
  *          interaction after a reconnect.
  */
-export const createRetrySenderWithPath = (path: string, retryDelayMs: number = 1000) =>
+export const createRetrySenderWithPath =
+  (path: string, retryDelayMs: number = 1000) =>
   async (
     run: (action: Action.Action) => Promise<void>,
     onConnect?: (send: (state: State) => void) => void,
@@ -107,7 +114,12 @@ export const createRetrySenderWithPath = (path: string, retryDelayMs: number = 1
           });
 
           conn.on("error", (err) => {
-            console.warn("[WARN]", "socket error", path, err.message ?? String(err));
+            console.warn(
+              "[WARN]",
+              "socket error",
+              path,
+              err.message ?? String(err),
+            );
             if (currentConn === conn) {
               currentConn = null;
             }
@@ -121,7 +133,11 @@ export const createRetrySenderWithPath = (path: string, retryDelayMs: number = 1
             try {
               await run(action);
             } catch (err) {
-              console.warn("[WARN]", "error during action", err instanceof Error ? err.message : String(err));
+              console.warn(
+                "[WARN]",
+                "error during action",
+                err instanceof Error ? err.message : String(err),
+              );
             } finally {
               running = false;
             }

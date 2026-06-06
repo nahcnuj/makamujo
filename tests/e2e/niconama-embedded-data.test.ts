@@ -1,19 +1,28 @@
 import { expect, test } from "@playwright/test";
-import { createNiconamaCommentClient, parseAgentCommentsFromResponseBody } from "../../lib/niconamaCommentClient";
+import {
+  createNiconamaCommentClient,
+  parseAgentCommentsFromResponseBody,
+} from "../../lib/niconamaCommentClient";
 
-const ACTUAL_PROGRAM_WATCH_URL = "https://live.nicovideo.jp/watch/user/14171889";
-const ENABLE_LIVE_NICONAMA_TESTS = process.env.NICONAMA_LIVE_TESTS === '1';
+const ACTUAL_PROGRAM_WATCH_URL =
+  "https://live.nicovideo.jp/watch/user/14171889";
+const ENABLE_LIVE_NICONAMA_TESTS = process.env.NICONAMA_LIVE_TESTS === "1";
 // Disable the Playwright browser fallback inside the test by passing the
 // option to the client so the test does not rely on the environment.
 
 test.describe("NiconamaCommentClient fallback watch page", () => {
-  test.skip(!ENABLE_LIVE_NICONAMA_TESTS, "Live NicoNico tests require NICONAMA_LIVE_TESTS=1");
+  test.skip(
+    !ENABLE_LIVE_NICONAMA_TESTS,
+    "Live NicoNico tests require NICONAMA_LIVE_TESTS=1",
+  );
   test("fetches embedded-data from the actual program watch URL and extracts relive websocket URL and initial comments", async () => {
     const initialComments: any[] = [];
     const client = createNiconamaCommentClient(
       { watchUrl: ACTUAL_PROGRAM_WATCH_URL, enablePlaywrightFallback: false },
       {
-        onComments: (comments) => { initialComments.push(...comments); },
+        onComments: (comments) => {
+          initialComments.push(...comments);
+        },
         onMeta: () => {},
         onError: (error) => {
           throw error;
@@ -26,11 +35,14 @@ test.describe("NiconamaCommentClient fallback watch page", () => {
     expect(embeddedData).toBeTruthy();
     expect(typeof embeddedData).toBe("object");
 
-    const webSocketUrl = (embeddedData as any).site?.state?.relive?.webSocketUrl ?? (embeddedData as any).site?.relive?.webSocketUrl;
+    const webSocketUrl =
+      (embeddedData as any).site?.state?.relive?.webSocketUrl ??
+      (embeddedData as any).site?.relive?.webSocketUrl;
     expect(webSocketUrl).toBeTruthy();
     expect(webSocketUrl).toMatch(/^wss:\/\//);
 
-    const commentCount = (embeddedData as any).program?.statistics?.commentCount;
+    const commentCount = (embeddedData as any).program?.statistics
+      ?.commentCount;
     expect(typeof commentCount).toBe("number");
     expect(commentCount).toBeGreaterThanOrEqual(0);
     const embeddedComments = parseAgentCommentsFromResponseBody(embeddedData);
@@ -54,9 +66,13 @@ test.describe("NiconamaCommentClient fallback watch page", () => {
     const client = createNiconamaCommentClient(
       { watchUrl: ACTUAL_PROGRAM_WATCH_URL, enablePlaywrightFallback: false },
       {
-        onComments: (comments) => { initialComments.push(...comments); },
+        onComments: (comments) => {
+          initialComments.push(...comments);
+        },
         onMeta: () => {},
-        onError: (error) => { errors.push(error); },
+        onError: (error) => {
+          errors.push(error);
+        },
       },
     );
 
@@ -69,7 +85,11 @@ test.describe("NiconamaCommentClient fallback watch page", () => {
       // comments. This reduces flakiness where the client starts background
       // watchers that take a short time to populate comments.
       let waited = 0;
-      while (initialComments.length === 0 && waited < 8000 && errors.length === 0) {
+      while (
+        initialComments.length === 0 &&
+        waited < 8000 &&
+        errors.length === 0
+      ) {
         await new Promise((r) => setTimeout(r, 250));
         waited += 250;
       }

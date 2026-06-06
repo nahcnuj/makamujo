@@ -14,21 +14,23 @@
  * Layout, CharacterSprite) are still sourced from AGT; only their TypeScript
  * types are re-cast so that hono/jsx/dom JSX accepts them without errors.
  */
-import type { Child, FC } from "hono/jsx/dom";
+
 import {
   Box as _Box,
+  CharacterSprite as _CharacterSprite,
   Container as _Container,
   Layout as _Layout,
-  CharacterSprite as _CharacterSprite,
 } from "automated-gameplay-transmitter";
-export { useInterval } from "./hooks/useInterval";
+import type { Child, FC } from "hono/jsx/dom";
+
 export { HighlightOnChange } from "./components/HighlightOnChange";
+export { useInterval } from "./hooks/useInterval";
 
 // Derive the valid hono component return type from FC so we stay aligned
 // with hono's own type definitions without importing internal hono types.
-type HonoReturn = ReturnType<FC<{}>>;
+type HonoReturn = ReturnType<FC<object>>;
 
-type HonoizeChildren<Props> = Omit<Props, 'children'> & { children?: Child };
+type HonoizeChildren<Props> = Omit<Props, "children"> & { children?: Child };
 
 // Cast to a hono-compatible function signature so that AGT's React-typed
 // components are accepted by hono/jsx/dom JSX without TypeScript type errors.
@@ -37,6 +39,12 @@ type HonoizeChildren<Props> = Omit<Props, 'children'> & { children?: Child };
 type HonoComponent<Props> = (props: HonoizeChildren<Props>) => HonoReturn;
 
 export const Box = _Box as unknown as HonoComponent<Parameters<typeof _Box>[0]>;
-export const Container = _Container as unknown as HonoComponent<Parameters<typeof _Container>[0]>;
-export const Layout = _Layout as unknown as HonoComponent<Parameters<typeof _Layout>[0]>;
-export const CharacterSprite = _CharacterSprite as unknown as HonoComponent<Parameters<typeof _CharacterSprite>[0]>;
+export const Container = _Container as unknown as HonoComponent<
+  Parameters<typeof _Container>[0]
+>;
+export const Layout = _Layout as unknown as HonoComponent<
+  Parameters<typeof _Layout>[0]
+>;
+export const CharacterSprite = _CharacterSprite as unknown as HonoComponent<
+  Parameters<typeof _CharacterSprite>[0]
+>;

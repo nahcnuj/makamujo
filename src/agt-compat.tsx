@@ -11,18 +11,19 @@ import type { Child, FC } from "hono/jsx/dom";
 import "hono/jsx/dom/jsx-dev-runtime";
 import type {
   Box as AgTBox,
+  CharacterSprite as AgTCharacterSprite,
   Container as AgTContainer,
   Layout as AgTLayout,
-  CharacterSprite as AgTCharacterSprite,
 } from "automated-gameplay-transmitter";
-export { useInterval } from "./hooks/useInterval";
+
 export { HighlightOnChange } from "./components/HighlightOnChange";
+export { useInterval } from "./hooks/useInterval";
 
 // Derive the valid hono component return type from FC so we stay aligned
 // with hono's own type definitions without importing internal hono types.
-type HonoReturn = ReturnType<FC<{}>>;
+type HonoReturn = ReturnType<FC<object>>;
 
-type HonoizeChildren<Props> = Omit<Props, 'children'> & { children?: Child };
+type HonoizeChildren<Props> = Omit<Props, "children"> & { children?: Child };
 
 const screenClass = {
   1: "col-span-1 row-span-1",
@@ -79,7 +80,9 @@ export function Box({
   return <div className={className}>{children}</div>;
 }
 
-export function Container({ children }: HonoizeChildren<Parameters<typeof AgTContainer>[0]>): HonoReturn {
+export function Container({
+  children,
+}: HonoizeChildren<Parameters<typeof AgTContainer>[0]>): HonoReturn {
   return <div className="h-full p-1 overflow-hidden">{children}</div>;
 }
 
@@ -94,15 +97,21 @@ export function Layout({
   const countSpan = `${count}_${span}`;
 
   if (!Object.hasOwn(sideClass, countSpan)) {
-    throw new Error(`No side-panel class found for the pair of count:${count} and span:${span}.`);
+    throw new Error(
+      `No side-panel class found for the pair of count:${count} and span:${span}.`,
+    );
   }
   if (!Object.hasOwn(bottomClass, countSpan)) {
-    throw new Error(`No bottom-panel class found for the pair of count:${count} and span:${span}.`);
+    throw new Error(
+      `No bottom-panel class found for the pair of count:${count} and span:${span}.`,
+    );
   }
 
   return (
     <div className="w-screen h-screen content-center">
-      <div className={`grid ${gridTemplateClass[count]} max-w-full max-h-full aspect-video`}>
+      <div
+        className={`grid ${gridTemplateClass[count]} max-w-full max-h-full aspect-video`}
+      >
         <div className={screenClass[span]}>
           <div className={`w-full h-full ${className}`}>{mainPanel}</div>
         </div>
@@ -125,9 +134,12 @@ export function CharacterSprite({
   return (
     <img
       src={src}
+      alt=""
       width="720"
       height="960"
-      className={["h-full object-cover object-top", className].filter(Boolean).join(" ")}
+      className={["h-full object-cover object-top", className]
+        .filter(Boolean)
+        .join(" ")}
       {...rest}
     />
   );

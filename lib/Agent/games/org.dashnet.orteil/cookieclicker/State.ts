@@ -1,28 +1,28 @@
 type Product = {
-  name: string
-  mult: number
-  price: number
-  enabled: boolean
+  name: string;
+  mult: number;
+  price: number;
+  enabled: boolean;
 };
 
 type Upgrade = {
-  enabled: boolean
+  enabled: boolean;
 };
 
 type Tech = {
-  enabled: boolean
+  enabled: boolean;
 };
 
 type Switch = {
-  description?: string
-  enabled: boolean
+  description?: string;
+  enabled: boolean;
 };
 
 export type Statistics = {
   general: {
     [key in string]: {
-      innerText: string
-    }
+      innerText: string;
+    };
   } & {
     // cookiesInBank: {
     //   value: number
@@ -51,23 +51,23 @@ export type Statistics = {
     // handmadeCookies: {
     //   value: number
     // }
-  }
+  };
 };
 
 export type State = {
-  cookies: number
-  cps: number
-  isWrinkled: boolean
-  ascendNumber: number
-  commentsText?: string
+  cookies: number;
+  cps: number;
+  isWrinkled: boolean;
+  ascendNumber: number;
+  commentsText?: string;
   store: {
     products: {
-      bulkMode: 'buy' | 'sell'
-      items: Product[]
-    }
-    upgrades: Upgrade[]
-    tech: Tech[]
-    switches: Switch[]
-  }
-  statistics?: Statistics
+      bulkMode: "buy" | "sell";
+      items: Product[];
+    };
+    upgrades: Upgrade[];
+    tech: Tech[];
+    switches: Switch[];
+  };
+  statistics?: Statistics;
 };

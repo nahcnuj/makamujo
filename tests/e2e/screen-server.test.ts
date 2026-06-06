@@ -1,8 +1,17 @@
 import { expect, test } from "@playwright/test";
-import { mkdtempSync, mkdirSync, writeFileSync, copyFileSync, chmodSync, readFileSync, existsSync, rmSync } from "fs";
-import { join } from "path";
 import { spawnSync } from "child_process";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "fs";
 import os from "os";
+import { join } from "path";
 
 const RETRY_MS = 50;
 const TIMEOUT_MS = 5000;
@@ -26,14 +35,25 @@ test("bin/start creates pid files and logs", async () => {
     // Create a fake `bun` executable that just sleeps (ignores args)
     const fakeBinDir = join(tmp, "fake-bin");
     mkdirSync(fakeBinDir, { recursive: true });
-    writeFileSync(join(fakeBinDir, "bun"), "#!/usr/bin/env sh\n# fake bun: ignore args and sleep so nohup captures a long-running PID\nsleep 60\n");
+    writeFileSync(
+      join(fakeBinDir, "bun"),
+      "#!/usr/bin/env sh\n# fake bun: ignore args and sleep so nohup captures a long-running PID\nsleep 60\n",
+    );
     chmodSync(join(fakeBinDir, "bun"), 0o755);
 
     // Run the start script under the temp project root
-    const env = { ...process.env, PATH: `${fakeBinDir}:${process.env.PATH}`, PROJECT_ROOT: tmp } as any;
+    const env = {
+      ...process.env,
+      PATH: `${fakeBinDir}:${process.env.PATH}`,
+      PROJECT_ROOT: tmp,
+    } as any;
 
     // Execute start via bash so relative paths resolve inside the temp tree
-    const res = spawnSync("bash", [join(tmpBin, "start")], { env, cwd: tmp, stdio: "inherit" });
+    const res = spawnSync("bash", [join(tmpBin, "start")], {
+      env,
+      cwd: tmp,
+      stdio: "inherit",
+    });
     expect(res.error).toBeUndefined();
 
     const screenPidPath = join(tmpPid, "screen");
@@ -43,7 +63,12 @@ test("bin/start creates pid files and logs", async () => {
     // Wait for PID files to appear
     const start = Date.now();
     while (Date.now() - start < TIMEOUT_MS) {
-      if (existsSync(screenPidPath) && existsSync(browserPidPath) && existsSync(obsPidPath)) break;
+      if (
+        existsSync(screenPidPath) &&
+        existsSync(browserPidPath) &&
+        existsSync(obsPidPath)
+      )
+        break;
       await new Promise((r) => setTimeout(r, RETRY_MS));
     }
 
@@ -59,10 +84,18 @@ test("bin/start creates pid files and logs", async () => {
     expect(existsSync(screenLogPath)).toBeTruthy();
 
     // Cleanup: kill background processes if still running
-    try { process.kill(parseInt(screenPid, 10)); } catch {}
-    try { process.kill(parseInt(readFileSync(browserPidPath, "utf-8").trim(), 10)); } catch {}
-    try { process.kill(parseInt(readFileSync(obsPidPath, "utf-8").trim(), 10)); } catch {}
+    try {
+      process.kill(parseInt(screenPid, 10));
+    } catch {}
+    try {
+      process.kill(parseInt(readFileSync(browserPidPath, "utf-8").trim(), 10));
+    } catch {}
+    try {
+      process.kill(parseInt(readFileSync(obsPidPath, "utf-8").trim(), 10));
+    } catch {}
   } finally {
-    try { rmSync(tmp, { recursive: true, force: true }); } catch {}
+    try {
+      rmSync(tmp, { recursive: true, force: true });
+    } catch {}
   }
 });

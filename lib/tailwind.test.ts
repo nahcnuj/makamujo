@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { expect, test } from "bun:test";
 import { compileTailwindCss } from "./tailwind";
 
 test("compiles main Tailwind CSS without unresolved directives and includes app utilities", async () => {

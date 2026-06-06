@@ -1,6 +1,9 @@
-import type { AgentStateResponse } from "./types";
 import type { Child, CSSProperties } from "hono/jsx";
-import { getAgentCommentNumber, getCommentTextFromAgentComment } from "../../../lib/niconamaCommentClient.helpers";
+import {
+  getAgentCommentNumber,
+  getCommentTextFromAgentComment,
+} from "../../../lib/niconamaCommentClient.helpers";
+import type { AgentStateResponse } from "./types";
 
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
 const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
@@ -17,23 +20,37 @@ export const formatStateLabel = (type: string | undefined): string => {
   return type ?? "-";
 };
 
-export const formatStartDate = (startAtUnixTime: number | undefined): string => {
-  if (typeof startAtUnixTime !== "number" || !Number.isFinite(startAtUnixTime) || startAtUnixTime <= 0) {
+export const formatStartDate = (
+  startAtUnixTime: number | undefined,
+): string => {
+  if (
+    typeof startAtUnixTime !== "number" ||
+    !Number.isFinite(startAtUnixTime) ||
+    startAtUnixTime <= 0
+  ) {
     return "-";
   }
-  const startAtUnixTimeMilliseconds = startAtUnixTime >= UNIX_MILLISECONDS_THRESHOLD
-    ? startAtUnixTime
-    : startAtUnixTime * 1000;
+  const startAtUnixTimeMilliseconds =
+    startAtUnixTime >= UNIX_MILLISECONDS_THRESHOLD
+      ? startAtUnixTime
+      : startAtUnixTime * 1000;
   return new Date(startAtUnixTimeMilliseconds).toLocaleString("ja-JP");
 };
 
-export const formatStreamStartTime = (startAtUnixTime: number | undefined): string | undefined => {
-  if (typeof startAtUnixTime !== "number" || !Number.isFinite(startAtUnixTime) || startAtUnixTime <= 0) {
+export const formatStreamStartTime = (
+  startAtUnixTime: number | undefined,
+): string | undefined => {
+  if (
+    typeof startAtUnixTime !== "number" ||
+    !Number.isFinite(startAtUnixTime) ||
+    startAtUnixTime <= 0
+  ) {
     return undefined;
   }
-  const startAtUnixTimeMilliseconds = startAtUnixTime >= UNIX_MILLISECONDS_THRESHOLD
-    ? startAtUnixTime
-    : startAtUnixTime * 1000;
+  const startAtUnixTimeMilliseconds =
+    startAtUnixTime >= UNIX_MILLISECONDS_THRESHOLD
+      ? startAtUnixTime
+      : startAtUnixTime * 1000;
   const date = new Date(startAtUnixTimeMilliseconds);
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -47,7 +64,10 @@ export const formatMetricValue = (metricValue: number | undefined): string => {
   return metricValue === undefined ? "-" : String(metricValue);
 };
 
-export const formatNGramValue = (nGram: number | undefined, nGramRaw: number | undefined): string => {
+export const formatNGramValue = (
+  nGram: number | undefined,
+  nGramRaw: number | undefined,
+): string => {
   if (nGram === undefined || !Number.isFinite(nGram) || nGram < 1) {
     return "-";
   }
@@ -62,48 +82,64 @@ export const formatNGramValue = (nGram: number | undefined, nGramRaw: number | u
 type SpeechPayload =
   | string
   | { text?: string; nodes?: readonly string[] }
-  | ({ speech?: string | { text?: string; nodes?: readonly string[] } | { speech?: string; text?: string; nodes?: readonly string[] }; silent?: boolean })
+  | {
+      speech?:
+        | string
+        | { text?: string; nodes?: readonly string[] }
+        | { speech?: string; text?: string; nodes?: readonly string[] };
+      silent?: boolean;
+    }
   | undefined;
 
-export const normalizeSpeechText = (speech: SpeechPayload): string | undefined => {
+export const normalizeSpeechText = (
+  speech: SpeechPayload,
+): string | undefined => {
   if (typeof speech === "string") {
     return speech.trim() || undefined;
   }
 
   if (speech && typeof speech === "object") {
-    const textValue = typeof (speech as any).text === "string"
-      ? (speech as any).text
-      : typeof (speech as any).speech === "string"
-        ? (speech as any).speech
-        : typeof (speech as any).speech === "object"
-          ? typeof (speech as any).speech.text === "string"
-            ? (speech as any).speech.text
-            : undefined
-          : undefined;
-    return typeof textValue === "string" ? textValue.trim() || undefined : undefined;
+    const textValue =
+      typeof (speech as any).text === "string"
+        ? (speech as any).text
+        : typeof (speech as any).speech === "string"
+          ? (speech as any).speech
+          : typeof (speech as any).speech === "object"
+            ? typeof (speech as any).speech.text === "string"
+              ? (speech as any).speech.text
+              : undefined
+            : undefined;
+    return typeof textValue === "string"
+      ? textValue.trim() || undefined
+      : undefined;
   }
 
   return undefined;
 };
 
-const createHighlightedCommentLines = (commentText: string, pickedTopic: string) => {
+const createHighlightedCommentLines = (
+  commentText: string,
+  pickedTopic: string,
+) => {
   if (!pickedTopic) {
     return [commentText];
   }
   if (pickedTopic === commentText) {
     return ["", pickedTopic, ""];
   }
-  return commentText.split(pickedTopic).flatMap((segment, index, segments) => (
-    index === segments.length - 1
-      ? [segment]
-      : [segment, pickedTopic]
-  ));
+  return commentText
+    .split(pickedTopic)
+    .flatMap((segment, index, segments) =>
+      index === segments.length - 1 ? [segment] : [segment, pickedTopic],
+    );
 };
 
-export const normalizeReplyTargetCommentText = (text: string | undefined): string | undefined => {
-  if (typeof text !== 'string') return undefined;
+export const normalizeReplyTargetCommentText = (
+  text: string | undefined,
+): string | undefined => {
+  if (typeof text !== "string") return undefined;
   const normalized = text.trim();
-  return normalized.replace(/^#\d+[ 　]+/, '').trimStart() || undefined;
+  return normalized.replace(/^#\d+[ 　]+/, "").trimStart() || undefined;
 };
 
 export const createReplyTargetCommentValueComponent = (
@@ -122,7 +158,7 @@ export const createReplyTargetCommentValueComponent = (
   return (
     <div className="space-y-2">
       <p className="break-words whitespace-pre-wrap">
-        {commentNodes.map((part, index) => (
+        {commentNodes.map((part, index) =>
           index % 2 === 1 ? (
             <span
               key={`highlighted-topic-${index}`}
@@ -132,8 +168,8 @@ export const createReplyTargetCommentValueComponent = (
             </span>
           ) : (
             <span key={`comment-part-${index}`}>{part}</span>
-          )
-        ))}
+          ),
+        )}
       </p>
     </div>
   );
@@ -168,7 +204,7 @@ export const createRecentCommentsValueComponent = (
   return (
     <div className="space-y-2">
       {commentsToRender.map((comment, index) => {
-        const entry = formatAgentCommentEntry(comment) ?? '-';
+        const entry = formatAgentCommentEntry(comment) ?? "-";
 
         return (
           <p
@@ -192,7 +228,10 @@ const formatSpeechHistoryNGramLabel = (nGram: number | undefined): string => {
 
 const EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH = "3px";
 
-const formatSpeechHistoryItemText = (speechText: string, nGram: number | undefined): string => {
+const formatSpeechHistoryItemText = (
+  speechText: string,
+  nGram: number | undefined,
+): string => {
   return `${speechText} (${formatSpeechHistoryNGramLabel(nGram)})`;
 };
 
@@ -214,7 +253,14 @@ export const createSpeechHistoryDisplayItems = (
   }
 
   const speechHistoryItems = speechHistory.reduce<
-    Array<{ id: string; speechText: string; displayLine: string; nGramLabel: string; nodes?: string[]; replyTargetComment?: { text?: string; pickedTopic?: string } }>
+    Array<{
+      id: string;
+      speechText: string;
+      displayLine: string;
+      nGramLabel: string;
+      nodes?: string[];
+      replyTargetComment?: { text?: string; pickedTopic?: string };
+    }>
   >((accumulatedItems, speechHistoryItem) => {
     const speechText = normalizeSpeechText(speechHistoryItem.speech);
     if (!speechText) {
@@ -223,7 +269,10 @@ export const createSpeechHistoryDisplayItems = (
 
     const traceNodes = (speechHistoryItem as any).nodes;
     const hasTrace = Array.isArray(traceNodes) && traceNodes.length > 0;
-    const hasValidNGram = speechHistoryItem.nGram !== undefined && Number.isFinite(speechHistoryItem.nGram) && speechHistoryItem.nGram >= 1;
+    const hasValidNGram =
+      speechHistoryItem.nGram !== undefined &&
+      Number.isFinite(speechHistoryItem.nGram) &&
+      speechHistoryItem.nGram >= 1;
     if (!hasTrace && !hasValidNGram) {
       return accumulatedItems;
     }
@@ -232,7 +281,10 @@ export const createSpeechHistoryDisplayItems = (
     accumulatedItems.push({
       id: speechHistoryItem.id ?? `speech-history-${displayOrder}`,
       speechText,
-      displayLine: formatSpeechHistoryItemText(speechText, speechHistoryItem.nGram),
+      displayLine: formatSpeechHistoryItemText(
+        speechText,
+        speechHistoryItem.nGram,
+      ),
       nGramLabel: formatSpeechHistoryNGramLabel(speechHistoryItem.nGram),
       nodes: hasTrace ? (traceNodes as string[]) : undefined,
       replyTargetComment: speechHistoryItem.replyTargetComment,
@@ -245,7 +297,10 @@ export const createSpeechHistoryDisplayItems = (
     return { ...item, seq: match ? Number(match[1]) : undefined };
   });
 
-  const seqCount = itemsWithSeq.reduce((c, it) => (it.seq !== undefined ? c + 1 : c), 0);
+  const seqCount = itemsWithSeq.reduce(
+    (c, it) => (it.seq !== undefined ? c + 1 : c),
+    0,
+  );
   if (seqCount >= 2) {
     itemsWithSeq.sort((a, b) => (b.seq ?? 0) - (a.seq ?? 0));
     return itemsWithSeq.map(({ seq, ...rest }) => rest);
@@ -268,41 +323,54 @@ export const createSpeechHistoryValueComponent = (
     return <span>-</span>;
   }
   return (
-    <ul className="grid grid-cols-1 gap-2 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
+    <ul
+      className="grid grid-cols-1 gap-2 overflow-y-auto"
+      style={{ scrollbarWidth: "thin" }}
+    >
       {speechHistoryItems.map((speechHistoryItem, index) => (
         <li
           key={speechHistoryItem.id}
-          className={index === 0 && emphasizeLatest
-            ? "rounded-md border border-emerald-300/30 border-b border-b-emerald-300/80 p-2"
-            : "rounded-md border border-emerald-300/30 p-2"
+          className={
+            index === 0 && emphasizeLatest
+              ? "rounded-md border border-emerald-300/30 border-b border-b-emerald-300/80 p-2"
+              : "rounded-md border border-emerald-300/30 p-2"
           }
-          style={index === 0 && emphasizeLatest ? {
-            "--speech-history-border-bottom-width": EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH,
-            borderBottomWidth: "var(--speech-history-border-bottom-width)",
-            paddingBottom: "calc(0.5rem - var(--speech-history-border-bottom-width))",
-          } as CSSProperties : undefined}
+          style={
+            index === 0 && emphasizeLatest
+              ? ({
+                  "--speech-history-border-bottom-width":
+                    EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH,
+                  borderBottomWidth:
+                    "var(--speech-history-border-bottom-width)",
+                  paddingBottom:
+                    "calc(0.5rem - var(--speech-history-border-bottom-width))",
+                } as CSSProperties)
+              : undefined
+          }
         >
           <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-2">
             <div className="flex flex-wrap gap-1">
               {speechHistoryItem.nodes && Array.isArray(speechHistoryItem.nodes)
                 ? speechHistoryItem.nodes.map((word, wi) => (
-                  <span
-                    key={`${speechHistoryItem.id}-node-${wi}`}
-                    className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
-                  >
-                    {word}
-                  </span>
-                ))
+                    <span
+                      key={`${speechHistoryItem.id}-node-${wi}`}
+                      className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
+                    >
+                      {word}
+                    </span>
+                  ))
                 : speechHistoryItem.speechText.split(/\s+/).map((word, wi) => (
-                  <span
-                    key={`${speechHistoryItem.id}-word-${wi}`}
-                    className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
-                  >
-                    {word}
-                  </span>
-                ))}
+                    <span
+                      key={`${speechHistoryItem.id}-word-${wi}`}
+                      className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
+                    >
+                      {word}
+                    </span>
+                  ))}
             </div>
-            <span className="text-xs whitespace-nowrap">{speechHistoryItem.nGramLabel}</span>
+            <span className="text-xs whitespace-nowrap">
+              {speechHistoryItem.nGramLabel}
+            </span>
             <button
               type="button"
               disabled
@@ -327,11 +395,14 @@ export const createLiveDeliveryMetricsValueComponent = (
   niconamaState: AgentStateResponse["niconama"],
   commentCount: AgentStateResponse["commentCount"],
   isRecentCommentsOpen?: boolean,
-  toggleRecentComments?: (() => void),
+  toggleRecentComments?: () => void,
 ): Child => {
   const liveMetricItems = [
     { label: "配信状況", value: formatStateLabel(niconamaState?.type) },
-    { label: "視聴者数", value: formatMetricValue(niconamaState?.meta?.total?.listeners) },
+    {
+      label: "視聴者数",
+      value: formatMetricValue(niconamaState?.meta?.total?.listeners),
+    },
     {
       label: "コメント数",
       valueComponent: toggleRecentComments ? (
@@ -348,14 +419,20 @@ export const createLiveDeliveryMetricsValueComponent = (
         formatMetricValue(commentCount)
       ),
     },
-    { label: "ギフト", value: formatMetricValue(niconamaState?.meta?.total?.gift) },
+    {
+      label: "ギフト",
+      value: formatMetricValue(niconamaState?.meta?.total?.gift),
+    },
     { label: "広告", value: formatMetricValue(niconamaState?.meta?.total?.ad) },
   ];
 
   return (
     <div className="grid grid-cols-5 gap-x-2 gap-y-1">
       {liveMetricItems.map((liveMetricItem, index) => (
-        <div key={`label-${liveMetricItem.label}`} className="text-center whitespace-nowrap">
+        <div
+          key={`label-${liveMetricItem.label}`}
+          className="text-center whitespace-nowrap"
+        >
           {index === 0 ? (
             <h3 className="font-bold">{liveMetricItem.label}</h3>
           ) : (
@@ -364,7 +441,10 @@ export const createLiveDeliveryMetricsValueComponent = (
         </div>
       ))}
       {liveMetricItems.map((liveMetricItem) => (
-        <p key={`value-${liveMetricItem.label}`} className="text-center whitespace-nowrap">
+        <p
+          key={`value-${liveMetricItem.label}`}
+          className="text-center whitespace-nowrap"
+        >
           {liveMetricItem.valueComponent ?? liveMetricItem.value}
         </p>
       ))}
@@ -386,12 +466,19 @@ const renderCurrentGameStateValueComponent = (
   currentGameStateValue: unknown,
   visitedObjects = new WeakSet<object>(),
 ): Child => {
-  if (currentGameStateValue === null || typeof currentGameStateValue !== "object") {
-    return <span>{formatCurrentGameStateLeafValue(currentGameStateValue)}</span>;
+  if (
+    currentGameStateValue === null ||
+    typeof currentGameStateValue !== "object"
+  ) {
+    return (
+      <span>{formatCurrentGameStateLeafValue(currentGameStateValue)}</span>
+    );
   }
 
   if (visitedObjects.has(currentGameStateValue)) {
-    throw new TypeError("Cannot render currentGame.state because circular references were detected (will display '-'.");
+    throw new TypeError(
+      "Cannot render currentGame.state because circular references were detected (will display '-'.",
+    );
   }
 
   visitedObjects.add(currentGameStateValue);
@@ -407,7 +494,14 @@ const renderCurrentGameStateValueComponent = (
               arrayItem !== null && typeof arrayItem === "object"
                 ? `array-item-object-${arrayIndex}`
                 : `array-item-${formatCurrentGameStateLeafValue(arrayItem)}-${arrayIndex}`;
-            return <li key={arrayItemKey}>{renderCurrentGameStateValueComponent(arrayItem, visitedObjects)}</li>;
+            return (
+              <li key={arrayItemKey}>
+                {renderCurrentGameStateValueComponent(
+                  arrayItem,
+                  visitedObjects,
+                )}
+              </li>
+            );
           })}
         </ul>
       );
@@ -426,16 +520,24 @@ const renderCurrentGameStateValueComponent = (
               <li key={stateKey}>
                 <details className="group rounded-md border border-emerald-300/40 p-2">
                   <summary className="flex items-center gap-2 font-semibold cursor-pointer list-none">
-                    <span aria-hidden="true" className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-slate-500">
+                    <span
+                      aria-hidden="true"
+                      className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-slate-500"
+                    >
                       ▶
                     </span>
                     <span>{stateKey}</span>
                     {Array.isArray(stateValue) ? (
-                      <span className="text-sm italic text-slate-500">({stateValue.length})</span>
+                      <span className="text-sm italic text-slate-500">
+                        ({stateValue.length})
+                      </span>
                     ) : null}
                   </summary>
                   <div className="pl-4 border-l border-emerald-300/40 mt-2">
-                    {renderCurrentGameStateValueComponent(stateValue, visitedObjects)}
+                    {renderCurrentGameStateValueComponent(
+                      stateValue,
+                      visitedObjects,
+                    )}
                   </div>
                 </details>
               </li>
@@ -469,4 +571,5 @@ export const createCurrentGameInfoValueComponent = (
   }
 };
 
-export const getSpeechUnavailableIndicator = (): string => SPEECH_UNAVAILABLE_INDICATOR;
+export const getSpeechUnavailableIndicator = (): string =>
+  SPEECH_UNAVAILABLE_INDICATOR;

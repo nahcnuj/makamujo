@@ -7,20 +7,24 @@ import { play } from "./ALSA";
 import { generateWavFile, type OpenJTalkOptions } from "./OpenJTalk";
 
 export default class implements TTS {
-  #htsvoiceFile: string
-  #dictionaryDir: string
+  #htsvoiceFile: string;
+  #dictionaryDir: string;
 
   #tempDir: string;
 
-  constructor({ htsvoiceFile, dictionaryDir }: Pick<OpenJTalkOptions, 'htsvoiceFile' | 'dictionaryDir'>) {
+  constructor({
+    htsvoiceFile,
+    dictionaryDir,
+  }: Pick<OpenJTalkOptions, "htsvoiceFile" | "dictionaryDir">) {
     this.#htsvoiceFile = htsvoiceFile;
     this.#dictionaryDir = dictionaryDir;
 
-    this.#tempDir = mkdtempSync(join(tmpdir(), 'makamujo-'));
+    this.#tempDir = mkdtempSync(join(tmpdir(), "makamujo-"));
   }
 
   async speech(text: string, options = {}) {
-    const tempFile = `${join(this.#tempDir, 'speech')}.wav` satisfies `${string}.wav`;
+    const tempFile =
+      `${join(this.#tempDir, "speech")}.wav` satisfies `${string}.wav`;
     try {
       await generateWavFile(text, tempFile, {
         htsvoiceFile: this.#htsvoiceFile,
@@ -41,6 +45,6 @@ export default class implements TTS {
 export class FallbackTTS implements TTS {
   async speech(text: string) {
     await setTimeout(10_000);
-    console.debug('[DEBUG]', 'Fallback.speech', text);
+    console.debug("[DEBUG]", "Fallback.speech", text);
   }
 }

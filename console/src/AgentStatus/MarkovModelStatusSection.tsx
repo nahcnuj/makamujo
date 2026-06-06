@@ -7,7 +7,9 @@ type MarkovModelStatusSectionProps = {
   markovModelRows: AgentStatusRow[];
 };
 
-export const MarkovModelStatusSection = ({ markovModelRows }: MarkovModelStatusSectionProps) => {
+export const MarkovModelStatusSection = ({
+  markovModelRows,
+}: MarkovModelStatusSectionProps) => {
   const nGramRow = markovModelRows.find((row) => row.label === "生成N-gram");
   const rows = markovModelRows.filter((row) => row.label !== "生成N-gram");
 

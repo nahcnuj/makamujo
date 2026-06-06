@@ -1,40 +1,61 @@
-import fs from 'fs';
-import path from 'path';
-import { tmpdir } from 'node:os';
-import { mkdtempSync } from 'node:fs';
-import { launchPersistentContext, DEFAULT_PLAYWRIGHT_USER_DATA_DIR } from '../lib/Browser/chromium';
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import fs from "fs";
+import path from "path";
+import {
+  DEFAULT_PLAYWRIGHT_USER_DATA_DIR,
+  launchPersistentContext,
+} from "../lib/Browser/chromium";
 
 const makeTempDir = () => {
   const ts = Date.now();
-  const dir = path.join('/tmp', `makamujo-playwright-${ts}`);
-  try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
+  const dir = path.join("/tmp", `makamujo-playwright-${ts}`);
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch (e) {}
   return dir;
 };
 
 const persistentUserDataDir = () => {
   try {
-    if (process.env.MAKAMUJO_PERSIST_USER_DATA === '1') {
+    if (process.env.MAKAMUJO_PERSIST_USER_DATA === "1") {
       const dir = DEFAULT_PLAYWRIGHT_USER_DATA_DIR;
-      try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+      } catch (e) {}
       return dir;
     }
   } catch (e) {}
   return null;
 };
 
-const normalize = (s) => s.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#x2F;/g, '/');
+const normalize = (s) =>
+  s
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&#x2F;/g, "/");
 const extractEmbeddedDataFromHtml = (html) => {
-  let m = html.match(/<script[^>]*id=["']embedded-data["'][^>]*data-props=(['"])([\s\S]*?)\1/i);
+  let m = html.match(
+    /<script[^>]*id=["']embedded-data["'][^>]*data-props=(['"])([\s\S]*?)\1/i,
+  );
   if (m && m[2]) {
-    try { return JSON.parse(normalize(m[2])); } catch (e) {}
+    try {
+      return JSON.parse(normalize(m[2]));
+    } catch (e) {}
   }
   m = html.match(/data-props=(['"])([\s\S]*?)\1/i);
   if (m && m[2]) {
-    try { return JSON.parse(normalize(m[2])); } catch (e) {}
+    try {
+      return JSON.parse(normalize(m[2]));
+    } catch (e) {}
   }
-  m = html.match(/<(?:div|script)[^>]*id=["']embedded-data["'][^>]*>([\s\S]*?)<\/(?:div|script)>/i);
+  m = html.match(
+    /<(?:div|script)[^>]*id=["']embedded-data["'][^>]*>([\s\S]*?)<\/(?:div|script)>/i,
+  );
   if (m && m[1]) {
-    try { return JSON.parse(normalize(m[1])); } catch (e) {}
+    try {
+      return JSON.parse(normalize(m[1]));
+    } catch (e) {}
   }
   return null;
 };
@@ -42,19 +63,30 @@ const extractEmbeddedDataFromHtml = (html) => {
 const safeContent = async (frame, timeoutMs = 30_000) => {
   return await Promise.race([
     (async () => {
-      try { return await frame.content(); } catch (e) { return `<error: ${String(e)}>`; }
+      try {
+        return await frame.content();
+      } catch (e) {
+        return `<error: ${String(e)}>`;
+      }
     })(),
-    new Promise((res) => setTimeout(() => res(`<timeout after ${timeoutMs}ms>`), timeoutMs)),
+    new Promise((res) =>
+      setTimeout(() => res(`<timeout after ${timeoutMs}ms>`), timeoutMs),
+    ),
   ]);
 };
 
 const run = async () => {
   const url = process.argv[2];
-  if (!url) { console.error('missing url arg'); process.exit(2); }
+  if (!url) {
+    console.error("missing url arg");
+    process.exit(2);
+  }
 
   const tmpDir = makeTempDir();
-  const userDataDir = persistentUserDataDir() ?? path.join(tmpDir, 'user-data');
-  try { fs.mkdirSync(userDataDir, { recursive: true }); } catch (e) {}
+  const userDataDir = persistentUserDataDir() ?? path.join(tmpDir, "user-data");
+  try {
+    fs.mkdirSync(userDataDir, { recursive: true });
+  } catch (e) {}
 
   const diagnostics = { console: [], requests: [], responses: [], frames: [] };
 
@@ -67,9 +99,17 @@ const run = async () => {
   context.setDefaultTimeout?.(30000);
 
   const page = await context.newPage();
-  page.on('console', (msg) => diagnostics.console.push({ type: msg.type(), text: msg.text() }));
-  page.on('request', (req) => diagnostics.requests.push({ url: req.url(), method: req.method(), headers: req.headers() }));
-  page.on('response', async (res) => {
+  page.on("console", (msg) =>
+    diagnostics.console.push({ type: msg.type(), text: msg.text() }),
+  );
+  page.on("request", (req) =>
+    diagnostics.requests.push({
+      url: req.url(),
+      method: req.method(),
+      headers: req.headers(),
+    }),
+  );
+  page.on("response", async (res) => {
     try {
       const url2 = res.url();
       const status = res.status();
@@ -78,52 +118,112 @@ const run = async () => {
       try {
         body = await Promise.race([
           res.text().catch((e) => `<error:${String(e)}>`),
-          new Promise((res2) => setTimeout(() => res2('<response-timeout>'), 12_000)),
+          new Promise((res2) =>
+            setTimeout(() => res2("<response-timeout>"), 12_000),
+          ),
         ]);
-      } catch (e) { body = `<error reading response: ${String(e)}>`; }
-      diagnostics.responses.push({ url: url2, status, headers, body: typeof body === 'string' ? (body.length > 10000 ? body.slice(0,10000) + '...TRUNCATED' : body) : String(body) });
+      } catch (e) {
+        body = `<error reading response: ${String(e)}>`;
+      }
+      diagnostics.responses.push({
+        url: url2,
+        status,
+        headers,
+        body:
+          typeof body === "string"
+            ? body.length > 10000
+              ? body.slice(0, 10000) + "...TRUNCATED"
+              : body
+            : String(body),
+      });
     } catch (e) {}
   });
 
   try {
     await page.addInitScript(() => {
-      try { Object.defineProperty(navigator, 'webdriver', { get: () => false }); } catch (e) {}
-      try { window.chrome = window.chrome || { runtime: {} }; } catch (e) {}
-      try { Object.defineProperty(navigator, 'languages', { get: () => ['ja-JP','ja','en-US','en'] }); } catch (e) {}
-      try { Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3,4,5] }); } catch (e) {}
+      try {
+        Object.defineProperty(navigator, "webdriver", { get: () => false });
+      } catch (e) {}
+      try {
+        window.chrome = window.chrome || { runtime: {} };
+      } catch (e) {}
+      try {
+        Object.defineProperty(navigator, "languages", {
+          get: () => ["ja-JP", "ja", "en-US", "en"],
+        });
+      } catch (e) {}
+      try {
+        Object.defineProperty(navigator, "plugins", {
+          get: () => [1, 2, 3, 4, 5],
+        });
+      } catch (e) {}
     });
   } catch (e) {}
 
   try {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
-    try { await page.waitForLoadState?.('networkidle', { timeout: 15_000 }); } catch {}
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    try {
+      await page.waitForLoadState?.("networkidle", { timeout: 15_000 });
+    } catch {}
   } catch (e) {}
 
   let html = null;
-  try { html = await safeContent(page, 15_000); } catch (e) { html = `<error:${String(e)}>`; }
-  try { fs.writeFileSync(path.join(tmpDir, 'page.html'), typeof html === 'string' ? html : String(html), 'utf8'); } catch (e) {}
+  try {
+    html = await safeContent(page, 15_000);
+  } catch (e) {
+    html = `<error:${String(e)}>`;
+  }
+  try {
+    fs.writeFileSync(
+      path.join(tmpDir, "page.html"),
+      typeof html === "string" ? html : String(html),
+      "utf8",
+    );
+  } catch (e) {}
 
   try {
     const frames = page.frames ? page.frames() : [];
     for (let i = 0; i < frames.length; i++) {
       try {
         const frameHtml = await safeContent(frames[i], 8_000);
-        diagnostics.frames.push({ url: frames[i].url(), index: i, snippet: typeof frameHtml === 'string' ? frameHtml.slice(0,2000) : String(frameHtml) });
-        try { fs.writeFileSync(path.join(tmpDir, `frame-${i}.html`), typeof frameHtml === 'string' ? frameHtml : String(frameHtml), 'utf8'); } catch (e) {}
+        diagnostics.frames.push({
+          url: frames[i].url(),
+          index: i,
+          snippet:
+            typeof frameHtml === "string"
+              ? frameHtml.slice(0, 2000)
+              : String(frameHtml),
+        });
+        try {
+          fs.writeFileSync(
+            path.join(tmpDir, `frame-${i}.html`),
+            typeof frameHtml === "string" ? frameHtml : String(frameHtml),
+            "utf8",
+          );
+        } catch (e) {}
       } catch (e) {}
     }
   } catch (e) {}
 
-  try { fs.writeFileSync(path.join(tmpDir, 'diagnostics.json'), JSON.stringify(diagnostics, null, 2), 'utf8'); } catch (e) {}
+  try {
+    fs.writeFileSync(
+      path.join(tmpDir, "diagnostics.json"),
+      JSON.stringify(diagnostics, null, 2),
+      "utf8",
+    );
+  } catch (e) {}
 
   let parsed = null;
-  if (typeof html === 'string') parsed = extractEmbeddedDataFromHtml(html);
+  if (typeof html === "string") parsed = extractEmbeddedDataFromHtml(html);
   if (!parsed) {
     for (const rsp of diagnostics.responses) {
       try {
-        if (rsp && typeof rsp.body === 'string') {
+        if (rsp && typeof rsp.body === "string") {
           const maybe = extractEmbeddedDataFromHtml(rsp.body);
-          if (maybe) { parsed = maybe; break; }
+          if (maybe) {
+            parsed = maybe;
+            break;
+          }
         }
       } catch (e) {}
     }
@@ -132,19 +232,32 @@ const run = async () => {
     for (const frame of diagnostics.frames) {
       try {
         const maybe = extractEmbeddedDataFromHtml(frame.snippet);
-        if (maybe) { parsed = maybe; break; }
+        if (maybe) {
+          parsed = maybe;
+          break;
+        }
       } catch (e) {}
     }
   }
 
-  console.log(JSON.stringify({ success: Boolean(parsed), embedded: parsed, diagnosticsDir: tmpDir }));
+  console.log(
+    JSON.stringify({
+      success: Boolean(parsed),
+      embedded: parsed,
+      diagnosticsDir: tmpDir,
+    }),
+  );
 
-  try { await page.close(); } catch (e) {}
-  try { await context.close(); } catch (e) {}
+  try {
+    await page.close();
+  } catch (e) {}
+  try {
+    await context.close();
+  } catch (e) {}
   process.exit(0);
 };
 
 run().catch((err) => {
-  console.error('ERROR', String(err));
+  console.error("ERROR", String(err));
   process.exit(1);
 });

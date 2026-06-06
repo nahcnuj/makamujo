@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { useInterval } from "./useInterval";
 import { useEffect, useRef } from "hono/jsx/dom";
+import { useInterval } from "./useInterval";
 
 describe("useInterval", () => {
   it("is a function", () => {

@@ -1,14 +1,24 @@
-import { createNiconamaCommentClient, filterAgentCommentsWithText, getCommentTextFromAgentComment } from "../lib/niconamaCommentClient";
+import {
+  createNiconamaCommentClient,
+  filterAgentCommentsWithText,
+  getCommentTextFromAgentComment,
+} from "../lib/niconamaCommentClient";
 
-const WATCH_URL = process.env.NICONAMA_TEST_WATCH_URL ?? "https://live.nicovideo.jp/watch/user/14171889";
+const WATCH_URL =
+  process.env.NICONAMA_TEST_WATCH_URL ??
+  "https://live.nicovideo.jp/watch/user/14171889";
 
 const isSuspectedMetadataComment = (text: string): boolean => {
   const normalized = text.trim();
-  return normalized === 'コメントするにはログインしてください'
-    || normalized === '(コメントあり)'
-    || /^[0-9]+$/.test(normalized)
-    || /^\d+コメント(?:\s*コメントするにはログインしてください)?$/.test(normalized)
-    || /ログインしてください$/u.test(normalized);
+  return (
+    normalized === "コメントするにはログインしてください" ||
+    normalized === "(コメントあり)" ||
+    /^[0-9]+$/.test(normalized) ||
+    /^\d+コメント(?:\s*コメントするにはログインしてください)?$/.test(
+      normalized,
+    ) ||
+    /ログインしてください$/u.test(normalized)
+  );
 };
 
 const buildUniqueComments = (comments: unknown[]): any[] => {
@@ -17,8 +27,9 @@ const buildUniqueComments = (comments: unknown[]): any[] => {
   for (const item of comments) {
     const text = getCommentTextFromAgentComment(item);
     if (!text) continue;
-    const value = item && typeof item === 'object' ? (item as any).data ?? item : item;
-    const key = `${value?.no ?? 'none'}|${value?.userId ?? value?.user_id ?? 'unknown'}|${text}`;
+    const value =
+      item && typeof item === "object" ? ((item as any).data ?? item) : item;
+    const key = `${value?.no ?? "none"}|${value?.userId ?? value?.user_id ?? "unknown"}|${text}`;
     if (seen.has(key)) continue;
     seen.add(key);
     unique.push(value);
@@ -28,14 +39,22 @@ const buildUniqueComments = (comments: unknown[]): any[] => {
 
 async function main() {
   const collected: any[] = [];
-  const userDataDir = process.env.NICONAMA_USER_DATA_DIR ?? './tmp/niconama-user-data';
-  const client = createNiconamaCommentClient({ watchUrl: WATCH_URL, userDataDir }, {
-    onComments: (comments) => { collected.push(...comments); },
-    onMeta: () => {},
-    onError: (err) => { console.error('client error', err); },
-  });
+  const userDataDir =
+    process.env.NICONAMA_USER_DATA_DIR ?? "./tmp/niconama-user-data";
+  const client = createNiconamaCommentClient(
+    { watchUrl: WATCH_URL, userDataDir },
+    {
+      onComments: (comments) => {
+        collected.push(...comments);
+      },
+      onMeta: () => {},
+      onError: (err) => {
+        console.error("client error", err);
+      },
+    },
+  );
 
-  console.log('Starting client for', WATCH_URL);
+  console.log("Starting client for", WATCH_URL);
   await client.start();
 
   // Wait up to 60s for comments to arrive (or shorter if already present)
@@ -46,10 +65,13 @@ async function main() {
   const start = Date.now();
   while (Date.now() - start < waitMs) {
     // stop early if we received any real comment bodies
-    if (collected.some((c) => {
-      const text = getCommentTextFromAgentComment(c);
-      return text !== null && !isSuspectedMetadataComment(text);
-    })) break;
+    if (
+      collected.some((c) => {
+        const text = getCommentTextFromAgentComment(c);
+        return text !== null && !isSuspectedMetadataComment(text);
+      })
+    )
+      break;
     await new Promise((r) => setTimeout(r, 500));
   }
 
@@ -57,11 +79,15 @@ async function main() {
   try {
     const embedded = await client.fetchEmbeddedData();
     if (embedded) {
-      const { parseAgentCommentsFromResponseBody } = await import('../lib/niconamaCommentClient');
+      const { parseAgentCommentsFromResponseBody } = await import(
+        "../lib/niconamaCommentClient"
+      );
       const embeddedComments = parseAgentCommentsFromResponseBody(embedded);
       for (const c of embeddedComments) collected.push(c);
     }
-  } catch (e) { /* ignore */ }
+  } catch (e) {
+    /* ignore */
+  }
 
   const filtered = filterAgentCommentsWithText(collected as any);
   const unique = buildUniqueComments(filtered);
@@ -76,10 +102,14 @@ async function main() {
     try {
       const rendered = await client.fetchRenderedWatchPageBodyText(WATCH_URL);
       if (rendered) {
-        const { extractEmbeddedDataFromHtml, parseAgentCommentsFromResponseBody } = await import('../lib/niconamaCommentClient');
+        const {
+          extractEmbeddedDataFromHtml,
+          parseAgentCommentsFromResponseBody,
+        } = await import("../lib/niconamaCommentClient");
         const embeddedFromRendered = extractEmbeddedDataFromHtml(rendered);
         if (embeddedFromRendered) {
-          const renderedComments = parseAgentCommentsFromResponseBody(embeddedFromRendered);
+          const renderedComments =
+            parseAgentCommentsFromResponseBody(embeddedFromRendered);
           for (const c of renderedComments) collected.push(c);
         }
       }
@@ -95,14 +125,17 @@ async function main() {
   // If still no real comments, wait a bit longer while keeping the
   // direct websocket open to allow live frames to arrive.
   if (!hasRealComments) {
-    console.log('No comment bodies found yet — waiting 60s for live frames...');
+    console.log("No comment bodies found yet — waiting 60s for live frames...");
     const extraWaitStart = Date.now();
     const extraWaitMs = 60_000;
     while (Date.now() - extraWaitStart < extraWaitMs) {
-      if (collected.some((c) => {
-        const text = getCommentTextFromAgentComment(c);
-        return text !== null && !isSuspectedMetadataComment(text);
-      })) break;
+      if (
+        collected.some((c) => {
+          const text = getCommentTextFromAgentComment(c);
+          return text !== null && !isSuspectedMetadataComment(text);
+        })
+      )
+        break;
       // poll every 1s
       // eslint-disable-next-line no-await-in-loop
       await new Promise((r) => setTimeout(r, 1_000));
@@ -119,19 +152,24 @@ async function main() {
 
   // If still empty, attempt extracting rendered page comments via Playwright
   if (!hasRealComments) {
-    console.log('No comments yet — polling rendered extraction for up to 5 minutes...');
+    console.log(
+      "No comments yet — polling rendered extraction for up to 5 minutes...",
+    );
     const maxMs = Number(process.env.LIST_DURATION_MS ?? 300_000);
     const intervalMs = Number(process.env.LIST_INTERVAL_MS ?? 5_000);
     const loopStart = Date.now();
     while (Date.now() - loopStart < maxMs) {
       try {
-        const renderedComments = await client.fetchRenderedPageComments(WATCH_URL);
+        const renderedComments =
+          await client.fetchRenderedPageComments(WATCH_URL);
         if (Array.isArray(renderedComments) && renderedComments.length > 0) {
           for (const c of renderedComments) collected.push(c);
         }
         const embedded = await client.fetchEmbeddedData().catch(() => null);
         if (embedded) {
-          const { parseAgentCommentsFromResponseBody } = await import('../lib/niconamaCommentClient');
+          const { parseAgentCommentsFromResponseBody } = await import(
+            "../lib/niconamaCommentClient"
+          );
           const embeddedComments = parseAgentCommentsFromResponseBody(embedded);
           for (const c of embeddedComments) collected.push(c);
         }
@@ -143,10 +181,14 @@ async function main() {
       unique.length = 0;
       unique.push(...buildUniqueComments(filteredAgain));
 
-      if (unique.length > 0 && unique.some((item) => {
-        const text = getCommentTextFromAgentComment(item);
-        return text !== null && !isSuspectedMetadataComment(text);
-      })) break;
+      if (
+        unique.length > 0 &&
+        unique.some((item) => {
+          const text = getCommentTextFromAgentComment(item);
+          return text !== null && !isSuspectedMetadataComment(text);
+        })
+      )
+        break;
       // wait before next attempt
       // eslint-disable-next-line no-await-in-loop
       await new Promise((r) => setTimeout(r, intervalMs));
@@ -158,22 +200,28 @@ async function main() {
   // comment-like JSON payloads. If we find real bodies, prefer them.
   if (unique.length === 0) {
     try {
-      console.log('Running Playwright capture fallback (30s)...');
-      const { execSync } = await import('node:child_process');
+      console.log("Running Playwright capture fallback (30s)...");
+      const { execSync } = await import("node:child_process");
       // run the dedicated capture script which writes to /tmp/playwright-*.log
       try {
-        execSync('bun ./scripts/playwright-capture.ts', { cwd: process.cwd(), stdio: 'inherit', timeout: 35_000 });
+        execSync("bun ./scripts/playwright-capture.ts", {
+          cwd: process.cwd(),
+          stdio: "inherit",
+          timeout: 35_000,
+        });
       } catch (e) {
         // capture may still have written logs; continue
       }
 
-      const { readFileSync } = await import('node:fs');
-      const { parseAgentCommentsFromResponseBody } = await import('../lib/niconamaCommentClient');
+      const { readFileSync } = await import("node:fs");
+      const { parseAgentCommentsFromResponseBody } = await import(
+        "../lib/niconamaCommentClient"
+      );
       const candidateComments: any[] = [];
 
       const tryParseFromLog = (path: string) => {
         try {
-          const txt = readFileSync(path, 'utf8');
+          const txt = readFileSync(path, "utf8");
           for (const line of txt.split(/\r?\n/)) {
             const m = line.match(/({[\s\S]*})/);
             if (!m) continue;
@@ -189,12 +237,12 @@ async function main() {
         } catch {}
       };
 
-      tryParseFromLog('/tmp/playwright-ws.log');
-      tryParseFromLog('/tmp/playwright-net.log');
+      tryParseFromLog("/tmp/playwright-ws.log");
+      tryParseFromLog("/tmp/playwright-net.log");
       // Also inspect the direct WebSocket raw frame log which the client
       // appends to during runtime. This can contain NDJSON snippets and
       // JSON fragments we may have missed earlier.
-      tryParseFromLog('/tmp/niconama-ws-raw.log');
+      tryParseFromLog("/tmp/niconama-ws-raw.log");
 
       if (candidateComments.length > 0) {
         for (const c of candidateComments) collected.push(c);
@@ -219,11 +267,16 @@ async function main() {
 
   console.log(`Collected ${finalComments.length} unique comments:`);
   for (const c of finalComments) {
-    console.log('-', c);
+    console.log("-", c);
   }
 
   await client.stop();
-  try { /* cleanup tmp dir if desired */ } catch {}
+  try {
+    /* cleanup tmp dir if desired */
+  } catch {}
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

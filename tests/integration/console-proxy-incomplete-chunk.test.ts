@@ -1,23 +1,26 @@
-import { test, expect, beforeAll, afterAll } from 'bun:test';
-import { spawn } from 'child_process';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { afterAll, beforeAll, expect, test } from "bun:test";
+import { spawn } from "child_process";
+import { tmpdir } from "os";
+import { join } from "path";
 
 let upstream: ReturnType<typeof spawn> | null = null;
 let server: ReturnType<typeof spawn> | null = null;
-let consoleBaseUrl: string | undefined = undefined;
+let consoleBaseUrl: string | undefined;
 let upstreamPort: number | null = null;
 
 beforeAll(async () => {
-  upstream = spawn('bun', ['tests/helpers/mock-upstream-server.ts'], {
-    env: { ...process.env, PORT: '0' },
-    stdio: ['ignore', 'pipe', 'pipe'],
+  upstream = spawn("bun", ["tests/helpers/mock-upstream-server.ts"], {
+    env: { ...process.env, PORT: "0" },
+    stdio: ["ignore", "pipe", "pipe"],
   });
 
   await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('upstream start timeout')), 5000);
-    let buf = '';
-    upstream!.stdout!.on('data', (c: any) => {
+    const timeout = setTimeout(
+      () => reject(new Error("upstream start timeout")),
+      5000,
+    );
+    let buf = "";
+    upstream!.stdout!.on("data", (c: any) => {
       buf += String(c);
       const match = buf.match(/mock-upstream ready on (\d+)/);
       if (match) {
@@ -26,39 +29,45 @@ beforeAll(async () => {
         resolve();
       }
     });
-    upstream!.on('exit', (code) => { clearTimeout(timeout); reject(new Error('upstream exited ' + code)); });
+    upstream!.on("exit", (code) => {
+      clearTimeout(timeout);
+      reject(new Error("upstream exited " + code));
+    });
   });
 
   if (!upstreamPort) {
-    throw new Error('Failed to resolve mock upstream port');
+    throw new Error("Failed to resolve mock upstream port");
   }
 
   const ipcPath =
-    process.platform === 'win32'
+    process.platform === "win32"
       ? `\\.\\pipe\\makamujo-test-ipc`
       : join(tmpdir(), `makamujo-ipc-${process.pid}.sock`);
 
-  server = spawn('bun', ['index.ts', '--port', '0'], {
+  server = spawn("bun", ["index.ts", "--port", "0"], {
     env: {
       ...process.env,
-      NODE_ENV: 'production',
-      CONSOLE_LOOPBACK_ONLY: '1',
-      BROADCASTING_HOST: '127.0.0.1',
+      NODE_ENV: "production",
+      CONSOLE_LOOPBACK_ONLY: "1",
+      BROADCASTING_HOST: "127.0.0.1",
       BROADCASTING_PORT: String(upstreamPort),
       MAKAMUJO_IPC_PATH: ipcPath,
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ["ignore", "pipe", "pipe"],
   });
 
-  let serverStderr = '';
-  server!.stderr!.on('data', (c: any) => {
+  let serverStderr = "";
+  server!.stderr!.on("data", (c: any) => {
     serverStderr += String(c);
   });
 
   await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('server start timeout')), 15000);
-    let buf = '';
-    server!.stdout!.on('data', (c: any) => {
+    const timeout = setTimeout(
+      () => reject(new Error("server start timeout")),
+      15000,
+    );
+    let buf = "";
+    server!.stdout!.on("data", (c: any) => {
       const s = String(c);
       buf += s;
       // The main process logs both server and console URLs; prefer the console URL.
@@ -69,11 +78,11 @@ beforeAll(async () => {
         resolve();
         return;
       }
-      if (buf.includes('Server running') || buf.includes('🚀 Server running')) {
+      if (buf.includes("Server running") || buf.includes("🚀 Server running")) {
         // Fallback: server started but console URL not yet printed. Keep listening.
       }
     });
-    server!.on('exit', (code) => {
+    server!.on("exit", (code) => {
       clearTimeout(timeout);
       reject(new Error(`server exited ${code}\n${serverStderr}`));
     });
@@ -89,22 +98,29 @@ afterAll(() => {
 
 const READ_TIMEOUT_MS = 4000;
 
-test('proxy maintains SSE connection and reconnects when upstream drops', async () => {
-  const base = consoleBaseUrl ?? 'http://127.0.0.1:7777';
-  const res = await fetch(`${base}/console/api/ws`, { headers: { accept: 'text/event-stream' } });
+test("proxy maintains SSE connection and reconnects when upstream drops", async () => {
+  const base = consoleBaseUrl ?? "http://127.0.0.1:7777";
+  const res = await fetch(`${base}/console/api/ws`, {
+    headers: { accept: "text/event-stream" },
+  });
   expect(res.ok).toBeTruthy();
   const body: any = res.body;
   expect(body).toBeTruthy();
   const reader = body.getReader();
   const decoder = new TextDecoder();
 
-  let accumulated = '';
+  let accumulated = "";
 
   // Read chunks with a per-read timeout to avoid hanging indefinitely.
   const readWithTimeout = () =>
     Promise.race([
-      reader.read() as Promise<{ done: boolean; value: Uint8Array | undefined }>,
-      new Promise<{ done: true; value: undefined }>(r => setTimeout(() => r({ done: true, value: undefined }), READ_TIMEOUT_MS)),
+      reader.read() as Promise<{
+        done: boolean;
+        value: Uint8Array | undefined;
+      }>,
+      new Promise<{ done: true; value: undefined }>((r) =>
+        setTimeout(() => r({ done: true, value: undefined }), READ_TIMEOUT_MS),
+      ),
     ]);
 
   try {
@@ -115,7 +131,9 @@ test('proxy maintains SSE connection and reconnects when upstream drops', async 
       if (value) accumulated += decoder.decode(value);
     }
   } finally {
-    try { reader.cancel(); } catch {}
+    try {
+      reader.cancel();
+    } catch {}
   }
 
   // The proxy should keep the downstream connection alive and deliver at least
@@ -124,5 +142,5 @@ test('proxy maintains SSE connection and reconnects when upstream drops', async 
   expect(helloCount).toBeGreaterThanOrEqual(2);
   // Incomplete SSE frames (data: PARTIAL without trailing \n\n) must be dropped
   // by the proxy and never forwarded to the browser's EventSource.
-  expect(accumulated).not.toContain('PARTIAL');
+  expect(accumulated).not.toContain("PARTIAL");
 });

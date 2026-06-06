@@ -25,22 +25,32 @@ export async function GET(req?: Request) {
   }, AGENT_STATE_TIMEOUT_MS);
 
   try {
-    const response = await fetch(new URL("/api/meta", getBroadcastingAgentBaseUrl(req)), {
-      signal: abortController.signal,
-    });
+    const response = await fetch(
+      new URL("/api/meta", getBroadcastingAgentBaseUrl(req)),
+      {
+        signal: abortController.signal,
+      },
+    );
     if (!response.ok) {
       return Response.json(
-        { error: `failed to fetch /api/meta: ${response.status} ${response.statusText}` },
+        {
+          error: `failed to fetch /api/meta: ${response.status} ${response.statusText}`,
+        },
         { status: 502 },
       );
     }
     return Response.json(await response.json());
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      return Response.json({ error: AGENT_STATE_TIMEOUT_ERROR_MESSAGE }, { status: 502 });
+      return Response.json(
+        { error: AGENT_STATE_TIMEOUT_ERROR_MESSAGE },
+        { status: 502 },
+      );
     }
     return Response.json(
-      { error: `failed to fetch /api/meta: ${error instanceof Error ? error.message : String(error)}` },
+      {
+        error: `failed to fetch /api/meta: ${error instanceof Error ? error.message : String(error)}`,
+      },
       { status: 502 },
     );
   } finally {

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "hono/jsx/dom";
 import type { Child } from "hono/jsx/dom";
+import { useEffect, useState } from "hono/jsx/dom";
 
 type Props = {
   children?: Child;
@@ -16,7 +16,11 @@ type Props = {
  * React alongside hono/jsx/dom, preventing "Cannot read properties of null"
  * runtime errors in OBS Browser.
  */
-export function HighlightOnChange({ children, timeout, classNameOnChanged }: Props) {
+export function HighlightOnChange({
+  children,
+  timeout,
+  classNameOnChanged,
+}: Props) {
   const [isHighlighting, setIsHighlighting] = useState(false);
   useEffect(() => {
     setIsHighlighting(true);

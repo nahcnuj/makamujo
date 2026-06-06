@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "hono/jsx";
 import type { CSSProperties } from "hono/jsx";
-import type { AgentStateResponse } from "./types";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "hono/jsx";
 import { createSpeechHistoryDisplayItems } from "./agentStatusUtils";
 import { NewItemsButton } from "./NewItemsButton";
+import type { AgentStateResponse } from "./types";
 import { UndoLearningButton } from "./UndoLearningButton";
 
 type SpeechHistoryDisplayItem = {
@@ -39,42 +45,54 @@ export const SpeechHistoryListItem = ({
   return (
     <li
       key={speechHistoryItem.id}
-      className={isFirst && emphasizeLatest
-        ? "rounded-sm border-b border-b-emerald-300/80 px-1"
-        : "rounded-sm px-1"
+      className={
+        isFirst && emphasizeLatest
+          ? "rounded-sm border-b border-b-emerald-300/80 px-1"
+          : "rounded-sm px-1"
       }
-      style={isFirst && emphasizeLatest ? {
-        "--speech-history-border-bottom-width": EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH,
-        borderBottomWidth: "var(--speech-history-border-bottom-width)",
-        paddingBottom: "calc(0.2rem - var(--speech-history-border-bottom-width))",
-      } as CSSProperties : undefined}
+      style={
+        isFirst && emphasizeLatest
+          ? ({
+              "--speech-history-border-bottom-width":
+                EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH,
+              borderBottomWidth: "var(--speech-history-border-bottom-width)",
+              paddingBottom:
+                "calc(0.2rem - var(--speech-history-border-bottom-width))",
+            } as CSSProperties)
+          : undefined
+      }
     >
       <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-2">
         <div className="flex flex-wrap items-center gap-1">
           {replyComment?.text ? (
             <span className="text-xs text-emerald-300/60 break-words">
-              {renderReplyAnnotation(replyComment.text, replyComment.pickedTopic)}
+              {renderReplyAnnotation(
+                replyComment.text,
+                replyComment.pickedTopic,
+              )}
             </span>
           ) : null}
           {speechHistoryItem.nodes && Array.isArray(speechHistoryItem.nodes)
             ? speechHistoryItem.nodes.map((word, wi) => (
-              <span
-                key={`${speechHistoryItem.id}-node-${wi}`}
-                className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
-              >
-                {word}
-              </span>
-            ))
+                <span
+                  key={`${speechHistoryItem.id}-node-${wi}`}
+                  className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
+                >
+                  {word}
+                </span>
+              ))
             : speechHistoryItem.speechText.split(/\s+/).map((word, wi) => (
-              <span
-                key={`${speechHistoryItem.id}-word-${wi}`}
-                className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
-              >
-                {word}
-              </span>
-            ))}
+                <span
+                  key={`${speechHistoryItem.id}-word-${wi}`}
+                  className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
+                >
+                  {word}
+                </span>
+              ))}
         </div>
-        <span className="text-xs whitespace-nowrap">{speechHistoryItem.nGramLabel}</span>
+        <span className="text-xs whitespace-nowrap">
+          {speechHistoryItem.nGramLabel}
+        </span>
         <UndoLearningButton />
       </div>
     </li>
@@ -96,13 +114,18 @@ type SpeechHistoryListProps = {
  * sticky notification button appears at the top so the user can jump back
  * to the latest item without losing their scroll position.
  */
-const renderReplyAnnotation = (text: string, pickedTopic: string | undefined) => {
+const renderReplyAnnotation = (
+  text: string,
+  pickedTopic: string | undefined,
+) => {
   if (!pickedTopic) {
     return <span>{text}</span>;
   }
-  const segments = text.split(pickedTopic).flatMap((segment, idx, arr) =>
-    idx === arr.length - 1 ? [segment] : [segment, pickedTopic],
-  );
+  const segments = text
+    .split(pickedTopic)
+    .flatMap((segment, idx, arr) =>
+      idx === arr.length - 1 ? [segment] : [segment, pickedTopic],
+    );
   return (
     <>
       {segments.map((part, idx) =>
@@ -121,7 +144,10 @@ const renderReplyAnnotation = (text: string, pickedTopic: string | undefined) =>
   );
 };
 
-export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHistoryListProps) => {
+export const SpeechHistoryList = ({
+  initialItems,
+  emphasizeLatest,
+}: SpeechHistoryListProps) => {
   const [olderItems, setOlderItems] = useState<SpeechHistoryDisplayItem[]>([]);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -173,7 +199,8 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHisto
 
     if (!container || isAtTopRef.current) {
       // User is at the top: no anchoring needed; just refresh the baseline.
-      prevScrollHeightRef.current = container?.scrollHeight ?? prevScrollHeightRef.current;
+      prevScrollHeightRef.current =
+        container?.scrollHeight ?? prevScrollHeightRef.current;
       return;
     }
 
@@ -241,10 +268,19 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHisto
       const response = await fetch(url.toString());
       if (!response.ok) return;
 
-      const data = await response.json() as { items: AgentStateResponse["speechHistory"]; hasMore: boolean };
+      const data = (await response.json()) as {
+        items: AgentStateResponse["speechHistory"];
+        hasMore: boolean;
+      };
       const newItems = createSpeechHistoryDisplayItems(data.items);
-      const existingIds = new Set([...initialItems.map((i) => i.id), ...olderItems.map((i) => i.id)]);
-      setOlderItems((prev) => [...prev, ...newItems.filter((i) => !existingIds.has(i.id))]);
+      const existingIds = new Set([
+        ...initialItems.map((i) => i.id),
+        ...olderItems.map((i) => i.id),
+      ]);
+      setOlderItems((prev) => [
+        ...prev,
+        ...newItems.filter((i) => !existingIds.has(i.id)),
+      ]);
       setHasMore(data.hasMore);
     } catch {
       // Ignore transient fetch errors; the user can scroll again to retry.
@@ -308,11 +344,14 @@ export const SpeechHistoryList = ({ initialItems, emphasizeLatest }: SpeechHisto
       </ul>
       <div ref={bottomSentinelRef} aria-hidden="true" className="h-4" />
       {isLoadingMore ? (
-        <p className="text-xs text-center py-1 text-emerald-300/70">読み込み中...</p>
+        <p className="text-xs text-center py-1 text-emerald-300/70">
+          読み込み中...
+        </p>
       ) : !hasMore && allItems.length > 0 ? (
-        <p className="text-xs text-center py-1 text-emerald-300/50">すべての発話を表示しています</p>
+        <p className="text-xs text-center py-1 text-emerald-300/50">
+          すべての発話を表示しています
+        </p>
       ) : null}
     </div>
   );
 };
-
