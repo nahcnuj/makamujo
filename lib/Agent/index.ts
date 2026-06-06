@@ -202,10 +202,12 @@ export class MakaMujo {
   }
 
   listen(comments: AgentComment[]) {
+    console.debug('[DEBUG]', 'comments', JSON.stringify(comments, null, 0));
     for (const { data } of comments) {
       const commentData = data as CommentData;
+      console.log('[INFO]', 'got data', JSON.stringify(commentData, null, 0));
+
       const comment = commentData.comment.normalize('NFC').trim();
-      console.debug('[DEBUG]', 'comment', JSON.stringify(data, null, 0));
 
       // Update last comment timestamp for any received comment that counts as activity.
       this.#lastCommentAt = new Date(Date.now());
@@ -223,7 +225,7 @@ export class MakaMujo {
       }
 
       if (data.no || (data.userId === 'onecomme.system' && data.name === '生放送クルーズ')) {
-        console.log('[INFO]', `got a comment: "${comment}"`);
+        console.debug('[DEBUG]', `got a comment: "${comment}"`);
         // FIXME: improve replying algorithm
         const topic = pickTopic(comment);
         if (topic) {
