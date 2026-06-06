@@ -137,8 +137,17 @@ test.beforeAll(async ({ request }) => {
     : join(process.cwd(), "var", `ipc-${randomId}.sock`);
   const port = await getFreePort();
 
+  // Resolve an explicit bun executable path when available in the environment
+  // or when installed into the user's home directory (dev containers).
+  const bunExecutable = (() => {
+    if (process.env.BUN) return process.env.BUN;
+    if (process.env.BUN_EXECUTABLE) return process.env.BUN_EXECUTABLE;
+    const home = process.env.HOME || "";
+    return process.platform === "win32" ? "bun.exe" : join(home, ".bun", "bin", "bun");
+  })();
+
   server = spawn(
-    process.platform === "win32" ? "bun.exe" : "bun",
+    bunExecutable,
     ["index.ts", "--port", String(port)],
     {
       env: {

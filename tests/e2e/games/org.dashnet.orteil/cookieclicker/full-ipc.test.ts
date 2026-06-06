@@ -213,8 +213,15 @@ test.describe("Full IPC operation", () => {
       await proxyReady;
 
       // 1. Start `bun start`
+      const bunExecutable = (() => {
+        if (process.env.BUN) return process.env.BUN;
+        if (process.env.BUN_EXECUTABLE) return process.env.BUN_EXECUTABLE;
+        const home = process.env.HOME || "";
+        return process.platform === "win32" ? "bun.exe" : join(home, ".bun", "bin", "bun");
+      })();
+
       serverProcess = spawn(
-        process.platform === "win32" ? "bun.exe" : "bun",
+        bunExecutable,
         ["index.ts", "--port", String(PORT)],
         {
           env: {
