@@ -213,8 +213,23 @@ test.describe("Full IPC operation", () => {
       await proxyReady;
 
       // 1. Start `bun start`
+      const bunExecutable = (() => {
+        if (process.env.BUN) return process.env.BUN;
+        if (process.env.BUN_EXECUTABLE) return process.env.BUN_EXECUTABLE;
+        if (process.platform === "win32") return "bun.exe";
+        
+        // On non-Windows, try the home directory path first if it exists
+        const home = process.env.HOME;
+        if (home) {
+          const homeBun = join(home, ".bun", "bin", "bun");
+          if (existsSync(homeBun)) return homeBun;
+        }
+        // Fall back to "bun" on PATH
+        return "bun";
+      })();
+
       serverProcess = spawn(
-        process.platform === "win32" ? "bun.exe" : "bun",
+        bunExecutable,
         ["index.ts", "--port", String(PORT)],
         {
           env: {

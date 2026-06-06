@@ -118,6 +118,9 @@ export class NiconamaCommentClient {
   #launchPersistentContext: NiconamaLaunchPersistentContext;
   #enablePlaywrightFallback = true;
   #callbacks: NiconamaCommentClientCallbacks;
+  // Cap the number of remembered comment identifiers to avoid unbounded
+  // memory growth during long-running sessions.
+  static readonly MAX_SEEN_COMMENT_IDENTIFIERS = 50_000;
 
   constructor(options: NiconamaCommentClientOptions, callbacks: NiconamaCommentClientCallbacks) {
     this.#userDataDir = options.userDataDir ?? DEFAULT_PLAYWRIGHT_USER_DATA_DIR;
@@ -127,6 +130,50 @@ export class NiconamaCommentClient {
     this.#launchPersistentContext = options.launchPersistentContext ?? (launchPersistentContext as unknown as NiconamaLaunchPersistentContext);
     this.#enablePlaywrightFallback = options.enablePlaywrightFallback ?? true;
     this.#callbacks = callbacks;
+  }
+
+  // Unified delivery helper: call consumer callback and perform maintenance
+  // (e.g. trimming the seen identifiers set) to prevent memory/perf degradation.
+  private deliverComments(comments: any[]): void {
+    // Call consumer callback asynchronously to avoid consumer-induced
+    // event-loop blocking while still delivering comments in a timely way.
+    try {
+      const cb = this.#callbacks.onComments;
+      if (typeof cb === 'function') {
+        try {
+          // Prefer setImmediate-like scheduling; fall back to setTimeout.
+          if (typeof (globalThis as any).setImmediate === 'function') {
+            (globalThis as any).setImmediate(() => {
+              try { cb(comments); } catch (e) { /* swallow */ }
+            });
+          } else {
+            globalThis.setTimeout(() => {
+              try { cb(comments); } catch (e) { /* swallow */ }
+            }, 0);
+          }
+        } catch (e) {
+          try { cb(comments); } catch (e2) { /* swallow */ }
+        }
+      }
+    } catch (e) {
+      // Swallow consumer errors to avoid destabilizing the client.
+    }
+
+    // Trim the seen identifiers set to avoid unbounded memory growth.
+    try {
+      const max = (this.constructor as typeof NiconamaCommentClient).MAX_SEEN_COMMENT_IDENTIFIERS;
+      if (this.#seenCommentIdentifiers.size > max) {
+        const removeCount = Math.max(0, this.#seenCommentIdentifiers.size - max);
+        let removed = 0;
+        for (const id of this.#seenCommentIdentifiers) {
+          this.#seenCommentIdentifiers.delete(id);
+          removed += 1;
+          if (removed >= removeCount) break;
+        }
+      }
+    } catch (e) {
+      // ignore trimming errors
+    }
   }
 
   async start(): Promise<void> {
@@ -183,7 +230,7 @@ export class NiconamaCommentClient {
       const initialComments = parseAgentCommentsFromResponseBody(embeddedData, this.#seenCommentIdentifiers);
       try { console.debug('[DEBUG] startup initialComments count', { count: initialComments.length }); } catch {}
       if (initialComments.length > 0) {
-        this.#callbacks.onComments(initialComments);
+        this.deliverComments(initialComments);
       }
     } catch (err) {
       console.warn('[WARN] error while checking embedded initial comments', err);
@@ -191,7 +238,7 @@ export class NiconamaCommentClient {
     try {
       const polled = await this.fetchCommentsFromPollingApis(embeddedData).catch(() => [] as any[]);
       if (Array.isArray(polled) && polled.length > 0) {
-        this.#callbacks.onComments(polled);
+        this.deliverComments(polled);
         console.debug('[DEBUG] delivered comments from polling APIs at startup', { count: polled.length, watchUrl });
       }
     } catch (e) {
@@ -304,7 +351,7 @@ export class NiconamaCommentClient {
       try {
         const singleTry = await this.fetchCommentsFromPollingApis(embedded).catch(() => [] as AgentComment[]);
         if (Array.isArray(singleTry) && singleTry.length > 0) {
-          this.#callbacks.onComments(singleTry);
+          this.deliverComments(singleTry);
           console.debug('[DEBUG] fetchEmbeddedData comments found from polling APIs', { count: singleTry.length, targetUrl });
           return embedded;
         }
@@ -318,7 +365,7 @@ export class NiconamaCommentClient {
           while (Date.now() - startTime < aggressiveTimeoutMs) {
             const commentsFromApi = await this.fetchCommentsFromPollingApis(embedded).catch(() => [] as AgentComment[]);
             if (Array.isArray(commentsFromApi) && commentsFromApi.length > 0) {
-              this.#callbacks.onComments(commentsFromApi);
+              this.deliverComments(commentsFromApi);
               console.debug('[DEBUG] fetchEmbeddedData comments found from polling APIs (aggressive)', { count: commentsFromApi.length, targetUrl });
               return embedded;
             }
@@ -344,7 +391,7 @@ export class NiconamaCommentClient {
     try {
       const singleTry = await this.fetchCommentsFromPollingApis(null).catch(() => [] as AgentComment[]);
       if (Array.isArray(singleTry) && singleTry.length > 0) {
-        this.#callbacks.onComments(singleTry);
+        this.deliverComments(singleTry);
         console.debug('[DEBUG] fetchEmbeddedData comments found from polling APIs (no static embedded)', { count: singleTry.length, targetUrl });
         return null;
       }
@@ -354,7 +401,7 @@ export class NiconamaCommentClient {
       while (Date.now() - startTime < aggressiveTimeoutMs) {
         const commentsFromApi = await this.fetchCommentsFromPollingApis(null).catch(() => [] as AgentComment[]);
         if (Array.isArray(commentsFromApi) && commentsFromApi.length > 0) {
-          this.#callbacks.onComments(commentsFromApi);
+          this.deliverComments(commentsFromApi);
           console.debug('[DEBUG] fetchEmbeddedData comments found from polling APIs (aggressive, no static)', { count: commentsFromApi.length, targetUrl });
           return null;
         }
@@ -743,9 +790,9 @@ export class NiconamaCommentClient {
                 (enriched as any).site.state.relive = (enriched as any).site.state.relive ?? {};
                 (enriched as any).site.state.relive.comments = comments.map((c: string) => ({ comment: c }));
               } catch {}
-              try {
+                try {
                 const parsedComments = (enriched as any).site.state.relive.comments.map((c: any) => ({ data: c }));
-                this.#callbacks.onComments(parsedComments);
+                this.deliverComments(parsedComments);
               } catch {}
               return enriched;
             }
@@ -770,7 +817,7 @@ export class NiconamaCommentClient {
                   (enriched2 as any).site.state.relive = (enriched2 as any).site.state.relive ?? {};
                   (enriched2 as any).site.state.relive.comments = pageComments.map((c: any) => (c && c.data) ? c.data : { comment: String(c) });
                 } catch {}
-                try { this.#callbacks.onComments(pageComments); } catch {}
+                try { this.deliverComments(pageComments); } catch {}
                 return enriched2;
               }
             } catch {
@@ -943,7 +990,7 @@ export class NiconamaCommentClient {
       const initialComments = parseAgentCommentsFromResponseBody(data, this.#seenCommentIdentifiers);
       if (initialComments.length > 0) {
         console.debug('[DEBUG] direct websocket initial comments from embedded data', { count: initialComments.length, watchUrl });
-        this.#callbacks.onComments(initialComments);
+        this.deliverComments(initialComments);
       }
       webSocketUrl = this.getWebSocketUrlFromEmbeddedData(data);
       const frontendId = this.getFrontendIdFromEmbeddedData(data);
@@ -1146,6 +1193,13 @@ export class NiconamaCommentClient {
     this.#directWebSocket = null;
     this.#directWebSocketQueue = [];
     try {
+      // Null out event handlers and remove listeners to avoid retaining
+      // references to `this` via closure-bound handlers.
+      try { if (ws) { ws.onopen = null; } } catch {}
+      try { if (ws) { ws.onmessage = null; } } catch {}
+      try { if (ws) { ws.onerror = null; } } catch {}
+      try { if (ws) { ws.onclose = null; } } catch {}
+      try { if (typeof ws.removeAllListeners === 'function') ws.removeAllListeners(); } catch {}
       ws.close();
     } catch {
       // ignore
@@ -1288,7 +1342,7 @@ export class NiconamaCommentClient {
               if (parsed) {
                 const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
                 if (comments.length > 0) {
-                  this.#callbacks.onComments(comments);
+                  this.deliverComments(comments);
                   console.debug('[DEBUG] Playwright response comment payload', { url, count: comments.length });
                   return;
                 }
@@ -1298,7 +1352,7 @@ export class NiconamaCommentClient {
                 if (extracted) {
                   const comments2 = parseAgentCommentsFromResponseBody(extracted, this.#seenCommentIdentifiers);
                   if (comments2.length > 0) {
-                    this.#callbacks.onComments(comments2);
+                    this.deliverComments(comments2);
                     console.debug('[DEBUG] Playwright response embedded-data comment payload', { url, count: comments2.length });
                   }
                 }
@@ -1454,7 +1508,7 @@ export class NiconamaCommentClient {
         try {
           const immediateComments = await this.extractPageComments(page);
           if (immediateComments.length > 0) {
-            this.#callbacks.onComments(immediateComments);
+            this.deliverComments(immediateComments);
             try { console.debug('[DEBUG] Playwright immediate page comments extracted', { count: immediateComments.length, url: page.url() }); } catch { console.debug('[DEBUG] Playwright immediate page comments extracted', { count: immediateComments.length, url: 'unknown' }); }
           }
         } catch (err) {
@@ -1488,7 +1542,7 @@ export class NiconamaCommentClient {
       }
       const initialPageComments = await this.pollPageComments(page, 1_000, 30);
       if (initialPageComments.length > 0) {
-        this.#callbacks.onComments(initialPageComments);
+        this.deliverComments(initialPageComments);
         try { console.debug('[DEBUG] Playwright initial page comments extracted', { count: initialPageComments.length, url: page.url() }); } catch { console.debug('[DEBUG] Playwright initial page comments extracted', { count: initialPageComments.length, url: 'unknown' }); }
       }
 
@@ -1574,7 +1628,7 @@ export class NiconamaCommentClient {
 
   private startPlaywrightPagePolling(page: any): void {
     if (this.#playwrightPageCommentPollTimer) return;
-    this.#playwrightPageCommentPollTimer = startPlaywrightPagePolling(page, this.#seenCommentIdentifiers, this.#callbacks.onComments);
+    this.#playwrightPageCommentPollTimer = startPlaywrightPagePolling(page, this.#seenCommentIdentifiers, (comments: any[]) => this.deliverComments(comments));
   }
 
   private clearPlaywrightPagePolling(): void {
@@ -1599,7 +1653,7 @@ export class NiconamaCommentClient {
         if (!p) continue;
         const comments = parseAgentCommentsFromResponseBody(p, this.#seenCommentIdentifiers);
         if (comments.length > 0) {
-          this.#callbacks.onComments(comments);
+          this.deliverComments(comments);
           console.debug('[DEBUG] Playwright websocket NDJSON comment payload', { wsUrl, count: comments.length });
           return;
         }
@@ -1612,7 +1666,7 @@ export class NiconamaCommentClient {
     const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
     if (comments.length === 0) return;
 
-    this.#callbacks.onComments(comments);
+    this.deliverComments(comments);
     console.debug('[DEBUG] Playwright websocket comment payload', { wsUrl, count: comments.length });
   }
 
@@ -1623,7 +1677,7 @@ export class NiconamaCommentClient {
       if (staticData) {
         const comments = parseAgentCommentsFromResponseBody(staticData, this.#seenCommentIdentifiers);
         if (comments.length > 0) {
-          this.#callbacks.onComments(comments);
+          this.deliverComments(comments);
           console.debug('[DEBUG] performImmediateRescan comments extracted (static)', { count: comments.length, watchUrl });
           return;
         }
@@ -1636,7 +1690,7 @@ export class NiconamaCommentClient {
       try {
         const singleTry = await this.fetchCommentsFromPollingApis(staticData).catch(() => [] as AgentComment[]);
         if (Array.isArray(singleTry) && singleTry.length > 0) {
-          this.#callbacks.onComments(singleTry);
+          this.deliverComments(singleTry);
           console.debug('[DEBUG] performImmediateRescan comments extracted (polling-api)', { count: singleTry.length, watchUrl });
           return;
         }
@@ -1647,7 +1701,7 @@ export class NiconamaCommentClient {
         while (Date.now() - startTime < aggressiveTimeoutMs) {
           const commentsFromApi = await this.fetchCommentsFromPollingApis(staticData).catch(() => [] as AgentComment[]);
           if (Array.isArray(commentsFromApi) && commentsFromApi.length > 0) {
-            this.#callbacks.onComments(commentsFromApi);
+            this.deliverComments(commentsFromApi);
             console.debug('[DEBUG] performImmediateRescan comments extracted (polling-api aggressive)', { count: commentsFromApi.length, watchUrl });
             return;
           }
@@ -1668,7 +1722,7 @@ export class NiconamaCommentClient {
             if (enriched) {
               const comments2 = parseAgentCommentsFromResponseBody(enriched, this.#seenCommentIdentifiers);
               if (comments2.length > 0) {
-                this.#callbacks.onComments(comments2);
+                this.deliverComments(comments2);
                 console.debug('[DEBUG] performImmediateRescan comments extracted (playwright)', { count: comments2.length, watchUrl, attempt });
                 return;
               }
@@ -1844,7 +1898,12 @@ export class NiconamaCommentClient {
         const fs = require('fs');
         const ts = new Date().toISOString();
         const snippet = String(message).slice(0, 200).replace(/\n/g, ' ');
-        fs.appendFileSync('/tmp/niconama-ws-raw.log', `${ts} ${wsUrl} ${snippet}\n`);
+        // Use the async append variant to avoid blocking the event loop
+        try {
+          fs.appendFile('/tmp/niconama-ws-raw.log', `${ts} ${wsUrl} ${snippet}\n`, () => {});
+        } catch (e) {
+          // ignore write errors
+        }
       } catch (e) {
         // ignore fs errors
       }
@@ -1867,7 +1926,7 @@ export class NiconamaCommentClient {
         anyFound = true;
         const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
         if (comments.length > 0) {
-          this.#callbacks.onComments(comments);
+          this.deliverComments(comments);
           console.debug('[DEBUG] direct websocket NDJSON comment payload', wsUrl, { count: comments.length });
           return;
         }
@@ -1991,7 +2050,7 @@ export class NiconamaCommentClient {
 
     const comments = parseAgentCommentsFromResponseBody(body, this.#seenCommentIdentifiers, eventType);
     if (comments.length > 0) {
-      this.#callbacks.onComments(comments);
+      this.deliverComments(comments);
       if (knownEventType) {
         console.debug('[DEBUG] direct websocket known event type with comment payload', eventType, wsUrl, body);
       }
