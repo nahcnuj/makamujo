@@ -25,7 +25,7 @@ else
   exit 1
 fi
 
-echo "$STAGED_FILES" | while IFS= read -r file; do
+while IFS= read -r file; do
   echo "Formatting $file"
   if [ "$RUNNER" = "bun" ]; then
     bun run format -- "$file"
@@ -35,7 +35,7 @@ echo "$STAGED_FILES" | while IFS= read -r file; do
     ./node_modules/.bin/biome format --write "$file"
   fi
   git add -- "$file"
-done
+done < <(echo "$STAGED_FILES")
 
 echo "Formatting complete"
 exit 0
