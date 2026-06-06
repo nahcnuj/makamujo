@@ -3,55 +3,45 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  buildNiconamaStreamStateFromStatisticsEvent,
-  createNiconamaCommentClient,
   ensureUserDataDirExists,
   extractEmbeddedDataFromHtml,
   extractWatchUrlFromHtml,
   hasCommentArrayStructure,
+  buildNiconamaStreamStateFromStatisticsEvent,
   parseAgentCommentsFromResponseBody,
+  createNiconamaCommentClient,
 } from "./niconamaCommentClient";
 
 describe("extractEmbeddedDataFromHtml", () => {
   it("extracts data props from a script #embedded-data element", () => {
-    const html =
-      '<script id="embedded-data" data-props="{&quot;site&quot;:{&quot;state&quot;:{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com&quot;}}}}"></script>';
+    const html = '<script id="embedded-data" data-props="{&quot;site&quot;:{&quot;state&quot;:{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com&quot;}}}}"></script>';
     const extracted = extractEmbeddedDataFromHtml(html);
     expect(extracted).toEqual({
-      site: { state: { relive: { webSocketUrl: "wss://example.com" } } },
+      site: { state: { relive: { webSocketUrl: 'wss://example.com' } } },
     });
   });
 
   it("extracts data props from a div #embedded-data element", () => {
-    const html =
-      '<div id="embedded-data" data-props="{&quot;site&quot;:{&quot;state&quot;:{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com&quot;}}}}"></div>';
+    const html = '<div id="embedded-data" data-props="{&quot;site&quot;:{&quot;state&quot;:{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com&quot;}}}}"></div>';
     const extracted = extractEmbeddedDataFromHtml(html);
     expect(extracted).toEqual({
-      site: { state: { relive: { webSocketUrl: "wss://example.com" } } },
+      site: { state: { relive: { webSocketUrl: 'wss://example.com' } } },
     });
   });
 
   it("extracts data props when the embedded-data tag spans newlines", () => {
-    const html =
-      '<script id="embedded-data"\n  data-props="{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com/ws&quot;,&quot;comments&quot;:[{&quot;comment&quot;:&quot;hi&quot;,&quot;no&quot;:1}]}}">\n</script>';
+    const html = '<script id="embedded-data"\n  data-props="{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com/ws&quot;,&quot;comments&quot;:[{&quot;comment&quot;:&quot;hi&quot;,&quot;no&quot;:1}]}}">\n</script>';
     const extracted = extractEmbeddedDataFromHtml(html);
     expect(extracted).toEqual({
-      relive: {
-        webSocketUrl: "wss://example.com/ws",
-        comments: [{ comment: "hi", no: 1 }],
-      },
+      relive: { webSocketUrl: 'wss://example.com/ws', comments: [{ comment: 'hi', no: 1 }] },
     });
   });
 
   it("extracts top-level relive embedded-data JSON", () => {
-    const html =
-      '<script id="embedded-data" data-props="{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com/ws&quot;,&quot;comments&quot;:[{&quot;comment&quot;:&quot;hello&quot;,&quot;no&quot;:2}]}}"></script>';
+    const html = '<script id="embedded-data" data-props="{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com/ws&quot;,&quot;comments&quot;:[{&quot;comment&quot;:&quot;hello&quot;,&quot;no&quot;:2}]}}"></script>';
     const extracted = extractEmbeddedDataFromHtml(html);
     expect(extracted).toEqual({
-      relive: {
-        webSocketUrl: "wss://example.com/ws",
-        comments: [{ comment: "hello", no: 2 }],
-      },
+      relive: { webSocketUrl: 'wss://example.com/ws', comments: [{ comment: 'hello', no: 2 }] },
     });
   });
 });
@@ -59,24 +49,22 @@ describe("extractEmbeddedDataFromHtml", () => {
 describe("extractWatchUrlFromHtml", () => {
   it("extracts relative /watch URLs from anchor tags", () => {
     const html = '<a href="/watch/lv123456">Watch</a>';
-    expect(extractWatchUrlFromHtml(html, "https://live.nicovideo.jp/")).toBe(
-      "https://live.nicovideo.jp/watch/lv123456",
+    expect(extractWatchUrlFromHtml(html, 'https://live.nicovideo.jp/')).toBe(
+      'https://live.nicovideo.jp/watch/lv123456',
     );
   });
 
   it("extracts watchPageUrl values from JSON-like HTML", () => {
-    const html =
-      "...&quot;watchPageUrl&quot;:&quot;https://live.nicovideo.jp/watch/lv350350266?ref=TopPage-RecommendedProgramListSection-PlayerProgramCard&quot;...";
-    expect(extractWatchUrlFromHtml(html, "https://live.nicovideo.jp/")).toBe(
-      "https://live.nicovideo.jp/watch/lv350350266?ref=TopPage-RecommendedProgramListSection-PlayerProgramCard",
+    const html = '...&quot;watchPageUrl&quot;:&quot;https://live.nicovideo.jp/watch/lv350350266?ref=TopPage-RecommendedProgramListSection-PlayerProgramCard&quot;...';
+    expect(extractWatchUrlFromHtml(html, 'https://live.nicovideo.jp/')).toBe(
+      'https://live.nicovideo.jp/watch/lv350350266?ref=TopPage-RecommendedProgramListSection-PlayerProgramCard',
     );
   });
 
   it("extracts watchPageUrlAtExtPlayer values from JSON-like HTML", () => {
-    const html =
-      '..."watchPageUrlAtExtPlayer":"https://ext.live.nicovideo.jp/watch/lv350350266"...';
-    expect(extractWatchUrlFromHtml(html, "https://live.nicovideo.jp/")).toBe(
-      "https://ext.live.nicovideo.jp/watch/lv350350266",
+    const html = '..."watchPageUrlAtExtPlayer":"https://ext.live.nicovideo.jp/watch/lv350350266"...';
+    expect(extractWatchUrlFromHtml(html, 'https://live.nicovideo.jp/')).toBe(
+      'https://ext.live.nicovideo.jp/watch/lv350350266',
     );
   });
 });
@@ -84,9 +72,7 @@ describe("extractWatchUrlFromHtml", () => {
 describe("parseAgentCommentsFromResponseBody", () => {
   it("parses comments from a top-level comments array", () => {
     const body = {
-      comments: [
-        { comment: "こんにちは", no: 1, anonymity: false, hasGift: false },
-      ],
+      comments: [{ comment: "こんにちは", no: 1, anonymity: false, hasGift: false }],
     };
 
     const parsed = parseAgentCommentsFromResponseBody(body);
@@ -105,15 +91,7 @@ describe("parseAgentCommentsFromResponseBody", () => {
   it("parses comments from nested data arrays", () => {
     const body = {
       data: {
-        comments: [
-          {
-            comment: "こんばんは",
-            no: 2,
-            anonymity: true,
-            hasGift: true,
-            userId: "user123",
-          },
-        ],
+        comments: [{ comment: "こんばんは", no: 2, anonymity: true, hasGift: true, userId: "user123" }],
       },
     };
 
@@ -136,15 +114,7 @@ describe("parseAgentCommentsFromResponseBody", () => {
       site: {
         state: {
           relive: {
-            comments: [
-              {
-                comment: "おはよう",
-                no: 3,
-                anonymity: false,
-                hasGift: false,
-                userId: "user456",
-              },
-            ],
+            comments: [{ comment: "おはよう", no: 3, anonymity: false, hasGift: false, userId: "user456" }],
           },
         },
       },
@@ -167,20 +137,10 @@ describe("parseAgentCommentsFromResponseBody", () => {
   it("parses a single actionComment payload with nested data object", () => {
     const body = {
       type: "actionComment",
-      data: {
-        comment: "こんにちは",
-        no: 7,
-        anonymity: false,
-        hasGift: false,
-        userId: "user321",
-      },
+      data: { comment: "こんにちは", no: 7, anonymity: false, hasGift: false, userId: "user321" },
     };
 
-    const parsed = parseAgentCommentsFromResponseBody(
-      body,
-      new Set(),
-      "actionComment",
-    );
+    const parsed = parseAgentCommentsFromResponseBody(body, new Set(), "actionComment");
 
     expect(parsed).toHaveLength(1);
     expect(parsed[0]).toEqual({
@@ -199,15 +159,7 @@ describe("parseAgentCommentsFromResponseBody", () => {
       foo: {
         bar: {
           baz: {
-            comments: [
-              {
-                comment: "深いネスト",
-                no: 42,
-                anonymity: true,
-                hasGift: false,
-                userId: "user789",
-              },
-            ],
+            comments: [{ comment: "深いネスト", no: 42, anonymity: true, hasGift: false, userId: "user789" }],
           },
         },
       },
@@ -250,14 +202,8 @@ describe("parseAgentCommentsFromResponseBody", () => {
     };
     const seenIdentifiers = new Set<string>();
 
-    const firstParsed = parseAgentCommentsFromResponseBody(
-      body1,
-      seenIdentifiers,
-    );
-    const secondParsed = parseAgentCommentsFromResponseBody(
-      body2,
-      seenIdentifiers,
-    );
+    const firstParsed = parseAgentCommentsFromResponseBody(body1, seenIdentifiers);
+    const secondParsed = parseAgentCommentsFromResponseBody(body2, seenIdentifiers);
 
     expect(firstParsed).toHaveLength(1);
     expect(secondParsed).toHaveLength(0);
@@ -265,7 +211,10 @@ describe("parseAgentCommentsFromResponseBody", () => {
 
   it("merges numeric-only comment entries into the previous comment object", () => {
     const body = {
-      comments: [{ comment: "ジュニアアイドル" }, { comment: "16" }],
+      comments: [
+        { comment: "ジュニアアイドル" },
+        { comment: "16" },
+      ],
     };
 
     const parsed = parseAgentCommentsFromResponseBody(body);
@@ -298,38 +247,28 @@ describe("fetchEmbeddedData fallback behavior", () => {
   it("falls back to Playwright when embedded-data lacks websocket url and emits rendered page comments", async () => {
     const originalFetch = (globalThis as any).fetch;
     try {
-      const embeddedHtml =
-        '<script id="embedded-data" data-props="{&quot;site&quot;:{&quot;state&quot;:{&quot;relive&quot;:{}},&quot;program&quot;:{&quot;statistics&quot;:{&quot;commentCount&quot;:1}}}}"></script>';
-      (globalThis as any).fetch = async () => ({
-        ok: true,
-        text: async () => embeddedHtml,
-      });
+      const embeddedHtml = '<script id="embedded-data" data-props="{&quot;site&quot;:{&quot;state&quot;:{&quot;relive&quot;:{}},&quot;program&quot;:{&quot;statistics&quot;:{&quot;commentCount&quot;:1}}}}"></script>';
+      (globalThis as any).fetch = async () => ({ ok: true, text: async () => embeddedHtml });
 
       const renderedComments: any[] = [];
       const launchPersistentContext = async () => {
         const fakePage = {
-          goto: async () => ({
-            status: () => 200,
-            text: async () => "<html><body></body></html>",
-          }),
+          goto: async () => ({ status: () => 200, text: async () => '<html><body></body></html>' }),
           waitForTimeout: async () => {},
           waitForLoadState: async () => {},
           $: async () => null,
           evaluate: async (fn: any) => {
             const source = fn.toString();
-            if (
-              source.includes("const selectors") ||
-              source.includes("const panel")
-            ) {
-              return ["rendered comment"];
+            if (source.includes('const selectors') || source.includes('const panel')) {
+              return ['rendered comment'];
             }
-            if (source.includes("const results")) {
+            if (source.includes('const results')) {
               return [];
             }
             return [];
           },
           on: () => {},
-          url: () => "https://live.nicovideo.jp/watch/test",
+          url: () => 'https://live.nicovideo.jp/watch/test',
           isClosed: () => false,
           close: async () => {},
         };
@@ -341,30 +280,38 @@ describe("fetchEmbeddedData fallback behavior", () => {
       };
 
       const onComments: any[] = [];
-      const client = createNiconamaCommentClient(
-        {
-          watchUrl: "https://live.nicovideo.jp/watch/test",
-          launchPersistentContext: launchPersistentContext as any,
-        },
-        {
-          onComments: (comments) => {
-            onComments.push(...comments);
-          },
-          onMeta: () => {},
-          onError: (error) => {
-            throw error;
-          },
-        },
-      );
+      const client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: launchPersistentContext as any }, {
+        onComments: (comments) => { onComments.push(...comments); },
+        onMeta: () => {},
+        onError: (error) => { throw error; },
+      });
 
       const result = await client.fetchEmbeddedData();
 
+      // deliverComments is now scheduled asynchronously; wait briefly
+      // for the callback to be invoked to avoid flakiness in tests.
+      await new Promise<void>((resolve, reject) => {
+        let t: ReturnType<typeof setTimeout> | null = null;
+        let iv: ReturnType<typeof setInterval> | null = null;
+        
+        t = setTimeout(() => {
+          if (iv !== null) clearInterval(iv);
+          reject(new Error('timeout waiting for onComments'));
+        }, 1000);
+        
+        iv = setInterval(() => {
+          if (onComments.length >= 1) {
+            if (t !== null) clearTimeout(t);
+            if (iv !== null) clearInterval(iv);
+            resolve();
+          }
+        }, 10);
+      });
+
       expect(onComments).toHaveLength(1);
-      expect(onComments[0]?.data?.comment).toBe("rendered comment");
+      expect(onComments[0]?.data?.comment).toBe('rendered comment');
       expect(result).toBeTruthy();
-      expect((result as any).site?.state?.relive?.comments).toEqual([
-        { comment: "rendered comment" },
-      ]);
+      expect((result as any).site?.state?.relive?.comments).toEqual([{ comment: 'rendered comment' }]);
     } finally {
       (globalThis as any).fetch = originalFetch;
     }
@@ -375,152 +322,93 @@ describe("detect program end in fetched HTML", () => {
   it("emits onMeta and returns sentinel when page contains 公開終了", async () => {
     const originalFetch = (globalThis as any).fetch;
     try {
-      const embeddedHtml =
-        "<html><body>この番組は公開終了しました。 公開終了</body></html>";
-      (globalThis as any).fetch = async () => ({
-        ok: true,
-        text: async () => embeddedHtml,
-      });
+      const embeddedHtml = '<html><body>この番組は公開終了しました。 公開終了</body></html>';
+      (globalThis as any).fetch = async () => ({ ok: true, text: async () => embeddedHtml });
 
       const metas: any[] = [];
-      const client = createNiconamaCommentClient(
-        {
-          watchUrl: "https://live.nicovideo.jp/watch/test",
-          launchPersistentContext: (async () => ({
-            pages: () => [],
-            newPage: async () => ({}),
-            close: async () => {},
-          })) as any,
-        },
-        {
-          onComments: () => {},
-          onMeta: (m) => {
-            metas.push(m);
-          },
-          onError: (err) => {
-            throw err;
-          },
-        },
-      );
+      const client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: (async () => ({ pages: () => [], newPage: async () => ({}), close: async () => {} })) as any }, {
+        onComments: () => {},
+        onMeta: (m) => { metas.push(m); },
+        onError: (err) => { throw err; },
+      });
 
       const result = await client.fetchEmbeddedData();
 
       expect(metas.length).toBeGreaterThan(0);
-      expect(metas[0]).toEqual(expect.objectContaining({ type: "niconama" }));
+      expect(metas[0]).toEqual(expect.objectContaining({ type: 'niconama' }));
       expect((metas[0] as any).data.isLive).toBe(false);
-      expect((metas[0] as any).data.title).toBe("公開終了");
-      expect(result).toEqual({
-        programEnded: true,
-        url: "https://live.nicovideo.jp/watch/test",
-      });
+      expect((metas[0] as any).data.title).toBe('公開終了');
+      expect(result).toEqual({ programEnded: true, url: 'https://live.nicovideo.jp/watch/test' });
     } finally {
       (globalThis as any).fetch = originalFetch;
     }
   });
 });
 
-describe("fetchRenderedWatchPageBodyText", () => {
-  it("returns body text from Playwright body locator allTextContents", async () => {
+describe('fetchRenderedWatchPageBodyText', () => {
+  it('returns body text from Playwright body locator allTextContents', async () => {
     const originalFetch = (globalThis as any).fetch;
     try {
-      (globalThis as any).fetch = async () => ({
-        ok: true,
-        text: async () => "<html><body></body></html>",
-      });
+      (globalThis as any).fetch = async () => ({ ok: true, text: async () => '<html><body></body></html>' });
 
       const fakePage = {
-        goto: async () => ({
-          status: () => 200,
-          text: async () => "<html><body>test</body></html>",
-        }),
+        goto: async () => ({ status: () => 200, text: async () => '<html><body>test</body></html>' }),
         waitForTimeout: async () => {},
         waitForLoadState: async () => {},
-        locator: (_selector: string) => ({
-          allTextContents: async () => ["  フォロー中の番組一覧", "放送中"],
-        }),
+        locator: (_selector: string) => ({ allTextContents: async () => ['  フォロー中の番組一覧', '放送中'] }),
         evaluate: async () => null,
-        url: () => "https://live.nicovideo.jp/watch/test",
+        url: () => 'https://live.nicovideo.jp/watch/test',
         isClosed: () => false,
         close: async () => {},
       };
-      const launchPersistentContext = async () => ({
-        pages: () => [fakePage],
-        newPage: async () => fakePage,
-        close: async () => {},
+      const launchPersistentContext = async () => ({ pages: () => [fakePage], newPage: async () => fakePage, close: async () => {} });
+
+      const client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: launchPersistentContext as any }, {
+        onComments: () => {},
+        onMeta: () => {},
+        onError: (error) => { throw error; },
       });
 
-      const client = createNiconamaCommentClient(
-        {
-          watchUrl: "https://live.nicovideo.jp/watch/test",
-          launchPersistentContext: launchPersistentContext as any,
-        },
-        {
-          onComments: () => {},
-          onMeta: () => {},
-          onError: (error) => {
-            throw error;
-          },
-        },
-      );
-
       const text = await client.fetchRenderedWatchPageBodyText();
-      expect(text).toBe("  フォロー中の番組一覧放送中");
+      expect(text).toBe('  フォロー中の番組一覧放送中');
     } finally {
       (globalThis as any).fetch = originalFetch;
     }
   });
 
-  it("falls back to evaluate when locator.allTextContents is not available", async () => {
+  it('falls back to evaluate when locator.allTextContents is not available', async () => {
     const originalFetch = (globalThis as any).fetch;
     try {
-      (globalThis as any).fetch = async () => ({
-        ok: true,
-        text: async () => "<html><body></body></html>",
-      });
+      (globalThis as any).fetch = async () => ({ ok: true, text: async () => '<html><body></body></html>' });
 
       const fakePage = {
-        goto: async () => ({
-          status: () => 200,
-          text: async () => "<html><body>test</body></html>",
-        }),
+        goto: async () => ({ status: () => 200, text: async () => '<html><body>test</body></html>' }),
         waitForTimeout: async () => {},
         waitForLoadState: async () => {},
         locator: (_selector: string) => ({}),
-        evaluate: async () => "fallback body",
-        url: () => "https://live.nicovideo.jp/watch/test",
+        evaluate: async () => 'fallback body',
+        url: () => 'https://live.nicovideo.jp/watch/test',
         isClosed: () => false,
         close: async () => {},
       };
-      const launchPersistentContext = async () => ({
-        pages: () => [fakePage],
-        newPage: async () => fakePage,
-        close: async () => {},
+      const launchPersistentContext = async () => ({ pages: () => [fakePage], newPage: async () => fakePage, close: async () => {} });
+
+      const client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: launchPersistentContext as any }, {
+        onComments: () => {},
+        onMeta: () => {},
+        onError: (error) => { throw error; },
       });
 
-      const client = createNiconamaCommentClient(
-        {
-          watchUrl: "https://live.nicovideo.jp/watch/test",
-          launchPersistentContext: launchPersistentContext as any,
-        },
-        {
-          onComments: () => {},
-          onMeta: () => {},
-          onError: (error) => {
-            throw error;
-          },
-        },
-      );
-
       const text = await client.fetchRenderedWatchPageBodyText();
-      expect(text).toBe("fallback body");
+      expect(text).toBe('fallback body');
     } finally {
       (globalThis as any).fetch = originalFetch;
     }
   });
 });
 
-describe("direct websocket onmessage handling", () => {
-  it("handles string payloads", async () => {
+describe('direct websocket onmessage handling', () => {
+  it('handles string payloads', async () => {
     const originalWebSocket = (globalThis as any).WebSocket;
     class MockWebSocket {
       static OPEN = 1;
@@ -535,20 +423,11 @@ describe("direct websocket onmessage handling", () => {
       constructor(_url: string, _opts?: any) {
         MockWebSocket.instances.push(this);
         // simulate async open
-        setTimeout(() => {
-          if (this.onopen) this.onopen();
-        }, 0);
+        setTimeout(() => { if (this.onopen) this.onopen(); }, 0);
       }
-      send(data: any) {
-        this.sent.push(data);
-      }
-      close() {
-        this.readyState = MockWebSocket.CLOSED;
-        if (this.onclose) this.onclose({ code: 1000, reason: "" });
-      }
-      emit(data: any) {
-        if (this.onmessage) this.onmessage({ data });
-      }
+      send(data: any) { this.sent.push(data); }
+      close() { this.readyState = MockWebSocket.CLOSED; if (this.onclose) this.onclose({ code: 1000, reason: '' }); }
+      emit(data: any) { if (this.onmessage) this.onmessage({ data }); }
     }
 
     (globalThis as any).WebSocket = MockWebSocket;
@@ -556,58 +435,32 @@ describe("direct websocket onmessage handling", () => {
     let client: any = null;
     try {
       const received: any[] = [];
-      client = createNiconamaCommentClient(
-        {
-          watchUrl: "https://live.nicovideo.jp/watch/test",
-          launchPersistentContext: (async () => ({
-            pages: () => [],
-            newPage: async () => ({}),
-            close: async () => {},
-          })) as any,
-        },
-        {
-          onComments: (c) => {
-            received.push(...c);
-          },
-          onMeta: () => {},
-          onError: (e) => {
-            throw e;
-          },
-        },
-      );
+      client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: (async () => ({ pages: () => [], newPage: async () => ({}), close: async () => {} })) as any }, {
+        onComments: (c) => { received.push(...c); },
+        onMeta: () => {},
+        onError: (e) => { throw e; },
+      });
 
-      const embeddedData = {
-        site: { state: { relive: { webSocketUrl: "wss://example.com/ws" } } },
-      };
+      const embeddedData = { site: { state: { relive: { webSocketUrl: 'wss://example.com/ws' } } } };
 
-      await (client as any).setupDirectWebSocketConnection(
-        "https://live.nicovideo.jp/watch/test",
-        embeddedData,
-      );
+      await (client as any).setupDirectWebSocketConnection('https://live.nicovideo.jp/watch/test', embeddedData);
 
       const ws = MockWebSocket.instances[0];
       // allow onopen/keepSeat to run
       await new Promise((res) => setTimeout(res, 0));
 
-      const payload = JSON.stringify({
-        type: "actionComment",
-        data: { comment: "hello string", no: 1 },
-      });
+      const payload = JSON.stringify({ type: 'actionComment', data: { comment: 'hello string', no: 1 } });
       ws.emit(payload);
 
       // wait for callback
       await new Promise<void>((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error("timeout")), 1000);
+        const t = setTimeout(() => reject(new Error('timeout')), 1000);
         const iv = setInterval(() => {
-          if (received.length >= 1) {
-            clearTimeout(t);
-            clearInterval(iv);
-            resolve();
-          }
+          if (received.length >= 1) { clearTimeout(t); clearInterval(iv); resolve(); }
         }, 10);
       });
 
-      expect(received[0]?.data?.comment).toBe("hello string");
+      expect(received[0]?.data?.comment).toBe('hello string');
 
       // cleanup
       (client as any).clearDirectWebSocket();
@@ -617,7 +470,7 @@ describe("direct websocket onmessage handling", () => {
     }
   });
 
-  it("handles ArrayBuffer payloads", async () => {
+  it('handles ArrayBuffer payloads', async () => {
     const originalWebSocket = (globalThis as any).WebSocket;
     class MockWebSocket {
       static OPEN = 1;
@@ -631,20 +484,11 @@ describe("direct websocket onmessage handling", () => {
       sent: any[] = [];
       constructor(_url: string, _opts?: any) {
         MockWebSocket.instances.push(this);
-        setTimeout(() => {
-          if (this.onopen) this.onopen();
-        }, 0);
+        setTimeout(() => { if (this.onopen) this.onopen(); }, 0);
       }
-      send(data: any) {
-        this.sent.push(data);
-      }
-      close() {
-        this.readyState = MockWebSocket.CLOSED;
-        if (this.onclose) this.onclose({ code: 1000, reason: "" });
-      }
-      emit(data: any) {
-        if (this.onmessage) this.onmessage({ data });
-      }
+      send(data: any) { this.sent.push(data); }
+      close() { this.readyState = MockWebSocket.CLOSED; if (this.onclose) this.onclose({ code: 1000, reason: '' }); }
+      emit(data: any) { if (this.onmessage) this.onmessage({ data }); }
     }
 
     (globalThis as any).WebSocket = MockWebSocket;
@@ -652,57 +496,31 @@ describe("direct websocket onmessage handling", () => {
     let client: any = null;
     try {
       const received: any[] = [];
-      client = createNiconamaCommentClient(
-        {
-          watchUrl: "https://live.nicovideo.jp/watch/test",
-          launchPersistentContext: (async () => ({
-            pages: () => [],
-            newPage: async () => ({}),
-            close: async () => {},
-          })) as any,
-        },
-        {
-          onComments: (c) => {
-            received.push(...c);
-          },
-          onMeta: () => {},
-          onError: (e) => {
-            throw e;
-          },
-        },
-      );
+      client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: (async () => ({ pages: () => [], newPage: async () => ({}), close: async () => {} })) as any }, {
+        onComments: (c) => { received.push(...c); },
+        onMeta: () => {},
+        onError: (e) => { throw e; },
+      });
 
-      const embeddedData = {
-        site: { state: { relive: { webSocketUrl: "wss://example.com/ws" } } },
-      };
-      await (client as any).setupDirectWebSocketConnection(
-        "https://live.nicovideo.jp/watch/test",
-        embeddedData,
-      );
+      const embeddedData = { site: { state: { relive: { webSocketUrl: 'wss://example.com/ws' } } } };
+      await (client as any).setupDirectWebSocketConnection('https://live.nicovideo.jp/watch/test', embeddedData);
 
       const ws = MockWebSocket.instances[0];
       await new Promise((res) => setTimeout(res, 0));
 
-      const payloadObj = {
-        type: "actionComment",
-        data: { comment: "arraybuffer", no: 2 },
-      };
+      const payloadObj = { type: 'actionComment', data: { comment: 'arraybuffer', no: 2 } };
       const json = JSON.stringify(payloadObj);
       const ab = new TextEncoder().encode(json).buffer;
       ws.emit(ab);
 
       await new Promise<void>((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error("timeout")), 1000);
+        const t = setTimeout(() => reject(new Error('timeout')), 1000);
         const iv = setInterval(() => {
-          if (received.length >= 1) {
-            clearTimeout(t);
-            clearInterval(iv);
-            resolve();
-          }
+          if (received.length >= 1) { clearTimeout(t); clearInterval(iv); resolve(); }
         }, 10);
       });
 
-      expect(received[0]?.data?.comment).toBe("arraybuffer");
+      expect(received[0]?.data?.comment).toBe('arraybuffer');
 
       (client as any).clearDirectWebSocket();
       await (client as any).clearPlaywrightCommentWatcher();
@@ -711,7 +529,7 @@ describe("direct websocket onmessage handling", () => {
     }
   });
 
-  it("handles arrayBuffer()-capable payload objects", async () => {
+  it('handles arrayBuffer()-capable payload objects', async () => {
     const originalWebSocket = (globalThis as any).WebSocket;
     class MockWebSocket {
       static OPEN = 1;
@@ -725,20 +543,11 @@ describe("direct websocket onmessage handling", () => {
       sent: any[] = [];
       constructor(_url: string, _opts?: any) {
         MockWebSocket.instances.push(this);
-        setTimeout(() => {
-          if (this.onopen) this.onopen();
-        }, 0);
+        setTimeout(() => { if (this.onopen) this.onopen(); }, 0);
       }
-      send(data: any) {
-        this.sent.push(data);
-      }
-      close() {
-        this.readyState = MockWebSocket.CLOSED;
-        if (this.onclose) this.onclose({ code: 1000, reason: "" });
-      }
-      emit(data: any) {
-        if (this.onmessage) this.onmessage({ data });
-      }
+      send(data: any) { this.sent.push(data); }
+      close() { this.readyState = MockWebSocket.CLOSED; if (this.onclose) this.onclose({ code: 1000, reason: '' }); }
+      emit(data: any) { if (this.onmessage) this.onmessage({ data }); }
     }
 
     (globalThis as any).WebSocket = MockWebSocket;
@@ -746,41 +555,19 @@ describe("direct websocket onmessage handling", () => {
     let client: any = null;
     try {
       const received: any[] = [];
-      client = createNiconamaCommentClient(
-        {
-          watchUrl: "https://live.nicovideo.jp/watch/test",
-          launchPersistentContext: (async () => ({
-            pages: () => [],
-            newPage: async () => ({}),
-            close: async () => {},
-          })) as any,
-        },
-        {
-          onComments: (c) => {
-            received.push(...c);
-          },
-          onMeta: () => {},
-          onError: (e) => {
-            throw e;
-          },
-        },
-      );
+      client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: (async () => ({ pages: () => [], newPage: async () => ({}), close: async () => {} })) as any }, {
+        onComments: (c) => { received.push(...c); },
+        onMeta: () => {},
+        onError: (e) => { throw e; },
+      });
 
-      const embeddedData = {
-        site: { state: { relive: { webSocketUrl: "wss://example.com/ws" } } },
-      };
-      await (client as any).setupDirectWebSocketConnection(
-        "https://live.nicovideo.jp/watch/test",
-        embeddedData,
-      );
+      const embeddedData = { site: { state: { relive: { webSocketUrl: 'wss://example.com/ws' } } } };
+      await (client as any).setupDirectWebSocketConnection('https://live.nicovideo.jp/watch/test', embeddedData);
 
       const ws = MockWebSocket.instances[0];
       await new Promise((res) => setTimeout(res, 0));
 
-      const payloadObj = {
-        type: "actionComment",
-        data: { comment: "arraybuffer-method", no: 3 },
-      };
+      const payloadObj = { type: 'actionComment', data: { comment: 'arraybuffer-method', no: 3 } };
       const json = JSON.stringify(payloadObj);
       const ab = new TextEncoder().encode(json).buffer;
 
@@ -788,17 +575,13 @@ describe("direct websocket onmessage handling", () => {
       ws.emit(arrayBufferCapable);
 
       await new Promise<void>((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error("timeout")), 1000);
+        const t = setTimeout(() => reject(new Error('timeout')), 1000);
         const iv = setInterval(() => {
-          if (received.length >= 1) {
-            clearTimeout(t);
-            clearInterval(iv);
-            resolve();
-          }
+          if (received.length >= 1) { clearTimeout(t); clearInterval(iv); resolve(); }
         }, 10);
       });
 
-      expect(received[0]?.data?.comment).toBe("arraybuffer-method");
+      expect(received[0]?.data?.comment).toBe('arraybuffer-method');
 
       (client as any).clearDirectWebSocket();
       await (client as any).clearPlaywrightCommentWatcher();
@@ -807,7 +590,7 @@ describe("direct websocket onmessage handling", () => {
     }
   });
 
-  it("handles Uint8Array payloads", async () => {
+  it('handles Uint8Array payloads', async () => {
     const originalWebSocket = (globalThis as any).WebSocket;
     class MockWebSocket {
       static OPEN = 1;
@@ -821,20 +604,11 @@ describe("direct websocket onmessage handling", () => {
       sent: any[] = [];
       constructor(_url: string, _opts?: any) {
         MockWebSocket.instances.push(this);
-        setTimeout(() => {
-          if (this.onopen) this.onopen();
-        }, 0);
+        setTimeout(() => { if (this.onopen) this.onopen(); }, 0);
       }
-      send(data: any) {
-        this.sent.push(data);
-      }
-      close() {
-        this.readyState = MockWebSocket.CLOSED;
-        if (this.onclose) this.onclose({ code: 1000, reason: "" });
-      }
-      emit(data: any) {
-        if (this.onmessage) this.onmessage({ data });
-      }
+      send(data: any) { this.sent.push(data); }
+      close() { this.readyState = MockWebSocket.CLOSED; if (this.onclose) this.onclose({ code: 1000, reason: '' }); }
+      emit(data: any) { if (this.onmessage) this.onmessage({ data }); }
     }
 
     (globalThis as any).WebSocket = MockWebSocket;
@@ -842,57 +616,31 @@ describe("direct websocket onmessage handling", () => {
     let client: any = null;
     try {
       const received: any[] = [];
-      client = createNiconamaCommentClient(
-        {
-          watchUrl: "https://live.nicovideo.jp/watch/test",
-          launchPersistentContext: (async () => ({
-            pages: () => [],
-            newPage: async () => ({}),
-            close: async () => {},
-          })) as any,
-        },
-        {
-          onComments: (c) => {
-            received.push(...c);
-          },
-          onMeta: () => {},
-          onError: (e) => {
-            throw e;
-          },
-        },
-      );
+      client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: (async () => ({ pages: () => [], newPage: async () => ({}), close: async () => {} })) as any }, {
+        onComments: (c) => { received.push(...c); },
+        onMeta: () => {},
+        onError: (e) => { throw e; },
+      });
 
-      const embeddedData = {
-        site: { state: { relive: { webSocketUrl: "wss://example.com/ws" } } },
-      };
-      await (client as any).setupDirectWebSocketConnection(
-        "https://live.nicovideo.jp/watch/test",
-        embeddedData,
-      );
+      const embeddedData = { site: { state: { relive: { webSocketUrl: 'wss://example.com/ws' } } } };
+      await (client as any).setupDirectWebSocketConnection('https://live.nicovideo.jp/watch/test', embeddedData);
 
       const ws = MockWebSocket.instances[0];
       await new Promise((res) => setTimeout(res, 0));
 
-      const payloadObj = {
-        type: "actionComment",
-        data: { comment: "uint8array", no: 4 },
-      };
+      const payloadObj = { type: 'actionComment', data: { comment: 'uint8array', no: 4 } };
       const json = JSON.stringify(payloadObj);
       const u8 = new TextEncoder().encode(json);
       ws.emit(u8);
 
       await new Promise<void>((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error("timeout")), 1000);
+        const t = setTimeout(() => reject(new Error('timeout')), 1000);
         const iv = setInterval(() => {
-          if (received.length >= 1) {
-            clearTimeout(t);
-            clearInterval(iv);
-            resolve();
-          }
+          if (received.length >= 1) { clearTimeout(t); clearInterval(iv); resolve(); }
         }, 10);
       });
 
-      expect(received[0]?.data?.comment).toBe("uint8array");
+      expect(received[0]?.data?.comment).toBe('uint8array');
 
       (client as any).clearDirectWebSocket();
       await (client as any).clearPlaywrightCommentWatcher();
@@ -901,7 +649,7 @@ describe("direct websocket onmessage handling", () => {
     }
   });
 
-  it("handles DataView payloads", async () => {
+  it('handles DataView payloads', async () => {
     const originalWebSocket = (globalThis as any).WebSocket;
     class MockWebSocket {
       static OPEN = 1;
@@ -915,20 +663,11 @@ describe("direct websocket onmessage handling", () => {
       sent: any[] = [];
       constructor(_url: string, _opts?: any) {
         MockWebSocket.instances.push(this);
-        setTimeout(() => {
-          if (this.onopen) this.onopen();
-        }, 0);
+        setTimeout(() => { if (this.onopen) this.onopen(); }, 0);
       }
-      send(data: any) {
-        this.sent.push(data);
-      }
-      close() {
-        this.readyState = MockWebSocket.CLOSED;
-        if (this.onclose) this.onclose({ code: 1000, reason: "" });
-      }
-      emit(data: any) {
-        if (this.onmessage) this.onmessage({ data });
-      }
+      send(data: any) { this.sent.push(data); }
+      close() { this.readyState = MockWebSocket.CLOSED; if (this.onclose) this.onclose({ code: 1000, reason: '' }); }
+      emit(data: any) { if (this.onmessage) this.onmessage({ data }); }
     }
 
     (globalThis as any).WebSocket = MockWebSocket;
@@ -936,58 +675,32 @@ describe("direct websocket onmessage handling", () => {
     let client: any = null;
     try {
       const received: any[] = [];
-      client = createNiconamaCommentClient(
-        {
-          watchUrl: "https://live.nicovideo.jp/watch/test",
-          launchPersistentContext: (async () => ({
-            pages: () => [],
-            newPage: async () => ({}),
-            close: async () => {},
-          })) as any,
-        },
-        {
-          onComments: (c) => {
-            received.push(...c);
-          },
-          onMeta: () => {},
-          onError: (e) => {
-            throw e;
-          },
-        },
-      );
+      client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: (async () => ({ pages: () => [], newPage: async () => ({}), close: async () => {} })) as any }, {
+        onComments: (c) => { received.push(...c); },
+        onMeta: () => {},
+        onError: (e) => { throw e; },
+      });
 
-      const embeddedData = {
-        site: { state: { relive: { webSocketUrl: "wss://example.com/ws" } } },
-      };
-      await (client as any).setupDirectWebSocketConnection(
-        "https://live.nicovideo.jp/watch/test",
-        embeddedData,
-      );
+      const embeddedData = { site: { state: { relive: { webSocketUrl: 'wss://example.com/ws' } } } };
+      await (client as any).setupDirectWebSocketConnection('https://live.nicovideo.jp/watch/test', embeddedData);
 
       const ws = MockWebSocket.instances[0];
       await new Promise((res) => setTimeout(res, 0));
 
-      const payloadObj = {
-        type: "actionComment",
-        data: { comment: "dataview", no: 5 },
-      };
+      const payloadObj = { type: 'actionComment', data: { comment: 'dataview', no: 5 } };
       const json = JSON.stringify(payloadObj);
       const ab = new TextEncoder().encode(json).buffer;
       const dv = new DataView(ab);
       ws.emit(dv);
 
       await new Promise<void>((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error("timeout")), 1000);
+        const t = setTimeout(() => reject(new Error('timeout')), 1000);
         const iv = setInterval(() => {
-          if (received.length >= 1) {
-            clearTimeout(t);
-            clearInterval(iv);
-            resolve();
-          }
+          if (received.length >= 1) { clearTimeout(t); clearInterval(iv); resolve(); }
         }, 10);
       });
 
-      expect(received[0]?.data?.comment).toBe("dataview");
+      expect(received[0]?.data?.comment).toBe('dataview');
 
       (client as any).clearDirectWebSocket();
       await (client as any).clearPlaywrightCommentWatcher();
@@ -996,7 +709,7 @@ describe("direct websocket onmessage handling", () => {
     }
   });
 
-  it("handles Blob payloads", async () => {
+  it('handles Blob payloads', async () => {
     const originalWebSocket = (globalThis as any).WebSocket;
     const originalBlob = (globalThis as any).Blob;
 
@@ -1012,31 +725,18 @@ describe("direct websocket onmessage handling", () => {
       sent: any[] = [];
       constructor(_url: string, _opts?: any) {
         MockWebSocket.instances.push(this);
-        setTimeout(() => {
-          if (this.onopen) this.onopen();
-        }, 0);
+        setTimeout(() => { if (this.onopen) this.onopen(); }, 0);
       }
-      send(data: any) {
-        this.sent.push(data);
-      }
-      close() {
-        this.readyState = MockWebSocket.CLOSED;
-        if (this.onclose) this.onclose({ code: 1000, reason: "" });
-      }
-      emit(data: any) {
-        if (this.onmessage) this.onmessage({ data });
-      }
+      send(data: any) { this.sent.push(data); }
+      close() { this.readyState = MockWebSocket.CLOSED; if (this.onclose) this.onclose({ code: 1000, reason: '' }); }
+      emit(data: any) { if (this.onmessage) this.onmessage({ data }); }
     }
 
     // minimal Blob mock with text()
     class MockBlob {
       private txt: string;
-      constructor(txt: string) {
-        this.txt = txt;
-      }
-      text() {
-        return Promise.resolve(this.txt);
-      }
+      constructor(txt: string) { this.txt = txt; }
+      text() { return Promise.resolve(this.txt); }
     }
 
     (globalThis as any).WebSocket = MockWebSocket;
@@ -1045,56 +745,30 @@ describe("direct websocket onmessage handling", () => {
     let client: any = null;
     try {
       const received: any[] = [];
-      client = createNiconamaCommentClient(
-        {
-          watchUrl: "https://live.nicovideo.jp/watch/test",
-          launchPersistentContext: (async () => ({
-            pages: () => [],
-            newPage: async () => ({}),
-            close: async () => {},
-          })) as any,
-        },
-        {
-          onComments: (c) => {
-            received.push(...c);
-          },
-          onMeta: () => {},
-          onError: (e) => {
-            throw e;
-          },
-        },
-      );
+      client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: (async () => ({ pages: () => [], newPage: async () => ({}), close: async () => {} })) as any }, {
+        onComments: (c) => { received.push(...c); },
+        onMeta: () => {},
+        onError: (e) => { throw e; },
+      });
 
-      const embeddedData = {
-        site: { state: { relive: { webSocketUrl: "wss://example.com/ws" } } },
-      };
-      await (client as any).setupDirectWebSocketConnection(
-        "https://live.nicovideo.jp/watch/test",
-        embeddedData,
-      );
+      const embeddedData = { site: { state: { relive: { webSocketUrl: 'wss://example.com/ws' } } } };
+      await (client as any).setupDirectWebSocketConnection('https://live.nicovideo.jp/watch/test', embeddedData);
 
       const ws = MockWebSocket.instances[0];
       await new Promise((res) => setTimeout(res, 0));
 
-      const payloadObj = {
-        type: "actionComment",
-        data: { comment: "blobtext", no: 6 },
-      };
+      const payloadObj = { type: 'actionComment', data: { comment: 'blobtext', no: 6 } };
       const json = JSON.stringify(payloadObj);
       ws.emit(new MockBlob(json));
 
       await new Promise<void>((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error("timeout")), 1000);
+        const t = setTimeout(() => reject(new Error('timeout')), 1000);
         const iv = setInterval(() => {
-          if (received.length >= 1) {
-            clearTimeout(t);
-            clearInterval(iv);
-            resolve();
-          }
+          if (received.length >= 1) { clearTimeout(t); clearInterval(iv); resolve(); }
         }, 10);
       });
 
-      expect(received[0]?.data?.comment).toBe("blobtext");
+      expect(received[0]?.data?.comment).toBe('blobtext');
 
       (client as any).clearDirectWebSocket();
       await (client as any).clearPlaywrightCommentWatcher();
@@ -1104,7 +778,7 @@ describe("direct websocket onmessage handling", () => {
     }
   });
 
-  it("handles Buffer-like payloads when Buffer is available", async () => {
+  it('handles Buffer-like payloads when Buffer is available', async () => {
     const originalWebSocket = (globalThis as any).WebSocket;
     class MockWebSocket {
       static OPEN = 1;
@@ -1118,20 +792,11 @@ describe("direct websocket onmessage handling", () => {
       sent: any[] = [];
       constructor(_url: string, _opts?: any) {
         MockWebSocket.instances.push(this);
-        setTimeout(() => {
-          if (this.onopen) this.onopen();
-        }, 0);
+        setTimeout(() => { if (this.onopen) this.onopen(); }, 0);
       }
-      send(data: any) {
-        this.sent.push(data);
-      }
-      close() {
-        this.readyState = MockWebSocket.CLOSED;
-        if (this.onclose) this.onclose({ code: 1000, reason: "" });
-      }
-      emit(data: any) {
-        if (this.onmessage) this.onmessage({ data });
-      }
+      send(data: any) { this.sent.push(data); }
+      close() { this.readyState = MockWebSocket.CLOSED; if (this.onclose) this.onclose({ code: 1000, reason: '' }); }
+      emit(data: any) { if (this.onmessage) this.onmessage({ data }); }
     }
 
     (globalThis as any).WebSocket = MockWebSocket;
@@ -1139,61 +804,33 @@ describe("direct websocket onmessage handling", () => {
     let client: any = null;
     try {
       const received: any[] = [];
-      client = createNiconamaCommentClient(
-        {
-          watchUrl: "https://live.nicovideo.jp/watch/test",
-          launchPersistentContext: (async () => ({
-            pages: () => [],
-            newPage: async () => ({}),
-            close: async () => {},
-          })) as any,
-        },
-        {
-          onComments: (c) => {
-            received.push(...c);
-          },
-          onMeta: () => {},
-          onError: (e) => {
-            throw e;
-          },
-        },
-      );
+      client = createNiconamaCommentClient({ watchUrl: 'https://live.nicovideo.jp/watch/test', launchPersistentContext: (async () => ({ pages: () => [], newPage: async () => ({}), close: async () => {} })) as any }, {
+        onComments: (c) => { received.push(...c); },
+        onMeta: () => {},
+        onError: (e) => { throw e; },
+      });
 
-      const embeddedData = {
-        site: { state: { relive: { webSocketUrl: "wss://example.com/ws" } } },
-      };
-      await (client as any).setupDirectWebSocketConnection(
-        "https://live.nicovideo.jp/watch/test",
-        embeddedData,
-      );
+      const embeddedData = { site: { state: { relive: { webSocketUrl: 'wss://example.com/ws' } } } };
+      await (client as any).setupDirectWebSocketConnection('https://live.nicovideo.jp/watch/test', embeddedData);
 
       const ws = MockWebSocket.instances[0];
       await new Promise((res) => setTimeout(res, 0));
 
-      const payloadObj = {
-        type: "actionComment",
-        data: { comment: "bufferlike", no: 7 },
-      };
+      const payloadObj = { type: 'actionComment', data: { comment: 'bufferlike', no: 7 } };
       const json = JSON.stringify(payloadObj);
 
       // If Buffer is available, use Buffer, otherwise fall back to Uint8Array
-      const maybeBuffer = (globalThis as any).Buffer
-        ? (globalThis as any).Buffer.from(json)
-        : new TextEncoder().encode(json);
+      const maybeBuffer = (globalThis as any).Buffer ? (globalThis as any).Buffer.from(json) : new TextEncoder().encode(json);
       ws.emit(maybeBuffer);
 
       await new Promise<void>((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error("timeout")), 1000);
+        const t = setTimeout(() => reject(new Error('timeout')), 1000);
         const iv = setInterval(() => {
-          if (received.length >= 1) {
-            clearTimeout(t);
-            clearInterval(iv);
-            resolve();
-          }
+          if (received.length >= 1) { clearTimeout(t); clearInterval(iv); resolve(); }
         }, 10);
       });
 
-      expect(received[0]?.data?.comment).toBe("bufferlike");
+      expect(received[0]?.data?.comment).toBe('bufferlike');
 
       (client as any).clearDirectWebSocket();
       await (client as any).clearPlaywrightCommentWatcher();
@@ -1251,17 +888,11 @@ describe("hasCommentArrayStructure", () => {
   });
 
   it("returns true for nested embedded data comment arrays", () => {
-    expect(
-      hasCommentArrayStructure({
-        site: { state: { relive: { comments: [] } } },
-      }),
-    ).toBe(true);
+    expect(hasCommentArrayStructure({ site: { state: { relive: { comments: [] } } } })).toBe(true);
   });
 
   it("returns true for deeply nested arbitrary comment arrays", () => {
-    expect(
-      hasCommentArrayStructure({ foo: { bar: { baz: { comments: [] } } } }),
-    ).toBe(true);
+    expect(hasCommentArrayStructure({ foo: { bar: { baz: { comments: [] } } } })).toBe(true);
   });
 
   it("returns true for an empty top-level data array", () => {
@@ -1269,7 +900,7 @@ describe("hasCommentArrayStructure", () => {
   });
 
   it("returns false for a response without comment arrays", () => {
-    expect(hasCommentArrayStructure({ foo: "bar" })).toBe(false);
+    expect(hasCommentArrayStructure({ foo: 'bar' })).toBe(false);
   });
 });
 
@@ -1300,3 +931,4 @@ describe("ensureUserDataDirExists", () => {
     }
   });
 });
+
