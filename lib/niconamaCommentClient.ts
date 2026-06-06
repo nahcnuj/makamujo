@@ -82,6 +82,10 @@ export type NiconamaCommentClientOptions = {
   watchUrl?: string;
   pollIntervalMs?: number;
   launchPersistentContext?: NiconamaLaunchPersistentContext;
+  // When set to false, the client will not launch Playwright-based
+  // fallbacks or enrichment and will rely solely on direct websocket
+  // connections and polling APIs. Default: `true`.
+  enablePlaywrightFallback?: boolean;
 };
 
 type NiconamaCommentClientCallbacks = {
@@ -112,6 +116,7 @@ export class NiconamaCommentClient {
   #pollTimer: ReturnType<typeof setTimeout> | null = null;
   #pollCancelResolve: (() => void) | null = null;
   #launchPersistentContext: NiconamaLaunchPersistentContext;
+  #enablePlaywrightFallback = true;
   #callbacks: NiconamaCommentClientCallbacks;
 
   constructor(options: NiconamaCommentClientOptions, callbacks: NiconamaCommentClientCallbacks) {
@@ -120,6 +125,7 @@ export class NiconamaCommentClient {
     this.#executablePath = options.executablePath ?? DEFAULT_CHROMIUM_EXECUTABLE_PATH;
     this.#pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.#launchPersistentContext = options.launchPersistentContext ?? (launchPersistentContext as unknown as NiconamaLaunchPersistentContext);
+    this.#enablePlaywrightFallback = options.enablePlaywrightFallback ?? true;
     this.#callbacks = callbacks;
   }
 
@@ -175,6 +181,7 @@ export class NiconamaCommentClient {
     // live WebSocket so consumers receive pre-existing messages first.
     try {
       const initialComments = parseAgentCommentsFromResponseBody(embeddedData, this.#seenCommentIdentifiers);
+      try { console.debug('[DEBUG] startup initialComments count', { count: initialComments.length }); } catch {}
       if (initialComments.length > 0) {
         this.#callbacks.onComments(initialComments);
       }
@@ -195,21 +202,44 @@ export class NiconamaCommentClient {
     // install Playwright watcher in the background to enrich or fallback.
     await this.setupDirectWebSocketConnection(watchUrl, embeddedData);
     try {
-      this.#playwrightWatcherTask = this.setupPlaywrightCommentWatcher(watchUrl)
-        .catch((err) => {
-          console.warn('[WARN] setupPlaywrightCommentWatcher failed (background)', err);
-        })
-        .finally(() => {
-          this.#playwrightWatcherTask = null;
-        });
+      if (this.#enablePlaywrightFallback) {
+        this.#playwrightWatcherTask = this.setupPlaywrightCommentWatcher(watchUrl)
+          .catch((err) => {
+            console.warn('[WARN] setupPlaywrightCommentWatcher failed (background)', err);
+          })
+          .finally(() => {
+            this.#playwrightWatcherTask = null;
+          });
+      } else {
+        console.debug('[DEBUG] Playwright fallback disabled via options (enablePlaywrightFallback=false)');
+      }
     } catch (err) {
       console.warn('[WARN] failed to schedule Playwright watcher', err);
     }
 
-    // After watchers are installed, perform an immediate re-scan in the
-    // background to catch any comments that arrived between the initial
-    // fetch and the watcher installation.
-    void this.performImmediateRescan(watchUrl).catch(() => undefined);
+    // After watchers are installed, perform an immediate re-scan to catch
+    // any comments that arrived between the initial fetch and the watcher
+    // installation. If the embedded metadata reports a positive comment
+    // count, wait a short, bounded time for the rescan so e2e tests that
+    // expect initial comments are less likely to race on background tasks.
+    try {
+      const reportedCount = (embeddedData && typeof embeddedData === 'object')
+        ? (typeof (embeddedData as any).program?.statistics?.commentCount === 'number'
+          ? (embeddedData as any).program.statistics.commentCount
+          : undefined)
+        : undefined;
+      if (typeof reportedCount === 'number' && reportedCount > 0) {
+        // Wait up to 2s for an immediate rescan to complete and deliver comments.
+        await Promise.race([
+          this.performImmediateRescan(watchUrl),
+          new Promise((res) => setTimeout(res, 2000)),
+        ]).catch(() => undefined);
+      } else {
+        void this.performImmediateRescan(watchUrl).catch(() => undefined);
+      }
+    } catch (e) {
+      // ignore rescan errors
+    }
     this.#pollTask = this.pollLoop();
     console.info('[DEBUG] NiconamaCommentClient.start finished');
   }
@@ -300,10 +330,13 @@ export class NiconamaCommentClient {
       }
 
       try { console.debug('[DEBUG] fetchEmbeddedData falling back to Playwright', targetUrl, { commentCount, initialCommentsCount: initialComments.length, embeddedWebSocketUrl: Boolean(embeddedWebSocketUrl) }); } catch {}
-      try { console.debug('[DEBUG] fetchEmbeddedData invoking fetchEmbeddedDataWithPlaywright', { targetUrl }); } catch {}
-      const enrichedEmbedded = await this.fetchEmbeddedDataWithPlaywright(targetUrl, embedded);
-      try { console.debug('[DEBUG] fetchEmbeddedData fetchEmbeddedDataWithPlaywright ->', enrichedEmbedded ? 'found' : 'not-found'); } catch {}
-      return enrichedEmbedded ?? embedded;
+      if (this.#enablePlaywrightFallback) {
+        try { console.debug('[DEBUG] fetchEmbeddedData invoking fetchEmbeddedDataWithPlaywright', { targetUrl }); } catch {}
+        const enrichedEmbedded = await this.fetchEmbeddedDataWithPlaywright(targetUrl, embedded);
+        try { console.debug('[DEBUG] fetchEmbeddedData fetchEmbeddedDataWithPlaywright ->', enrichedEmbedded ? 'found' : 'not-found'); } catch {}
+        return enrichedEmbedded ?? embedded;
+      }
+      return embedded;
     }
 
     // If static extraction failed entirely, try aggressive polling before
@@ -332,6 +365,10 @@ export class NiconamaCommentClient {
     }
 
     try { console.debug('[DEBUG] fetchEmbeddedData invoking fetchEmbeddedDataWithPlaywright (no static embedded)', { targetUrl }); } catch {}
+    if (!this.#enablePlaywrightFallback) {
+      console.debug('[DEBUG] skipping Playwright fetchEmbeddedDataWithPlaywright (disabled via enablePlaywrightFallback=false)');
+      return null;
+    }
     const renderedEmbedded = await this.fetchEmbeddedDataWithPlaywright(targetUrl);
     try { console.debug('[DEBUG] fetchEmbeddedData fetchEmbeddedDataWithPlaywright (no static embedded) ->', renderedEmbedded ? 'found' : 'not-found'); } catch {}
     return renderedEmbedded;
@@ -1622,20 +1659,24 @@ export class NiconamaCommentClient {
 
       // If static extraction didn't find comments, try the Playwright-rendered enrichment
       try {
-        // Try Playwright enrichment a few times because transient page-closes
-        // or WAF-induced navigation failures sometimes prevent a single
-        // attempt from harvesting comments.
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          const enriched = await this.fetchEmbeddedDataWithPlaywright(watchUrl, staticData).catch(() => null);
-          if (enriched) {
-            const comments2 = parseAgentCommentsFromResponseBody(enriched, this.#seenCommentIdentifiers);
-            if (comments2.length > 0) {
-              this.#callbacks.onComments(comments2);
-              console.debug('[DEBUG] performImmediateRescan comments extracted (playwright)', { count: comments2.length, watchUrl, attempt });
-              return;
+        if (this.#enablePlaywrightFallback) {
+          // Try Playwright enrichment a few times because transient page-closes
+          // or WAF-induced navigation failures sometimes prevent a single
+          // attempt from harvesting comments.
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            const enriched = await this.fetchEmbeddedDataWithPlaywright(watchUrl, staticData).catch(() => null);
+            if (enriched) {
+              const comments2 = parseAgentCommentsFromResponseBody(enriched, this.#seenCommentIdentifiers);
+              if (comments2.length > 0) {
+                this.#callbacks.onComments(comments2);
+                console.debug('[DEBUG] performImmediateRescan comments extracted (playwright)', { count: comments2.length, watchUrl, attempt });
+                return;
+              }
             }
+            await new Promise((r) => setTimeout(r, 500 * attempt));
           }
-          await new Promise((r) => setTimeout(r, 500 * attempt));
+        } else {
+          console.debug('[DEBUG] skipping Playwright enrichment (disabled via enablePlaywrightFallback=false)');
         }
       } catch (e) {
         // ignore

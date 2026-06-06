@@ -329,6 +329,50 @@ export const parseAgentCommentsFromResponseBody = (
   return comments;
 };
 
+export const coerceToAgentComments = (
+  input: unknown,
+  opts?: { seen?: Set<string>; eventType?: string },
+): AgentComment[] => {
+  const seen = opts?.seen ?? new Set<string>();
+  const eventType = opts?.eventType;
+
+  if (input === undefined || input === null) return [];
+
+  // Strings: try JSON parse, then NDJSON, otherwise empty
+  if (typeof input === 'string') {
+    const parsed = tryParseJson(input);
+    if (parsed) return coerceToAgentComments(parsed, opts);
+
+    // NDJSON: multiple JSON objects separated by newlines
+    const lines = input.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    if (lines.length > 0) {
+      const out: any[] = [];
+      for (const line of lines) {
+        const p = tryParseJson(line);
+        if (p) out.push(...parseAgentCommentsFromResponseBody(p, seen, eventType));
+      }
+      return out as AgentComment[];
+    }
+
+    return [];
+  }
+
+  // Arrays: treat as a data array
+  if (Array.isArray(input)) {
+    return parseAgentCommentsFromResponseBody({ data: input }, seen, eventType) as AgentComment[];
+  }
+
+  // Objects: either a single comment-like object or a response body
+  if (typeof input === 'object') {
+    if (isCommentLikeObject(input)) {
+      return parseAgentCommentsFromResponseBody({ data: [input] }, seen, eventType) as AgentComment[];
+    }
+    return parseAgentCommentsFromResponseBody(input, seen, eventType) as AgentComment[];
+  }
+
+  return [];
+};
+
 const parseCommentNumberFromText = (text: string): number | undefined => {
   const normalized = text.trimStart();
   const match = normalized.match(/^#(\d+)[ 　]+/);

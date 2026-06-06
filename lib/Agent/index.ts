@@ -223,7 +223,7 @@ export class MakaMujo {
 
       if (data.no || (data.userId === 'onecomme.system' && data.name === '生放送クルーズ')) {
         console.log('[INFO]', `got a comment: "${comment}"`);
-        // TODO reply
+        // FIXME: improve replying algorithm
         const topic = pickTopic(comment);
         if (topic) {
           // console.debug('[DEBUG]', 'picked a word', `"${topic}"`, 'from', `"${comment}"`);
