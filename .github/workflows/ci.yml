@@ -38,6 +38,12 @@ jobs:
           key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - name: Install dependencies
         run: bun ci
+      - name: Ensure node_modules/.bin/bun points to system bun
+        run: |
+          mkdir -p node_modules/.bin
+          if command -v bun >/dev/null 2>&1; then
+            ln -sf "$(command -v bun)" node_modules/.bin/bun
+          fi
       - name: Save node_modules to cache
         uses: actions/cache/save@v5
         with:
