@@ -134,7 +134,7 @@ export class NiconamaCommentClient {
   }
 
   // Unified delivery helper: call consumer callback and perform maintenance
-  // (e.g. trimming the seen identifiers set) to prevent memory/perf degredation.
+  // (e.g. trimming the seen identifiers set) to prevent memory/perf degradation.
   private deliverComments(comments: any[]): void {
     // Call consumer callback asynchronously to avoid consumer-induced
     // event-loop blocking while still delivering comments in a timely way.
@@ -291,8 +291,9 @@ export class NiconamaCommentClient {
     this.#pollTask = this.pollLoop();
     // Start a lightweight periodic metrics logger to aid in long-run
     // diagnostics (memory + seen identifiers size).
+    // Enable via NICONAMA_ENABLE_METRICS=1 to avoid production noise.
     try {
-      if (!this.#metricsTimer) {
+      if (!this.#metricsTimer && process.env.NICONAMA_ENABLE_METRICS) {
         this.#metricsTimer = setInterval(() => {
           try {
             const mem = (typeof process !== 'undefined' && typeof (process as any).memoryUsage === 'function')
@@ -1366,7 +1367,7 @@ export class NiconamaCommentClient {
               const bodyText = await response.text().catch(() => null);
               if (!bodyText) return;
               const parsed = tryParseJson(bodyText);
-                if (parsed) {
+              if (parsed) {
                 const comments = parseAgentCommentsFromResponseBody(parsed, this.#seenCommentIdentifiers);
                 if (comments.length > 0) {
                   this.deliverComments(comments);

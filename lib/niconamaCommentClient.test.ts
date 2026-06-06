@@ -291,9 +291,20 @@ describe("fetchEmbeddedData fallback behavior", () => {
       // deliverComments is now scheduled asynchronously; wait briefly
       // for the callback to be invoked to avoid flakiness in tests.
       await new Promise<void>((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error('timeout waiting for onComments')), 1000);
-        const iv = setInterval(() => {
-          if (onComments.length >= 1) { clearTimeout(t); clearInterval(iv); resolve(); }
+        let t: ReturnType<typeof setTimeout> | null = null;
+        let iv: ReturnType<typeof setInterval> | null = null;
+        
+        t = setTimeout(() => {
+          if (iv !== null) clearInterval(iv);
+          reject(new Error('timeout waiting for onComments'));
+        }, 1000);
+        
+        iv = setInterval(() => {
+          if (onComments.length >= 1) {
+            if (t !== null) clearTimeout(t);
+            if (iv !== null) clearInterval(iv);
+            resolve();
+          }
         }, 10);
       });
 
