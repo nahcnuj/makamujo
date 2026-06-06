@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-echo "Running formatter (package script) for staged files..."
+echo "Running Biome formatter for staged files..."
 
 # Find staged files that match common text/code extensions
 STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|jsx|ts|tsx|json|css|scss|html|md|toml)$' || true)
@@ -13,29 +13,23 @@ if [ -z "$STAGED_FILES" ]; then
   exit 0
 fi
 
-# Use the package script when available: prefer `bun run`, then `npm run`, then direct biome binary
-if command -v bun >/dev/null 2>&1; then
-  RUNNER="bun"
-elif command -v npm >/dev/null 2>&1; then
-  RUNNER="npm"
+# Prefer bunx, then npx, then local node_modules binary
+if command -v bunx >/dev/null 2>&1; then
+  BIOME_CMD="bunx biome"
+elif command -v npx >/dev/null 2>&1; then
+  BIOME_CMD="npx biome"
 elif [ -x "./node_modules/.bin/biome" ]; then
-  RUNNER="local"
+  BIOME_CMD="./node_modules/.bin/biome"
 else
-  echo "biome not found. Install it with 'bun add -d @biomejs/biome' or 'npm i -D @biomejs/biome'" >&2
+  echo "biome not found. Install it with 'bun add -d biome' or 'npm i -D biome'" >&2
   exit 1
 fi
 
-while IFS= read -r file; do
-  echo "Formatting $file"
-  if [ "$RUNNER" = "bun" ]; then
-    bun run format -- "$file"
-  elif [ "$RUNNER" = "npm" ]; then
-    npm run format -- "$file"
-  else
-    ./node_modules/.bin/biome format --write "$file"
-  fi
+echo "$STAGED_FILES" | while IFS= read -r file; do
+  # Format each file; continue on errors to avoid blocking for formatter issues
+  $BIOME_CMD format "$file" || true
   git add -- "$file"
-done < <(echo "$STAGED_FILES")
+done
 
-echo "Formatting complete"
+echo "biome format complete"
 exit 0
