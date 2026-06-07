@@ -185,6 +185,17 @@ export const app = new Hono()
             try { console.debug('[DEBUG] opening upstream SSE fetch ->', sseUrl); } catch {}
             const res = await fetch(sseUrl, { headers: { accept: 'text/event-stream' } });
             try { console.debug('[DEBUG] upstream SSE response ->', { status: res.status, contentType: res.headers.get('content-type') }); } catch {}
+            
+            if (!res.ok) {
+              try { console.warn('[WARN] upstream SSE fetch failed with status', res.status); } catch {}
+              // Send local metadata and close gracefully instead of erroring
+              try {
+                const metaJson = await fetchMetaSnapshot(proxyBase).catch(() => ({}));
+                try { ws.send(JSON.stringify(metaJson)); } catch {}
+              } catch {}
+              return;
+            }
+            
             try {
               const metaJson = await fetchMetaSnapshot(proxyBase);
               try { ws.send(JSON.stringify(metaJson)); } catch {}
@@ -221,7 +232,9 @@ export const app = new Hono()
             try { console.warn('[WARN] websocket bridge failed', String(err)); } catch {}
             try { ws.close(); } catch {}
           }
-        })();
+        })().catch((err) => {
+          try { console.error('[ERROR] websocket onOpen handler error', String(err)); } catch {}
+        });
       },
       onMessage() {},
       onClose() { cancelForward?.(); },
