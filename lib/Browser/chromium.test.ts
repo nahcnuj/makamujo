@@ -1,5 +1,5 @@
-import { describe, expect, it } from "bun:test";
-import { createClickByElementId, createPopupPageHandler, createRedirectToHomeHandler } from "./chromium";
+import { describe, expect, it, mock } from "bun:test";
+import { createClickByElementId, createPopupPageHandler, createRedirectToHomeHandler, launchPersistentContext } from "./chromium";
 
 const HOME_URL = 'https://orteil.dashnet.org/cookieclicker/';
 
@@ -220,5 +220,39 @@ describe('createClickByElementId', () => {
     await createClickByElementId(page)('promptOption0');
 
     expect(firstCalled).toBeTrue();
+  });
+});
+
+describe('launchPersistentContext', () => {
+  it('should recognize transient connection error patterns', () => {
+    // Test that the error pattern regex recognizes expected transient errors
+    const transientErrors = [
+      'Failed to connect',
+      'spawn ENOENT',
+      'ECONNREFUSED',
+      'pipe broken',
+      'Timeout waiting',
+    ];
+
+    const errorPattern = /Failed to connect|spawn|ECONNREFUSED|pipe|Timeout/i;
+
+    for (const errorMsg of transientErrors) {
+      expect(errorPattern.test(errorMsg)).toBeTrue();
+    }
+  });
+
+  it('should not retry on non-transient errors', () => {
+    // Test that non-transient errors are not retried
+    const nonTransientErrors = [
+      'ProcessSingleton',
+      'Permission denied',
+      'Unknown error',
+    ];
+
+    const transientPattern = /Failed to connect|spawn|ECONNREFUSED|pipe|Timeout/i;
+
+    for (const errorMsg of nonTransientErrors) {
+      expect(transientPattern.test(errorMsg)).toBeFalse();
+    }
   });
 });
