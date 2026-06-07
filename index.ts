@@ -55,20 +55,20 @@ let __consoleServerForExit: any = null;
 
 process.on('uncaughtException', (err) => {
   try {
-    console.error('[UNCAUGHT_EXCEPTION]', err instanceof Error ? err.stack ?? err.message : String(err));
+    console.error('[ERROR]', err instanceof Error ? err.stack ?? err.message : String(err));
   } catch {
     // ignore logging failures
   }
 });
 process.on('unhandledRejection', (reason) => {
   try {
-    console.error('[UNHANDLED_REJECTION]', reason instanceof Error ? reason.stack ?? reason.message : String(reason));
+    console.error('[ERROR]', reason instanceof Error ? reason.stack ?? reason.message : String(reason));
   } catch { }
 });
 process.on('uncaughtException', (err) => {
   try {
     // Log the exception for diagnostics
-    console.error('[UNCAUGHT_EXCEPTION]', err instanceof Error ? err.stack ?? err.message : String(err));
+    console.error('[ERROR]', err instanceof Error ? err.stack ?? err.message : String(err));
   } catch { }
 
   // Do not terminate the process for transient IPC listen failures
@@ -119,7 +119,7 @@ const model = (file => {
   try {
     return MarkovChainModel.fromFile(file);
   } catch (err) {
-    console.warn('failed to open the file', file);
+    console.warn('[WARN]', 'failed to open the file', file);
     return new MarkovChainModel();
   }
 })(modelFile);
@@ -148,7 +148,7 @@ if (openJTalkDictionaryDir && openJTalkHtsvoiceFile) {
 
   if (requireOpenJTalkAssets) {
     const message = 'OpenJTalk assets are required in production. Please install the fixed OpenJTalk HTS voice and dictionary files.';
-    console.error('[FATAL]', message, commonConfig);
+    console.error('[ERROR]', message, commonConfig);
     process.exit(1);
   }
 
@@ -575,7 +575,7 @@ streamer.onGameStateChange(() => {
 
 const portNumber = parseInt(port ?? "7777", 10);
 if (!Number.isFinite(portNumber) || portNumber < 0 || portNumber > 65535) {
-  console.error(`Invalid port: ${port}. Must be an integer between 0 and 65535.`);
+  console.error('[ERROR]', `Invalid port: ${port}. Must be an integer between 0 and 65535.`);
   process.exit(1);
 }
 

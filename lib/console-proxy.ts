@@ -73,7 +73,7 @@ export function forwardSSEEventsToSink(upstreamBody: any, sink: (data: string) =
         }
       }
     } catch (err) {
-      console.warn('[DIAG] SSE reader failed', String(err));
+      console.warn('[WARN]', 'SSE reader failed', String(err));
     } finally {
       try { reader.cancel && typeof reader.cancel === 'function' && reader.cancel(); } catch {}
     }
@@ -316,7 +316,7 @@ export function createResilientSseProxy(
           try {
             await processUpstreamBody(firstResponse, controller);
           } catch (err) {
-            console.error('[DIAG] resilient proxy initial body read failed', String(err));
+            console.error('[ERROR]', 'resilient proxy initial body read failed', String(err));
             appendDebugLog('initial body read failed', String(err));
           }
           console.log('[DIAG] resilient proxy initial upstream body completed');
@@ -335,11 +335,11 @@ export function createResilientSseProxy(
             console.log('[DIAG] resilient proxy reconnect fetched', { status: upstream.status });
             appendDebugLog('reconnect fetched', upstream.status);
             try { await processUpstreamBody(upstream, controller); } catch (err) {
-              console.error('[DIAG] resilient proxy reconnect body read failed', String(err));
+              console.error('[ERROR]', 'resilient proxy reconnect body read failed', String(err));
               appendDebugLog('reconnect body read failed', String(err));
             }
             } catch (err) {
-              console.warn('[DIAG] resilient proxy reconnect fetch failed', String(err));
+              console.warn('[WARN]', 'resilient proxy reconnect fetch failed', String(err));
               // Connection failed; will retry after delay.
             }
           }
@@ -352,7 +352,8 @@ export function createResilientSseProxy(
           try { resilientControllers.delete(controller); } catch {}
           try { controller.close(); } catch {}
         }
-      })().catch(() => {
+      })().catch((err) => {
+        console.error('[ERROR]', 'resilient SSE proxy failed', String(err));
         if (keepaliveTimer) {
           clearInterval(keepaliveTimer);
           keepaliveTimer = null;
