@@ -1,6 +1,6 @@
 import type { Browser } from "automated-gameplay-transmitter";
 import { setTimeout } from "node:timers/promises";
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ViewportSize } from "playwright";
@@ -273,9 +273,33 @@ export const createClickByElementId = (page: ClickablePageLike) =>
 export const DEFAULT_PLAYWRIGHT_USER_DATA_DIR = process.env.PLAYWRIGHT_USER_DATA_DIR ?? '/tmp/playwright-user-data';
 export const DEFAULT_CHROMIUM_EXECUTABLE_PATH = process.env.CHROMIUM_EXECUTABLE_PATH ?? '';
 
+// Clean up Chromium lock files that may prevent launching a new instance.
+// This helps avoid "ProcessSingleton" errors when a previous instance crashed
+// or didn't clean up properly.
+const cleanupChromiumLockFiles = (userDataDir: string): void => {
+  if (!existsSync(userDataDir)) {
+    return;
+  }
+  
+  const lockFiles = ['SingletonLock', 'SingletonSocket', '.ssh'];
+  for (const lockFile of lockFiles) {
+    const lockPath = join(userDataDir, lockFile);
+    if (existsSync(lockPath)) {
+      try {
+        rmSync(lockPath, { force: true, recursive: true });
+        console.warn(`[WARN] cleaned up lock file: ${lockPath}`);
+      } catch (err) {
+        console.warn(`[WARN] failed to clean up lock file ${lockPath}:`, err instanceof Error ? err.message : String(err));
+      }
+    }
+  }
+};
+
 // Provide a launchPersistentContext helper that prefers playwright-extra's
 // chromium wrapper but falls back to Playwright's chromium implementation.
 export const launchPersistentContext = async (userDataDir: string, options: Record<string, unknown> = {}) => {
+  // Clean up any stale lock files before attempting to launch
+  cleanupChromiumLockFiles(userDataDir);
   try {
     if (typeof (chromium as any).launchPersistentContext === 'function') {
       try {
@@ -287,6 +311,7 @@ export const launchPersistentContext = async (userDataDir: string, options: Reco
           // the ProcessSingleton conflict and retry.
           try {
             const tmpDir = mkdtempSync(join(tmpdir(), 'playwright-'));
+            cleanupChromiumLockFiles(tmpDir);
             console.warn('[WARN] userDataDir locked, retrying with temp dir', tmpDir);
             return await (chromium as any).launchPersistentContext(tmpDir, options as any);
           } catch (err2) {
@@ -303,6 +328,7 @@ export const launchPersistentContext = async (userDataDir: string, options: Reco
       if (/ProcessSingleton|SingletonLock/i.test(msg)) {
         try {
           const tmpDir = mkdtempSync(join(tmpdir(), 'playwright-'));
+          cleanupChromiumLockFiles(tmpDir);
           console.warn('[WARN] userDataDir locked, retrying with temp dir', tmpDir);
           return await playwright.chromium.launchPersistentContext(tmpDir, options as any);
         } catch (err2) {
