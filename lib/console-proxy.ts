@@ -73,7 +73,7 @@ export function forwardSSEEventsToSink(upstreamBody: any, sink: (data: string) =
         }
       }
     } catch (err) {
-      try { console.warn('[DIAG] SSE reader failed', String(err)); } catch {}
+      console.warn('[DIAG] SSE reader failed', String(err));
     } finally {
       try { reader.cancel && typeof reader.cancel === 'function' && reader.cancel(); } catch {}
     }
@@ -119,7 +119,6 @@ export function computeProxyBase(req: Request) {
         const proxyPort = parsedProxyBase.port || (parsedProxyBase.protocol === 'https:' ? '443' : '80');
         if (incomingHostname === proxyHostname && incomingPort === proxyPort) {
           proxyBase = `http://127.0.0.1:${BROADCASTING_PORT}`;
-          try { console.log('[WARN] Detected self-proxying; overriding proxyBase ->', proxyBase); } catch {}
         }
       } catch {}
     }
@@ -168,11 +167,11 @@ export async function fetchMetaSnapshot(proxyBase: string): Promise<any> {
       const finalRes = await fetch(url);
       return await finalRes.json().catch(() => ({}));
     } catch (err) {
-      try { console.warn('[DIAG] fetchMetaSnapshot final fetch failed', String(err)); } catch {}
+      console.warn('[DIAG] fetchMetaSnapshot final fetch failed', String(err));
       return {};
     }
   } catch (err) {
-    try { console.warn('[DIAG] fetchMetaSnapshot failed', String(err)); } catch {}
+    console.warn('[DIAG] fetchMetaSnapshot failed', String(err));
     return {};
   }
 }
@@ -306,7 +305,7 @@ export function createResilientSseProxy(
       // marker immediately after to indicate the proxy is active.
       try { controller.enqueue(encoder.encode(': keepalive\n\n')); } catch {}
       try { controller.enqueue(encoder.encode(': connected\n\n')); } catch {}
-      try { console.debug && console.debug('[DIAG] resilient proxy enqueued initial :connected chunk'); } catch {}
+      console.debug('[DIAG] resilient proxy enqueued initial :connected chunk');
 
       (async () => {
         try {
@@ -317,10 +316,10 @@ export function createResilientSseProxy(
           try {
             await processUpstreamBody(firstResponse, controller);
           } catch (err) {
-            try { console.error('[DIAG] resilient proxy initial body read failed', String(err)); } catch {}
+            console.error('[DIAG] resilient proxy initial body read failed', String(err));
             appendDebugLog('initial body read failed', String(err));
           }
-          try { console.log('[DIAG] resilient proxy initial upstream body completed'); } catch {}
+          console.log('[DIAG] resilient proxy initial upstream body completed');
           appendDebugLog('initial upstream body completed');
           appendDebugLog('before reconnect loop', stopped);
 
@@ -330,17 +329,17 @@ export function createResilientSseProxy(
 
             abortController = new AbortController();
             try {
-              try { console.log('[DIAG] resilient proxy reconnecting upstream'); } catch {}
+              console.log('[DIAG] resilient proxy reconnecting upstream');
             appendDebugLog('reconnecting upstream');
             const upstream = await fetchUpstream(abortController.signal);
-            try { console.log('[DIAG] resilient proxy reconnect fetched', { status: upstream.status }); } catch {}
+            console.log('[DIAG] resilient proxy reconnect fetched', { status: upstream.status });
             appendDebugLog('reconnect fetched', upstream.status);
             try { await processUpstreamBody(upstream, controller); } catch (err) {
-              try { console.error('[DIAG] resilient proxy reconnect body read failed', String(err)); } catch {}
+              console.error('[DIAG] resilient proxy reconnect body read failed', String(err));
               appendDebugLog('reconnect body read failed', String(err));
             }
             } catch (err) {
-              try { console.warn('[DIAG] resilient proxy reconnect fetch failed', String(err)); } catch {}
+              console.warn('[DIAG] resilient proxy reconnect fetch failed', String(err));
               // Connection failed; will retry after delay.
             }
           }
@@ -398,7 +397,7 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
       try {
         const headRes = await fetch(proxyUrl.toString(), { method: 'HEAD', headers: proxyHeaders, signal: controller.signal } as any);
         clearTimeout(timeout);
-        try { console.debug('[DIAG] HEAD probe upstream (HEAD) ->', { url: proxyUrl, status: headRes.status, ct: headRes.headers.get('content-type') }); } catch {}
+        console.debug('[DIAG] HEAD probe upstream (HEAD) ->', { url: proxyUrl, status: headRes.status, ct: headRes.headers.get('content-type') });
         // If HEAD indicates OK and an SSE content-type, return it. Otherwise
         // treat the HEAD response as a probe failure and fall through to the
         // GET fallback below so we can decide on a conservative 200 fallback
@@ -424,7 +423,7 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
             headers: proxyHeaders,
             signal: controller.signal,
           } as any);
-          try { console.debug('[DIAG] HEAD probe upstream (GET fallback) ->', { url: proxyUrl, status: upstreamGet.status, ct: upstreamGet.headers.get('content-type') }); } catch {}
+          console.debug('[DIAG] HEAD probe upstream (GET fallback) ->', { url: proxyUrl, status: upstreamGet.status, ct: upstreamGet.headers.get('content-type') });
           // Ensure we abort/close any streaming body so the connection isn't left open.
           try { upstreamGet.body?.cancel && typeof upstreamGet.body.cancel === 'function' && upstreamGet.body.cancel(); } catch {}
           const responseHeaders = new Headers(upstreamGet.headers);
@@ -436,7 +435,7 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
           clearTimeout(to);
         }
       } catch (err) {
-        try { console.warn('[DIAG] HEAD probe failed, returning conservative SSE response', String(err)); } catch {}
+        console.warn('[DIAG] HEAD probe failed, returning conservative SSE response', String(err));
         // Conservative fallback: return a successful SSE-like response so
         // clients (and test probes) that expect an EventSource endpoint
         // see a positive result even when the upstream HEAD/GET probe fails.
@@ -471,7 +470,7 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
       } catch {}
 
       if (isSelfProxy) {
-        try { console.debug('[DIAG] proxyConsoleApiWsRequest selected self-proxy fast-path', { proxyUrl, incomingHost }); } catch {}
+        console.debug('[DIAG] proxyConsoleApiWsRequest selected self-proxy fast-path', { proxyUrl, incomingHost });
         // Immediate local SSE stream so downstream EventSource transitions
         // to 'open' deterministically. Do not synthesize `niconama` data
         // before opening — instead wait up to `maxWaitMs` asynchronously
@@ -531,7 +530,7 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
                   payload = (globalThis as any).__getCurrentStreamPayload?.() ?? (globalThis as any).__lastPublishedStreamState ?? {};
               }
 
-              try { console.debug('[DIAG] self-proxy fast-path waited ms=', Date.now() - start, 'hasNiconama=', !!(payload && (payload as any).niconama)); } catch {}
+              console.debug('[DIAG] self-proxy fast-path waited ms=', Date.now() - start, 'hasNiconama=', !!(payload && (payload as any).niconama));
 
               if (payload && (payload as any).niconama) {
                 sendIfChanged(payload ?? {});
@@ -542,7 +541,7 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
                 setTimeout(() => {
                   try { const p3 = (globalThis as any).__lastPublishedStreamState ?? {}; sendIfChanged(p3); } catch {}
                 }, 1000);
-                try { console.debug('[DIAG] self-proxy enqueued real payload (has niconama)'); } catch {}
+                console.debug('[DIAG] self-proxy enqueued real payload (has niconama)');
               } else {
                 try { controller.enqueue(encoder.encode(': fallback\n\n')); } catch {}
                 const fallbackKeepaliveMs = 5_000;
@@ -550,7 +549,7 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
                   try { controller.enqueue(encoder.encode(': keepalive\n\n')); } catch {}
                 }, fallbackKeepaliveMs);
                 (controller as any)._keepalive = keepalive;
-                try { console.debug('[DIAG] self-proxy enqueued synthetic fallback (no niconama within timeout)'); } catch {}
+                console.debug('[DIAG] self-proxy enqueued synthetic fallback (no niconama within timeout)');
               }
             })();
           },
@@ -570,7 +569,7 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
     try {
       probe = await fetch(proxyUrl.toString(), { method: 'GET', headers: proxyHeaders });
     } catch (err) {
-      try { console.warn('[DIAG] SSE probe fetch failed ->', String(err), 'proxyUrl=', proxyUrl); } catch {}
+      console.warn('[DIAG] SSE probe fetch failed ->', String(err), 'proxyUrl=', proxyUrl);
       // Return a synthetic streaming SSE fallback so downstream EventSource
       // receives an immediate chunk and transitions to 'open'. This helps
       // tests that probe the proxy when the upstream is temporarily
@@ -594,9 +593,9 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
       return new Response(stream, { status: 200, headers: fallbackHeaders });
     }
     const contentType = probe.headers.get('content-type') ?? '';
-    try { console.debug('[DEBUG] probe upstream ->', { url: proxyUrl, status: probe.status, contentType }); } catch {}
+    console.debug('[DEBUG] probe upstream ->', { url: proxyUrl, status: probe.status, contentType });
     if (!probe.ok || !contentType.includes('text/event-stream')) {
-      try { console.warn('[WARN] upstream probe returned non-SSE or non-ok; passing through', { url: proxyUrl, status: probe.status, contentType }); } catch {}
+      console.warn('[WARN] upstream probe returned non-SSE or non-ok; passing through', { url: proxyUrl, status: probe.status, contentType });
       // Upstream returned a non-SSE or error response — pass it through as-is.
       return streamUpstreamResponse(probe);
     }
