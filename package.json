@@ -26,7 +26,7 @@
     "generate-ogp": "bun run scripts/generate-ogp.ts",
     "screenshot:console-agent-status": "bun run scripts/capture-console-agent-status.ts",
     "print-comments": "bun run scripts/print-niconama-comment-bodies.ts",
-    "format": "biome format",
+    "format": "biome format --write && biome check --write || true",
     "lint": "biome check"
   },
   "dependencies": {
