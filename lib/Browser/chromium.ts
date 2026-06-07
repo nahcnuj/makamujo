@@ -300,44 +300,73 @@ const cleanupChromiumLockFiles = (userDataDir: string): void => {
 export const launchPersistentContext = async (userDataDir: string, options: Record<string, unknown> = {}) => {
   // Clean up any stale lock files before attempting to launch
   cleanupChromiumLockFiles(userDataDir);
-  try {
-    if (typeof (chromium as any).launchPersistentContext === 'function') {
+  
+  const maxRetries = 3;
+  const baseRetryDelayMs = 500;
+  let lastError: Error | undefined;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      if (typeof (chromium as any).launchPersistentContext === 'function') {
+        try {
+          return await (chromium as any).launchPersistentContext(userDataDir, options as any);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (/ProcessSingleton|SingletonLock/i.test(msg)) {
+            // Profile appears locked; create a temporary user data dir to avoid
+            // the ProcessSingleton conflict and retry.
+            try {
+              const tmpDir = mkdtempSync(join(tmpdir(), 'playwright-'));
+              cleanupChromiumLockFiles(tmpDir);
+              console.warn('[WARN] userDataDir locked, retrying with temp dir', tmpDir);
+              return await (chromium as any).launchPersistentContext(tmpDir, options as any);
+            } catch (err2) {
+              // Fall through to rethrow original error below.
+            }
+          }
+          // Check for transient connection errors
+          if (/Failed to connect|spawn|ECONNREFUSED|pipe|Timeout/i.test(msg) && attempt < maxRetries - 1) {
+            lastError = err instanceof Error ? err : new Error(String(err));
+            const delayMs = baseRetryDelayMs * Math.pow(2, attempt);
+            console.warn(`[WARN] launchPersistentContext transient error (attempt ${attempt + 1}/${maxRetries}), retrying in ${delayMs}ms:`, msg);
+            await setTimeout(delayMs);
+            continue;
+          }
+          throw err;
+        }
+      }
       try {
-        return await (chromium as any).launchPersistentContext(userDataDir, options as any);
+        return await playwright.chromium.launchPersistentContext(userDataDir, options as any);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (/ProcessSingleton|SingletonLock/i.test(msg)) {
-          // Profile appears locked; create a temporary user data dir to avoid
-          // the ProcessSingleton conflict and retry.
           try {
             const tmpDir = mkdtempSync(join(tmpdir(), 'playwright-'));
             cleanupChromiumLockFiles(tmpDir);
             console.warn('[WARN] userDataDir locked, retrying with temp dir', tmpDir);
-            return await (chromium as any).launchPersistentContext(tmpDir, options as any);
+            return await playwright.chromium.launchPersistentContext(tmpDir, options as any);
           } catch (err2) {
-            // Fall through to rethrow original error below.
+            // fall through
           }
+        }
+        // Check for transient connection errors
+        if (/Failed to connect|spawn|ECONNREFUSED|pipe|Timeout/i.test(msg) && attempt < maxRetries - 1) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+          const delayMs = baseRetryDelayMs * Math.pow(2, attempt);
+          console.warn(`[WARN] launchPersistentContext fallback transient error (attempt ${attempt + 1}/${maxRetries}), retrying in ${delayMs}ms:`, msg);
+          await setTimeout(delayMs);
+          continue;
         }
         throw err;
       }
-    }
-    try {
-      return await playwright.chromium.launchPersistentContext(userDataDir, options as any);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (/ProcessSingleton|SingletonLock/i.test(msg)) {
-        try {
-          const tmpDir = mkdtempSync(join(tmpdir(), 'playwright-'));
-          cleanupChromiumLockFiles(tmpDir);
-          console.warn('[WARN] userDataDir locked, retrying with temp dir', tmpDir);
-          return await playwright.chromium.launchPersistentContext(tmpDir, options as any);
-        } catch (err2) {
-          // fall through
-        }
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt === maxRetries - 1) {
+        throw lastError;
       }
-      throw err;
     }
-  } catch (err) {
-    throw err;
+  }
+  if (lastError) {
+    throw lastError;
   }
 };
