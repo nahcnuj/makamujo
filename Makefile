@@ -33,14 +33,14 @@ install-app:
 install-systemd:
 	@echo "Installing systemd units to $(UNIT_DIR)"
 	@if [ "$$(id -u)" -ne 0 ]; then echo "This target requires root: run 'sudo make install'"; exit 1; fi
+	@pkill obs || :
+	@pkill bun || :
+	@pkill chromium || :
+	@pkill bun || :
+	@systemctl stop "$(SERVICE)"
 	@cp -a etc/systemd/*.service "$(UNIT_DIR)/"
 	@systemctl daemon-reload
-	@systemctl stop "$(SERVICE)"
 	@systemctl reset-failed "$(SERVICE)"
-	@pkill obs
-	@pkill bun
-	@pkill chromium
-	@pkill bun
 	@systemctl enable --now "$(SERVICE)"
 	@echo ""
 	@echo "================================================================="
