@@ -1229,7 +1229,7 @@ export class NiconamaCommentClient {
       }
       attempt += 1;
       try {
-      console.debug('[DEBUG] starting Playwright comment watcher', watchUrl);
+      console.info('[INFO] Playwright comment watcher starting', { url: watchUrl.substring(0, 80), attempt });
       let context = await this.#launchPersistentContext(this.#userDataDir, {
         executablePath: this.#executablePath,
         headless: true,
@@ -1238,6 +1238,7 @@ export class NiconamaCommentClient {
         userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         locale: 'ja-JP',
       });
+      console.debug('[DEBUG] Playwright context created', { attempt });
       this.#playwrightCommentContext = context;
 
       const attachListeners = (pageRef: any) => {
@@ -1246,13 +1247,13 @@ export class NiconamaCommentClient {
           try {
             let pageUrlSafe = 'unknown';
             try { pageUrlSafe = typeof pageRef.url === 'function' ? pageRef.url() : String(pageRef.url); } catch {}
-            console.debug('[DEBUG] Playwright page closed', { url: pageUrlSafe });
+            console.info('[INFO] Playwright page closed', { url: pageUrlSafe.substring(0, 80) });
             if (this.#stopRequested) return;
             // Prefer recreating the whole context when pages are being closed
             // repeatedly by remote scripts; this gives us a cleaner slate and
             // avoids reused page-level scripts that may force-close new pages.
             try {
-              console.warn('[WARN] recreating Playwright context due to page close', { url: watchUrl });
+              console.warn('[WARN] Playwright context recreating (page close)', { url: watchUrl.substring(0, 80) });
               try { await context.close(); } catch (e) { /* ignore */ }
               // attempt to export trace for debugging
                       try {
@@ -1272,7 +1273,9 @@ export class NiconamaCommentClient {
               });
               // replace context reference for subsequent ops
               try { /* rebind local context variable by mutating parent scope */ (context as any) = newContext; } catch {}
+              console.debug('[DEBUG] Playwright context recreated');
               const newPage = await newContext.newPage();
+              console.debug('[DEBUG] Playwright page recreated');
               await addNiconamaPlaywrightInitScript(newPage);
               attachListeners(newPage);
               try {
@@ -1283,6 +1286,7 @@ export class NiconamaCommentClient {
               page = newPage;
               this.#playwrightCommentContext = newContext;
               this.#playwrightCommentPage = page;
+              console.debug('[DEBUG] Playwright page ready', { url: watchUrl.substring(0, 80) });
               this.startPlaywrightPagePolling(page);
               // capture screenshot of surviving pages for debugging
               try {
@@ -1417,6 +1421,7 @@ export class NiconamaCommentClient {
       // embedded data and comment payloads instead.
 
       let page = await context.newPage();
+      console.debug('[DEBUG] Playwright page created');
       await addNiconamaPlaywrightInitScript(page);
       attachListeners(page);
 
@@ -1582,6 +1587,7 @@ export class NiconamaCommentClient {
 
       this.#playwrightCommentContext = context;
       this.#playwrightCommentPage = page;
+      console.debug('[DEBUG] Playwright page ready', { url: watchUrl.substring(0, 80) });
       this.startPlaywrightPagePolling(page);
       // success
       return;
@@ -2005,7 +2011,8 @@ export class NiconamaCommentClient {
           if (typeof newToken === 'string' && newToken.length > 0) {
             this.#directWebSocketAudienceToken = newToken;
             const reconnectUrl = this.buildWebSocketUrlWithAudienceToken(wsUrl, newToken);
-            console.info('[INFO] direct websocket requested reconnect', { wsUrl, waitTimeMs, newToken, reconnectUrl });
+            const tokenId = newToken.substring(0, 20);
+            console.info(`[INFO] ws://reconnect waitMs:${waitTimeMs} token:${tokenId} pw:${this.#enablePlaywrightFallback ? 'enabled' : 'disabled'}`);
             if (!this.#stopRequested) {
               this.#directWebSocketReconnectTimer = globalThis.setTimeout(() => {
                 this.#directWebSocketReconnectTimer = null;
@@ -2023,7 +2030,7 @@ export class NiconamaCommentClient {
               }, waitTimeMs + 250);
             }
           } else if (wsUrl.includes('audience_token=')) {
-            console.info('[INFO] direct websocket requested reconnect (token not provided explicitly)', { wsUrl, waitTimeMs });
+            console.info(`[INFO] ws://reconnect waitMs:${waitTimeMs} token:auto-refresh pw:${this.#enablePlaywrightFallback ? 'enabled' : 'disabled'}`);
             if (!this.#stopRequested) {
               this.#directWebSocketReconnectTimer = globalThis.setTimeout(() => {
                 this.#directWebSocketReconnectTimer = null;
