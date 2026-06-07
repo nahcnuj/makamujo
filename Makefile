@@ -7,7 +7,7 @@ INSTALL_DATA = package.json bunfig.toml tsconfig.json bootstrap.ts index.ts lib 
 SERVICE = makamujo.service
 UNIT_FILES = $(shell ls etc/systemd/*.service 2>/dev/null)
 
-.PHONY: all install install-app install-systemd uninstall uninstall-app uninstall-systemd help
+.PHONY: all install install-app install-systemd uninstall uninstall-app uninstall-systemd help console-password
 
 all: install
 
@@ -66,3 +66,6 @@ help:
 	@echo "  sudo make install          # install to $(PREFIX) and enable service"
 	@echo "  sudo make uninstall        # remove service and installed files"
 	@echo "  make install PREFIX=/some/path  # install to custom prefix (run as root)"
+
+console-password:
+	@bash -lc 'journalctl -u makamujo.service -n 20 --no-pager | grep "Console Basic auth password" | tail -n 1 | sed -E "s/^.*Console Basic auth password: //"'

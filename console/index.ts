@@ -142,7 +142,7 @@ export function startConsoleServer({
   });
 
   const loopbackConsolePort = loopbackServer.port;
-  const consoleBasicAuthPassword = process.env.CONSOLE_BASIC_AUTH_PASSWORD;
+  let consoleBasicAuthPassword = process.env.CONSOLE_BASIC_AUTH_PASSWORD;
   const consoleAccessControlEnabled = isConsoleIPRestrictionEnabled();
 
   // If running in loopback-only mode (used by tests), return the loopback
@@ -154,6 +154,18 @@ export function startConsoleServer({
         loopbackServer.stop(closeActiveConnections);
       },
     };
+  }
+
+  // Generate password at startup if not provided, and log it for retrieving
+  if (!consoleBasicAuthPassword) {
+    // Generate a random password (16 characters, alphanumeric + some special chars)
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    const randomBytes = new Uint8Array(16);
+    crypto.getRandomValues(randomBytes);
+    consoleBasicAuthPassword = Array.from(randomBytes)
+      .map(byte => chars[byte % chars.length])
+      .join('');
+    console.log(`Console Basic auth password: ${consoleBasicAuthPassword}`);
   }
 
   if (consoleAccessControlEnabled && !consoleBasicAuthPassword) {
@@ -226,7 +238,7 @@ export function startConsoleServer({
         const clientIpAddress = ip ? `${ip.family}/${ip.address}` : 'unknown';
         let statusCode = 500;
 
-        if (consoleAccessControlEnabled && !hasValidConsoleAuthorization(req.headers.get('authorization'), consoleBasicAuthPassword ?? '')) {
+        if (consoleAccessControlEnabled && !hasValidConsoleAuthorization(req.headers.get('authorization'), consoleBasicAuthPassword)) {
           statusCode = 401;
           errorLogger.write({
             event: 'console_unauthorized',
