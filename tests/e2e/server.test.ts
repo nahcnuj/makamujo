@@ -305,16 +305,14 @@ test.describe("server", () => {
       // Mirror stream status into the running server via /api/meta (fire and forget)
       void request.post(`${BASE_URL}/api/meta`, {
         data: {
+          type: 'niconama',
           data: {
-            type: 'niconama',
-            data: {
-              isLive: true,
-              title: 'IPC integration test',
-              startTime: 0,
-              total: 0,
-              points: { gift: 0, ad: 0 },
-              url: (state as any)?.url ?? 'https://example.com',
-            },
+            isLive: true,
+            title: 'IPC integration test',
+            startTime: 0,
+            total: 0,
+            points: { gift: 0, ad: 0 },
+            url: (state as any)?.url ?? 'https://example.com',
           },
         },
       }).catch(() => undefined);
