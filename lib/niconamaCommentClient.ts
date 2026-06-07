@@ -665,12 +665,20 @@ export class NiconamaCommentClient {
 
   private async resolveWatchUrlFromNiconamaTopPage(): Promise<string | null> {
     console.debug('[DEBUG] resolveWatchUrlWithPlaywright opening Niconama top page', DEFAULT_WATCH_PAGE_BASE_URL);
-    const context = await this.#launchPersistentContext(this.#userDataDir, {
-      executablePath: this.#executablePath,
-      headless: true,
-      ignoreHTTPSErrors: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    let context;
+    try {
+      context = await this.#launchPersistentContext(this.#userDataDir, {
+        executablePath: this.#executablePath,
+        headless: true,
+        ignoreHTTPSErrors: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
+    } catch (launchErr) {
+      const errMsg = launchErr instanceof Error ? launchErr.message : String(launchErr);
+      console.error('[ERROR] failed to launch persistent context for Niconama top page:', errMsg);
+      console.info('[INFO] falling back to fixed NicoNico watch URL', DEFAULT_FALLBACK_WATCH_URL);
+      return DEFAULT_FALLBACK_WATCH_URL;
+    }
 
     try {
       const page = context.pages()[0] ?? await context.newPage();
