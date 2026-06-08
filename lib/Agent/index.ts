@@ -376,7 +376,6 @@ export class MakaMujo {
           this.speech(`${name}さん、ギフトありがとうございます！`);
           //       giftQueue.push({ userId, name, icon });
         }
-        continue;
       }
     }
   }
