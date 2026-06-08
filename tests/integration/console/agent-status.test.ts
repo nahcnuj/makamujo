@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, mock } from "bun:test";
 import { renderToString } from "hono/jsx/dom/server";
 import {
   AGENT_STATE_REFRESH_INTERVAL_MS,
-  createAgentStatusSections,
   createAgentStatusRows,
+  createAgentStatusSections,
   parseAgentStateResponse,
   startAgentStateAutoRefresh,
 } from "../../../console/src/AgentStatus";
@@ -20,7 +20,9 @@ afterEach(() => {
 describe("startAgentStateAutoRefresh", () => {
   it("registers periodic refresh and clears interval on cleanup", async () => {
     const fetchAgentState = mock(async () => {});
-    const intervalToken = { token: "interval" } as unknown as ReturnType<typeof setInterval>;
+    const intervalToken = { token: "interval" } as unknown as ReturnType<
+      typeof setInterval
+    >;
     let registeredCallback: TimerHandler | null = null;
 
     globalThis.setInterval = mock((handler: TimerHandler, timeout?: number) => {
@@ -32,7 +34,8 @@ describe("startAgentStateAutoRefresh", () => {
     }) as unknown as typeof setInterval;
 
     const clearIntervalMock = mock((_: ReturnType<typeof setInterval>) => {});
-    globalThis.clearInterval = clearIntervalMock as unknown as typeof clearInterval;
+    globalThis.clearInterval =
+      clearIntervalMock as unknown as typeof clearInterval;
 
     const stopAutoRefresh = startAgentStateAutoRefresh(fetchAgentState);
 
@@ -142,7 +145,10 @@ describe("createAgentStatusRows", () => {
   it("includes currentGame and speech rows when present", () => {
     const rows = createAgentStatusRows({
       canSpeak: true,
-      currentGame: { name: "org.dashnet.orteil/cookieclicker", state: { status: "idle" } },
+      currentGame: {
+        name: "org.dashnet.orteil/cookieclicker",
+        state: { status: "idle" },
+      },
       nGram: 4,
       nGramRaw: 4,
       speechHistory: [
@@ -152,10 +158,18 @@ describe("createAgentStatusRows", () => {
       speech: { speech: "テスト発話", silent: false },
     });
 
-    expect(rows).not.toContainEqual({ label: "現在のゲーム", value: "org.dashnet.orteil/cookieclicker" });
-    expect(rows).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "生成N-gram", value: "4-gram (4.00)" }),
-    ]));
+    expect(rows).not.toContainEqual({
+      label: "現在のゲーム",
+      value: "org.dashnet.orteil/cookieclicker",
+    });
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "生成N-gram",
+          value: "4-gram (4.00)",
+        }),
+      ]),
+    );
     const gameInfoRow = rows.find((row) => row.label === "ゲーム情報");
     expect(gameInfoRow?.value).toBeUndefined();
     expect(gameInfoRow?.valueComponent).toBeDefined();
@@ -172,7 +186,7 @@ describe("createAgentStatusRows", () => {
     expect(speechHistoryHtml).toContain("テスト発話その2");
     expect(speechHistoryHtml).toContain("n=4");
     expect(speechHistoryHtml).toContain("n=3");
-    expect(speechHistoryHtml).toContain("aria-label=\"学習の取り消し\"");
+    expect(speechHistoryHtml).toContain('aria-label="学習の取り消し"');
     expect(rows).toContainEqual({ label: "発話内容", value: "テスト発話" });
   });
 
@@ -262,22 +276,41 @@ describe("createAgentStatusRows", () => {
 
   it("shows message to suggest comment when canSpeak is false", () => {
     const rows = createAgentStatusRows({ canSpeak: false });
-    expect(rows).toContainEqual({ label: "発話内容", value: "（コメントしてね）" });
+    expect(rows).toContainEqual({
+      label: "発話内容",
+      value: "（コメントしてね）",
+    });
     expect(rows).not.toContainEqual({ label: "話せる状態", value: "いいえ" });
   });
 
   it("prioritizes speech unavailable indicator when canSpeak is false even if speech exists", () => {
-    const rows = createAgentStatusRows({ canSpeak: false, speech: { speech: "発話テキスト", silent: false } });
-    expect(rows).toContainEqual({ label: "発話内容", value: "（コメントしてね）" });
-    expect(rows).not.toContainEqual({ label: "発話内容", value: "発話テキスト" });
+    const rows = createAgentStatusRows({
+      canSpeak: false,
+      speech: { speech: "発話テキスト", silent: false },
+    });
+    expect(rows).toContainEqual({
+      label: "発話内容",
+      value: "（コメントしてね）",
+    });
+    expect(rows).not.toContainEqual({
+      label: "発話内容",
+      value: "発話テキスト",
+    });
   });
 
   it.each([
     { label: "canSpeak が false のとき", canSpeak: false },
     { label: "canSpeak が true のとき", canSpeak: true },
-  ] as const)("does not show 発話内容 when speech.silent is true ($label)", ({ canSpeak }) => {
-    const rows = createAgentStatusRows({ canSpeak, speech: { speech: "前回の発話", silent: true } });
-    expect(rows).not.toContainEqual(expect.objectContaining({ label: "発話内容" }));
+  ] as const)("does not show 発話内容 when speech.silent is true ($label)", ({
+    canSpeak,
+  }) => {
+    const rows = createAgentStatusRows({
+      canSpeak,
+      speech: { speech: "前回の発話", silent: true },
+    });
+    expect(rows).not.toContainEqual(
+      expect.objectContaining({ label: "発話内容" }),
+    );
   });
 
   it("does not emphasize latest speech history item when speech.silent is true", () => {
@@ -285,39 +318,72 @@ describe("createAgentStatusRows", () => {
       { id: "history-1", speech: "最新発話", nGram: 4, nGramRaw: 4 },
       { id: "history-2", speech: "前の発話", nGram: 3, nGramRaw: 3 },
     ];
-    const rowsWhenSilent = createAgentStatusRows({ canSpeak: false, speech: { speech: "最新発話", silent: true }, speechHistory });
-    const speechHistoryRowWhenSilent = rowsWhenSilent.find((row) => row.label === "これまでの発話");
-    const htmlWhenSilent = renderToString(speechHistoryRowWhenSilent?.valueComponent);
+    const rowsWhenSilent = createAgentStatusRows({
+      canSpeak: false,
+      speech: { speech: "最新発話", silent: true },
+      speechHistory,
+    });
+    const speechHistoryRowWhenSilent = rowsWhenSilent.find(
+      (row) => row.label === "これまでの発話",
+    );
+    const htmlWhenSilent = renderToString(
+      speechHistoryRowWhenSilent?.valueComponent,
+    );
     expect(htmlWhenSilent).not.toContain("border-b-emerald-300/80");
 
-    const rowsWhenNotSilent = createAgentStatusRows({ canSpeak: true, speech: { speech: "最新発話", silent: false }, speechHistory });
-    const speechHistoryRowWhenNotSilent = rowsWhenNotSilent.find((row) => row.label === "これまでの発話");
-    const htmlWhenNotSilent = renderToString(speechHistoryRowWhenNotSilent?.valueComponent);
+    const rowsWhenNotSilent = createAgentStatusRows({
+      canSpeak: true,
+      speech: { speech: "最新発話", silent: false },
+      speechHistory,
+    });
+    const speechHistoryRowWhenNotSilent = rowsWhenNotSilent.find(
+      (row) => row.label === "これまでの発話",
+    );
+    const htmlWhenNotSilent = renderToString(
+      speechHistoryRowWhenNotSilent?.valueComponent,
+    );
     expect(htmlWhenNotSilent).toContain("border-b-emerald-300/80");
   });
 
   it("formats n-gram row with fallback for invalid numbers", () => {
-    expect(createAgentStatusRows({ nGram: Infinity })).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "生成N-gram", value: "-" }),
-    ]));
-    expect(createAgentStatusRows({ nGram: 0 })).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "生成N-gram", value: "-" }),
-    ]));
-    expect(createAgentStatusRows({ nGram: 4.8 })).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "生成N-gram", value: "4-gram" }),
-    ]));
-    expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: 4.8 })).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "生成N-gram", value: "4-gram (4.80)" }),
-    ]));
-    expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: 0.5 })).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "生成N-gram", value: "4-gram" }),
-    ]));
-    expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: -2 })).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "生成N-gram", value: "4-gram" }),
-    ]));
-    expect(createAgentStatusRows({})).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "生成N-gram", value: "-" }),
-    ]));
+    expect(createAgentStatusRows({ nGram: Infinity })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "生成N-gram", value: "-" }),
+      ]),
+    );
+    expect(createAgentStatusRows({ nGram: 0 })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "生成N-gram", value: "-" }),
+      ]),
+    );
+    expect(createAgentStatusRows({ nGram: 4.8 })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "生成N-gram", value: "4-gram" }),
+      ]),
+    );
+    expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: 4.8 })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "生成N-gram",
+          value: "4-gram (4.80)",
+        }),
+      ]),
+    );
+    expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: 0.5 })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "生成N-gram", value: "4-gram" }),
+      ]),
+    );
+    expect(createAgentStatusRows({ nGram: 4.8, nGramRaw: -2 })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "生成N-gram", value: "4-gram" }),
+      ]),
+    );
+    expect(createAgentStatusRows({})).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "生成N-gram", value: "-" }),
+      ]),
+    );
   });
 
   it("shows all speech history items in descending order", () => {
@@ -333,12 +399,16 @@ describe("createAgentStatusRows", () => {
     const speechHistoryHtml = renderToString(speechHistoryRow?.valueComponent);
     expect(speechHistoryHtml).toContain(">テスト発話1<");
     expect(speechHistoryHtml).toContain(">テスト発話12<");
-    expect((speechHistoryHtml.match(/aria-label="学習の取り消し"/g) ?? []).length).toBe(12);
+    expect(
+      (speechHistoryHtml.match(/aria-label="学習の取り消し"/g) ?? []).length,
+    ).toBe(12);
     const speechIndicesDescending = Array.from({ length: 12 }, (_, index) => {
       const speechNumber = 12 - index;
       return speechHistoryHtml.indexOf(`>テスト発話${speechNumber}<`);
     });
-    expect(speechIndicesDescending.every((speechIndex) => speechIndex >= 0)).toBe(true);
+    expect(
+      speechIndicesDescending.every((speechIndex) => speechIndex >= 0),
+    ).toBe(true);
     speechIndicesDescending.slice(1).forEach((currentSpeechIndex, index) => {
       const previousSpeechIndex = speechIndicesDescending[index] as number;
       expect(previousSpeechIndex).toBeLessThan(currentSpeechIndex);
@@ -355,9 +425,9 @@ describe("createAgentStatusRows", () => {
     const liveMetricRow = rows.find((row) => row.label === "配信指標");
     expect(liveMetricRow?.value).toBeUndefined();
     expect(renderToString(liveMetricRow?.valueComponent)).toContain("配信中");
-    expect(rows).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "配信指標" }),
-    ]));
+    expect(rows).toEqual(
+      expect.arrayContaining([expect.objectContaining({ label: "配信指標" })]),
+    );
   });
 
   it("does not include a dedicated start time row in createAgentStatusRows", () => {
@@ -375,26 +445,47 @@ describe("createAgentStatusRows", () => {
 
 describe("createAgentStatusSections", () => {
   it("categorizes rows into delivery, markov-model, and game sections", () => {
-    const sections = createAgentStatusSections(cloneAgentStateResponseMockFixture());
+    const sections = createAgentStatusSections(
+      cloneAgentStateResponseMockFixture(),
+    );
 
     expect(sections).toHaveLength(3);
-    const liveDeliverySection = sections.find((section) => section.title === "配信状況");
+    const liveDeliverySection = sections.find(
+      (section) => section.title === "配信状況",
+    );
     expect(liveDeliverySection?.rows).toContainEqual({
       label: "配信指標",
       hideLabel: true,
       valueComponent: expect.anything(),
     });
-    expect(liveDeliverySection?.rows).toContainEqual({ label: "発話内容", value: "コメントを学習してお話ししています" });
-    const markovModelSection = sections.find((section) => section.title === "マルコフ連鎖モデル");
-    expect(markovModelSection?.rows).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "生成N-gram", value: "4-gram (4.00)" }),
-    ]));
-    expect(markovModelSection?.rows).not.toContainEqual({ label: "発話内容", value: "コメントを学習してお話ししています" });
+    expect(liveDeliverySection?.rows).toContainEqual({
+      label: "発話内容",
+      value: "コメントを学習してお話ししています",
+    });
+    const markovModelSection = sections.find(
+      (section) => section.title === "マルコフ連鎖モデル",
+    );
+    expect(markovModelSection?.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "生成N-gram",
+          value: "4-gram (4.00)",
+        }),
+      ]),
+    );
+    expect(markovModelSection?.rows).not.toContainEqual({
+      label: "発話内容",
+      value: "コメントを学習してお話ししています",
+    });
     const gameSection = sections.find((section) =>
       section.rows.some((row) => row.label === "ゲーム情報"),
     );
-    expect(gameSection?.title).toBe("『org.dashnet.orteil/cookieclicker』プレイ中");
-    const gameInfoRow = gameSection?.rows.find((row) => row.label === "ゲーム情報");
+    expect(gameSection?.title).toBe(
+      "『org.dashnet.orteil/cookieclicker』プレイ中",
+    );
+    const gameInfoRow = gameSection?.rows.find(
+      (row) => row.label === "ゲーム情報",
+    );
     expect(gameInfoRow?.value).toBeUndefined();
     expect(gameInfoRow?.hideLabel).toBeTrue();
     expect(renderToString(gameInfoRow?.valueComponent)).toContain("status");
@@ -405,7 +496,9 @@ describe("createAgentStatusSections", () => {
     expect(sections).toEqual([
       {
         title: "マルコフ連鎖モデル",
-        rows: [expect.objectContaining({ label: "生成N-gram", value: "4-gram" })],
+        rows: [
+          expect.objectContaining({ label: "生成N-gram", value: "4-gram" }),
+        ],
       },
       {
         title: "『-』プレイ中",
@@ -421,10 +514,12 @@ describe("createAgentStatusSections", () => {
     expect(sections).toEqual([
       {
         title: "マルコフ連鎖モデル",
-        rows: [expect.objectContaining({
-          label: "これまでの発話",
-          valueComponent: expect.anything(),
-        })],
+        rows: [
+          expect.objectContaining({
+            label: "これまでの発話",
+            valueComponent: expect.anything(),
+          }),
+        ],
       },
       {
         title: "『-』プレイ中",
@@ -438,22 +533,31 @@ describe("createAgentStatusSections", () => {
       niconama: { type: "live" },
       speech: { speech: "最新発話", silent: false },
     });
-    const liveDeliverySection = sections.find((section) => section.title === "配信状況");
-    expect(liveDeliverySection?.rows).toContainEqual({ label: "発話内容", value: "最新発話" });
-    const markovModelSection = sections.find((section) => section.title === "マルコフ連鎖モデル");
+    const liveDeliverySection = sections.find(
+      (section) => section.title === "配信状況",
+    );
+    expect(liveDeliverySection?.rows).toContainEqual({
+      label: "発話内容",
+      value: "最新発話",
+    });
+    const markovModelSection = sections.find(
+      (section) => section.title === "マルコフ連鎖モデル",
+    );
     expect(markovModelSection).toBeUndefined();
   });
 });
 
 describe("agent state fixture", () => {
   it("provides deterministic mock state for screenshot capture", () => {
-    expect(cloneAgentStateResponseMockFixture().niconama?.meta?.title).toBe("配信エージェント状態モック");
+    expect(cloneAgentStateResponseMockFixture().niconama?.meta?.title).toBe(
+      "配信エージェント状態モック",
+    );
   });
 });
 
 describe("parseAgentStateResponse", () => {
   it("parses valid JSON payload", () => {
-    expect(parseAgentStateResponse("{\"niconama\":{\"type\":\"live\"}}")).toEqual({
+    expect(parseAgentStateResponse('{"niconama":{"type":"live"}}')).toEqual({
       niconama: { type: "live" },
     });
   });

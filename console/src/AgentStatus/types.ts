@@ -1,68 +1,71 @@
-import type { Child } from "hono/jsx";
 import type { AgentComment } from "automated-gameplay-transmitter";
+import type { Child } from "hono/jsx";
 
 export type AgentStatusRow = {
-  label: string
-  href?: string
-  hideLabel?: boolean
+  label: string;
+  href?: string;
+  hideLabel?: boolean;
 } & (
   | {
-    value: string
-    valueComponent?: never
-  }
+      value: string;
+      valueComponent?: never;
+    }
   | {
-    value?: never
-    valueComponent: Child
-  }
+      value?: never;
+      valueComponent: Child;
+    }
 );
 
 export type AgentStatusSection = {
-  title: string
-  rows: AgentStatusRow[]
+  title: string;
+  rows: AgentStatusRow[];
 };
 
 export type AgentStateResponse = {
-  error?: string
+  error?: string;
   niconama?: {
-    type?: string
+    type?: string;
     meta?: {
-      title?: string
-      url?: string
-      start?: number
+      title?: string;
+      url?: string;
+      start?: number;
       total?: {
-        listeners?: number
-        gift?: number
-        ad?: number
-        comments?: number
-      }
-    }
-  }
-  canSpeak?: boolean
+        listeners?: number;
+        gift?: number;
+        ad?: number;
+        comments?: number;
+      };
+    };
+  };
+  canSpeak?: boolean;
   currentGame?: {
-    name?: string
-    state?: Record<string, unknown>
-  } | null
-  nGram?: number
-  nGramRaw?: number
+    name?: string;
+    state?: Record<string, unknown>;
+  } | null;
+  nGram?: number;
+  nGramRaw?: number;
   speech?: {
-    speech?: string | { text?: string; nodes?: readonly string[] } | { speech?: string; text?: string; nodes?: readonly string[] }
-    silent?: boolean
-  }
+    speech?:
+      | string
+      | { text?: string; nodes?: readonly string[] }
+      | { speech?: string; text?: string; nodes?: readonly string[] };
+    silent?: boolean;
+  };
   speechHistory?: Array<{
-    id?: string
-    speech?: string | { text?: string; nodes?: readonly string[] }
-    nGram?: number
-    nGramRaw?: number
-    nodes?: readonly string[]
+    id?: string;
+    speech?: string | { text?: string; nodes?: readonly string[] };
+    nGram?: number;
+    nGramRaw?: number;
+    nodes?: readonly string[];
     replyTargetComment?: {
-      text?: string
-      pickedTopic?: string
-    }
-  }>
+      text?: string;
+      pickedTopic?: string;
+    };
+  }>;
   replyTargetComment?: {
-    text?: string
-    pickedTopic?: string
-  }
-  commentCount?: number
-  recentComments?: AgentComment[]
+    text?: string;
+    pickedTopic?: string;
+  };
+  commentCount?: number;
+  recentComments?: AgentComment[];
 };

@@ -1,1 +1,1 @@
-export * from '../../lib/niconamaCommentClient';
+export * from "../../lib/niconamaCommentClient";

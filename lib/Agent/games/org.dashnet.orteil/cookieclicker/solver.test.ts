@@ -1,24 +1,25 @@
-import { Action, ActionResult } from "automated-gameplay-transmitter";
 import { beforeAll, describe, expect, it } from "bun:test";
+import { Action, ActionResult } from "automated-gameplay-transmitter";
 import { solver } from "./solver";
 
 beforeAll(() => {
-  console.debug = () => { };
-  console.error = () => { };
+  console.debug = () => {};
+  console.error = () => {};
 });
 
-const expectOk = (solve: Generator, action: any) => expect(solve.next(ActionResult.ok(action)).value);
+const expectOk = (solve: Generator, action: any) =>
+  expect(solve.next(ActionResult.ok(action)).value);
 
-describe('solver', () => {
-  it('should initialize', () => {
+describe("solver", () => {
+  it("should initialize", () => {
     const solve = solver();
 
-    expect(solve.next().value).toHaveProperty('name', 'open');
+    expect(solve.next().value).toHaveProperty("name", "open");
 
     const actions = [
-      Action.clickByText('日本語'),
-      Action.clickByText('Got it'),
-      Action.clickByText('次回から表示しない'),
+      Action.clickByText("日本語"),
+      Action.clickByText("Got it"),
+      Action.clickByText("次回から表示しない"),
       Action.noop,
     ];
 
@@ -29,22 +30,23 @@ describe('solver', () => {
     }
   });
 
-  it('should initialize with existing data', () => {
-    const data = 'Mi4wNTJ8fDE3NjM4ODAzNTI5MTQ7MTc2Mzg4MDM1MjkxNDsxNzYzODgwMzYyNTE1O1RyaXBsZSBHbm9tZTt5dnJjZjswLDEsMCwwLDAsMCwwfDExMTExMTAxMTAwMTAxMTAwMTAxMDExMDAwMXwwOzA7MDswOzA7MDswOzA7MDswOzA7MDswOzA7MDswOzA7MDswOzA7MDswOzswOzA7MDswOzA7MDswOy0xOy0xOy0xOy0xOy0xOzA7MDswOzA7NzU7MDswOy0xOy0xOzE3NjM4ODAzNTI5MTQ7MDswOzs0MTswOzA7MDs1MDswOzA7fDAsMCwwLDAsLDAsMDswLDAsMCwwLCwwLDA7MCwwLDAsMCwsMCwwOzAsMCwwLDAsLDAsMDswLDAsMCwwLCwwLDA7MCwwLDAsMCwsMCwwOzAsMCwwLDAsLDAsMDswLDAsMCwwLCwwLDA7MCwwLDAsMCwsMCwwOzAsMCwwLDAsLDAsMDswLDAsMCwwLCwwLDA7MCwwLDAsMCwsMCwwOzAsMCwwLDAsLDAsMDswLDAsMCwwLCwwLDA7MCwwLDAsMCwsMCwwOzAsMCwwLDAsLDAsMDswLDAsMCwwLCwwLDA7MCwwLDAsMCwsMCwwOzAsMCwwLDAsLDAsMDswLDAsMCwwLCwwLDA7fDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDB8MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHx8%21END%21';
+  it("should initialize with existing data", () => {
+    const data =
+      "Mi4wNTJ8fDE3NjM4ODAzNTI5MTQ7MTc2Mzg4MDM1MjkxNDsxNzYzODgwMzYyNTE1O1RyaXBsZSBHbm9tZTt5dnJjZjswLDEsMCwwLDAsMCwwfDExMTExMTAxMTAwMTAxMTAwMTAxMDExMDAwMXwwOzA7MDswOzA7MDswOzA7MDswOzA7MDswOzA7MDswOzA7MDswOzA7MDswOzswOzA7MDswOzA7MDswOy0xOy0xOy0xOy0xOy0xOzA7MDswOzA7NzU7MDswOy0xOy0xOzE3NjM4ODAzNTI5MTQ7MDswOzs0MTswOzA7MDs1MDswOzA7fDAsMCwwLDAsLDAsMDswLDAsMCwwLCwwLDA7MCwwLDAsMCwsMCwwOzAsMCwwLDAsLDAsMDswLDAsMCwwLCwwLDA7MCwwLDAsMCwsMCwwOzAsMCwwLDAsLDAsMDswLDAsMCwwLCwwLDA7MCwwLDAsMCwsMCwwOzAsMCwwLDAsLDAsMDswLDAsMCwwLCwwLDA7MCwwLDAsMCwsMCwwOzAsMCwwLDAsLDAsMDswLDAsMCwwLCwwLDA7MCwwLDAsMCwsMCwwOzAsMCwwLDAsLDAsMDswLDAsMCwwLCwwLDA7MCwwLDAsMCwsMCwwOzAsMCwwLDAsLDAsMDswLDAsMCwwLCwwLDA7fDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDB8MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHx8%21END%21";
     const solve = solver({
-      type: 'initialize',
+      type: "initialize",
       data,
     });
 
-    expect(solve.next().value).toHaveProperty('name', 'open');
+    expect(solve.next().value).toHaveProperty("name", "open");
 
     const actions = [
-      Action.clickByText('日本語'),
-      Action.clickByText('Got it'),
-      Action.clickByText('次回から表示しない'),
-      { name: 'press', key: 'Control+O' },
-      { name: 'fill', value: data, on: { selector: '#game', role: 'textbox' } },
-      { name: 'press', key: 'Enter' },
+      Action.clickByText("日本語"),
+      Action.clickByText("Got it"),
+      Action.clickByText("次回から表示しない"),
+      { name: "press", key: "Control+O" },
+      { name: "fill", value: data, on: { selector: "#game", role: "textbox" } },
+      { name: "press", key: "Enter" },
       Action.noop,
     ];
 
@@ -55,198 +57,258 @@ describe('solver', () => {
     }
   });
 
-  it('should continue initialization when optional steps fail', () => {
+  it("should continue initialization when optional steps fail", () => {
     const solve = solver();
 
-    expect(solve.next().value).toHaveProperty('name', 'open');
+    expect(solve.next().value).toHaveProperty("name", "open");
 
     // open succeeds
-    expect(solve.next(ActionResult.ok(undefined as any)).value).toEqual(Action.clickByText('日本語'));
+    expect(solve.next(ActionResult.ok(undefined as any)).value).toEqual(
+      Action.clickByText("日本語"),
+    );
 
     // optional steps fail (e.g. dialogs not present) — initialization should continue
-    expect(solve.next(ActionResult.error(Action.clickByText('日本語')) as any).value).toEqual(Action.clickByText('Got it'));
-    expect(solve.next(ActionResult.error(Action.clickByText('Got it')) as any).value).toEqual(Action.clickByText('次回から表示しない'));
-    expect(solve.next(ActionResult.error(Action.clickByText('次回から表示しない')) as any).value).toEqual(Action.noop);
+    expect(
+      solve.next(ActionResult.error(Action.clickByText("日本語")) as any).value,
+    ).toEqual(Action.clickByText("Got it"));
+    expect(
+      solve.next(ActionResult.error(Action.clickByText("Got it")) as any).value,
+    ).toEqual(Action.clickByText("次回から表示しない"));
+    expect(
+      solve.next(
+        ActionResult.error(Action.clickByText("次回から表示しない")) as any,
+      ).value,
+    ).toEqual(Action.noop);
   });
 
-  it('should be done when got closed state', () => {
-    const solve = solver({ type: 'closed' });
+  it("should be done when got closed state", () => {
+    const solve = solver({ type: "closed" });
     expect(solve.next().done).toBeTrue();
   });
 
-  it('should click a random clickable element in the idle state', () => {
+  it("should click a random clickable element in the idle state", () => {
     const idleState = {
-      name: 'idle' as const,
-      url: 'https://orteil.dashnet.org/cookieclicker/',
-      state: { clickableElementIds: ['bigCookie'] },
+      name: "idle" as const,
+      url: "https://orteil.dashnet.org/cookieclicker/",
+      state: { clickableElementIds: ["bigCookie"] },
     };
 
-    const solve = solver({ type: 'idle', count: 0 });
+    const solve = solver({ type: "idle", count: 0 });
 
     expect(solve.next().value).toEqual(Action.noop);
-    expect(solve.next(idleState as any).value).toEqual(Action.clickByElementId('bigCookie'));
+    expect(solve.next(idleState as any).value).toEqual(
+      Action.clickByElementId("bigCookie"),
+    );
   });
 
-  it('should click one of the available clickable elements', () => {
+  it("should click one of the available clickable elements", () => {
     const idleState = {
-      name: 'idle' as const,
-      url: 'https://orteil.dashnet.org/cookieclicker/',
-      state: { clickableElementIds: ['bigCookie', 'shimmer1', 'shimmer2'] },
+      name: "idle" as const,
+      url: "https://orteil.dashnet.org/cookieclicker/",
+      state: { clickableElementIds: ["bigCookie", "shimmer1", "shimmer2"] },
     };
 
-    const solve = solver({ type: 'idle', count: 0 });
+    const solve = solver({ type: "idle", count: 0 });
 
     expect(solve.next().value).toEqual(Action.noop);
     const clickAction = solve.next(idleState as any).value as any;
-    expect(clickAction).toHaveProperty('name', 'click');
-    expect(['bigCookie', 'shimmer1', 'shimmer2']).toContain(clickAction.target.id);
+    expect(clickAction).toHaveProperty("name", "click");
+    expect(["bigCookie", "shimmer1", "shimmer2"]).toContain(
+      clickAction.target.id,
+    );
   });
 
-  it('should fall back to clicking bigCookie when no clickable elements in state', () => {
+  it("should fall back to clicking bigCookie when no clickable elements in state", () => {
     const idleState = {
-      name: 'idle' as const,
-      url: 'https://orteil.dashnet.org/cookieclicker/',
+      name: "idle" as const,
+      url: "https://orteil.dashnet.org/cookieclicker/",
       state: { clickableElementIds: [] },
     };
 
-    const solve = solver({ type: 'idle', count: 0 });
+    const solve = solver({ type: "idle", count: 0 });
 
     expect(solve.next().value).toEqual(Action.noop);
-    expect(solve.next(idleState as any).value).toEqual(Action.clickByElementId('bigCookie'));
+    expect(solve.next(idleState as any).value).toEqual(
+      Action.clickByElementId("bigCookie"),
+    );
   });
 
-  it('should click bigCookie only when isSilent returns true, even if other elements are available', () => {
+  it("should click bigCookie only when isSilent returns true, even if other elements are available", () => {
     const idleState = {
-      name: 'idle' as const,
-      url: 'https://orteil.dashnet.org/cookieclicker/',
-      state: { clickableElementIds: ['bigCookie', 'shimmer1', 'shimmer2'] },
+      name: "idle" as const,
+      url: "https://orteil.dashnet.org/cookieclicker/",
+      state: { clickableElementIds: ["bigCookie", "shimmer1", "shimmer2"] },
     };
 
-    const solve = solver({ type: 'idle', count: 0 }, { isSilent: () => true });
+    const solve = solver({ type: "idle", count: 0 }, { isSilent: () => true });
 
     expect(solve.next().value).toEqual(Action.noop);
-    expect(solve.next(idleState as any).value).toEqual(Action.clickByElementId('bigCookie'));
+    expect(solve.next(idleState as any).value).toEqual(
+      Action.clickByElementId("bigCookie"),
+    );
   });
 
-  it('should click a random element when isSilent returns false', () => {
+  it("should click a random element when isSilent returns false", () => {
     const idleState = {
-      name: 'idle' as const,
-      url: 'https://orteil.dashnet.org/cookieclicker/',
-      state: { clickableElementIds: ['bigCookie', 'shimmer1', 'shimmer2'] },
+      name: "idle" as const,
+      url: "https://orteil.dashnet.org/cookieclicker/",
+      state: { clickableElementIds: ["bigCookie", "shimmer1", "shimmer2"] },
     };
 
-    const solve = solver({ type: 'idle', count: 0 }, { isSilent: () => false });
+    const solve = solver({ type: "idle", count: 0 }, { isSilent: () => false });
 
     expect(solve.next().value).toEqual(Action.noop);
     const clickAction = solve.next(idleState as any).value as any;
-    expect(clickAction).toHaveProperty('name', 'click');
-    expect(['bigCookie', 'shimmer1', 'shimmer2']).toContain(clickAction.target.id);
+    expect(clickAction).toHaveProperty("name", "click");
+    expect(["bigCookie", "shimmer1", "shimmer2"]).toContain(
+      clickAction.target.id,
+    );
   });
 
-  it('should restart from initialize when navigated to another page', () => {
+  it("should restart from initialize when navigated to another page", () => {
     const wrongUrlState = {
-      name: 'idle' as const,
-      url: 'https://example.com/',
+      name: "idle" as const,
+      url: "https://example.com/",
     };
-    const openAction = Action.open('https://orteil.dashnet.org/cookieclicker/');
+    const openAction = Action.open("https://orteil.dashnet.org/cookieclicker/");
 
-    const solve = solver({ type: 'idle', count: 0 });
+    const solve = solver({ type: "idle", count: 0 });
 
     expect(solve.next().value).toEqual(Action.noop);
     // When at wrong URL, transition to initialize state and open Cookie Clicker
     expect(solve.next(wrongUrlState as any).value).toEqual(openAction);
     // After opening, should proceed with initialization steps (not idle clicking)
-    expect(solve.next(ActionResult.ok(openAction) as any).value).toEqual(Action.clickByText('日本語'));
+    expect(solve.next(ActionResult.ok(openAction) as any).value).toEqual(
+      Action.clickByText("日本語"),
+    );
   });
 
-  it('should press ESC after a click fails in the idle state', () => {
+  it("should press ESC after a click fails in the idle state", () => {
     const idleState = {
-      name: 'idle' as const,
-      url: 'https://orteil.dashnet.org/cookieclicker/',
-      state: { clickableElementIds: ['bigCookie'] },
+      name: "idle" as const,
+      url: "https://orteil.dashnet.org/cookieclicker/",
+      state: { clickableElementIds: ["bigCookie"] },
     };
-    const clickAction = Action.clickByElementId('bigCookie');
+    const clickAction = Action.clickByElementId("bigCookie");
 
-    const solve = solver({ type: 'idle', count: 0 });
+    const solve = solver({ type: "idle", count: 0 });
 
     expect(solve.next().value).toEqual(Action.noop);
     expect(solve.next(idleState as any).value).toEqual(clickAction);
-    expect(solve.next(ActionResult.error(clickAction) as any).value).toEqual({ name: 'press', key: 'Escape' });
+    expect(solve.next(ActionResult.error(clickAction) as any).value).toEqual({
+      name: "press",
+      key: "Escape",
+    });
   });
 
-  it('should press ESC after the first click in save sequence fails', () => {
-    const optionsAction = Action.clickByText('オプション');
+  it("should press ESC after the first click in save sequence fails", () => {
+    const optionsAction = Action.clickByText("オプション");
 
-    const solve = solver({ type: 'save', failureCount: 0 });
+    const solve = solver({ type: "save", failureCount: 0 });
 
     expect(solve.next().value).toEqual(optionsAction);
-    expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual({ name: 'press', key: 'Escape' });
+    expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual({
+      name: "press",
+      key: "Escape",
+    });
   });
 
-  it('should press ESC after the second click in save sequence fails', () => {
-    const optionsAction = Action.clickByText('オプション');
-    const exportAction = Action.clickByText('セーブをエクスポート');
+  it("should press ESC after the second click in save sequence fails", () => {
+    const optionsAction = Action.clickByText("オプション");
+    const exportAction = Action.clickByText("セーブをエクスポート");
 
-    const solve = solver({ type: 'save', failureCount: 0 });
+    const solve = solver({ type: "save", failureCount: 0 });
 
     expect(solve.next().value).toEqual(optionsAction);
-    expect(solve.next(ActionResult.ok(optionsAction) as any).value).toEqual(exportAction);
-    expect(solve.next(ActionResult.error(exportAction) as any).value).toEqual({ name: 'press', key: 'Escape' });
+    expect(solve.next(ActionResult.ok(optionsAction) as any).value).toEqual(
+      exportAction,
+    );
+    expect(solve.next(ActionResult.error(exportAction) as any).value).toEqual({
+      name: "press",
+      key: "Escape",
+    });
   });
 
-  it('should set closed state when browser closes during ESC press after a click fails', () => {
+  it("should set closed state when browser closes during ESC press after a click fails", () => {
     const idleState = {
-      name: 'idle' as const,
-      url: 'https://orteil.dashnet.org/cookieclicker/',
-      state: { clickableElementIds: ['bigCookie'] },
+      name: "idle" as const,
+      url: "https://orteil.dashnet.org/cookieclicker/",
+      state: { clickableElementIds: ["bigCookie"] },
     };
-    const clickAction = Action.clickByElementId('bigCookie');
+    const clickAction = Action.clickByElementId("bigCookie");
 
-    const solve = solver({ type: 'idle', count: 0 });
+    const solve = solver({ type: "idle", count: 0 });
 
     expect(solve.next().value).toEqual(Action.noop);
     expect(solve.next(idleState as any).value).toEqual(clickAction);
-    expect(solve.next(ActionResult.error(clickAction) as any).value).toEqual({ name: 'press', key: 'Escape' });
-    expect(solve.next({ name: 'closed' } as any).done).toBeTrue();
+    expect(solve.next(ActionResult.error(clickAction) as any).value).toEqual({
+      name: "press",
+      key: "Escape",
+    });
+    expect(solve.next({ name: "closed" } as any).done).toBeTrue();
   });
 
-  it('should return to idle after consecutive failures in save state', () => {
-    const optionsAction = Action.clickByText('オプション');
-    const escapeAction = { name: 'press', key: 'Escape' } as const;
+  it("should return to idle after consecutive failures in save state", () => {
+    const optionsAction = Action.clickByText("オプション");
+    const escapeAction = { name: "press", key: "Escape" } as const;
 
-    const solve = solver({ type: 'save', failureCount: 0 });
+    const solve = solver({ type: "save", failureCount: 0 });
 
     // First failure: failureCount 0 → 1, stays in save
     expect(solve.next().value).toEqual(optionsAction);
-    expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(escapeAction);
-    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(optionsAction);
+    expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(
+      escapeAction,
+    );
+    expect(
+      solve.next(ActionResult.ok(escapeAction as any) as any).value,
+    ).toEqual(optionsAction);
 
     // Second failure: failureCount 1 → 2, stays in save
-    expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(escapeAction);
-    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(optionsAction);
+    expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(
+      escapeAction,
+    );
+    expect(
+      solve.next(ActionResult.ok(escapeAction as any) as any).value,
+    ).toEqual(optionsAction);
 
     // Third failure: failureCount 2 → 3 >= MAX_CONSECUTIVE_FAILURES → transitions to idle
-    expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(escapeAction);
-    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(Action.noop);
+    expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(
+      escapeAction,
+    );
+    expect(
+      solve.next(ActionResult.ok(escapeAction as any) as any).value,
+    ).toEqual(Action.noop);
   });
 
-  it('should return to idle after consecutive failures in seeStats state', () => {
-    const statsAction = Action.clickByText('記録');
-    const escapeAction = { name: 'press', key: 'Escape' } as const;
+  it("should return to idle after consecutive failures in seeStats state", () => {
+    const statsAction = Action.clickByText("記録");
+    const escapeAction = { name: "press", key: "Escape" } as const;
 
-    const solve = solver({ type: 'seeStats', failureCount: 0 });
+    const solve = solver({ type: "seeStats", failureCount: 0 });
 
     // First failure: failureCount 0 → 1, stays in seeStats
     expect(solve.next().value).toEqual(statsAction);
-    expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(escapeAction);
-    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(statsAction);
+    expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(
+      escapeAction,
+    );
+    expect(
+      solve.next(ActionResult.ok(escapeAction as any) as any).value,
+    ).toEqual(statsAction);
 
     // Second failure: failureCount 1 → 2, stays in seeStats
-    expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(escapeAction);
-    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(statsAction);
+    expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(
+      escapeAction,
+    );
+    expect(
+      solve.next(ActionResult.ok(escapeAction as any) as any).value,
+    ).toEqual(statsAction);
 
     // Third failure: failureCount 2 → 3 >= MAX_CONSECUTIVE_FAILURES → transitions to idle
-    expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(escapeAction);
-    expect(solve.next(ActionResult.ok(escapeAction as any) as any).value).toEqual(Action.noop);
+    expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(
+      escapeAction,
+    );
+    expect(
+      solve.next(ActionResult.ok(escapeAction as any) as any).value,
+    ).toEqual(Action.noop);
   });
 });

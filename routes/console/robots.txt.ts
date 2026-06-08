@@ -1,1 +1,1 @@
-export default new Response('User-agent: *\nDisallow: /\n');
+export default new Response("User-agent: *\nDisallow: /\n");

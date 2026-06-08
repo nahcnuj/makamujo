@@ -4,7 +4,11 @@ type AgentStatusHeaderProps = {
   startTime?: string;
 };
 
-export const AgentStatusHeader = ({ streamTitle, streamUrl, startTime }: AgentStatusHeaderProps) => {
+export const AgentStatusHeader = ({
+  streamTitle,
+  streamUrl,
+  startTime,
+}: AgentStatusHeaderProps) => {
   if (!streamTitle && !startTime) {
     return null;
   }
@@ -23,13 +27,19 @@ export const AgentStatusHeader = ({ streamTitle, streamUrl, startTime }: AgentSt
             {streamTitle}
           </a>
         ) : (
-          <span data-testid="agent-status-stream-title" className="text-base font-semibold text-emerald-100 break-all">
+          <span
+            data-testid="agent-status-stream-title"
+            className="text-base font-semibold text-emerald-100 break-all"
+          >
             {streamTitle}
           </span>
         )
       ) : null}
       {startTime ? (
-        <span data-testid="agent-status-start-time" className="text-sm text-emerald-200 whitespace-nowrap">
+        <span
+          data-testid="agent-status-start-time"
+          className="text-sm text-emerald-200 whitespace-nowrap"
+        >
           {startTime}
         </span>
       ) : null}

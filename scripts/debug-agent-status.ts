@@ -1,4 +1,7 @@
-import { createAgentStatusRows, createAgentStatusSections } from "../console/src/AgentStatus";
+import {
+  createAgentStatusRows,
+  createAgentStatusSections,
+} from "../console/src/AgentStatus";
 import { cloneAgentStateResponseMockFixture } from "../tests/fixtures/agentStateResponseMock";
 
 (async () => {

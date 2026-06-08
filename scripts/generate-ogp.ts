@@ -8,9 +8,9 @@
  *   bun run scripts/generate-ogp.ts
  */
 
-import { chromium } from "playwright";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { chromium } from "playwright";
 
 const WIDTH = 1200;
 const HEIGHT = 630;
@@ -19,7 +19,8 @@ const root = path.resolve(import.meta.dir, "..");
 const characterImagePath = path.join(root, "src", "public", "nc433974.png");
 const outputPath = path.join(root, "docs", "ogp.png");
 
-const characterImageBase64 = readFileSync(characterImagePath).toString("base64");
+const characterImageBase64 =
+  readFileSync(characterImagePath).toString("base64");
 const characterImageDataUrl = `data:image/png;base64,${characterImageBase64}`;
 
 const html = `\

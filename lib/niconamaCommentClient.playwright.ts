@@ -1,23 +1,40 @@
 import type { AgentComment } from "automated-gameplay-transmitter";
 import { parseAgentCommentsFromResponseBody } from "./niconamaCommentClient.helpers";
 
-export const addNiconamaPlaywrightInitScript = async (page: any): Promise<void> => {
+export const addNiconamaPlaywrightInitScript = async (
+  page: any,
+): Promise<void> => {
   try {
     await page?.addInitScript?.(() => {
       try {
         // suppress page unload hooks and replace close/open to avoid remote scripts
         // ejecting our instrumented browser instance.
-        Object.defineProperty(window, 'close', { configurable: true, writable: true, value: () => undefined });
+        Object.defineProperty(window, "close", {
+          configurable: true,
+          writable: true,
+          value: () => undefined,
+        });
       } catch {}
       try {
-        Object.defineProperty(window, 'open', { configurable: true, writable: true, value: () => null });
+        Object.defineProperty(window, "open", {
+          configurable: true,
+          writable: true,
+          value: () => null,
+        });
       } catch {}
-      try { window.onbeforeunload = null; } catch {}
-      try { window.onunload = null; } catch {}
+      try {
+        window.onbeforeunload = null;
+      } catch {}
+      try {
+        window.onunload = null;
+      } catch {}
       const origAdd = EventTarget.prototype.addEventListener;
-      // @ts-ignore
-      EventTarget.prototype.addEventListener = function (type: string, listener: any, opts: any) {
-        if (type === 'beforeunload' || type === 'unload') return;
+      EventTarget.prototype.addEventListener = function (
+        type: string,
+        listener: any,
+        opts: any,
+      ) {
+        if (type === "beforeunload" || type === "unload") return;
         return origAdd.call(this, type, listener, opts);
       };
     });
@@ -26,15 +43,18 @@ export const addNiconamaPlaywrightInitScript = async (page: any): Promise<void> 
   }
 };
 
-export const getBodyTextFromPage = async (page: any): Promise<string | null> => {
-  if (!page || (typeof page.isClosed === 'function' && page.isClosed())) return null;
+export const getBodyTextFromPage = async (
+  page: any,
+): Promise<string | null> => {
+  if (!page || (typeof page.isClosed === "function" && page.isClosed()))
+    return null;
 
   try {
-    const locator = page.locator?.('body');
-    if (locator && typeof locator.allTextContents === 'function') {
+    const locator = page.locator?.("body");
+    if (locator && typeof locator.allTextContents === "function") {
       const contents = await locator.allTextContents();
       if (Array.isArray(contents) && contents.length > 0) {
-        return contents.join('');
+        return contents.join("");
       }
     }
   } catch {
@@ -42,9 +62,11 @@ export const getBodyTextFromPage = async (page: any): Promise<string | null> => 
   }
 
   try {
-    if (typeof page.evaluate === 'function') {
-      const bodyText = await page.evaluate(() => document.body?.textContent ?? null);
-      return typeof bodyText === 'string' ? bodyText : null;
+    if (typeof page.evaluate === "function") {
+      const bodyText = await page.evaluate(
+        () => document.body?.textContent ?? null,
+      );
+      return typeof bodyText === "string" ? bodyText : null;
     }
   } catch {
     // ignore evaluate failures
@@ -56,38 +78,43 @@ export const getBodyTextFromPage = async (page: any): Promise<string | null> => 
 export const extractBodyTextFromHtml = (html: string): string | null => {
   const bodyMatch = /<body[^>]*>([\s\S]*?)<\/body>/i.exec(html);
   const source = bodyMatch?.[1] ?? html;
-  const withoutScripts = source.replace(/<script[\s\S]*?<\/script>/gi, '');
-  const withoutStyles = withoutScripts.replace(/<style[\s\S]*?<\/style>/gi, '');
+  const withoutScripts = source.replace(/<script[\s\S]*?<\/script>/gi, "");
+  const withoutStyles = withoutScripts.replace(/<style[\s\S]*?<\/style>/gi, "");
   const text = withoutStyles
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
   return text.length > 0 ? text : null;
 };
 
-export const scanRenderedFrameForComments = async (frame: any): Promise<string[]> => {
+export const scanRenderedFrameForComments = async (
+  frame: any,
+): Promise<string[]> => {
   try {
     const pageComments = await frame.evaluate(() => {
       const selectors = [
         '[data-name="comment"]',
-        '.comment-panel',
-        '.comment-list',
-        '.comment-area',
-        '.lv-comment',
-        '.comment-item',
-        '.base-comment-list',
+        ".comment-panel",
+        ".comment-list",
+        ".comment-area",
+        ".lv-comment",
+        ".comment-item",
+        ".base-comment-list",
         '[aria-label*="コメント"]',
         '[role="log"]',
-        '[class*=comment]',
-        '[id*=comment]',
+        "[class*=comment]",
+        "[id*=comment]",
       ];
 
-      const normalize = (text: string) => text.replace(/\s+/gu, ' ').trim();
-      const exclude = (line: string) => ['コメント', 'コメント数', 'コメント一覧'].includes(line);
+      const normalize = (text: string) => text.replace(/\s+/gu, " ").trim();
+      const exclude = (line: string) =>
+        ["コメント", "コメント数", "コメント一覧"].includes(line);
       const results = new Set<string>();
 
       const chooseCommentLine = (lines: string[]) => {
-        const candidates = lines.filter((line) => line.length > 0 && !exclude(line));
+        const candidates = lines.filter(
+          (line) => line.length > 0 && !exclude(line),
+        );
         if (candidates.length === 0) return null;
         return candidates.sort((a, b) => b.length - a.length)[0] ?? null;
       };
@@ -95,8 +122,11 @@ export const scanRenderedFrameForComments = async (frame: any): Promise<string[]
       for (const selector of selectors) {
         const elements = Array.from(document.querySelectorAll(selector));
         for (const element of elements) {
-          const content = element.textContent ?? '';
-          const lines = content.split(/\r?\n/).map(normalize).filter((line) => line.length > 0 && !exclude(line));
+          const content = element.textContent ?? "";
+          const lines = content
+            .split(/\r?\n/)
+            .map(normalize)
+            .filter((line) => line.length > 0 && !exclude(line));
           const comment = chooseCommentLine(lines);
           if (comment) results.add(comment);
         }
@@ -105,13 +135,20 @@ export const scanRenderedFrameForComments = async (frame: any): Promise<string[]
     });
 
     if (!Array.isArray(pageComments) || pageComments.length === 0) return [];
-    return pageComments.filter((comment) => typeof comment === 'string' && comment.trim().length > 0).map((comment) => comment.trim());
+    return pageComments
+      .filter(
+        (comment) => typeof comment === "string" && comment.trim().length > 0,
+      )
+      .map((comment) => comment.trim());
   } catch {
     return [];
   }
 };
 
-export const getUniquePageComments = (comments: string[], seenCommentIdentifiers: Set<string>): AgentComment[] => {
+export const getUniquePageComments = (
+  comments: string[],
+  seenCommentIdentifiers: Set<string>,
+): AgentComment[] => {
   const results: AgentComment[] = [];
   for (const comment of comments) {
     if (comment.length === 0) continue;
@@ -123,60 +160,89 @@ export const getUniquePageComments = (comments: string[], seenCommentIdentifiers
   return results;
 };
 
-export const extractRenderedPageComments = async (page: any, seenCommentIdentifiers: Set<string>): Promise<AgentComment[]> => {
+export const extractRenderedPageComments = async (
+  page: any,
+  seenCommentIdentifiers: Set<string>,
+): Promise<AgentComment[]> => {
   try {
     const commentLines = new Set<string>();
     const mainComments = await scanRenderedFrameForComments(page);
     for (const comment of mainComments) commentLines.add(comment);
 
-    const frames = typeof page.frames === 'function' ? page.frames() : [];
+    const frames = typeof page.frames === "function" ? page.frames() : [];
     for (const frame of frames) {
       if (!frame || frame.url?.() === page.url?.()) continue;
-      const frameComments = await scanRenderedFrameForComments(frame).catch(() => []);
+      const frameComments = await scanRenderedFrameForComments(frame).catch(
+        () => [],
+      );
       for (const comment of frameComments) commentLines.add(comment);
     }
 
     if (commentLines.size === 0) return [];
-    return getUniquePageComments(Array.from(commentLines), seenCommentIdentifiers);
+    return getUniquePageComments(
+      Array.from(commentLines),
+      seenCommentIdentifiers,
+    );
   } catch {
     return [];
   }
 };
 
-export const extractPageComments = async (page: any, seenCommentIdentifiers: Set<string>): Promise<AgentComment[]> => {
-  if (!page || (typeof page.isClosed === 'function' && page.isClosed())) return [];
-  const renderedComments = await extractRenderedPageComments(page, seenCommentIdentifiers);
+export const extractPageComments = async (
+  page: any,
+  seenCommentIdentifiers: Set<string>,
+): Promise<AgentComment[]> => {
+  if (!page || (typeof page.isClosed === "function" && page.isClosed()))
+    return [];
+  const renderedComments = await extractRenderedPageComments(
+    page,
+    seenCommentIdentifiers,
+  );
   if (renderedComments.length > 0) return renderedComments;
 
   try {
     const candidates = await page.evaluate(() => {
       const results: unknown[] = [];
       const safeParse = (text: string) => {
-        try { return JSON.parse(text); } catch { return null; }
+        try {
+          return JSON.parse(text);
+        } catch {
+          return null;
+        }
       };
       const pushIfObject = (value: unknown) => {
-        if (value && typeof value === 'object') {
-          try { results.push(JSON.parse(JSON.stringify(value))); } catch {}
+        if (value && typeof value === "object") {
+          try {
+            results.push(JSON.parse(JSON.stringify(value)));
+          } catch {}
         }
       };
       const scanText = (text: string) => {
         const trimmed = text.trim();
-        if (trimmed[0] === '{' || trimmed[0] === '[') {
+        if (trimmed[0] === "{" || trimmed[0] === "[") {
           const parsed = safeParse(trimmed);
           if (parsed) pushIfObject(parsed);
         }
       };
 
-      const scriptTags = Array.from(document.querySelectorAll('script'));
+      const scriptTags = Array.from(document.querySelectorAll("script"));
       for (const script of scriptTags) {
-        const text = script.textContent ?? '';
-        if (!text.includes('comment') && !text.includes('comments') && !text.includes('relive') && !text.includes('data-props')) continue;
+        const text = script.textContent ?? "";
+        if (
+          !text.includes("comment") &&
+          !text.includes("comments") &&
+          !text.includes("relive") &&
+          !text.includes("data-props")
+        )
+          continue;
         scanText(text);
       }
 
-      const propElements = Array.from(document.querySelectorAll('[data-props]'));
+      const propElements = Array.from(
+        document.querySelectorAll("[data-props]"),
+      );
       for (const element of propElements) {
-        const value = element.getAttribute('data-props');
+        const value = element.getAttribute("data-props");
         if (value) scanText(value);
       }
 
@@ -184,28 +250,47 @@ export const extractPageComments = async (page: any, seenCommentIdentifiers: Set
     });
 
     if (!Array.isArray(candidates)) return [];
-    return parseAgentCommentsFromResponseBody(candidates, seenCommentIdentifiers);
+    return parseAgentCommentsFromResponseBody(
+      candidates,
+      seenCommentIdentifiers,
+    );
   } catch {
     return [];
   }
 };
 
-export const pollPageComments = async (page: any, seenCommentIdentifiers: Set<string>, intervalMs = 1_000, maxAttempts = 30): Promise<AgentComment[]> => {
+export const pollPageComments = async (
+  page: any,
+  seenCommentIdentifiers: Set<string>,
+  intervalMs = 1_000,
+  maxAttempts = 30,
+): Promise<AgentComment[]> => {
   let attempts = 0;
   while (!page.isClosed?.() && attempts < maxAttempts) {
     attempts += 1;
     try {
-      const pageComments = await extractPageComments(page, seenCommentIdentifiers);
+      const pageComments = await extractPageComments(
+        page,
+        seenCommentIdentifiers,
+      );
       if (pageComments.length > 0) return pageComments;
     } catch {
       if (page.isClosed?.()) break;
     }
-    try { await page.waitForTimeout(intervalMs); } catch { break; }
+    try {
+      await page.waitForTimeout(intervalMs);
+    } catch {
+      break;
+    }
   }
   return [];
 };
 
-export const startPlaywrightPagePolling = (page: any, seenCommentIdentifiers: Set<string>, onComments: (comments: AgentComment[]) => void): ReturnType<typeof setInterval> => {
+export const startPlaywrightPagePolling = (
+  page: any,
+  seenCommentIdentifiers: Set<string>,
+  onComments: (comments: AgentComment[]) => void,
+): ReturnType<typeof setInterval> => {
   return setInterval(async () => {
     if (!page || page.isClosed?.()) return;
     try {
@@ -217,53 +302,78 @@ export const startPlaywrightPagePolling = (page: any, seenCommentIdentifiers: Se
   }, 1_000);
 };
 
-export const waitForAnyCommentSelector = async (page: any, timeoutMs: number): Promise<void> => {
-  if (typeof page.waitForSelector !== 'function') return;
+export const waitForAnyCommentSelector = async (
+  page: any,
+  timeoutMs: number,
+): Promise<void> => {
+  if (typeof page.waitForSelector !== "function") return;
   const selectors = [
     '[data-name="comment"]',
-    '.comment-panel',
-    '[class*=comment]',
-    '[id*=comment]',
-    '[data-comment]',
-    '[data-testid*=\"comment\"]',
-    '[aria-label*=\"コメント\"]',
+    ".comment-panel",
+    "[class*=comment]",
+    "[id*=comment]",
+    "[data-comment]",
+    '[data-testid*="comment"]',
+    '[aria-label*="コメント"]',
     '[role="log"]',
-    '[class*=Comment]',
-    '[id*=Comment]',
+    "[class*=Comment]",
+    "[id*=Comment]",
   ];
-  const waiters = selectors.map((selector) => Promise.resolve(page.waitForSelector(selector, { timeout: timeoutMs })).catch(() => null));
+  const waiters = selectors.map((selector) =>
+    Promise.resolve(
+      page.waitForSelector(selector, { timeout: timeoutMs }),
+    ).catch(() => null),
+  );
   await Promise.race(waiters);
 };
 
 export const tryOpenRenderedCommentPanel = async (page: any): Promise<void> => {
-  if (!page || (typeof page.isClosed === 'function' && page.isClosed())) return;
-  const safeEval = async <T>(p: any, fn: (pp: any) => Promise<T> | T): Promise<T | null> => {
-    try { return await fn(p); } catch { return null; }
+  if (!page || (typeof page.isClosed === "function" && page.isClosed())) return;
+  const safeEval = async <T>(
+    p: any,
+    fn: (pp: any) => Promise<T> | T,
+  ): Promise<T | null> => {
+    try {
+      return await fn(p);
+    } catch {
+      return null;
+    }
   };
 
-  if (typeof page.$ === 'function') {
-    const commentButton = await safeEval(page, (pp) => pp.$('[data-name="comment"], .comment-tab, .comment-panel button'));
+  if (typeof page.$ === "function") {
+    const commentButton = await safeEval(page, (pp) =>
+      pp.$('[data-name="comment"], .comment-tab, .comment-panel button'),
+    );
     if (commentButton) {
-      await safeEval(commentButton, (b: any) => b.click({ timeout: 2_000, force: true }));
+      await safeEval(commentButton, (b: any) =>
+        b.click({ timeout: 2_000, force: true }),
+      );
       return;
     }
   }
 
-  if (typeof page.locator === 'function') {
-    const loc = await safeEval(page, (pp) => pp.locator('[data-name="comment"], .comment-tab, .comment-panel button'));
-    if (loc && typeof loc.first === 'function') {
+  if (typeof page.locator === "function") {
+    const loc = await safeEval(page, (pp) =>
+      pp.locator('[data-name="comment"], .comment-tab, .comment-panel button'),
+    );
+    if (loc && typeof loc.first === "function") {
       await safeEval(loc.first(), (l: any) => l.click({ timeout: 2_000 }));
       return;
     }
   }
 
-  if (typeof page.evaluate === 'function') {
-    await safeEval(page, (pp) => pp.evaluate(() => {
-      const sel = '[data-name="comment"], .comment-tab, .comment-panel button';
-      const el = document.querySelector(sel);
-      if (!el) return false;
-      try { (el as HTMLElement).click(); } catch {}
-      return true;
-    }));
+  if (typeof page.evaluate === "function") {
+    await safeEval(page, (pp) =>
+      pp.evaluate(() => {
+        const sel =
+          '[data-name="comment"], .comment-tab, .comment-panel button';
+        const el = document.querySelector(sel);
+        if (!el) return false;
+        try {
+          (el as HTMLElement).click();
+        } catch {}
+        return true;
+      }),
+    );
   }
 };

@@ -1,21 +1,28 @@
-import { createContext, useContext, useState, useEffect, useRef, type PropsWithChildren } from "hono/jsx/dom";
+import {
+  createContext,
+  type PropsWithChildren,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "hono/jsx/dom";
 import type { Games } from "../../lib/Agent/games";
 import type { AgentState } from "../../lib/Agent/State";
 import { useInterval } from "../hooks/useInterval";
 import { updateSpeechState } from "./speechState";
 
 type Data = {
-  speech: string
-  silent: boolean
+  speech: string;
+  silent: boolean;
   playing?: {
-    name: keyof typeof Games
-    state: any
-  }
-  streamState?: AgentState
+    name: keyof typeof Games;
+    state: any;
+  };
+  streamState?: AgentState;
 };
 
 const AgentContext = createContext<Data>({
-  speech: '',
+  speech: "",
   silent: false,
 });
 
@@ -54,35 +61,35 @@ export const setStreamStateFromMetaApiResponse = (
 };
 
 export const AgentProvider = ({ children }: PropsWithChildren) => {
-  const [speech, setSpeech] = useState('');
+  const [speech, setSpeech] = useState("");
   const [silent, setSilent] = useState(false);
-  const [playing, setPlaying] = useState<Data['playing']>();
+  const [playing, setPlaying] = useState<Data["playing"]>();
   const [streamState, setStreamState] = useState<AgentState>();
 
   useInterval(100, async () => {
-    const res = await fetch('/api/speech', { unix: './var/api-speech.sock' })
-      .then(res => res.ok ? res.json() : null)
-      .catch(err => {
-        console.warn('[WARN]', err);
+    const res = await fetch("/api/speech", { unix: "./var/api-speech.sock" })
+      .then((res) => (res.ok ? res.json() : null))
+      .catch((err) => {
+        console.warn("[WARN]", err);
         return null;
       });
     updateSpeechStateFromSpeechApiResponse(res, speech, setSpeech, setSilent);
   });
 
   useInterval(100, async () => {
-    const res = await fetch('/api/game', { unix: './var/api-game.sock' })
-      .then(res => res.ok ? res.json() : { error: 'not ok' })
-      .catch(error => ({ error }));
+    const res = await fetch("/api/game", { unix: "./var/api-game.sock" })
+      .then((res) => (res.ok ? res.json() : { error: "not ok" }))
+      .catch((error) => ({ error }));
     if (res?.name) {
       setPlaying(res);
     }
   });
 
   useInterval(100, async () => {
-    const res = await fetch('/api/meta', { unix: './var/api-meta.sock' })
-      .then(res => res.ok ? res.json() : null)
-      .catch(error => {
-        console.warn('[WARN]', error);
+    const res = await fetch("/api/meta", { unix: "./var/api-meta.sock" })
+      .then((res) => (res.ok ? res.json() : null))
+      .catch((error) => {
+        console.warn("[WARN]", error);
         return null;
       });
     setStreamStateFromMetaApiResponse(res, setStreamState);
@@ -92,8 +99,17 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
   const prevTitleRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    const currentType = streamState && typeof streamState === 'object' ? (streamState as any).type : undefined;
-    const currentTitle = streamState && typeof streamState === 'object' && (streamState as any).meta && typeof (streamState as any).meta.title === 'string' ? (streamState as any).meta.title as string : undefined;
+    const currentType =
+      streamState && typeof streamState === "object"
+        ? (streamState as any).type
+        : undefined;
+    const currentTitle =
+      streamState &&
+      typeof streamState === "object" &&
+      (streamState as any).meta &&
+      typeof (streamState as any).meta.title === "string"
+        ? ((streamState as any).meta.title as string)
+        : undefined;
 
     const prevType = prevTypeRef.current;
     const prevTitle = prevTitleRef.current;
@@ -102,12 +118,15 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
     // same program URL becomes marked with the explicit "公開終了" marker
     // for the first time (title transitions from non-ended to ended).
     try {
-      if (currentType === 'offline' && prevType === 'live') {
+      if (currentType === "offline" && prevType === "live") {
         window.location.reload();
         return;
       }
 
-      if (currentTitle?.includes('公開終了') && !prevTitle?.includes('公開終了')) {
+      if (
+        currentTitle?.includes("公開終了") &&
+        !prevTitle?.includes("公開終了")
+      ) {
         window.location.reload();
         return;
       }

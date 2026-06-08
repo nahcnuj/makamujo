@@ -14,7 +14,7 @@ describe("AgentStatusHeader", () => {
     );
 
     expect(html).toContain("配信タイトル");
-    expect(html).toContain("href=\"https://example.com/live\"");
+    expect(html).toContain('href="https://example.com/live"');
     expect(html).toContain("2026/05/02 12:34:56");
   });
 

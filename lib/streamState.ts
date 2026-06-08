@@ -1,5 +1,5 @@
 export const normalizePublishedStreamState = (state: unknown): unknown => {
-  if (!state || typeof state !== 'object') {
+  if (!state || typeof state !== "object") {
     return state;
   }
 
@@ -8,25 +8,33 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
   // Preserve any top-level custom fields while normalizing legacy payloads.
   // This is important for values like replyTargetComment, commentCount, and
   // speechHistory that are not part of the legacy `type/data` structure.
-  if (rawState.type === 'niconama') {
+  if (rawState.type === "niconama") {
     const data = rawState.data as Record<string, unknown> | undefined;
     const total: Record<string, unknown> = {};
-    if (typeof data?.total === 'number') {
+    if (typeof data?.total === "number") {
       total.listeners = data.total;
-    } else if (data?.total && typeof data.total === 'object') {
+    } else if (data?.total && typeof data.total === "object") {
       const totalObj = data.total as Record<string, unknown>;
-      if (typeof totalObj.listeners === 'number') total.listeners = totalObj.listeners;
-      if (typeof totalObj.comments === 'number') total.comments = totalObj.comments;
-      if (typeof totalObj.gift === 'number') total.gift = totalObj.gift;
-      if (typeof totalObj.ad === 'number') total.ad = totalObj.ad;
+      if (typeof totalObj.listeners === "number")
+        total.listeners = totalObj.listeners;
+      if (typeof totalObj.comments === "number")
+        total.comments = totalObj.comments;
+      if (typeof totalObj.gift === "number") total.gift = totalObj.gift;
+      if (typeof totalObj.ad === "number") total.ad = totalObj.ad;
     }
-    if (typeof data?.comments === 'number') {
+    if (typeof data?.comments === "number") {
       total.comments = data.comments;
     }
-    if (data?.points && typeof (data.points as Record<string, unknown>).gift !== 'undefined') {
+    if (
+      data?.points &&
+      typeof (data.points as Record<string, unknown>).gift !== "undefined"
+    ) {
       total.gift = (data.points as Record<string, unknown>).gift;
     }
-    if (data?.points && typeof (data.points as Record<string, unknown>).ad !== 'undefined') {
+    if (
+      data?.points &&
+      typeof (data.points as Record<string, unknown>).ad !== "undefined"
+    ) {
       total.ad = (data.points as Record<string, unknown>).ad;
     }
 
@@ -34,7 +42,7 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
     delete normalizedState.type;
     delete normalizedState.data;
     normalizedState.niconama = {
-      type: data?.isLive ? 'live' : 'offline',
+      type: data?.isLive ? "live" : "offline",
       meta: {
         title: data?.title ?? undefined,
         url: data?.url ?? undefined,
@@ -45,10 +53,16 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
     return normalizedState;
   }
 
-  if ('niconama' in rawState && rawState.niconama && typeof rawState.niconama === 'object') {
+  if (
+    "niconama" in rawState &&
+    rawState.niconama &&
+    typeof rawState.niconama === "object"
+  ) {
     try {
-      const resolved = resolveNiconamaFromState({ niconama: rawState.niconama });
-      if (resolved && typeof resolved === 'object') {
+      const resolved = resolveNiconamaFromState({
+        niconama: rawState.niconama,
+      });
+      if (resolved && typeof resolved === "object") {
         return { ...rawState, niconama: resolved };
       }
     } catch {
@@ -57,7 +71,7 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
     return rawState;
   }
 
-  if (rawState.type === 'live' || rawState.type === 'offline') {
+  if (rawState.type === "live" || rawState.type === "offline") {
     const normalizedState: Record<string, unknown> = { ...rawState };
     delete normalizedState.type;
     normalizedState.niconama = rawState;
@@ -73,31 +87,48 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
  * present either at top-level or within a `niconama` object that lacks `meta`.
  */
 export const resolveNiconamaFromState = (src: unknown): unknown => {
-  if (!src || typeof src !== 'object') return {};
+  if (!src || typeof src !== "object") return {};
 
   const payload = src as any;
 
-  if (payload.niconama && typeof payload.niconama === 'object') {
+  if (payload.niconama && typeof payload.niconama === "object") {
     const n = { ...payload.niconama } as any;
-    if ((!n.meta || typeof n.meta !== 'object') && (n.title || n.url || n.start || n.startTime)) {
+    if (
+      (!n.meta || typeof n.meta !== "object") &&
+      (n.title || n.url || n.start || n.startTime)
+    ) {
       n.meta = {
-        title: typeof n.title === 'string' ? n.title : undefined,
-        url: typeof n.url === 'string' ? n.url : undefined,
-        start: typeof n.start === 'number' ? n.start : (typeof n.startTime === 'number' ? n.startTime : undefined),
+        title: typeof n.title === "string" ? n.title : undefined,
+        url: typeof n.url === "string" ? n.url : undefined,
+        start:
+          typeof n.start === "number"
+            ? n.start
+            : typeof n.startTime === "number"
+              ? n.startTime
+              : undefined,
         total: n.meta?.total ?? n.total ?? undefined,
       } as any;
     }
     return n;
   }
 
-  const hasTopLevelFields = typeof payload.title === 'string' || typeof payload.url === 'string' || typeof payload.start === 'number' || typeof payload.startTime === 'number';
+  const hasTopLevelFields =
+    typeof payload.title === "string" ||
+    typeof payload.url === "string" ||
+    typeof payload.start === "number" ||
+    typeof payload.startTime === "number";
   if (hasTopLevelFields) {
     return {
-      type: typeof payload.type === 'string' ? payload.type : undefined,
+      type: typeof payload.type === "string" ? payload.type : undefined,
       meta: {
-        title: typeof payload.title === 'string' ? payload.title : undefined,
-        url: typeof payload.url === 'string' ? payload.url : undefined,
-        start: typeof payload.start === 'number' ? payload.start : (typeof payload.startTime === 'number' ? payload.startTime : undefined),
+        title: typeof payload.title === "string" ? payload.title : undefined,
+        url: typeof payload.url === "string" ? payload.url : undefined,
+        start:
+          typeof payload.start === "number"
+            ? payload.start
+            : typeof payload.startTime === "number"
+              ? payload.startTime
+              : undefined,
         total: payload.meta?.total ?? payload.total ?? undefined,
       },
     } as any;
@@ -109,14 +140,23 @@ export const resolveNiconamaFromState = (src: unknown): unknown => {
   // the upstream source placed those values under the current game state.
   try {
     const cg = payload.currentGame;
-    const gameState = cg && typeof cg === 'object' && cg.state && typeof cg.state === 'object' ? cg.state : undefined;
+    const gameState =
+      cg && typeof cg === "object" && cg.state && typeof cg.state === "object"
+        ? cg.state
+        : undefined;
     if (gameState) {
-      const title = typeof gameState.title === 'string' ? gameState.title : undefined;
-      const url = typeof gameState.url === 'string' ? gameState.url : undefined;
-      const start = typeof gameState.timestamp === 'number' ? gameState.timestamp : (typeof gameState.start === 'number' ? gameState.start : undefined);
-      if (title || url || typeof start === 'number') {
+      const title =
+        typeof gameState.title === "string" ? gameState.title : undefined;
+      const url = typeof gameState.url === "string" ? gameState.url : undefined;
+      const start =
+        typeof gameState.timestamp === "number"
+          ? gameState.timestamp
+          : typeof gameState.start === "number"
+            ? gameState.start
+            : undefined;
+      if (title || url || typeof start === "number") {
         return {
-          type: typeof payload.type === 'string' ? payload.type : undefined,
+          type: typeof payload.type === "string" ? payload.type : undefined,
           meta: {
             title,
             url,

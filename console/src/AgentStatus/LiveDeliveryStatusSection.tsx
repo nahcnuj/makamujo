@@ -7,6 +7,14 @@ type LiveDeliveryStatusSectionProps = {
   liveDeliveryRows: AgentStatusRow[];
 };
 
-export const LiveDeliveryStatusSection = ({ liveDeliveryRows }: LiveDeliveryStatusSectionProps) => {
-  return <AgentStatusSectionCard title={LIVE_DELIVERY_SECTION_TITLE} rows={liveDeliveryRows} hideTitle />;
+export const LiveDeliveryStatusSection = ({
+  liveDeliveryRows,
+}: LiveDeliveryStatusSectionProps) => {
+  return (
+    <AgentStatusSectionCard
+      title={LIVE_DELIVERY_SECTION_TITLE}
+      rows={liveDeliveryRows}
+      hideTitle
+    />
+  );
 };

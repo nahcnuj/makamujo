@@ -8,20 +8,22 @@ type SpeechPayload =
   | { text?: string; nodes?: readonly string[] }
   | { speech?: string; text?: string; nodes?: readonly string[] };
 
-const normalizeSpeechText = (speech: SpeechPayload | undefined): string | undefined => {
-  if (typeof speech === 'string') {
+const normalizeSpeechText = (
+  speech: SpeechPayload | undefined,
+): string | undefined => {
+  if (typeof speech === "string") {
     return speech;
   }
 
-  if (!speech || typeof speech !== 'object') {
+  if (!speech || typeof speech !== "object") {
     return undefined;
   }
 
-  if ('text' in speech && typeof speech.text === 'string') {
+  if ("text" in speech && typeof speech.text === "string") {
     return speech.text;
   }
 
-  if ('speech' in speech && typeof speech.speech === 'string') {
+  if ("speech" in speech && typeof speech.speech === "string") {
     return speech.speech;
   }
 
@@ -40,14 +42,14 @@ export function updateSpeechState(
 
   if (isSilent) {
     // When silent, hide prior speech so old text does not persist after silence ends.
-    if (currentSpeech !== '') {
-      setSpeech('');
+    if (currentSpeech !== "") {
+      setSpeech("");
     }
     return;
   }
 
   if (res.speech !== undefined) {
-    const newSpeech = normalizeSpeechText(res.speech) ?? '';
+    const newSpeech = normalizeSpeechText(res.speech) ?? "";
     if (newSpeech !== currentSpeech) {
       setSpeech(newSpeech);
     }

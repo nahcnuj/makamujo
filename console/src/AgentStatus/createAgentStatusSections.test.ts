@@ -4,7 +4,10 @@ import { createAgentStatusSections } from "./createAgentStatusSections";
 describe("createAgentStatusSections", () => {
   it("categorizes rows into delivery, markov-model, and game sections", () => {
     const sections = createAgentStatusSections({
-      niconama: { type: "live", meta: { title: "タイトル", url: "https://example.com" } },
+      niconama: {
+        type: "live",
+        meta: { title: "タイトル", url: "https://example.com" },
+      },
       currentGame: { name: "ゲームID", state: { status: "running" } },
       nGram: 4,
       speechHistory: [{ id: "speech-1", speech: "hello world", nGram: 2 }],
@@ -23,7 +26,10 @@ describe("createAgentStatusSections", () => {
       speechHistory: [{ id: "speech-1", speech: "hello world", nGram: 2 }],
     } as any);
 
-    expect(sections.map((section) => section.title)).toEqual(["マルコフ連鎖モデル", "『-』プレイ中"]);
+    expect(sections.map((section) => section.title)).toEqual([
+      "マルコフ連鎖モデル",
+      "『-』プレイ中",
+    ]);
   });
 
   it("includes reply target comments in the markov model section", () => {
@@ -35,10 +41,14 @@ describe("createAgentStatusSections", () => {
       },
     } as any);
 
-    const markovSection = sections.find((section) => section.title === "マルコフ連鎖モデル");
-    expect(markovSection?.rows).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "返信先コメント" }),
-    ]));
+    const markovSection = sections.find(
+      (section) => section.title === "マルコフ連鎖モデル",
+    );
+    expect(markovSection?.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "返信先コメント" }),
+      ]),
+    );
   });
 
   it("includes recent comments in the delivery section", () => {
@@ -49,10 +59,14 @@ describe("createAgentStatusSections", () => {
       ],
     } as any);
 
-    const deliverySection = sections.find((section) => section.title === "配信状況");
-    expect(deliverySection?.rows).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "最近のコメント" }),
-    ]));
+    const deliverySection = sections.find(
+      (section) => section.title === "配信状況",
+    );
+    expect(deliverySection?.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "最近のコメント" }),
+      ]),
+    );
   });
 
   it("shows fallback game title without detail rows when currentGame is null", () => {

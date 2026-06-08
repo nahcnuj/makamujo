@@ -29,16 +29,18 @@ run_and_log_stderr() {
   fi
 }
 
-# Ensure bun is available (its stderr goes to the log on failure).
-if ! bun --version >/dev/null 2>>"$STDERR_LOG"; then
+# Ensure bun is available (use system bun to avoid node_modules/.bin wrappers).
+BUN_BIN="$(command -v bun || true)"
+if [ -z "$BUN_BIN" ]; then
   echo "bun not available; see stderr log at: $STDERR_LOG" >&2
   exit 1
 fi
 
-run_and_log_stderr bun run typecheck
-run_and_log_stderr bun run test
-run_and_log_stderr bun run test:integration
-run_and_log_stderr bun run test:e2e
+run_and_log_stderr "$BUN_BIN" run typecheck
+# Run tests directly with the system bun binary to avoid nested `bun` invocations
+run_and_log_stderr "$BUN_BIN" test lib/ src/ routes/ console/src/
+run_and_log_stderr env MAKAMUJO_ALLOW_FALLBACK_TTS=1 "$BUN_BIN" test tests/integration/
+run_and_log_stderr "$BUN_BIN" run test:e2e
 
 CHECKS_PASSED=1
 SUCCESS=1

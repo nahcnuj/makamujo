@@ -1,4 +1,10 @@
-import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  renameSync,
+  statSync,
+} from "node:fs";
 import { appendFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
@@ -17,7 +23,10 @@ export type DailyRotatingJsonLogger = {
   flush(): Promise<void>;
 };
 
-export function createDailyRotatingJsonLogger(logFilePath: string, options: LoggerOptions = {}): DailyRotatingJsonLogger {
+export function createDailyRotatingJsonLogger(
+  logFilePath: string,
+  options: LoggerOptions = {},
+): DailyRotatingJsonLogger {
   const now = options.now ?? (() => new Date());
   const currentDate = formatLogDate(now());
 
@@ -32,7 +41,8 @@ export function createDailyRotatingJsonLogger(logFilePath: string, options: Logg
     write(record: JsonLogRecord): void {
       try {
         const currentTime = now();
-        const { timestamp: _ignoredTimestamp, ...recordWithoutTimestamp } = record;
+        const { timestamp: _ignoredTimestamp, ...recordWithoutTimestamp } =
+          record;
         const logLine = `${JSON.stringify({ timestamp: formatJstTimestamp(currentTime), ...recordWithoutTimestamp })}\n`;
         pendingWrite = pendingWrite
           .then(async () => {
@@ -44,14 +54,20 @@ export function createDailyRotatingJsonLogger(logFilePath: string, options: Logg
               }
               await appendFile(logFilePath, logLine);
             } catch (error) {
-              writeStderr(`Failed to write log entry to ${logFilePath}: ${formatUnknownError(error)}\n`);
+              writeStderr(
+                `Failed to write log entry to ${logFilePath}: ${formatUnknownError(error)}\n`,
+              );
             }
           })
           .catch((error) => {
-            writeStderr(`Unexpected log pipeline failure for ${logFilePath}: ${formatUnknownError(error)}\n`);
+            writeStderr(
+              `Unexpected log pipeline failure for ${logFilePath}: ${formatUnknownError(error)}\n`,
+            );
           });
       } catch (error) {
-        writeStderr(`Failed to write log entry to ${logFilePath}: ${formatUnknownError(error)}\n`);
+        writeStderr(
+          `Failed to write log entry to ${logFilePath}: ${formatUnknownError(error)}\n`,
+        );
       }
     },
     async flush(): Promise<void> {
@@ -80,7 +96,10 @@ function ensureLogWritable(logFilePath: string): void {
   appendFileSync(logFilePath, "");
 }
 
-function rotateExistingFileOnStartup(logFilePath: string, currentDate: string): void {
+function rotateExistingFileOnStartup(
+  logFilePath: string,
+  currentDate: string,
+): void {
   if (!existsSync(logFilePath)) {
     return;
   }
@@ -147,7 +166,9 @@ export function formatUnknownError(error: unknown): string {
   return String(error);
 }
 
-export function createConsoleLogger({ environment = process.env.NODE_ENV }: ConsoleLoggerOptions = {}): Console {
+export function createConsoleLogger({
+  environment = process.env.NODE_ENV,
+}: ConsoleLoggerOptions = {}): Console {
   const originalConsole = globalThis.console;
   const originalLog = originalConsole.log.bind(originalConsole);
   const originalInfo = originalConsole.info.bind(originalConsole);
@@ -156,10 +177,10 @@ export function createConsoleLogger({ environment = process.env.NODE_ENV }: Cons
   const logger = Object.create(originalConsole) as Console;
 
   const isSuppressedDebug = (args: unknown[]): boolean =>
-    environment === 'production' &&
+    environment === "production" &&
     args.length > 0 &&
-    typeof args[0] === 'string' &&
-    args[0].startsWith('[DEBUG]');
+    typeof args[0] === "string" &&
+    args[0].startsWith("[DEBUG]");
 
   logger.log = (...args: unknown[]): void => {
     if (isSuppressedDebug(args)) {
@@ -175,16 +196,21 @@ export function createConsoleLogger({ environment = process.env.NODE_ENV }: Cons
     originalInfo(...args);
   };
 
-  logger.debug = environment === 'production'
-    ? () => { /* suppress debug output when configured for production */ }
-    : (...args: unknown[]): void => {
-      originalDebug(...args);
-    };
+  logger.debug =
+    environment === "production"
+      ? () => {
+          /* suppress debug output when configured for production */
+        }
+      : (...args: unknown[]): void => {
+          originalDebug(...args);
+        };
 
   return logger;
 }
 
-export function installConsoleLogger(options: ConsoleLoggerOptions = {}): Console {
+export function installConsoleLogger(
+  options: ConsoleLoggerOptions = {},
+): Console {
   const logger = createConsoleLogger(options);
   globalThis.console = logger;
   return logger;

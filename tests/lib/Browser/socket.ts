@@ -1,1 +1,1 @@
-export * from '../../../lib/Browser/socket';
+export * from "../../../lib/Browser/socket";

@@ -1,4 +1,7 @@
-import type { AgentStateResponse, AgentStatusRow } from "./types";
+import {
+  getAgentCommentNumber,
+  getCommentTextFromAgentComment,
+} from "../../../lib/niconamaCommentClient.helpers";
 import {
   createCurrentGameInfoValueComponent,
   createLiveDeliveryMetricsValueComponent,
@@ -10,8 +13,8 @@ import {
   normalizeReplyTargetCommentText,
   normalizeSpeechText,
 } from "./agentStatusUtils";
-import { getAgentCommentNumber, getCommentTextFromAgentComment } from "../../../lib/niconamaCommentClient.helpers";
 import { SpeechHistoryList } from "./SpeechHistoryList";
+import type { AgentStateResponse, AgentStatusRow } from "./types";
 
 const mergeRecentCommentEntries = (
   recentComments: import("automated-gameplay-transmitter").AgentComment[],
@@ -20,17 +23,24 @@ const mergeRecentCommentEntries = (
 
   for (const comment of recentComments) {
     const text = getCommentTextFromAgentComment(comment);
-    if (typeof text === 'string' && /^[0-9]+(?:,[0-9]{3})*$/.test(text.trim())) {
+    if (
+      typeof text === "string" &&
+      /^[0-9]+(?:,[0-9]{3})*$/.test(text.trim())
+    ) {
       const previous = merged[merged.length - 1];
       if (previous) {
         const previousText = getCommentTextFromAgentComment(previous);
         const previousNumber = getAgentCommentNumber(previous);
-        if (typeof previousText === 'string' && !/^[0-9]+(?:,[0-9]{3})*$/.test(previousText.trim()) && previousNumber === undefined) {
+        if (
+          typeof previousText === "string" &&
+          !/^[0-9]+(?:,[0-9]{3})*$/.test(previousText.trim()) &&
+          previousNumber === undefined
+        ) {
           const previousData = (previous as any).data ?? previous;
           merged[merged.length - 1] = {
             data: {
               ...previousData,
-              no: Number(text.replace(/,/g, '')),
+              no: Number(text.replace(/,/g, "")),
             },
           } as import("automated-gameplay-transmitter").AgentComment;
           continue;
@@ -55,35 +65,45 @@ export const createAgentStatusRows = (
 
   const niconamaState = stateResponse?.niconama;
   const recentComments = Array.isArray(stateResponse?.recentComments)
-    ? mergeRecentCommentEntries(stateResponse.recentComments.filter((item): item is import("automated-gameplay-transmitter").AgentComment => typeof item === 'object' && item !== null))
+    ? mergeRecentCommentEntries(
+        stateResponse.recentComments.filter(
+          (
+            item,
+          ): item is import("automated-gameplay-transmitter").AgentComment =>
+            typeof item === "object" && item !== null,
+        ),
+      )
     : [];
 
   // Prefer explicit counts from the stream state, and only fall back to the
   // recent comment array length when no top-level count is available.
-  const resolvedCommentCount = typeof stateResponse?.commentCount === 'number'
-    ? stateResponse.commentCount
-    : typeof niconamaState?.meta?.total?.comments === 'number'
-      ? niconamaState.meta.total.comments
-      : recentComments.length > 0
-        ? recentComments.length
-        : undefined;
+  const resolvedCommentCount =
+    typeof stateResponse?.commentCount === "number"
+      ? stateResponse.commentCount
+      : typeof niconamaState?.meta?.total?.comments === "number"
+        ? niconamaState.meta.total.comments
+        : recentComments.length > 0
+          ? recentComments.length
+          : undefined;
 
   if (niconamaState && Object.keys(niconamaState).length > 0) {
-    rows.push(
-      {
-        label: "配信指標",
-        hideLabel: true,
-        valueComponent: createLiveDeliveryMetricsValueComponent(
-          niconamaState,
-          resolvedCommentCount,
-          options?.showRecentComments,
-          options?.toggleRecentComments,
-        ),
-      },
-    );
+    rows.push({
+      label: "配信指標",
+      hideLabel: true,
+      valueComponent: createLiveDeliveryMetricsValueComponent(
+        niconamaState,
+        resolvedCommentCount,
+        options?.showRecentComments,
+        options?.toggleRecentComments,
+      ),
+    });
   }
 
-  if (stateResponse !== null && stateResponse !== undefined && "currentGame" in stateResponse) {
+  if (
+    stateResponse !== null &&
+    stateResponse !== undefined &&
+    "currentGame" in stateResponse
+  ) {
     const currentGameName = stateResponse.currentGame?.name;
     const currentGameState = stateResponse.currentGame?.state;
 
@@ -109,7 +129,9 @@ export const createAgentStatusRows = (
     : undefined;
 
   const isSameAsRecentComment = (replyCommentText: string): boolean => {
-    const normalizedReplyText = normalizeReplyTargetCommentText(replyCommentText) ?? replyCommentText.trim();
+    const normalizedReplyText =
+      normalizeReplyTargetCommentText(replyCommentText) ??
+      replyCommentText.trim();
     return recentComments.some((comment) => {
       const commentText = getCommentTextFromAgentComment(comment);
       if (!commentText) return false;
@@ -118,7 +140,9 @@ export const createAgentStatusRows = (
   };
 
   const isSpeechSilent = stateResponse?.speech?.silent === true;
-  const speechHistoryItems = createSpeechHistoryDisplayItems(stateResponse?.speechHistory);
+  const speechHistoryItems = createSpeechHistoryDisplayItems(
+    stateResponse?.speechHistory,
+  );
   const shouldShowRecentComments = options?.showRecentComments !== false;
   if (recentComments.length > 0 && shouldShowRecentComments) {
     rows.push({
@@ -138,22 +162,31 @@ export const createAgentStatusRows = (
         />
       ),
     });
-  } else if (replyTargetComment && !isSameAsRecentComment(replyTargetComment.text ?? '')) {
+  } else if (
+    replyTargetComment &&
+    !isSameAsRecentComment(replyTargetComment.text ?? "")
+  ) {
     rows.push({
       label: "返信先コメント",
-      valueComponent: createReplyTargetCommentValueComponent(replyTargetComment),
+      valueComponent:
+        createReplyTargetCommentValueComponent(replyTargetComment),
     });
   }
 
   const normalizedSpeechText = normalizeSpeechText(stateResponse?.speech);
-  const shouldRenderSpeechContent = stateResponse?.canSpeak === false
-    || (normalizedSpeechText !== undefined && speechHistoryItems.length === 0)
-    || (normalizedSpeechText !== undefined && speechHistoryItems[0]?.speechText !== normalizedSpeechText);
+  const shouldRenderSpeechContent =
+    stateResponse?.canSpeak === false ||
+    (normalizedSpeechText !== undefined && speechHistoryItems.length === 0) ||
+    (normalizedSpeechText !== undefined &&
+      speechHistoryItems[0]?.speechText !== normalizedSpeechText);
 
   if (!isSpeechSilent) {
     if (stateResponse?.canSpeak === false) {
       rows.push({ label: "発話内容", value: getSpeechUnavailableIndicator() });
-    } else if (normalizedSpeechText !== undefined && shouldRenderSpeechContent) {
+    } else if (
+      normalizedSpeechText !== undefined &&
+      shouldRenderSpeechContent
+    ) {
       rows.push({ label: "発話内容", value: normalizedSpeechText });
     }
   }
