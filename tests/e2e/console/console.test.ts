@@ -1,7 +1,7 @@
-import { createServer } from "node:net";
 import { expect, test } from "@playwright/test";
 import { spawn } from "child_process";
-import { createWriteStream, existsSync, mkdirSync, writeFileSync } from "fs";
+import { existsSync, writeFileSync, createWriteStream, mkdirSync } from "fs";
+import { createServer } from "node:net";
 import { join } from "path";
 import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
 import { installDeterministicEventSource } from "../../fixtures/installDeterministicEventSource";
@@ -12,121 +12,115 @@ let BROADCASTING_BASE_URL = `http://127.0.0.1:7777`;
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 const BROWSER_PAGE_LOAD_TIMEOUT_MS = 20_000;
 const EXPECTED_CONSOLE_TITLE = "馬可無序 - 管理コンソール";
-const ACTUAL_PROGRAM_WATCH_URL =
-  "https://live.nicovideo.jp/watch/user/14171889";
+const ACTUAL_PROGRAM_WATCH_URL = "https://live.nicovideo.jp/watch/user/14171889";
 
 let server: ReturnType<typeof spawn> | null = null;
-let outStream: import("fs").WriteStream | null = null;
-let errStream: import("fs").WriteStream | null = null;
+let outStream: import('fs').WriteStream | null = null;
+let errStream: import('fs').WriteStream | null = null;
 
 const getFreePort = (): Promise<number> => {
   return new Promise((resolve, reject) => {
     const server = createServer();
-    server.on("error", (error) => {
+    server.on('error', (error) => {
       reject(error);
     });
-    server.listen(0, "127.0.0.1", () => {
+    server.listen(0, '127.0.0.1', () => {
       const address = server.address();
-      if (address && typeof address !== "string") {
+      if (address && typeof address !== 'string') {
         const port = address.port;
         server.close(() => resolve(port));
       } else {
-        server.close(() => reject(new Error("Failed to acquire a free port")));
+        server.close(() => reject(new Error('Failed to acquire a free port')));
       }
     });
   });
 };
 
-const waitForServerReady = async (): Promise<{
-  consoleUrl: string | null;
-  serverUrl: string | null;
-}> => {
-  return new Promise<{ consoleUrl: string | null; serverUrl: string | null }>(
-    (resolve, reject) => {
-      if (!server) {
-        reject(new Error("Server process not started"));
+const waitForServerReady = async (): Promise<{ consoleUrl: string | null; serverUrl: string | null }> => {
+  return new Promise<{ consoleUrl: string | null; serverUrl: string | null }>((resolve, reject) => {
+    if (!server) {
+      reject(new Error("Server process not started"));
+      return;
+    }
+
+    if (!server.stdout || !server.stderr) {
+      reject(new Error("Server stdout/stderr stream not available"));
+      return;
+    }
+
+    const proc = server!;
+    const stdout = proc.stdout!;
+
+    let settled = false;
+    let buffer = "";
+    let consoleUrl: string | null = null;
+    let serverUrl: string | null = null;
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      stdout.off("data", onData);
+      proc.off("exit", onExit);
+    };
+
+    const resolveOnce = () => {
+      if (settled) {
         return;
       }
+      settled = true;
+      cleanup();
+      resolve({ consoleUrl, serverUrl });
+    };
 
-      if (!server.stdout || !server.stderr) {
-        reject(new Error("Server stdout/stderr stream not available"));
+    const rejectOnce = (error: Error) => {
+      if (settled) {
         return;
       }
+      settled = true;
+      cleanup();
+      reject(error);
+    };
 
-      const proc = server!;
-      const stdout = proc.stdout!;
+    const onData = (chunk: Buffer | string) => {
+      buffer += chunk.toString();
+      const consoleMarker = "Console running at ";
+      const serverMarker = "Server running at ";
 
-      let settled = false;
-      let buffer = "";
-      let consoleUrl: string | null = null;
-      let serverUrl: string | null = null;
-
-      const cleanup = () => {
-        clearTimeout(timeout);
-        stdout.off("data", onData);
-        proc.off("exit", onExit);
-      };
-
-      const resolveOnce = () => {
-        if (settled) {
-          return;
+      const consoleIdx = buffer.indexOf(consoleMarker);
+      if (consoleIdx >= 0) {
+        const rest = buffer.slice(consoleIdx + consoleMarker.length);
+        const newlineIdx = rest.search(/\r?\n/);
+        if (newlineIdx >= 0) {
+          const line = rest.slice(0, newlineIdx).trim();
+          consoleUrl = line || null;
         }
-        settled = true;
-        cleanup();
-        resolve({ consoleUrl, serverUrl });
-      };
+      }
 
-      const rejectOnce = (error: Error) => {
-        if (settled) {
-          return;
+      const serverIdx = buffer.indexOf(serverMarker);
+      if (serverIdx >= 0) {
+        const rest = buffer.slice(serverIdx + serverMarker.length);
+        const newlineIdx = rest.search(/\r?\n/);
+        if (newlineIdx >= 0) {
+          const line = rest.slice(0, newlineIdx).trim();
+          serverUrl = line || null;
         }
-        settled = true;
-        cleanup();
-        reject(error);
-      };
+      }
 
-      const onData = (chunk: Buffer | string) => {
-        buffer += chunk.toString();
-        const consoleMarker = "Console running at ";
-        const serverMarker = "Server running at ";
+      if (consoleUrl !== null && serverUrl !== null) {
+        resolveOnce();
+      }
+    };
 
-        const consoleIdx = buffer.indexOf(consoleMarker);
-        if (consoleIdx >= 0) {
-          const rest = buffer.slice(consoleIdx + consoleMarker.length);
-          const newlineIdx = rest.search(/\r?\n/);
-          if (newlineIdx >= 0) {
-            const line = rest.slice(0, newlineIdx).trim();
-            consoleUrl = line || null;
-          }
-        }
+    const onExit = (code: number | null) => {
+      rejectOnce(new Error(`Server process exited early with code ${code}`));
+    };
 
-        const serverIdx = buffer.indexOf(serverMarker);
-        if (serverIdx >= 0) {
-          const rest = buffer.slice(serverIdx + serverMarker.length);
-          const newlineIdx = rest.search(/\r?\n/);
-          if (newlineIdx >= 0) {
-            const line = rest.slice(0, newlineIdx).trim();
-            serverUrl = line || null;
-          }
-        }
+    const timeout = setTimeout(() => {
+      rejectOnce(new Error("Server startup timed out"));
+    }, SERVER_STARTUP_TIMEOUT_MS);
 
-        if (consoleUrl !== null && serverUrl !== null) {
-          resolveOnce();
-        }
-      };
-
-      const onExit = (code: number | null) => {
-        rejectOnce(new Error(`Server process exited early with code ${code}`));
-      };
-
-      const timeout = setTimeout(() => {
-        rejectOnce(new Error("Server startup timed out"));
-      }, SERVER_STARTUP_TIMEOUT_MS);
-
-      stdout.on("data", onData);
-      proc.on("exit", onExit);
-    },
-  );
+    stdout.on("data", onData);
+    proc.on("exit", onExit);
+  });
 };
 
 test.beforeAll(async ({ request }) => {
@@ -137,12 +131,10 @@ test.beforeAll(async ({ request }) => {
   // Use a unique IPC path per test run to avoid named-pipe conflicts on
   // Windows CI runners which can cause the server to crash when the
   // default pipe is already in use.
-  const randomId =
-    Date.now().toString(36) + Math.random().toString(36).slice(2);
-  const ipcPath =
-    process.platform === "win32"
-      ? `\\.\\pipe\\makamujo-ipc-${randomId}`
-      : join(process.cwd(), "var", `ipc-${randomId}.sock`);
+  const randomId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  const ipcPath = process.platform === "win32"
+    ? `\\.\\pipe\\makamujo-ipc-${randomId}`
+    : join(process.cwd(), "var", `ipc-${randomId}.sock`);
   const port = await getFreePort();
 
   // Resolve an explicit bun executable path when available in the environment
@@ -152,7 +144,7 @@ test.beforeAll(async ({ request }) => {
     if (process.env.BUN) return process.env.BUN;
     if (process.env.BUN_EXECUTABLE) return process.env.BUN_EXECUTABLE;
     if (process.platform === "win32") return "bun.exe";
-
+    
     // On non-Windows, try the home directory path first if it exists
     const home = process.env.HOME;
     if (home) {
@@ -163,17 +155,21 @@ test.beforeAll(async ({ request }) => {
     return "bun";
   })();
 
-  server = spawn(bunExecutable, ["index.ts", "--port", String(port)], {
-    env: {
-      ...process.env,
-      NODE_ENV: "production",
-      CONSOLE_TLS_CERT: process.env.CONSOLE_TLS_CERT,
-      CONSOLE_TLS_KEY: process.env.CONSOLE_TLS_KEY,
-      CONSOLE_LOOPBACK_ONLY: "1",
-      MAKAMUJO_IPC_PATH: ipcPath,
+  server = spawn(
+    bunExecutable,
+    ["index.ts", "--port", String(port)],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: "production",
+        CONSOLE_TLS_CERT: process.env.CONSOLE_TLS_CERT,
+        CONSOLE_TLS_KEY: process.env.CONSOLE_TLS_KEY,
+        CONSOLE_LOOPBACK_ONLY: '1',
+        MAKAMUJO_IPC_PATH: ipcPath,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
     },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  );
 
   // Capture server stdout/stderr to files for debugging when tests fail.
   try {
@@ -189,10 +185,10 @@ test.beforeAll(async ({ request }) => {
 
   const { consoleUrl, serverUrl } = await waitForServerReady();
   if (consoleUrl) {
-    CONSOLE_BASE_URL = consoleUrl.replace(/\/$/, "");
+    CONSOLE_BASE_URL = consoleUrl.replace(/\/$/, '');
   }
   if (serverUrl) {
-    BROADCASTING_BASE_URL = serverUrl.replace(/\/$/, "");
+    BROADCASTING_BASE_URL = serverUrl.replace(/\/$/, '');
   }
 
   // Verify the console base URL is responding before continuing.
@@ -201,9 +197,7 @@ test.beforeAll(async ({ request }) => {
   let lastErr: Error | null = null;
   while (Date.now() < deadline) {
     try {
-      const health = await request.get(
-        `${CONSOLE_BASE_URL}/console/robots.txt`,
-      );
+      const health = await request.get(`${CONSOLE_BASE_URL}/console/robots.txt`);
       if (health.ok()) {
         lastErr = null;
         break;
@@ -215,10 +209,9 @@ test.beforeAll(async ({ request }) => {
     await new Promise((r) => setTimeout(r, 250));
   }
   if (lastErr) {
-    throw new Error(
-      `Console server not responding at ${CONSOLE_BASE_URL}: ${String(lastErr)}`,
-    );
+    throw new Error(`Console server not responding at ${CONSOLE_BASE_URL}: ${String(lastErr)}`);
   }
+
 });
 
 test.afterAll(() => {
@@ -226,12 +219,8 @@ test.afterAll(() => {
     server.kill();
   }
   server = null;
-  try {
-    outStream?.end();
-  } catch {}
-  try {
-    errStream?.end();
-  } catch {}
+  try { outStream?.end(); } catch {}
+  try { errStream?.end(); } catch {}
 });
 
 test.describe("console", () => {
@@ -242,9 +231,10 @@ test.describe("console", () => {
     const mockResponse = options?.withoutCurrentGame
       ? { ...cloneAgentStateResponseMockFixture(), currentGame: null }
       : cloneAgentStateResponseMockFixture();
-    await page.addInitScript(installDeterministicEventSource, {
-      responseText: JSON.stringify(mockResponse),
-    });
+    await page.addInitScript(
+      installDeterministicEventSource,
+      { responseText: JSON.stringify(mockResponse) },
+    );
   };
 
   test("serves /console/robots.txt", async ({ request }) => {
@@ -266,10 +256,7 @@ test.describe("console", () => {
     const viewport = { width: 1280, height: 1000 };
     await page.setViewportSize(viewport);
     await installAgentStateMockStream(page);
-    await page.goto(`${CONSOLE_BASE_URL}/console/`, {
-      waitUntil: "domcontentloaded",
-      timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS,
-    });
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
     expect(await page.title()).toContain(EXPECTED_CONSOLE_TITLE);
     const rootElement = await page.$("#root");
     expect(rootElement).not.toBeNull();
@@ -280,7 +267,7 @@ test.describe("console", () => {
     const emptyLocator = page.getByTestId("agent-status-empty");
     await detailsLocator.waitFor({ timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
 
-    if ((await emptyLocator.count()) > 0) {
+    if (await emptyLocator.count() > 0) {
       try {
         await detailsLocator.waitFor({ timeout: 5_000 });
       } catch {
@@ -291,44 +278,28 @@ test.describe("console", () => {
 
     await expect(detailsLocator).not.toContainText("話せる状態");
     await expect(detailsLocator).toContainText("4-gram");
-    await expect(
-      page.getByRole("heading", { level: 3, name: "配信状況" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { level: 3, name: "マルコフ連鎖モデル" }),
-    ).toBeVisible();
-    const gameHeading = page.getByRole("heading", {
-      level: 3,
-      name: "『org.dashnet.orteil/cookieclicker』プレイ中",
-    });
+    await expect(page.getByRole("heading", { level: 3, name: "配信状況" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 3, name: "マルコフ連鎖モデル" })).toBeVisible();
+    const gameHeading = page.getByRole("heading", { level: 3, name: "『org.dashnet.orteil/cookieclicker』プレイ中" });
     await expect(gameHeading).toBeVisible();
     const gameHeadingBoundingBox = await gameHeading.boundingBox();
     expect(gameHeadingBoundingBox).not.toBeNull();
     if (gameHeadingBoundingBox) {
-      expect(
-        gameHeadingBoundingBox.y + gameHeadingBoundingBox.height,
-      ).toBeLessThanOrEqual(viewport.height);
+      expect(gameHeadingBoundingBox.y + gameHeadingBoundingBox.height).toBeLessThanOrEqual(viewport.height);
     }
 
     const agentStatusDetails = page.getByTestId("agent-status-details");
-    const initialAgentStatusDetailsBoundingBox =
-      await agentStatusDetails.boundingBox();
+    const initialAgentStatusDetailsBoundingBox = await agentStatusDetails.boundingBox();
     expect(initialAgentStatusDetailsBoundingBox).not.toBeNull();
     const initialWidth = initialAgentStatusDetailsBoundingBox?.width ?? 0;
 
     await page.evaluate((veryLongSpeechText) => {
-      const agentStatusDetailsElement = document.querySelector(
-        "[data-testid='agent-status-details']",
-      );
+      const agentStatusDetailsElement = document.querySelector("[data-testid='agent-status-details']");
       if (!(agentStatusDetailsElement instanceof HTMLElement)) {
         throw new Error("agent status details element not found");
       }
-      const speechLabelElement = Array.from(
-        agentStatusDetailsElement.querySelectorAll("dt"),
-      ).find(
-        (definitionTermElement) =>
-          definitionTermElement.textContent?.trim() === "発話内容",
-      );
+      const speechLabelElement = Array.from(agentStatusDetailsElement.querySelectorAll("dt"))
+        .find((definitionTermElement) => definitionTermElement.textContent?.trim() === "発話内容");
       const speechValueElement = speechLabelElement?.nextElementSibling;
       if (!(speechValueElement instanceof HTMLElement)) {
         throw new Error("speech value element not found");
@@ -336,37 +307,25 @@ test.describe("console", () => {
       speechValueElement.textContent = veryLongSpeechText;
     }, "あ".repeat(8_000));
 
-    const widthAfterLongSpeechBoundingBox =
-      await agentStatusDetails.boundingBox();
+    const widthAfterLongSpeechBoundingBox = await agentStatusDetails.boundingBox();
     expect(widthAfterLongSpeechBoundingBox).not.toBeNull();
     const finalWidth = widthAfterLongSpeechBoundingBox?.width ?? 0;
     expect(finalWidth).toBeCloseTo(initialWidth);
   });
 
-  test("renders a heading containing プレイ中 even when currentGame is missing", async ({
-    page,
-  }) => {
+  test("renders a heading containing プレイ中 even when currentGame is missing", async ({ page }) => {
     await installAgentStateMockStream(page, { withoutCurrentGame: true });
-    await page.goto(`${CONSOLE_BASE_URL}/console/`, {
-      waitUntil: "domcontentloaded",
-      timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS,
-    });
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
     await expect(page.getByRole("heading", { name: /プレイ中/ })).toBeVisible();
   });
 
-  test("connects via SSE and updates on broadcast (non-mock)", async ({
-    page,
-    request,
-  }) => {
+  test("connects via SSE and updates on broadcast (non-mock)", async ({ page, request }) => {
     const probeEventStream = async (url: string) => {
       try {
-        const probe = await fetch(url, {
-          headers: { accept: "text/event-stream" },
-        });
-        try {
-          probe.body?.cancel?.();
-        } catch {}
-      } catch (err) {}
+        const probe = await fetch(url, { headers: { accept: 'text/event-stream' } });
+        try { probe.body?.cancel?.(); } catch {}
+      } catch (err) {
+      }
     };
 
     await probeEventStream(`${BROADCASTING_BASE_URL}/api/ws`);
@@ -378,64 +337,43 @@ test.describe("console", () => {
     try {
       const consoleEnvRes = await fetch(`${CONSOLE_BASE_URL}/console/env`);
       let consoleEnvBody = null;
-      try {
-        consoleEnvBody = await consoleEnvRes.json();
-      } catch {}
-    } catch (err) {}
+      try { consoleEnvBody = await consoleEnvRes.json(); } catch {}
+    } catch (err) {
+    }
 
     // Install a small init script so we can reliably detect when the
     // page's EventSource has opened. This avoids race conditions where
     // the test POST happens before the browser subscribes.
     await page.addInitScript(() => {
-      (() => {
+      (function () {
         const OrigEventSource = (window as any).EventSource;
-        Object.defineProperty(window, "__sseOpen", {
-          value: false,
-          writable: true,
-          configurable: true,
-        });
-        (window as any).EventSource = ((url: string) => {
+        Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
+        (window as any).EventSource = function (url: string) {
           const es = new OrigEventSource(url);
-          try {
-            es.addEventListener("open", () => {
-              (window as any).__sseOpen = true;
-            });
-          } catch {}
+          try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
           return es;
-        }) as any;
-        try {
-          (window as any).EventSource.prototype = OrigEventSource.prototype;
-        } catch {}
+        } as any;
+        try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
       })();
     });
 
-    await page.goto(`${CONSOLE_BASE_URL}/console/`, {
-      waitUntil: "domcontentloaded",
-      timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS,
-    });
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
 
     // Wait for the client to select an SSE URL (either same-origin proxy or
     // a direct broadcasting server URL) so we can inspect which path the
     // browser attempted to connect to.
-    await page.waitForFunction(() => (window as any).__sseUrl !== undefined, {
-      timeout: 5_000,
-    });
+    await page.waitForFunction(() => (window as any).__sseUrl !== undefined, { timeout: 5_000 });
     const sseUrl = await page.evaluate(() => (window as any).__sseUrl ?? null);
-    expect(
-      sseUrl,
-      "page did not select an SSE URL (proxy or direct) before timeout",
-    ).toBeTruthy();
+    expect(sseUrl, 'page did not select an SSE URL (proxy or direct) before timeout').toBeTruthy();
 
     // Wait for the page to establish the SSE connection before sending
     // the broadcast POST to avoid timing-dependent flakiness.
-    await page.waitForFunction(() => (window as any).__sseOpen === true, {
-      timeout: 30_000,
-    });
+    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 30_000 });
 
     const payload: any = cloneAgentStateResponseMockFixture();
     const res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
     });
     expect(res.ok, `broadcast POST failed: ${res.status}`).toBeTruthy();
@@ -445,140 +383,78 @@ test.describe("console", () => {
     await expect(detailsLocator).toContainText("4-gram", { timeout: 10_000 });
   });
 
-  test("reloads when broadcasted meta becomes 公開終了", async ({
-    page,
-    request,
-  }) => {
+  test("reloads when broadcasted meta becomes 公開終了", async ({ page, request }) => {
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
-      Object.defineProperty(window, "__sseOpen", {
-        value: false,
-        writable: true,
-        configurable: true,
-      });
+      Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
       // A per-document session id that changes on every navigation/reload.
-      Object.defineProperty(window, "__sessionId", {
-        value: Math.random(),
-        writable: true,
-        configurable: true,
-      });
-      (window as any).EventSource = ((url: string) => {
+      Object.defineProperty(window, '__sessionId', { value: Math.random(), writable: true, configurable: true });
+      (window as any).EventSource = function (url: string) {
         const es = new OrigEventSource(url);
-        try {
-          es.addEventListener("open", () => {
-            (window as any).__sseOpen = true;
-          });
-        } catch {}
+        try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
         return es;
-      }) as any;
-      try {
-        (window as any).EventSource.prototype = OrigEventSource.prototype;
-      } catch {}
+      } as any;
+      try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
     });
 
-    await page.goto(`${CONSOLE_BASE_URL}/console/`, {
-      waitUntil: "domcontentloaded",
-      timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS,
-    });
-    await page.waitForFunction(() => (window as any).__sseOpen === true, {
-      timeout: 30_000,
-    });
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: 'domcontentloaded', timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 30_000 });
 
     // Post an initial live payload so the client has a prior live state
     const initialPayload: any = cloneAgentStateResponseMockFixture();
     let res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(initialPayload),
     });
     expect(res.ok, `initial broadcast POST failed: ${res.status}`).toBeTruthy();
 
-    const detailsLocator = page.getByTestId("agent-status-details");
+    const detailsLocator = page.getByTestId('agent-status-details');
     await detailsLocator.waitFor({ timeout: 10_000 });
 
     // Now post an ended/offline payload with the same program URL and title '公開終了'
-    const endedPayload = {
-      niconama: {
-        type: "offline",
-        meta: {
-          title: "公開終了",
-          url: initialPayload.niconama.meta.url,
-          start: initialPayload.niconama.meta.start,
-        },
-      },
-    };
+    const endedPayload = { niconama: { type: 'offline', meta: { title: '公開終了', url: initialPayload.niconama.meta.url, start: initialPayload.niconama.meta.start } } };
 
     // Use a per-document session id to robustly detect a reload — the
     // `__sessionId` is re-created on every navigation and changes value.
-    const beforeSessionId = await page.evaluate(
-      () => (window as any).__sessionId ?? null,
-    );
+    const beforeSessionId = await page.evaluate(() => (window as any).__sessionId ?? null);
     res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(endedPayload),
     });
     expect(res.ok, `ended broadcast POST failed: ${res.status}`).toBeTruthy();
 
-    await page.waitForFunction(
-      (id) => (window as any).__sessionId !== id,
-      beforeSessionId,
-      { timeout: 10_000 },
-    );
+    await page.waitForFunction((id) => (window as any).__sessionId !== id, beforeSessionId, { timeout: 10_000 });
 
     // After reload, the console app should still render
-    await expect(page.getByRole("heading", { name: "馬可無序" })).toBeVisible({
-      timeout: 5_000,
-    });
+    await expect(page.getByRole('heading', { name: '馬可無序' })).toBeVisible({ timeout: 5_000 });
   });
 
-  test("displays replyTargetComment in the console after broadcast event", async ({
-    page,
-    request,
-  }) => {
-    await page.route("**/*fonts*", (route) => route.abort());
-    await page.route("**/*fonts.googleapis.com*", (route) => route.abort());
-    await page.route("**/*fonts.gstatic.com*", (route) => route.abort());
+  test("displays replyTargetComment in the console after broadcast event", async ({ page, request }) => {
+    await page.route('**/*fonts*', (route) => route.abort());
+    await page.route('**/*fonts.googleapis.com*', (route) => route.abort());
+    await page.route('**/*fonts.gstatic.com*', (route) => route.abort());
 
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
-      Object.defineProperty(window, "__sseOpen", {
-        value: false,
-        writable: true,
-        configurable: true,
-      });
-      (window as any).EventSource = ((url: string) => {
+      Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
+      (window as any).EventSource = function (url: string) {
         const es = new OrigEventSource(url);
-        try {
-          es.addEventListener("open", () => {
-            (window as any).__sseOpen = true;
-          });
-        } catch {}
+        try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
         return es;
-      }) as any;
-      try {
-        (window as any).EventSource.prototype = OrigEventSource.prototype;
-      } catch {}
+      } as any;
+      try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
     });
 
-    await page.goto(`${CONSOLE_BASE_URL}/console/`, {
-      waitUntil: "domcontentloaded",
-      timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS,
-    });
-    await expect(page.getByRole("heading", { name: "馬可無序" })).toBeVisible();
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: 'domcontentloaded', timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await expect(page.getByRole('heading', { name: '馬可無序' })).toBeVisible();
 
-    await page.waitForFunction(() => (window as any).__sseUrl !== undefined, {
-      timeout: 5_000,
-    });
+    await page.waitForFunction(() => (window as any).__sseUrl !== undefined, { timeout: 5_000 });
     const sseUrl = await page.evaluate(() => (window as any).__sseUrl ?? null);
-    expect(
-      sseUrl,
-      "page did not select an SSE URL before timeout",
-    ).toBeTruthy();
+    expect(sseUrl, 'page did not select an SSE URL before timeout').toBeTruthy();
 
-    await page.waitForFunction(() => (window as any).__sseOpen === true, {
-      timeout: 10_000,
-    });
+    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
 
     const payload: any = cloneAgentStateResponseMockFixture();
     // Attach the replyTargetComment to the first speech history item so
@@ -587,260 +463,147 @@ test.describe("console", () => {
     payload.speechHistory[0] = {
       ...payload.speechHistory[0],
       replyTargetComment: {
-        text: "このコメントに返信します",
-        pickedTopic: "返信",
+        text: 'このコメントに返信します',
+        pickedTopic: '返信',
       },
     };
 
     const broadcastRes = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    expect(
-      broadcastRes.ok,
-      `broadcast POST failed: ${broadcastRes.status}`,
-    ).toBeTruthy();
+    expect(broadcastRes.ok, `broadcast POST failed: ${broadcastRes.status}`).toBeTruthy();
 
-    const detailsLocator = page.getByTestId("agent-status-details");
+    const detailsLocator = page.getByTestId('agent-status-details');
     await detailsLocator.waitFor({ timeout: 10_000 });
-    await expect(detailsLocator).toContainText("このコメントに返信します", {
-      timeout: 10_000,
-    });
-    await expect(detailsLocator).toContainText("返信", { timeout: 10_000 });
+    await expect(detailsLocator).toContainText('このコメントに返信します', { timeout: 10_000 });
+    await expect(detailsLocator).toContainText('返信', { timeout: 10_000 });
   });
 
-  test("shows stream title and link when posted as top-level title/url/start", async ({
-    page,
-    request,
-  }) => {
-    await page.route("**/*fonts*", (route) => route.abort());
-    await page.route("**/*fonts.googleapis.com*", (route) => route.abort());
+  test("shows stream title and link when posted as top-level title/url/start", async ({ page, request }) => {
+    await page.route('**/*fonts*', (route) => route.abort());
+    await page.route('**/*fonts.googleapis.com*', (route) => route.abort());
 
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
-      Object.defineProperty(window, "__sseOpen", {
-        value: false,
-        writable: true,
-        configurable: true,
-      });
-      (window as any).EventSource = ((url: string) => {
+      Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
+      (window as any).EventSource = function (url: string) {
         const es = new OrigEventSource(url);
-        try {
-          es.addEventListener("open", () => {
-            (window as any).__sseOpen = true;
-          });
-        } catch {}
+        try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
         return es;
-      }) as any;
-      try {
-        (window as any).EventSource.prototype = OrigEventSource.prototype;
-      } catch {}
+      } as any;
+      try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
     });
 
-    await page.goto(`${CONSOLE_BASE_URL}/console/`, {
-      waitUntil: "domcontentloaded",
-      timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS,
-    });
-    await page.waitForFunction(() => (window as any).__sseUrl !== undefined, {
-      timeout: 5_000,
-    });
-    await page.waitForFunction(() => (window as any).__sseOpen === true, {
-      timeout: 10_000,
-    });
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: 'domcontentloaded', timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await page.waitForFunction(() => (window as any).__sseUrl !== undefined, { timeout: 5_000 });
+    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
 
     // Fetch metadata from the actual NicoNico program page and post as
     // top-level title/url/start to ensure normalization works end-to-end.
-    const client = createNiconamaCommentClient(
-      { watchUrl: ACTUAL_PROGRAM_WATCH_URL },
-      {
-        onComments: () => {},
-        onMeta: () => {},
-        onError: (err) => {
-          console.error("niconama client error", err);
-        },
-      },
-    );
+    const client = createNiconamaCommentClient({ watchUrl: ACTUAL_PROGRAM_WATCH_URL }, {
+      onComments: () => {},
+      onMeta: () => {},
+      onError: (err) => { console.error('niconama client error', err); },
+    });
     const embedded = await client.fetchEmbeddedData();
     expect(embedded).toBeTruthy();
 
-    const extractedTitle =
-      (embedded as any)?.program?.title ??
-      (embedded as any)?.site?.program?.title ??
-      (embedded as any)?.title ??
-      "馬可無序";
-    const extractedUrl =
-      (embedded as any)?.program?.watchPageUrl ??
-      (embedded as any)?.watchPageUrl ??
-      ACTUAL_PROGRAM_WATCH_URL;
-    let extractedStart =
-      (embedded as any)?.program?.startTime ??
-      (embedded as any)?.program?.start ??
-      (embedded as any)?.site?.state?.relive?.startTime;
-    if (
-      typeof extractedStart !== "number" ||
-      !Number.isFinite(extractedStart) ||
-      extractedStart <= 0
-    ) {
+    const extractedTitle = (embedded as any)?.program?.title ?? (embedded as any)?.site?.program?.title ?? (embedded as any)?.title ?? '馬可無序';
+    const extractedUrl = (embedded as any)?.program?.watchPageUrl ?? (embedded as any)?.watchPageUrl ?? ACTUAL_PROGRAM_WATCH_URL;
+    let extractedStart = (embedded as any)?.program?.startTime ?? (embedded as any)?.program?.start ?? (embedded as any)?.site?.state?.relive?.startTime;
+    if (typeof extractedStart !== 'number' || !Number.isFinite(extractedStart) || extractedStart <= 0) {
       extractedStart = Math.floor(Date.now() / 1000);
     }
 
-    const payload = {
-      title: extractedTitle,
-      url: extractedUrl,
-      start: extractedStart,
-    };
+    const payload = { title: extractedTitle, url: extractedUrl, start: extractedStart };
 
     const broadcastRes = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    expect(
-      broadcastRes.ok,
-      `broadcast POST failed: ${broadcastRes.status}`,
-    ).toBeTruthy();
+    expect(broadcastRes.ok, `broadcast POST failed: ${broadcastRes.status}`).toBeTruthy();
 
-    const streamTitleLocator = page.getByTestId("agent-status-stream-title");
+    const streamTitleLocator = page.getByTestId('agent-status-stream-title');
     await streamTitleLocator.waitFor({ timeout: 10_000 });
     const titleText = await streamTitleLocator.textContent();
     // The live program title on the external site can change unexpectedly;
     // ensure we have a non-empty displayed title and that the link matches.
     expect(titleText && titleText.length > 0).toBeTruthy();
 
-    const href = await streamTitleLocator.getAttribute("href");
+    const href = await streamTitleLocator.getAttribute('href');
     expect(href).toBe(extractedUrl);
 
-    const startTimeLocator = page.getByTestId("agent-status-start-time");
+    const startTimeLocator = page.getByTestId('agent-status-start-time');
     await startTimeLocator.waitFor({ timeout: 10_000 });
     const startText = await startTimeLocator.textContent();
-    expect(startText).toContain("開始");
+    expect(startText).toContain('開始');
   });
 
-  test("promotes niconama.title into niconama.meta when meta is missing", async ({
-    page,
-    request,
-  }) => {
-    await page.route("**/*fonts*", (route) => route.abort());
-    await page.route("**/*fonts.googleapis.com*", (route) => route.abort());
+  test("promotes niconama.title into niconama.meta when meta is missing", async ({ page, request }) => {
+    await page.route('**/*fonts*', (route) => route.abort());
+    await page.route('**/*fonts.googleapis.com*', (route) => route.abort());
 
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
-      Object.defineProperty(window, "__sseOpen", {
-        value: false,
-        writable: true,
-        configurable: true,
-      });
-      (window as any).EventSource = ((url: string) => {
+      Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
+      (window as any).EventSource = function (url: string) {
         const es = new OrigEventSource(url);
-        try {
-          es.addEventListener("open", () => {
-            (window as any).__sseOpen = true;
-          });
-        } catch {}
+        try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
         return es;
-      }) as any;
-      try {
-        (window as any).EventSource.prototype = OrigEventSource.prototype;
-      } catch {}
+      } as any;
+      try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
     });
 
-    await page.goto(`${CONSOLE_BASE_URL}/console/`, {
-      waitUntil: "domcontentloaded",
-      timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS,
-    });
-    await page.waitForFunction(() => (window as any).__sseUrl !== undefined, {
-      timeout: 5_000,
-    });
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: 'domcontentloaded', timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await page.waitForFunction(() => (window as any).__sseUrl !== undefined, { timeout: 5_000 });
     // Allow more time for the SSE connection to establish in slower CI or
     // when the server performs external metadata fetches.
-    await page.waitForFunction(() => (window as any).__sseOpen === true, {
-      timeout: 20_000,
-    });
+    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 20_000 });
 
     // Use actual NicoNico page metadata but post as a `niconama` object lacking
     // `meta` so the server promotes `title` into `niconama.meta`.
-    const client = createNiconamaCommentClient(
-      { watchUrl: ACTUAL_PROGRAM_WATCH_URL },
-      {
-        onComments: () => {},
-        onMeta: () => {},
-        onError: (err) => {
-          console.error("niconama client error", err);
-        },
-      },
-    );
+    const client = createNiconamaCommentClient({ watchUrl: ACTUAL_PROGRAM_WATCH_URL }, {
+      onComments: () => {},
+      onMeta: () => {},
+      onError: (err) => { console.error('niconama client error', err); },
+    });
     const embedded = await client.fetchEmbeddedData();
     expect(embedded).toBeTruthy();
 
-    const extractedTitle =
-      (embedded as any)?.program?.title ??
-      (embedded as any)?.site?.program?.title ??
-      (embedded as any)?.title ??
-      "NicoLegacyTitle";
-    const payload = { niconama: { type: "live", title: extractedTitle } };
+    const extractedTitle = (embedded as any)?.program?.title ?? (embedded as any)?.site?.program?.title ?? (embedded as any)?.title ?? 'NicoLegacyTitle';
+    const payload = { niconama: { type: 'live', title: extractedTitle } };
     const broadcastRes = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    expect(
-      broadcastRes.ok,
-      `broadcast POST failed: ${broadcastRes.status}`,
-    ).toBeTruthy();
+    expect(broadcastRes.ok, `broadcast POST failed: ${broadcastRes.status}`).toBeTruthy();
 
-    const streamTitleLocator = page.getByTestId("agent-status-stream-title");
+    const streamTitleLocator = page.getByTestId('agent-status-stream-title');
     await streamTitleLocator.waitFor({ timeout: 10_000 });
     const titleText = await streamTitleLocator.textContent();
     expect(titleText).toContain(extractedTitle);
   });
 
-  test("keeps SSE connection open while the console browser tab is open", async ({
-    page,
-    request,
-  }) => {
+  test("keeps SSE connection open while the console browser tab is open", async ({ page, request }) => {
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
-      Object.defineProperty(window, "__sseOpen", {
-        value: false,
-        writable: true,
-        configurable: true,
-      });
-      Object.defineProperty(window, "__sseError", {
-        value: false,
-        writable: true,
-        configurable: true,
-      });
-      Object.defineProperty(window, "__sseMessageCount", {
-        value: 0,
-        writable: true,
-        configurable: true,
-      });
-      const WrappedEventSource = ((url: string) => {
+      Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
+      Object.defineProperty(window, '__sseError', { value: false, writable: true, configurable: true });
+      Object.defineProperty(window, '__sseMessageCount', { value: 0, writable: true, configurable: true });
+      const WrappedEventSource = function (url: string) {
         const es = new OrigEventSource(url);
-        try {
-          es.addEventListener("open", () => {
-            (window as any).__sseOpen = true;
-          });
-        } catch {}
-        try {
-          es.addEventListener("message", () => {
-            (window as any).__sseMessageCount += 1;
-          });
-        } catch {}
-        try {
-          es.addEventListener("error", () => {
-            (window as any).__sseError = true;
-          });
-        } catch {}
+        try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
+        try { es.addEventListener('message', () => { (window as any).__sseMessageCount += 1; }); } catch {}
+        try { es.addEventListener('error', () => { (window as any).__sseError = true; }); } catch {}
         return es;
-      }) as any;
+      } as any;
       try {
         for (const key of Object.getOwnPropertyNames(OrigEventSource)) {
-          const descriptor = Object.getOwnPropertyDescriptor(
-            OrigEventSource,
-            key,
-          );
+          const descriptor = Object.getOwnPropertyDescriptor(OrigEventSource, key);
           if (descriptor) {
             Object.defineProperty(WrappedEventSource, key, descriptor);
           }
@@ -849,32 +612,21 @@ test.describe("console", () => {
       (window as any).EventSource = WrappedEventSource;
     });
 
-    await page.goto(`${CONSOLE_BASE_URL}/console/`, {
-      waitUntil: "domcontentloaded",
-      timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS,
-    });
-    await page.waitForFunction(() => (window as any).__sseOpen === true, {
-      timeout: 10_000,
-    });
-    await page.waitForFunction(() => (window as any).__sseMessageCount > 0, {
-      timeout: 10_000,
-    });
+    await page.goto(`${CONSOLE_BASE_URL}/console/`, { waitUntil: 'domcontentloaded', timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS });
+    await page.waitForFunction(() => (window as any).__sseOpen === true, { timeout: 10_000 });
+    await page.waitForFunction(() => (window as any).__sseMessageCount > 0, { timeout: 10_000 });
 
     // Keep the console tab open long enough for idle SSE/keepalive behavior
     // to be observed, then verify the connection is still alive.
-    const messagesBeforeIdle = await page.evaluate(
-      () => (window as any).__sseMessageCount ?? 0,
-    );
+    const messagesBeforeIdle = await page.evaluate(() => (window as any).__sseMessageCount ?? 0);
     await page.waitForTimeout(6_000);
     expect(await page.evaluate(() => (window as any).__sseError)).toBeFalsy();
-    expect(
-      await page.evaluate(() => (window as any).__sseMessageCount ?? 0),
-    ).toBeGreaterThanOrEqual(messagesBeforeIdle);
+    expect(await page.evaluate(() => (window as any).__sseMessageCount ?? 0)).toBeGreaterThanOrEqual(messagesBeforeIdle);
 
     const payload: any = cloneAgentStateResponseMockFixture();
     const res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
     });
     expect(res.ok, `broadcast POST failed: ${res.status}`).toBeTruthy();
@@ -882,40 +634,28 @@ test.describe("console", () => {
     const detailsLocator = page.getByTestId("agent-status-details");
     await detailsLocator.waitFor({ timeout: 10_000 });
     await expect(detailsLocator).toContainText("4-gram", { timeout: 10_000 });
-    await expect(
-      page.waitForFunction(
-        (count) => (window as any).__sseMessageCount > count,
-        messagesBeforeIdle,
-        { timeout: 10_000 },
-      ),
-    ).resolves.toBeTruthy();
+    await expect(page.waitForFunction(
+      (count) => (window as any).__sseMessageCount > count,
+      messagesBeforeIdle,
+      { timeout: 10_000 },
+    )).resolves.toBeTruthy();
     expect(await page.evaluate(() => (window as any).__sseError)).toBeFalsy();
   });
 
-  test("proxy returns SSE content-type at /console/api/ws", async ({
-    request,
-  }) => {
+  test("proxy returns SSE content-type at /console/api/ws", async ({ request }) => {
     // Use HEAD to inspect headers without opening a persistent SSE stream
     // which can cause the test runner's HTTP client to abort on chunked
     // streaming responses.
-    const res = await request.head(`${CONSOLE_BASE_URL}/console/api/ws`, {
-      headers: { accept: "text/event-stream" },
-    });
-    expect(
-      res.ok(),
-      `HEAD /console/api/ws failed: ${res.status()}`,
-    ).toBeTruthy();
-    const ct = res.headers()["content-type"] || "";
-    expect(ct).toContain("text/event-stream");
+    const res = await request.head(`${CONSOLE_BASE_URL}/console/api/ws`, { headers: { accept: 'text/event-stream' } });
+    expect(res.ok(), `HEAD /console/api/ws failed: ${res.status()}`).toBeTruthy();
+    const ct = res.headers()['content-type'] || '';
+    expect(ct).toContain('text/event-stream');
   });
 
-  test("proxy forwards WebSocket upgrades to broadcasting server", async ({
-    page,
-    request,
-  }) => {
+  test("proxy forwards WebSocket upgrades to broadcasting server", async ({ page, request }) => {
     // Build a ws/wss URL matching the console origin used by the test harness.
     const originUrl = new URL(CONSOLE_BASE_URL);
-    const wsProtocol = originUrl.protocol === "https:" ? "wss:" : "ws:";
+    const wsProtocol = originUrl.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProtocol}//${originUrl.host}/console/api/ws`;
     // Attempt connection to the console proxy first; if it fails, fall back to
     // direct broadcasting server connection using /console/env.
@@ -925,7 +665,7 @@ test.describe("console", () => {
       if (envRes.ok()) {
         const env = await envRes.json();
         if (env?.broadcastingHost && env?.broadcastingPort) {
-          const bWsProtocol = originUrl.protocol === "https:" ? "wss:" : "ws:";
+          const bWsProtocol = originUrl.protocol === 'https:' ? 'wss:' : 'ws:';
           broadcastingWsUrl = `${bWsProtocol}//${env.broadcastingHost}:${env.broadcastingPort}/console/api/ws`;
         }
       }
@@ -934,43 +674,24 @@ test.describe("console", () => {
     let firstMessage: string | null = null;
     try {
       firstMessage = await page.evaluate(
-        async ({
-          proxyUrl,
-          fallbackUrl,
-        }: {
-          proxyUrl: string | null;
-          fallbackUrl: string | null;
-        }) => {
+        async ({ proxyUrl, fallbackUrl }: { proxyUrl: string | null; fallbackUrl: string | null }) => {
           return await new Promise((resolve, reject) => {
             const timeoutMs = 5000;
             function attempt(urlToConnect: string | null) {
               if (!urlToConnect) {
-                return reject(new Error("no url to connect"));
+                return reject(new Error('no url to connect'));
               }
               const ws = new WebSocket(urlToConnect);
-              ws.binaryType = "arraybuffer";
-              const timeout = setTimeout(() => {
-                try {
-                  ws.close();
-                } catch {}
-                reject(new Error("timeout"));
-              }, timeoutMs);
-              ws.onmessage = (ev) => {
-                clearTimeout(timeout);
-                try {
-                  ws.close();
-                } catch {}
-                resolve(ev.data);
-              };
+              ws.binaryType = 'arraybuffer';
+              const timeout = setTimeout(() => { try { ws.close(); } catch {} ; reject(new Error('timeout')); }, timeoutMs);
+              ws.onmessage = (ev) => { clearTimeout(timeout); try { ws.close(); } catch {} ; resolve(ev.data); };
               ws.onerror = () => {
                 clearTimeout(timeout);
-                try {
-                  ws.close();
-                } catch {}
+                try { ws.close(); } catch {}
                 if (urlToConnect === proxyUrl && fallbackUrl) {
                   attempt(fallbackUrl);
                 } else {
-                  reject(new Error("ws error"));
+                  reject(new Error('ws error'));
                 }
               };
             }
@@ -989,7 +710,8 @@ test.describe("console", () => {
           const metaJson = await metaRes.json();
           firstMessage = JSON.stringify(metaJson);
         }
-      } catch (fetchErr) {}
+      } catch (fetchErr) {
+      }
       if (!firstMessage) throw err;
     }
 
@@ -998,10 +720,8 @@ test.describe("console", () => {
     try {
       parsed = JSON.parse(firstMessage as string);
     } catch (err) {
-      throw new Error(
-        `WebSocket first message is not valid JSON: ${String(err)} -- message: ${String(firstMessage)}`,
-      );
+      throw new Error(`WebSocket first message is not valid JSON: ${String(err)} -- message: ${String(firstMessage)}`);
     }
-    expect(parsed).toHaveProperty("niconama");
+    expect(parsed).toHaveProperty('niconama');
   });
 });
