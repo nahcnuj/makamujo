@@ -3,8 +3,8 @@ import { describe, expect, it } from "bun:test";
 import { renderToString } from "hono/jsx/dom/server";
 import { createReplyTargetCommentValueComponent } from "./agentStatusUtils";
 import { createAgentStatusRows } from "./createAgentStatusRows";
-import type { AgentStateResponse, AgentStatusRow } from "./types";
 import { MarkovModelStatusSection } from "./MarkovModelStatusSection";
+import type { AgentStateResponse, AgentStatusRow } from "./types";
 
 describe("createAgentStatusRows", () => {
   it("returns readable status rows when niconama metadata exists", () => {

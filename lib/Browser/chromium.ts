@@ -1,8 +1,8 @@
-import type { Browser } from "automated-gameplay-transmitter";
-import { setTimeout } from "node:timers/promises";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout } from "node:timers/promises";
+import type { Browser } from "automated-gameplay-transmitter";
 import type { ViewportSize } from "playwright";
 import playwright from "playwright";
 import { chromium as $_ } from "playwright-extra";

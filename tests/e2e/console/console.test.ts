@@ -1,7 +1,7 @@
+import { createServer } from "node:net";
 import { expect, test } from "@playwright/test";
 import { spawn } from "child_process";
-import { existsSync, writeFileSync, createWriteStream, mkdirSync } from "fs";
-import { createServer } from "node:net";
+import { createWriteStream, existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
 import { installDeterministicEventSource } from "../../fixtures/installDeterministicEventSource";

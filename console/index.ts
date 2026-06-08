@@ -1,6 +1,6 @@
-import { serve } from "bun";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { serve } from "bun";
 import {
   createDailyRotatingJsonLogger,
   formatUnknownError,

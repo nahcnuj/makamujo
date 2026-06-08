@@ -1,9 +1,9 @@
 import {
   existsSync,
   mkdirSync,
-  statSync,
   mkdtempSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,32 +11,32 @@ import { join } from "node:path";
 import type { AgentComment } from "automated-gameplay-transmitter";
 
 import {
-  DEFAULT_PLAYWRIGHT_USER_DATA_DIR,
   DEFAULT_CHROMIUM_EXECUTABLE_PATH,
+  DEFAULT_PLAYWRIGHT_USER_DATA_DIR,
   launchPersistentContext,
 } from "./Browser/chromium";
 import {
-  ensureUserDataDirExists,
-  normalizeHtmlForUrlExtraction,
-  extractWatchUrlFromHtml,
-  tryParseJson,
   buildNiconamaStreamStateFromStatisticsEvent,
+  ensureUserDataDirExists,
   extractEmbeddedDataFromHtml,
-  hasCommentArrayStructure,
-  parseAgentCommentsFromResponseBody,
+  extractWatchUrlFromHtml,
   filterAgentCommentsWithText,
   getCommentTextFromAgentComment,
+  hasCommentArrayStructure,
+  normalizeHtmlForUrlExtraction,
+  parseAgentCommentsFromResponseBody,
+  tryParseJson,
 } from "./niconamaCommentClient.helpers";
 import {
   addNiconamaPlaywrightInitScript,
   extractBodyTextFromHtml,
+  extractPageComments,
   getBodyTextFromPage,
-  startPlaywrightPagePolling,
-  waitForAnyCommentSelector,
-  tryOpenRenderedCommentPanel,
   pollPageComments,
   scanRenderedFrameForComments,
-  extractPageComments,
+  startPlaywrightPagePolling,
+  tryOpenRenderedCommentPanel,
+  waitForAnyCommentSelector,
 } from "./niconamaCommentClient.playwright";
 
 type NiconamaBrowserPageResponse = {
@@ -3105,16 +3105,16 @@ export const createNiconamaCommentClient = (
 ): NiconamaCommentClient => new NiconamaCommentClient(options, callbacks);
 
 export {
-  ensureUserDataDirExists,
-  normalizeHtmlForUrlExtraction,
-  extractWatchUrlFromHtml,
-  tryParseJson,
   buildNiconamaStreamStateFromStatisticsEvent,
+  DEFAULT_FALLBACK_WATCH_URL,
+  DEFAULT_WATCH_PAGE_BASE_URL,
+  ensureUserDataDirExists,
   extractEmbeddedDataFromHtml,
-  hasCommentArrayStructure,
-  parseAgentCommentsFromResponseBody,
+  extractWatchUrlFromHtml,
   filterAgentCommentsWithText,
   getCommentTextFromAgentComment,
-  DEFAULT_WATCH_PAGE_BASE_URL,
-  DEFAULT_FALLBACK_WATCH_URL,
+  hasCommentArrayStructure,
+  normalizeHtmlForUrlExtraction,
+  parseAgentCommentsFromResponseBody,
+  tryParseJson,
 };

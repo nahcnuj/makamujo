@@ -3,8 +3,7 @@
 // can cause uncaught exceptions on CI (e.g., named-pipe collisions).
 // We'll initialize a fallback agent first and replace it if the import
 // and initialization succeed.
-import { serve } from "bun";
-import { Hono } from "hono";
+
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,21 +12,13 @@ import { fileURLToPath } from "node:url";
 // inconsistently across runtimes; using a classic timer keeps the
 // process alive reliably.
 import { parseArgs } from "node:util";
+import { serve } from "bun";
+import { Hono } from "hono";
 import { startConsoleServer } from "./console/index";
-import * as consoleRoutes from "./routes/console/index";
-import { getResilientProxyControllers } from "./lib/console-proxy";
-import { FallbackTTS, MakaMujo, MarkovChainModel } from "./lib/server";
-import OpenJTalkTTS from "./lib/TTS";
 import type { TTS } from "./lib/Agent";
 import { AllowedIP } from "./lib/allowedIP";
-import * as speechHistoryRoute from "./routes/api/speech-history";
-import type { SpeechHistoryEntry } from "./routes/api/speech-history";
-import { handleCatchAll } from "./src/frontendServer";
-import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
-import {
-  normalizePublishedStreamState,
-  resolveNiconamaFromState,
-} from "./lib/streamState";
+import { getResilientProxyControllers } from "./lib/console-proxy";
+import { installConsoleLogger } from "./lib/consoleLogger";
 import {
   createNiconamaCommentClient,
   filterAgentCommentsWithText,
@@ -35,11 +26,21 @@ import {
   type NiconamaCommentClient,
 } from "./lib/niconamaCommentClient";
 import {
+  coerceToAgentComments,
   countNumberedAgentComments,
   formatAgentCommentEntry,
-  coerceToAgentComments,
 } from "./lib/niconamaCommentClient.helpers";
-import { installConsoleLogger } from "./lib/consoleLogger";
+import { FallbackTTS, MakaMujo, MarkovChainModel } from "./lib/server";
+import {
+  normalizePublishedStreamState,
+  resolveNiconamaFromState,
+} from "./lib/streamState";
+import OpenJTalkTTS from "./lib/TTS";
+import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
+import type { SpeechHistoryEntry } from "./routes/api/speech-history";
+import * as speechHistoryRoute from "./routes/api/speech-history";
+import * as consoleRoutes from "./routes/console/index";
+import { handleCatchAll } from "./src/frontendServer";
 
 const console = installConsoleLogger();
 let server: Bun.Server<unknown> | null = null;
@@ -1239,7 +1240,7 @@ const handleNiconamaComments = (comments: unknown) => {
           meta: { total: { comments: newCount } },
         };
       } else {
-        let meta = (lastPublishedStreamState as any).niconama.meta ?? {};
+        const meta = (lastPublishedStreamState as any).niconama.meta ?? {};
         (lastPublishedStreamState as any).niconama.meta = meta;
         meta.total = meta.total ?? {};
         meta.total.comments = newCount;

@@ -1,13 +1,13 @@
-import { test, expect } from "@playwright/test";
+import { createConnection, createServer, type Socket } from "node:net";
+import { expect, test } from "@playwright/test";
 import { spawn } from "child_process";
 import {
-  existsSync,
-  writeFileSync,
-  unlinkSync,
-  mkdirSync,
   createWriteStream,
+  existsSync,
+  mkdirSync,
+  unlinkSync,
+  writeFileSync,
 } from "fs";
-import { createServer, createConnection, type Socket } from "node:net";
 import { join } from "path";
 
 type ProxyServer = {
