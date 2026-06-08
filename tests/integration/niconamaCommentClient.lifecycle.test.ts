@@ -37,13 +37,13 @@ const createFakePlaywrightContext = () => {
 
 describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
   it("emits embedded-data initial comments and handles websocket messages", async () => {
-    const originalFetch = (globalThis as any).fetch;
-    const originalWebSocket = (globalThis as any).WebSocket;
+    const originalFetch = (globalThis as unknown as Record<string, unknown>).fetch;
+    const originalWebSocket = (globalThis as unknown as Record<string, unknown>).WebSocket;
 
     try {
       const embeddedHtml =
         '<script id="embedded-data" data-props="{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com/ws&quot;,&quot;comments&quot;:[{&quot;comment&quot;:&quot;embedded hello&quot;,&quot;no&quot;:10}]}}"></script>';
-      (globalThis as any).fetch = async () => ({
+      (globalThis as unknown as Record<string, unknown>).fetch = async () => ({
         ok: true,
         text: async () => embeddedHtml,
       });
@@ -84,7 +84,7 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
         }
       }
 
-      (globalThis as any).WebSocket = MockWebSocket;
+      (globalThis as unknown as Record<string, unknown>).WebSocket = MockWebSocket;
 
       const launchPersistentContext = async () => createFakePlaywrightContext();
       const collectedComments: any[] = [];
@@ -125,7 +125,7 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
 
       await new Promise((res) => setTimeout(res, 20));
 
-      expect(collectedMeta.some((m) => m && (m as any).niconama)).toBe(true);
+      expect(collectedMeta.some((m) => m && (m as unknown as Record<string, unknown>).niconama)).toBe(true);
       expect(
         collectedComments.some(
           (c) => (c.data && c.data.comment) === "hello from websocket",
@@ -135,19 +135,19 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
       await client.stop();
       expect(ws.readyState).toBe(MockWebSocket.CLOSED);
     } finally {
-      (globalThis as any).fetch = originalFetch;
-      (globalThis as any).WebSocket = originalWebSocket;
+      (globalThis as unknown as Record<string, unknown>).fetch = originalFetch;
+      (globalThis as unknown as Record<string, unknown>).WebSocket = originalWebSocket;
     }
   });
 
   it("deduplicates comments across embedded-data and websocket frames", async () => {
-    const originalFetch = (globalThis as any).fetch;
-    const originalWebSocket = (globalThis as any).WebSocket;
+    const originalFetch = (globalThis as unknown as Record<string, unknown>).fetch;
+    const originalWebSocket = (globalThis as unknown as Record<string, unknown>).WebSocket;
 
     try {
       const embeddedHtml =
         '<script id="embedded-data" data-props="{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com/ws&quot;,&quot;comments&quot;:[{&quot;comment&quot;:&quot;dup comment&quot;,&quot;no&quot;:5}]}}"></script>';
-      (globalThis as any).fetch = async () => ({
+      (globalThis as unknown as Record<string, unknown>).fetch = async () => ({
         ok: true,
         text: async () => embeddedHtml,
       });
@@ -178,7 +178,7 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
           if (this.onmessage) this.onmessage({ data: JSON.stringify(obj) });
         }
       }
-      (globalThis as any).WebSocket = MockWebSocket2;
+      (globalThis as unknown as Record<string, unknown>).WebSocket = MockWebSocket2;
 
       const launchPersistentContext = async () => createFakePlaywrightContext();
       const collectedComments: any[] = [];
@@ -213,23 +213,23 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
 
       await client.stop();
     } finally {
-      (globalThis as any).fetch = originalFetch;
-      (globalThis as any).WebSocket = originalWebSocket;
+      (globalThis as unknown as Record<string, unknown>).fetch = originalFetch;
+      (globalThis as unknown as Record<string, unknown>).WebSocket = originalWebSocket;
     }
   });
 
   it("skips direct websocket when runtime WebSocket support is unavailable", async () => {
-    const originalFetch = (globalThis as any).fetch;
-    const originalWebSocket = (globalThis as any).WebSocket;
+    const originalFetch = (globalThis as unknown as Record<string, unknown>).fetch;
+    const originalWebSocket = (globalThis as unknown as Record<string, unknown>).WebSocket;
 
     try {
       const embeddedHtml =
         '<script id="embedded-data" data-props="{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com/ws&quot;,&quot;comments&quot;:[{&quot;comment&quot;:&quot;embedded hello&quot;,&quot;no&quot;:10}]}}"></script>';
-      (globalThis as any).fetch = async () => ({
+      (globalThis as unknown as Record<string, unknown>).fetch = async () => ({
         ok: true,
         text: async () => embeddedHtml,
       });
-      delete (globalThis as any).WebSocket;
+      delete (globalThis as unknown as Record<string, unknown>).WebSocket;
 
       const launchPersistentContext = async () => createFakePlaywrightContext();
       const collectedComments: any[] = [];
@@ -258,23 +258,23 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
 
       await client.stop();
     } finally {
-      (globalThis as any).fetch = originalFetch;
-      (globalThis as any).WebSocket = originalWebSocket;
+      (globalThis as unknown as Record<string, unknown>).fetch = originalFetch;
+      (globalThis as unknown as Record<string, unknown>).WebSocket = originalWebSocket;
     }
   });
 
   it("starts Playwright comment watcher and emits page comments from websocket frames and responses", async () => {
-    const originalFetch = (globalThis as any).fetch;
-    const originalWebSocket = (globalThis as any).WebSocket;
+    const originalFetch = (globalThis as unknown as Record<string, unknown>).fetch;
+    const originalWebSocket = (globalThis as unknown as Record<string, unknown>).WebSocket;
 
     try {
       const embeddedHtml =
         '<script id="embedded-data" data-props="{&quot;relive&quot;:{&quot;webSocketUrl&quot;:&quot;wss://example.com/ws&quot;}}"></script>';
-      (globalThis as any).fetch = async () => ({
+      (globalThis as unknown as Record<string, unknown>).fetch = async () => ({
         ok: true,
         text: async () => embeddedHtml,
       });
-      delete (globalThis as any).WebSocket;
+      delete (globalThis as unknown as Record<string, unknown>).WebSocket;
 
       let websocketCallback: any = null;
       let responseCallback: any = null;
@@ -394,8 +394,8 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
       await client.stop();
       expect(playwrightClosed).toBe(true);
     } finally {
-      (globalThis as any).fetch = originalFetch;
-      (globalThis as any).WebSocket = originalWebSocket;
+      (globalThis as unknown as Record<string, unknown>).fetch = originalFetch;
+      (globalThis as unknown as Record<string, unknown>).WebSocket = originalWebSocket;
     }
   });
 });
