@@ -1,35 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd "$(git rev-parse --show-toplevel)"
-
-echo "Running Biome formatter for staged files..."
-
-# Find staged files that match common text/code extensions
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|jsx|ts|tsx|json|css|scss|html|md|toml)$' || true)
-
-if [ -z "$STAGED_FILES" ]; then
-  echo "No staged files to format"
-  exit 0
-fi
-
-# Prefer bunx, then npx, then local node_modules binary
-if command -v bunx >/dev/null 2>&1; then
-  BIOME_CMD="bunx biome"
-elif command -v npx >/dev/null 2>&1; then
-  BIOME_CMD="npx biome"
-elif [ -x "./node_modules/.bin/biome" ]; then
-  BIOME_CMD="./node_modules/.bin/biome"
-else
-  echo "biome not found. Install it with 'bun add -d biome' or 'npm i -D biome'" >&2
-  exit 1
-fi
-
-echo "$STAGED_FILES" | while IFS= read -r file; do
-  # Format each file; continue on errors to avoid blocking for formatter issues
-  $BIOME_CMD format "$file" || true
-  git add -- "$file"
-done
-
-echo "biome format complete"
-exit 0
+bun run format
