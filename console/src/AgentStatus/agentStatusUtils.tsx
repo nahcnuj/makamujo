@@ -1,8 +1,5 @@
 import type { Child, CSSProperties } from "hono/jsx";
-import {
-  getAgentCommentNumber,
-  getCommentTextFromAgentComment,
-} from "../../../lib/niconamaCommentClient.helpers";
+import { getAgentCommentNumber } from "../../../lib/niconamaCommentClient.helpers";
 import type { AgentStateResponse } from "./types";
 
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
@@ -99,14 +96,15 @@ export const normalizeSpeechText = (
   }
 
   if (speech && typeof speech === "object") {
+    const obj = speech as Record<string, unknown>;
     const textValue =
-      typeof (speech as any).text === "string"
-        ? (speech as any).text
-        : typeof (speech as any).speech === "string"
-          ? (speech as any).speech
-          : typeof (speech as any).speech === "object"
-            ? typeof (speech as any).speech.text === "string"
-              ? (speech as any).speech.text
+      typeof obj.text === "string"
+        ? obj.text
+        : typeof obj.speech === "string"
+          ? obj.speech
+          : typeof obj.speech === "object" && obj.speech !== null
+            ? typeof (obj.speech as Record<string, unknown>).text === "string"
+              ? (obj.speech as Record<string, unknown>).text
               : undefined
             : undefined;
     return typeof textValue === "string"
@@ -161,13 +159,13 @@ export const createReplyTargetCommentValueComponent = (
         {commentNodes.map((part, index) =>
           index % 2 === 1 ? (
             <span
-              key={`highlighted-topic-${index}`}
+              key={`highlighted-topic-${part}`}
               className="rounded bg-emerald-300/30 px-1 font-semibold text-emerald-100"
             >
               {part}
             </span>
           ) : (
-            <span key={`comment-part-${index}`}>{part}</span>
+            <span key={`comment-part-${part}`}>{part}</span>
           ),
         )}
       </p>
@@ -203,12 +201,15 @@ export const createRecentCommentsValueComponent = (
 
   return (
     <div className="space-y-2">
-      {commentsToRender.map((comment, index) => {
+      {commentsToRender.map((comment) => {
         const entry = formatAgentCommentEntry(comment) ?? "-";
+        const commentData = comment as Record<string, unknown>;
+        const commentNo = ((commentData?.data as Record<string, unknown>)?.no ??
+          "") as string | number;
 
         return (
           <p
-            key={`recent-comment-${index}`}
+            key={`recent-comment-${commentNo}`}
             className="break-words whitespace-pre-wrap rounded-md border border-emerald-300/30 bg-emerald-950/30 px-3 py-2 text-sm"
           >
             {createRecentCommentEntryComponent(entry)}
@@ -267,7 +268,7 @@ export const createSpeechHistoryDisplayItems = (
       return accumulatedItems;
     }
 
-    const traceNodes = (speechHistoryItem as any).nodes;
+    const traceNodes = speechHistoryItem.nodes;
     const hasTrace = Array.isArray(traceNodes) && traceNodes.length > 0;
     const hasValidNGram =
       speechHistoryItem.nGram !== undefined &&
@@ -351,17 +352,17 @@ export const createSpeechHistoryValueComponent = (
           <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-2">
             <div className="flex flex-wrap gap-1">
               {speechHistoryItem.nodes && Array.isArray(speechHistoryItem.nodes)
-                ? speechHistoryItem.nodes.map((word, wi) => (
+                ? speechHistoryItem.nodes.map((word) => (
                     <span
-                      key={`${speechHistoryItem.id}-node-${wi}`}
+                      key={`${speechHistoryItem.id}-node-${word}`}
                       className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
                     >
                       {word}
                     </span>
                   ))
-                : speechHistoryItem.speechText.split(/\s+/).map((word, wi) => (
+                : speechHistoryItem.speechText.split(/\s+/).map((word) => (
                     <span
-                      key={`${speechHistoryItem.id}-word-${wi}`}
+                      key={`${speechHistoryItem.id}-word-${word}`}
                       className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
                     >
                       {word}

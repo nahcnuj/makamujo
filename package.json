@@ -26,8 +26,8 @@
     "generate-ogp": "bun run scripts/generate-ogp.ts",
     "screenshot:console-agent-status": "bun run scripts/capture-console-agent-status.ts",
     "print-comments": "bun run scripts/print-niconama-comment-bodies.ts",
-    "format": "timeout 60s biome check --write .",
-    "lint": "timeout 60s biome lint ."
+    "format": "timeout 600s biome check --write .",
+    "lint": "timeout 60s biome check ."
   },
   "dependencies": {
     "@playwright/browser-chromium": "^1.60.0",

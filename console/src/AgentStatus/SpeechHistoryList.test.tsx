@@ -9,8 +9,8 @@ let dom: JSDOM;
 
 beforeAll(() => {
   dom = new JSDOM("<!doctype html><html><body></body></html>");
-  globalThis.window = dom.window as any;
-  globalThis.document = dom.window.document as any;
+  globalThis.window = dom.window as unknown as typeof window;
+  globalThis.document = dom.window.document as unknown as typeof document;
   globalThis.requestAnimationFrame = (callback: FrameRequestCallback) =>
     setTimeout(callback, 0);
   globalThis.cancelAnimationFrame = (handle: number) => clearTimeout(handle);
@@ -18,8 +18,8 @@ beforeAll(() => {
 
 afterAll(() => {
   dom.window.close();
-  delete (globalThis as any).window;
-  delete (globalThis as any).document;
+  delete (globalThis as unknown as Record<string, unknown>).window;
+  delete (globalThis as unknown as Record<string, unknown>).document;
 });
 
 const SAMPLE_ITEMS = [
