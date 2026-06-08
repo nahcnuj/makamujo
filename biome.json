@@ -28,5 +28,17 @@
   },
   "files": {
     "includes": ["**", "!docs/index.html", "!var"]
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
+        }
+      }
+    }
+  ]
 }

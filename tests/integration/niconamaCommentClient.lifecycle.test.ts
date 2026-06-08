@@ -50,8 +50,10 @@ const createFakePlaywrightContext = () => {
 
 describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
   it("emits embedded-data initial comments and handles websocket messages", async () => {
-    const originalFetch = (globalThis as unknown as Record<string, unknown>).fetch;
-    const originalWebSocket = (globalThis as unknown as Record<string, unknown>).WebSocket;
+    const originalFetch = (globalThis as unknown as Record<string, unknown>)
+      .fetch;
+    const originalWebSocket = (globalThis as unknown as Record<string, unknown>)
+      .WebSocket;
 
     try {
       const embeddedHtml =
@@ -97,7 +99,8 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
         }
       }
 
-      (globalThis as unknown as Record<string, unknown>).WebSocket = MockWebSocket;
+      (globalThis as unknown as Record<string, unknown>).WebSocket =
+        MockWebSocket;
 
       const launchPersistentContext = async () => createFakePlaywrightContext();
       const collectedComments: AgentComment[] = [];
@@ -122,7 +125,9 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
       await new Promise((res) => setTimeout(res, 20));
 
       expect(collectedComments.length).toBeGreaterThanOrEqual(1);
-      expect((collectedComments[0] as AgentComment).data.comment).toBe("embedded hello");
+      expect((collectedComments[0] as AgentComment).data.comment).toBe(
+        "embedded hello",
+      );
 
       const ws = sockets[0] as unknown as IMockWebSocket;
       expect(ws).toBeTruthy();
@@ -138,7 +143,9 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
 
       await new Promise((res) => setTimeout(res, 20));
 
-      expect(collectedMeta.some((m) => m && (m as Record<string, unknown>).niconama)).toBe(true);
+      expect(
+        collectedMeta.some((m) => m && (m as Record<string, unknown>).niconama),
+      ).toBe(true);
       expect(
         collectedComments.some(
           (c) => c.data?.comment === "hello from websocket",
@@ -146,16 +153,21 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
       ).toBe(true);
 
       await client.stop();
-      expect((ws as unknown as IMockWebSocket).readyState).toBe(MockWebSocket.CLOSED);
+      expect((ws as unknown as IMockWebSocket).readyState).toBe(
+        MockWebSocket.CLOSED,
+      );
     } finally {
       (globalThis as unknown as Record<string, unknown>).fetch = originalFetch;
-      (globalThis as unknown as Record<string, unknown>).WebSocket = originalWebSocket;
+      (globalThis as unknown as Record<string, unknown>).WebSocket =
+        originalWebSocket;
     }
   });
 
   it("deduplicates comments across embedded-data and websocket frames", async () => {
-    const originalFetch = (globalThis as unknown as Record<string, unknown>).fetch;
-    const originalWebSocket = (globalThis as unknown as Record<string, unknown>).WebSocket;
+    const originalFetch = (globalThis as unknown as Record<string, unknown>)
+      .fetch;
+    const originalWebSocket = (globalThis as unknown as Record<string, unknown>)
+      .WebSocket;
 
     try {
       const embeddedHtml =
@@ -194,7 +206,8 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
           if (this.onmessage) this.onmessage({ data: JSON.stringify(obj) });
         }
       }
-      (globalThis as unknown as Record<string, unknown>).WebSocket = MockWebSocket2;
+      (globalThis as unknown as Record<string, unknown>).WebSocket =
+        MockWebSocket2;
 
       const launchPersistentContext = async () => createFakePlaywrightContext();
       const collectedComments: unknown[] = [];
