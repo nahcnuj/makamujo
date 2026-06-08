@@ -38,7 +38,8 @@ export const AgentStatus = () => {
     (async () => {
       const sseUrl = "/console/api/ws";
       try {
-        (window as any).__sseUrl = sseUrl;
+        const w = window as unknown as Record<string, unknown>;
+        w.__sseUrl = sseUrl;
       } catch {}
       try {
         es = new EventSource(sseUrl);
