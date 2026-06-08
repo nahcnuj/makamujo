@@ -1,6 +1,4 @@
 import { createAgentStatusRows } from "./createAgentStatusRows";
-import { LIVE_DELIVERY_SECTION_TITLE } from "./LiveDeliveryStatusSection";
-import { MARKOV_MODEL_SECTION_TITLE } from "./MarkovModelStatusSection";
 import type { AgentStateResponse, AgentStatusSection } from "./types";
 
 const LIVE_DELIVERY_ROW_LABELS = [
