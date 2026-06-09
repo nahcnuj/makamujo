@@ -39,8 +39,13 @@
         "lib/Agent/index.ts",
         "lib/Agent/games/org.dashnet.orteil/cookieclicker/solver.ts",
         "lib/console-proxy.ts",
+        "lib/niconamaCommentClient.ts",
         "lib/niconamaCommentClient.helpers.ts",
-        "lib/streamState.ts"
+        "lib/niconamaCommentClient.playwright.ts",
+        "lib/streamState.ts",
+        "routes/index.ts",
+        "routes/console/index.ts",
+        "scripts/*.ts"
       ],
       "linter": {
         "rules": {
@@ -49,6 +54,9 @@
           },
           "style": {
             "noNonNullAssertion": "off"
+          },
+          "performance": {
+            "noAccumulatingSpread": "off"
           }
         }
       }
