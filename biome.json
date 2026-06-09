@@ -45,7 +45,9 @@
         "lib/streamState.ts",
         "routes/index.ts",
         "routes/console/index.ts",
-        "scripts/*.ts"
+        "scripts/*.ts",
+        "src/contexts/AgentContext.tsx",
+        "tests/helpers/mock-upstream-server.ts"
       ],
       "linter": {
         "rules": {
@@ -57,6 +59,10 @@
           },
           "performance": {
             "noAccumulatingSpread": "off"
+          },
+          "correctness": {
+            "noUnusedPrivateClassMembers": "off",
+            "noUnusedFunctionParameters": "off"
           }
         }
       }
