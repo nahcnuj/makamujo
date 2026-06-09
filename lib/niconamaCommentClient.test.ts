@@ -305,7 +305,7 @@ describe("fetchEmbeddedData fallback behavior", () => {
         text: async () => embeddedHtml,
       });
 
-      const renderedComments: any[] = [];
+      const _renderedComments: any[] = [];
       const launchPersistentContext = async () => {
         const fakePage = {
           goto: async () => ({
@@ -1334,7 +1334,7 @@ describe("NiconamaCommentClient launch failure handling", () => {
         throw new Error("Failed to connect to browser");
       };
 
-      const client = createNiconamaCommentClient(
+      const _client = createNiconamaCommentClient(
         {
           watchUrl: "",
           launchPersistentContext: mockLaunchPersistentContext as any,

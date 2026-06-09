@@ -31,7 +31,7 @@ beforeAll(async () => {
     });
     upstream!.on("exit", (code) => {
       clearTimeout(timeout);
-      reject(new Error("upstream exited " + code));
+      reject(new Error(`upstream exited ${code}`));
     });
   });
 

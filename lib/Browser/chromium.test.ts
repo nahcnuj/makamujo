@@ -1,9 +1,8 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import {
   createClickByElementId,
   createPopupPageHandler,
   createRedirectToHomeHandler,
-  launchPersistentContext,
 } from "./chromium";
 
 const HOME_URL = "https://orteil.dashnet.org/cookieclicker/";
@@ -79,7 +78,7 @@ describe("createRedirectToHomeHandler", () => {
   });
 
   it("should not redirect when already at a sub-path of the home URL", () => {
-    const mainFrame = makeFrameLike(HOME_URL + "?some=param");
+    const mainFrame = makeFrameLike(`${HOME_URL}?some=param`);
     const redirectedUrls: string[] = [];
     const handler = createRedirectToHomeHandler(
       mainFrame,
@@ -189,7 +188,7 @@ describe("createRedirectToHomeHandler", () => {
     handler(mainFrame); // triggers redirect, sets isRedirecting = true
 
     // Simulate the main frame arriving at the home URL
-    const arrivedFrame = makeFrameLike(HOME_URL);
+    const _arrivedFrame = makeFrameLike(HOME_URL);
     // We need the handler to compare frame identity to mainFrame, so use mainFrame with a different url() impl
     const arrivedMainFrame = Object.assign(mainFrame, { url: () => HOME_URL });
     handler(arrivedMainFrame); // should reset isRedirecting = false

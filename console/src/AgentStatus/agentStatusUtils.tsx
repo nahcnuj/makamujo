@@ -1,5 +1,4 @@
 import type { Child, CSSProperties } from "hono/jsx";
-import { getAgentCommentNumber } from "../../../lib/niconamaCommentClient.helpers";
 import type { AgentStateResponse } from "./types";
 
 const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;

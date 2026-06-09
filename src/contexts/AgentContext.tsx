@@ -130,7 +130,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
         window.location.reload();
         return;
       }
-    } catch (e) {
+    } catch (_e) {
       // ignore reload errors in environments where window is unavailable
     }
 

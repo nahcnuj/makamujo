@@ -343,7 +343,7 @@ export class MakaMujo {
         this.#currentProgramUrl
       ) {
         this.#currentProgramLatestCommentNo = commentData.no;
-        if (this.#streamState && this.#streamState.meta) {
+        if (this.#streamState?.meta) {
           const existingTotal = this.#streamState.meta.total ?? {
             listeners: 0,
             gift: 0,

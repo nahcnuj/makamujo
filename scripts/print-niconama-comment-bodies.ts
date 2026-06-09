@@ -64,7 +64,7 @@ async function main() {
       printed.add(key);
       console.log(text);
     }
-  } catch (e) {
+  } catch (_e) {
     // ignore fallback extraction failures
   }
 

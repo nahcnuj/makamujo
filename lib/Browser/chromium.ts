@@ -372,7 +372,7 @@ export const launchPersistentContext = async (
                 tmpDir,
                 options as any,
               );
-            } catch (err2) {
+            } catch (_err2) {
               // Fall through to rethrow original error below.
             }
           }
@@ -412,7 +412,7 @@ export const launchPersistentContext = async (
               tmpDir,
               options as any,
             );
-          } catch (err2) {
+          } catch (_err2) {
             // fall through
           }
         }

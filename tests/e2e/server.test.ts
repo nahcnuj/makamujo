@@ -44,7 +44,7 @@ const waitForServerReady = async () => {
       reject(new Error(`Server process exited early with code ${code}`));
     });
 
-    server.stderr.on("data", (chunk) => {
+    server.stderr.on("data", (_chunk) => {
       // optionally log server stderr for diagnosis
       // console.error("server stderr:", chunk.toString());
     });
@@ -131,7 +131,7 @@ test.describe("server", () => {
       }
       await new Promise((r) => setTimeout(r, 250));
     }
-    expect(res && res.ok(), "frontend HTML should respond OK").toBeTruthy();
+    expect(res?.ok(), "frontend HTML should respond OK").toBeTruthy();
     const html = await res.text();
     expect(html).toContain("<title>馬可無序");
     expect(html).toContain('<div id="root">');

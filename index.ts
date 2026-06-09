@@ -28,7 +28,6 @@ import {
 import {
   coerceToAgentComments,
   countNumberedAgentComments,
-  formatAgentCommentEntry,
 } from "./lib/niconamaCommentClient.helpers";
 import { FallbackTTS, MakaMujo, MarkovChainModel } from "./lib/server";
 import {
@@ -43,7 +42,7 @@ import * as consoleRoutes from "./routes/console/index";
 import { handleCatchAll } from "./src/frontendServer";
 
 const console = installConsoleLogger();
-let server: Bun.Server<unknown> | null = null;
+let _server: Bun.Server<unknown> | null = null;
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 let niconamaCommentClient: NiconamaCommentClient | null = null;
 
@@ -146,7 +145,7 @@ const dataFile = resolve(PROJECT_ROOT, dataFileArg);
 const model = ((file) => {
   try {
     return MarkovChainModel.fromFile(file);
-  } catch (err) {
+  } catch (_err) {
     console.warn("[WARN]", "failed to open the file", file);
     return new MarkovChainModel();
   }
@@ -296,7 +295,7 @@ function sseBroadcast(payload: unknown) {
   for (const c of Array.from(sseClients)) {
     try {
       c.enqueue(chunk);
-    } catch (err) {
+    } catch (_err) {
       try {
         sseClients.delete(c);
       } catch {}
@@ -313,7 +312,7 @@ function sseBroadcast(payload: unknown) {
           continue;
         }
         c.enqueue(chunk);
-      } catch (err) {
+      } catch (_err) {
         try {
           resilient.delete(c);
         } catch {}
@@ -340,7 +339,7 @@ const broadcastToWsClients = (payload: unknown) => {
   for (const ws of Array.from(wsClients)) {
     try {
       ws.send(message);
-    } catch (err) {
+    } catch (_err) {
       try {
         ws.close();
       } catch {}
@@ -390,7 +389,7 @@ let agent: any = {
       } else if (comments) {
         streamer.listen([comments] as any);
       }
-    } catch (e) {
+    } catch (_e) {
       // swallow errors in the fallback to avoid crashing startup
     }
   },
@@ -646,7 +645,7 @@ const handlePublishedStreamState = (payload: unknown): void => {
             : undefined,
         );
       } catch {}
-    } catch (mergeErr) {
+    } catch (_mergeErr) {
       // Fallback to direct assignment if merge fails for unexpected types.
       lastPublishedStreamState = published;
       try {
@@ -706,7 +705,7 @@ const normalizeSpeechText = (speech: unknown): string | undefined => {
 
   return undefined;
 };
-let externalAgentInitialized = false;
+let _externalAgentInitialized = false;
 
 // Attempt to dynamically load the external agent API. This avoids module
 // evaluation side-effects at import time (such as binding to IPC paths)
@@ -718,7 +717,7 @@ let externalAgentInitialized = false;
       try {
         const externalAgent = mod.createAgentApi(streamer);
         agent = externalAgent;
-        externalAgentInitialized = true;
+        _externalAgentInitialized = true;
         console.info("[INFO] external agent API initialized");
       } catch (err) {
         console.warn(
@@ -889,7 +888,7 @@ const MAIN_BUILD_PATH = resolve(process.cwd(), "var/main/build");
 const MAIN_SOURCE_HTML_PATH = resolve(process.cwd(), "src/index.html");
 
 let mainBuildPromise: Promise<void> | null = null;
-let builtMainHtml: string | null = null;
+let _builtMainHtml: string | null = null;
 
 function normalizeMainHtml(source: string): string {
   // Replace the TypeScript entrypoint reference with the compiled output filename.
@@ -935,12 +934,12 @@ async function buildMainFrontend() {
   if (!result.success) {
     throw new Error("Main frontend build failed");
   }
-  builtMainHtml = normalizeMainHtml(
+  _builtMainHtml = normalizeMainHtml(
     readFileSync(MAIN_SOURCE_HTML_PATH, "utf-8"),
   );
 }
 
-function ensureMainFrontendBuilt(): Promise<void> {
+function _ensureMainFrontendBuilt(): Promise<void> {
   if (!mainBuildPromise) {
     mainBuildPromise = (async () => {
       try {
@@ -956,7 +955,7 @@ function ensureMainFrontendBuilt(): Promise<void> {
   return mainBuildPromise;
 }
 
-function getMainFrontendAssetPath(pathname: string): string | null {
+function _getMainFrontendAssetPath(pathname: string): string | null {
   // Only serve files (paths with an extension that aren't root-only)
   if (!pathname.includes(".") || pathname.endsWith("/")) return null;
   const resolved = resolve(MAIN_BUILD_PATH, pathname.slice(1));
@@ -964,12 +963,12 @@ function getMainFrontendAssetPath(pathname: string): string | null {
   // Normalize both paths before comparing to handle any OS-specific separator differences.
   const normalizedBuildPath = resolve(MAIN_BUILD_PATH);
   const normalizedResolved = resolve(resolved);
-  if (!normalizedResolved.startsWith(normalizedBuildPath + "/")) return null;
+  if (!normalizedResolved.startsWith(`${normalizedBuildPath}/`)) return null;
   if (!existsSync(normalizedResolved)) return null;
   return normalizedResolved;
 }
 
-function getMainAssetContentType(filePath: string): string | undefined {
+function _getMainAssetContentType(filePath: string): string | undefined {
   if (filePath.endsWith(".js")) return "application/javascript; charset=utf-8";
   if (filePath.endsWith(".css")) return "text/css; charset=utf-8";
   if (filePath.endsWith(".html")) return "text/html; charset=utf-8";
@@ -1121,7 +1120,7 @@ const serverInstance: any = serve<WsData>({
     },
   },
 });
-server = serverInstance as any;
+_server = serverInstance as any;
 __serverForExit = serverInstance as any;
 const serverUrl = String(serverInstance.url).replace(/\/+$|^\s+|\s+$/g, "");
 console.log(`🚀 Server running at ${serverUrl}`);
@@ -1405,14 +1404,14 @@ function exitHandler(
       if (__serverForExit) {
         __serverForExit.stop(options.exit);
       }
-    } catch (err) {
+    } catch (_err) {
       // ignore errors while attempting to stop the server during cleanup
     }
     try {
       if (__consoleServerForExit) {
         __consoleServerForExit.stop(options.exit);
       }
-    } catch (err) {
+    } catch (_err) {
       // ignore console stop errors
     }
     if (niconamaCommentClient) {

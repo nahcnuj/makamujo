@@ -4,7 +4,7 @@ const appendDebugLog = (...args: unknown[]) => {
   try {
     appendFileSync(
       "/tmp/console-proxy-debug.log",
-      args.map(String).join(" ") + "\n",
+      `${args.map(String).join(" ")}\n`,
     );
   } catch {
     // ignore
@@ -44,7 +44,7 @@ export function streamUpstreamResponse(proxied: Response) {
       },
       cancel() {
         try {
-          upstreamBody.cancel && upstreamBody.cancel();
+          upstreamBody.cancel?.();
         } catch {}
       },
     });
@@ -168,7 +168,7 @@ export function computeProxyUrl(req: Request, proxyBase: string) {
   let parsed: URL;
   try {
     parsed = new URL(req.url);
-  } catch (err) {
+  } catch (_err) {
     const hostForParse =
       req.headers.get("host") ?? `${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
     parsed = new URL(req.url, `http://${hostForParse}`);
@@ -190,7 +190,7 @@ export async function fetchMetaSnapshot(proxyBase: string): Promise<any> {
       const res = await fetch(url);
       const json = await res.json().catch(() => ({}));
       if (json && typeof json === "object" && json.niconama) return json;
-    } catch (err) {
+    } catch (_err) {
       // fall through to polling below
     }
 
@@ -526,7 +526,7 @@ export async function proxyConsoleApiWsRequest(
       } finally {
         clearTimeout(timeout);
       }
-    } catch (headErr) {
+    } catch (_headErr) {
       // HEAD failed or timed out; fall back to a short GET probe and abort quickly
       try {
         const controller = new AbortController();

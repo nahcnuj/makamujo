@@ -74,11 +74,7 @@ export const AgentStatus = () => {
               } catch {}
             }
 
-            if (
-              currentTitle &&
-              currentTitle.includes("公開終了") &&
-              currentUrl
-            ) {
+            if (currentTitle?.includes("公開終了") && currentUrl) {
               try {
                 const endedKey = `program-ended-${currentUrl}`;
                 if (!sessionStorage.getItem(endedKey)) {
@@ -90,7 +86,7 @@ export const AgentStatus = () => {
             }
 
             prevTypeRef.current = currentType;
-          } catch (e) {
+          } catch (_e) {
             // ignore detection errors
           }
 

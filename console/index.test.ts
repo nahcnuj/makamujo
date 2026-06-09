@@ -73,7 +73,7 @@ describe("Console password generation", () => {
         /Console Basic auth password: (.+)/,
       );
       expect(passwordMatch).toBeDefined();
-      if (passwordMatch && passwordMatch[1]) {
+      if (passwordMatch?.[1]) {
         const password = passwordMatch[1];
         expect(password.length).toBe(16);
         // Verify password contains only alphanumeric + special chars (no spaces or invalid chars)
@@ -128,7 +128,7 @@ describe("Console password generation", () => {
         const passwordMatch = (passwordCall[0] as string).match(
           /Console Basic auth password: (.+)/,
         );
-        if (passwordMatch && passwordMatch[1]) {
+        if (passwordMatch?.[1]) {
           passwords.push(passwordMatch[1]);
         }
       }

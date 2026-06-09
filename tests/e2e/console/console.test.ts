@@ -371,7 +371,7 @@ test.describe("console", () => {
         try {
           probe.body?.cancel?.();
         } catch {}
-      } catch (err) {}
+      } catch (_err) {}
     };
 
     await probeEventStream(`${BROADCASTING_BASE_URL}/api/ws`);
@@ -382,11 +382,11 @@ test.describe("console", () => {
     // server (helpful when the proxy is misbehaving in tests).
     try {
       const consoleEnvRes = await fetch(`${CONSOLE_BASE_URL}/console/env`);
-      let consoleEnvBody = null;
+      let _consoleEnvBody = null;
       try {
-        consoleEnvBody = await consoleEnvRes.json();
+        _consoleEnvBody = await consoleEnvRes.json();
       } catch {}
-    } catch (err) {}
+    } catch (_err) {}
 
     // Install a small init script so we can reliably detect when the
     // page's EventSource has opened. This avoids race conditions where
@@ -994,7 +994,7 @@ test.describe("console", () => {
           const metaJson = await metaRes.json();
           firstMessage = JSON.stringify(metaJson);
         }
-      } catch (fetchErr) {}
+      } catch (_fetchErr) {}
       if (!firstMessage) throw err;
     }
 

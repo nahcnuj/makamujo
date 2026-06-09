@@ -31,11 +31,24 @@
   },
   "overrides": [
     {
-      "includes": ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+      "includes": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "index.ts",
+        "lib/Browser/chromium.ts",
+        "lib/Agent/index.ts",
+        "lib/Agent/games/org.dashnet.orteil/cookieclicker/solver.ts",
+        "lib/console-proxy.ts",
+        "lib/niconamaCommentClient.helpers.ts",
+        "lib/streamState.ts"
+      ],
       "linter": {
         "rules": {
           "suspicious": {
             "noExplicitAny": "off"
+          },
+          "style": {
+            "noNonNullAssertion": "off"
           }
         }
       }

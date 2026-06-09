@@ -1,5 +1,3 @@
-import { createConnection, createServer, type Socket } from "node:net";
-import { expect, test } from "@playwright/test";
 import { spawn } from "node:child_process";
 import {
   createWriteStream,
@@ -8,7 +6,9 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createConnection, createServer, type Socket } from "node:net";
 import { join } from "node:path";
+import { expect, test } from "@playwright/test";
 
 type ProxyServer = {
   once(event: "error", listener: (err: Error) => void): void;
@@ -154,7 +154,7 @@ test.describe("Full IPC operation", () => {
             s.once("error", (err: Error) => {
               try {
                 proxyLogStream.write(
-                  `[proxy] backend connect error: ${err && err.message}\n`,
+                  `[proxy] backend connect error: ${err?.message}\n`,
                 );
               } catch {}
               try {
@@ -184,7 +184,7 @@ test.describe("Full IPC operation", () => {
             let backendSocket: Socket;
             try {
               backendSocket = await createConnectionWithRetry(serverIpcPath);
-            } catch (err) {
+            } catch (_err) {
               try {
                 proxyLogStream.write(
                   "[proxy] failed to connect backend; destroying browser socket\n",
@@ -433,7 +433,7 @@ test.describe("Full IPC operation", () => {
       try {
         // ensure proxy log is flushed
         // @ts-expect-error
-        proxyLogStream?.end && proxyLogStream.end();
+        proxyLogStream?.end?.();
       } catch {}
       if (process.platform !== "win32") {
         if (existsSync(serverIpcPath)) {

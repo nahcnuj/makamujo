@@ -1,11 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentComment } from "automated-gameplay-transmitter";
@@ -133,7 +126,6 @@ export class NiconamaCommentClient {
   #directWebSocketSuppressReconnect = false;
   #directWebSocketQueue: string[] = [];
   #playwrightCommentContext: any | null = null;
-  #playwrightCommentPage: any | null = null;
   #playwrightPageCommentPollTimer: ReturnType<typeof setInterval> | null = null;
   #playwrightWatcherTask: Promise<void> | null = null;
   #pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -175,7 +167,7 @@ export class NiconamaCommentClient {
             (globalThis as any).setImmediate(() => {
               try {
                 cb(comments);
-              } catch (e) {
+              } catch (_e) {
                 /* swallow */
               }
             });
@@ -183,20 +175,20 @@ export class NiconamaCommentClient {
             globalThis.setTimeout(() => {
               try {
                 cb(comments);
-              } catch (e) {
+              } catch (_e) {
                 /* swallow */
               }
             }, 0);
           }
-        } catch (e) {
+        } catch (_e) {
           try {
             cb(comments);
-          } catch (e2) {
+          } catch (_e2) {
             /* swallow */
           }
         }
       }
-    } catch (e) {
+    } catch (_e) {
       // Swallow consumer errors to avoid destabilizing the client.
     }
 
@@ -216,7 +208,7 @@ export class NiconamaCommentClient {
           if (removed >= removeCount) break;
         }
       }
-    } catch (e) {
+    } catch (_e) {
       // ignore trimming errors
     }
   }
@@ -312,7 +304,7 @@ export class NiconamaCommentClient {
           { count: polled.length, watchUrl },
         );
       }
-    } catch (e) {
+    } catch (_e) {
       // ignore polling errors at startup
     }
 
@@ -364,7 +356,7 @@ export class NiconamaCommentClient {
       } else {
         void this.performImmediateRescan(watchUrl).catch(() => undefined);
       }
-    } catch (e) {
+    } catch (_e) {
       // ignore rescan errors
     }
     this.#pollTask = this.pollLoop();
@@ -433,7 +425,7 @@ export class NiconamaCommentClient {
       // initial comment so that we still attempt Playwright fallbacks when the
       // embedded metadata only reports a count but no bodies.
       const initialRealComments = (initialComments || []).filter(
-        (c: any) => !(c && c.data && c.data.comment === "(コメントあり)"),
+        (c: any) => !(c?.data && c.data.comment === "(コメントあり)"),
       );
       const embeddedWebSocketUrl =
         this.getWebSocketUrlFromEmbeddedData(embedded);
@@ -498,7 +490,7 @@ export class NiconamaCommentClient {
             await new Promise((r) => setTimeout(r, aggressiveIntervalMs));
           }
         }
-      } catch (e) {
+      } catch (_e) {
         // ignore
       }
 
@@ -566,7 +558,7 @@ export class NiconamaCommentClient {
         }
         await new Promise((r) => setTimeout(r, aggressiveIntervalMs));
       }
-    } catch (e) {
+    } catch (_e) {
       // ignore
     }
 
@@ -1055,8 +1047,7 @@ export class NiconamaCommentClient {
             locale: "ja-JP",
           });
 
-          const page =
-            (context.pages && context.pages()[0]) ?? (await context.newPage());
+          const page = context.pages?.()[0] ?? (await context.newPage());
           await addNiconamaPlaywrightInitScript(page);
 
           try {
@@ -1083,7 +1074,7 @@ export class NiconamaCommentClient {
               "[DEBUG] fetchEmbeddedDataWithPlaywright in-process sanity evaluate",
               { sanity },
             );
-          } catch (e) {}
+          } catch (_e) {}
 
           // Try to scan the rendered page for comments using the same helpers
           // used by the Playwright watcher.
@@ -1147,7 +1138,7 @@ export class NiconamaCommentClient {
                   (enriched2 as any).site.state.relive ?? {};
                 (enriched2 as any).site.state.relive.comments =
                   pageComments.map((c: any) =>
-                    c && c.data ? c.data : { comment: String(c) },
+                    c?.data ? c.data : { comment: String(c) },
                   );
               } catch {}
               try {
@@ -1224,7 +1215,7 @@ export class NiconamaCommentClient {
       let out: any = { err: true };
       try {
         out = await runChild(90_000).catch(() => null);
-      } catch (e) {
+      } catch (_e) {
         // try one more time briefly before giving up
         try {
           out = await runChild(60_000).catch(() => null);
@@ -1240,16 +1231,14 @@ export class NiconamaCommentClient {
       } else {
         try {
           const parsed = JSON.parse((out as any).stdout);
-          if (parsed && parsed.success && parsed.embedded)
-            return parsed.embedded;
+          if (parsed?.success && parsed.embedded) return parsed.embedded;
           // If child didn't report success but wrote diagnostics, try to
           // read main_response.html from diagnosticsDir to extract embedded-data.
           try {
             const { readFileSync, existsSync } = await import("node:fs");
             const path = await import("node:path");
             if (
-              parsed &&
-              parsed.diagnosticsDir &&
+              parsed?.diagnosticsDir &&
               typeof parsed.diagnosticsDir === "string"
             ) {
               const mainPath = path.join(
@@ -1277,17 +1266,17 @@ export class NiconamaCommentClient {
                       }
                     }
                   }
-                } catch (e) {}
+                } catch (_e) {}
               }
             }
-          } catch (e) {
+          } catch (_e) {
             // ignore diagnostics read errors
           }
-        } catch (e) {
+        } catch (_e) {
           // ignore parse errors
         }
       }
-    } catch (e) {
+    } catch (_e) {
       // ignore spawn failures
     }
 
@@ -1427,7 +1416,7 @@ export class NiconamaCommentClient {
         try {
           const wsMod = await import("ws");
           WebSocketClass = wsMod?.default ?? wsMod?.WebSocket ?? wsMod;
-        } catch (e) {
+        } catch (_e) {
           console.warn(
             "[WARN] direct websocket not available in this runtime, skipping direct websocket connection",
             { watchUrl },
@@ -1451,7 +1440,7 @@ export class NiconamaCommentClient {
             perMessageDeflate: false,
             handshakeTimeout: 30_000,
           } as any);
-        } catch (e) {
+        } catch (_e) {
           try {
             ws = new WebSocketClass(webSocketUrl, { headers } as any);
           } catch {
@@ -1490,7 +1479,7 @@ export class NiconamaCommentClient {
               }
             }
           }
-        } catch (e) {
+        } catch (_e) {
           // ignore draining errors
         }
         const keepSeatMessage = { type: "keepSeat" } as any;
@@ -1765,7 +1754,7 @@ export class NiconamaCommentClient {
                 );
                 try {
                   await context.close();
-                } catch (e) {
+                } catch (_e) {
                   /* ignore */
                 }
                 // attempt to export trace for debugging
@@ -1778,7 +1767,7 @@ export class NiconamaCommentClient {
                     "[INFO] prepared playwright trace path",
                     tracePath,
                   );
-                } catch (traceErr) {
+                } catch (_traceErr) {
                   // ignore trace export errors
                 }
                 const newContext = await this.#launchPersistentContext(
@@ -1993,11 +1982,11 @@ export class NiconamaCommentClient {
           context.on?.("page", (p: any) => {
             try {
               attachListeners(p);
-            } catch (e) {
+            } catch (_e) {
               /* ignore */
             }
           });
-        } catch (e) {
+        } catch (_e) {
           // ignore environments where context.on is not available
         }
 
@@ -2118,7 +2107,7 @@ export class NiconamaCommentClient {
                 });
               } catch {}
             }
-          } catch (e) {
+          } catch (_e) {
             // fallback to small backoff and continue retries
             await new Promise((res) => setTimeout(res, 300 * attempt));
           }
@@ -2385,7 +2374,7 @@ export class NiconamaCommentClient {
     let parsed: unknown = null;
     try {
       parsed = JSON.parse(payload);
-    } catch (err) {
+    } catch (_err) {
       // try NDJSON / multiple JSON objects
       const lines = String(payload)
         .split(/\r?\n/)
@@ -2483,7 +2472,7 @@ export class NiconamaCommentClient {
           }
           await new Promise((r) => setTimeout(r, aggressiveIntervalMs));
         }
-      } catch (e) {
+      } catch (_e) {
         // ignore API fallback errors
       }
 
@@ -2519,7 +2508,7 @@ export class NiconamaCommentClient {
             "[DEBUG] skipping Playwright enrichment (disabled via enablePlaywrightFallback=false)",
           );
         }
-      } catch (e) {
+      } catch (_e) {
         // ignore
       }
     } catch (err) {
@@ -2567,7 +2556,7 @@ export class NiconamaCommentClient {
               (m4 ? `lv${m4[1]}` : undefined) ??
               undefined;
           }
-        } catch (e) {
+        } catch (_e) {
           // ignore HTML fetch/parse errors
         }
       }
@@ -2663,7 +2652,7 @@ export class NiconamaCommentClient {
             let bodyText: string | null = null;
             try {
               bodyText = await res.text();
-            } catch (e) {
+            } catch (_e) {
               bodyText = null;
             }
             // Save a diagnostic snapshot for this candidate
@@ -2672,10 +2661,10 @@ export class NiconamaCommentClient {
                 join(diagnosticsDir, `${safeName}_${status}.txt`),
                 `URL: ${url}\nSTATUS: ${status}\n\n${bodyText ?? ""}`,
               );
-            } catch (e) {
+            } catch (_e) {
               // ignore write errors
             }
-          } catch (e) {
+          } catch (_e) {
             // ignore diagnostics write errors
           }
           if (!res || res.status >= 400) return null;
@@ -2690,7 +2679,7 @@ export class NiconamaCommentClient {
               join(diagnosticsDir, `${safeName}_error.txt`),
               `URL: ${url}\nERROR: ${String(err)}`,
             );
-          } catch (e) {}
+          } catch (_e) {}
           return null;
         }
       };
@@ -2715,7 +2704,7 @@ export class NiconamaCommentClient {
             );
             if (parsedComments2.length > 0) return parsedComments2;
           }
-        } catch (e) {
+        } catch (_e) {
           // ignore per-candidate errors
         }
       }
@@ -2731,12 +2720,12 @@ export class NiconamaCommentClient {
             );
             if (parsedComments.length > 0) return parsedComments;
           }
-        } catch (e) {
+        } catch (_e) {
           // ignore per-candidate errors
         }
       }
       return [];
-    } catch (err) {
+    } catch (_err) {
       return [];
     }
   }
@@ -2752,7 +2741,7 @@ export class NiconamaCommentClient {
       try {
         // use require to avoid top-level await in non-async function
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const fs = require("fs");
+        const fs = require("node:fs");
         const ts = new Date().toISOString();
         const snippet = String(message).slice(0, 200).replace(/\n/g, " ");
         // Use the async append variant to avoid blocking the event loop
@@ -2762,10 +2751,10 @@ export class NiconamaCommentClient {
             `${ts} ${wsUrl} ${snippet}\n`,
             () => {},
           );
-        } catch (e) {
+        } catch (_e) {
           // ignore write errors
         }
-      } catch (e) {
+      } catch (_e) {
         // ignore fs errors
       }
     } catch {}
@@ -2835,7 +2824,7 @@ export class NiconamaCommentClient {
         keys,
         snippet: JSON.stringify(body).slice(0, 400),
       });
-    } catch (e) {
+    } catch (_e) {
       // ignore
     }
 
@@ -2873,7 +2862,7 @@ export class NiconamaCommentClient {
               })
               .catch(() => undefined);
           }
-        } catch (e) {
+        } catch (_e) {
           // ignore rescan errors
         }
         knownEventType = true;
@@ -2950,7 +2939,7 @@ export class NiconamaCommentClient {
               );
             }
           }
-        } catch (e) {
+        } catch (_e) {
           // ignore
         }
         knownEventType = true;
@@ -3024,7 +3013,7 @@ export class NiconamaCommentClient {
     try {
       const msg = JSON.stringify(message);
       console.debug("[DEBUG] direct websocket sending message", message);
-      if (!this.#directWebSocket || this.#directWebSocket.readyState !== 1) {
+      if (this.#directWebSocket?.readyState !== 1) {
         // Queue messages until the socket opens to avoid 'not open' errors
         this.#directWebSocketQueue.push(msg);
         return;
@@ -3060,10 +3049,6 @@ export class NiconamaCommentClient {
     } catch {
       return null;
     }
-  }
-
-  private tryParseJson(text: string): unknown {
-    return tryParseJson(text);
   }
 
   async pollLoop(): Promise<void> {

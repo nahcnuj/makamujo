@@ -1,5 +1,5 @@
-const net = require("net");
-const crypto = require("crypto");
+const net = require("node:net");
+const crypto = require("node:crypto");
 
 const host = process.argv[2] || "127.0.0.1";
 const port = parseInt(process.argv[3], 10) || 7777;

@@ -99,7 +99,7 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
         searchIndex = openIndex + 1;
         continue;
       }
-      const tagName = tagNameMatch[1]!.toLowerCase();
+      const tagName = tagNameMatch[1]?.toLowerCase();
       if (tagName !== "script" && tagName !== "div") {
         searchIndex = openIndex + 1;
         continue;
@@ -159,7 +159,7 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
     if (parsed) return parsed;
     try {
       JSON.parse(normalized);
-    } catch (err) {
+    } catch (_err) {
       /* ignore */
     }
     return null;
@@ -175,7 +175,7 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
   }
 
   const attrMatch = html.match(/data-props=(['"])([\s\S]*?)\1/i);
-  if (attrMatch && attrMatch[2]) {
+  if (attrMatch?.[2]) {
     const parsed = parseJsonFromRaw(attrMatch[2]!);
     if (parsed) return parsed;
   }
@@ -183,7 +183,7 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
   const innerMatch = html.match(
     /<(?:div|script)[^>]*id=['"]embedded-data['"][^>]*>([\s\S]*?)<\/(?:div|script)>/i,
   );
-  if (innerMatch && innerMatch[1]) {
+  if (innerMatch?.[1]) {
     const parsed = parseJsonFromRaw(innerMatch[1]!);
     if (parsed) return parsed;
   }
