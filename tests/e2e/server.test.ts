@@ -1,8 +1,8 @@
+import { spawn } from "node:child_process";
+import { existsSync, unlinkSync, writeFileSync } from "node:fs";
 import net from "node:net";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { spawn } from "child_process";
-import { existsSync, unlinkSync, writeFileSync } from "fs";
-import { join } from "path";
 import {
   createReceiverWithPath,
   createSenderWithPath,

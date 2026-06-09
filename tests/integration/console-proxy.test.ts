@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { spawn } from "child_process";
-import { existsSync, mkdirSync, writeFileSync } from "fs";
+import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 
 let BROADCASTING_BASE_URL = "";
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;

@@ -1,14 +1,14 @@
 import { createConnection, createServer, type Socket } from "node:net";
 import { expect, test } from "@playwright/test";
-import { spawn } from "child_process";
+import { spawn } from "node:child_process";
 import {
   createWriteStream,
   existsSync,
   mkdirSync,
   unlinkSync,
   writeFileSync,
-} from "fs";
-import { join } from "path";
+} from "node:fs";
+import { join } from "node:path";
 
 type ProxyServer = {
   once(event: "error", listener: (err: Error) => void): void;

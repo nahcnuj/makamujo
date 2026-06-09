@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { spawn } from "child_process";
-import { existsSync, mkdirSync, writeFileSync } from "fs";
+import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 
 // We wait for the server readiness message on stdout rather than
 // modifying runner timeouts so the test is robust on CI.

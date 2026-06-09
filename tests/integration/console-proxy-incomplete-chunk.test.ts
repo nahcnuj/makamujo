@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { spawn } from "child_process";
-import { tmpdir } from "os";
-import { join } from "path";
+import { spawn } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 let upstream: ReturnType<typeof spawn> | null = null;
 let server: ReturnType<typeof spawn> | null = null;
