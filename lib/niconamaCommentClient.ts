@@ -126,6 +126,7 @@ export class NiconamaCommentClient {
   #directWebSocketSuppressReconnect = false;
   #directWebSocketQueue: string[] = [];
   #playwrightCommentContext: any | null = null;
+  #playwrightCommentPage: any | null = null;
   #playwrightPageCommentPollTimer: ReturnType<typeof setInterval> | null = null;
   #playwrightWatcherTask: Promise<void> | null = null;
   #pollTimer: ReturnType<typeof setTimeout> | null = null;
