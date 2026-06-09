@@ -260,15 +260,18 @@ export const app = new Hono()
                   if (
                     !metaJson ||
                     typeof metaJson !== "object" ||
-                    !(metaJson as any).niconama
+                    !(metaJson as Record<string, unknown>).niconama
                   ) {
-                    const local = (
-                      globalThis as any
-                    ).__getCurrentStreamPayload?.();
+                    const globalThis$ = globalThis as Record<string, unknown>;
+                    const getPayload = globalThis$.__getCurrentStreamPayload;
+                    const local =
+                      typeof getPayload === "function"
+                        ? getPayload()
+                        : undefined;
                     if (
                       local &&
                       typeof local === "object" &&
-                      (local as any).niconama
+                      (local as Record<string, unknown>).niconama
                     ) {
                       try {
                         ws.send(JSON.stringify(local));

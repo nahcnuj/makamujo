@@ -22,9 +22,15 @@ function extractCommentText(item: unknown): string | null {
 
 function buildCommentKey(item: unknown, text: string): string {
   const value =
-    item && typeof item === "object" ? ((item as any).data ?? item) : item;
-  const no = value?.no ?? "none";
-  const userId = value?.userId ?? value?.user_id ?? "unknown";
+    item && typeof item === "object"
+      ? ((item as Record<string, unknown>).data ?? item)
+      : item;
+  const valueObj =
+    value && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : {};
+  const no = valueObj.no ?? "none";
+  const userId = valueObj.userId ?? valueObj.user_id ?? "unknown";
   return `${text}|${no}|${userId}`;
 }
 

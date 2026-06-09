@@ -29,12 +29,18 @@ async function main() {
     console.error("no embedded");
     process.exit(1);
   }
-  const prog = (embedded as any).program;
-  const site = (embedded as any).site;
-  const relive = (embedded as any).relive;
+  const prog = (embedded as Record<string, unknown>).program as
+    | Record<string, unknown>
+    | undefined;
+  const site = (embedded as Record<string, unknown>).site as
+    | Record<string, unknown>
+    | undefined;
+  const relive = (embedded as Record<string, unknown>).relive as
+    | Record<string, unknown>
+    | undefined;
   console.log("programId", prog?.nicoliveProgramId);
   const programId = prog?.nicoliveProgramId;
-  const numeric = programId ? programId.replace(/^lv/, "") : null;
+  const numeric = programId ? String(programId).replace(/^lv/, "") : null;
   const candidates: string[] = [];
   if (site?.pollingApiBaseUrl)
     candidates.push(

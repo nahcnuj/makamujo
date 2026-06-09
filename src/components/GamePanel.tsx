@@ -35,7 +35,8 @@ export function GamePanel() {
   return (
     <div className="h-full flex flex-col justify-between text-2xl/8">
       <div className="flex-none">
-        {playing && <Component state={playing.state} />}
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        {playing && <Component state={playing.state as any} />}
       </div>
       <div className="flex-none">
         {streamState?.meta?.total && (

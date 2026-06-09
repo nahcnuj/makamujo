@@ -3,11 +3,15 @@ import { MakaMujo, SILENCE_THRESHOLD_MS, type TalkModel, type TTS } from ".";
 
 // Variables starting with "mock" are available in mock.module factory closures
 // even after hoisting (following the same convention as jest.mock).
-let mockCapturedIpcCallback: ((state: any) => any) | undefined;
+let mockCapturedIpcCallback:
+  | ((state: Record<string, unknown>) => Record<string, unknown>)
+  | undefined;
 const mockSolverControl = { done: false };
 
 mock.module("../Browser/socket", () => ({
-  createReceiver: (cb: (state: any) => any) => {
+  createReceiver: (
+    cb: (state: Record<string, unknown>) => Record<string, unknown>,
+  ) => {
     mockCapturedIpcCallback = cb;
   },
 }));
