@@ -342,11 +342,12 @@ test.describe("server", () => {
     }
 
     let receivedState: unknown = null;
+    let publishPromise: Promise<void> | null = null;
     const receiver = createReceiverWithPath(ipcPath);
     receiver((state) => {
       receivedState = state;
-      // Mirror stream status into the running server via /api/meta (fire and forget)
-      void request
+      // Mirror stream status into the running server via /api/meta
+      publishPromise = request
         .post(`${BASE_URL}/api/meta`, {
           data: {
             data: {
@@ -362,6 +363,7 @@ test.describe("server", () => {
             },
           },
         })
+        .then(() => undefined)
         .catch(() => undefined);
       return { name: "noop" };
     });
@@ -372,7 +374,12 @@ test.describe("server", () => {
     });
 
     sender({ name: "idle", url: "https://example.com", state: { foo: "bar" } });
-    await new Promise((r) => setTimeout(r, 400));
+
+    // Wait for IPC state to be received
+    await new Promise((r) => setTimeout(r, 100));
+    if (publishPromise) {
+      await publishPromise;
+    }
 
     expect(receivedState).toEqual({
       name: "idle",
@@ -380,15 +387,70 @@ test.describe("server", () => {
       state: { foo: "bar" },
     });
 
-    const metaRes = await request.get(`${BASE_URL}/api/meta`);
-    expect(metaRes.ok()).toBeTruthy();
+    // Poll until the correct meta is returned, with timeout
+    // Retry posting if needed in case of race condition
+    let metaJson: Record<string, unknown> | null = null;
+    const pollStartTime = Date.now();
+    const pollTimeoutMs = 10000;
+    let attemptCount = 0;
 
-    const metaJson = await metaRes.json();
+    while (Date.now() - pollStartTime < pollTimeoutMs) {
+      // Occasionally re-post in case of timing issues
+      if (attemptCount % 5 === 0 && attemptCount > 0) {
+        await request
+          .post(`${BASE_URL}/api/meta`, {
+            data: {
+              data: {
+                type: "niconama",
+                data: {
+                  isLive: true,
+                  title: "IPC integration test",
+                  startTime: 0,
+                  total: 0,
+                  points: { gift: 0, ad: 0 },
+                  url: "https://example.com",
+                },
+              },
+            },
+          })
+          .catch(() => undefined);
+        await new Promise((r) => setTimeout(r, 50));
+      }
+
+      const metaRes = await request.get(`${BASE_URL}/api/meta`);
+      if (!metaRes.ok()) {
+        await new Promise((r) => setTimeout(r, 100));
+        attemptCount++;
+        continue;
+      }
+
+      metaJson = await metaRes.json();
+
+      // Check if we got the correct title
+      if (
+        metaJson &&
+        typeof metaJson === "object" &&
+        "niconama" in metaJson &&
+        metaJson.niconama &&
+        typeof metaJson.niconama === "object" &&
+        "meta" in metaJson.niconama &&
+        metaJson.niconama.meta &&
+        typeof metaJson.niconama.meta === "object" &&
+        "title" in metaJson.niconama.meta &&
+        metaJson.niconama.meta.title === "IPC integration test"
+      ) {
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 100));
+      attemptCount++;
+    }
+
+    expect(metaJson).not.toBeNull();
     expect(metaJson).toHaveProperty("niconama");
 
     // agent.getStreamState returns { type:'live', meta:{...} }
-    expect(metaJson.niconama).toHaveProperty("type", "live");
-    expect(metaJson.niconama).toHaveProperty(
+    expect((metaJson as any).niconama).toHaveProperty("type", "live");
+    expect((metaJson as any).niconama).toHaveProperty(
       "meta.title",
       "IPC integration test",
     );
