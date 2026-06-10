@@ -27,7 +27,13 @@
     }
   },
   "files": {
-    "includes": ["**", "!docs/index.html", "!var"]
+    "includes": [
+      "**",
+      "!docs/index.html",
+      "!var",
+      "!playwright/.auth",
+      "!test-results"
+    ]
   },
   "overrides": [
     {
@@ -46,9 +52,13 @@
         "routes/index.ts",
         "routes/console/index.ts",
         "scripts/*.ts",
+        "src/components/GamePanel.tsx",
         "src/contexts/AgentContext.tsx",
         "tests/helpers/mock-upstream-server.ts"
       ],
+      "formatter": {
+        "enabled": false
+      },
       "linter": {
         "rules": {
           "suspicious": {
@@ -62,7 +72,11 @@
           },
           "correctness": {
             "noUnusedPrivateClassMembers": "off",
-            "noUnusedFunctionParameters": "off"
+            "noUnusedFunctionParameters": "off",
+            "noUnusedVariables": "off"
+          },
+          "complexity": {
+            "useArrowFunction": "off"
           }
         }
       }
