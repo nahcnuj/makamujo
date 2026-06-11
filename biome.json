@@ -34,34 +34,5 @@
       "!playwright/.auth",
       "!test-results"
     ]
-  },
-  "overrides": [
-    {
-      "includes": [
-        "**/*.test.ts",
-        "**/*.test.tsx",
-        "index.ts",
-        "lib/Browser/chromium.ts",
-        "lib/Agent/index.ts",
-        "lib/Agent/games/org.dashnet.orteil/cookieclicker/solver.ts",
-        "lib/console-proxy.ts",
-        "lib/niconamaCommentClient.ts",
-        "lib/niconamaCommentClient.helpers.ts",
-        "lib/niconamaCommentClient.playwright.ts",
-        "lib/streamState.ts",
-        "routes/index.ts",
-        "routes/console/index.ts",
-        "scripts/*.ts",
-        "src/components/GamePanel.tsx",
-        "src/contexts/AgentContext.tsx",
-        "tests/helpers/mock-upstream-server.ts"
-      ],
-      "formatter": {
-        "enabled": false
-      },
-      "linter": {
-        "rules": {}
-      }
-    }
-  ]
+  }
 }
