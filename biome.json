@@ -60,11 +60,7 @@
         "enabled": false
       },
       "linter": {
-        "rules": {
-          "suspicious": {
-            "noExplicitAny": "off"
-          }
-        }
+        "rules": {}
       }
     }
   ]
