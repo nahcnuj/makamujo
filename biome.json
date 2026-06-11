@@ -67,16 +67,8 @@
           "style": {
             "noNonNullAssertion": "off"
           },
-          "performance": {
-            "noAccumulatingSpread": "off"
-          },
           "correctness": {
-            "noUnusedPrivateClassMembers": "off",
-            "noUnusedFunctionParameters": "off",
-            "noUnusedVariables": "off"
-          },
-          "complexity": {
-            "useArrowFunction": "off"
+            "noUnusedPrivateClassMembers": "off"
           }
         }
       }
