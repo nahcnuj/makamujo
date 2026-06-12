@@ -40,6 +40,9 @@ test("createResilientSseProxy sends keepalive comments for idle SSE streams", as
   );
 
   const reader = proxyResponse.body?.getReader();
+  if (!reader) {
+    throw new Error("Expected response body to have a reader");
+  }
   const decoder = new TextDecoder();
 
   const result = await Promise.race([
