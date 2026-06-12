@@ -48,7 +48,9 @@ const waitForServerReady = async (): Promise<{ consoleUrl: string | null; server
       return;
     }
 
+    // biome-ignore lint/style/noNonNullAssertion: server guaranteed by check above
     const proc = server!;
+    // biome-ignore lint/style/noNonNullAssertion: stdout guaranteed to exist on process
     const stdout = proc.stdout!;
 
     let settled = false;
@@ -244,7 +246,7 @@ test.describe("console", () => {
     expect(text).toContain("Disallow: /");
   });
 
-  test("responds to GET /console/api/agent-state", async ({ request }) => {
+  test("responds to GET /console/api/agent-state", async () => {
     // The agent state endpoint has been replaced by a WebSocket stream
     // (`/console/api/ws`). This legacy REST test is intentionally left
     // as a no-op to avoid false failures in environments where the REST
@@ -319,12 +321,12 @@ test.describe("console", () => {
     await expect(page.getByRole("heading", { name: /プレイ中/ })).toBeVisible();
   });
 
-  test("connects via SSE and updates on broadcast (non-mock)", async ({ page, request }) => {
+  test("connects via SSE and updates on broadcast (non-mock)", async ({ page }) => {
     const probeEventStream = async (url: string) => {
       try {
         const probe = await fetch(url, { headers: { accept: 'text/event-stream' } });
         try { probe.body?.cancel?.(); } catch {}
-      } catch (err) {
+      } catch (_err) {
       }
     };
 
@@ -336,21 +338,21 @@ test.describe("console", () => {
     // server (helpful when the proxy is misbehaving in tests).
     try {
       const consoleEnvRes = await fetch(`${CONSOLE_BASE_URL}/console/env`);
-      let consoleEnvBody = null;
-      try { consoleEnvBody = await consoleEnvRes.json(); } catch {}
-    } catch (err) {
+      let _consoleEnvBody = null;
+      try { _consoleEnvBody = await consoleEnvRes.json(); } catch {}
+    } catch (_err) {
     }
 
     // Install a small init script so we can reliably detect when the
     // page's EventSource has opened. This avoids race conditions where
     // the test POST happens before the browser subscribes.
     await page.addInitScript(() => {
-      (function () {
+      (() => {
         const OrigEventSource = (window as any).EventSource;
         Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
         Object.defineProperty(window, '__sseMessageReceived', { value: false, writable: true, configurable: true });
         const instances: EventSource[] = [];
-        (window as any).EventSource = function (url: string) {
+        (window as any).EventSource = ((url: string) => {
           const es = new OrigEventSource(url);
           instances.push(es);
           try { 
@@ -376,7 +378,7 @@ test.describe("console", () => {
           // Stop polling after 5 seconds
           setTimeout(() => clearInterval(checkReady), 5000);
           return es;
-        } as any;
+        }) as any;
         try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
       })();
     });
@@ -419,13 +421,13 @@ test.describe("console", () => {
     await expect(detailsLocator).toContainText("4-gram", { timeout: 10_000 });
   });
 
-  test("reloads when broadcasted meta becomes 公開終了", async ({ page, request }) => {
+  test("reloads when broadcasted meta becomes 公開終了", async ({ page }) => {
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
       Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
       // A per-document session id that changes on every navigation/reload.
       Object.defineProperty(window, '__sessionId', { value: Math.random(), writable: true, configurable: true });
-      (window as any).EventSource = function (url: string) {
+      (window as any).EventSource = ((url: string) => {
         const es = new OrigEventSource(url);
         try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
         try { es.addEventListener('message', () => { (window as any).__sseOpen = true; }); } catch {}
@@ -441,7 +443,7 @@ test.describe("console", () => {
         // Stop polling after 5 seconds
         setTimeout(() => clearInterval(checkReady), 5000);
         return es;
-      } as any;
+      }) as any;
       try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
     });
 
@@ -479,7 +481,7 @@ test.describe("console", () => {
     await expect(page.getByRole('heading', { name: '馬可無序' })).toBeVisible({ timeout: 5_000 });
   });
 
-  test("displays replyTargetComment in the console after broadcast event", async ({ page, request }) => {
+  test("displays replyTargetComment in the console after broadcast event", async ({ page }) => {
     await page.route('**/*fonts*', (route) => route.abort());
     await page.route('**/*fonts.googleapis.com*', (route) => route.abort());
     await page.route('**/*fonts.gstatic.com*', (route) => route.abort());
@@ -487,7 +489,7 @@ test.describe("console", () => {
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
       Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
-      (window as any).EventSource = function (url: string) {
+      (window as any).EventSource = ((url: string) => {
         const es = new OrigEventSource(url);
         try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
         try { es.addEventListener('message', () => { (window as any).__sseOpen = true; }); } catch {}
@@ -503,7 +505,7 @@ test.describe("console", () => {
         // Stop polling after 5 seconds
         setTimeout(() => clearInterval(checkReady), 5000);
         return es;
-      } as any;
+      }) as any;
       try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
     });
 
@@ -541,14 +543,14 @@ test.describe("console", () => {
     await expect(detailsLocator).toContainText('返信', { timeout: 10_000 });
   });
 
-  test("shows stream title and link when posted as top-level title/url/start", async ({ page, request }) => {
+  test("shows stream title and link when posted as top-level title/url/start", async ({ page }) => {
     await page.route('**/*fonts*', (route) => route.abort());
     await page.route('**/*fonts.googleapis.com*', (route) => route.abort());
 
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
       Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
-      (window as any).EventSource = function (url: string) {
+      (window as any).EventSource = ((url: string) => {
         const es = new OrigEventSource(url);
         try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
         try { es.addEventListener('message', () => { (window as any).__sseOpen = true; }); } catch {}
@@ -564,7 +566,7 @@ test.describe("console", () => {
         // Stop polling after 5 seconds
         setTimeout(() => clearInterval(checkReady), 5000);
         return es;
-      } as any;
+      }) as any;
       try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
     });
 
@@ -614,14 +616,14 @@ test.describe("console", () => {
     expect(startText).toContain('開始');
   });
 
-  test("promotes niconama.title into niconama.meta when meta is missing", async ({ page, request }) => {
+  test("promotes niconama.title into niconama.meta when meta is missing", async ({ page }) => {
     await page.route('**/*fonts*', (route) => route.abort());
     await page.route('**/*fonts.googleapis.com*', (route) => route.abort());
 
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
       Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
-      (window as any).EventSource = function (url: string) {
+      (window as any).EventSource = ((url: string) => {
         const es = new OrigEventSource(url);
         try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
         try { es.addEventListener('message', () => { (window as any).__sseOpen = true; }); } catch {}
@@ -637,7 +639,7 @@ test.describe("console", () => {
         // Stop polling after 5 seconds
         setTimeout(() => clearInterval(checkReady), 5000);
         return es;
-      } as any;
+      }) as any;
       try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
     });
 
@@ -672,13 +674,13 @@ test.describe("console", () => {
     expect(titleText).toContain(extractedTitle);
   });
 
-  test("keeps SSE connection open while the console browser tab is open", async ({ page, request }) => {
+  test("keeps SSE connection open while the console browser tab is open", async ({ page }) => {
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
       Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
       Object.defineProperty(window, '__sseError', { value: false, writable: true, configurable: true });
       Object.defineProperty(window, '__sseMessageCount', { value: 0, writable: true, configurable: true });
-      const WrappedEventSource = function (url: string) {
+      const WrappedEventSource = ((url: string) => {
         const es = new OrigEventSource(url);
         try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
         try { es.addEventListener('message', () => { (window as any).__sseMessageCount += 1; }); } catch {}
@@ -695,7 +697,7 @@ test.describe("console", () => {
         // Stop polling after 5 seconds
         setTimeout(() => clearInterval(checkReady), 5000);
         return es;
-      } as any;
+      }) as any;
       try {
         for (const key of Object.getOwnPropertyNames(OrigEventSource)) {
           const descriptor = Object.getOwnPropertyDescriptor(OrigEventSource, key);
@@ -805,7 +807,7 @@ test.describe("console", () => {
           const metaJson = await metaRes.json();
           firstMessage = JSON.stringify(metaJson);
         }
-      } catch (fetchErr) {
+      } catch (_fetchErr) {
       }
       if (!firstMessage) throw err;
     }

@@ -76,6 +76,7 @@ describe("createAgentStatusSections", () => {
     } as unknown as AgentStateResponse);
 
     expect(sections).toHaveLength(1);
+    // biome-ignore lint/style/noNonNullAssertion: test data guaranteed to have sections
     const gameSection = sections[0]!;
     expect(gameSection.title).toBe("『-』プレイ中");
     expect(gameSection.rows).toEqual([]);
@@ -87,6 +88,7 @@ describe("createAgentStatusSections", () => {
     );
 
     expect(sections).toHaveLength(1);
+    // biome-ignore lint/style/noNonNullAssertion: test data guaranteed to have sections
     const gameSection = sections[0]!;
     expect(gameSection.title).toBe("『-』プレイ中");
     expect(gameSection.rows).toEqual([]);

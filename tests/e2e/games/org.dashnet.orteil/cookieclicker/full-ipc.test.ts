@@ -311,13 +311,13 @@ test.describe("Full IPC operation", () => {
 
         let buffer = "";
 
-        if (!serverProcess!.stdout || !serverProcess!.stderr) {
+        if (!serverProcess?.stdout || !serverProcess?.stderr) {
           clearTimeout(timeout);
           reject(new Error("Server stdout/stderr stream not available"));
           return;
         }
 
-        serverProcess!.stdout.on("data", (chunk: Buffer) => {
+        serverProcess?.stdout.on("data", (chunk: Buffer) => {
           buffer += chunk.toString();
           if (buffer.includes("Server running")) {
             clearTimeout(timeout);
@@ -325,7 +325,7 @@ test.describe("Full IPC operation", () => {
           }
         });
 
-        serverProcess!.on("exit", (code) => {
+        serverProcess?.on("exit", (code) => {
           clearTimeout(timeout);
           reject(new Error(`Server exited early with code ${code}`));
         });

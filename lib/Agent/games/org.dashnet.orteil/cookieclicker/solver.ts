@@ -159,6 +159,7 @@ export function* solver(
             ? clickableElementIds
             : ["bigCookie"];
         const targetId =
+          // biome-ignore lint/style/noNonNullAssertion: solver guaranteed to have candidates
           candidateIds[Math.floor(Math.random() * candidateIds.length)]!;
 
         if (!(yield* runActions([Action.clickByElementId(targetId)]))) break;

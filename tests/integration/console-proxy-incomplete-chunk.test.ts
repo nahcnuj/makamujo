@@ -20,7 +20,7 @@ beforeAll(async () => {
       5000,
     );
     let buf = "";
-    upstream!.stdout!.on("data", (c: any) => {
+    upstream?.stdout?.on("data", (c: any) => {
       buf += String(c);
       const match = buf.match(/mock-upstream ready on (\d+)/);
       if (match) {
@@ -29,7 +29,7 @@ beforeAll(async () => {
         resolve();
       }
     });
-    upstream!.on("exit", (code) => {
+    upstream?.on("exit", (code) => {
       clearTimeout(timeout);
       reject(new Error(`upstream exited ${code}`));
     });
@@ -57,7 +57,7 @@ beforeAll(async () => {
   });
 
   let serverStderr = "";
-  server!.stderr!.on("data", (c: any) => {
+  server?.stderr?.on("data", (c: any) => {
     serverStderr += String(c);
   });
 
@@ -67,7 +67,7 @@ beforeAll(async () => {
       15000,
     );
     let buf = "";
-    server!.stdout!.on("data", (c: any) => {
+    server?.stdout?.on("data", (c: any) => {
       const s = String(c);
       buf += s;
       // The main process logs both server and console URLs; prefer the console URL.
@@ -82,7 +82,7 @@ beforeAll(async () => {
         // Fallback: server started but console URL not yet printed. Keep listening.
       }
     });
-    server!.on("exit", (code) => {
+    server?.on("exit", (code) => {
       clearTimeout(timeout);
       reject(new Error(`server exited ${code}\n${serverStderr}`));
     });

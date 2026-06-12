@@ -50,8 +50,8 @@ beforeAll(async () => {
     let buffer = "";
     let serverRunning = false;
     let agentReady = false;
-    const stdout = server!.stdout;
-    const stderr = server!.stderr;
+    const stdout = server?.stdout;
+    const stderr = server?.stderr;
 
     function checkReady() {
       if (serverRunning && agentReady) {

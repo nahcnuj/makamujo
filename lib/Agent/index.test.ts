@@ -575,7 +575,7 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(listener);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback!({ name: "closed" });
+    mockCapturedIpcCallback?.({ name: "closed" });
     await flushMicrotasks();
 
     expect(listener).toHaveBeenCalledTimes(1);
@@ -587,7 +587,7 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(listener);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback!({ name: "idle", state: { cookies: 42 } });
+    mockCapturedIpcCallback?.({ name: "idle", state: { cookies: 42 } });
     await flushMicrotasks();
 
     expect(listener).toHaveBeenCalledTimes(1);
@@ -599,7 +599,7 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(listener);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback!({ name: "idle" });
+    mockCapturedIpcCallback?.({ name: "idle" });
     await flushMicrotasks();
 
     expect(listener).not.toHaveBeenCalled();
@@ -612,7 +612,7 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(listener);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback!({ name: "idle" });
+    mockCapturedIpcCallback?.({ name: "idle" });
     await flushMicrotasks();
 
     expect(listener).toHaveBeenCalledTimes(1);
@@ -626,7 +626,7 @@ describe("onGameStateChange", () => {
     });
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback!({ name: "closed" });
+    mockCapturedIpcCallback?.({ name: "closed" });
     callOrder.push("afterReceiver");
 
     // Listener must not have run synchronously
@@ -644,7 +644,7 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(listenerB);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback!({ name: "closed" });
+    mockCapturedIpcCallback?.({ name: "closed" });
     await flushMicrotasks();
 
     expect(listenerA).toHaveBeenCalledTimes(1);
@@ -661,7 +661,7 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(succeedingListener);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback!({ name: "closed" });
+    mockCapturedIpcCallback?.({ name: "closed" });
     await flushMicrotasks();
 
     expect(failingListener).toHaveBeenCalledTimes(1);

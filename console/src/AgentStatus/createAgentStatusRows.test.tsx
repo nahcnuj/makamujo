@@ -250,6 +250,7 @@ describe("createAgentStatusRows", () => {
     expect(replyRow?.hideLabel).toBeFalsy();
     const html = renderToString(
       <MarkovModelStatusSection
+        // biome-ignore lint/style/noNonNullAssertion: test data requires non-null assertion
         markovModelRows={[replyRow!] as unknown as Array<AgentStatusRow>}
       />,
     );
@@ -312,6 +313,7 @@ describe("createAgentStatusRows", () => {
     const html = renderToString(
       <MarkovModelStatusSection
         markovModelRows={
+          // biome-ignore lint/style/noNonNullAssertion: test data requires non-null assertion
           [speechHistoryRow!] as unknown as Array<AgentStatusRow>
         }
       />,
@@ -338,7 +340,7 @@ describe("createAgentStatusRows", () => {
 
     const liveRow = rows.find((r) => r.label === "配信指標");
     expect(liveRow).toBeDefined();
-    const html = renderToString(liveRow!.valueComponent);
+    const html = renderToString(liveRow?.valueComponent);
     expect(html).toContain("コメント数");
     expect(html).toContain("99");
   });
@@ -364,7 +366,7 @@ describe("createAgentStatusRows", () => {
 
     const recentRow = rows.find((row) => row.label === "最近のコメント");
     expect(recentRow).toBeDefined();
-    const html = renderToString(recentRow!.valueComponent);
+    const html = renderToString(recentRow?.valueComponent);
     expect(html).toContain('<span class="text-emerald-200">#1</span>');
     expect(html).toContain("こんにちは");
   });
@@ -382,7 +384,7 @@ describe("createAgentStatusRows", () => {
 
     const recentRow = rows.find((row) => row.label === "最近のコメント");
     expect(recentRow).toBeDefined();
-    const html = renderToString(recentRow!.valueComponent);
+    const html = renderToString(recentRow?.valueComponent);
     const firstIndex = html.indexOf('<span class="text-emerald-200">#2</span>');
     const secondIndex = html.indexOf(
       '<span class="text-emerald-200">#1</span>',
@@ -404,7 +406,7 @@ describe("createAgentStatusRows", () => {
 
     const liveRow = rows.find((row) => row.label === "配信指標");
     expect(liveRow).toBeDefined();
-    const html = renderToString(liveRow!.valueComponent);
+    const html = renderToString(liveRow?.valueComponent);
     expect(html).toContain("<button");
     expect(html).toContain("99");
   });
@@ -427,7 +429,7 @@ describe("createAgentStatusRows", () => {
 
     const liveRow = rows.find((row) => row.label === "配信指標");
     expect(liveRow).toBeDefined();
-    const html = renderToString(liveRow!.valueComponent);
+    const html = renderToString(liveRow?.valueComponent);
     expect(html).toContain(">80</button>");
   });
 
@@ -445,7 +447,7 @@ describe("createAgentStatusRows", () => {
 
     const liveRow = rows.find((row) => row.label === "配信指標");
     expect(liveRow).toBeDefined();
-    const html = renderToString(liveRow!.valueComponent);
+    const html = renderToString(liveRow?.valueComponent);
     expect(html).toContain(">2</button>");
   });
 
@@ -467,12 +469,12 @@ describe("createAgentStatusRows", () => {
 
     const liveRow = rows.find((row) => row.label === "配信指標");
     expect(liveRow).toBeDefined();
-    const liveHtml = renderToString(liveRow!.valueComponent);
+    const liveHtml = renderToString(liveRow?.valueComponent);
     expect(liveHtml).toContain("3");
 
     const recentRow = rows.find((row) => row.label === "最近のコメント");
     expect(recentRow).toBeDefined();
-    const recentHtml = renderToString(recentRow!.valueComponent);
+    const recentHtml = renderToString(recentRow?.valueComponent);
     expect((recentHtml.match(/<p\b/g) ?? []).length).toBe(3);
   });
 
@@ -486,7 +488,7 @@ describe("createAgentStatusRows", () => {
 
     const recentRow = rows.find((row) => row.label === "最近のコメント");
     expect(recentRow).toBeDefined();
-    const html = renderToString(recentRow!.valueComponent);
+    const html = renderToString(recentRow?.valueComponent);
     expect(html).toContain('<span class="text-emerald-200">#12</span>');
     expect(html).toContain("テストコメント");
   });
@@ -508,7 +510,7 @@ describe("createAgentStatusRows", () => {
 
     const recentRow = rows.find((row) => row.label === "最近のコメント");
     expect(recentRow).toBeDefined();
-    const recentHtml = renderToString(recentRow!.valueComponent);
+    const recentHtml = renderToString(recentRow?.valueComponent);
     expect(recentHtml).toContain('<span class="text-emerald-200">#16</span>');
     expect(recentHtml).toContain("ジュニアアイドル");
     expect((recentHtml.match(/<p\b/g) ?? []).length).toBe(1);
@@ -527,7 +529,7 @@ describe("createAgentStatusRows", () => {
 
     const recentRow = rows.find((row) => row.label === "最近のコメント");
     expect(recentRow).toBeDefined();
-    const html = renderToString(recentRow!.valueComponent);
+    const html = renderToString(recentRow?.valueComponent);
     expect(html).toContain('<span class="text-emerald-200">#1</span>');
     expect(html).toContain('<span class="text-emerald-200">#2</span>');
     expect(html).toContain("こんにちは");
