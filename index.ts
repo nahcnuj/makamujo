@@ -790,7 +790,7 @@ streamer.onSpeech(async (event) => {
     typeof event === "object" &&
     event !== null &&
     Array.isArray((event as Record<string, unknown>).nodes)
-      ? (event as Record<string, unknown>).nodes
+      ? ((event as Record<string, unknown>).nodes as string[])
       : undefined;
   const nGram =
     typeof event === "object" &&
@@ -829,7 +829,7 @@ streamer.onSpeechComplete(async () => {
   broadcastCurrentPayload("onSpeechComplete");
   clearSpeechTimer = setTimeout(() => {
     const speechState = agent.getSpeech();
-    if (!speechState.silent) {
+    if (speechState && !speechState.silent) {
       agent.setSpeech("");
     }
     clearSpeechTimer = undefined;
@@ -1222,9 +1222,7 @@ const createNiconamaClientOptions = () => {
 
 const handleNiconamaComments = (comments: unknown) => {
   const parsed = coerceToAgentComments(comments);
-  const filteredComments = filterAgentCommentsWithText(
-    parsed as Array<unknown>,
-  );
+  const filteredComments = filterAgentCommentsWithText(parsed);
   if (DEBUG_NICONAMA_COMMENTS) {
     for (const comment of filteredComments) {
       const text = getCommentTextFromAgentComment(comment);
@@ -1245,14 +1243,22 @@ const handleNiconamaComments = (comments: unknown) => {
 
   try {
     const payload = getCurrentStreamPayload();
-    const currentCount =
+    const currentCount: number =
       typeof payload.commentCount === "number"
         ? payload.commentCount
-        : typeof payload.niconama?.meta?.total?.comments === "number"
-          ? payload.niconama.meta.total.comments
+        : typeof payload === "object" &&
+            payload !== null &&
+            typeof (payload as Record<string, unknown>).niconama === "object" &&
+            (payload as Record<string, unknown>).niconama !== null &&
+            typeof ((payload as Record<string, unknown>).niconama as Record<string, unknown>).meta === "object" &&
+            ((payload as Record<string, unknown>).niconama as Record<string, unknown>).meta !== null &&
+            typeof (((payload as Record<string, unknown>).niconama as Record<string, unknown>).meta as Record<string, unknown>).total === "object" &&
+            (((payload as Record<string, unknown>).niconama as Record<string, unknown>).meta as Record<string, unknown>).total !== null &&
+            typeof ((((payload as Record<string, unknown>).niconama as Record<string, unknown>).meta as Record<string, unknown>).total as Record<string, unknown>).comments === "number"
+          ? ((((payload as Record<string, unknown>).niconama as Record<string, unknown>).meta as Record<string, unknown>).total as Record<string, unknown>).comments
           : 0;
     const numberedCommentsCount = countNumberedAgentComments(
-      filteredComments as Array<unknown>,
+      filteredComments,
     );
     const newCount = currentCount + numberedCommentsCount;
 
