@@ -4,7 +4,7 @@ const WATCH_URL =
   process.env.NICONAMA_TEST_WATCH_URL ??
   "https://live.nicovideo.jp/watch/user/14171889";
 
-async function fetchText(url: string, opts: any = {}) {
+async function fetchText(url: string, opts: Record<string, unknown> = {}) {
   try {
     const r = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0", Accept: "*/*" },
@@ -29,12 +29,18 @@ async function main() {
     console.error("no embedded");
     process.exit(1);
   }
-  const prog = (embedded as any).program;
-  const site = (embedded as any).site;
-  const relive = (embedded as any).relive;
+  const prog = (embedded as Record<string, unknown>).program as
+    | Record<string, unknown>
+    | undefined;
+  const site = (embedded as Record<string, unknown>).site as
+    | Record<string, unknown>
+    | undefined;
+  const relive = (embedded as Record<string, unknown>).relive as
+    | Record<string, unknown>
+    | undefined;
   console.log("programId", prog?.nicoliveProgramId);
   const programId = prog?.nicoliveProgramId;
-  const numeric = programId ? programId.replace(/^lv/, "") : null;
+  const numeric = programId ? String(programId).replace(/^lv/, "") : null;
   const candidates: string[] = [];
   if (site?.pollingApiBaseUrl)
     candidates.push(

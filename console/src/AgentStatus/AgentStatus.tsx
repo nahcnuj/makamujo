@@ -18,6 +18,12 @@ import {
 } from "./MarkovModelStatusSection";
 import type { AgentStateResponse, AgentStatusSection } from "./types";
 
+declare global {
+  interface Window {
+    __sseUrl?: string;
+  }
+}
+
 const AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS = "grid-rows-[auto_minmax(0,1fr)]";
 
 export const AgentStatus = () => {
@@ -38,7 +44,7 @@ export const AgentStatus = () => {
     (async () => {
       const sseUrl = "/console/api/ws";
       try {
-        (window as any).__sseUrl = sseUrl;
+        window.__sseUrl = sseUrl;
       } catch {}
       try {
         es = new EventSource(sseUrl);
@@ -73,11 +79,7 @@ export const AgentStatus = () => {
               } catch {}
             }
 
-            if (
-              currentTitle &&
-              currentTitle.includes("公開終了") &&
-              currentUrl
-            ) {
+            if (currentTitle?.includes("公開終了") && currentUrl) {
               try {
                 const endedKey = `program-ended-${currentUrl}`;
                 if (!sessionStorage.getItem(endedKey)) {
@@ -89,7 +91,7 @@ export const AgentStatus = () => {
             }
 
             prevTypeRef.current = currentType;
-          } catch (e) {
+          } catch {
             // ignore detection errors
           }
 

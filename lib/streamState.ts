@@ -81,6 +81,25 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
   return rawState;
 };
 
+// Type definitions for payload structures with stream metadata
+interface StreamMetaOutput {
+  title: string | undefined;
+  url: string | undefined;
+  start: number | undefined;
+  total?: unknown;
+}
+
+interface NiconamaOutput {
+  meta?: StreamMetaOutput;
+  [key: string]: unknown;
+}
+
+interface StructuredOutput {
+  type?: string;
+  meta: StreamMetaOutput;
+  [key: string]: unknown;
+}
+
 /**
  * Normalize various payload shapes into a consistent `niconama` object where
  * `niconama.meta` contains `title`, `url`, and `start` when those values are
@@ -89,25 +108,39 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
 export const resolveNiconamaFromState = (src: unknown): unknown => {
   if (!src || typeof src !== "object") return {};
 
-  const payload = src as any;
+  const payload = src as Record<string, unknown>;
 
   if (payload.niconama && typeof payload.niconama === "object") {
-    const n = { ...payload.niconama } as any;
+    const n: NiconamaOutput = {
+      ...((payload.niconama as Record<string, unknown>) ?? {}),
+    };
+    const niconamaRecord = payload.niconama as Record<string, unknown>;
+
     if (
       (!n.meta || typeof n.meta !== "object") &&
-      (n.title || n.url || n.start || n.startTime)
+      (niconamaRecord.title ||
+        niconamaRecord.url ||
+        niconamaRecord.start ||
+        niconamaRecord.startTime)
     ) {
+      const metaRecord = n.meta as Record<string, unknown> | undefined;
       n.meta = {
-        title: typeof n.title === "string" ? n.title : undefined,
-        url: typeof n.url === "string" ? n.url : undefined,
+        title:
+          typeof niconamaRecord.title === "string"
+            ? (niconamaRecord.title as string)
+            : undefined,
+        url:
+          typeof niconamaRecord.url === "string"
+            ? (niconamaRecord.url as string)
+            : undefined,
         start:
-          typeof n.start === "number"
-            ? n.start
-            : typeof n.startTime === "number"
-              ? n.startTime
+          typeof niconamaRecord.start === "number"
+            ? (niconamaRecord.start as number)
+            : typeof niconamaRecord.startTime === "number"
+              ? (niconamaRecord.startTime as number)
               : undefined,
-        total: n.meta?.total ?? n.total ?? undefined,
-      } as any;
+        total: metaRecord?.total ?? niconamaRecord.total,
+      };
     }
     return n;
   }
@@ -118,20 +151,28 @@ export const resolveNiconamaFromState = (src: unknown): unknown => {
     typeof payload.start === "number" ||
     typeof payload.startTime === "number";
   if (hasTopLevelFields) {
-    return {
-      type: typeof payload.type === "string" ? payload.type : undefined,
+    const result: StructuredOutput = {
+      type:
+        typeof payload.type === "string" ? (payload.type as string) : undefined,
       meta: {
-        title: typeof payload.title === "string" ? payload.title : undefined,
-        url: typeof payload.url === "string" ? payload.url : undefined,
+        title:
+          typeof payload.title === "string"
+            ? (payload.title as string)
+            : undefined,
+        url:
+          typeof payload.url === "string" ? (payload.url as string) : undefined,
         start:
           typeof payload.start === "number"
-            ? payload.start
+            ? (payload.start as number)
             : typeof payload.startTime === "number"
-              ? payload.startTime
+              ? (payload.startTime as number)
               : undefined,
-        total: payload.meta?.total ?? payload.total ?? undefined,
+        total:
+          (payload.meta as Record<string, unknown> | undefined)?.total ??
+          payload.total,
       },
-    } as any;
+    };
+    return result;
   }
 
   // If the payload embeds stream-like metadata inside `currentGame.state`,
@@ -141,29 +182,43 @@ export const resolveNiconamaFromState = (src: unknown): unknown => {
   try {
     const cg = payload.currentGame;
     const gameState =
-      cg && typeof cg === "object" && cg.state && typeof cg.state === "object"
-        ? cg.state
+      cg &&
+      typeof cg === "object" &&
+      (cg as Record<string, unknown>).state &&
+      typeof (cg as Record<string, unknown>).state === "object"
+        ? ((cg as Record<string, unknown>).state as Record<string, unknown>)
         : undefined;
     if (gameState) {
       const title =
-        typeof gameState.title === "string" ? gameState.title : undefined;
-      const url = typeof gameState.url === "string" ? gameState.url : undefined;
+        typeof gameState.title === "string"
+          ? (gameState.title as string)
+          : undefined;
+      const url =
+        typeof gameState.url === "string"
+          ? (gameState.url as string)
+          : undefined;
       const start =
         typeof gameState.timestamp === "number"
-          ? gameState.timestamp
+          ? (gameState.timestamp as number)
           : typeof gameState.start === "number"
-            ? gameState.start
+            ? (gameState.start as number)
             : undefined;
       if (title || url || typeof start === "number") {
-        return {
-          type: typeof payload.type === "string" ? payload.type : undefined,
+        const result: StructuredOutput = {
+          type:
+            typeof payload.type === "string"
+              ? (payload.type as string)
+              : undefined,
           meta: {
             title,
             url,
             start,
-            total: payload.meta?.total ?? payload.total ?? undefined,
+            total:
+              (payload.meta as Record<string, unknown> | undefined)?.total ??
+              payload.total,
           },
-        } as any;
+        };
+        return result;
       }
     }
   } catch {

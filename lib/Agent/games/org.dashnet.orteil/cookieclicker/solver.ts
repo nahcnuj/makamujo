@@ -149,9 +149,10 @@ export function* solver(
         const sightData =
           noopResult.name === "idle" ? noopResult.state : undefined;
         const clickableElementIds = Array.isArray(
-          (sightData as any)?.clickableElementIds,
+          (sightData as Record<string, unknown>)?.clickableElementIds,
         )
-          ? ((sightData as any).clickableElementIds as string[])
+          ? ((sightData as Record<string, unknown>)
+              .clickableElementIds as string[])
           : ["bigCookie"];
         const candidateIds = listeners.isSilent()
           ? ["bigCookie"]
@@ -159,6 +160,7 @@ export function* solver(
             ? clickableElementIds
             : ["bigCookie"];
         const targetId =
+          // biome-ignore lint/style/noNonNullAssertion: solver guaranteed to have candidates
           candidateIds[Math.floor(Math.random() * candidateIds.length)]!;
 
         if (!(yield* runActions([Action.clickByElementId(targetId)]))) break;

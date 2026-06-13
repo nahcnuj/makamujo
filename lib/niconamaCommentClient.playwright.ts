@@ -1,11 +1,12 @@
 import type { AgentComment } from "automated-gameplay-transmitter";
+import type { NiconamaBrowserPage } from "./niconamaCommentClient";
 import { parseAgentCommentsFromResponseBody } from "./niconamaCommentClient.helpers";
 
 export const addNiconamaPlaywrightInitScript = async (
-  page: any,
+  page: NiconamaBrowserPage,
 ): Promise<void> => {
   try {
-    await page?.addInitScript?.(() => {
+    await page.addInitScript(() => {
       try {
         // suppress page unload hooks and replace close/open to avoid remote scripts
         // ejecting our instrumented browser instance.
@@ -31,11 +32,17 @@ export const addNiconamaPlaywrightInitScript = async (
       const origAdd = EventTarget.prototype.addEventListener;
       EventTarget.prototype.addEventListener = function (
         type: string,
-        listener: any,
-        opts: any,
+        listener: EventListener | EventListenerObject,
+        opts: unknown,
       ) {
         if (type === "beforeunload" || type === "unload") return;
-        return origAdd.call(this, type, listener, opts);
+        const addEventOptions =
+          typeof opts === "boolean" ||
+          typeof opts === "object" ||
+          typeof opts === "undefined"
+            ? (opts as boolean | AddEventListenerOptions | undefined)
+            : undefined;
+        return origAdd.call(this, type, listener, addEventOptions);
       };
     });
   } catch {
@@ -44,18 +51,15 @@ export const addNiconamaPlaywrightInitScript = async (
 };
 
 export const getBodyTextFromPage = async (
-  page: any,
+  page: NiconamaBrowserPage,
 ): Promise<string | null> => {
-  if (!page || (typeof page.isClosed === "function" && page.isClosed()))
-    return null;
+  if (page.isClosed()) return null;
 
   try {
-    const locator = page.locator?.("body");
-    if (locator && typeof locator.allTextContents === "function") {
-      const contents = await locator.allTextContents();
-      if (Array.isArray(contents) && contents.length > 0) {
-        return contents.join("");
-      }
+    const locator = page.locator("body");
+    const contents = await locator.allTextContents();
+    if (Array.isArray(contents) && contents.length > 0) {
+      return contents.join("");
     }
   } catch {
     // ignore locator failures
@@ -87,9 +91,9 @@ export const extractBodyTextFromHtml = (html: string): string | null => {
   return text.length > 0 ? text : null;
 };
 
-export const scanRenderedFrameForComments = async (
-  frame: any,
-): Promise<string[]> => {
+export const scanRenderedFrameForComments = async (frame: {
+  evaluate: <T>(fn: () => T) => Promise<T>;
+}): Promise<string[]> => {
   try {
     const pageComments = await frame.evaluate(() => {
       const selectors = [
@@ -161,7 +165,7 @@ export const getUniquePageComments = (
 };
 
 export const extractRenderedPageComments = async (
-  page: any,
+  page: NiconamaBrowserPage,
   seenCommentIdentifiers: Set<string>,
 ): Promise<AgentComment[]> => {
   try {
@@ -189,11 +193,10 @@ export const extractRenderedPageComments = async (
 };
 
 export const extractPageComments = async (
-  page: any,
+  page: NiconamaBrowserPage,
   seenCommentIdentifiers: Set<string>,
 ): Promise<AgentComment[]> => {
-  if (!page || (typeof page.isClosed === "function" && page.isClosed()))
-    return [];
+  if (page.isClosed()) return [];
   const renderedComments = await extractRenderedPageComments(
     page,
     seenCommentIdentifiers,
@@ -260,13 +263,13 @@ export const extractPageComments = async (
 };
 
 export const pollPageComments = async (
-  page: any,
+  page: NiconamaBrowserPage,
   seenCommentIdentifiers: Set<string>,
   intervalMs = 1_000,
   maxAttempts = 30,
 ): Promise<AgentComment[]> => {
   let attempts = 0;
-  while (!page.isClosed?.() && attempts < maxAttempts) {
+  while (!page.isClosed() && attempts < maxAttempts) {
     attempts += 1;
     try {
       const pageComments = await extractPageComments(
@@ -286,13 +289,13 @@ export const pollPageComments = async (
   return [];
 };
 
-export const startPlaywrightPagePolling = (
-  page: any,
+export const startNiconamaBrowserPagePolling = (
+  page: NiconamaBrowserPage,
   seenCommentIdentifiers: Set<string>,
   onComments: (comments: AgentComment[]) => void,
 ): ReturnType<typeof setInterval> => {
   return setInterval(async () => {
-    if (!page || page.isClosed?.()) return;
+    if (page.isClosed()) return;
     try {
       const comments = await extractPageComments(page, seenCommentIdentifiers);
       if (comments.length > 0) onComments(comments);
@@ -303,10 +306,9 @@ export const startPlaywrightPagePolling = (
 };
 
 export const waitForAnyCommentSelector = async (
-  page: any,
+  page: NiconamaBrowserPage,
   timeoutMs: number,
 ): Promise<void> => {
-  if (typeof page.waitForSelector !== "function") return;
   const selectors = [
     '[data-name="comment"]',
     ".comment-panel",
@@ -321,50 +323,51 @@ export const waitForAnyCommentSelector = async (
   ];
   const waiters = selectors.map((selector) =>
     Promise.resolve(
-      page.waitForSelector(selector, { timeout: timeoutMs }),
+      page.waitForSelector?.(selector, { timeout: timeoutMs }) ?? null,
     ).catch(() => null),
   );
   await Promise.race(waiters);
 };
 
-export const tryOpenRenderedCommentPanel = async (page: any): Promise<void> => {
-  if (!page || (typeof page.isClosed === "function" && page.isClosed())) return;
-  const safeEval = async <T>(
-    p: any,
-    fn: (pp: any) => Promise<T> | T,
-  ): Promise<T | null> => {
+export const tryOpenRenderedCommentPanel = async (
+  page: NiconamaBrowserPage,
+): Promise<void> => {
+  if (page.isClosed()) return;
+  const safeEval = async <T>(fn: () => Promise<T> | T): Promise<T | null> => {
     try {
-      return await fn(p);
+      return await fn();
     } catch {
       return null;
     }
   };
 
   if (typeof page.$ === "function") {
-    const commentButton = await safeEval(page, (pp) =>
-      pp.$('[data-name="comment"], .comment-tab, .comment-panel button'),
+    const commentButton = await safeEval(() =>
+      page.$('[data-name="comment"], .comment-tab, .comment-panel button'),
     );
-    if (commentButton) {
-      await safeEval(commentButton, (b: any) =>
-        b.click({ timeout: 2_000, force: true }),
+    if (commentButton && typeof commentButton.click === "function") {
+      await safeEval(async () =>
+        commentButton.click({ timeout: 2_000, force: true }),
       );
       return;
     }
   }
 
   if (typeof page.locator === "function") {
-    const loc = await safeEval(page, (pp) =>
-      pp.locator('[data-name="comment"], .comment-tab, .comment-panel button'),
+    const loc = await safeEval(() =>
+      page.locator(
+        '[data-name="comment"], .comment-tab, .comment-panel button',
+      ),
     );
     if (loc && typeof loc.first === "function") {
-      await safeEval(loc.first(), (l: any) => l.click({ timeout: 2_000 }));
+      await safeEval(async () => loc.first().click({ timeout: 2_000 }));
       return;
     }
   }
 
   if (typeof page.evaluate === "function") {
-    await safeEval(page, (pp) =>
-      pp.evaluate(() => {
+    await safeEval(() =>
+      page.evaluate(() => {
         const sel =
           '[data-name="comment"], .comment-tab, .comment-panel button';
         const el = document.querySelector(sel);

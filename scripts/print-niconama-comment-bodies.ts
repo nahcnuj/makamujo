@@ -1,3 +1,4 @@
+import type { AgentComment } from "automated-gameplay-transmitter";
 import {
   createNiconamaCommentClient,
   filterAgentCommentsWithText,
@@ -22,9 +23,15 @@ function extractCommentText(item: unknown): string | null {
 
 function buildCommentKey(item: unknown, text: string): string {
   const value =
-    item && typeof item === "object" ? ((item as any).data ?? item) : item;
-  const no = value?.no ?? "none";
-  const userId = value?.userId ?? value?.user_id ?? "unknown";
+    item && typeof item === "object"
+      ? ((item as Record<string, unknown>).data ?? item)
+      : item;
+  const valueObj =
+    value && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : {};
+  const no = valueObj.no ?? "none";
+  const userId = valueObj.userId ?? valueObj.user_id ?? "unknown";
   return `${text}|${no}|${userId}`;
 }
 
@@ -55,7 +62,7 @@ async function main() {
   try {
     const renderedComments = await client
       .fetchRenderedPageComments(WATCH_URL)
-      .catch(() => [] as any[]);
+      .catch(() => [] as AgentComment[]);
     for (const comment of filterAgentCommentsWithText(renderedComments)) {
       const text = extractCommentText(comment);
       if (!text) continue;
@@ -64,7 +71,7 @@ async function main() {
       printed.add(key);
       console.log(text);
     }
-  } catch (e) {
+  } catch {
     // ignore fallback extraction failures
   }
 

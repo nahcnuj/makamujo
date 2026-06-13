@@ -73,17 +73,17 @@ describe("createAgentStatusSections", () => {
     const sections = createAgentStatusSections({ currentGame: null } as any);
 
     expect(sections).toHaveLength(1);
-    const gameSection = sections[0]!;
-    expect(gameSection.title).toBe("『-』プレイ中");
-    expect(gameSection.rows).toEqual([]);
+    const gameSection = sections[0];
+    expect(gameSection?.title).toBe("『-』プレイ中");
+    expect(gameSection?.rows).toEqual([]);
   });
 
   it("shows fallback game title without detail rows when currentGame is missing", () => {
     const sections = createAgentStatusSections({} as any);
 
     expect(sections).toHaveLength(1);
-    const gameSection = sections[0]!;
-    expect(gameSection.title).toBe("『-』プレイ中");
-    expect(gameSection.rows).toEqual([]);
+    const gameSection = sections[0];
+    expect(gameSection?.title).toBe("『-』プレイ中");
+    expect(gameSection?.rows).toEqual([]);
   });
 });

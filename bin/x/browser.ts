@@ -111,7 +111,7 @@ const send = await createRetrySender(
       switch (action.name) {
         case "noop": {
           await setTimeout(100);
-          const { sight } = Games["CookieClicker"];
+          const { sight } = Games.CookieClicker;
           const [state, selectedText] = await Promise.all([
             browser.evaluate(sight),
             browser.evaluate(() => document.getSelection()?.toString()),

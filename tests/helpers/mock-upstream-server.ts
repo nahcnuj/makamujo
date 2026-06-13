@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import http from "http";
+import http from "node:http";
 
 const port = process.env.PORT ? Number(process.env.PORT) : 8888;
 
@@ -17,8 +17,8 @@ const server = http.createServer((req, res) => {
       try {
         res.write("data: PARTIAL"); // no terminating newline(s)
         // Abruptly close the socket to simulate an upstream truncation
-        res.socket && (res.socket as any).destroy();
-      } catch (e) {}
+        res.socket?.destroy?.();
+      } catch {}
     }, 50);
     return;
   }

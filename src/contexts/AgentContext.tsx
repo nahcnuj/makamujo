@@ -16,7 +16,7 @@ type Data = {
   silent: boolean;
   playing?: {
     name: keyof typeof Games;
-    state: any;
+    state: unknown;
   };
   streamState?: AgentState;
 };
@@ -101,14 +101,14 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
   useEffect(() => {
     const currentType =
       streamState && typeof streamState === "object"
-        ? (streamState as any).type
+        ? streamState.type
         : undefined;
     const currentTitle =
       streamState &&
       typeof streamState === "object" &&
-      (streamState as any).meta &&
-      typeof (streamState as any).meta.title === "string"
-        ? ((streamState as any).meta.title as string)
+      streamState.meta &&
+      typeof streamState.meta.title === "string"
+        ? streamState.meta.title
         : undefined;
 
     const prevType = prevTypeRef.current;
@@ -118,7 +118,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
     // same program URL becomes marked with the explicit "公開終了" marker
     // for the first time (title transitions from non-ended to ended).
     try {
-      if (currentType === "offline" && prevType === "live") {
+      if (currentType === undefined && prevType === "live") {
         window.location.reload();
         return;
       }
@@ -130,7 +130,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
         window.location.reload();
         return;
       }
-    } catch (e) {
+    } catch {
       // ignore reload errors in environments where window is unavailable
     }
 

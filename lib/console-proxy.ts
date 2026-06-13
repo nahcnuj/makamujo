@@ -1,8 +1,35 @@
-import { appendFileSync } from 'node:fs';
+import { appendFileSync } from "node:fs";
+import type {} from "node:timers";
+
+// Type-safe wrappers for global timer functions
+const _clearInterval = (id: ReturnType<typeof setInterval>) => {
+  globalThis.clearInterval(id);
+};
+const _clearTimeout = (id: ReturnType<typeof setTimeout>) => {
+  globalThis.clearTimeout(id);
+};
+
+const getCurrentStreamPayload = (): unknown => {
+  const payloadHook = (globalThis as Record<string, unknown>)
+    .__getCurrentStreamPayload;
+  if (typeof payloadHook === "function") {
+    try {
+      return (payloadHook as () => unknown)();
+    } catch {
+      // fall through to mirrored state
+    }
+  }
+  return (
+    (globalThis as Record<string, unknown>).__lastPublishedStreamState ?? {}
+  );
+};
 
 const appendDebugLog = (...args: unknown[]) => {
   try {
-    appendFileSync('/tmp/console-proxy-debug.log', args.map(String).join(' ') + '\n');
+    appendFileSync(
+      "/tmp/console-proxy-debug.log",
+      `${args.map(String).join(" ")}\n`,
+    );
   } catch {
     // ignore
   }
@@ -10,11 +37,12 @@ const appendDebugLog = (...args: unknown[]) => {
 
 export function streamUpstreamResponse(proxied: Response) {
   const responseHeaders = new Headers(proxied.headers);
-  responseHeaders.set('cache-control', 'no-cache');
+  responseHeaders.set("cache-control", "no-cache");
   // Remove content-length to avoid mismatches when streaming/chunked.
-  responseHeaders.delete('content-length');
-  const upstreamBody: any = proxied.body;
-  if (upstreamBody && typeof upstreamBody.getReader === 'function') {
+  responseHeaders.delete("content-length");
+  const upstreamBody: ReadableStream<Uint8Array> | null =
+    proxied.body as ReadableStream<Uint8Array> | null;
+  if (upstreamBody && typeof upstreamBody.getReader === "function") {
     const wrapped = new ReadableStream({
       start(controller) {
         const reader = upstreamBody.getReader();
@@ -22,34 +50,52 @@ export function streamUpstreamResponse(proxied: Response) {
           try {
             while (true) {
               const { done, value } = await reader.read();
-              if (done) { controller.close(); break; }
+              if (done) {
+                controller.close();
+                break;
+              }
               controller.enqueue(value);
             }
           } catch (e) {
-            try { controller.error(e); } catch {}
+            try {
+              controller.error(e);
+            } catch {}
           } finally {
-            try { reader.releaseLock(); } catch {}
+            try {
+              reader.releaseLock();
+            } catch {}
           }
         })();
       },
       cancel() {
-        try { upstreamBody.cancel && upstreamBody.cancel(); } catch {}
+        try {
+          upstreamBody.cancel?.();
+        } catch {}
       },
     });
 
-    return new Response(wrapped, { status: proxied.status, headers: responseHeaders });
+    return new Response(wrapped, {
+      status: proxied.status,
+      headers: responseHeaders,
+    });
   }
 
-  return new Response(proxied.body, { status: proxied.status, headers: responseHeaders });
+  return new Response(proxied.body, {
+    status: proxied.status,
+    headers: responseHeaders,
+  });
 }
 
-export function forwardSSEEventsToSink(upstreamBody: any, sink: (data: string) => void) {
-  if (!upstreamBody || typeof upstreamBody.getReader !== 'function') {
+export function forwardSSEEventsToSink(
+  upstreamBody: ReadableStream<Uint8Array> | null,
+  sink: (data: string) => void,
+) {
+  if (!upstreamBody || typeof upstreamBody.getReader !== "function") {
     return () => {};
   }
   const reader = upstreamBody.getReader();
   const decoder = new TextDecoder();
-  let buffer = '';
+  let buffer = "";
   let stopped = false;
 
   (async () => {
@@ -58,35 +104,45 @@ export function forwardSSEEventsToSink(upstreamBody: any, sink: (data: string) =
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        let idx = buffer.indexOf('\r\n\r\n');
-        if (idx === -1) idx = buffer.indexOf('\n\n');
+        let idx = buffer.indexOf("\r\n\r\n");
+        if (idx === -1) idx = buffer.indexOf("\n\n");
         while (idx !== -1) {
           const event = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + (buffer.startsWith('\r\n', idx) ? 4 : 2));
-          const dataLines = event.split(/\r?\n/).filter((l) => l.startsWith('data:'));
+          buffer = buffer.slice(idx + (buffer.startsWith("\r\n", idx) ? 4 : 2));
+          const dataLines = event
+            .split(/\r?\n/)
+            .filter((l) => l.startsWith("data:"));
           if (dataLines.length > 0) {
-            const data = dataLines.map((l) => l.replace(/^data:\s?/, '')).join('\n');
-            try { sink(data); } catch {}
+            const data = dataLines
+              .map((l) => l.replace(/^data:\s?/, ""))
+              .join("\n");
+            try {
+              sink(data);
+            } catch {}
           }
-          idx = buffer.indexOf('\r\n\r\n');
-          if (idx === -1) idx = buffer.indexOf('\n\n');
+          idx = buffer.indexOf("\r\n\r\n");
+          if (idx === -1) idx = buffer.indexOf("\n\n");
         }
       }
     } catch (err) {
-      console.warn('[WARN]', 'SSE reader failed', String(err));
+      console.warn("[WARN]", "SSE reader failed", String(err));
     } finally {
-      try { reader.cancel && typeof reader.cancel === 'function' && reader.cancel(); } catch {}
+      try {
+        reader.cancel && typeof reader.cancel === "function" && reader.cancel();
+      } catch {}
     }
   })();
 
   return () => {
     stopped = true;
-    try { reader.cancel && typeof reader.cancel === 'function' && reader.cancel(); } catch {}
+    try {
+      reader.cancel && typeof reader.cancel === "function" && reader.cancel();
+    } catch {}
   };
 }
 
-let BROADCASTING_HOST = process.env.BROADCASTING_HOST ?? 'localhost';
-let BROADCASTING_PORT = process.env.BROADCASTING_PORT ?? '7777';
+let BROADCASTING_HOST = process.env.BROADCASTING_HOST ?? "localhost";
+let BROADCASTING_PORT = process.env.BROADCASTING_PORT ?? "7777";
 
 export function setBroadcastingTarget(host: string, port: string | number) {
   BROADCASTING_HOST = host;
@@ -97,26 +153,33 @@ export function buildProxyHeaders(req: Request, proxyBase: string) {
   const proxyHeaders = new Headers(req.headers);
   try {
     const proxyBaseHost = new URL(proxyBase).host;
-    proxyHeaders.set('host', proxyBaseHost);
+    proxyHeaders.set("host", proxyBaseHost);
   } catch {
-    proxyHeaders.set('host', `${BROADCASTING_HOST}:${BROADCASTING_PORT}`);
+    proxyHeaders.set("host", `${BROADCASTING_HOST}:${BROADCASTING_PORT}`);
   }
-  proxyHeaders.delete('origin');
-  proxyHeaders.delete('referer');
-  if (!proxyHeaders.has('accept')) proxyHeaders.set('accept', 'text/event-stream');
+  proxyHeaders.delete("origin");
+  proxyHeaders.delete("referer");
+  if (!proxyHeaders.has("accept"))
+    proxyHeaders.set("accept", "text/event-stream");
   return proxyHeaders;
 }
 
 export function computeProxyBase(req: Request) {
   let proxyBase = `http://${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
   try {
-    const incomingHost = req.headers.get('host')?.trim().toLowerCase() ?? '';
+    const incomingHost = req.headers.get("host")?.trim().toLowerCase() ?? "";
     if (incomingHost) {
       try {
         const parsedProxyBase = new URL(proxyBase);
-        const [incomingHostname, incomingPort = parsedProxyBase.port || (parsedProxyBase.protocol === 'https:' ? '443' : '80')] = incomingHost.split(':');
+        const [
+          incomingHostname,
+          incomingPort = parsedProxyBase.port ||
+            (parsedProxyBase.protocol === "https:" ? "443" : "80"),
+        ] = incomingHost.split(":");
         const proxyHostname = parsedProxyBase.hostname.toLowerCase();
-        const proxyPort = parsedProxyBase.port || (parsedProxyBase.protocol === 'https:' ? '443' : '80');
+        const proxyPort =
+          parsedProxyBase.port ||
+          (parsedProxyBase.protocol === "https:" ? "443" : "80");
         if (incomingHostname === proxyHostname && incomingPort === proxyPort) {
           proxyBase = `http://127.0.0.1:${BROADCASTING_PORT}`;
         }
@@ -128,17 +191,22 @@ export function computeProxyBase(req: Request) {
 
 export function computeProxyUrl(req: Request, proxyBase: string) {
   let parsed: URL;
-  try { parsed = new URL(req.url); } catch (err) {
-    const hostForParse = req.headers.get('host') ?? `${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
+  try {
+    parsed = new URL(req.url);
+  } catch {
+    const hostForParse =
+      req.headers.get("host") ?? `${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
     parsed = new URL(req.url, `http://${hostForParse}`);
   }
   // Ensure we don't produce duplicate slashes when joining base and pathname
-  const base = proxyBase.endsWith('/') ? proxyBase.slice(0, -1) : proxyBase;
-  const pathname = parsed.pathname.startsWith('/') ? parsed.pathname : `/${parsed.pathname}`;
-  return `${base}${pathname}${parsed.search ?? ''}`;
+  const base = proxyBase.endsWith("/") ? proxyBase.slice(0, -1) : proxyBase;
+  const pathname = parsed.pathname.startsWith("/")
+    ? parsed.pathname
+    : `/${parsed.pathname}`;
+  return `${base}${pathname}${parsed.search ?? ""}`;
 }
 
-export async function fetchMetaSnapshot(proxyBase: string): Promise<any> {
+export async function fetchMetaSnapshot(proxyBase: string): Promise<unknown> {
   try {
     // Attempt to fetch current meta. If the result lacks `niconama`, poll
     // briefly to give in-flight published state updates a chance to arrive.
@@ -146,8 +214,8 @@ export async function fetchMetaSnapshot(proxyBase: string): Promise<any> {
     try {
       const res = await fetch(url);
       const json = await res.json().catch(() => ({}));
-      if (json && typeof json === 'object' && json.niconama) return json;
-    } catch (err) {
+      if (json && typeof json === "object" && json.niconama) return json;
+    } catch {
       // fall through to polling below
     }
 
@@ -156,7 +224,7 @@ export async function fetchMetaSnapshot(proxyBase: string): Promise<any> {
       try {
         const r = await fetch(url);
         const j = await r.json().catch(() => ({}));
-        if (j && typeof j === 'object' && j.niconama) return j;
+        if (j && typeof j === "object" && j.niconama) return j;
       } catch {}
       // small delay between polls
       // eslint-disable-next-line no-await-in-loop
@@ -167,11 +235,11 @@ export async function fetchMetaSnapshot(proxyBase: string): Promise<any> {
       const finalRes = await fetch(url);
       return await finalRes.json().catch(() => ({}));
     } catch (err) {
-      console.warn('[DIAG] fetchMetaSnapshot final fetch failed', String(err));
+      console.warn("[DIAG] fetchMetaSnapshot final fetch failed", String(err));
       return {};
     }
   } catch (err) {
-    console.warn('[DIAG] fetchMetaSnapshot failed', String(err));
+    console.warn("[DIAG] fetchMetaSnapshot failed", String(err));
     return {};
   }
 }
@@ -180,11 +248,14 @@ export async function fetchMetaSnapshot(proxyBase: string): Promise<any> {
  * Returns the position and length of the first SSE frame boundary (\n\n or \r\n\r\n)
  * in the given buffer, or null if no complete boundary is found.
  */
-function findSseBoundary(buffer: string): { end: number; length: number } | null {
-  const lfIdx = buffer.indexOf('\n\n');
-  const crlfIdx = buffer.indexOf('\r\n\r\n');
+function findSseBoundary(
+  buffer: string,
+): { end: number; length: number } | null {
+  const lfIdx = buffer.indexOf("\n\n");
+  const crlfIdx = buffer.indexOf("\r\n\r\n");
   if (lfIdx === -1 && crlfIdx === -1) return null;
-  if (lfIdx !== -1 && (crlfIdx === -1 || lfIdx <= crlfIdx)) return { end: lfIdx, length: 2 };
+  if (lfIdx !== -1 && (crlfIdx === -1 || lfIdx <= crlfIdx))
+    return { end: lfIdx, length: 2 };
   return { end: crlfIdx, length: 4 };
 }
 
@@ -214,8 +285,19 @@ export function createResilientSseProxy(
   // (e.g., POST /api/meta) can be forwarded to proxied SSE clients as well.
   // This allows clients connected through the proxy to receive server-side
   // sseBroadcast calls.
-  (createResilientSseProxy as any)._controllers = (createResilientSseProxy as any)._controllers ?? new Set<ReadableStreamDefaultController<Uint8Array>>();
-  const resilientControllers: Set<ReadableStreamDefaultController<Uint8Array>> = (createResilientSseProxy as any)._controllers;
+  const controllers = (
+    createResilientSseProxy as unknown as Record<string, unknown>
+  )._controllers as
+    | Set<ReadableStreamDefaultController<Uint8Array>>
+    | undefined;
+  if (!controllers) {
+    (
+      createResilientSseProxy as unknown as Record<string, unknown>
+    )._controllers = new Set<ReadableStreamDefaultController<Uint8Array>>();
+  }
+  const resilientControllers: Set<ReadableStreamDefaultController<Uint8Array>> =
+    (createResilientSseProxy as unknown as Record<string, unknown>)
+      ._controllers as Set<ReadableStreamDefaultController<Uint8Array>>;
   let stopped = false;
   let abortController = new AbortController();
   let currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
@@ -224,24 +306,25 @@ export function createResilientSseProxy(
 
   // Preserve SSE-relevant headers from the initial upstream response.
   const responseHeaders = new Headers();
-  responseHeaders.set('Content-Type', 'text/event-stream');
-  responseHeaders.set('Cache-Control', 'no-cache');
-  responseHeaders.set('Connection', 'keep-alive');
-  const corsHeader = firstResponse.headers.get('Access-Control-Allow-Origin');
-  if (corsHeader) responseHeaders.set('Access-Control-Allow-Origin', corsHeader);
-  else responseHeaders.set('Access-Control-Allow-Origin', '*');
+  responseHeaders.set("Content-Type", "text/event-stream");
+  responseHeaders.set("Cache-Control", "no-cache");
+  responseHeaders.set("Connection", "keep-alive");
+  const corsHeader = firstResponse.headers.get("Access-Control-Allow-Origin");
+  if (corsHeader)
+    responseHeaders.set("Access-Control-Allow-Origin", corsHeader);
+  else responseHeaders.set("Access-Control-Allow-Origin", "*");
 
   const processUpstreamBody = async (
     upstream: Response,
     controller: ReadableStreamDefaultController<Uint8Array>,
   ): Promise<void> => {
     const body = upstream.body as ReadableStream<Uint8Array> | null;
-    if (!body || typeof body.getReader !== 'function') return;
+    if (!body || typeof body.getReader !== "function") return;
 
     const reader = body.getReader();
     currentReader = reader;
     const decoder = new TextDecoder();
-    let sseBuffer = '';
+    let sseBuffer = "";
     const readTimeoutMs = 2_000;
 
     const readWithTimeout = async () => {
@@ -250,11 +333,18 @@ export function createResilientSseProxy(
         return await Promise.race([
           reader.read(),
           new Promise<never>((_, reject) => {
-            timeoutId = setTimeout(() => reject(new Error('upstream read timeout')), readTimeoutMs);
+            timeoutId = setTimeout(
+              () => reject(new Error("upstream read timeout")),
+              readTimeoutMs,
+            );
           }),
-        ]);
+        ] as readonly Promise<
+          Awaited<ReturnType<typeof reader.read>> | never
+        >[]);
       } finally {
-        if (timeoutId !== null) clearTimeout(timeoutId);
+        if (timeoutId !== null) {
+          _clearTimeout(timeoutId);
+        }
       }
     };
 
@@ -264,7 +354,7 @@ export function createResilientSseProxy(
         try {
           result = await readWithTimeout();
         } catch (err) {
-          appendDebugLog('upstream read timeout or error', String(err));
+          appendDebugLog("upstream read timeout or error", String(err));
           break;
         }
         const { done, value } = result;
@@ -277,7 +367,9 @@ export function createResilientSseProxy(
           const { end, length } = boundary;
           const frame = sseBuffer.slice(0, end + length);
           sseBuffer = sseBuffer.slice(end + length);
-          try { controller.enqueue(encoder.encode(frame)); } catch {}
+          try {
+            controller.enqueue(encoder.encode(frame));
+          } catch {}
           boundary = findSseBoundary(sseBuffer);
         }
       }
@@ -285,17 +377,23 @@ export function createResilientSseProxy(
       currentReader = null;
       // Any incomplete frame remaining in sseBuffer is discarded here, preventing
       // a truncated/corrupt event from being dispatched after reconnect.
-      try { reader.cancel(); } catch {}
+      try {
+        reader.cancel();
+      } catch {}
     }
   };
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      try { resilientControllers.add(controller); } catch {}
+      try {
+        resilientControllers.add(controller);
+      } catch {}
       if (keepaliveIntervalMs > 0) {
         keepaliveTimer = setInterval(() => {
           if (stopped) return;
-          try { controller.enqueue(encoder.encode(': keepalive\n\n')); } catch {}
+          try {
+            controller.enqueue(encoder.encode(": keepalive\n\n"));
+          } catch {}
         }, keepaliveIntervalMs);
       }
 
@@ -303,9 +401,13 @@ export function createResilientSseProxy(
       // promptly and the EventSource 'open' lifecycle proceeds without
       // waiting for the first upstream frame. Also emit a `: connected`
       // marker immediately after to indicate the proxy is active.
-      try { controller.enqueue(encoder.encode(': keepalive\n\n')); } catch {}
-      try { controller.enqueue(encoder.encode(': connected\n\n')); } catch {}
-      console.debug('[DIAG] resilient proxy enqueued initial :connected chunk');
+      try {
+        controller.enqueue(encoder.encode(": keepalive\n\n"));
+      } catch {}
+      try {
+        controller.enqueue(encoder.encode(": connected\n\n"));
+      } catch {}
+      console.debug("[DIAG] resilient proxy enqueued initial :connected chunk");
 
       (async () => {
         try {
@@ -316,63 +418,94 @@ export function createResilientSseProxy(
           try {
             await processUpstreamBody(firstResponse, controller);
           } catch (err) {
-            console.error('[ERROR]', 'resilient proxy initial body read failed', String(err));
-            appendDebugLog('initial body read failed', String(err));
+            console.error(
+              "[ERROR]",
+              "resilient proxy initial body read failed",
+              String(err),
+            );
+            appendDebugLog("initial body read failed", String(err));
           }
-          console.log('[DIAG] resilient proxy initial upstream body completed');
-          appendDebugLog('initial upstream body completed');
-          appendDebugLog('before reconnect loop', stopped);
+          console.log("[DIAG] resilient proxy initial upstream body completed");
+          appendDebugLog("initial upstream body completed");
+          appendDebugLog("before reconnect loop", stopped);
 
           while (!stopped) {
-            await new Promise<void>(r => setTimeout(r, reconnectDelayMs));
+            await new Promise<void>((r) => setTimeout(r, reconnectDelayMs));
             if (stopped) break;
 
             abortController = new AbortController();
             try {
-              console.log('[DIAG] resilient proxy reconnecting upstream');
-            appendDebugLog('reconnecting upstream');
-            const upstream = await fetchUpstream(abortController.signal);
-            console.log('[DIAG] resilient proxy reconnect fetched', { status: upstream.status });
-            appendDebugLog('reconnect fetched', upstream.status);
-            try { await processUpstreamBody(upstream, controller); } catch (err) {
-              console.error('[ERROR]', 'resilient proxy reconnect body read failed', String(err));
-              appendDebugLog('reconnect body read failed', String(err));
-            }
+              console.log("[DIAG] resilient proxy reconnecting upstream");
+              appendDebugLog("reconnecting upstream");
+              const upstream = await fetchUpstream(abortController.signal);
+              console.log("[DIAG] resilient proxy reconnect fetched", {
+                status: upstream.status,
+              });
+              appendDebugLog("reconnect fetched", upstream.status);
+              try {
+                await processUpstreamBody(upstream, controller);
+              } catch (err) {
+                console.error(
+                  "[ERROR]",
+                  "resilient proxy reconnect body read failed",
+                  String(err),
+                );
+                appendDebugLog("reconnect body read failed", String(err));
+              }
             } catch (err) {
-              console.warn('[WARN]', 'resilient proxy reconnect fetch failed', String(err));
+              console.warn(
+                "[WARN]",
+                "resilient proxy reconnect fetch failed",
+                String(err),
+              );
               // Connection failed; will retry after delay.
             }
           }
         } finally {
-          appendDebugLog('outer loop exiting', stopped ? 'stopped' : 'completed');
+          appendDebugLog(
+            "outer loop exiting",
+            stopped ? "stopped" : "completed",
+          );
           if (keepaliveTimer) {
-            clearInterval(keepaliveTimer);
+            _clearInterval(keepaliveTimer);
             keepaliveTimer = null;
           }
-          try { resilientControllers.delete(controller); } catch {}
-          try { controller.close(); } catch {}
+          try {
+            resilientControllers.delete(controller);
+          } catch {}
+          try {
+            controller.close();
+          } catch {}
         }
       })().catch((err) => {
-        console.error('[ERROR]', 'resilient SSE proxy failed', String(err));
+        console.error("[ERROR]", "resilient SSE proxy failed", String(err));
         if (keepaliveTimer) {
           clearInterval(keepaliveTimer);
           keepaliveTimer = null;
         }
-        try { resilientControllers.delete(controller); } catch {}
-        try { controller.close(); } catch {}
+        try {
+          resilientControllers.delete(controller);
+        } catch {}
+        try {
+          controller.close();
+        } catch {}
       });
     },
     cancel() {
       stopped = true;
-      appendDebugLog('stream cancelled');
+      appendDebugLog("stream cancelled");
       if (keepaliveTimer) {
-        clearInterval(keepaliveTimer);
+        _clearInterval(keepaliveTimer);
         keepaliveTimer = null;
       }
       // Abort any in-flight reconnect fetch and cancel any active upstream reader,
       // allowing the loop to exit promptly without leaking the upstream connection.
-      try { abortController.abort(); } catch {}
-      try { currentReader?.cancel(); } catch {}
+      try {
+        abortController.abort();
+      } catch {}
+      try {
+        currentReader?.cancel();
+      } catch {}
     },
   });
 
@@ -384,63 +517,105 @@ export function createResilientSseProxy(
 
 // Helper to access currently active resilient proxy controllers from
 // other modules (e.g., index.ts) so broadcasts can reach proxied clients.
-export function getResilientProxyControllers(): Set<ReadableStreamDefaultController<Uint8Array>> {
-  return (createResilientSseProxy as any)._controllers ?? new Set();
+export function getResilientProxyControllers(): Set<
+  ReadableStreamDefaultController<Uint8Array>
+> {
+  return (
+    ((createResilientSseProxy as unknown as Record<string, unknown>)
+      ._controllers as Set<ReadableStreamDefaultController<Uint8Array>>) ??
+    new Set()
+  );
 }
 
-export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, proxyHeaders: Headers): Promise<Response> {
+export async function proxyConsoleApiWsRequest(
+  req: Request,
+  proxyUrl: string,
+  proxyHeaders: Headers,
+): Promise<Response> {
   // HEAD handling: probe upstream with GET and return headers only
-  if ((req.method || 'GET').toUpperCase() === 'HEAD') {
+  if ((req.method || "GET").toUpperCase() === "HEAD") {
     // Try a true HEAD first (less likely to trigger streaming body).
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 2000);
       try {
-        const headRes = await fetch(proxyUrl.toString(), { method: 'HEAD', headers: proxyHeaders, signal: controller.signal } as any);
+        const headRes = await fetch(proxyUrl.toString(), {
+          method: "HEAD",
+          headers: proxyHeaders,
+          signal: controller.signal,
+        } as unknown as RequestInit);
         clearTimeout(timeout);
-        console.debug('[DIAG] HEAD probe upstream (HEAD) ->', { url: proxyUrl, status: headRes.status, ct: headRes.headers.get('content-type') });
+        console.debug("[DIAG] HEAD probe upstream (HEAD) ->", {
+          url: proxyUrl,
+          status: headRes.status,
+          ct: headRes.headers.get("content-type"),
+        });
         // If HEAD indicates OK and an SSE content-type, return it. Otherwise
         // treat the HEAD response as a probe failure and fall through to the
         // GET fallback below so we can decide on a conservative 200 fallback
         // instead of returning upstream 4xx/5xx statuses directly to the test.
-        const ct = headRes.headers.get('content-type') || '';
-        if (headRes.ok && ct.includes('text/event-stream')) {
+        const ct = headRes.headers.get("content-type") || "";
+        if (headRes.ok && ct.includes("text/event-stream")) {
           const responseHeaders = new Headers(headRes.headers);
-          responseHeaders.set('cache-control', 'no-cache');
-          return new Response(null, { status: headRes.status, headers: responseHeaders });
+          responseHeaders.set("cache-control", "no-cache");
+          return new Response(null, {
+            status: headRes.status,
+            headers: responseHeaders,
+          });
         }
         // Otherwise, fall through to GET fallback below.
       } finally {
         clearTimeout(timeout);
       }
-    } catch (headErr) {
+    } catch {
       // HEAD failed or timed out; fall back to a short GET probe and abort quickly
       try {
         const controller = new AbortController();
         const to = setTimeout(() => controller.abort(), 2_000);
         try {
           const upstreamGet = await fetch(proxyUrl.toString(), {
-            method: 'GET',
+            method: "GET",
             headers: proxyHeaders,
             signal: controller.signal,
-          } as any);
-          console.debug('[DIAG] HEAD probe upstream (GET fallback) ->', { url: proxyUrl, status: upstreamGet.status, ct: upstreamGet.headers.get('content-type') });
+          } as unknown as RequestInit);
+          console.debug("[DIAG] HEAD probe upstream (GET fallback) ->", {
+            url: proxyUrl,
+            status: upstreamGet.status,
+            ct: upstreamGet.headers.get("content-type"),
+          });
           // Ensure we abort/close any streaming body so the connection isn't left open.
-          try { upstreamGet.body?.cancel && typeof upstreamGet.body.cancel === 'function' && upstreamGet.body.cancel(); } catch {}
+          try {
+            upstreamGet.body?.cancel &&
+              typeof upstreamGet.body.cancel === "function" &&
+              upstreamGet.body.cancel();
+          } catch {}
           const responseHeaders = new Headers(upstreamGet.headers);
-          if ((upstreamGet.headers.get('content-type') || '').includes('text/event-stream')) {
-            responseHeaders.set('cache-control', 'no-cache');
+          if (
+            (upstreamGet.headers.get("content-type") || "").includes(
+              "text/event-stream",
+            )
+          ) {
+            responseHeaders.set("cache-control", "no-cache");
           }
-          return new Response(null, { status: upstreamGet.status, headers: responseHeaders });
+          return new Response(null, {
+            status: upstreamGet.status,
+            headers: responseHeaders,
+          });
         } finally {
           clearTimeout(to);
         }
       } catch (err) {
-        console.warn('[DIAG] HEAD probe failed, returning conservative SSE response', String(err));
+        console.warn(
+          "[DIAG] HEAD probe failed, returning conservative SSE response",
+          String(err),
+        );
         // Conservative fallback: return a successful SSE-like response so
         // clients (and test probes) that expect an EventSource endpoint
         // see a positive result even when the upstream HEAD/GET probe fails.
-        const fallbackHeaders = new Headers({ 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
+        const fallbackHeaders = new Headers({
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+        });
         return new Response(null, { status: 200, headers: fallbackHeaders });
       }
     }
@@ -449,29 +624,37 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
   // For SSE GET requests, probe upstream once and use the resilient proxy if SSE is returned.
   // This prevents ERR_INCOMPLETE_CHUNKED_ENCODING errors in the browser caused by upstream drops.
   if (
-    (req.method || 'GET').toUpperCase() === 'GET' &&
-    (req.headers.get('accept') ?? '').includes('text/event-stream')
+    (req.method || "GET").toUpperCase() === "GET" &&
+    (req.headers.get("accept") ?? "").includes("text/event-stream")
   ) {
     // Fast-path: if proxyUrl points back to this same server (self-proxy),
     // avoid fetching over HTTP which can cause re-entrancy and instead
     // provide a local SSE stream based on the mirrored global state.
     try {
-      const incomingHost = req.headers.get('host') ?? '';
+      const incomingHost = req.headers.get("host") ?? "";
       let isSelfProxy = false;
       try {
         const parsedProxy = new URL(proxyUrl.toString());
         const proxyHost = parsedProxy.hostname;
-        const proxyPort = parsedProxy.port || '80';
+        const proxyPort = parsedProxy.port || "80";
         if (incomingHost) {
-          const [incomingHostname, incomingPort = '80'] = incomingHost.split(':');
-          isSelfProxy = incomingHostname === proxyHost && incomingPort === proxyPort;
+          const [incomingHostname, incomingPort = "80"] =
+            incomingHost.split(":");
+          isSelfProxy =
+            incomingHostname === proxyHost && incomingPort === proxyPort;
         } else {
-          isSelfProxy = proxyHost === '127.0.0.1' || proxyHost === 'localhost' || proxyPort === BROADCASTING_PORT;
+          isSelfProxy =
+            proxyHost === "127.0.0.1" ||
+            proxyHost === "localhost" ||
+            proxyPort === BROADCASTING_PORT;
         }
       } catch {}
 
       if (isSelfProxy) {
-        console.debug('[DIAG] proxyConsoleApiWsRequest selected self-proxy fast-path', { proxyUrl, incomingHost });
+        console.debug(
+          "[DIAG] proxyConsoleApiWsRequest selected self-proxy fast-path",
+          { proxyUrl, incomingHost },
+        );
         // Immediate local SSE stream so downstream EventSource transitions
         // to 'open' deterministically. Do not synthesize `niconama` data
         // before opening — instead wait up to `maxWaitMs` asynchronously
@@ -482,9 +665,11 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
 
         const stream = new ReadableStream<Uint8Array>({
           start(controller) {
-            try { controller.enqueue(encoder.encode(': connected\n\n')); } catch {}
+            try {
+              controller.enqueue(encoder.encode(": connected\n\n"));
+            } catch {}
 
-            let lastSent = '';
+            let lastSent = "";
             const sendIfChanged = (obj: unknown) => {
               try {
                 const s = JSON.stringify(obj ?? {});
@@ -501,7 +686,7 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
             // if present (avoids racing with raw mirrors), otherwise fall back
             // to the mirrored raw published state.
             try {
-              const immediate = (globalThis as any).__getCurrentStreamPayload?.() ?? (globalThis as any).__lastPublishedStreamState ?? {};
+              const immediate = getCurrentStreamPayload();
               sendIfChanged(immediate);
             } catch {}
 
@@ -510,67 +695,130 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
             const pollIntervalMs = 100;
             const pollTimer = setInterval(() => {
               try {
-                const p = (globalThis as any).__getCurrentStreamPayload?.() ?? (globalThis as any).__lastPublishedStreamState ?? {};
+                const p = getCurrentStreamPayload();
                 sendIfChanged(p);
               } catch {}
             }, pollIntervalMs);
-            (controller as any)._poll = pollTimer;
+            (controller as unknown as Record<string, unknown>)._poll =
+              pollTimer;
             // Stop polling after a short window to avoid long-lived timers.
             const pollStopTimer = setTimeout(() => {
-              try { clearInterval(pollTimer); } catch {}
-              try { (controller as any)._poll = undefined; } catch {}
+              try {
+                _clearInterval(pollTimer);
+              } catch {}
+              try {
+                (controller as unknown as Record<string, unknown>)._poll =
+                  undefined;
+              } catch {}
             }, 10_000);
-            (controller as any)._pollStop = pollStopTimer;
+            (controller as unknown as Record<string, unknown>)._pollStop =
+              pollStopTimer;
 
             (async () => {
-                const start = Date.now();
-                let payload = (globalThis as any).__getCurrentStreamPayload?.() ?? (globalThis as any).__lastPublishedStreamState ?? {};
-                while (!(payload && (payload as any).niconama) && (Date.now() - start) < maxWaitMs) {
+              const start = Date.now();
+              let payload = getCurrentStreamPayload();
+              while (
+                !(payload && (payload as Record<string, unknown>).niconama) &&
+                Date.now() - start < maxWaitMs
+              ) {
                 // eslint-disable-next-line no-await-in-loop
-                  await new Promise((r) => setTimeout(r, pollMs));
-                  payload = (globalThis as any).__getCurrentStreamPayload?.() ?? (globalThis as any).__lastPublishedStreamState ?? {};
+                await new Promise<void>((resolve) => {
+                  setTimeout(resolve, pollMs);
+                });
+                payload = getCurrentStreamPayload();
               }
 
-              console.debug('[DIAG] self-proxy fast-path waited ms=', Date.now() - start, 'hasNiconama=', !!(payload && (payload as any).niconama));
+              console.debug(
+                "[DIAG] self-proxy fast-path waited ms=",
+                Date.now() - start,
+                "hasNiconama=",
+                !!(payload && (payload as Record<string, unknown>).niconama),
+              );
 
-              if (payload && (payload as any).niconama) {
+              if (payload && (payload as Record<string, unknown>).niconama) {
                 sendIfChanged(payload ?? {});
                 // Retransmit shortly if state races later (best-effort)
                 setTimeout(() => {
-                  try { const p2 = (globalThis as any).__lastPublishedStreamState ?? {}; sendIfChanged(p2); } catch {}
+                  try {
+                    const p2 =
+                      (globalThis as Record<string, unknown>)
+                        .__lastPublishedStreamState ?? {};
+                    sendIfChanged(p2);
+                  } catch {}
                 }, 250);
                 setTimeout(() => {
-                  try { const p3 = (globalThis as any).__lastPublishedStreamState ?? {}; sendIfChanged(p3); } catch {}
+                  try {
+                    const p3 =
+                      (globalThis as Record<string, unknown>)
+                        .__lastPublishedStreamState ?? {};
+                    sendIfChanged(p3);
+                  } catch {}
                 }, 1000);
-                console.debug('[DIAG] self-proxy enqueued real payload (has niconama)');
+                console.debug(
+                  "[DIAG] self-proxy enqueued real payload (has niconama)",
+                );
               } else {
-                try { controller.enqueue(encoder.encode(': fallback\n\n')); } catch {}
+                try {
+                  controller.enqueue(encoder.encode(": fallback\n\n"));
+                } catch {}
                 const fallbackKeepaliveMs = 5_000;
                 const keepalive = setInterval(() => {
-                  try { controller.enqueue(encoder.encode(': keepalive\n\n')); } catch {}
+                  try {
+                    controller.enqueue(encoder.encode(": keepalive\n\n"));
+                  } catch {}
                 }, fallbackKeepaliveMs);
-                (controller as any)._keepalive = keepalive;
-                console.debug('[DIAG] self-proxy enqueued synthetic fallback (no niconama within timeout)');
+                (controller as unknown as Record<string, unknown>)._keepalive =
+                  keepalive;
+                console.debug(
+                  "[DIAG] self-proxy enqueued synthetic fallback (no niconama within timeout)",
+                );
               }
             })();
           },
           cancel() {
-            try { clearInterval((this as any)._keepalive); } catch {}
-            try { clearInterval((this as any)._poll); } catch {}
-            try { clearTimeout((this as any)._pollStop); } catch {}
+            try {
+              clearInterval(
+                (this as unknown as Record<string, unknown>)
+                  ._keepalive as number,
+              );
+            } catch {}
+            try {
+              clearInterval(
+                (this as unknown as Record<string, unknown>)._poll as number,
+              );
+            } catch {}
+            try {
+              clearTimeout(
+                (this as unknown as Record<string, unknown>)
+                  ._pollStop as number,
+              );
+            } catch {}
           },
         });
 
-        const headers = new Headers({ 'content-type': 'text/event-stream', 'cache-control': 'no-cache', 'connection': 'keep-alive' });
-        if (!headers.get('Access-Control-Allow-Origin')) headers.set('Access-Control-Allow-Origin', '*');
+        const headers = new Headers({
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          connection: "keep-alive",
+        });
+        if (!headers.get("Access-Control-Allow-Origin"))
+          headers.set("Access-Control-Allow-Origin", "*");
         return new Response(stream, { status: 200, headers });
       }
     } catch {}
     let probe: Response;
     try {
-      probe = await fetch(proxyUrl.toString(), { method: 'GET', headers: proxyHeaders });
+      probe = await fetch(proxyUrl.toString(), {
+        method: "GET",
+        headers: proxyHeaders,
+      });
     } catch (err) {
-      console.warn('[DIAG] SSE probe fetch failed ->', String(err), 'proxyUrl=', proxyUrl);
+      console.warn(
+        "[DIAG] SSE probe fetch failed ->",
+        String(err),
+        "proxyUrl=",
+        proxyUrl,
+      );
       // Return a synthetic streaming SSE fallback so downstream EventSource
       // receives an immediate chunk and transitions to 'open'. This helps
       // tests that probe the proxy when the upstream is temporarily
@@ -578,32 +826,54 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
       const encoder = new TextEncoder();
       const stream = new ReadableStream<Uint8Array>({
         start(controller) {
-          try { controller.enqueue(encoder.encode(': fallback\n\n')); } catch {}
+          try {
+            controller.enqueue(encoder.encode(": fallback\n\n"));
+          } catch {}
           const fallbackKeepaliveMs = 5_000;
           const keepalive = setInterval(() => {
-            try { controller.enqueue(encoder.encode(': keepalive\n\n')); } catch {}
+            try {
+              controller.enqueue(encoder.encode(": keepalive\n\n"));
+            } catch {}
           }, fallbackKeepaliveMs);
-          (controller as any)._keepalive = keepalive;
+          (controller as unknown as Record<string, unknown>)._keepalive =
+            keepalive;
         },
         cancel() {
-          try { clearInterval((this as any)._keepalive); } catch {}
+          try {
+            const keepalive = (this as unknown as Record<string, unknown>)
+              ._keepalive;
+            if (keepalive !== undefined) {
+              _clearInterval(keepalive as ReturnType<typeof setInterval>);
+            }
+          } catch {}
         },
       });
-      const fallbackHeaders = new Headers({ 'content-type': 'text/event-stream', 'cache-control': 'no-cache', 'connection': 'keep-alive' });
-      if (!fallbackHeaders.get('Access-Control-Allow-Origin')) fallbackHeaders.set('Access-Control-Allow-Origin', '*');
+      const fallbackHeaders = new Headers({
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache",
+        connection: "keep-alive",
+      });
+      if (!fallbackHeaders.get("Access-Control-Allow-Origin"))
+        fallbackHeaders.set("Access-Control-Allow-Origin", "*");
       return new Response(stream, { status: 200, headers: fallbackHeaders });
     }
-    const contentType = probe.headers.get('content-type') ?? '';
-    console.debug('[DEBUG] probe upstream ->', { url: proxyUrl, status: probe.status, contentType });
-    if (!probe.ok || !contentType.includes('text/event-stream')) {
-      console.warn('[WARN] upstream probe returned non-SSE or non-ok; passing through', { url: proxyUrl, status: probe.status, contentType });
+    const contentType = probe.headers.get("content-type") ?? "";
+    console.debug("[DEBUG] probe upstream ->", {
+      url: proxyUrl,
+      status: probe.status,
+      contentType,
+    });
+    if (!probe.ok || !contentType.includes("text/event-stream")) {
+      console.warn(
+        "[WARN] upstream probe returned non-SSE or non-ok; passing through",
+        { url: proxyUrl, status: probe.status, contentType },
+      );
       // Upstream returned a non-SSE or error response — pass it through as-is.
       return streamUpstreamResponse(probe);
     }
     const headers = proxyHeaders;
-    return createResilientSseProxy(
-      probe,
-      (signal) => fetch(proxyUrl.toString(), { method: 'GET', headers, signal }),
+    return createResilientSseProxy(probe, (signal) =>
+      fetch(proxyUrl.toString(), { method: "GET", headers, signal }),
     );
   }
 
@@ -614,8 +884,8 @@ export async function proxyConsoleApiWsRequest(req: Request, proxyUrl: string, p
     body: req.body,
   });
 
-  const contentType = proxied.headers.get('content-type') ?? '';
-  if (contentType.includes('text/event-stream')) {
+  const contentType = proxied.headers.get("content-type") ?? "";
+  if (contentType.includes("text/event-stream")) {
     return streamUpstreamResponse(proxied);
   }
 

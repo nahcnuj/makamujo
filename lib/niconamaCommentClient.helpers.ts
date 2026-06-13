@@ -38,6 +38,7 @@ export const extractWatchUrlFromHtml = (
     const match = normalizedHtml.match(pattern);
     if (!match) continue;
     try {
+      // biome-ignore lint/style/noNonNullAssertion: regex match group guaranteed by condition
       return new URL(match[1]!, baseUrl).href;
     } catch {}
   }
@@ -57,8 +58,11 @@ export const buildNiconamaStreamStateFromStatisticsEvent = (
   body: unknown,
 ): unknown | null => {
   if (!body || typeof body !== "object") return null;
-  if ((body as any).type !== "statistics") return null;
-  const data = (body as any).data;
+  if ((body as Record<string, unknown>).type !== "statistics") return null;
+  const data = (body as Record<string, unknown>).data as Record<
+    string,
+    unknown
+  >;
   if (!data || typeof data !== "object") return null;
   const listeners = typeof data.viewers === "number" ? data.viewers : undefined;
   const comments =
@@ -99,7 +103,7 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
         searchIndex = openIndex + 1;
         continue;
       }
-      const tagName = tagNameMatch[1]!.toLowerCase();
+      const tagName = tagNameMatch[1]?.toLowerCase();
       if (tagName !== "script" && tagName !== "div") {
         searchIndex = openIndex + 1;
         continue;
@@ -131,6 +135,7 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
       const dpIndex = lowerTag.indexOf("data-props=", searchIndex);
       if (dpIndex === -1) return null;
       let cursor = dpIndex + "data-props=".length;
+      // biome-ignore lint/style/noNonNullAssertion: cursor guaranteed within bounds
       while (cursor < openTag.length && /\s/.test(openTag[cursor]!))
         cursor += 1;
       const quote = openTag[cursor];
@@ -159,7 +164,7 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
     if (parsed) return parsed;
     try {
       JSON.parse(normalized);
-    } catch (err) {
+    } catch {
       /* ignore */
     }
     return null;
@@ -175,7 +180,8 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
   }
 
   const attrMatch = html.match(/data-props=(['"])([\s\S]*?)\1/i);
-  if (attrMatch && attrMatch[2]) {
+  if (attrMatch?.[2]) {
+    // biome-ignore lint/style/noNonNullAssertion: matched group guaranteed by condition
     const parsed = parseJsonFromRaw(attrMatch[2]!);
     if (parsed) return parsed;
   }
@@ -183,7 +189,8 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
   const innerMatch = html.match(
     /<(?:div|script)[^>]*id=['"]embedded-data['"][^>]*>([\s\S]*?)<\/(?:div|script)>/i,
   );
-  if (innerMatch && innerMatch[1]) {
+  if (innerMatch?.[1]) {
+    // biome-ignore lint/style/noNonNullAssertion: matched group guaranteed by condition
     const parsed = parseJsonFromRaw(innerMatch[1]!);
     if (parsed) return parsed;
   }
@@ -194,21 +201,21 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
 const isCommentLikeObject = (object: unknown): boolean => {
   if (!object || typeof object !== "object") return false;
   const text =
-    (object as any).comment ??
-    (object as any).text ??
-    (object as any).body ??
-    (object as any).message ??
-    (object as any).content;
+    (object as Record<string, unknown>).comment ??
+    (object as Record<string, unknown>).text ??
+    (object as Record<string, unknown>).body ??
+    (object as Record<string, unknown>).message ??
+    (object as Record<string, unknown>).content;
   if (typeof text !== "string" || text.trim().length === 0) return false;
   return (
-    typeof (object as any).no === "number" ||
-    typeof (object as any).num === "number" ||
-    typeof (object as any).userId === "string" ||
-    typeof (object as any).user_id === "string" ||
-    (object as any).anonymity !== undefined ||
-    (object as any).isAnonymous !== undefined ||
-    (object as any).hasGift !== undefined ||
-    (object as any).gift !== undefined
+    typeof (object as Record<string, unknown>).no === "number" ||
+    typeof (object as Record<string, unknown>).num === "number" ||
+    typeof (object as Record<string, unknown>).userId === "string" ||
+    typeof (object as Record<string, unknown>).user_id === "string" ||
+    (object as Record<string, unknown>).anonymity !== undefined ||
+    (object as Record<string, unknown>).isAnonymous !== undefined ||
+    (object as Record<string, unknown>).hasGift !== undefined ||
+    (object as Record<string, unknown>).gift !== undefined
   );
 };
 
@@ -276,7 +283,7 @@ const mergeNumericCommentEntries = (rawComments: unknown[]): unknown[] => {
       continue;
     }
 
-    const currentText = (raw as any).comment;
+    const currentText = (raw as Record<string, unknown>).comment;
     if (isNumericCommentText(currentText)) {
       const previous = merged[merged.length - 1];
       if (
@@ -284,12 +291,12 @@ const mergeNumericCommentEntries = (rawComments: unknown[]): unknown[] => {
         typeof previous === "object" &&
         !Array.isArray(previous)
       ) {
-        const previousText = (previous as any).comment;
+        const previousText = (previous as Record<string, unknown>).comment;
         const previousNumber =
-          typeof (previous as any).no === "number"
-            ? (previous as any).no
-            : typeof (previous as any).num === "number"
-              ? (previous as any).num
+          typeof (previous as Record<string, unknown>).no === "number"
+            ? (previous as Record<string, unknown>).no
+            : typeof (previous as Record<string, unknown>).num === "number"
+              ? (previous as Record<string, unknown>).num
               : undefined;
 
         if (
@@ -314,21 +321,44 @@ const mergeNumericCommentEntries = (rawComments: unknown[]): unknown[] => {
 
 export const hasCommentArrayStructure = (body: unknown): boolean => {
   if (!body || typeof body !== "object") return false;
-  const candidateArrays = [
-    (body as any).comments,
-    (body as any).chat,
-    (body as any).chats,
-    (body as any).data?.comments,
-    (body as any).data?.chat,
-    (body as any).data?.chats,
-    (body as any).site?.state?.relive?.comments,
-    (body as any).site?.state?.relive?.chat,
-    (body as any).site?.state?.relive?.chats,
-    (body as any).site?.relive?.comments,
-    (body as any).site?.relive?.chat,
-    (body as any).site?.relive?.chats,
-    (body as any).data,
-  ];
+  const bodyRec = body as Record<string, unknown>;
+
+  if (Array.isArray(bodyRec.data)) return true;
+
+  // Helper to safely extract candidate arrays
+  const getCandidateArrays = (obj: Record<string, unknown>) => {
+    const candidates: unknown[] = [];
+    candidates.push(obj.comments);
+    candidates.push(obj.chat);
+    candidates.push(obj.chats);
+    const data = obj.data as Record<string, unknown> | undefined;
+    if (data) {
+      candidates.push(data.comments);
+      candidates.push(data.chat);
+      candidates.push(data.chats);
+    }
+    const site = obj.site as Record<string, unknown> | undefined;
+    if (site) {
+      const state = site.state as Record<string, unknown> | undefined;
+      if (state) {
+        const relive = state.relive as Record<string, unknown> | undefined;
+        if (relive) {
+          candidates.push(relive.comments);
+          candidates.push(relive.chat);
+          candidates.push(relive.chats);
+        }
+      }
+      const relive = site.relive as Record<string, unknown> | undefined;
+      if (relive) {
+        candidates.push(relive.comments);
+        candidates.push(relive.chat);
+        candidates.push(relive.chats);
+      }
+    }
+    return candidates;
+  };
+
+  const candidateArrays = getCandidateArrays(bodyRec);
   if (candidateArrays.some(Array.isArray)) return true;
   return collectNestedCommentArrays(body).length > 0;
 };
@@ -337,34 +367,61 @@ export const parseAgentCommentsFromResponseBody = (
   body: unknown,
   seenCommentIdentifiers: Set<string> = new Set<string>(),
   eventType?: string,
-): any[] => {
+) => {
   if (!body || typeof body !== "object") return [];
+  const bodyRec = body as Record<string, unknown>;
   const rawComments: unknown[] = [];
-  const candidateArrays = [
-    (body as any).comments,
-    (body as any).chat,
-    (body as any).chats,
-    (body as any).data?.comments,
-    (body as any).data?.chat,
-    (body as any).data?.chats,
-    (body as any).site?.state?.relive?.comments,
-    (body as any).site?.state?.relive?.chat,
-    (body as any).site?.state?.relive?.chats,
-    (body as any).site?.relive?.comments,
-    (body as any).site?.relive?.chat,
-    (body as any).site?.relive?.chats,
-  ];
-  for (const candidate of candidateArrays)
-    if (Array.isArray(candidate)) rawComments.push(...candidate);
-  if (rawComments.length === 0 && Array.isArray((body as any).data))
-    rawComments.push(...(body as any).data);
+
+  // Helper to safely extract candidate arrays
+  const getCandidateArrays = (obj: Record<string, unknown>) => {
+    const candidates: unknown[] = [];
+    candidates.push(obj.comments);
+    candidates.push(obj.chat);
+    candidates.push(obj.chats);
+    const data = obj.data as Record<string, unknown> | undefined;
+    if (data) {
+      candidates.push(data.comments);
+      candidates.push(data.chat);
+      candidates.push(data.chats);
+    }
+    const site = obj.site as Record<string, unknown> | undefined;
+    if (site) {
+      const state = site.state as Record<string, unknown> | undefined;
+      if (state) {
+        const relive = state.relive as Record<string, unknown> | undefined;
+        if (relive) {
+          candidates.push(relive.comments);
+          candidates.push(relive.chat);
+          candidates.push(relive.chats);
+        }
+      }
+      const relive = site.relive as Record<string, unknown> | undefined;
+      if (relive) {
+        candidates.push(relive.comments);
+        candidates.push(relive.chat);
+        candidates.push(relive.chats);
+      }
+    }
+    return candidates;
+  };
+
+  const candidateArrays = getCandidateArrays(bodyRec);
+  for (const candidate of candidateArrays) {
+    if (Array.isArray(candidate)) {
+      rawComments.push(...(candidate as unknown[]));
+    }
+  }
+  const bodyData = (body as Record<string, unknown>).data;
+  if (rawComments.length === 0 && Array.isArray(bodyData)) {
+    rawComments.push(...(bodyData as unknown[]));
+  }
   const commentEventTypes = new Set(["actionComment", "action_comment"]);
   if (
     rawComments.length === 0 &&
     eventType &&
     commentEventTypes.has(eventType)
   ) {
-    const maybeComment = (body as any).data;
+    const maybeComment = (body as Record<string, unknown>).data;
     if (maybeComment && isCommentLikeObject(maybeComment))
       rawComments.push(maybeComment);
   }
@@ -379,31 +436,40 @@ export const parseAgentCommentsFromResponseBody = (
   }
 
   const normalizedRawComments = mergeNumericCommentEntries(rawComments);
-  const comments: any[] = [];
+  const comments = [];
   const seenIdentifiers = seenCommentIdentifiers;
   for (const raw of normalizedRawComments) {
     if (!raw || typeof raw !== "object") continue;
     const commentText =
-      (raw as any).comment ??
-      (raw as any).text ??
-      (raw as any).body ??
-      (raw as any).message ??
-      (raw as any).content;
+      (raw as Record<string, unknown>).comment ??
+      (raw as Record<string, unknown>).text ??
+      (raw as Record<string, unknown>).body ??
+      (raw as Record<string, unknown>).message ??
+      (raw as Record<string, unknown>).content;
     if (typeof commentText !== "string" || commentText.trim().length === 0)
       continue;
     const commentData: Record<string, unknown> = {
       comment: commentText,
       no:
-        typeof (raw as any).no === "number"
-          ? (raw as any).no
-          : typeof (raw as any).num === "number"
-            ? (raw as any).num
+        typeof (raw as Record<string, unknown>).no === "number"
+          ? (raw as Record<string, unknown>).no
+          : typeof (raw as Record<string, unknown>).num === "number"
+            ? (raw as Record<string, unknown>).num
             : undefined,
       anonymity: Boolean(
-        (raw as any).anonymity ?? (raw as any).isAnonymous ?? false,
+        (raw as Record<string, unknown>).anonymity ??
+          (raw as Record<string, unknown>).isAnonymous ??
+          false,
       ),
-      hasGift: Boolean((raw as any).hasGift ?? (raw as any).gift ?? false),
-      userId: (raw as any).userId ?? (raw as any).user_id ?? undefined,
+      hasGift: Boolean(
+        (raw as Record<string, unknown>).hasGift ??
+          (raw as Record<string, unknown>).gift ??
+          false,
+      ),
+      userId:
+        (raw as Record<string, unknown>).userId ??
+        (raw as Record<string, unknown>).user_id ??
+        undefined,
       origin: raw,
     };
     const identifier = `${commentData.no ?? "none"}|${commentData.userId ?? "unknown"}|${commentData.comment}`;
@@ -441,7 +507,7 @@ export const coerceToAgentComments = (
       .map((s) => s.trim())
       .filter(Boolean);
     if (lines.length > 0) {
-      const out: any[] = [];
+      const out = [];
       for (const line of lines) {
         const p = tryParseJson(line);
         if (p)
@@ -493,26 +559,31 @@ export const getCommentTextFromAgentComment = (
   comment: unknown,
 ): string | null => {
   if (!comment || typeof comment !== "object") return null;
-  const value = (comment as any).data ?? comment;
+  const commentRec = comment as Record<string, unknown>;
+  const dataValue = commentRec.data;
+  const value = (
+    dataValue && typeof dataValue === "object" ? dataValue : comment
+  ) as Record<string, unknown>;
+
   const text =
-    typeof value?.comment === "string"
+    typeof value.comment === "string"
       ? value.comment
-      : typeof value?.text === "string"
+      : typeof value.text === "string"
         ? value.text
-        : typeof value?.body === "string"
+        : typeof value.body === "string"
           ? value.body
-          : typeof value?.message === "string"
+          : typeof value.message === "string"
             ? value.message
-            : typeof value?.content === "string"
+            : typeof value.content === "string"
               ? value.content
               : undefined;
   if (typeof text !== "string") return null;
   const trimmed = text.trim();
   if (trimmed.length === 0 || trimmed === "(コメントあり)") return null;
   const no =
-    typeof value?.no === "number"
+    typeof value.no === "number"
       ? value.no
-      : typeof value?.num === "number"
+      : typeof value.num === "number"
         ? value.num
         : parseCommentNumberFromText(trimmed);
   return stripCommentNumberPrefix(trimmed, no);
@@ -546,17 +617,22 @@ const stripCommentNumberPrefix = (
 
 export const getAgentCommentNumber = (comment: unknown): number | undefined => {
   if (!comment || typeof comment !== "object") return undefined;
-  const value = (comment as any).data ?? comment;
+  const commentRec = comment as Record<string, unknown>;
+  const dataValue = commentRec.data;
+  const value = (
+    dataValue && typeof dataValue === "object" ? dataValue : comment
+  ) as Record<string, unknown>;
+
   const rawText =
-    typeof value?.comment === "string"
+    typeof value.comment === "string"
       ? value.comment
-      : typeof value?.text === "string"
+      : typeof value.text === "string"
         ? value.text
         : undefined;
   const no =
-    typeof value?.no === "number"
+    typeof value.no === "number"
       ? value.no
-      : typeof value?.num === "number"
+      : typeof value.num === "number"
         ? value.num
         : parseCommentNumberFromText(rawText ?? "");
   return typeof no === "number" && Number.isFinite(no) ? no : undefined;

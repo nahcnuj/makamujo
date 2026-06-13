@@ -38,10 +38,7 @@ ws.addEventListener("message", (ev) => {
       } catch {
         console.log(ts, "RAW", data.slice ? data.slice(0, 2000) : String(data));
       }
-    } else if (
-      data instanceof ArrayBuffer ||
-      (ArrayBuffer.isView && ArrayBuffer.isView(data))
-    ) {
+    } else if (data instanceof ArrayBuffer || ArrayBuffer.isView?.(data)) {
       const buf = data instanceof ArrayBuffer ? data : data.buffer;
       const text = new TextDecoder().decode(buf);
       try {

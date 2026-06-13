@@ -36,7 +36,8 @@ const mergeRecentCommentEntries = (
           !/^[0-9]+(?:,[0-9]{3})*$/.test(previousText.trim()) &&
           previousNumber === undefined
         ) {
-          const previousData = (previous as any).data ?? previous;
+          const previousData =
+            (previous as Record<string, unknown>).data ?? previous;
           merged[merged.length - 1] = {
             data: {
               ...previousData,

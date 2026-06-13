@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { spawn } from "child_process";
-import { existsSync, mkdirSync, writeFileSync } from "fs";
+import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 
 let BROADCASTING_BASE_URL = "";
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
@@ -50,8 +50,8 @@ beforeAll(async () => {
     let buffer = "";
     let serverRunning = false;
     let agentReady = false;
-    const stdout = server!.stdout;
-    const stderr = server!.stderr;
+    const stdout = server?.stdout;
+    const stderr = server?.stderr;
 
     function checkReady() {
       if (serverRunning && agentReady) {
@@ -149,7 +149,7 @@ test("proxy forwards WebSocket upgrades to broadcasting server", async () => {
       // Server does not support WS upgrades in this runtime — skip.
       return;
     }
-  } catch (err) {
+  } catch {
     // If probing fails assume upgrades are unavailable and skip.
     return;
   }

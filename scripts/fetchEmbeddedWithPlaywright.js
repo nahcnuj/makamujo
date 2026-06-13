@@ -1,5 +1,5 @@
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import { chromium as _chromium } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
@@ -10,7 +10,7 @@ const makeTempDir = () => {
   const dir = path.join("/tmp", `makamujo-playwright-${ts}`);
   try {
     fs.mkdirSync(dir, { recursive: true });
-  } catch (e) {}
+  } catch (_e) {}
   return dir;
 };
 
@@ -20,10 +20,10 @@ const persistentUserDataDir = () => {
       const dir = path.join("/tmp", "makamujo-playwright-user-data");
       try {
         fs.mkdirSync(dir, { recursive: true });
-      } catch (e) {}
+      } catch (_e) {}
       return dir;
     }
-  } catch (e) {}
+  } catch (_e) {}
   return null;
 };
 
@@ -36,24 +36,24 @@ const extractEmbeddedDataFromHtml = (html) => {
   let m = html.match(
     /<script[^>]*id=["']embedded-data["'][^>]*data-props=(['"])([\s\S]*?)\1/i,
   );
-  if (m && m[2]) {
+  if (m?.[2]) {
     try {
       return JSON.parse(normalize(m[2]));
-    } catch (e) {}
+    } catch (_e) {}
   }
   m = html.match(/data-props=(['"])([\s\S]*?)\1/i);
-  if (m && m[2]) {
+  if (m?.[2]) {
     try {
       return JSON.parse(normalize(m[2]));
-    } catch (e) {}
+    } catch (_e) {}
   }
   m = html.match(
     /<(?:div|script)[^>]*id=["']embedded-data["'][^>]*>([\s\S]*?)<\/(?:div|script)>/i,
   );
-  if (m && m[1]) {
+  if (m?.[1]) {
     try {
       return JSON.parse(normalize(m[1]));
-    } catch (e) {}
+    } catch (_e) {}
   }
   return null;
 };
@@ -84,7 +84,7 @@ const run = async () => {
   const userDataDir = persistentUserDataDir() ?? path.join(tmpDir, "user-data");
   try {
     fs.mkdirSync(userDataDir, { recursive: true });
-  } catch (e) {}
+  } catch (_e) {}
 
   const browser = await _chromium.launch({
     headless: true,
@@ -144,11 +144,11 @@ const run = async () => {
         body:
           typeof body === "string"
             ? body.length > 10000
-              ? body.slice(0, 10000) + "...TRUNCATED"
+              ? `${body.slice(0, 10000)}...TRUNCATED`
               : body
             : String(body),
       });
-    } catch (e) {
+    } catch (_e) {
       // ignore
     }
   });
@@ -157,29 +157,29 @@ const run = async () => {
     await page.addInitScript(() => {
       try {
         Object.defineProperty(navigator, "webdriver", { get: () => false });
-      } catch (e) {}
+      } catch (_e) {}
       try {
         window.chrome = window.chrome || { runtime: {} };
-      } catch (e) {}
+      } catch (_e) {}
       try {
         Object.defineProperty(navigator, "languages", {
           get: () => ["ja-JP", "ja", "en-US", "en"],
         });
-      } catch (e) {}
+      } catch (_e) {}
       try {
         Object.defineProperty(navigator, "plugins", {
           get: () => [1, 2, 3, 4, 5],
         });
-      } catch (e) {}
+      } catch (_e) {}
     });
-  } catch (e) {}
+  } catch (_e) {}
 
   try {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45_000 });
     try {
       await page.waitForLoadState?.("networkidle", { timeout: 15_000 });
     } catch {}
-  } catch (e) {
+  } catch (_e) {
     // ignore navigation errors
   }
 
@@ -195,7 +195,7 @@ const run = async () => {
       typeof html === "string" ? html : String(html),
       "utf8",
     );
-  } catch (e) {}
+  } catch (_e) {}
 
   try {
     const frames = page.frames ? page.frames() : [];
@@ -216,10 +216,10 @@ const run = async () => {
             typeof frameHtml === "string" ? frameHtml : String(frameHtml),
             "utf8",
           );
-        } catch (e) {}
-      } catch (e) {}
+        } catch (_e) {}
+      } catch (_e) {}
     }
-  } catch (e) {}
+  } catch (_e) {}
 
   try {
     fs.writeFileSync(
@@ -227,7 +227,7 @@ const run = async () => {
       JSON.stringify(diagnostics, null, 2),
       "utf8",
     );
-  } catch (e) {}
+  } catch (_e) {}
 
   let parsed = null;
   if (typeof html === "string") parsed = extractEmbeddedDataFromHtml(html);
@@ -242,7 +242,7 @@ const run = async () => {
             break;
           }
         }
-      } catch (e) {}
+      } catch (_e) {}
     }
   }
 
@@ -254,7 +254,7 @@ const run = async () => {
           parsed = maybe;
           break;
         }
-      } catch (e) {}
+      } catch (_e) {}
     }
   }
 
@@ -267,10 +267,10 @@ const run = async () => {
   );
   try {
     await context.close();
-  } catch (e) {}
+  } catch (_e) {}
   try {
     await browser.close();
-  } catch (e) {}
+  } catch (_e) {}
 };
 
 run().catch((err) => {

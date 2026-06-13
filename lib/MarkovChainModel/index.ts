@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { MarkovModel } from "automated-gameplay-transmitter";
 import type { TalkModel } from "../Agent";
 
-const jaJP = new Intl.Locale("ja-JP");
+const _jaJP = new Intl.Locale("ja-JP");
 
 type WeightedCandidates = Record<string, number>;
 

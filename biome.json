@@ -27,6 +27,23 @@
     }
   },
   "files": {
-    "includes": ["**", "!docs/index.html", "!var"]
-  }
+    "includes": [
+      "**",
+      "!docs/index.html",
+      "!var",
+      "!playwright/.auth",
+      "!test-results"
+    ]
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.test.ts", "**/*.test.tsx"],
+      "formatter": {
+        "enabled": true
+      },
+      "linter": {
+        "enabled": false
+      }
+    }
+  ]
 }

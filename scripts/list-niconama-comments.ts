@@ -1,3 +1,4 @@
+import type { AgentComment } from "automated-gameplay-transmitter";
 import {
   createNiconamaCommentClient,
   filterAgentCommentsWithText,
@@ -21,15 +22,18 @@ const isSuspectedMetadataComment = (text: string): boolean => {
   );
 };
 
-const buildUniqueComments = (comments: unknown[]): any[] => {
+const buildUniqueComments = (comments: unknown[]): unknown[] => {
   const seen = new Set<string>();
-  const unique: any[] = [];
+  const unique: unknown[] = [];
   for (const item of comments) {
     const text = getCommentTextFromAgentComment(item);
     if (!text) continue;
     const value =
-      item && typeof item === "object" ? ((item as any).data ?? item) : item;
-    const key = `${value?.no ?? "none"}|${value?.userId ?? value?.user_id ?? "unknown"}|${text}`;
+      item && typeof item === "object"
+        ? ((item as Record<string, unknown>).data ?? item)
+        : item;
+    const valueRecord = value as Record<string, unknown>;
+    const key = `${valueRecord?.no ?? "none"}|${valueRecord?.userId ?? valueRecord?.user_id ?? "unknown"}|${text}`;
     if (seen.has(key)) continue;
     seen.add(key);
     unique.push(value);
@@ -38,7 +42,7 @@ const buildUniqueComments = (comments: unknown[]): any[] => {
 };
 
 async function main() {
-  const collected: any[] = [];
+  const collected: unknown[] = [];
   const userDataDir =
     process.env.NICONAMA_USER_DATA_DIR ?? "./tmp/niconama-user-data";
   const client = createNiconamaCommentClient(
@@ -85,11 +89,13 @@ async function main() {
       const embeddedComments = parseAgentCommentsFromResponseBody(embedded);
       for (const c of embeddedComments) collected.push(c);
     }
-  } catch (e) {
+  } catch {
     /* ignore */
   }
 
-  const filtered = filterAgentCommentsWithText(collected as any);
+  const filtered = filterAgentCommentsWithText(
+    collected as unknown as AgentComment[],
+  );
   const unique = buildUniqueComments(filtered);
   let hasRealComments = unique.some((item) => {
     const text = getCommentTextFromAgentComment(item);
@@ -113,11 +119,13 @@ async function main() {
           for (const c of renderedComments) collected.push(c);
         }
       }
-    } catch (e) {
+    } catch {
       /* ignore */
     }
 
-    const filteredAgain = filterAgentCommentsWithText(collected as any);
+    const filteredAgain = filterAgentCommentsWithText(
+      collected as unknown as AgentComment[],
+    );
     unique.length = 0;
     unique.push(...buildUniqueComments(filteredAgain));
   }
@@ -141,7 +149,9 @@ async function main() {
       await new Promise((r) => setTimeout(r, 1_000));
     }
 
-    const filteredAgain = filterAgentCommentsWithText(collected as any);
+    const filteredAgain = filterAgentCommentsWithText(
+      collected as unknown as AgentComment[],
+    );
     unique.length = 0;
     unique.push(...buildUniqueComments(filteredAgain));
     hasRealComments = unique.some((item) => {
@@ -173,11 +183,13 @@ async function main() {
           const embeddedComments = parseAgentCommentsFromResponseBody(embedded);
           for (const c of embeddedComments) collected.push(c);
         }
-      } catch (e) {
+      } catch {
         // ignore per-iteration errors
       }
 
-      const filteredAgain = filterAgentCommentsWithText(collected as any);
+      const filteredAgain = filterAgentCommentsWithText(
+        collected as unknown as AgentComment[],
+      );
       unique.length = 0;
       unique.push(...buildUniqueComments(filteredAgain));
 
@@ -209,7 +221,7 @@ async function main() {
           stdio: "inherit",
           timeout: 35_000,
         });
-      } catch (e) {
+      } catch {
         // capture may still have written logs; continue
       }
 
@@ -217,7 +229,7 @@ async function main() {
       const { parseAgentCommentsFromResponseBody } = await import(
         "../lib/niconamaCommentClient"
       );
-      const candidateComments: any[] = [];
+      const candidateComments: unknown[] = [];
 
       const tryParseFromLog = (path: string) => {
         try {
@@ -246,7 +258,9 @@ async function main() {
 
       if (candidateComments.length > 0) {
         for (const c of candidateComments) collected.push(c);
-        const filteredAgain = filterAgentCommentsWithText(collected as any);
+        const filteredAgain = filterAgentCommentsWithText(
+          collected as unknown as AgentComment[],
+        );
         unique.length = 0;
         unique.push(...buildUniqueComments(filteredAgain));
         hasRealComments = unique.some((item) => {
@@ -254,7 +268,7 @@ async function main() {
           return text !== null && !isSuspectedMetadataComment(text);
         });
       }
-    } catch (e) {
+    } catch {
       /* ignore */
     }
   }

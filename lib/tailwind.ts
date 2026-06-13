@@ -150,7 +150,7 @@ function buildCssHeaders(css: string): Record<string, string> {
     const etag = `"${createHash("sha256").update(css).digest("hex")}"`;
     headers["Cache-Control"] =
       "public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400";
-    headers["ETag"] = etag;
+    headers.ETag = etag;
   } else {
     headers["Cache-Control"] = "no-cache";
   }
@@ -162,7 +162,7 @@ export function createCssResponse(css: string, req?: Request): Response {
   const headers = buildCssHeaders(css);
   if (
     process.env.NODE_ENV === "production" &&
-    req?.headers.get("if-none-match") === headers["ETag"]
+    req?.headers.get("if-none-match") === headers.ETag
   ) {
     return new Response(null, { status: 304, headers });
   }

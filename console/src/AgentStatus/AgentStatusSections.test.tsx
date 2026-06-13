@@ -61,7 +61,7 @@ describe("AgentStatusSections", () => {
       label: "配信指標",
       hideLabel: true,
     });
-    const html = renderToString(<>{liveDeliveryRow.valueComponent}</>);
+    const html = renderToString(liveDeliveryRow.valueComponent);
     expect(html).toContain("配信状況");
     expect(html).toContain("配信中");
     expect(html).toContain("視聴者数");
@@ -139,9 +139,7 @@ describe("AgentStatusSections", () => {
     if (!liveDeliveryRow) {
       throw new Error("Expected live delivery row to be defined");
     }
-    const liveDeliveryHtml = renderToString(
-      <>{liveDeliveryRow.valueComponent}</>,
-    );
+    const liveDeliveryHtml = renderToString(liveDeliveryRow.valueComponent);
     expect((liveDeliveryHtml.match(/<h3\b/g) || []).length).toBe(1);
     expect((liveDeliveryHtml.match(/配信状況/g) || []).length).toBe(1);
 

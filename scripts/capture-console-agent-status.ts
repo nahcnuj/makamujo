@@ -69,7 +69,7 @@ const captureScreenshot = async (url: string, outputPath: string) => {
 };
 
 const parseOutputPath = () => {
-  const outputIndex = process.argv.findIndex((arg) => arg === "--output");
+  const outputIndex = process.argv.indexOf("--output");
   if (outputIndex === -1) {
     return DEFAULT_OUTPUT_PATH;
   }
