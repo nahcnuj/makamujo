@@ -46,10 +46,7 @@
       }
     },
     {
-      "includes": [
-        "lib/niconamaCommentClient.playwright.ts",
-        "scripts/*.ts"
-      ],
+      "includes": ["scripts/*.ts"],
       "formatter": {
         "enabled": true
       },
