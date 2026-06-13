@@ -59,10 +59,7 @@ export const buildNiconamaStreamStateFromStatisticsEvent = (
 ): unknown | null => {
   if (!body || typeof body !== "object") return null;
   if ((body as Record<string, unknown>).type !== "statistics") return null;
-  const data = (body as Record<string, unknown>).data as Record<
-    string,
-    unknown
-  >;
+  const data = (body as Record<string, unknown>).data as Record<string, unknown>;
   if (!data || typeof data !== "object") return null;
   const listeners = typeof data.viewers === "number" ? data.viewers : undefined;
   const comments =
@@ -322,33 +319,41 @@ const mergeNumericCommentEntries = (rawComments: unknown[]): unknown[] => {
 export const hasCommentArrayStructure = (body: unknown): boolean => {
   if (!body || typeof body !== "object") return false;
   const bodyRec = body as Record<string, unknown>;
-  const candidateArrays = [
-    bodyRec.comments,
-    bodyRec.chat,
-    bodyRec.chats,
-    (bodyRec.data as Record<string, unknown> | undefined)?.comments,
-    (bodyRec.data as Record<string, unknown> | undefined)?.chat,
-    (bodyRec.data as Record<string, unknown> | undefined)?.chats,
-    (
-      (bodyRec.site as Record<string, unknown> | undefined)?.state as
-        | Record<string, unknown>
-        | undefined
-    )?.relive?.comments,
-    (
-      (bodyRec.site as Record<string, unknown> | undefined)?.state as
-        | Record<string, unknown>
-        | undefined
-    )?.relive?.chat,
-    (
-      (bodyRec.site as Record<string, unknown> | undefined)?.state as
-        | Record<string, unknown>
-        | undefined
-    )?.relive?.chats,
-    (bodyRec.site as Record<string, unknown> | undefined)?.relive?.comments,
-    (bodyRec.site as Record<string, unknown> | undefined)?.relive?.chat,
-    (bodyRec.site as Record<string, unknown> | undefined)?.relive?.chats,
-    bodyRec.data,
-  ];
+
+  // Helper to safely extract candidate arrays
+  const getCandidateArrays = (obj: Record<string, unknown>) => {
+    const candidates: unknown[] = [];
+    candidates.push(obj.comments);
+    candidates.push(obj.chat);
+    candidates.push(obj.chats);
+    const data = obj.data as Record<string, unknown> | undefined;
+    if (data) {
+      candidates.push(data.comments);
+      candidates.push(data.chat);
+      candidates.push(data.chats);
+    }
+    const site = obj.site as Record<string, unknown> | undefined;
+    if (site) {
+      const state = site.state as Record<string, unknown> | undefined;
+      if (state) {
+        const relive = state.relive as Record<string, unknown> | undefined;
+        if (relive) {
+          candidates.push(relive.comments);
+          candidates.push(relive.chat);
+          candidates.push(relive.chats);
+        }
+      }
+      const relive = site.relive as Record<string, unknown> | undefined;
+      if (relive) {
+        candidates.push(relive.comments);
+        candidates.push(relive.chat);
+        candidates.push(relive.chats);
+      }
+    }
+    return candidates;
+  };
+
+  const candidateArrays = getCandidateArrays(bodyRec);
   if (candidateArrays.some(Array.isArray)) return true;
   return collectNestedCommentArrays(body).length > 0;
 };
@@ -361,39 +366,50 @@ export const parseAgentCommentsFromResponseBody = (
   if (!body || typeof body !== "object") return [];
   const bodyRec = body as Record<string, unknown>;
   const rawComments: unknown[] = [];
-  const candidateArrays = [
-    bodyRec.comments,
-    bodyRec.chat,
-    bodyRec.chats,
-    (bodyRec.data as Record<string, unknown> | undefined)?.comments,
-    (bodyRec.data as Record<string, unknown> | undefined)?.chat,
-    (bodyRec.data as Record<string, unknown> | undefined)?.chats,
-    (
-      (bodyRec.site as Record<string, unknown> | undefined)?.state as
-        | Record<string, unknown>
-        | undefined
-    )?.relive?.comments,
-    (
-      (bodyRec.site as Record<string, unknown> | undefined)?.state as
-        | Record<string, unknown>
-        | undefined
-    )?.relive?.chat,
-    (
-      (bodyRec.site as Record<string, unknown> | undefined)?.state as
-        | Record<string, unknown>
-        | undefined
-    )?.relive?.chats,
-    (bodyRec.site as Record<string, unknown> | undefined)?.relive?.comments,
-    (bodyRec.site as Record<string, unknown> | undefined)?.relive?.chat,
-    (bodyRec.site as Record<string, unknown> | undefined)?.relive?.chats,
-  ];
-  for (const candidate of candidateArrays)
-    if (Array.isArray(candidate)) rawComments.push(...candidate);
-  if (
-    rawComments.length === 0 &&
-    Array.isArray((body as Record<string, unknown>).data)
-  )
-    rawComments.push(...(body as Record<string, unknown>).data);
+
+  // Helper to safely extract candidate arrays
+  const getCandidateArrays = (obj: Record<string, unknown>) => {
+    const candidates: unknown[] = [];
+    candidates.push(obj.comments);
+    candidates.push(obj.chat);
+    candidates.push(obj.chats);
+    const data = obj.data as Record<string, unknown> | undefined;
+    if (data) {
+      candidates.push(data.comments);
+      candidates.push(data.chat);
+      candidates.push(data.chats);
+    }
+    const site = obj.site as Record<string, unknown> | undefined;
+    if (site) {
+      const state = site.state as Record<string, unknown> | undefined;
+      if (state) {
+        const relive = state.relive as Record<string, unknown> | undefined;
+        if (relive) {
+          candidates.push(relive.comments);
+          candidates.push(relive.chat);
+          candidates.push(relive.chats);
+        }
+      }
+      const relive = site.relive as Record<string, unknown> | undefined;
+      if (relive) {
+        candidates.push(relive.comments);
+        candidates.push(relive.chat);
+        candidates.push(relive.chats);
+      }
+    }
+    return candidates;
+  };
+
+  const candidateArrays = getCandidateArrays(bodyRec);
+  for (const candidate of candidateArrays) {
+    if (Array.isArray(candidate)) {
+      rawComments.push(...(candidate as unknown[]));
+    }
+  }
+  const bodyData = (body as Record<string, unknown>).data;
+  if (rawComments.length === 0 && Array.isArray(bodyData)) {
+    rawComments.push(...(bodyData as unknown[]));
+  }
   const commentEventTypes = new Set(["actionComment", "action_comment"]);
   if (
     rawComments.length === 0 &&
@@ -538,26 +554,29 @@ export const getCommentTextFromAgentComment = (
   comment: unknown,
 ): string | null => {
   if (!comment || typeof comment !== "object") return null;
-  const value = (comment as Record<string, unknown>).data ?? comment;
+  const commentRec = comment as Record<string, unknown>;
+  const dataValue = commentRec.data;
+  const value = (dataValue && typeof dataValue === "object" ? dataValue : comment) as Record<string, unknown>;
+  
   const text =
-    typeof value?.comment === "string"
+    typeof value.comment === "string"
       ? value.comment
-      : typeof value?.text === "string"
+      : typeof value.text === "string"
         ? value.text
-        : typeof value?.body === "string"
+        : typeof value.body === "string"
           ? value.body
-          : typeof value?.message === "string"
+          : typeof value.message === "string"
             ? value.message
-            : typeof value?.content === "string"
+            : typeof value.content === "string"
               ? value.content
               : undefined;
   if (typeof text !== "string") return null;
   const trimmed = text.trim();
   if (trimmed.length === 0 || trimmed === "(コメントあり)") return null;
   const no =
-    typeof value?.no === "number"
+    typeof value.no === "number"
       ? value.no
-      : typeof value?.num === "number"
+      : typeof value.num === "number"
         ? value.num
         : parseCommentNumberFromText(trimmed);
   return stripCommentNumberPrefix(trimmed, no);
@@ -591,17 +610,20 @@ const stripCommentNumberPrefix = (
 
 export const getAgentCommentNumber = (comment: unknown): number | undefined => {
   if (!comment || typeof comment !== "object") return undefined;
-  const value = (comment as Record<string, unknown>).data ?? comment;
+  const commentRec = comment as Record<string, unknown>;
+  const dataValue = commentRec.data;
+  const value = (dataValue && typeof dataValue === "object" ? dataValue : comment) as Record<string, unknown>;
+  
   const rawText =
-    typeof value?.comment === "string"
+    typeof value.comment === "string"
       ? value.comment
-      : typeof value?.text === "string"
+      : typeof value.text === "string"
         ? value.text
         : undefined;
   const no =
-    typeof value?.no === "number"
+    typeof value.no === "number"
       ? value.no
-      : typeof value?.num === "number"
+      : typeof value.num === "number"
         ? value.num
         : parseCommentNumberFromText(rawText ?? "");
   return typeof no === "number" && Number.isFinite(no) ? no : undefined;

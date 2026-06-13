@@ -1250,16 +1250,56 @@ const handleNiconamaComments = (comments: unknown) => {
             payload !== null &&
             typeof (payload as Record<string, unknown>).niconama === "object" &&
             (payload as Record<string, unknown>).niconama !== null &&
-            typeof ((payload as Record<string, unknown>).niconama as Record<string, unknown>).meta === "object" &&
-            ((payload as Record<string, unknown>).niconama as Record<string, unknown>).meta !== null &&
-            typeof (((payload as Record<string, unknown>).niconama as Record<string, unknown>).meta as Record<string, unknown>).total === "object" &&
-            (((payload as Record<string, unknown>).niconama as Record<string, unknown>).meta as Record<string, unknown>).total !== null &&
-            typeof ((((payload as Record<string, unknown>).niconama as Record<string, unknown>).meta as Record<string, unknown>).total as Record<string, unknown>).comments === "number"
-          ? ((((payload as Record<string, unknown>).niconama as Record<string, unknown>).meta as Record<string, unknown>).total as Record<string, unknown>).comments
+            typeof (
+              (payload as Record<string, unknown>).niconama as Record<
+                string,
+                unknown
+              >
+            ).meta === "object" &&
+            (
+              (payload as Record<string, unknown>).niconama as Record<
+                string,
+                unknown
+              >
+            ).meta !== null &&
+            typeof (
+              (
+                (payload as Record<string, unknown>).niconama as Record<
+                  string,
+                  unknown
+                >
+              ).meta as Record<string, unknown>
+            ).total === "object" &&
+            (
+              (
+                (payload as Record<string, unknown>).niconama as Record<
+                  string,
+                  unknown
+                >
+              ).meta as Record<string, unknown>
+            ).total !== null &&
+            typeof (
+              (
+                (
+                  (payload as Record<string, unknown>).niconama as Record<
+                    string,
+                    unknown
+                  >
+                ).meta as Record<string, unknown>
+              ).total as Record<string, unknown>
+            ).comments === "number"
+          ? (
+              (
+                (
+                  (payload as Record<string, unknown>).niconama as Record<
+                    string,
+                    unknown
+                  >
+                ).meta as Record<string, unknown>
+              ).total as Record<string, unknown>
+            ).comments
           : 0;
-    const numberedCommentsCount = countNumberedAgentComments(
-      filteredComments,
-    );
+    const numberedCommentsCount = countNumberedAgentComments(filteredComments);
     const newCount = currentCount + numberedCommentsCount;
 
     lastPublishedStreamState =
