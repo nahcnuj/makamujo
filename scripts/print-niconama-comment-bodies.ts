@@ -61,7 +61,7 @@ async function main() {
   try {
     const renderedComments = await client
       .fetchRenderedPageComments(WATCH_URL)
-      .catch(() => [] as any[]);
+      .catch(() => [] as unknown[]);
     for (const comment of filterAgentCommentsWithText(renderedComments)) {
       const text = extractCommentText(comment);
       if (!text) continue;

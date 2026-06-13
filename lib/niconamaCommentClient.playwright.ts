@@ -327,10 +327,12 @@ export const waitForAnyCommentSelector = async (
   await Promise.race(waiters);
 };
 
-export const tryOpenRenderedCommentPanel = async (page: unknown): Promise<void> => {
+export const tryOpenRenderedCommentPanel = async (
+  page: unknown,
+): Promise<void> => {
   if (!page || (typeof page.isClosed === "function" && page.isClosed())) return;
   const safeEval = async <T>(
-    p: any,
+    p: unknown,
     fn: (pp: unknown) => Promise<T> | T,
   ): Promise<T | null> => {
     try {

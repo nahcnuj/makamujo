@@ -16,7 +16,8 @@ export function streamUpstreamResponse(proxied: Response) {
   responseHeaders.set("cache-control", "no-cache");
   // Remove content-length to avoid mismatches when streaming/chunked.
   responseHeaders.delete("content-length");
-  const upstreamBody: ReadableStream<Uint8Array> | null = proxied.body as ReadableStream<Uint8Array> | null;
+  const upstreamBody: ReadableStream<Uint8Array> | null =
+    proxied.body as ReadableStream<Uint8Array> | null;
   if (upstreamBody && typeof upstreamBody.getReader === "function") {
     const wrapped = new ReadableStream({
       start(controller) {
@@ -260,13 +261,19 @@ export function createResilientSseProxy(
   // (e.g., POST /api/meta) can be forwarded to proxied SSE clients as well.
   // This allows clients connected through the proxy to receive server-side
   // sseBroadcast calls.
-  const controllers = (createResilientSseProxy as unknown as Record<string, unknown>)._controllers as Set<ReadableStreamDefaultController<Uint8Array>> | undefined;
+  const controllers = (
+    createResilientSseProxy as unknown as Record<string, unknown>
+  )._controllers as
+    | Set<ReadableStreamDefaultController<Uint8Array>>
+    | undefined;
   if (!controllers) {
-    (createResilientSseProxy as unknown as Record<string, unknown>)._controllers =
-      new Set<ReadableStreamDefaultController<Uint8Array>>();
+    (
+      createResilientSseProxy as unknown as Record<string, unknown>
+    )._controllers = new Set<ReadableStreamDefaultController<Uint8Array>>();
   }
   const resilientControllers: Set<ReadableStreamDefaultController<Uint8Array>> =
-    (createResilientSseProxy as unknown as Record<string, unknown>)._controllers as Set<ReadableStreamDefaultController<Uint8Array>>;
+    (createResilientSseProxy as unknown as Record<string, unknown>)
+      ._controllers as Set<ReadableStreamDefaultController<Uint8Array>>;
   let stopped = false;
   let abortController = new AbortController();
   let currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
@@ -307,7 +314,9 @@ export function createResilientSseProxy(
               readTimeoutMs,
             );
           }),
-        ] as readonly Promise<Awaited<ReturnType<typeof reader.read>> | never>[]);
+        ] as readonly Promise<
+          Awaited<ReturnType<typeof reader.read>> | never
+        >[]);
       } finally {
         if (timeoutId !== null) clearTimeout(timeoutId);
       }
@@ -485,7 +494,11 @@ export function createResilientSseProxy(
 export function getResilientProxyControllers(): Set<
   ReadableStreamDefaultController<Uint8Array>
 > {
-  return (createResilientSseProxy as unknown as Record<string, unknown>)._controllers as Set<ReadableStreamDefaultController<Uint8Array>> ?? new Set();
+  return (
+    ((createResilientSseProxy as unknown as Record<string, unknown>)
+      ._controllers as Set<ReadableStreamDefaultController<Uint8Array>>) ??
+    new Set()
+  );
 }
 
 export async function proxyConsoleApiWsRequest(
@@ -648,9 +661,12 @@ export async function proxyConsoleApiWsRequest(
             // to the mirrored raw published state.
             try {
               const immediate =
-                (globalThis as Record<string, unknown>).__getCurrentStreamPayload?.()
-                  ?? (globalThis as Record<string, unknown>).__lastPublishedStreamState
-                  ?? {};
+                (
+                  globalThis as Record<string, unknown>
+                ).__getCurrentStreamPayload?.() ??
+                (globalThis as Record<string, unknown>)
+                  .__lastPublishedStreamState ??
+                {};
               sendIfChanged(immediate);
             } catch {}
 
@@ -660,30 +676,39 @@ export async function proxyConsoleApiWsRequest(
             const pollTimer = setInterval(() => {
               try {
                 const p =
-                  (globalThis as Record<string, unknown>).__getCurrentStreamPayload?.()
-                    ?? (globalThis as Record<string, unknown>).__lastPublishedStreamState
-                    ?? {};
+                  (
+                    globalThis as Record<string, unknown>
+                  ).__getCurrentStreamPayload?.() ??
+                  (globalThis as Record<string, unknown>)
+                    .__lastPublishedStreamState ??
+                  {};
                 sendIfChanged(p);
               } catch {}
             }, pollIntervalMs);
-            (controller as unknown as Record<string, unknown>)._poll = pollTimer;
+            (controller as unknown as Record<string, unknown>)._poll =
+              pollTimer;
             // Stop polling after a short window to avoid long-lived timers.
             const pollStopTimer = setTimeout(() => {
               try {
                 clearInterval(pollTimer);
               } catch {}
               try {
-                (controller as unknown as Record<string, unknown>)._poll = undefined;
+                (controller as unknown as Record<string, unknown>)._poll =
+                  undefined;
               } catch {}
             }, 10_000);
-            (controller as unknown as Record<string, unknown>)._pollStop = pollStopTimer;
+            (controller as unknown as Record<string, unknown>)._pollStop =
+              pollStopTimer;
 
             (async () => {
               const start = Date.now();
               let payload =
-                (globalThis as Record<string, unknown>).__getCurrentStreamPayload?.()
-                  ?? (globalThis as Record<string, unknown>).__lastPublishedStreamState
-                  ?? {};
+                (
+                  globalThis as Record<string, unknown>
+                ).__getCurrentStreamPayload?.() ??
+                (globalThis as Record<string, unknown>)
+                  .__lastPublishedStreamState ??
+                {};
               while (
                 !(payload && (payload as Record<string, unknown>).niconama) &&
                 Date.now() - start < maxWaitMs
@@ -691,9 +716,12 @@ export async function proxyConsoleApiWsRequest(
                 // eslint-disable-next-line no-await-in-loop
                 await new Promise((r) => setTimeout(r, pollMs));
                 payload =
-                  (globalThis as Record<string, unknown>).__getCurrentStreamPayload?.()
-                    ?? (globalThis as Record<string, unknown>).__lastPublishedStreamState
-                    ?? {};
+                  (
+                    globalThis as Record<string, unknown>
+                  ).__getCurrentStreamPayload?.() ??
+                  (globalThis as Record<string, unknown>)
+                    .__lastPublishedStreamState ??
+                  {};
               }
 
               console.debug(
@@ -709,14 +737,16 @@ export async function proxyConsoleApiWsRequest(
                 setTimeout(() => {
                   try {
                     const p2 =
-                        (globalThis as Record<string, unknown>).__lastPublishedStreamState ?? {};
+                      (globalThis as Record<string, unknown>)
+                        .__lastPublishedStreamState ?? {};
                     sendIfChanged(p2);
                   } catch {}
                 }, 250);
                 setTimeout(() => {
                   try {
                     const p3 =
-                      (globalThis as Record<string, unknown>).__lastPublishedStreamState ?? {};
+                      (globalThis as Record<string, unknown>)
+                        .__lastPublishedStreamState ?? {};
                     sendIfChanged(p3);
                   } catch {}
                 }, 1000);
@@ -733,7 +763,8 @@ export async function proxyConsoleApiWsRequest(
                     controller.enqueue(encoder.encode(": keepalive\n\n"));
                   } catch {}
                 }, fallbackKeepaliveMs);
-                (controller as unknown as Record<string, unknown>)._keepalive = keepalive;
+                (controller as unknown as Record<string, unknown>)._keepalive =
+                  keepalive;
                 console.debug(
                   "[DIAG] self-proxy enqueued synthetic fallback (no niconama within timeout)",
                 );
@@ -742,13 +773,21 @@ export async function proxyConsoleApiWsRequest(
           },
           cancel() {
             try {
-              clearInterval((this as unknown as Record<string, unknown>)._keepalive as number);
+              clearInterval(
+                (this as unknown as Record<string, unknown>)
+                  ._keepalive as number,
+              );
             } catch {}
             try {
-              clearInterval((this as unknown as Record<string, unknown>)._poll as number);
+              clearInterval(
+                (this as unknown as Record<string, unknown>)._poll as number,
+              );
             } catch {}
             try {
-              clearTimeout((this as unknown as Record<string, unknown>)._pollStop as number);
+              clearTimeout(
+                (this as unknown as Record<string, unknown>)
+                  ._pollStop as number,
+              );
             } catch {}
           },
         });
@@ -792,11 +831,14 @@ export async function proxyConsoleApiWsRequest(
               controller.enqueue(encoder.encode(": keepalive\n\n"));
             } catch {}
           }, fallbackKeepaliveMs);
-          (controller as unknown as Record<string, unknown>)._keepalive = keepalive;
+          (controller as unknown as Record<string, unknown>)._keepalive =
+            keepalive;
         },
         cancel() {
           try {
-            clearInterval((this as unknown as Record<string, unknown>)._keepalive);
+            clearInterval(
+              (this as unknown as Record<string, unknown>)._keepalive,
+            );
           } catch {}
         },
       });

@@ -38,7 +38,7 @@ type NiconamaBrowserPageResponse = {
 };
 
 type NiconamaBrowserPage = {
-  on: (event: string, callback: any) => void;
+  on: (event: string, callback: unknown) => void;
   goto: (
     url: string,
     options?: Record<string, unknown>,
@@ -79,7 +79,7 @@ type NiconamaBrowserContext = {
   pages: () => NiconamaBrowserPage[];
   newPage: () => Promise<NiconamaBrowserPage>;
   close: () => Promise<void>;
-  on?: (event: string, callback: any) => void;
+  on?: (event: string, callback: unknown) => void;
 };
 
 type NiconamaLaunchPersistentContext = (
@@ -119,14 +119,14 @@ export class NiconamaCommentClient {
   #stopRequested = false;
   #pollTask: Promise<void> | null = null;
   #seenCommentIdentifiers = new Set<string>();
-  #directWebSocket: any | null = null;
+  #directWebSocket: unknown | null = null;
   #directWebSocketAudienceToken: string | null = null;
   #directWebSocketKeepSeatTimer: ReturnType<typeof setInterval> | null = null;
   #directWebSocketReconnectTimer: ReturnType<typeof setTimeout> | null = null;
   #directWebSocketSuppressReconnect = false;
   #directWebSocketQueue: string[] = [];
-  #playwrightCommentContext: any | null = null;
-  #playwrightCommentPage: any | null = null;
+  #playwrightCommentContext: unknown | null = null;
+  #playwrightCommentPage: unknown | null = null;
   #playwrightPageCommentPollTimer: ReturnType<typeof setInterval> | null = null;
   #playwrightWatcherTask: Promise<void> | null = null;
   #pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -156,7 +156,7 @@ export class NiconamaCommentClient {
 
   // Unified delivery helper: call consumer callback and perform maintenance
   // (e.g. trimming the seen identifiers set) to prevent memory/perf degradation.
-  private deliverComments(comments: any[]): void {
+  private deliverComments(comments: unknown[]): void {
     // Call consumer callback asynchronously to avoid consumer-induced
     // event-loop blocking while still delivering comments in a timely way.
     try {
@@ -164,8 +164,8 @@ export class NiconamaCommentClient {
       if (typeof cb === "function") {
         try {
           // Prefer setImmediate-like scheduling; fall back to setTimeout.
-          if (typeof (globalThis as any).setImmediate === "function") {
-            (globalThis as any).setImmediate(() => {
+          if (typeof (globalThis as Record<string, unknown>).setImmediate === "function") {
+            (globalThis as Record<string, unknown>).setImmediate(() => {
               try {
                 cb(comments);
               } catch {
@@ -241,9 +241,9 @@ export class NiconamaCommentClient {
     const hasWebSocketUrl =
       embeddedData && typeof embeddedData === "object"
         ? Boolean(
-            (embeddedData as any).site?.state?.relive?.webSocketUrl ??
-              (embeddedData as any).site?.relive?.webSocketUrl ??
-              (embeddedData as any).relive?.webSocketUrl,
+            (embeddedData as Record<string, unknown>).site?.state?.relive?.webSocketUrl ??
+              (embeddedData as Record<string, unknown>).site?.relive?.webSocketUrl ??
+              (embeddedData as Record<string, unknown>).relive?.webSocketUrl,
           )
         : false;
     console.debug(
@@ -297,7 +297,7 @@ export class NiconamaCommentClient {
     try {
       const polled = await this.fetchCommentsFromPollingApis(
         embeddedData,
-      ).catch(() => [] as any[]);
+      ).catch(() => [] as unknown[]);
       if (Array.isArray(polled) && polled.length > 0) {
         this.deliverComments(polled);
         console.debug(
@@ -343,9 +343,9 @@ export class NiconamaCommentClient {
     try {
       const reportedCount =
         embeddedData && typeof embeddedData === "object"
-          ? typeof (embeddedData as any).program?.statistics?.commentCount ===
+          ? typeof (embeddedData as Record<string, unknown>).program?.statistics?.commentCount ===
             "number"
-            ? (embeddedData as any).program.statistics.commentCount
+            ? (embeddedData as Record<string, unknown>).program.statistics.commentCount
             : undefined
           : undefined;
       if (typeof reportedCount === "number" && reportedCount > 0) {
@@ -393,14 +393,14 @@ export class NiconamaCommentClient {
     if (
       embedded &&
       typeof embedded === "object" &&
-      (embedded as any).programEnded
+      (embedded as Record<string, unknown>).programEnded
     ) {
       return embedded;
     }
 
     if (embedded) {
-      const rawTop = (embedded as any).program?.statistics?.commentCount;
-      const rawSite = (embedded as any).site?.program?.statistics?.commentCount;
+      const rawTop = (embedded as Record<string, unknown>).program?.statistics?.commentCount;
+      const rawSite = (embedded as Record<string, unknown>).site?.program?.statistics?.commentCount;
       const commentCount =
         typeof rawTop === "number"
           ? rawTop
@@ -415,9 +415,9 @@ export class NiconamaCommentClient {
         console.debug(
           "[DEBUG] fetchEmbeddedData embedded program/statistics presence",
           {
-            hasProgram: Boolean((embedded as any).program),
-            hasStatistics: Boolean((embedded as any).program?.statistics),
-            rawValue: (embedded as any).program?.statistics?.commentCount,
+            hasProgram: Boolean((embedded as Record<string, unknown>).program),
+            hasStatistics: Boolean((embedded as Record<string, unknown>).program?.statistics),
+            rawValue: (embedded as Record<string, unknown>).program?.statistics?.commentCount,
           },
         );
       } catch {}
@@ -426,13 +426,13 @@ export class NiconamaCommentClient {
       // initial comment so that we still attempt Playwright fallbacks when the
       // embedded metadata only reports a count but no bodies.
       const initialRealComments = (initialComments || []).filter(
-        (c: any) => !(c?.data && c.data.comment === "(コメントあり)"),
+        (c: unknown) => !(c?.data && c.data.comment === "(コメントあり)"),
       );
       const embeddedWebSocketUrl =
         this.getWebSocketUrlFromEmbeddedData(embedded);
       const embeddedFrontendId = this.getFrontendIdFromEmbeddedData(embedded);
       if (embeddedWebSocketUrl && embeddedFrontendId) {
-        (embedded as any).webSocketUrl = this.buildWebSocketUrlWithFrontendId(
+        (embedded as Record<string, unknown>).webSocketUrl = this.buildWebSocketUrlWithFrontendId(
           embeddedWebSocketUrl,
           embeddedFrontendId,
         );
@@ -599,7 +599,7 @@ export class NiconamaCommentClient {
     }
 
     const tempUserDataDir = mkdtempSync(join(tmpdir(), "niconama-body-text-"));
-    let context: any = null;
+    let context: unknown = null;
 
     try {
       context = await this.#launchPersistentContext(tempUserDataDir, {
@@ -633,7 +633,7 @@ export class NiconamaCommentClient {
         return null;
       }
 
-      const activePages = context.pages().filter((p: any) => !p.isClosed());
+      const activePages = context.pages().filter((p: unknown) => !p.isClosed());
       for (const currentPage of activePages) {
         if (currentPage.isClosed()) continue;
         const bodyText = await getBodyTextFromPage(currentPage);
@@ -677,7 +677,7 @@ export class NiconamaCommentClient {
     const tempUserDataDir = mkdtempSync(
       join(tmpdir(), "niconama-page-comments-"),
     );
-    let context: any = null;
+    let context: unknown = null;
     try {
       context = await this.#launchPersistentContext(tempUserDataDir, {
         executablePath: this.#executablePath,
@@ -743,7 +743,7 @@ export class NiconamaCommentClient {
         },
       );
       if (this.#pollTimer) {
-        clearTimeout(this.#pollTimer as any);
+        clearTimeout(this.#pollTimer as unknown);
         this.#pollTimer = null;
       }
       if (this.#pollCancelResolve) {
@@ -983,20 +983,20 @@ export class NiconamaCommentClient {
   private getWebSocketUrlFromEmbeddedData(data: unknown): string | undefined {
     if (!data || typeof data !== "object") return undefined;
     return (
-      (data as any).site?.state?.relive?.webSocketUrl ??
-      (data as any).site?.relive?.webSocketUrl ??
-      (data as any).site?.webSocketUrl ??
-      (data as any).relive?.webSocketUrl ??
-      (data as any).webSocketUrl
+      (data as Record<string, unknown>).site?.state?.relive?.webSocketUrl ??
+      (data as Record<string, unknown>).site?.relive?.webSocketUrl ??
+      (data as Record<string, unknown>).site?.webSocketUrl ??
+      (data as Record<string, unknown>).relive?.webSocketUrl ??
+      (data as Record<string, unknown>).webSocketUrl
     );
   }
 
   private getFrontendIdFromEmbeddedData(data: unknown): string | undefined {
     if (!data || typeof data !== "object") return undefined;
     const candidate =
-      (data as any).site?.frontendId ??
-      (data as any).site?.state?.frontendId ??
-      (data as any).frontendId;
+      (data as Record<string, unknown>).site?.frontendId ??
+      (data as Record<string, unknown>).site?.state?.frontendId ??
+      (data as Record<string, unknown>).frontendId;
     if (typeof candidate === "number") return String(candidate);
     if (typeof candidate === "string" && candidate.trim().length > 0)
       return candidate.trim();
@@ -1036,7 +1036,7 @@ export class NiconamaCommentClient {
         // If a different function was provided via constructor options,
         // `this.#launchPersistentContext` will be a different reference.
         const tmpDir = mkdtempSync(join(tmpdir(), "niconama-playwright-"));
-        let context: any = null;
+        let context: unknown = null;
         try {
           context = await this.#launchPersistentContext(tmpDir, {
             executablePath: this.#executablePath,
@@ -1092,18 +1092,18 @@ export class NiconamaCommentClient {
                 ? JSON.parse(JSON.stringify(existingEmbeddedData))
                 : { site: { state: { relive: {} } } };
             try {
-              (enriched as any).site = (enriched as any).site ?? {};
-              (enriched as any).site.state = (enriched as any).site.state ?? {};
-              (enriched as any).site.state.relive =
-                (enriched as any).site.state.relive ?? {};
-              (enriched as any).site.state.relive.comments = comments.map(
+              (enriched as Record<string, unknown>).site = (enriched as Record<string, unknown>).site ?? {};
+              (enriched as Record<string, unknown>).site.state = (enriched as Record<string, unknown>).site.state ?? {};
+              (enriched as Record<string, unknown>).site.state.relive =
+                (enriched as Record<string, unknown>).site.state.relive ?? {};
+              (enriched as Record<string, unknown>).site.state.relive.comments = comments.map(
                 (c: string) => ({ comment: c }),
               );
             } catch {}
             try {
               const parsedComments = (
-                enriched as any
-              ).site.state.relive.comments.map((c: any) => ({ data: c }));
+                enriched as Record<string, unknown>
+              ).site.state.relive.comments.map((c: unknown) => ({ data: c }));
               this.deliverComments(parsedComments);
             } catch {}
             return enriched;
@@ -1121,9 +1121,9 @@ export class NiconamaCommentClient {
                 return await extractPageComments(
                   page,
                   this.#seenCommentIdentifiers,
-                ).catch(() => [] as any[]);
+                ).catch(() => [] as unknown[]);
               } catch {
-                return [] as any[];
+                return [] as unknown[];
               }
             })();
             if (Array.isArray(pageComments) && pageComments.length > 0) {
@@ -1132,13 +1132,13 @@ export class NiconamaCommentClient {
                   ? JSON.parse(JSON.stringify(existingEmbeddedData))
                   : { site: { state: { relive: {} } } };
               try {
-                (enriched2 as any).site = (enriched2 as any).site ?? {};
-                (enriched2 as any).site.state =
-                  (enriched2 as any).site.state ?? {};
-                (enriched2 as any).site.state.relive =
-                  (enriched2 as any).site.state.relive ?? {};
-                (enriched2 as any).site.state.relive.comments =
-                  pageComments.map((c: any) =>
+                (enriched2 as Record<string, unknown>).site = (enriched2 as Record<string, unknown>).site ?? {};
+                (enriched2 as Record<string, unknown>).site.state =
+                  (enriched2 as Record<string, unknown>).site.state ?? {};
+                (enriched2 as Record<string, unknown>).site.state.relive =
+                  (enriched2 as Record<string, unknown>).site.state.relive ?? {};
+                (enriched2 as Record<string, unknown>).site.state.relive.comments =
+                  pageComments.map((c: unknown) =>
                     c?.data ? c.data : { comment: String(c) },
                   );
               } catch {}
@@ -1167,7 +1167,7 @@ export class NiconamaCommentClient {
           } catch (e) {
             console.warn(
               "[WARN] fetchEmbeddedDataWithPlaywright failed to extract embedded data from rendered page content",
-              e && (e as any).message ? (e as any).message : String(e),
+              e && (e as Record<string, unknown>).message ? (e as Record<string, unknown>).message : String(e),
             );
           }
         } finally {
@@ -1181,7 +1181,7 @@ export class NiconamaCommentClient {
       } catch (e) {
         console.warn(
           "[WARN] in-process Playwright extraction failed, falling back to external helper",
-          e && (e as any).message ? (e as any).message : String(e),
+          e && (e as Record<string, unknown>).message ? (e as Record<string, unknown>).message : String(e),
         );
       }
       const { execFile } = await import("node:child_process");
@@ -1213,7 +1213,7 @@ export class NiconamaCommentClient {
           );
           child.on("error", (e) => reject(e));
         });
-      let out: any = { err: true };
+      let out: unknown = { err: true };
       try {
         out = await runChild(90_000).catch(() => null);
       } catch {
@@ -1224,14 +1224,14 @@ export class NiconamaCommentClient {
           out = { err: e2 };
         }
       }
-      if ((out as any).err) {
+      if ((out as Record<string, unknown>).err) {
         console.warn(
           "[WARN] fetchEmbeddedDataWithPlaywright child failed",
-          (out as any).err,
+          (out as Record<string, unknown>).err,
         );
       } else {
         try {
-          const parsed = JSON.parse((out as any).stdout);
+          const parsed = JSON.parse((out as Record<string, unknown>).stdout);
           if (parsed?.success && parsed.embedded) return parsed.embedded;
           // If child didn't report success but wrote diagnostics, try to
           // read main_response.html from diagnosticsDir to extract embedded-data.
@@ -1412,7 +1412,7 @@ export class NiconamaCommentClient {
     }
 
     try {
-      let WebSocketClass: any = (globalThis as any).WebSocket;
+      let WebSocketClass: unknown = (globalThis as Record<string, unknown>).WebSocket;
       if (typeof WebSocketClass !== "function") {
         try {
           const wsMod = await import("ws");
@@ -1427,7 +1427,7 @@ export class NiconamaCommentClient {
       }
 
       console.debug("[DEBUG] direct websocket creating socket", webSocketUrl);
-      let ws: any = null;
+      let ws: unknown = null;
       try {
         const headers = {
           Origin: "https://live.nicovideo.jp",
@@ -1440,10 +1440,10 @@ export class NiconamaCommentClient {
             headers,
             perMessageDeflate: false,
             handshakeTimeout: 30_000,
-          } as any);
+          } as unknown);
         } catch {
           try {
-            ws = new WebSocketClass(webSocketUrl, { headers } as any);
+            ws = new WebSocketClass(webSocketUrl, { headers } as unknown);
           } catch {
             ws = new WebSocketClass(webSocketUrl);
           }
@@ -1483,7 +1483,7 @@ export class NiconamaCommentClient {
         } catch {
           // ignore draining errors
         }
-        const keepSeatMessage = { type: "keepSeat" } as any;
+        const keepSeatMessage = { type: "keepSeat" } as unknown;
         if (this.#directWebSocketAudienceToken) {
           keepSeatMessage.audienceToken = this.#directWebSocketAudienceToken;
         } else {
@@ -1495,7 +1495,7 @@ export class NiconamaCommentClient {
         this.sendDirectWebSocketMessage(keepSeatMessage);
       };
 
-      ws.onmessage = (event: any) => {
+      ws.onmessage = (event: unknown) => {
         try {
           const data = event?.data;
 
@@ -1559,8 +1559,8 @@ export class NiconamaCommentClient {
           }
 
           // Some environments provide objects with arrayBuffer() (e.g., Buffer-like)
-          if (data && typeof (data as any).arrayBuffer === "function") {
-            (data as any)
+          if (data && typeof (data as Record<string, unknown>).arrayBuffer === "function") {
+            (data as Record<string, unknown>)
               .arrayBuffer()
               .then((ab: ArrayBuffer) => {
                 const payload = new TextDecoder().decode(ab);
@@ -1633,7 +1633,7 @@ export class NiconamaCommentClient {
             this.#directWebSocket &&
             this.#directWebSocket.readyState === WebSocketClass.OPEN
           ) {
-            const keepSeatMessage = { type: "keepSeat" } as any;
+            const keepSeatMessage = { type: "keepSeat" } as unknown;
             if (this.#directWebSocketAudienceToken) {
               keepSeatMessage.audienceToken =
                 this.#directWebSocketAudienceToken;
@@ -1728,7 +1728,7 @@ export class NiconamaCommentClient {
         console.debug("[DEBUG] Playwright context created", { attempt });
         this.#playwrightCommentContext = context;
 
-        const attachListeners = (pageRef: any) => {
+        const attachListeners = (pageRef: unknown) => {
           try {
             pageRef.setDefaultTimeout?.(30_000);
           } catch {}
@@ -1785,7 +1785,7 @@ export class NiconamaCommentClient {
                 );
                 // replace context reference for subsequent ops
                 try {
-                  /* rebind local context variable by mutating parent scope */ (context as any) =
+                  /* rebind local context variable by mutating parent scope */ (context as unknown) =
                     newContext;
                 } catch {}
                 console.debug("[DEBUG] Playwright context recreated");
@@ -1860,7 +1860,7 @@ export class NiconamaCommentClient {
               url: pageUrlSafe,
             });
           });
-          pageRef.on("request", (request: any) => {
+          pageRef.on("request", (request: unknown) => {
             const url = request.url();
             if (/comment|wsapi|watch|json|data/i.test(url)) {
               console.debug("[DEBUG] Playwright request", url);
@@ -1874,7 +1874,7 @@ export class NiconamaCommentClient {
           // Route interception is intentionally omitted here in the watcher because
           // the page may be closed by remote content while Playwright is shutting
           // down; route teardown can trigger CDP errors during cleanup.
-          pageRef.on("requestfailed", (request: any) => {
+          pageRef.on("requestfailed", (request: unknown) => {
             const url = request.url();
             if (/comment|wsapi|watch|json|data/i.test(url)) {
               console.debug(
@@ -1884,7 +1884,7 @@ export class NiconamaCommentClient {
               );
             }
           });
-          pageRef.on("response", (response: any) => {
+          pageRef.on("response", (response: unknown) => {
             try {
               const tryProcess = async () => {
                 if (this.#stopRequested) return;
@@ -1949,10 +1949,10 @@ export class NiconamaCommentClient {
               // swallow
             }
           });
-          pageRef.on("websocket", (socket: any) => {
+          pageRef.on("websocket", (socket: unknown) => {
             const wsUrl = socket.url();
             console.debug("[DEBUG] Playwright websocket connected", wsUrl);
-            socket.on("framereceived", (frame: any) => {
+            socket.on("framereceived", (frame: unknown) => {
               if (pageRef.isClosed?.()) return;
               let payload = frame.payload;
               if (payload instanceof ArrayBuffer) {
@@ -1980,7 +1980,7 @@ export class NiconamaCommentClient {
         // responses and websocket frames. This reduces reliance on a single page
         // object which remote scripts may close.
         try {
-          context.on?.("page", (p: any) => {
+          context.on?.("page", (p: unknown) => {
             try {
               attachListeners(p);
             } catch {
@@ -2007,7 +2007,7 @@ export class NiconamaCommentClient {
           return;
         }
 
-        let response: any;
+        let response: unknown;
         // Try a few navigation strategies to work around transient network aborts
         for (let navTry = 1; navTry <= 3; navTry++) {
           try {
@@ -2054,7 +2054,7 @@ export class NiconamaCommentClient {
               if (typeof page.isClosed === "function" && page.isClosed()) {
                 const surviving = context
                   .pages()
-                  .find((p: any) => !p.isClosed());
+                  .find((p: unknown) => !p.isClosed());
                 if (surviving) {
                   page = surviving;
                 } else {
@@ -2125,7 +2125,7 @@ export class NiconamaCommentClient {
           console.debug("[DEBUG] Playwright page after goto", {
             url: page.url(),
             isClosed: page.isClosed(),
-            pages: context.pages().map((p: any) => {
+            pages: context.pages().map((p: unknown) => {
               try {
                 return p.url();
               } catch {
@@ -2240,7 +2240,7 @@ export class NiconamaCommentClient {
           return;
         }
         if (page.isClosed()) {
-          const survivingPage = context.pages().find((p: any) => !p.isClosed());
+          const survivingPage = context.pages().find((p: unknown) => !p.isClosed());
           if (survivingPage) {
             let survivingUrlSafe = "unknown";
             try {
@@ -2328,16 +2328,16 @@ export class NiconamaCommentClient {
     this.#playwrightCommentContext = null;
   }
 
-  private async tryOpenRenderedCommentPanel(page: any): Promise<void> {
+  private async tryOpenRenderedCommentPanel(page: unknown): Promise<void> {
     await tryOpenRenderedCommentPanel(page);
   }
 
-  private async extractPageComments(page: any): Promise<AgentComment[]> {
+  private async extractPageComments(page: unknown): Promise<AgentComment[]> {
     return await extractPageComments(page, this.#seenCommentIdentifiers);
   }
 
   private async pollPageComments(
-    page: any,
+    page: unknown,
     intervalMs = 1_000,
     maxAttempts = 30,
   ): Promise<AgentComment[]> {
@@ -2349,12 +2349,12 @@ export class NiconamaCommentClient {
     );
   }
 
-  private startPlaywrightPagePolling(page: any): void {
+  private startPlaywrightPagePolling(page: unknown): void {
     if (this.#playwrightPageCommentPollTimer) return;
     this.#playwrightPageCommentPollTimer = startPlaywrightPagePolling(
       page,
       this.#seenCommentIdentifiers,
-      (comments: any[]) => this.deliverComments(comments),
+      (comments: unknown[]) => this.deliverComments(comments),
     );
   }
 
@@ -2365,7 +2365,7 @@ export class NiconamaCommentClient {
   }
 
   private async waitForAnyCommentSelector(
-    page: any,
+    page: unknown,
     timeoutMs: number,
   ): Promise<void> {
     await waitForAnyCommentSelector(page, timeoutMs);
@@ -2523,11 +2523,11 @@ export class NiconamaCommentClient {
     try {
       const site =
         embeddedData && typeof embeddedData === "object"
-          ? (embeddedData as any).site || {}
+          ? (embeddedData as Record<string, unknown>).site || {}
           : {};
       const program =
         embeddedData && typeof embeddedData === "object"
-          ? (embeddedData as any).program || {}
+          ? (embeddedData as Record<string, unknown>).program || {}
           : {};
       // If no embeddedData was provided, attempt to derive program information
       // from the configured watch URL or by fetching the static watch page.
@@ -2819,7 +2819,7 @@ export class NiconamaCommentClient {
 
     // Diagnostic: log shape of body when no comments are detected to aid debugging
     try {
-      const keys = Object.keys(body as any).slice(0, 10);
+      const keys = Object.keys(body as unknown).slice(0, 10);
       console.debug("[DEBUG] direct websocket parsed body keys", {
         wsUrl,
         keys,
@@ -2829,9 +2829,9 @@ export class NiconamaCommentClient {
       // ignore
     }
 
-    const eventType = (body as any).type;
+    const eventType = (body as unknown).type;
     if (eventType === "ping") {
-      const keepSeatMessage = { type: "keepSeat" } as any;
+      const keepSeatMessage = { type: "keepSeat" } as unknown;
       if (this.#directWebSocketAudienceToken) {
         keepSeatMessage.audienceToken = this.#directWebSocketAudienceToken;
       }
@@ -2847,7 +2847,7 @@ export class NiconamaCommentClient {
           this.#callbacks.onMeta(metaState);
         }
         try {
-          const stats = (body as any)?.data;
+          const stats = (body as unknown)?.data;
           if (
             stats &&
             typeof stats === "object" &&
@@ -2871,7 +2871,7 @@ export class NiconamaCommentClient {
       }
       case "reconnect": {
         try {
-          const reconnectData = (body as any)?.data;
+          const reconnectData = (body as unknown)?.data;
           const newToken = reconnectData?.audienceToken;
           const waitTimeMs =
             typeof reconnectData?.waitTimeSec === "number" &&
@@ -3061,7 +3061,7 @@ export class NiconamaCommentClient {
           this.#pollTimer = null;
           this.#pollCancelResolve = null;
           resolve();
-        }, this.#pollIntervalMs) as any;
+        }, this.#pollIntervalMs) as unknown;
       });
       if (this.#stopRequested) break;
       if (!this.#directWebSocket) {
