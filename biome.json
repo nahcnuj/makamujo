@@ -40,7 +40,6 @@
       "includes": [
         "**/*.test.ts",
         "**/*.test.tsx",
-        "index.ts",
         "lib/console-proxy.ts",
         "lib/niconamaCommentClient.ts",
         "lib/niconamaCommentClient.helpers.ts",
