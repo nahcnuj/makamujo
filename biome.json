@@ -49,8 +49,7 @@
         "lib/streamState.ts",
         "routes/index.ts",
         "routes/console/index.ts",
-        "scripts/*.ts",
-        "src/contexts/AgentContext.tsx"
+        "scripts/*.ts"
       ],
       "formatter": {
         "enabled": false
