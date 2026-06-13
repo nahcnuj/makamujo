@@ -32,13 +32,22 @@ import {
   waitForAnyCommentSelector,
 } from "./niconamaCommentClient.playwright";
 
+type DirectWebSocket = {
+  readyState: number;
+  send: (data: string) => void;
+  onmessage: ((event: unknown) => void) | null;
+  onopen: ((event: unknown) => void) | null;
+  onclose: ((event: unknown) => void) | null;
+  onerror: ((event: unknown) => void) | null;
+};
+
 type NiconamaBrowserPageResponse = {
   status: () => number;
   text: () => Promise<string>;
 };
 
 type NiconamaBrowserPage = {
-  on: (event: string, callback: unknown) => void;
+  on: (event: string, callback: (event: unknown) => void) => void;
   goto: (
     url: string,
     options?: Record<string, unknown>,
@@ -79,7 +88,7 @@ type NiconamaBrowserContext = {
   pages: () => NiconamaBrowserPage[];
   newPage: () => Promise<NiconamaBrowserPage>;
   close: () => Promise<void>;
-  on?: (event: string, callback: unknown) => void;
+  on?: (event: string, callback: (event: unknown) => void) => void;
 };
 
 type NiconamaLaunchPersistentContext = (
@@ -119,7 +128,7 @@ export class NiconamaCommentClient {
   #stopRequested = false;
   #pollTask: Promise<void> | null = null;
   #seenCommentIdentifiers = new Set<string>();
-  #directWebSocket: unknown | null = null;
+  #directWebSocket: DirectWebSocket | null = null;
   #directWebSocketAudienceToken: string | null = null;
   #directWebSocketKeepSeatTimer: ReturnType<typeof setInterval> | null = null;
   #directWebSocketReconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -2785,9 +2794,9 @@ export class NiconamaCommentClient {
       }
     } catch {}
 
-    let body: unknown = null;
+    let body: Record<string, unknown> | null = null;
     try {
-      body = JSON.parse(message);
+      body = JSON.parse(message) as Record<string, unknown>;
     } catch (err) {
       // Try NDJSON / multiple JSON objects per frame
       const lines = String(message)
@@ -2854,13 +2863,18 @@ export class NiconamaCommentClient {
       // ignore
     }
 
-    const eventType = (body as unknown).type;
+    if (!body) {
+      console.debug("[DEBUG] direct websocket empty body after JSON parse", wsUrl);
+      return;
+    }
+
+    const eventType = body.type as string | undefined;
     if (eventType === "ping") {
-      const keepSeatMessage = { type: "keepSeat" } as unknown;
+      const keepSeatMessage = { type: "keepSeat" } as Record<string, unknown>;
       if (this.#directWebSocketAudienceToken) {
         keepSeatMessage.audienceToken = this.#directWebSocketAudienceToken;
       }
-      this.sendDirectWebSocketMessage(keepSeatMessage);
+      this.sendDirectWebSocketMessage(keepSeatMessage as unknown);
       return;
     }
 
@@ -2872,12 +2886,12 @@ export class NiconamaCommentClient {
           this.#callbacks.onMeta(metaState);
         }
         try {
-          const stats = (body as unknown)?.data;
+          const stats = (body as Record<string, unknown>)?.data;
           if (
             stats &&
             typeof stats === "object" &&
-            typeof stats.comments === "number" &&
-            stats.comments > 0
+            (stats as Record<string, unknown>).comments === "number" &&
+            (stats as Record<string, unknown>).comments > 0
           ) {
             // If statistics report comments, trigger an immediate rescan to try to harvest comment payloads
             void this.resolveWatchUrl()
@@ -2896,12 +2910,12 @@ export class NiconamaCommentClient {
       }
       case "reconnect": {
         try {
-          const reconnectData = (body as unknown)?.data;
-          const newToken = reconnectData?.audienceToken;
+          const reconnectData = (body as Record<string, unknown>)?.data;
+          const newToken = (reconnectData as Record<string, unknown>)?.audienceToken as unknown;
           const waitTimeMs =
-            typeof reconnectData?.waitTimeSec === "number" &&
-            reconnectData.waitTimeSec > 0
-              ? reconnectData.waitTimeSec * 1_000
+            typeof (reconnectData as Record<string, unknown>)?.waitTimeSec === "number" &&
+            (reconnectData as Record<string, unknown>).waitTimeSec > 0
+              ? (reconnectData as Record<string, unknown>).waitTimeSec * 1_000
               : 1_000;
           this.#directWebSocketSuppressReconnect = true;
           this.clearDirectWebSocket();
@@ -2909,7 +2923,7 @@ export class NiconamaCommentClient {
           if (typeof newToken === "string" && newToken.length > 0) {
             this.#directWebSocketAudienceToken = newToken;
             const reconnectUrl = this.buildWebSocketUrlWithAudienceToken(
-              wsUrl,
+              wsUrl as string,
               newToken,
             );
             const tokenId = newToken.substring(0, 20);
@@ -3086,7 +3100,7 @@ export class NiconamaCommentClient {
           this.#pollTimer = null;
           this.#pollCancelResolve = null;
           resolve();
-        }, this.#pollIntervalMs) as unknown;
+        }, this.#pollIntervalMs);
       });
       if (this.#stopRequested) break;
       if (!this.#directWebSocket) {

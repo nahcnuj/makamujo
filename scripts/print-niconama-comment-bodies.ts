@@ -1,3 +1,4 @@
+import type { AgentComment } from "automated-gameplay-transmitter";
 import {
   createNiconamaCommentClient,
   filterAgentCommentsWithText,
@@ -61,7 +62,7 @@ async function main() {
   try {
     const renderedComments = await client
       .fetchRenderedPageComments(WATCH_URL)
-      .catch(() => [] as unknown[]);
+      .catch(() => [] as AgentComment[]);
     for (const comment of filterAgentCommentsWithText(renderedComments)) {
       const text = extractCommentText(comment);
       if (!text) continue;

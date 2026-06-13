@@ -1,3 +1,4 @@
+import type { AgentComment } from "automated-gameplay-transmitter";
 import {
   createNiconamaCommentClient,
   filterAgentCommentsWithText,
@@ -31,7 +32,8 @@ const buildUniqueComments = (comments: unknown[]): unknown[] => {
       item && typeof item === "object"
         ? ((item as Record<string, unknown>).data ?? item)
         : item;
-    const key = `${value?.no ?? "none"}|${value?.userId ?? value?.user_id ?? "unknown"}|${text}`;
+    const valueRecord = value as Record<string, unknown>;
+    const key = `${valueRecord?.no ?? "none"}|${valueRecord?.userId ?? valueRecord?.user_id ?? "unknown"}|${text}`;
     if (seen.has(key)) continue;
     seen.add(key);
     unique.push(value);
@@ -92,7 +94,7 @@ async function main() {
   }
 
   const filtered = filterAgentCommentsWithText(
-    collected as Record<string, unknown>,
+    collected as unknown as AgentComment[],
   );
   const unique = buildUniqueComments(filtered);
   let hasRealComments = unique.some((item) => {
@@ -122,7 +124,7 @@ async function main() {
     }
 
     const filteredAgain = filterAgentCommentsWithText(
-      collected as Record<string, unknown>,
+      collected as unknown as AgentComment[],
     );
     unique.length = 0;
     unique.push(...buildUniqueComments(filteredAgain));
@@ -148,7 +150,7 @@ async function main() {
     }
 
     const filteredAgain = filterAgentCommentsWithText(
-      collected as Record<string, unknown>,
+      collected as unknown as AgentComment[],
     );
     unique.length = 0;
     unique.push(...buildUniqueComments(filteredAgain));
@@ -186,7 +188,7 @@ async function main() {
       }
 
       const filteredAgain = filterAgentCommentsWithText(
-        collected as Record<string, unknown>,
+        collected as unknown as AgentComment[],
       );
       unique.length = 0;
       unique.push(...buildUniqueComments(filteredAgain));
@@ -257,7 +259,7 @@ async function main() {
       if (candidateComments.length > 0) {
         for (const c of candidateComments) collected.push(c);
         const filteredAgain = filterAgentCommentsWithText(
-          collected as Record<string, unknown>,
+          collected as unknown as AgentComment[],
         );
         unique.length = 0;
         unique.push(...buildUniqueComments(filteredAgain));
