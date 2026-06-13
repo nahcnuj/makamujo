@@ -60,8 +60,8 @@ process.on("SIGUSR2", signalHandler.bind(null, { exit: true }));
 // variables that may still be in the temporal dead zone during early
 // startup failures. These are assigned once the corresponding resources
 // have been initialized.
-let __serverForExit: any = null;
-let __consoleServerForExit: any = null;
+let __serverForExit: Bun.Server<unknown> | null = null;
+let __consoleServerForExit: ReturnType<typeof startConsoleServer> | null = null;
 
 // Console server already started above; skip repeated initialization.
 
@@ -208,9 +208,9 @@ const streamer = new MakaMujo(model, tts);
 let lastPublishedStreamState: unknown;
 // Mirror published state on globalThis so callbacks from other async
 // modules can access it even if module evaluation order differs.
-(globalThis as any).__lastPublishedStreamState =
-  (globalThis as any).__lastPublishedStreamState ?? lastPublishedStreamState;
-const wsClients = new Set<any>();
+(globalThis as Record<string, unknown>).__lastPublishedStreamState =
+  (globalThis as Record<string, unknown>).__lastPublishedStreamState ?? lastPublishedStreamState;
+const wsClients = new Set<ServerWebSocket<WsData>>();
 const sseClients = new Set<ReadableStreamDefaultController<Uint8Array>>();
 const sseEncoder = new TextEncoder();
 
@@ -236,7 +236,7 @@ function createSseStream(_label: string) {
           if (
             payload &&
             typeof payload === "object" &&
-            !(payload as any).niconama
+            !(payload as Record<string, unknown>).niconama
           ) {
             setTimeout(() => {
               try {
@@ -265,7 +265,7 @@ function createSseStream(_label: string) {
       try {
         sseClients.forEach((c) => {
           try {
-            if ((c as any).desiredSize === null) sseClients.delete(c);
+            if ((c as Record<string, unknown>).desiredSize === null) sseClients.delete(c);
           } catch {}
         });
       } catch {}
@@ -286,10 +286,10 @@ function sseBroadcast(payload: unknown) {
     console.debug(
       "[DIAG] sseBroadcast payload keys ->",
       Object.keys(
-        payload && typeof payload === "object" ? (payload as any) : {},
+        payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {},
       ),
       "hasNiconama=",
-      !!(payload && typeof payload === "object" && (payload as any).niconama),
+      !!(payload && typeof payload === "object" && (payload as Record<string, unknown>).niconama),
     );
   } catch {}
   for (const c of Array.from(sseClients)) {
@@ -305,7 +305,7 @@ function sseBroadcast(payload: unknown) {
     const resilient = getResilientProxyControllers();
     for (const c of Array.from(resilient)) {
       try {
-        if ((c as any).desiredSize === null) {
+        if ((c as Record<string, unknown>).desiredSize === null) {
           try {
             resilient.delete(c);
           } catch {}
@@ -322,7 +322,7 @@ function sseBroadcast(payload: unknown) {
 }
 
 // Expose SSE broadcaster for external callers (tests, agents) to invoke.
-(globalThis as any).__sseBroadcast = sseBroadcast;
+(globalThis as Record<string, unknown>).__sseBroadcast = sseBroadcast;
 
 const broadcastToWsClients = (payload: unknown) => {
   const message = JSON.stringify(payload);
@@ -330,10 +330,10 @@ const broadcastToWsClients = (payload: unknown) => {
     console.debug(
       "[DIAG] broadcastToWsClients sending keys ->",
       Object.keys(
-        payload && typeof payload === "object" ? (payload as any) : {},
+        payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {},
       ),
       "hasNiconama=",
-      !!(payload && typeof payload === "object" && (payload as any).niconama),
+      !!(payload && typeof payload === "object" && (payload as Record<string, unknown>).niconama),
     );
   } catch {}
   for (const ws of Array.from(wsClients)) {
@@ -351,7 +351,7 @@ const broadcastToWsClients = (payload: unknown) => {
 };
 
 // Expose WS broadcaster as well for external callers.
-(globalThis as any).__broadcastToWsClients = broadcastToWsClients;
+(globalThis as Record<string, unknown>).__broadcastToWsClients = broadcastToWsClients;
 
 const broadcastCurrentPayload = (context: string) => {
   try {
@@ -369,7 +369,16 @@ const broadcastCurrentPayload = (context: string) => {
 // Current speech state exposed to the console agent API.
 let currentSpeechState: { speech: string; silent: boolean } | undefined;
 
-let agent: any = {
+interface AgentApi {
+  setSpeech: (text: string) => void;
+  getSpeech: () => { speech: string; silent: boolean } | undefined;
+  getGame: () => unknown;
+  getStreamState: () => unknown;
+  publishStreamState: (data: unknown) => void;
+  postComments: (comments: unknown) => void;
+}
+
+let agent: AgentApi = {
   setSpeech: (text: string) => {
     currentSpeechState = { speech: text, silent: false };
   },
@@ -385,9 +394,9 @@ let agent: any = {
       // can learn and speak in response. `streamer.listen` accepts an
       // array of AgentComment objects.
       if (Array.isArray(comments)) {
-        streamer.listen(comments as any);
+        streamer.listen(comments as Array<unknown>);
       } else if (comments) {
-        streamer.listen([comments] as any);
+        streamer.listen([comments] as Array<unknown>);
       }
     } catch {
       // swallow errors in the fallback to avoid crashing startup
@@ -401,7 +410,7 @@ const getCurrentStreamPayload = () => {
   // `globalThis` mirror (set by other modules) to handle cross-module
   // initialization ordering where the global may have been written but
   // the local variable has not yet been updated.
-  const globalPublished = (globalThis as any).__lastPublishedStreamState;
+  const globalPublished = (globalThis as Record<string, unknown>).__lastPublishedStreamState;
   const streamState =
     lastPublishedStreamState === undefined || lastPublishedStreamState === null
       ? (globalPublished ?? agentStreamState)
@@ -409,13 +418,13 @@ const getCurrentStreamPayload = () => {
   const normalizedStreamState = normalizePublishedStreamState(streamState);
   const base =
     normalizedStreamState && typeof normalizedStreamState === "object"
-      ? (normalizedStreamState as any)
+      ? (normalizedStreamState as Record<string, unknown>)
       : {};
   const normalizedAgentStreamState =
     normalizePublishedStreamState(agentStreamState);
   const agentBase =
     normalizedAgentStreamState && typeof normalizedAgentStreamState === "object"
-      ? (normalizedAgentStreamState as any)
+      ? (normalizedAgentStreamState as Record<string, unknown>)
       : {};
   const replyTargetComment =
     base.replyTargetComment && typeof base.replyTargetComment === "object"
@@ -425,7 +434,7 @@ const getCurrentStreamPayload = () => {
         ? agentBase.replyTargetComment
         : undefined;
   const tryResolveNiconama = (src: unknown) => {
-    const resolved = resolveNiconamaFromState(src as any) as any;
+    const resolved = resolveNiconamaFromState(src as unknown) as unknown;
     if (
       resolved &&
       typeof resolved === "object" &&
@@ -472,7 +481,7 @@ const getCurrentStreamPayload = () => {
   // current payload without performing an HTTP fetch which may race with
   // in-flight published state updates.
   try {
-    (globalThis as any).__getCurrentStreamPayload = getCurrentStreamPayload;
+    (globalThis as Record<string, unknown>).__getCurrentStreamPayload = getCurrentStreamPayload;
   } catch {}
 
   return payload;
@@ -484,11 +493,11 @@ const extractReplyTargetComment = (payload: unknown): unknown => {
     typeof payload === "object" &&
     "replyTargetComment" in payload
   ) {
-    return (payload as any).replyTargetComment;
+    return (payload as Record<string, unknown>).replyTargetComment;
   }
   const nestedData =
     payload && typeof payload === "object" && "data" in payload
-      ? (payload as any).data
+      ? (payload as Record<string, unknown>).data
       : undefined;
   if (
     nestedData &&
@@ -505,7 +514,7 @@ const handlePublishedStreamState = (payload: unknown): void => {
     console.debug(
       "[DIAG] handlePublishedStreamState invoked with payload ->",
       payload && typeof payload === "object"
-        ? Object.keys(payload as any)
+        ? Object.keys(payload as Record<string, unknown>)
         : String(payload),
     );
   } catch {}
@@ -518,7 +527,7 @@ const handlePublishedStreamState = (payload: unknown): void => {
     !("type" in published) &&
     "data" in published
   ) {
-    published = (published as any).data;
+    published = (published as Record<string, unknown>).data;
   }
 
   try {
@@ -534,7 +543,7 @@ const handlePublishedStreamState = (payload: unknown): void => {
     published = normalizePublishedStreamState(published);
     if (replyTargetComment !== undefined) {
       if (published && typeof published === "object") {
-        (published as any).replyTargetComment = replyTargetComment;
+        (published as Record<string, unknown>).replyTargetComment = replyTargetComment;
       } else {
         published = { replyTargetComment };
       }
@@ -554,17 +563,17 @@ const handlePublishedStreamState = (payload: unknown): void => {
     try {
       const prev =
         lastPublishedStreamState && typeof lastPublishedStreamState === "object"
-          ? (lastPublishedStreamState as any)
+          ? (lastPublishedStreamState as Record<string, unknown>)
           : {};
       const next =
-        published && typeof published === "object" ? (published as any) : {};
+        published && typeof published === "object" ? (published as Record<string, unknown>) : {};
       // Normalize the incoming published payload to determine any `niconama`
       // metadata it implies (e.g. top-level title/url/start -> niconama.meta).
-      const normalizedNext = normalizePublishedStreamState(next) as any;
+      const normalizedNext = normalizePublishedStreamState(next) as unknown;
 
       // Start with a shallow merge, but ensure that any `niconama` produced
       // from the new payload takes precedence over the previous `niconama`.
-      const merged: any = { ...prev, ...next };
+      const merged: Record<string, unknown> = { ...prev, ...next };
       if (
         normalizedNext &&
         typeof normalizedNext === "object" &&
@@ -576,7 +585,7 @@ const handlePublishedStreamState = (payload: unknown): void => {
         // derive one from top-level title/url/start fields so client-posted
         // metadata overrides previous nested `niconama` values.
         try {
-          const derived = resolveNiconamaFromState(next) as any;
+          const derived = resolveNiconamaFromState(next) as unknown;
           if (
             derived &&
             typeof derived === "object" &&
@@ -593,12 +602,12 @@ const handlePublishedStreamState = (payload: unknown): void => {
           const hasTopLevel =
             next &&
             typeof next === "object" &&
-            (typeof (next as any).title === "string" ||
-              typeof (next as any).url === "string" ||
-              typeof (next as any).start === "number" ||
-              typeof (next as any).startTime === "number");
+            (typeof (next as Record<string, unknown>).title === "string" ||
+              typeof (next as Record<string, unknown>).url === "string" ||
+              typeof (next as Record<string, unknown>).start === "number" ||
+              typeof (next as Record<string, unknown>).startTime === "number");
           if (hasTopLevel) {
-            const forced = resolveNiconamaFromState(next) as any;
+            const forced = resolveNiconamaFromState(next) as unknown;
             if (
               forced &&
               typeof forced === "object" &&
@@ -618,7 +627,7 @@ const handlePublishedStreamState = (payload: unknown): void => {
         if (merged && typeof merged === "object" && "niconama" in merged) {
           const resolved = resolveNiconamaFromState({
             niconama: merged.niconama,
-          }) as any;
+          }) as unknown;
           if (
             resolved &&
             typeof resolved === "object" &&
@@ -631,17 +640,17 @@ const handlePublishedStreamState = (payload: unknown): void => {
 
       lastPublishedStreamState = merged;
       try {
-        (globalThis as any).__lastPublishedStreamState = merged;
+        (globalThis as Record<string, unknown>).__lastPublishedStreamState = merged;
       } catch {}
       try {
         console.debug(
           "[DIAG] lastPublishedStreamState updated ->",
           merged && typeof merged === "object"
-            ? Object.keys(merged as any)
+            ? Object.keys(merged as Record<string, unknown>)
             : String(merged),
           "niconamaKeys=",
-          merged && typeof merged === "object" && (merged as any).niconama
-            ? Object.keys((merged as any).niconama)
+          merged && typeof merged === "object" && (merged as Record<string, unknown>).niconama
+            ? Object.keys((merged as Record<string, unknown>).niconama as Record<string, unknown>)
             : undefined,
         );
       } catch {}
@@ -649,13 +658,13 @@ const handlePublishedStreamState = (payload: unknown): void => {
       // Fallback to direct assignment if merge fails for unexpected types.
       lastPublishedStreamState = published;
       try {
-        (globalThis as any).__lastPublishedStreamState = published;
+        (globalThis as Record<string, unknown>).__lastPublishedStreamState = published;
       } catch {}
       try {
         console.debug(
           "[DIAG] lastPublishedStreamState updated ->",
           published && typeof published === "object"
-            ? Object.keys(published as any)
+            ? Object.keys(published as Record<string, unknown>)
             : String(published),
         );
       } catch {}
@@ -695,12 +704,12 @@ const normalizeSpeechText = (speech: unknown): string | undefined => {
     return undefined;
   }
 
-  if (typeof (speech as any).text === "string") {
-    return (speech as any).text;
+  if (typeof (speech as Record<string, unknown>).text === "string") {
+    return (speech as Record<string, unknown>).text as string;
   }
 
-  if (typeof (speech as any).speech === "string") {
-    return (speech as any).speech;
+  if (typeof (speech as Record<string, unknown>).speech === "string") {
+    return (speech as Record<string, unknown>).speech as string;
   }
 
   return undefined;
@@ -715,7 +724,7 @@ let _externalAgentInitialized = false;
     const mod = await import("automated-gameplay-transmitter");
     if (typeof mod.createAgentApi === "function") {
       try {
-        const externalAgent = mod.createAgentApi(streamer);
+        const externalAgent = mod.createAgentApi(streamer) as AgentApi;
         agent = externalAgent;
         _externalAgentInitialized = true;
         console.info("[INFO] external agent API initialized");
@@ -751,20 +760,20 @@ streamer.onSpeech(async (event) => {
   const traceNodes =
     typeof event === "object" &&
     event !== null &&
-    Array.isArray((event as any).nodes)
-      ? (event as any).nodes
+    Array.isArray((event as Record<string, unknown>).nodes)
+      ? (event as Record<string, unknown>).nodes
       : undefined;
   const nGram =
     typeof event === "object" &&
     event !== null &&
-    typeof (event as any).nGram === "number"
-      ? (event as any).nGram
+    typeof (event as Record<string, unknown>).nGram === "number"
+      ? (event as Record<string, unknown>).nGram as number
       : streamer.currentNGramSize;
   const nGramRaw =
     typeof event === "object" &&
     event !== null &&
-    typeof (event as any).nGramRaw === "number"
-      ? (event as any).nGramRaw
+    typeof (event as Record<string, unknown>).nGramRaw === "number"
+      ? (event as Record<string, unknown>).nGramRaw as number
       : streamer.currentNGramSizeRaw;
   generatedSpeechHistorySequence += 1;
   generatedSpeechHistory.unshift({
@@ -825,7 +834,7 @@ const apiApp = new Hono()
     return Response.json({
       speech: normalizeSpeechText(speechState) ?? "",
       silent: !!(speechState && typeof speechState === "object"
-        ? (speechState as any).silent
+        ? (speechState as Record<string, unknown>).silent
         : false),
     });
   })
@@ -860,7 +869,7 @@ const apiApp = new Hono()
   })
   .post("/api/meta", async (c) => {
     try {
-      let body: any;
+      let body: Record<string, unknown>;
       try {
         body = await c.req.json();
       } catch (err) {
@@ -881,6 +890,13 @@ const apiApp = new Hono()
       return Response.json({}, { status: 500 });
     }
   });
+
+declare global {
+  function upgrade<T>(
+    req: Request,
+    options?: { data?: T },
+  ): boolean;
+}
 
 type WsData = { label: string };
 
@@ -1096,7 +1112,7 @@ const serverInstance: any = serve<WsData>({
         if (
           payload &&
           typeof payload === "object" &&
-          !(payload as any).niconama
+          !(payload as Record<string, unknown>).niconama
         ) {
           setTimeout(() => {
             try {
@@ -1120,8 +1136,8 @@ const serverInstance: any = serve<WsData>({
     },
   },
 });
-_server = serverInstance as any;
-__serverForExit = serverInstance as any;
+_server = serverInstance as Bun.Server<unknown>;
+__serverForExit = serverInstance as Bun.Server<unknown>;
 const serverUrl = String(serverInstance.url).replace(/\/+$|^\s+|\s+$/g, "");
 console.log(`🚀 Server running at ${serverUrl}`);
 
