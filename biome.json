@@ -44,25 +44,6 @@
       "linter": {
         "enabled": false
       }
-    },
-    {
-      "includes": ["scripts/*.ts"],
-      "formatter": {
-        "enabled": true
-      },
-      "linter": {
-        "rules": {
-          "suspicious": {
-            "noExplicitAny": "off"
-          },
-          "performance": {
-            "noAccumulatingSpread": "off"
-          },
-          "correctness": {
-            "noUnusedPrivateClassMembers": "off"
-          }
-        }
-      }
     }
   ]
 }
