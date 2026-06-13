@@ -37,11 +37,7 @@
   },
   "overrides": [
     {
-      "includes": [
-        "**/*.test.ts",
-        "**/*.test.tsx",
-        "scripts/*.ts"
-      ],
+      "includes": ["**/*.test.ts", "**/*.test.tsx"],
       "formatter": {
         "enabled": false
       },
