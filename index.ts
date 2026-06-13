@@ -1243,7 +1243,7 @@ const handleNiconamaComments = (comments: unknown) => {
 
   try {
     const payload = getCurrentStreamPayload();
-    
+
     // Helper to safely extract comment count from nested structure
     const getCommentCountFromPayload = (obj: unknown): number => {
       if (typeof obj === "object" && obj !== null) {
@@ -1269,7 +1269,7 @@ const handleNiconamaComments = (comments: unknown) => {
       }
       return 0;
     };
-    
+
     const currentCount: number = getCommentCountFromPayload(payload);
     const numberedCommentsCount = countNumberedAgentComments(filteredComments);
     const newCount = currentCount + numberedCommentsCount;
