@@ -1243,62 +1243,34 @@ const handleNiconamaComments = (comments: unknown) => {
 
   try {
     const payload = getCurrentStreamPayload();
-    const currentCount: number =
-      typeof payload.commentCount === "number"
-        ? payload.commentCount
-        : typeof payload === "object" &&
-            payload !== null &&
-            typeof (payload as Record<string, unknown>).niconama === "object" &&
-            (payload as Record<string, unknown>).niconama !== null &&
-            typeof (
-              (payload as Record<string, unknown>).niconama as Record<
-                string,
-                unknown
-              >
-            ).meta === "object" &&
-            (
-              (payload as Record<string, unknown>).niconama as Record<
-                string,
-                unknown
-              >
-            ).meta !== null &&
-            typeof (
-              (
-                (payload as Record<string, unknown>).niconama as Record<
-                  string,
-                  unknown
-                >
-              ).meta as Record<string, unknown>
-            ).total === "object" &&
-            (
-              (
-                (payload as Record<string, unknown>).niconama as Record<
-                  string,
-                  unknown
-                >
-              ).meta as Record<string, unknown>
-            ).total !== null &&
-            typeof (
-              (
-                (
-                  (payload as Record<string, unknown>).niconama as Record<
-                    string,
-                    unknown
-                  >
-                ).meta as Record<string, unknown>
-              ).total as Record<string, unknown>
-            ).comments === "number"
-          ? (
-              (
-                (
-                  (payload as Record<string, unknown>).niconama as Record<
-                    string,
-                    unknown
-                  >
-                ).meta as Record<string, unknown>
-              ).total as Record<string, unknown>
-            ).comments
-          : 0;
+    
+    // Helper to safely extract comment count from nested structure
+    const getCommentCountFromPayload = (obj: unknown): number => {
+      if (typeof obj === "object" && obj !== null) {
+        const rec = obj as Record<string, unknown>;
+        if (typeof rec.commentCount === "number") {
+          return rec.commentCount;
+        }
+        const niconama = rec.niconama;
+        if (typeof niconama === "object" && niconama !== null) {
+          const niconamaRec = niconama as Record<string, unknown>;
+          const meta = niconamaRec.meta;
+          if (typeof meta === "object" && meta !== null) {
+            const metaRec = meta as Record<string, unknown>;
+            const total = metaRec.total;
+            if (typeof total === "object" && total !== null) {
+              const totalRec = total as Record<string, unknown>;
+              if (typeof totalRec.comments === "number") {
+                return totalRec.comments;
+              }
+            }
+          }
+        }
+      }
+      return 0;
+    };
+    
+    const currentCount: number = getCommentCountFromPayload(payload);
     const numberedCommentsCount = countNumberedAgentComments(filteredComments);
     const newCount = currentCount + numberedCommentsCount;
 
