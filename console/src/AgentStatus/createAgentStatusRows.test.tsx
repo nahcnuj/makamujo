@@ -4,7 +4,6 @@ import { renderToString } from "hono/jsx/dom/server";
 import { createReplyTargetCommentValueComponent } from "./agentStatusUtils";
 import { createAgentStatusRows } from "./createAgentStatusRows";
 import { MarkovModelStatusSection } from "./MarkovModelStatusSection";
-import type { AgentStateResponse, AgentStatusRow } from "./types";
 
 describe("createAgentStatusRows", () => {
   it("returns readable status rows when niconama metadata exists", () => {
@@ -24,7 +23,7 @@ describe("createAgentStatusRows", () => {
       speechHistory: [
         { id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 },
       ],
-    } as unknown as AgentStateResponse);
+    } as any);
 
     expect(rows).not.toContainEqual({ label: "タイトル", value: "タイトル" });
     expect(rows.find((row) => row.label === "開始時刻")).toBeUndefined();
@@ -47,7 +46,7 @@ describe("createAgentStatusRows", () => {
     const rows = createAgentStatusRows({
       nGram: 4,
       speechHistory: [{ id: "speech-1", speech: "alpha beta gamma", nGram: 4 }],
-    } as unknown as AgentStateResponse);
+    } as any);
 
     const speechHistoryRow = rows.find((row) => row.label === "これまでの発話");
     expect(speechHistoryRow).toEqual(
@@ -59,7 +58,7 @@ describe("createAgentStatusRows", () => {
     const rows = createAgentStatusRows({
       nGram: 4,
       speechHistory: [{ id: "speech-1", speech: "alpha beta gamma", nGram: 4 }],
-    } as unknown as AgentStateResponse);
+    } as any);
     const markovRows = rows.filter(
       (r) => r.label === "これまでの発話" || r.label === "生成N-gram",
     );
@@ -83,7 +82,7 @@ describe("createAgentStatusRows", () => {
         { id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 },
         { id: "speech-2", speech: "ぜひ遊びに来てね", nGram: 3, nGramRaw: 3 },
       ],
-    } as unknown as AgentStateResponse);
+    } as any);
     const markovRows = rows.filter(
       (r) => r.label === "これまでの発話" || r.label === "生成N-gram",
     );
@@ -107,7 +106,7 @@ describe("createAgentStatusRows", () => {
       speechHistory: [
         { id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 },
       ],
-    } as unknown as AgentStateResponse);
+    } as any);
 
     expect(rows.find((row) => row.label === "発話内容")).toBeUndefined();
     expect(rows.find((row) => row.label === "これまでの発話")).toBeDefined();
@@ -119,7 +118,7 @@ describe("createAgentStatusRows", () => {
       speechHistory: [
         { id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 },
       ],
-    } as unknown as AgentStateResponse);
+    } as any);
     const markovRows = rows.filter(
       (r) => r.label === "これまでの発話" || r.label === "生成N-gram",
     );
@@ -144,7 +143,7 @@ describe("createAgentStatusRows", () => {
       speechHistory: [
         { id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 },
       ],
-    } as unknown as AgentStateResponse);
+    } as any);
 
     expect(rows.find((row) => row.label === "発話内容")?.value).toBe(
       "コメント",
@@ -158,7 +157,7 @@ describe("createAgentStatusRows", () => {
       speechHistory: [
         { id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 },
       ],
-    } as unknown as AgentStateResponse);
+    } as any);
     const markovRows = rows.filter(
       (r) => r.label === "これまでの発話" || r.label === "生成N-gram",
     );
@@ -181,7 +180,7 @@ describe("createAgentStatusRows", () => {
         speech: { text: "コメント", nodes: ["コメント"] },
         silent: false,
       },
-    } as unknown as AgentStateResponse);
+    } as any);
 
     expect(rows.find((row) => row.label === "発話内容")?.value).toBe(
       "コメント",
@@ -199,7 +198,7 @@ describe("createAgentStatusRows", () => {
           nGramRaw: 4,
         },
       ],
-    } as unknown as AgentStateResponse);
+    } as any);
     const markovRows = rows.filter(
       (r) => r.label === "これまでの発話" || r.label === "生成N-gram",
     );
@@ -222,7 +221,7 @@ describe("createAgentStatusRows", () => {
           nodes: ["alpha", "beta", "gamma"],
         },
       ],
-    } as unknown as AgentStateResponse);
+    } as any);
     const markovRows = rows.filter(
       (r) => r.label === "これまでの発話" || r.label === "生成N-gram",
     );
@@ -243,16 +242,13 @@ describe("createAgentStatusRows", () => {
         text: "このコメントに返信します",
         pickedTopic: "返信",
       },
-    } as unknown as AgentStateResponse);
+    } as any);
     const replyRow = rows.find((row) => row.label === "返信先コメント");
 
     expect(replyRow).toBeDefined();
     expect(replyRow?.hideLabel).toBeFalsy();
     const html = renderToString(
-      <MarkovModelStatusSection
-        // biome-ignore lint/style/noNonNullAssertion: test data requires non-null assertion
-        markovModelRows={[replyRow!] as unknown as Array<AgentStatusRow>}
-      />,
+      <MarkovModelStatusSection markovModelRows={[replyRow!] as any} />,
     );
 
     expect(html).toContain("返信先コメント");
@@ -264,10 +260,12 @@ describe("createAgentStatusRows", () => {
 
   it("normalizes numbered prefixes in reply target comments", () => {
     const html = renderToString(
-      createReplyTargetCommentValueComponent({
-        text: "#2 コメント1わこつ2しかのこのこのここしたんたん",
-        pickedTopic: "",
-      }),
+      <>
+        {createReplyTargetCommentValueComponent({
+          text: "#2 コメント1わこつ2しかのこのこのここしたんたん",
+          pickedTopic: "",
+        })}
+      </>,
     );
 
     expect(html).toContain("コメント1わこつ2しかのこのこのここしたんたん");
@@ -289,7 +287,7 @@ describe("createAgentStatusRows", () => {
         text: "このコメントに返信します",
         pickedTopic: "返信",
       },
-    } as unknown as AgentStateResponse);
+    } as any);
 
     const replyRow = rows.find((row) => row.label === "返信先コメント");
     const speechHistoryRow = rows.find((row) => row.label === "これまでの発話");
@@ -307,16 +305,11 @@ describe("createAgentStatusRows", () => {
           nodes: ["alpha", "beta", "gamma"],
         },
       ],
-    } as unknown as AgentStateResponse);
+    } as any);
     const speechHistoryRow = rows.find((row) => row.label === "これまでの発話");
     expect(speechHistoryRow?.value).toBeUndefined();
     const html = renderToString(
-      <MarkovModelStatusSection
-        markovModelRows={
-          // biome-ignore lint/style/noNonNullAssertion: test data requires non-null assertion
-          [speechHistoryRow!] as unknown as Array<AgentStatusRow>
-        }
-      />,
+      <MarkovModelStatusSection markovModelRows={[speechHistoryRow!] as any} />,
     );
 
     expect(html).toContain("alpha");
@@ -336,11 +329,11 @@ describe("createAgentStatusRows", () => {
         type: "live",
         meta: { total: { listeners: 3, comments: 99 } },
       },
-    } as unknown as AgentStateResponse);
+    } as any);
 
     const liveRow = rows.find((r) => r.label === "配信指標");
     expect(liveRow).toBeDefined();
-    const html = renderToString(liveRow?.valueComponent);
+    const html = renderToString(<>{liveRow!.valueComponent}</>);
     expect(html).toContain("コメント数");
     expect(html).toContain("99");
   });
@@ -349,7 +342,7 @@ describe("createAgentStatusRows", () => {
     const rows = createAgentStatusRows(
       {
         recentComments: [{ data: { no: 1, comment: "こんにちは" } }],
-      } as unknown as AgentStateResponse,
+      } as any,
       { showRecentComments: false, toggleRecentComments: () => {} },
     );
 
@@ -360,13 +353,13 @@ describe("createAgentStatusRows", () => {
     const rows = createAgentStatusRows(
       {
         recentComments: [{ data: { no: 1, comment: "こんにちは" } }],
-      } as unknown as AgentStateResponse,
+      } as any,
       { showRecentComments: true, toggleRecentComments: () => {} },
     );
 
     const recentRow = rows.find((row) => row.label === "最近のコメント");
     expect(recentRow).toBeDefined();
-    const html = renderToString(recentRow?.valueComponent);
+    const html = renderToString(<>{recentRow!.valueComponent}</>);
     expect(html).toContain('<span class="text-emerald-200">#1</span>');
     expect(html).toContain("こんにちは");
   });
@@ -378,13 +371,13 @@ describe("createAgentStatusRows", () => {
           { data: { no: 1, comment: "古いコメント" } },
           { data: { no: 2, comment: "新しいコメント" } },
         ],
-      } as unknown as AgentStateResponse,
+      } as any,
       { showRecentComments: true, toggleRecentComments: () => {} },
     );
 
     const recentRow = rows.find((row) => row.label === "最近のコメント");
     expect(recentRow).toBeDefined();
-    const html = renderToString(recentRow?.valueComponent);
+    const html = renderToString(<>{recentRow!.valueComponent}</>);
     const firstIndex = html.indexOf('<span class="text-emerald-200">#2</span>');
     const secondIndex = html.indexOf(
       '<span class="text-emerald-200">#1</span>',
@@ -400,13 +393,13 @@ describe("createAgentStatusRows", () => {
           type: "live",
           meta: { total: { listeners: 3, comments: 99 } },
         },
-      } as unknown as AgentStateResponse,
+      } as any,
       { showRecentComments: false, toggleRecentComments: () => {} },
     );
 
     const liveRow = rows.find((row) => row.label === "配信指標");
     expect(liveRow).toBeDefined();
-    const html = renderToString(liveRow?.valueComponent);
+    const html = renderToString(<>{liveRow!.valueComponent}</>);
     expect(html).toContain("<button");
     expect(html).toContain("99");
   });
@@ -423,13 +416,13 @@ describe("createAgentStatusRows", () => {
           { data: { no: 1, comment: "こんにちは" } },
           { data: { no: 2, comment: "テストコメント" } },
         ],
-      } as unknown as AgentStateResponse,
+      } as any,
       { showRecentComments: false, toggleRecentComments: () => {} },
     );
 
     const liveRow = rows.find((row) => row.label === "配信指標");
     expect(liveRow).toBeDefined();
-    const html = renderToString(liveRow?.valueComponent);
+    const html = renderToString(<>{liveRow!.valueComponent}</>);
     expect(html).toContain(">80</button>");
   });
 
@@ -441,13 +434,13 @@ describe("createAgentStatusRows", () => {
           { data: { no: 1, comment: "こんにちは" } },
           { data: { no: 2, comment: "テストコメント" } },
         ],
-      } as unknown as AgentStateResponse,
+      } as any,
       { showRecentComments: false, toggleRecentComments: () => {} },
     );
 
     const liveRow = rows.find((row) => row.label === "配信指標");
     expect(liveRow).toBeDefined();
-    const html = renderToString(liveRow?.valueComponent);
+    const html = renderToString(<>{liveRow!.valueComponent}</>);
     expect(html).toContain(">2</button>");
   });
 
@@ -463,18 +456,18 @@ describe("createAgentStatusRows", () => {
           { data: { no: 2, comment: "テストコメント" } },
           { data: { no: 3, comment: "こんばんは" } },
         ],
-      } as unknown as AgentStateResponse,
+      } as any,
       { showRecentComments: true, toggleRecentComments: () => {} },
     );
 
     const liveRow = rows.find((row) => row.label === "配信指標");
     expect(liveRow).toBeDefined();
-    const liveHtml = renderToString(liveRow?.valueComponent);
+    const liveHtml = renderToString(<>{liveRow!.valueComponent}</>);
     expect(liveHtml).toContain("3");
 
     const recentRow = rows.find((row) => row.label === "最近のコメント");
     expect(recentRow).toBeDefined();
-    const recentHtml = renderToString(recentRow?.valueComponent);
+    const recentHtml = renderToString(<>{recentRow!.valueComponent}</>);
     expect((recentHtml.match(/<p\b/g) ?? []).length).toBe(3);
   });
 
@@ -482,13 +475,13 @@ describe("createAgentStatusRows", () => {
     const rows = createAgentStatusRows(
       {
         recentComments: [{ data: { no: 12, comment: "テストコメント" } }],
-      } as unknown as AgentStateResponse,
+      } as any,
       { showRecentComments: true, toggleRecentComments: () => {} },
     );
 
     const recentRow = rows.find((row) => row.label === "最近のコメント");
     expect(recentRow).toBeDefined();
-    const html = renderToString(recentRow?.valueComponent);
+    const html = renderToString(<>{recentRow!.valueComponent}</>);
     expect(html).toContain('<span class="text-emerald-200">#12</span>');
     expect(html).toContain("テストコメント");
   });
@@ -504,13 +497,13 @@ describe("createAgentStatusRows", () => {
           { data: { comment: "ジュニアアイドル" } },
           { data: { comment: "16" } },
         ],
-      } as unknown as AgentStateResponse,
+      } as any,
       { showRecentComments: true, toggleRecentComments: () => {} },
     );
 
     const recentRow = rows.find((row) => row.label === "最近のコメント");
     expect(recentRow).toBeDefined();
-    const recentHtml = renderToString(recentRow?.valueComponent);
+    const recentHtml = renderToString(<>{recentRow!.valueComponent}</>);
     expect(recentHtml).toContain('<span class="text-emerald-200">#16</span>');
     expect(recentHtml).toContain("ジュニアアイドル");
     expect((recentHtml.match(/<p\b/g) ?? []).length).toBe(1);
@@ -523,13 +516,13 @@ describe("createAgentStatusRows", () => {
           { data: { no: 1, comment: "こんにちは" } },
           { data: { no: 2, comment: "テストコメント" } },
         ],
-      } as unknown as AgentStateResponse,
+      } as any,
       { showRecentComments: true, toggleRecentComments: () => {} },
     );
 
     const recentRow = rows.find((row) => row.label === "最近のコメント");
     expect(recentRow).toBeDefined();
-    const html = renderToString(recentRow?.valueComponent);
+    const html = renderToString(<>{recentRow!.valueComponent}</>);
     expect(html).toContain('<span class="text-emerald-200">#1</span>');
     expect(html).toContain('<span class="text-emerald-200">#2</span>');
     expect(html).toContain("こんにちは");
@@ -541,7 +534,7 @@ describe("createAgentStatusRows", () => {
       {
         recentComments: [{ data: { no: 1, comment: "わこつ" } }],
         replyTargetComment: { text: "わこつ", pickedTopic: "" },
-      } as unknown as AgentStateResponse,
+      } as any,
       { showRecentComments: true, toggleRecentComments: () => {} },
     );
 
@@ -554,7 +547,7 @@ describe("createAgentStatusRows", () => {
       {
         recentComments: [{ data: { no: 2, comment: "#2 わこつ" } }],
         replyTargetComment: { text: "#2 わこつ", pickedTopic: "" },
-      } as unknown as AgentStateResponse,
+      } as any,
       { showRecentComments: true, toggleRecentComments: () => {} },
     );
 
@@ -569,7 +562,7 @@ describe("createAgentStatusRows", () => {
         name: "CookieClicker",
         state: { clickableElementIds: ["ascendButton"], cookies: 123 },
       },
-    } as unknown as AgentStateResponse);
+    } as any);
 
     const gameRow = rows.find((row) => row.label === "ゲーム情報");
     expect(gameRow).toBeDefined();
@@ -580,7 +573,7 @@ describe("createAgentStatusRows", () => {
       niconama: {},
       currentGame: { name: "CookieClicker", state: { ascendNumber: 1 } },
       speech: { speech: "テスト発話", silent: false },
-    } as unknown as AgentStateResponse);
+    } as any);
 
     expect(rows.find((r) => r.label === "配信指標")).toBeUndefined();
     expect(rows.find((r) => r.label === "ゲーム情報")).toBeDefined();

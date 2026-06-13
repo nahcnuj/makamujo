@@ -161,7 +161,7 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
     if (parsed) return parsed;
     try {
       JSON.parse(normalized);
-    } catch (_err) {
+    } catch {
       /* ignore */
     }
     return null;

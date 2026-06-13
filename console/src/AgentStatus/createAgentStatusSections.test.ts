@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import { createAgentStatusSections } from "./createAgentStatusSections";
-import type { AgentStateResponse } from "./types";
 
 describe("createAgentStatusSections", () => {
   it("categorizes rows into delivery, markov-model, and game sections", () => {
@@ -12,7 +11,7 @@ describe("createAgentStatusSections", () => {
       currentGame: { name: "ゲームID", state: { status: "running" } },
       nGram: 4,
       speechHistory: [{ id: "speech-1", speech: "hello world", nGram: 2 }],
-    } as unknown as AgentStateResponse);
+    } as any);
 
     expect(sections.map((section) => section.title)).toEqual([
       "配信状況",
@@ -25,7 +24,7 @@ describe("createAgentStatusSections", () => {
     const sections = createAgentStatusSections({
       nGram: 4,
       speechHistory: [{ id: "speech-1", speech: "hello world", nGram: 2 }],
-    } as unknown as AgentStateResponse);
+    } as any);
 
     expect(sections.map((section) => section.title)).toEqual([
       "マルコフ連鎖モデル",
@@ -40,7 +39,7 @@ describe("createAgentStatusSections", () => {
         text: "返信先コメントを表示します",
         pickedTopic: "返信",
       },
-    } as unknown as AgentStateResponse);
+    } as any);
 
     const markovSection = sections.find(
       (section) => section.title === "マルコフ連鎖モデル",
@@ -58,7 +57,7 @@ describe("createAgentStatusSections", () => {
         { data: { no: 1, comment: "こんにちは" } },
         { data: { no: 2, comment: "テストコメント" } },
       ],
-    } as unknown as AgentStateResponse);
+    } as any);
 
     const deliverySection = sections.find(
       (section) => section.title === "配信状況",
@@ -71,24 +70,18 @@ describe("createAgentStatusSections", () => {
   });
 
   it("shows fallback game title without detail rows when currentGame is null", () => {
-    const sections = createAgentStatusSections({
-      currentGame: null,
-    } as unknown as AgentStateResponse);
+    const sections = createAgentStatusSections({ currentGame: null } as any);
 
     expect(sections).toHaveLength(1);
-    // biome-ignore lint/style/noNonNullAssertion: test data guaranteed to have sections
     const gameSection = sections[0]!;
     expect(gameSection.title).toBe("『-』プレイ中");
     expect(gameSection.rows).toEqual([]);
   });
 
   it("shows fallback game title without detail rows when currentGame is missing", () => {
-    const sections = createAgentStatusSections(
-      {} as unknown as AgentStateResponse,
-    );
+    const sections = createAgentStatusSections({} as any);
 
     expect(sections).toHaveLength(1);
-    // biome-ignore lint/style/noNonNullAssertion: test data guaranteed to have sections
     const gameSection = sections[0]!;
     expect(gameSection.title).toBe("『-』プレイ中");
     expect(gameSection.rows).toEqual([]);

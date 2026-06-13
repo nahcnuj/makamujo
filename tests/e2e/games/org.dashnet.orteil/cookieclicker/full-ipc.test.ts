@@ -184,7 +184,7 @@ test.describe("Full IPC operation", () => {
             let backendSocket: Socket;
             try {
               backendSocket = await createConnectionWithRetry(serverIpcPath);
-            } catch (_err) {
+            } catch {
               try {
                 proxyLogStream.write(
                   "[proxy] failed to connect backend; destroying browser socket\n",

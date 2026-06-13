@@ -145,7 +145,7 @@ const dataFile = resolve(PROJECT_ROOT, dataFileArg);
 const model = ((file) => {
   try {
     return MarkovChainModel.fromFile(file);
-  } catch (_err) {
+  } catch {
     console.warn("[WARN]", "failed to open the file", file);
     return new MarkovChainModel();
   }
@@ -295,7 +295,7 @@ function sseBroadcast(payload: unknown) {
   for (const c of Array.from(sseClients)) {
     try {
       c.enqueue(chunk);
-    } catch (_err) {
+    } catch {
       try {
         sseClients.delete(c);
       } catch {}
@@ -312,7 +312,7 @@ function sseBroadcast(payload: unknown) {
           continue;
         }
         c.enqueue(chunk);
-      } catch (_err) {
+      } catch {
         try {
           resilient.delete(c);
         } catch {}
@@ -339,7 +339,7 @@ const broadcastToWsClients = (payload: unknown) => {
   for (const ws of Array.from(wsClients)) {
     try {
       ws.send(message);
-    } catch (_err) {
+    } catch {
       try {
         ws.close();
       } catch {}
@@ -389,7 +389,7 @@ let agent: any = {
       } else if (comments) {
         streamer.listen([comments] as any);
       }
-    } catch (_e) {
+    } catch {
       // swallow errors in the fallback to avoid crashing startup
     }
   },
@@ -645,7 +645,7 @@ const handlePublishedStreamState = (payload: unknown): void => {
             : undefined,
         );
       } catch {}
-    } catch (_mergeErr) {
+    } catch {
       // Fallback to direct assignment if merge fails for unexpected types.
       lastPublishedStreamState = published;
       try {
@@ -1404,14 +1404,14 @@ function exitHandler(
       if (__serverForExit) {
         __serverForExit.stop(options.exit);
       }
-    } catch (_err) {
+    } catch {
       // ignore errors while attempting to stop the server during cleanup
     }
     try {
       if (__consoleServerForExit) {
         __consoleServerForExit.stop(options.exit);
       }
-    } catch (_err) {
+    } catch {
       // ignore console stop errors
     }
     if (niconamaCommentClient) {

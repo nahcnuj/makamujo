@@ -251,7 +251,7 @@ export function startConsoleServer({
         };
 
         ws.data.target = target;
-      } catch (_err) {
+      } catch {
         try {
           ws.close();
         } catch {}

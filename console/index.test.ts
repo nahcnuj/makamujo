@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, beforeEach, afterEach, mock } from "bun:test";
 import { startConsoleServer } from "./index";
 
 describe("Console password generation", () => {
@@ -19,11 +19,11 @@ describe("Console password generation", () => {
 
     // Mock console.log to capture password output
     consoleLogSpy = mock(() => {});
-    console.log = consoleLogSpy as unknown as typeof console.log;
+    console.log = consoleLogSpy as any;
 
     // Setup test environment
-    process.env.CONSOLE_LOOPBACK_ONLY = "1"; // Use loopback mode to avoid TLS requirements
-    process.env.NODE_ENV = "production";
+    process.env.CONSOLE_LOOPBACK_ONLY = '1'; // Use loopback mode to avoid TLS requirements
+    process.env.NODE_ENV = 'production';
   });
 
   afterEach(() => {
@@ -48,7 +48,7 @@ describe("Console password generation", () => {
 
     // Verify that console.log was called with the password message
     expect(consoleLogSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/Console Basic auth password: /),
+      expect.stringMatching(/Console Basic auth password: /)
     );
   });
 
@@ -61,19 +61,14 @@ describe("Console password generation", () => {
     // Extract the logged password
     const calls = consoleLogSpy.mock.calls;
     const passwordCall = calls.find(
-      (call) =>
-        call[0] &&
-        typeof call[0] === "string" &&
-        call[0].includes("Console Basic auth password: "),
+      (call) => call[0] && typeof call[0] === 'string' && call[0].includes('Console Basic auth password: ')
     );
 
     expect(passwordCall).toBeDefined();
     if (passwordCall) {
-      const passwordMatch = (passwordCall[0] as string).match(
-        /Console Basic auth password: (.+)/,
-      );
+      const passwordMatch = (passwordCall[0] as string).match(/Console Basic auth password: (.+)/);
       expect(passwordMatch).toBeDefined();
-      if (passwordMatch?.[1]) {
+      if (passwordMatch && passwordMatch[1]) {
         const password = passwordMatch[1];
         expect(password.length).toBe(16);
         // Verify password contains only alphanumeric + special chars (no spaces or invalid chars)
@@ -83,7 +78,7 @@ describe("Console password generation", () => {
   });
 
   it("uses provided password when CONSOLE_BASIC_AUTH_PASSWORD env var is set", () => {
-    const providedPassword = "my-custom-password";
+    const providedPassword = 'my-custom-password';
     process.env.CONSOLE_BASIC_AUTH_PASSWORD = providedPassword;
 
     const server = startConsoleServer();
@@ -93,10 +88,7 @@ describe("Console password generation", () => {
     // (or may be called later for other reasons, but not with "Console Basic auth password: ")
     const calls = consoleLogSpy.mock.calls;
     const passwordGenerationCalls = calls.filter(
-      (call) =>
-        call[0] &&
-        typeof call[0] === "string" &&
-        call[0].includes("Console Basic auth password: "),
+      (call) => call[0] && typeof call[0] === 'string' && call[0].includes('Console Basic auth password: ')
     );
 
     // In loopback-only mode, it should not generate a password
@@ -111,24 +103,19 @@ describe("Console password generation", () => {
     // Generate passwords multiple times
     for (let i = 0; i < 3; i++) {
       consoleLogSpy = mock(() => {});
-      console.log = consoleLogSpy as unknown as typeof console.log;
+      console.log = consoleLogSpy as any;
 
       const server = startConsoleServer();
       server.stop(true);
 
       const calls = consoleLogSpy.mock.calls;
       const passwordCall = calls.find(
-        (call) =>
-          call[0] &&
-          typeof call[0] === "string" &&
-          call[0].includes("Console Basic auth password: "),
+        (call) => call[0] && typeof call[0] === 'string' && call[0].includes('Console Basic auth password: ')
       );
 
       if (passwordCall) {
-        const passwordMatch = (passwordCall[0] as string).match(
-          /Console Basic auth password: (.+)/,
-        );
-        if (passwordMatch?.[1]) {
+        const passwordMatch = (passwordCall[0] as string).match(/Console Basic auth password: (.+)/);
+        if (passwordMatch && passwordMatch[1]) {
           passwords.push(passwordMatch[1]);
         }
       }

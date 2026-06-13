@@ -146,7 +146,7 @@ export const app = new Hono()
       const proxyBase = computeProxyBase(c.req.raw);
       const res = await fetch(`${proxyBase}/api/meta`);
       return res;
-    } catch (_err) {
+    } catch {
       return new Response("{}", {
         status: 502,
         headers: { "content-type": "application/json" },
@@ -197,7 +197,7 @@ export const app = new Hono()
         // proxied HTTP response. Avoid special-casing self-proxying here to
         // ensure console clients get the authoritative upstream events.
         return proxyConsoleApiWsRequest(c.req.raw, proxyUrl, proxyHeaders);
-      } catch (_err) {
+      } catch {
         return new Response("proxy failed", { status: 502 });
       }
     },

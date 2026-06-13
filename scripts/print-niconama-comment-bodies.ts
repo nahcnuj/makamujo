@@ -70,7 +70,7 @@ async function main() {
       printed.add(key);
       console.log(text);
     }
-  } catch (_e) {
+  } catch {
     // ignore fallback extraction failures
   }
 

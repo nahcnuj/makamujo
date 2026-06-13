@@ -85,7 +85,7 @@ async function main() {
       const embeddedComments = parseAgentCommentsFromResponseBody(embedded);
       for (const c of embeddedComments) collected.push(c);
     }
-  } catch (_e) {
+  } catch {
     /* ignore */
   }
 
@@ -113,7 +113,7 @@ async function main() {
           for (const c of renderedComments) collected.push(c);
         }
       }
-    } catch (_e) {
+    } catch {
       /* ignore */
     }
 
@@ -173,7 +173,7 @@ async function main() {
           const embeddedComments = parseAgentCommentsFromResponseBody(embedded);
           for (const c of embeddedComments) collected.push(c);
         }
-      } catch (_e) {
+      } catch {
         // ignore per-iteration errors
       }
 
@@ -209,7 +209,7 @@ async function main() {
           stdio: "inherit",
           timeout: 35_000,
         });
-      } catch (_e) {
+      } catch {
         // capture may still have written logs; continue
       }
 
@@ -254,7 +254,7 @@ async function main() {
           return text !== null && !isSuspectedMetadataComment(text);
         });
       }
-    } catch (_e) {
+    } catch {
       /* ignore */
     }
   }

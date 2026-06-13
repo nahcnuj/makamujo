@@ -168,7 +168,7 @@ export function computeProxyUrl(req: Request, proxyBase: string) {
   let parsed: URL;
   try {
     parsed = new URL(req.url);
-  } catch (_err) {
+  } catch {
     const hostForParse =
       req.headers.get("host") ?? `${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
     parsed = new URL(req.url, `http://${hostForParse}`);
@@ -190,7 +190,7 @@ export async function fetchMetaSnapshot(proxyBase: string): Promise<any> {
       const res = await fetch(url);
       const json = await res.json().catch(() => ({}));
       if (json && typeof json === "object" && json.niconama) return json;
-    } catch (_err) {
+    } catch {
       // fall through to polling below
     }
 
@@ -526,7 +526,7 @@ export async function proxyConsoleApiWsRequest(
       } finally {
         clearTimeout(timeout);
       }
-    } catch (_headErr) {
+    } catch {
       // HEAD failed or timed out; fall back to a short GET probe and abort quickly
       try {
         const controller = new AbortController();

@@ -18,6 +18,12 @@ import {
 } from "./MarkovModelStatusSection";
 import type { AgentStateResponse, AgentStatusSection } from "./types";
 
+declare global {
+  interface Window {
+    __sseUrl?: string;
+  }
+}
+
 const AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS = "grid-rows-[auto_minmax(0,1fr)]";
 
 export const AgentStatus = () => {
@@ -38,8 +44,7 @@ export const AgentStatus = () => {
     (async () => {
       const sseUrl = "/console/api/ws";
       try {
-        const w = window as unknown as Record<string, unknown>;
-        w.__sseUrl = sseUrl;
+        window.__sseUrl = sseUrl;
       } catch {}
       try {
         es = new EventSource(sseUrl);
@@ -86,7 +91,7 @@ export const AgentStatus = () => {
             }
 
             prevTypeRef.current = currentType;
-          } catch (_e) {
+          } catch {
             // ignore detection errors
           }
 

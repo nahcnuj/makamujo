@@ -149,7 +149,7 @@ test("proxy forwards WebSocket upgrades to broadcasting server", async () => {
       // Server does not support WS upgrades in this runtime — skip.
       return;
     }
-  } catch (_err) {
+  } catch {
     // If probing fails assume upgrades are unavailable and skip.
     return;
   }
