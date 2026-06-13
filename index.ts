@@ -409,9 +409,9 @@ let agent: AgentApi = {
       // can learn and speak in response. `streamer.listen` accepts an
       // array of AgentComment objects.
       if (Array.isArray(comments)) {
-        streamer.listen(comments as Array<unknown>);
+        streamer.listen(coerceToAgentComments(comments));
       } else if (comments) {
-        streamer.listen([comments] as Array<unknown>);
+        streamer.listen(coerceToAgentComments([comments]));
       }
     } catch {
       // swallow errors in the fallback to avoid crashing startup
