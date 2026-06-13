@@ -126,7 +126,7 @@ export class MakaMujo {
               state: {
                 ...(this.#playing?.state ?? {}),
                 ...state.state,
-              // biome-ignore lint/suspicious/noExplicitAny: state structure is game-specific
+                // biome-ignore lint/suspicious/noExplicitAny: state structure is game-specific
               } as any,
             };
             this.#notifyGameStateChangeAsync();
