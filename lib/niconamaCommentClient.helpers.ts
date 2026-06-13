@@ -59,10 +59,7 @@ export const buildNiconamaStreamStateFromStatisticsEvent = (
 ): unknown | null => {
   if (!body || typeof body !== "object") return null;
   if ((body as Record<string, unknown>).type !== "statistics") return null;
-  const data = (body as Record<string, unknown>).data as Record<
-    string,
-    unknown
-  >;
+  const data = (body as Record<string, unknown>).data as Record<string, unknown>;
   if (!data || typeof data !== "object") return null;
   const listeners = typeof data.viewers === "number" ? data.viewers : undefined;
   const comments =
@@ -329,21 +326,9 @@ export const hasCommentArrayStructure = (body: unknown): boolean => {
     (bodyRec.data as Record<string, unknown> | undefined)?.comments,
     (bodyRec.data as Record<string, unknown> | undefined)?.chat,
     (bodyRec.data as Record<string, unknown> | undefined)?.chats,
-    (
-      (bodyRec.site as Record<string, unknown> | undefined)?.state as
-        | Record<string, unknown>
-        | undefined
-    )?.relive?.comments,
-    (
-      (bodyRec.site as Record<string, unknown> | undefined)?.state as
-        | Record<string, unknown>
-        | undefined
-    )?.relive?.chat,
-    (
-      (bodyRec.site as Record<string, unknown> | undefined)?.state as
-        | Record<string, unknown>
-        | undefined
-    )?.relive?.chats,
+    ((bodyRec.site as Record<string, unknown> | undefined)?.state as Record<string, unknown> | undefined)?.relive?.comments,
+    ((bodyRec.site as Record<string, unknown> | undefined)?.state as Record<string, unknown> | undefined)?.relive?.chat,
+    ((bodyRec.site as Record<string, unknown> | undefined)?.state as Record<string, unknown> | undefined)?.relive?.chats,
     (bodyRec.site as Record<string, unknown> | undefined)?.relive?.comments,
     (bodyRec.site as Record<string, unknown> | undefined)?.relive?.chat,
     (bodyRec.site as Record<string, unknown> | undefined)?.relive?.chats,
@@ -359,20 +344,21 @@ export const parseAgentCommentsFromResponseBody = (
   eventType?: string,
 ) => {
   if (!body || typeof body !== "object") return [];
+  const bodyRec = body as Record<string, unknown>;
   const rawComments: unknown[] = [];
   const candidateArrays = [
-    (body as Record<string, unknown>).comments,
-    (body as Record<string, unknown>).chat,
-    (body as Record<string, unknown>).chats,
-    (body as Record<string, unknown>).data?.comments,
-    (body as Record<string, unknown>).data?.chat,
-    (body as Record<string, unknown>).data?.chats,
-    (body as Record<string, unknown>).site?.state?.relive?.comments,
-    (body as Record<string, unknown>).site?.state?.relive?.chat,
-    (body as Record<string, unknown>).site?.state?.relive?.chats,
-    (body as Record<string, unknown>).site?.relive?.comments,
-    (body as Record<string, unknown>).site?.relive?.chat,
-    (body as Record<string, unknown>).site?.relive?.chats,
+    bodyRec.comments,
+    bodyRec.chat,
+    bodyRec.chats,
+    (bodyRec.data as Record<string, unknown> | undefined)?.comments,
+    (bodyRec.data as Record<string, unknown> | undefined)?.chat,
+    (bodyRec.data as Record<string, unknown> | undefined)?.chats,
+    ((bodyRec.site as Record<string, unknown> | undefined)?.state as Record<string, unknown> | undefined)?.relive?.comments,
+    ((bodyRec.site as Record<string, unknown> | undefined)?.state as Record<string, unknown> | undefined)?.relive?.chat,
+    ((bodyRec.site as Record<string, unknown> | undefined)?.state as Record<string, unknown> | undefined)?.relive?.chats,
+    (bodyRec.site as Record<string, unknown> | undefined)?.relive?.comments,
+    (bodyRec.site as Record<string, unknown> | undefined)?.relive?.chat,
+    (bodyRec.site as Record<string, unknown> | undefined)?.relive?.chats,
   ];
   for (const candidate of candidateArrays)
     if (Array.isArray(candidate)) rawComments.push(...candidate);

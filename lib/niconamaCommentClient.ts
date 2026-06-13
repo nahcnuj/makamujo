@@ -135,7 +135,6 @@ export class NiconamaCommentClient {
   #directWebSocketSuppressReconnect = false;
   #directWebSocketQueue: string[] = [];
   #playwrightCommentContext: unknown | null = null;
-  #playwrightCommentPage: unknown | null = null;
   #playwrightPageCommentPollTimer: ReturnType<typeof setInterval> | null = null;
   #playwrightWatcherTask: Promise<void> | null = null;
   #pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1839,7 +1838,6 @@ export class NiconamaCommentClient {
                 }
                 page = newPage;
                 this.#playwrightCommentContext = newContext;
-                this.#playwrightCommentPage = page;
                 console.debug("[DEBUG] Playwright page ready", {
                   url: watchUrl.substring(0, 80),
                 });
@@ -2320,7 +2318,6 @@ export class NiconamaCommentClient {
         }
 
         this.#playwrightCommentContext = context;
-        this.#playwrightCommentPage = page;
         console.debug("[DEBUG] Playwright page ready", {
           url: watchUrl.substring(0, 80),
         });
@@ -2380,7 +2377,6 @@ export class NiconamaCommentClient {
       console.warn("[WARN] failed to close Playwright comment watcher", err);
     }
 
-    this.#playwrightCommentPage = null;
     this.#playwrightCommentContext = null;
   }
 
