@@ -59,7 +59,10 @@ export const buildNiconamaStreamStateFromStatisticsEvent = (
 ): unknown | null => {
   if (!body || typeof body !== "object") return null;
   if ((body as Record<string, unknown>).type !== "statistics") return null;
-  const data = (body as Record<string, unknown>).data as Record<string, unknown>;
+  const data = (body as Record<string, unknown>).data as Record<
+    string,
+    unknown
+  >;
   if (!data || typeof data !== "object") return null;
   const listeners = typeof data.viewers === "number" ? data.viewers : undefined;
   const comments =
@@ -556,8 +559,10 @@ export const getCommentTextFromAgentComment = (
   if (!comment || typeof comment !== "object") return null;
   const commentRec = comment as Record<string, unknown>;
   const dataValue = commentRec.data;
-  const value = (dataValue && typeof dataValue === "object" ? dataValue : comment) as Record<string, unknown>;
-  
+  const value = (
+    dataValue && typeof dataValue === "object" ? dataValue : comment
+  ) as Record<string, unknown>;
+
   const text =
     typeof value.comment === "string"
       ? value.comment
@@ -612,8 +617,10 @@ export const getAgentCommentNumber = (comment: unknown): number | undefined => {
   if (!comment || typeof comment !== "object") return undefined;
   const commentRec = comment as Record<string, unknown>;
   const dataValue = commentRec.data;
-  const value = (dataValue && typeof dataValue === "object" ? dataValue : comment) as Record<string, unknown>;
-  
+  const value = (
+    dataValue && typeof dataValue === "object" ? dataValue : comment
+  ) as Record<string, unknown>;
+
   const rawText =
     typeof value.comment === "string"
       ? value.comment

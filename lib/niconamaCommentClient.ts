@@ -621,10 +621,10 @@ export class NiconamaCommentClient {
     }
 
     const tempUserDataDir = mkdtempSync(join(tmpdir(), "niconama-body-text-"));
-    let context: unknown = null;
+    let context: Record<string, unknown> | null = null;
 
     try {
-      context = await this.#launchPersistentContext(tempUserDataDir, {
+      context = (await this.#launchPersistentContext(tempUserDataDir, {
         executablePath: this.#executablePath,
         headless: true,
         ignoreHTTPSErrors: true,
@@ -632,9 +632,9 @@ export class NiconamaCommentClient {
         userAgent:
           "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         locale: "ja-JP",
-      });
+      })) as Record<string, unknown> | null;
 
-      const page = await context.newPage();
+      const page = await context!.newPage();
       await addNiconamaPlaywrightInitScript(page);
       const response = await page.goto(targetUrl, {
         waitUntil: "domcontentloaded",
@@ -699,9 +699,9 @@ export class NiconamaCommentClient {
     const tempUserDataDir = mkdtempSync(
       join(tmpdir(), "niconama-page-comments-"),
     );
-    let context: unknown = null;
+    let context: Record<string, unknown> | null = null;
     try {
-      context = await this.#launchPersistentContext(tempUserDataDir, {
+      context = (await this.#launchPersistentContext(tempUserDataDir, {
         executablePath: this.#executablePath,
         headless: true,
         ignoreHTTPSErrors: true,
@@ -709,7 +709,7 @@ export class NiconamaCommentClient {
         userAgent:
           "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         locale: "ja-JP",
-      });
+      })) as Record<string, unknown> | null;
 
       const page = await context.newPage();
       await addNiconamaPlaywrightInitScript(page);
@@ -1058,9 +1058,9 @@ export class NiconamaCommentClient {
         // If a different function was provided via constructor options,
         // `this.#launchPersistentContext` will be a different reference.
         const tmpDir = mkdtempSync(join(tmpdir(), "niconama-playwright-"));
-        let context: unknown = null;
+        let context: Record<string, unknown> | null = null;
         try {
-          context = await this.#launchPersistentContext(tmpDir, {
+          context = (await this.#launchPersistentContext(tmpDir, {
             executablePath: this.#executablePath,
             headless: true,
             ignoreHTTPSErrors: true,
@@ -1068,7 +1068,7 @@ export class NiconamaCommentClient {
             userAgent:
               "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             locale: "ja-JP",
-          });
+          })) as Record<string, unknown> | null;
 
           const page = context.pages?.()[0] ?? (await context.newPage());
           await addNiconamaPlaywrightInitScript(page);
