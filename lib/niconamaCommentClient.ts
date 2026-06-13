@@ -256,11 +256,16 @@ export class NiconamaCommentClient {
         ? (() => {
             const embedded = embeddedData as Record<string, unknown>;
             const site = embedded.site as Record<string, unknown> | undefined;
-            const relive1 = (site?.state as Record<string, unknown> | undefined)?.relive as Record<string, unknown> | undefined;
+            const relive1 = (site?.state as Record<string, unknown> | undefined)
+              ?.relive as Record<string, unknown> | undefined;
             const relive2 = site?.relive as Record<string, unknown> | undefined;
-            const relive3 = embedded.relive as Record<string, unknown> | undefined;
+            const relive3 = embedded.relive as
+              | Record<string, unknown>
+              | undefined;
             return Boolean(
-              relive1?.webSocketUrl ?? relive2?.webSocketUrl ?? relive3?.webSocketUrl
+              relive1?.webSocketUrl ??
+                relive2?.webSocketUrl ??
+                relive3?.webSocketUrl,
             );
           })()
         : false;
@@ -363,7 +368,9 @@ export class NiconamaCommentClient {
         if (!embeddedData || typeof embeddedData !== "object") return undefined;
         const embedded = embeddedData as Record<string, unknown>;
         const program = embedded.program as Record<string, unknown> | undefined;
-        const stats = program?.statistics as Record<string, unknown> | undefined;
+        const stats = program?.statistics as
+          | Record<string, unknown>
+          | undefined;
         const count = stats?.commentCount;
         return typeof count === "number" ? count : undefined;
       })();
@@ -422,19 +429,25 @@ export class NiconamaCommentClient {
         if (!obj || typeof obj !== "object") return undefined;
         const rec = obj as Record<string, unknown>;
         const program = rec.program as Record<string, unknown> | undefined;
-        const stats = program?.statistics as Record<string, unknown> | undefined;
+        const stats = program?.statistics as
+          | Record<string, unknown>
+          | undefined;
         const count = stats?.commentCount;
         if (typeof count === "number") return count;
         if (typeof count === "string") return Number(count);
         return undefined;
       };
       const rawTop = getCommentCount(embedded);
-      const rawSite = getCommentCount((embedded as Record<string, unknown>).site);
+      const rawSite = getCommentCount(
+        (embedded as Record<string, unknown>).site,
+      );
       const commentCount = rawTop !== undefined ? rawTop : rawSite;
       try {
         const embRec = embedded as Record<string, unknown>;
         const program = embRec.program as Record<string, unknown> | undefined;
-        const stats = program?.statistics as Record<string, unknown> | undefined;
+        const stats = program?.statistics as
+          | Record<string, unknown>
+          | undefined;
         console.debug(
           "[DEBUG] fetchEmbeddedData embedded program/statistics presence",
           {
@@ -658,7 +671,9 @@ export class NiconamaCommentClient {
         return null;
       }
 
-      const activePages = context.pages().filter((p: NiconamaBrowserPage) => !p.isClosed());
+      const activePages = context
+        .pages()
+        .filter((p: NiconamaBrowserPage) => !p.isClosed());
       for (const currentPage of activePages) {
         if (currentPage.isClosed()) continue;
         const bodyText = await getBodyTextFromPage(currentPage);
@@ -1056,9 +1071,11 @@ export class NiconamaCommentClient {
     // Check site.frontendId
     const site = rec.site as Record<string, unknown> | undefined;
     if (site) {
-      if (typeof site.frontendId === "number")
-        return String(site.frontendId);
-      if (typeof site.frontendId === "string" && site.frontendId.trim().length > 0)
+      if (typeof site.frontendId === "number") return String(site.frontendId);
+      if (
+        typeof site.frontendId === "string" &&
+        site.frontendId.trim().length > 0
+      )
         return site.frontendId.trim();
 
       // Check site.state.frontendId
@@ -1066,7 +1083,10 @@ export class NiconamaCommentClient {
       if (state) {
         if (typeof state.frontendId === "number")
           return String(state.frontendId);
-        if (typeof state.frontendId === "string" && state.frontendId.trim().length > 0)
+        if (
+          typeof state.frontendId === "string" &&
+          state.frontendId.trim().length > 0
+        )
           return state.frontendId.trim();
       }
     }
@@ -1539,7 +1559,9 @@ export class NiconamaCommentClient {
           } as unknown) as DirectWebSocket;
         } catch {
           try {
-            ws = new WebSocketConstructor(webSocketUrl, { headers } as unknown) as DirectWebSocket;
+            ws = new WebSocketConstructor(webSocketUrl, {
+              headers,
+            } as unknown) as DirectWebSocket;
           } catch {
             ws = new WebSocketConstructor(webSocketUrl) as DirectWebSocket;
           }
@@ -2051,9 +2073,15 @@ export class NiconamaCommentClient {
             const socketRec = socket as Record<string, unknown>;
             const wsUrl = (socketRec.url as () => string)();
             console.debug("[DEBUG] Playwright websocket connected", wsUrl);
-            (socketRec.on as (event: string, handler: (frame: unknown) => void) => void)("framereceived", (frame: unknown) => {
+            (
+              socketRec.on as (
+                event: string,
+                handler: (frame: unknown) => void,
+              ) => void
+            )("framereceived", (frame: unknown) => {
               const pageRefRec = pageRef as Record<string, unknown>;
-              if ((pageRefRec.isClosed as (() => boolean) | undefined)?.()) return;
+              if ((pageRefRec.isClosed as (() => boolean) | undefined)?.())
+                return;
               const frameRec = frame as Record<string, unknown>;
               let payload = frameRec.payload;
               if (payload instanceof ArrayBuffer) {
@@ -2402,16 +2430,26 @@ export class NiconamaCommentClient {
     if (!this.#playwrightCommentContext) return;
     try {
       try {
-        const context = this.#playwrightCommentContext as Record<string, unknown>;
+        const context = this.#playwrightCommentContext as Record<
+          string,
+          unknown
+        >;
         const pages =
           typeof context.pages === "function"
             ? (context.pages as () => unknown[])()
             : [];
         for (const page of pages) {
           try {
-            if (page && typeof (page as Record<string, unknown>).removeAllListeners === "function") {
+            if (
+              page &&
+              typeof (page as Record<string, unknown>).removeAllListeners ===
+                "function"
+            ) {
               try {
-                ((page as Record<string, unknown>).removeAllListeners as () => void)();
+                (
+                  (page as Record<string, unknown>)
+                    .removeAllListeners as () => void
+                )();
               } catch {}
             }
             try {
@@ -2626,23 +2664,39 @@ export class NiconamaCommentClient {
     try {
       const site: Record<string, unknown> =
         embeddedData && typeof embeddedData === "object"
-          ? ((embeddedData as Record<string, unknown>).site as Record<string, unknown>) || {}
+          ? ((embeddedData as Record<string, unknown>).site as Record<
+              string,
+              unknown
+            >) || {}
           : {};
       const program: Record<string, unknown> =
         embeddedData && typeof embeddedData === "object"
-          ? ((embeddedData as Record<string, unknown>).program as Record<string, unknown>) || {}
+          ? ((embeddedData as Record<string, unknown>).program as Record<
+              string,
+              unknown
+            >) || {}
           : {};
       // If no embeddedData was provided, attempt to derive program information
       // from the configured watch URL or by fetching the static watch page.
       let derivedProgramId: string | undefined =
-        (typeof program.nicoliveProgramId === "string" ? program.nicoliveProgramId : undefined) ??
-        (typeof program.programId === "string" ? program.programId : undefined) ??
+        (typeof program.nicoliveProgramId === "string"
+          ? program.nicoliveProgramId
+          : undefined) ??
+        (typeof program.programId === "string"
+          ? program.programId
+          : undefined) ??
         undefined;
       const pollingApiBase: string | undefined =
-        (typeof site.pollingApiBaseUrl === "string" ? site.pollingApiBaseUrl : undefined) ||
-        (typeof site.frontendPublicApiUrl === "string" ? site.frontendPublicApiUrl : undefined) ||
+        (typeof site.pollingApiBaseUrl === "string"
+          ? site.pollingApiBaseUrl
+          : undefined) ||
+        (typeof site.frontendPublicApiUrl === "string"
+          ? site.frontendPublicApiUrl
+          : undefined) ||
         (typeof site.apiBaseUrl === "string" ? site.apiBaseUrl : undefined) ||
-        (typeof site.staticResourceBaseUrl === "string" ? site.staticResourceBaseUrl : undefined);
+        (typeof site.staticResourceBaseUrl === "string"
+          ? site.staticResourceBaseUrl
+          : undefined);
       const watchUrl =
         this.#watchUrl ??
         process.env.NICONAMA_WATCH_URL ??
@@ -2667,13 +2721,17 @@ export class NiconamaCommentClient {
         }
       }
       const frontendApiBase: string | undefined =
-        (typeof site.frontendPublicApiUrl === "string" ? site.frontendPublicApiUrl : undefined) ||
+        (typeof site.frontendPublicApiUrl === "string"
+          ? site.frontendPublicApiUrl
+          : undefined) ||
         (typeof site.apiBaseUrl === "string" ? site.apiBaseUrl : undefined);
 
       const programId =
         derivedProgramId ??
         ((program as Record<string, unknown>).watchPageUrl
-          ? /lv\d+/.exec((program as Record<string, unknown>).watchPageUrl as string)?.[0]
+          ? /lv\d+/.exec(
+              (program as Record<string, unknown>).watchPageUrl as string,
+            )?.[0]
           : undefined) ??
         undefined;
 
@@ -2936,7 +2994,10 @@ export class NiconamaCommentClient {
     }
 
     if (!body) {
-      console.debug("[DEBUG] direct websocket empty body after JSON parse", wsUrl);
+      console.debug(
+        "[DEBUG] direct websocket empty body after JSON parse",
+        wsUrl,
+      );
       return;
     }
 
@@ -2959,7 +3020,10 @@ export class NiconamaCommentClient {
         }
         try {
           const rawStats = (body as Record<string, unknown>)?.data;
-          const stats = (rawStats && typeof rawStats === "object" ? rawStats as Record<string, unknown> : null);
+          const stats =
+            rawStats && typeof rawStats === "object"
+              ? (rawStats as Record<string, unknown>)
+              : null;
           if (
             stats &&
             typeof stats.comments === "number" &&
@@ -2983,7 +3047,10 @@ export class NiconamaCommentClient {
       case "reconnect": {
         try {
           const rawReconnectData = (body as Record<string, unknown>)?.data;
-          const reconnectData = (rawReconnectData && typeof rawReconnectData === "object" ? rawReconnectData as Record<string, unknown> : null);
+          const reconnectData =
+            rawReconnectData && typeof rawReconnectData === "object"
+              ? (rawReconnectData as Record<string, unknown>)
+              : null;
           const newToken = reconnectData?.audienceToken as unknown;
           const waitTimeMs =
             reconnectData &&
