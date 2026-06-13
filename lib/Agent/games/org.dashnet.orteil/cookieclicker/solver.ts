@@ -149,9 +149,9 @@ export function* solver(
         const sightData =
           noopResult.name === "idle" ? noopResult.state : undefined;
         const clickableElementIds = Array.isArray(
-          (sightData as any)?.clickableElementIds,
+          (sightData as Record<string, unknown>)?.clickableElementIds,
         )
-          ? ((sightData as any).clickableElementIds as string[])
+          ? ((sightData as Record<string, unknown>).clickableElementIds as string[])
           : ["bigCookie"];
         const candidateIds = listeners.isSilent()
           ? ["bigCookie"]

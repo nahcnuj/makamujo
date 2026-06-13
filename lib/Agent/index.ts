@@ -120,6 +120,7 @@ export class MakaMujo {
         if (state.name === "idle") {
           // console.debug('[DEBUG]', 'receiver idle state =', JSON.stringify(state.state, null, 0));
           if (state.state) {
+            // biome-ignore lint/suspicious/noExplicitAny: state structure is game-specific
             this.#playing = {
               name,
               state: {
@@ -361,6 +362,7 @@ export class MakaMujo {
 
       if (data.hasGift && !isAd) {
         //     const userId = data.userId;
+        // biome-ignore lint/suspicious/noExplicitAny: data comes from external API with unknown structure
         const name = (data as any).origin?.message?.gift?.advertiserName;
         //     const icon = (({ comment }) => {
         //       const start = comment.indexOf('https://');

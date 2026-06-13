@@ -17,7 +17,7 @@ const server = http.createServer((req, res) => {
       try {
         res.write("data: PARTIAL"); // no terminating newline(s)
         // Abruptly close the socket to simulate an upstream truncation
-        res.socket && (res.socket as any).destroy();
+        res.socket?.destroy?.();
       } catch {}
     }, 50);
     return;
