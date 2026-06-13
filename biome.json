@@ -39,7 +39,23 @@
     {
       "includes": ["**/*.test.ts", "**/*.test.tsx"],
       "formatter": {
+        "enabled": true
+      },
+      "linter": {
         "enabled": false
+      }
+    },
+    {
+      "includes": [
+        "index.ts",
+        "lib/console-proxy.ts",
+        "lib/niconamaCommentClient.ts",
+        "lib/niconamaCommentClient.helpers.ts",
+        "lib/niconamaCommentClient.playwright.ts",
+        "scripts/*.ts"
+      ],
+      "formatter": {
+        "enabled": true
       },
       "linter": {
         "rules": {
