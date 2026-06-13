@@ -2,7 +2,7 @@ import type { AgentComment } from "automated-gameplay-transmitter";
 import { parseAgentCommentsFromResponseBody } from "./niconamaCommentClient.helpers";
 
 export const addNiconamaPlaywrightInitScript = async (
-  page: any,
+  page: unknown,
 ): Promise<void> => {
   try {
     await page?.addInitScript?.(() => {
@@ -31,8 +31,8 @@ export const addNiconamaPlaywrightInitScript = async (
       const origAdd = EventTarget.prototype.addEventListener;
       EventTarget.prototype.addEventListener = function (
         type: string,
-        listener: any,
-        opts: any,
+        listener: unknown,
+        opts: unknown,
       ) {
         if (type === "beforeunload" || type === "unload") return;
         return origAdd.call(this, type, listener, opts);
@@ -44,7 +44,7 @@ export const addNiconamaPlaywrightInitScript = async (
 };
 
 export const getBodyTextFromPage = async (
-  page: any,
+  page: unknown,
 ): Promise<string | null> => {
   if (!page || (typeof page.isClosed === "function" && page.isClosed()))
     return null;
@@ -88,7 +88,7 @@ export const extractBodyTextFromHtml = (html: string): string | null => {
 };
 
 export const scanRenderedFrameForComments = async (
-  frame: any,
+  frame: unknown,
 ): Promise<string[]> => {
   try {
     const pageComments = await frame.evaluate(() => {
@@ -161,7 +161,7 @@ export const getUniquePageComments = (
 };
 
 export const extractRenderedPageComments = async (
-  page: any,
+  page: unknown,
   seenCommentIdentifiers: Set<string>,
 ): Promise<AgentComment[]> => {
   try {
@@ -189,7 +189,7 @@ export const extractRenderedPageComments = async (
 };
 
 export const extractPageComments = async (
-  page: any,
+  page: unknown,
   seenCommentIdentifiers: Set<string>,
 ): Promise<AgentComment[]> => {
   if (!page || (typeof page.isClosed === "function" && page.isClosed()))
@@ -260,7 +260,7 @@ export const extractPageComments = async (
 };
 
 export const pollPageComments = async (
-  page: any,
+  page: unknown,
   seenCommentIdentifiers: Set<string>,
   intervalMs = 1_000,
   maxAttempts = 30,
@@ -287,7 +287,7 @@ export const pollPageComments = async (
 };
 
 export const startPlaywrightPagePolling = (
-  page: any,
+  page: unknown,
   seenCommentIdentifiers: Set<string>,
   onComments: (comments: AgentComment[]) => void,
 ): ReturnType<typeof setInterval> => {
@@ -303,7 +303,7 @@ export const startPlaywrightPagePolling = (
 };
 
 export const waitForAnyCommentSelector = async (
-  page: any,
+  page: unknown,
   timeoutMs: number,
 ): Promise<void> => {
   if (typeof page.waitForSelector !== "function") return;
@@ -327,11 +327,11 @@ export const waitForAnyCommentSelector = async (
   await Promise.race(waiters);
 };
 
-export const tryOpenRenderedCommentPanel = async (page: any): Promise<void> => {
+export const tryOpenRenderedCommentPanel = async (page: unknown): Promise<void> => {
   if (!page || (typeof page.isClosed === "function" && page.isClosed())) return;
   const safeEval = async <T>(
     p: any,
-    fn: (pp: any) => Promise<T> | T,
+    fn: (pp: unknown) => Promise<T> | T,
   ): Promise<T | null> => {
     try {
       return await fn(p);
@@ -345,7 +345,7 @@ export const tryOpenRenderedCommentPanel = async (page: any): Promise<void> => {
       pp.$('[data-name="comment"], .comment-tab, .comment-panel button'),
     );
     if (commentButton) {
-      await safeEval(commentButton, (b: any) =>
+      await safeEval(commentButton, (b: unknown) =>
         b.click({ timeout: 2_000, force: true }),
       );
       return;
@@ -357,7 +357,7 @@ export const tryOpenRenderedCommentPanel = async (page: any): Promise<void> => {
       pp.locator('[data-name="comment"], .comment-tab, .comment-panel button'),
     );
     if (loc && typeof loc.first === "function") {
-      await safeEval(loc.first(), (l: any) => l.click({ timeout: 2_000 }));
+      await safeEval(loc.first(), (l: unknown) => l.click({ timeout: 2_000 }));
       return;
     }
   }

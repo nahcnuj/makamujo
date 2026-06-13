@@ -58,8 +58,8 @@ export const buildNiconamaStreamStateFromStatisticsEvent = (
   body: unknown,
 ): unknown | null => {
   if (!body || typeof body !== "object") return null;
-  if ((body as any).type !== "statistics") return null;
-  const data = (body as any).data;
+  if ((body as Record<string, unknown>).type !== "statistics") return null;
+  const data = (body as Record<string, unknown>).data;
   if (!data || typeof data !== "object") return null;
   const listeners = typeof data.viewers === "number" ? data.viewers : undefined;
   const comments =
@@ -319,19 +319,19 @@ const mergeNumericCommentEntries = (rawComments: unknown[]): unknown[] => {
 export const hasCommentArrayStructure = (body: unknown): boolean => {
   if (!body || typeof body !== "object") return false;
   const candidateArrays = [
-    (body as any).comments,
-    (body as any).chat,
-    (body as any).chats,
-    (body as any).data?.comments,
-    (body as any).data?.chat,
-    (body as any).data?.chats,
-    (body as any).site?.state?.relive?.comments,
-    (body as any).site?.state?.relive?.chat,
-    (body as any).site?.state?.relive?.chats,
-    (body as any).site?.relive?.comments,
-    (body as any).site?.relive?.chat,
-    (body as any).site?.relive?.chats,
-    (body as any).data,
+    (body as Record<string, unknown>).comments,
+    (body as Record<string, unknown>).chat,
+    (body as Record<string, unknown>).chats,
+    (body as Record<string, unknown>).data?.comments,
+    (body as Record<string, unknown>).data?.chat,
+    (body as Record<string, unknown>).data?.chats,
+    (body as Record<string, unknown>).site?.state?.relive?.comments,
+    (body as Record<string, unknown>).site?.state?.relive?.chat,
+    (body as Record<string, unknown>).site?.state?.relive?.chats,
+    (body as Record<string, unknown>).site?.relive?.comments,
+    (body as Record<string, unknown>).site?.relive?.chat,
+    (body as Record<string, unknown>).site?.relive?.chats,
+    (body as Record<string, unknown>).data,
   ];
   if (candidateArrays.some(Array.isArray)) return true;
   return collectNestedCommentArrays(body).length > 0;
@@ -345,30 +345,30 @@ export const parseAgentCommentsFromResponseBody = (
   if (!body || typeof body !== "object") return [];
   const rawComments: unknown[] = [];
   const candidateArrays = [
-    (body as any).comments,
-    (body as any).chat,
-    (body as any).chats,
-    (body as any).data?.comments,
-    (body as any).data?.chat,
-    (body as any).data?.chats,
-    (body as any).site?.state?.relive?.comments,
-    (body as any).site?.state?.relive?.chat,
-    (body as any).site?.state?.relive?.chats,
-    (body as any).site?.relive?.comments,
-    (body as any).site?.relive?.chat,
-    (body as any).site?.relive?.chats,
+    (body as Record<string, unknown>).comments,
+    (body as Record<string, unknown>).chat,
+    (body as Record<string, unknown>).chats,
+    (body as Record<string, unknown>).data?.comments,
+    (body as Record<string, unknown>).data?.chat,
+    (body as Record<string, unknown>).data?.chats,
+    (body as Record<string, unknown>).site?.state?.relive?.comments,
+    (body as Record<string, unknown>).site?.state?.relive?.chat,
+    (body as Record<string, unknown>).site?.state?.relive?.chats,
+    (body as Record<string, unknown>).site?.relive?.comments,
+    (body as Record<string, unknown>).site?.relive?.chat,
+    (body as Record<string, unknown>).site?.relive?.chats,
   ];
   for (const candidate of candidateArrays)
     if (Array.isArray(candidate)) rawComments.push(...candidate);
-  if (rawComments.length === 0 && Array.isArray((body as any).data))
-    rawComments.push(...(body as any).data);
+  if (rawComments.length === 0 && Array.isArray((body as Record<string, unknown>).data))
+    rawComments.push(...(body as Record<string, unknown>).data);
   const commentEventTypes = new Set(["actionComment", "action_comment"]);
   if (
     rawComments.length === 0 &&
     eventType &&
     commentEventTypes.has(eventType)
   ) {
-    const maybeComment = (body as any).data;
+    const maybeComment = (body as Record<string, unknown>).data;
     if (maybeComment && isCommentLikeObject(maybeComment))
       rawComments.push(maybeComment);
   }
