@@ -151,7 +151,8 @@ export function* solver(
         const clickableElementIds = Array.isArray(
           (sightData as Record<string, unknown>)?.clickableElementIds,
         )
-          ? ((sightData as Record<string, unknown>).clickableElementIds as string[])
+          ? ((sightData as Record<string, unknown>)
+              .clickableElementIds as string[])
           : ["bigCookie"];
         const candidateIds = listeners.isSilent()
           ? ["bigCookie"]

@@ -24,6 +24,7 @@ const pickTopic = (text: string) => {
       const a = [...s].length;
       const b = [...(prev[0] ?? "")].length;
       // console.debug(s, a, b, [s], [...prev, s]);
+      // biome-ignore lint/performance/noAccumulatingSpread: reduce accumulation pattern
       return a > b ? [s] : a === b ? [...prev, s] : prev;
     },
     [""],
@@ -120,12 +121,12 @@ export class MakaMujo {
         if (state.name === "idle") {
           // console.debug('[DEBUG]', 'receiver idle state =', JSON.stringify(state.state, null, 0));
           if (state.state) {
-            // biome-ignore lint/suspicious/noExplicitAny: state structure is game-specific
             this.#playing = {
               name,
               state: {
                 ...(this.#playing?.state ?? {}),
                 ...state.state,
+              // biome-ignore lint/suspicious/noExplicitAny: state structure is game-specific
               } as any,
             };
             this.#notifyGameStateChangeAsync();

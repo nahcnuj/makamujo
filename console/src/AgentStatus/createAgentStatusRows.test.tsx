@@ -331,7 +331,7 @@ describe("createAgentStatusRows", () => {
 
     const liveRow = rows.find((r) => r.label === "配信指標");
     expect(liveRow).toBeDefined();
-    const html = renderToString(liveRow!.valueComponent);
+    const html = renderToString(liveRow?.valueComponent);
     expect(html).toContain("コメント数");
     expect(html).toContain("99");
   });
@@ -357,7 +357,7 @@ describe("createAgentStatusRows", () => {
 
     const recentRow = rows.find((row) => row.label === "最近のコメント");
     expect(recentRow).toBeDefined();
-    const html = renderToString(recentRow!.valueComponent);
+    const html = renderToString(recentRow?.valueComponent);
     expect(html).toContain('<span class="text-emerald-200">#1</span>');
     expect(html).toContain("こんにちは");
   });
