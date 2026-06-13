@@ -20,12 +20,15 @@ type PlaywrightPage = {
     };
   };
   url: () => string;
-  waitForSelector: (selector: string, options?: Record<string, unknown>) => Promise<unknown>;
+  waitForSelector: (
+    selector: string,
+    options?: Record<string, unknown>,
+  ) => Promise<unknown>;
   waitForTimeout?: (ms: number) => Promise<void>;
 };
 
 export const addNiconamaPlaywrightInitScript = async (
-  page: PlaywrightPage,
+  page: NiconamaBrowserPage,
 ): Promise<void> => {
   try {
     await page.addInitScript(() => {
@@ -67,7 +70,7 @@ export const addNiconamaPlaywrightInitScript = async (
 };
 
 export const getBodyTextFromPage = async (
-  page: PlaywrightPage,
+  page: NiconamaBrowserPage,
 ): Promise<string | null> => {
   if (page.isClosed()) return null;
 
@@ -181,7 +184,7 @@ export const getUniquePageComments = (
 };
 
 export const extractRenderedPageComments = async (
-  page: PlaywrightPage,
+  page: NiconamaBrowserPage,
   seenCommentIdentifiers: Set<string>,
 ): Promise<AgentComment[]> => {
   try {
@@ -209,11 +212,10 @@ export const extractRenderedPageComments = async (
 };
 
 export const extractPageComments = async (
-  page: PlaywrightPage,
+  page: NiconamaBrowserPage,
   seenCommentIdentifiers: Set<string>,
 ): Promise<AgentComment[]> => {
-  if (page.isClosed())
-    return [];
+  if (page.isClosed()) return [];
   const renderedComments = await extractRenderedPageComments(
     page,
     seenCommentIdentifiers,
@@ -280,7 +282,7 @@ export const extractPageComments = async (
 };
 
 export const pollPageComments = async (
-  page: PlaywrightPage,
+  page: NiconamaBrowserPage,
   seenCommentIdentifiers: Set<string>,
   intervalMs = 1_000,
   maxAttempts = 30,
@@ -307,7 +309,7 @@ export const pollPageComments = async (
 };
 
 export const startPlaywrightPagePolling = (
-  page: PlaywrightPage,
+  page: NiconamaBrowserPage,
   seenCommentIdentifiers: Set<string>,
   onComments: (comments: AgentComment[]) => void,
 ): ReturnType<typeof setInterval> => {
@@ -323,7 +325,7 @@ export const startPlaywrightPagePolling = (
 };
 
 export const waitForAnyCommentSelector = async (
-  page: PlaywrightPage,
+  page: NiconamaBrowserPage,
   timeoutMs: number,
 ): Promise<void> => {
   const selectors = [
@@ -347,7 +349,7 @@ export const waitForAnyCommentSelector = async (
 };
 
 export const tryOpenRenderedCommentPanel = async (
-  page: PlaywrightPage,
+  page: NiconamaBrowserPage,
 ): Promise<void> => {
   if (page.isClosed()) return;
   const safeEval = async <T>(
