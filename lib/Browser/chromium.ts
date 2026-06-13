@@ -121,8 +121,11 @@ export const create = async (
     },
 
     clickByText: async (text) => {
+      // biome-ignore lint/suspicious/noExplicitAny: Playwright API types are complex
       const locatorFactories: Array<() => any> = [
+        // biome-ignore lint/suspicious/noExplicitAny: Playwright type casting needed
         () => page.getByRole("button", { name: text, exact: true } as any),
+        // biome-ignore lint/suspicious/noExplicitAny: Playwright type casting needed
         () => page.getByRole("button", { name: text } as any),
         () => page.getByText(text, { exact: true }),
         () => page.getByText(text),
@@ -137,6 +140,7 @@ export const create = async (
         let clicked = false;
 
         for (const createLocator of locatorFactories) {
+          // biome-ignore lint/suspicious/noExplicitAny: Playwright locator type is complex
           let locator: any;
           try {
             locator = createLocator();
@@ -192,6 +196,7 @@ export const create = async (
     fillByRole: async (value, role, selector) => {
       await page
         .locator(selector)
+        // biome-ignore lint/suspicious/noExplicitAny: Playwright role type needs casting
         .getByRole(role as any)
         .fill(value);
     },
@@ -281,6 +286,7 @@ export const createClickByElementId =
     // Prefer a DOM-evaluated click when available (real Playwright Page)
     // to avoid visibility/stability flakiness. Fall back to the locator
     // approach used in tests which provides a minimal `locator()` API.
+    // biome-ignore lint/suspicious/noExplicitAny: Playwright Page type needs casting for evaluate method
     const anyPage = page as any;
     if (typeof anyPage.evaluate === "function") {
       const clicked = await anyPage.evaluate((targetId: string) => {
@@ -350,10 +356,13 @@ export const launchPersistentContext = async (
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
+      // biome-ignore lint/suspicious/noExplicitAny: chromium may not have type definitions
       if (typeof (chromium as any).launchPersistentContext === "function") {
         try {
+          // biome-ignore lint/suspicious/noExplicitAny: chromium object may not have proper types
           return await (chromium as any).launchPersistentContext(
             userDataDir,
+            // biome-ignore lint/suspicious/noExplicitAny: Playwright options type is open-ended
             options as any,
           );
         } catch (err) {
@@ -368,8 +377,10 @@ export const launchPersistentContext = async (
                 "[WARN] userDataDir locked, retrying with temp dir",
                 tmpDir,
               );
+              // biome-ignore lint/suspicious/noExplicitAny: chromium may not have type definitions
               return await (chromium as any).launchPersistentContext(
                 tmpDir,
+                // biome-ignore lint/suspicious/noExplicitAny: Playwright options type is open-ended
                 options as any,
               );
             } catch {
@@ -396,6 +407,7 @@ export const launchPersistentContext = async (
       try {
         return await playwright.chromium.launchPersistentContext(
           userDataDir,
+          // biome-ignore lint/suspicious/noExplicitAny: Playwright options type is open-ended
           options as any,
         );
       } catch (err) {
@@ -410,6 +422,7 @@ export const launchPersistentContext = async (
             );
             return await playwright.chromium.launchPersistentContext(
               tmpDir,
+              // biome-ignore lint/suspicious/noExplicitAny: Playwright options type is open-ended
               options as any,
             );
           } catch {
