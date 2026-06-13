@@ -350,7 +350,7 @@ test.describe("console", () => {
         Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
         Object.defineProperty(window, '__sseMessageReceived', { value: false, writable: true, configurable: true });
         const instances: EventSource[] = [];
-        (window as any).EventSource = function (url: string) {
+        (window as any).EventSource = ((url: string) => {
           const es = new OrigEventSource(url);
           instances.push(es);
           try { 
@@ -376,7 +376,7 @@ test.describe("console", () => {
           // Stop polling after 5 seconds
           setTimeout(() => clearInterval(checkReady), 5000);
           return es;
-        } as any;
+        }) as any;
         try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
       })();
     });
@@ -425,7 +425,7 @@ test.describe("console", () => {
       Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
       // A per-document session id that changes on every navigation/reload.
       Object.defineProperty(window, '__sessionId', { value: Math.random(), writable: true, configurable: true });
-      (window as any).EventSource = function (url: string) {
+      (window as any).EventSource = ((url: string) => {
         const es = new OrigEventSource(url);
         try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
         try { es.addEventListener('message', () => { (window as any).__sseOpen = true; }); } catch {}
@@ -441,7 +441,7 @@ test.describe("console", () => {
         // Stop polling after 5 seconds
         setTimeout(() => clearInterval(checkReady), 5000);
         return es;
-      } as any;
+      }) as any;
       try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
     });
 
@@ -487,7 +487,7 @@ test.describe("console", () => {
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
       Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
-      (window as any).EventSource = function (url: string) {
+      (window as any).EventSource = ((url: string) => {
         const es = new OrigEventSource(url);
         try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
         try { es.addEventListener('message', () => { (window as any).__sseOpen = true; }); } catch {}
@@ -503,7 +503,7 @@ test.describe("console", () => {
         // Stop polling after 5 seconds
         setTimeout(() => clearInterval(checkReady), 5000);
         return es;
-      } as any;
+      }) as any;
       try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
     });
 
@@ -548,7 +548,7 @@ test.describe("console", () => {
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
       Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
-      (window as any).EventSource = function (url: string) {
+      (window as any).EventSource = ((url: string) => {
         const es = new OrigEventSource(url);
         try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
         try { es.addEventListener('message', () => { (window as any).__sseOpen = true; }); } catch {}
@@ -564,7 +564,7 @@ test.describe("console", () => {
         // Stop polling after 5 seconds
         setTimeout(() => clearInterval(checkReady), 5000);
         return es;
-      } as any;
+      }) as any;
       try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
     });
 
@@ -621,7 +621,7 @@ test.describe("console", () => {
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
       Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
-      (window as any).EventSource = function (url: string) {
+      (window as any).EventSource = ((url: string) => {
         const es = new OrigEventSource(url);
         try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
         try { es.addEventListener('message', () => { (window as any).__sseOpen = true; }); } catch {}
@@ -637,7 +637,7 @@ test.describe("console", () => {
         // Stop polling after 5 seconds
         setTimeout(() => clearInterval(checkReady), 5000);
         return es;
-      } as any;
+      }) as any;
       try { (window as any).EventSource.prototype = OrigEventSource.prototype; } catch {}
     });
 
@@ -678,7 +678,7 @@ test.describe("console", () => {
       Object.defineProperty(window, '__sseOpen', { value: false, writable: true, configurable: true });
       Object.defineProperty(window, '__sseError', { value: false, writable: true, configurable: true });
       Object.defineProperty(window, '__sseMessageCount', { value: 0, writable: true, configurable: true });
-      const WrappedEventSource = function (url: string) {
+      const WrappedEventSource = ((url: string) => {
         const es = new OrigEventSource(url);
         try { es.addEventListener('open', () => { (window as any).__sseOpen = true; }); } catch {}
         try { es.addEventListener('message', () => { (window as any).__sseMessageCount += 1; }); } catch {}
@@ -695,7 +695,7 @@ test.describe("console", () => {
         // Stop polling after 5 seconds
         setTimeout(() => clearInterval(checkReady), 5000);
         return es;
-      } as any;
+      }) as any;
       try {
         for (const key of Object.getOwnPropertyNames(OrigEventSource)) {
           const descriptor = Object.getOwnPropertyDescriptor(OrigEventSource, key);
