@@ -46,7 +46,6 @@
         "lib/niconamaCommentClient.ts",
         "lib/niconamaCommentClient.helpers.ts",
         "lib/niconamaCommentClient.playwright.ts",
-        "lib/streamState.ts",
         "scripts/*.ts"
       ],
       "formatter": {
