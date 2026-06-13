@@ -47,7 +47,6 @@
     },
     {
       "includes": [
-        "lib/niconamaCommentClient.helpers.ts",
         "lib/niconamaCommentClient.playwright.ts",
         "scripts/*.ts"
       ],
