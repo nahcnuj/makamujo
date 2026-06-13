@@ -35,10 +35,12 @@ import {
 type DirectWebSocket = {
   readyState: number;
   send: (data: string) => void;
+  close: () => void;
   onmessage: ((event: unknown) => void) | null;
   onopen: ((event: unknown) => void) | null;
   onclose: ((event: unknown) => void) | null;
   onerror: ((event: unknown) => void) | null;
+  constructor: { OPEN?: number } & typeof Function;
 };
 
 type NiconamaBrowserPageResponse = {
@@ -1510,8 +1512,18 @@ export class NiconamaCommentClient {
         }
       }
 
+      if (typeof WebSocketClass !== "function") {
+        console.warn("[WARN] WebSocketClass is not callable");
+        return;
+      }
+
+      const WebSocketConstructor = WebSocketClass as new (
+        url: string,
+        options?: unknown,
+      ) => DirectWebSocket;
+
       console.debug("[DEBUG] direct websocket creating socket", webSocketUrl);
-      let ws: unknown = null;
+      let ws: DirectWebSocket;
       try {
         const headers = {
           Origin: "https://live.nicovideo.jp",
@@ -1520,16 +1532,16 @@ export class NiconamaCommentClient {
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         };
         try {
-          ws = new WebSocketClass(webSocketUrl, {
+          ws = new WebSocketConstructor(webSocketUrl, {
             headers,
             perMessageDeflate: false,
             handshakeTimeout: 30_000,
-          } as unknown);
+          } as unknown) as DirectWebSocket;
         } catch {
           try {
-            ws = new WebSocketClass(webSocketUrl, { headers } as unknown);
+            ws = new WebSocketConstructor(webSocketUrl, { headers } as unknown) as DirectWebSocket;
           } catch {
-            ws = new WebSocketClass(webSocketUrl);
+            ws = new WebSocketConstructor(webSocketUrl) as DirectWebSocket;
           }
         }
       } catch (err) {
@@ -1567,7 +1579,7 @@ export class NiconamaCommentClient {
         } catch {
           // ignore draining errors
         }
-        const keepSeatMessage = { type: "keepSeat" } as unknown;
+        const keepSeatMessage: Record<string, string> = { type: "keepSeat" };
         if (this.#directWebSocketAudienceToken) {
           keepSeatMessage.audienceToken = this.#directWebSocketAudienceToken;
         } else {
