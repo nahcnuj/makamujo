@@ -16,7 +16,7 @@ export function streamUpstreamResponse(proxied: Response) {
   responseHeaders.set("cache-control", "no-cache");
   // Remove content-length to avoid mismatches when streaming/chunked.
   responseHeaders.delete("content-length");
-  const upstreamBody: any = proxied.body;
+  const upstreamBody: ReadableStream<Uint8Array> | null = proxied.body as ReadableStream<Uint8Array> | null;
   if (upstreamBody && typeof upstreamBody.getReader === "function") {
     const wrapped = new ReadableStream({
       start(controller) {
@@ -62,7 +62,7 @@ export function streamUpstreamResponse(proxied: Response) {
 }
 
 export function forwardSSEEventsToSink(
-  upstreamBody: any,
+  upstreamBody: ReadableStream<Uint8Array> | null,
   sink: (data: string) => void,
 ) {
   if (!upstreamBody || typeof upstreamBody.getReader !== "function") {
@@ -181,7 +181,7 @@ export function computeProxyUrl(req: Request, proxyBase: string) {
   return `${base}${pathname}${parsed.search ?? ""}`;
 }
 
-export async function fetchMetaSnapshot(proxyBase: string): Promise<any> {
+export async function fetchMetaSnapshot(proxyBase: string): Promise<unknown> {
   try {
     // Attempt to fetch current meta. If the result lacks `niconama`, poll
     // briefly to give in-flight published state updates a chance to arrive.
@@ -260,11 +260,13 @@ export function createResilientSseProxy(
   // (e.g., POST /api/meta) can be forwarded to proxied SSE clients as well.
   // This allows clients connected through the proxy to receive server-side
   // sseBroadcast calls.
-  (createResilientSseProxy as any)._controllers =
-    (createResilientSseProxy as any)._controllers ??
-    new Set<ReadableStreamDefaultController<Uint8Array>>();
+  const controllers = (createResilientSseProxy as unknown as Record<string, unknown>)._controllers as Set<ReadableStreamDefaultController<Uint8Array>> | undefined;
+  if (!controllers) {
+    (createResilientSseProxy as unknown as Record<string, unknown>)._controllers =
+      new Set<ReadableStreamDefaultController<Uint8Array>>();
+  }
   const resilientControllers: Set<ReadableStreamDefaultController<Uint8Array>> =
-    (createResilientSseProxy as any)._controllers;
+    (createResilientSseProxy as unknown as Record<string, unknown>)._controllers as Set<ReadableStreamDefaultController<Uint8Array>>;
   let stopped = false;
   let abortController = new AbortController();
   let currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
@@ -305,7 +307,7 @@ export function createResilientSseProxy(
               readTimeoutMs,
             );
           }),
-        ]);
+        ] as readonly Promise<Awaited<ReturnType<typeof reader.read>> | never>[]);
       } finally {
         if (timeoutId !== null) clearTimeout(timeoutId);
       }
@@ -483,7 +485,7 @@ export function createResilientSseProxy(
 export function getResilientProxyControllers(): Set<
   ReadableStreamDefaultController<Uint8Array>
 > {
-  return (createResilientSseProxy as any)._controllers ?? new Set();
+  return (createResilientSseProxy as unknown as Record<string, unknown>)._controllers as Set<ReadableStreamDefaultController<Uint8Array>> ?? new Set();
 }
 
 export async function proxyConsoleApiWsRequest(

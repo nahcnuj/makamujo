@@ -209,7 +209,8 @@ let lastPublishedStreamState: unknown;
 // Mirror published state on globalThis so callbacks from other async
 // modules can access it even if module evaluation order differs.
 (globalThis as Record<string, unknown>).__lastPublishedStreamState =
-  (globalThis as Record<string, unknown>).__lastPublishedStreamState ?? lastPublishedStreamState;
+  (globalThis as Record<string, unknown>).__lastPublishedStreamState ??
+  lastPublishedStreamState;
 const wsClients = new Set<ServerWebSocket<WsData>>();
 const sseClients = new Set<ReadableStreamDefaultController<Uint8Array>>();
 const sseEncoder = new TextEncoder();
@@ -265,7 +266,8 @@ function createSseStream(_label: string) {
       try {
         sseClients.forEach((c) => {
           try {
-            if ((c as Record<string, unknown>).desiredSize === null) sseClients.delete(c);
+            if ((c as Record<string, unknown>).desiredSize === null)
+              sseClients.delete(c);
           } catch {}
         });
       } catch {}
@@ -286,10 +288,16 @@ function sseBroadcast(payload: unknown) {
     console.debug(
       "[DIAG] sseBroadcast payload keys ->",
       Object.keys(
-        payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {},
+        payload && typeof payload === "object"
+          ? (payload as Record<string, unknown>)
+          : {},
       ),
       "hasNiconama=",
-      !!(payload && typeof payload === "object" && (payload as Record<string, unknown>).niconama),
+      !!(
+        payload &&
+        typeof payload === "object" &&
+        (payload as Record<string, unknown>).niconama
+      ),
     );
   } catch {}
   for (const c of Array.from(sseClients)) {
@@ -330,10 +338,16 @@ const broadcastToWsClients = (payload: unknown) => {
     console.debug(
       "[DIAG] broadcastToWsClients sending keys ->",
       Object.keys(
-        payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {},
+        payload && typeof payload === "object"
+          ? (payload as Record<string, unknown>)
+          : {},
       ),
       "hasNiconama=",
-      !!(payload && typeof payload === "object" && (payload as Record<string, unknown>).niconama),
+      !!(
+        payload &&
+        typeof payload === "object" &&
+        (payload as Record<string, unknown>).niconama
+      ),
     );
   } catch {}
   for (const ws of Array.from(wsClients)) {
@@ -351,7 +365,8 @@ const broadcastToWsClients = (payload: unknown) => {
 };
 
 // Expose WS broadcaster as well for external callers.
-(globalThis as Record<string, unknown>).__broadcastToWsClients = broadcastToWsClients;
+(globalThis as Record<string, unknown>).__broadcastToWsClients =
+  broadcastToWsClients;
 
 const broadcastCurrentPayload = (context: string) => {
   try {
@@ -410,7 +425,8 @@ const getCurrentStreamPayload = () => {
   // `globalThis` mirror (set by other modules) to handle cross-module
   // initialization ordering where the global may have been written but
   // the local variable has not yet been updated.
-  const globalPublished = (globalThis as Record<string, unknown>).__lastPublishedStreamState;
+  const globalPublished = (globalThis as Record<string, unknown>)
+    .__lastPublishedStreamState;
   const streamState =
     lastPublishedStreamState === undefined || lastPublishedStreamState === null
       ? (globalPublished ?? agentStreamState)
@@ -481,7 +497,8 @@ const getCurrentStreamPayload = () => {
   // current payload without performing an HTTP fetch which may race with
   // in-flight published state updates.
   try {
-    (globalThis as Record<string, unknown>).__getCurrentStreamPayload = getCurrentStreamPayload;
+    (globalThis as Record<string, unknown>).__getCurrentStreamPayload =
+      getCurrentStreamPayload;
   } catch {}
 
   return payload;
@@ -543,7 +560,8 @@ const handlePublishedStreamState = (payload: unknown): void => {
     published = normalizePublishedStreamState(published);
     if (replyTargetComment !== undefined) {
       if (published && typeof published === "object") {
-        (published as Record<string, unknown>).replyTargetComment = replyTargetComment;
+        (published as Record<string, unknown>).replyTargetComment =
+          replyTargetComment;
       } else {
         published = { replyTargetComment };
       }
@@ -566,7 +584,9 @@ const handlePublishedStreamState = (payload: unknown): void => {
           ? (lastPublishedStreamState as Record<string, unknown>)
           : {};
       const next =
-        published && typeof published === "object" ? (published as Record<string, unknown>) : {};
+        published && typeof published === "object"
+          ? (published as Record<string, unknown>)
+          : {};
       // Normalize the incoming published payload to determine any `niconama`
       // metadata it implies (e.g. top-level title/url/start -> niconama.meta).
       const normalizedNext = normalizePublishedStreamState(next) as unknown;
@@ -640,7 +660,8 @@ const handlePublishedStreamState = (payload: unknown): void => {
 
       lastPublishedStreamState = merged;
       try {
-        (globalThis as Record<string, unknown>).__lastPublishedStreamState = merged;
+        (globalThis as Record<string, unknown>).__lastPublishedStreamState =
+          merged;
       } catch {}
       try {
         console.debug(
@@ -649,8 +670,15 @@ const handlePublishedStreamState = (payload: unknown): void => {
             ? Object.keys(merged as Record<string, unknown>)
             : String(merged),
           "niconamaKeys=",
-          merged && typeof merged === "object" && (merged as Record<string, unknown>).niconama
-            ? Object.keys((merged as Record<string, unknown>).niconama as Record<string, unknown>)
+          merged &&
+            typeof merged === "object" &&
+            (merged as Record<string, unknown>).niconama
+            ? Object.keys(
+                (merged as Record<string, unknown>).niconama as Record<
+                  string,
+                  unknown
+                >,
+              )
             : undefined,
         );
       } catch {}
@@ -658,7 +686,8 @@ const handlePublishedStreamState = (payload: unknown): void => {
       // Fallback to direct assignment if merge fails for unexpected types.
       lastPublishedStreamState = published;
       try {
-        (globalThis as Record<string, unknown>).__lastPublishedStreamState = published;
+        (globalThis as Record<string, unknown>).__lastPublishedStreamState =
+          published;
       } catch {}
       try {
         console.debug(
@@ -767,13 +796,13 @@ streamer.onSpeech(async (event) => {
     typeof event === "object" &&
     event !== null &&
     typeof (event as Record<string, unknown>).nGram === "number"
-      ? (event as Record<string, unknown>).nGram as number
+      ? ((event as Record<string, unknown>).nGram as number)
       : streamer.currentNGramSize;
   const nGramRaw =
     typeof event === "object" &&
     event !== null &&
     typeof (event as Record<string, unknown>).nGramRaw === "number"
-      ? (event as Record<string, unknown>).nGramRaw as number
+      ? ((event as Record<string, unknown>).nGramRaw as number)
       : streamer.currentNGramSizeRaw;
   generatedSpeechHistorySequence += 1;
   generatedSpeechHistory.unshift({
@@ -892,10 +921,7 @@ const apiApp = new Hono()
   });
 
 declare global {
-  function upgrade<T>(
-    req: Request,
-    options?: { data?: T },
-  ): boolean;
+  function upgrade<T>(req: Request, options?: { data?: T }): boolean;
 }
 
 type WsData = { label: string };
@@ -1052,7 +1078,7 @@ const mainApp = new Hono()
   // Serve the built frontend (HTML + JS/CSS assets)
   .all("*", async (c) => handleCatchAll(c.req.raw));
 
-const serverInstance: any = serve<WsData>({
+const serverInstance: Bun.Server<WsData> = serve<WsData>({
   port: portNumber,
   async fetch(
     req: Request,
@@ -1183,7 +1209,7 @@ const NICONAMA_CHROMIUM_EXECUTABLE_PATH =
 const DEBUG_NICONAMA_COMMENTS = process.env.DEBUG_NICONAMA_COMMENTS === "1";
 
 const createNiconamaClientOptions = () => {
-  const options: any = {
+  const options: Record<string, string | number | undefined> = {
     userDataDir: NICONAMA_USER_DATA_DIR,
     executablePath: NICONAMA_CHROMIUM_EXECUTABLE_PATH,
     pollIntervalMs: 30_000,
@@ -1196,7 +1222,7 @@ const createNiconamaClientOptions = () => {
 
 const handleNiconamaComments = (comments: unknown) => {
   const parsed = coerceToAgentComments(comments);
-  const filteredComments = filterAgentCommentsWithText(parsed as any);
+  const filteredComments = filterAgentCommentsWithText(parsed as Array<unknown>);
   if (DEBUG_NICONAMA_COMMENTS) {
     for (const comment of filteredComments) {
       const text = getCommentTextFromAgentComment(comment);
@@ -1224,7 +1250,7 @@ const handleNiconamaComments = (comments: unknown) => {
           ? payload.niconama.meta.total.comments
           : 0;
     const numberedCommentsCount = countNumberedAgentComments(
-      filteredComments as any,
+      filteredComments as Array<unknown>,
     );
     const newCount = currentCount + numberedCommentsCount;
 
@@ -1233,32 +1259,33 @@ const handleNiconamaComments = (comments: unknown) => {
         ? { ...lastPublishedStreamState }
         : {};
     try {
-      (lastPublishedStreamState as any).commentCount = newCount;
+      (lastPublishedStreamState as Record<string, unknown>).commentCount = newCount;
     } catch {}
 
     try {
       const existingRecent = Array.isArray(
-        (lastPublishedStreamState as any).recentComments,
+        (lastPublishedStreamState as Record<string, unknown>).recentComments,
       )
-        ? [...(lastPublishedStreamState as any).recentComments]
+        ? [...(lastPublishedStreamState as Record<string, unknown>).recentComments as Array<unknown>]
         : [];
       const recentComments = [...existingRecent, ...filteredComments];
-      (lastPublishedStreamState as any).recentComments = recentComments;
+      (lastPublishedStreamState as Record<string, unknown>).recentComments = recentComments;
     } catch {}
 
     try {
       if (
-        !(lastPublishedStreamState as any).niconama ||
-        typeof (lastPublishedStreamState as any).niconama !== "object"
+        !(lastPublishedStreamState as Record<string, unknown>).niconama ||
+        typeof (lastPublishedStreamState as Record<string, unknown>).niconama !== "object"
       ) {
-        (lastPublishedStreamState as any).niconama = {
+        (lastPublishedStreamState as Record<string, unknown>).niconama = {
           meta: { total: { comments: newCount } },
         };
       } else {
-        const meta = (lastPublishedStreamState as any).niconama.meta ?? {};
-        (lastPublishedStreamState as any).niconama.meta = meta;
-        meta.total = meta.total ?? {};
-        meta.total.comments = newCount;
+        const meta = (lastPublishedStreamState as Record<string, unknown>).niconama as Record<string, unknown> | undefined;
+        const metaObj = (meta ?? {}) as Record<string, unknown>;
+        (lastPublishedStreamState as Record<string, unknown>).niconama = meta;
+        metaObj.total = metaObj.total ?? {};
+        (metaObj.total as Record<string, unknown>).comments = newCount;
       }
     } catch {}
   } catch (err) {
