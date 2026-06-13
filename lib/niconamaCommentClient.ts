@@ -27,7 +27,7 @@ import {
   getBodyTextFromPage,
   pollPageComments,
   scanRenderedFrameForComments,
-  startPlaywrightPagePolling,
+  startNiconamaBrowserPagePolling,
   tryOpenRenderedCommentPanel,
   waitForAnyCommentSelector,
 } from "./niconamaCommentClient.playwright";
@@ -48,7 +48,7 @@ type NiconamaBrowserPageResponse = {
   text: () => Promise<string>;
 };
 
-type NiconamaBrowserPage = {
+export type NiconamaBrowserPage = {
   on: (event: string, callback: (event: unknown) => void) => void;
   goto: (
     url: string,
@@ -70,10 +70,13 @@ type NiconamaBrowserPage = {
     first: () => {
       getAttribute: (name: string) => Promise<string | null>;
       count: () => Promise<number>;
+      click: (options?: { timeout?: number; force?: boolean }) => Promise<void>;
     };
     count: () => Promise<number>;
     allTextContents: () => Promise<string[]>;
   };
+  $: (selector: string) => Promise<{ click: (options?: Record<string, unknown>) => Promise<void> } | null>;
+  content: () => Promise<string>;
   waitFor: (options: Record<string, unknown>) => Promise<void>;
   waitForTimeout: (ms: number) => Promise<void>;
   waitForLoadState?: (
@@ -1173,20 +1176,24 @@ export class NiconamaCommentClient {
                 ? JSON.parse(JSON.stringify(existingEmbeddedData))
                 : { site: { state: { relive: {} } } };
             try {
-              (enriched as Record<string, unknown>).site =
-                (enriched as Record<string, unknown>).site ?? {};
-              (enriched as Record<string, unknown>).site.state =
-                (enriched as Record<string, unknown>).site.state ?? {};
-              (enriched as Record<string, unknown>).site.state.relive =
-                (enriched as Record<string, unknown>).site.state.relive ?? {};
-              (enriched as Record<string, unknown>).site.state.relive.comments =
-                comments.map((c: string) => ({ comment: c }));
+              const enrichedRec = enriched as Record<string, unknown>;
+              enrichedRec.site = (enrichedRec.site as Record<string, unknown> | undefined) ?? {};
+              const site = enrichedRec.site as Record<string, unknown>;
+              site.state = (site.state as Record<string, unknown> | undefined) ?? {};
+              const state = site.state as Record<string, unknown>;
+              state.relive = (state.relive as Record<string, unknown> | undefined) ?? {};
+              const relive = state.relive as Record<string, unknown>;
+              relive.comments = comments.map((c: string) => ({ comment: c }));
             } catch {}
             try {
-              const parsedComments = (
-                enriched as Record<string, unknown>
-              ).site.state.relive.comments.map((c: unknown) => ({ data: c }));
-              this.deliverComments(parsedComments);
+              const enrichedRec = enriched as Record<string, unknown>;
+              const site = enrichedRec.site as Record<string, unknown> | undefined;
+              const state = site?.state as Record<string, unknown> | undefined;
+              const relive = state?.relive as Record<string, unknown> | undefined;
+              const parsedComments = (relive?.comments as Array<Record<string, unknown>> | undefined)?.map((c: unknown) => ({ data: c })) ?? [];
+              if (Array.isArray(parsedComments) && parsedComments.length > 0) {
+                this.deliverComments(parsedComments);
+              }
             } catch {}
             return enriched;
           }
@@ -2458,7 +2465,7 @@ export class NiconamaCommentClient {
 
   private startPlaywrightPagePolling(page: unknown): void {
     if (this.#playwrightPageCommentPollTimer) return;
-    this.#playwrightPageCommentPollTimer = startPlaywrightPagePolling(
+    this.#playwrightPageCommentPollTimer = startNiconamaBrowserPagePolling(
       page,
       this.#seenCommentIdentifiers,
       (comments: unknown[]) => this.deliverComments(comments),
