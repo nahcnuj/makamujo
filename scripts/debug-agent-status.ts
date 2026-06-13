@@ -9,7 +9,9 @@ import { cloneAgentStateResponseMockFixture } from "../tests/fixtures/agentState
     const state = cloneAgentStateResponseMockFixture();
     const rows = createAgentStatusRows(state as Record<string, unknown>);
     console.log("ROWS:\n", JSON.stringify(rows, null, 2));
-    const sections = createAgentStatusSections(state as Record<string, unknown>);
+    const sections = createAgentStatusSections(
+      state as Record<string, unknown>,
+    );
     console.log("SECTIONS:\n", JSON.stringify(sections, null, 2));
   } catch (err) {
     console.error(err);

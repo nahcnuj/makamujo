@@ -28,7 +28,9 @@ const buildUniqueComments = (comments: unknown[]): unknown[] => {
     const text = getCommentTextFromAgentComment(item);
     if (!text) continue;
     const value =
-      item && typeof item === "object" ? ((item as Record<string, unknown>).data ?? item) : item;
+      item && typeof item === "object"
+        ? ((item as Record<string, unknown>).data ?? item)
+        : item;
     const key = `${value?.no ?? "none"}|${value?.userId ?? value?.user_id ?? "unknown"}|${text}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -89,7 +91,9 @@ async function main() {
     /* ignore */
   }
 
-  const filtered = filterAgentCommentsWithText(collected as Record<string, unknown>);
+  const filtered = filterAgentCommentsWithText(
+    collected as Record<string, unknown>,
+  );
   const unique = buildUniqueComments(filtered);
   let hasRealComments = unique.some((item) => {
     const text = getCommentTextFromAgentComment(item);
@@ -117,7 +121,9 @@ async function main() {
       /* ignore */
     }
 
-    const filteredAgain = filterAgentCommentsWithText(collected as Record<string, unknown>);
+    const filteredAgain = filterAgentCommentsWithText(
+      collected as Record<string, unknown>,
+    );
     unique.length = 0;
     unique.push(...buildUniqueComments(filteredAgain));
   }
@@ -141,7 +147,9 @@ async function main() {
       await new Promise((r) => setTimeout(r, 1_000));
     }
 
-    const filteredAgain = filterAgentCommentsWithText(collected as Record<string, unknown>);
+    const filteredAgain = filterAgentCommentsWithText(
+      collected as Record<string, unknown>,
+    );
     unique.length = 0;
     unique.push(...buildUniqueComments(filteredAgain));
     hasRealComments = unique.some((item) => {
@@ -177,7 +185,9 @@ async function main() {
         // ignore per-iteration errors
       }
 
-      const filteredAgain = filterAgentCommentsWithText(collected as Record<string, unknown>);
+      const filteredAgain = filterAgentCommentsWithText(
+        collected as Record<string, unknown>,
+      );
       unique.length = 0;
       unique.push(...buildUniqueComments(filteredAgain));
 
@@ -246,7 +256,9 @@ async function main() {
 
       if (candidateComments.length > 0) {
         for (const c of candidateComments) collected.push(c);
-        const filteredAgain = filterAgentCommentsWithText(collected as Record<string, unknown>);
+        const filteredAgain = filterAgentCommentsWithText(
+          collected as Record<string, unknown>,
+        );
         unique.length = 0;
         unique.push(...buildUniqueComments(filteredAgain));
         hasRealComments = unique.some((item) => {

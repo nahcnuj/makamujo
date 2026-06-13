@@ -407,10 +407,19 @@ export const parseAgentCommentsFromResponseBody = (
             ? (raw as Record<string, unknown>).num
             : undefined,
       anonymity: Boolean(
-        (raw as Record<string, unknown>).anonymity ?? (raw as Record<string, unknown>).isAnonymous ?? false,
+        (raw as Record<string, unknown>).anonymity ??
+          (raw as Record<string, unknown>).isAnonymous ??
+          false,
       ),
-      hasGift: Boolean((raw as Record<string, unknown>).hasGift ?? (raw as Record<string, unknown>).gift ?? false),
-      userId: (raw as Record<string, unknown>).userId ?? (raw as Record<string, unknown>).user_id ?? undefined,
+      hasGift: Boolean(
+        (raw as Record<string, unknown>).hasGift ??
+          (raw as Record<string, unknown>).gift ??
+          false,
+      ),
+      userId:
+        (raw as Record<string, unknown>).userId ??
+        (raw as Record<string, unknown>).user_id ??
+        undefined,
       origin: raw,
     };
     const identifier = `${commentData.no ?? "none"}|${commentData.userId ?? "unknown"}|${commentData.comment}`;
