@@ -1,31 +1,6 @@
 import type { AgentComment } from "automated-gameplay-transmitter";
 import { parseAgentCommentsFromResponseBody } from "./niconamaCommentClient.helpers";
-
-type PlaywrightFrame = {
-  evaluate: <T>(fn: () => T) => Promise<T>;
-  url: () => string;
-};
-
-type PlaywrightPage = {
-  isClosed: () => boolean;
-  evaluate: <T>(fn: () => T) => Promise<T>;
-  frames: () => PlaywrightFrame[];
-  addInitScript: (script: () => void) => Promise<void>;
-  locator: (selector: string) => {
-    count: () => Promise<number>;
-    allTextContents: () => Promise<string[]>;
-    first: () => {
-      hover: (options?: { timeout?: number }) => Promise<void>;
-      waitFor: (options?: Record<string, unknown>) => Promise<void>;
-    };
-  };
-  url: () => string;
-  waitForSelector: (
-    selector: string,
-    options?: Record<string, unknown>,
-  ) => Promise<unknown>;
-  waitForTimeout?: (ms: number) => Promise<void>;
-};
+import type { NiconamaBrowserPage } from "./niconamaCommentClient";
 
 export const addNiconamaPlaywrightInitScript = async (
   page: NiconamaBrowserPage,
@@ -111,7 +86,7 @@ export const extractBodyTextFromHtml = (html: string): string | null => {
 };
 
 export const scanRenderedFrameForComments = async (
-  frame: PlaywrightFrame,
+  frame: unknown,
 ): Promise<string[]> => {
   try {
     const pageComments = await frame.evaluate(() => {
@@ -215,7 +190,8 @@ export const extractPageComments = async (
   page: NiconamaBrowserPage,
   seenCommentIdentifiers: Set<string>,
 ): Promise<AgentComment[]> => {
-  if (page.isClosed()) return [];
+  if (page.isClosed())
+    return [];
   const renderedComments = await extractRenderedPageComments(
     page,
     seenCommentIdentifiers,
@@ -308,7 +284,7 @@ export const pollPageComments = async (
   return [];
 };
 
-export const startPlaywrightPagePolling = (
+export const startNiconamaBrowserPagePolling = (
   page: NiconamaBrowserPage,
   seenCommentIdentifiers: Set<string>,
   onComments: (comments: AgentComment[]) => void,
@@ -353,8 +329,8 @@ export const tryOpenRenderedCommentPanel = async (
 ): Promise<void> => {
   if (page.isClosed()) return;
   const safeEval = async <T>(
-    p: PlaywrightPage,
-    fn: (pp: PlaywrightPage) => Promise<T> | T,
+    p: NiconamaBrowserPage,
+    fn: (pp: NiconamaBrowserPage) => Promise<T> | T,
   ): Promise<T | null> => {
     try {
       return await fn(p);
