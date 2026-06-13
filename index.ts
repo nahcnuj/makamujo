@@ -1222,7 +1222,9 @@ const createNiconamaClientOptions = () => {
 
 const handleNiconamaComments = (comments: unknown) => {
   const parsed = coerceToAgentComments(comments);
-  const filteredComments = filterAgentCommentsWithText(parsed as Array<unknown>);
+  const filteredComments = filterAgentCommentsWithText(
+    parsed as Array<unknown>,
+  );
   if (DEBUG_NICONAMA_COMMENTS) {
     for (const comment of filteredComments) {
       const text = getCommentTextFromAgentComment(comment);
@@ -1259,29 +1261,36 @@ const handleNiconamaComments = (comments: unknown) => {
         ? { ...lastPublishedStreamState }
         : {};
     try {
-      (lastPublishedStreamState as Record<string, unknown>).commentCount = newCount;
+      (lastPublishedStreamState as Record<string, unknown>).commentCount =
+        newCount;
     } catch {}
 
     try {
       const existingRecent = Array.isArray(
         (lastPublishedStreamState as Record<string, unknown>).recentComments,
       )
-        ? [...(lastPublishedStreamState as Record<string, unknown>).recentComments as Array<unknown>]
+        ? [
+            ...((lastPublishedStreamState as Record<string, unknown>)
+              .recentComments as Array<unknown>),
+          ]
         : [];
       const recentComments = [...existingRecent, ...filteredComments];
-      (lastPublishedStreamState as Record<string, unknown>).recentComments = recentComments;
+      (lastPublishedStreamState as Record<string, unknown>).recentComments =
+        recentComments;
     } catch {}
 
     try {
       if (
         !(lastPublishedStreamState as Record<string, unknown>).niconama ||
-        typeof (lastPublishedStreamState as Record<string, unknown>).niconama !== "object"
+        typeof (lastPublishedStreamState as Record<string, unknown>)
+          .niconama !== "object"
       ) {
         (lastPublishedStreamState as Record<string, unknown>).niconama = {
           meta: { total: { comments: newCount } },
         };
       } else {
-        const meta = (lastPublishedStreamState as Record<string, unknown>).niconama as Record<string, unknown> | undefined;
+        const meta = (lastPublishedStreamState as Record<string, unknown>)
+          .niconama as Record<string, unknown> | undefined;
         const metaObj = (meta ?? {}) as Record<string, unknown>;
         (lastPublishedStreamState as Record<string, unknown>).niconama = meta;
         metaObj.total = metaObj.total ?? {};
