@@ -323,6 +323,8 @@ export const hasCommentArrayStructure = (body: unknown): boolean => {
   if (!body || typeof body !== "object") return false;
   const bodyRec = body as Record<string, unknown>;
 
+  if (Array.isArray(bodyRec.data)) return true;
+
   // Helper to safely extract candidate arrays
   const getCandidateArrays = (obj: Record<string, unknown>) => {
     const candidates: unknown[] = [];

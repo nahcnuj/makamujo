@@ -1,4 +1,28 @@
 import { appendFileSync } from "node:fs";
+import type {} from "node:timers";
+
+// Type-safe wrappers for global timer functions
+const _clearInterval = (id: ReturnType<typeof setInterval>) => {
+  globalThis.clearInterval(id);
+};
+const _clearTimeout = (id: ReturnType<typeof setTimeout>) => {
+  globalThis.clearTimeout(id);
+};
+
+const getCurrentStreamPayload = (): unknown => {
+  const payloadHook = (globalThis as Record<string, unknown>)
+    .__getCurrentStreamPayload;
+  if (typeof payloadHook === "function") {
+    try {
+      return (payloadHook as () => unknown)();
+    } catch {
+      // fall through to mirrored state
+    }
+  }
+  return (
+    (globalThis as Record<string, unknown>).__lastPublishedStreamState ?? {}
+  );
+};
 
 const appendDebugLog = (...args: unknown[]) => {
   try {
@@ -318,7 +342,9 @@ export function createResilientSseProxy(
           Awaited<ReturnType<typeof reader.read>> | never
         >[]);
       } finally {
-        if (timeoutId !== null) clearTimeout(timeoutId);
+        if (timeoutId !== null) {
+          _clearTimeout(timeoutId);
+        }
       }
     };
 
@@ -441,7 +467,7 @@ export function createResilientSseProxy(
             stopped ? "stopped" : "completed",
           );
           if (keepaliveTimer) {
-            clearInterval(keepaliveTimer);
+            _clearInterval(keepaliveTimer);
             keepaliveTimer = null;
           }
           try {
@@ -469,7 +495,7 @@ export function createResilientSseProxy(
       stopped = true;
       appendDebugLog("stream cancelled");
       if (keepaliveTimer) {
-        clearInterval(keepaliveTimer);
+        _clearInterval(keepaliveTimer);
         keepaliveTimer = null;
       }
       // Abort any in-flight reconnect fetch and cancel any active upstream reader,
@@ -660,13 +686,7 @@ export async function proxyConsoleApiWsRequest(
             // if present (avoids racing with raw mirrors), otherwise fall back
             // to the mirrored raw published state.
             try {
-              const immediate =
-                (
-                  globalThis as Record<string, unknown>
-                ).__getCurrentStreamPayload?.() ??
-                (globalThis as Record<string, unknown>)
-                  .__lastPublishedStreamState ??
-                {};
+              const immediate = getCurrentStreamPayload();
               sendIfChanged(immediate);
             } catch {}
 
@@ -675,13 +695,7 @@ export async function proxyConsoleApiWsRequest(
             const pollIntervalMs = 100;
             const pollTimer = setInterval(() => {
               try {
-                const p =
-                  (
-                    globalThis as Record<string, unknown>
-                  ).__getCurrentStreamPayload?.() ??
-                  (globalThis as Record<string, unknown>)
-                    .__lastPublishedStreamState ??
-                  {};
+                const p = getCurrentStreamPayload();
                 sendIfChanged(p);
               } catch {}
             }, pollIntervalMs);
@@ -690,7 +704,7 @@ export async function proxyConsoleApiWsRequest(
             // Stop polling after a short window to avoid long-lived timers.
             const pollStopTimer = setTimeout(() => {
               try {
-                clearInterval(pollTimer);
+                _clearInterval(pollTimer);
               } catch {}
               try {
                 (controller as unknown as Record<string, unknown>)._poll =
@@ -702,26 +716,16 @@ export async function proxyConsoleApiWsRequest(
 
             (async () => {
               const start = Date.now();
-              let payload =
-                (
-                  globalThis as Record<string, unknown>
-                ).__getCurrentStreamPayload?.() ??
-                (globalThis as Record<string, unknown>)
-                  .__lastPublishedStreamState ??
-                {};
+              let payload = getCurrentStreamPayload();
               while (
                 !(payload && (payload as Record<string, unknown>).niconama) &&
                 Date.now() - start < maxWaitMs
               ) {
                 // eslint-disable-next-line no-await-in-loop
-                await new Promise((r) => setTimeout(r, pollMs));
-                payload =
-                  (
-                    globalThis as Record<string, unknown>
-                  ).__getCurrentStreamPayload?.() ??
-                  (globalThis as Record<string, unknown>)
-                    .__lastPublishedStreamState ??
-                  {};
+                await new Promise<void>((resolve) => {
+                  setTimeout(resolve, pollMs);
+                });
+                payload = getCurrentStreamPayload();
               }
 
               console.debug(
@@ -836,9 +840,11 @@ export async function proxyConsoleApiWsRequest(
         },
         cancel() {
           try {
-            clearInterval(
-              (this as unknown as Record<string, unknown>)._keepalive,
-            );
+            const keepalive = (this as unknown as Record<string, unknown>)
+              ._keepalive;
+            if (keepalive !== undefined) {
+              _clearInterval(keepalive as ReturnType<typeof setInterval>);
+            }
           } catch {}
         },
       });

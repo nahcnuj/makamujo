@@ -36,7 +36,13 @@ export const addNiconamaPlaywrightInitScript = async (
         opts: unknown,
       ) {
         if (type === "beforeunload" || type === "unload") return;
-        return origAdd.call(this, type, listener, opts);
+        const addEventOptions =
+          typeof opts === "boolean" ||
+          typeof opts === "object" ||
+          typeof opts === "undefined"
+            ? (opts as boolean | AddEventListenerOptions | undefined)
+            : undefined;
+        return origAdd.call(this, type, listener, addEventOptions);
       };
     });
   } catch {
@@ -85,9 +91,9 @@ export const extractBodyTextFromHtml = (html: string): string | null => {
   return text.length > 0 ? text : null;
 };
 
-export const scanRenderedFrameForComments = async (
-  frame: unknown,
-): Promise<string[]> => {
+export const scanRenderedFrameForComments = async (frame: {
+  evaluate: <T>(fn: () => T) => Promise<T>;
+}): Promise<string[]> => {
   try {
     const pageComments = await frame.evaluate(() => {
       const selectors = [
@@ -317,7 +323,7 @@ export const waitForAnyCommentSelector = async (
   ];
   const waiters = selectors.map((selector) =>
     Promise.resolve(
-      page.waitForSelector(selector, { timeout: timeoutMs }),
+      page.waitForSelector?.(selector, { timeout: timeoutMs }) ?? null,
     ).catch(() => null),
   );
   await Promise.race(waiters);
@@ -339,9 +345,9 @@ export const tryOpenRenderedCommentPanel = async (
     const commentButton = await safeEval(() =>
       page.$('[data-name="comment"], .comment-tab, .comment-panel button'),
     );
-    if (commentButton) {
+    if (commentButton && typeof commentButton.click === "function") {
       await safeEval(async () =>
-        (commentButton as any).click({ timeout: 2_000, force: true }),
+        commentButton.click({ timeout: 2_000, force: true }),
       );
       return;
     }
@@ -354,9 +360,7 @@ export const tryOpenRenderedCommentPanel = async (
       ),
     );
     if (loc && typeof loc.first === "function") {
-      await safeEval(async () =>
-        (loc.first() as any).click({ timeout: 2_000 }),
-      );
+      await safeEval(async () => loc.first().click({ timeout: 2_000 }));
       return;
     }
   }

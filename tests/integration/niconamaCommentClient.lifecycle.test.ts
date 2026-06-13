@@ -3,6 +3,7 @@ import type { AgentComment } from "automated-gameplay-transmitter";
 import {
   createNiconamaCommentClient,
   DEFAULT_WATCH_PAGE_BASE_URL,
+  type NiconamaBrowserPage,
 } from "../../lib/niconamaCommentClient";
 
 interface IMockWebSocket {
@@ -20,12 +21,14 @@ interface IMockWebSocket {
 const TEST_WATCH_URL = new URL("watch/test", DEFAULT_WATCH_PAGE_BASE_URL).href;
 
 const createFakePlaywrightContext = () => {
-  const fakePage = {
+  const fakePage: NiconamaBrowserPage = {
     on(_event: string, _callback: (event: unknown) => void) {},
     goto: async (_url: string) => null,
+    frames: () => [],
+    addInitScript: async () => {},
     waitForTimeout: async () => {},
     close: async () => {},
-    evaluate: async <T>(_fn: () => T) => [] as any,
+    evaluate: async <T>(_fn: () => T) => null as unknown as T,
     getByText: () => ({
       count: async () => 0,
       first: () => ({
@@ -35,9 +38,18 @@ const createFakePlaywrightContext = () => {
       }),
     }),
     locator: () => ({
-      first: () => ({ getAttribute: async () => null, count: async () => 0 }),
+      first: () => ({
+        getAttribute: async () => null,
+        count: async () => 0,
+        click: async () => {},
+      }),
+      count: async () => 0,
+      allTextContents: async () => [],
     }),
+    $: async () => null,
+    content: async () => "",
     waitFor: async () => {},
+    waitForSelector: async () => null,
     url: () => TEST_WATCH_URL,
     isClosed: () => false,
   };
@@ -99,7 +111,10 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
 
       (globalThis as any).WebSocket = MockWebSocket;
 
-      const launchPersistentContext = async () => createFakePlaywrightContext();
+      const launchPersistentContext = async (
+        _userDataDir: string,
+        _options?: Record<string, unknown>,
+      ) => createFakePlaywrightContext();
       const collectedComments: AgentComment[] = [];
       const collectedMeta: unknown[] = [];
 
@@ -200,7 +215,10 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
       }
       (globalThis as any).WebSocket = MockWebSocket2;
 
-      const launchPersistentContext = async () => createFakePlaywrightContext();
+      const launchPersistentContext = async (
+        _userDataDir: string,
+        _options?: Record<string, unknown>,
+      ) => createFakePlaywrightContext();
       const collectedComments: unknown[] = [];
 
       const client = createNiconamaCommentClient(
@@ -251,7 +269,10 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
       });
       delete (globalThis as any).WebSocket;
 
-      const launchPersistentContext = async () => createFakePlaywrightContext();
+      const launchPersistentContext = async (
+        _userDataDir: string,
+        _options?: Record<string, unknown>,
+      ) => createFakePlaywrightContext();
       const collectedComments: Record<string, unknown>[] = [];
       const collectedMeta: Record<string, unknown>[] = [];
 
@@ -301,20 +322,22 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
       let gotoUrl: string = "";
       let playwrightClosed = false;
 
-      const fakePage = {
+      const fakePage: NiconamaBrowserPage = {
         on(event: string, callback: unknown) {
-          if (event === "websocket") websocketCallback = callback as any;
-          if (event === "response") responseCallback = callback as any;
+          if (event === "websocket") websocketCallback = callback;
+          if (event === "response") responseCallback = callback;
         },
         goto: async (url: string) => {
           gotoUrl = url;
           return null;
         },
+        frames: () => [],
+        addInitScript: async () => {},
         waitForTimeout: async () => {},
         close: async () => {
           playwrightClosed = true;
         },
-        evaluate: async <T>(_fn: () => T) => [] as any,
+        evaluate: async <T>(_fn: () => T) => null as unknown as T,
         getByText: () => ({
           count: async () => 0,
           first: () => ({
@@ -327,9 +350,15 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
           first: () => ({
             getAttribute: async () => null,
             count: async () => 0,
+            click: async () => {},
           }),
+          count: async () => 0,
+          allTextContents: async () => [],
         }),
+        $: async () => null,
+        content: async () => "",
         waitFor: async () => {},
+        waitForSelector: async () => null,
         url: () => TEST_WATCH_URL,
         isClosed: () => false,
       };
@@ -342,7 +371,10 @@ describe("NiconamaCommentClient lifecycle (mocked WebSocket + fetch)", () => {
         },
       };
 
-      const launchPersistentContext = async () => fakeContext;
+      const launchPersistentContext = async (
+        _userDataDir: string,
+        _options?: Record<string, unknown>,
+      ) => fakeContext;
 
       const collectedComments: Record<string, unknown>[] = [];
       const collectedMeta: Record<string, unknown>[] = [];

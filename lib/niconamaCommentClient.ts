@@ -36,6 +36,7 @@ type DirectWebSocket = {
   readyState: number;
   send: (data: string) => void;
   close: () => void;
+  removeAllListeners?: () => void;
   onmessage: ((event: unknown) => void) | null;
   onopen: ((event: unknown) => void) | null;
   onclose: ((event: unknown) => void) | null;
@@ -56,7 +57,10 @@ export type NiconamaBrowserPage = {
   ) => Promise<NiconamaBrowserPageResponse | null>;
   close: () => Promise<void>;
   evaluate: <T>(pageFunction: () => T) => Promise<T>;
-  frames: () => Array<{ evaluate: <T>(fn: () => T) => Promise<T>; url: () => string }>;
+  frames: () => Array<{
+    evaluate: <T>(fn: () => T) => Promise<T>;
+    url: () => string;
+  }>;
   addInitScript: (script: () => void) => Promise<void>;
   getByText: (text: string) => {
     count: () => Promise<number>;
@@ -75,7 +79,9 @@ export type NiconamaBrowserPage = {
     count: () => Promise<number>;
     allTextContents: () => Promise<string[]>;
   };
-  $: (selector: string) => Promise<{ click: (options?: Record<string, unknown>) => Promise<void> } | null>;
+  $: (selector: string) => Promise<{
+    click: (options?: Record<string, unknown>) => Promise<void>;
+  } | null>;
   content: () => Promise<string>;
   waitFor: (options: Record<string, unknown>) => Promise<void>;
   waitForTimeout: (ms: number) => Promise<void>;
@@ -143,7 +149,7 @@ export class NiconamaCommentClient {
   #directWebSocketReconnectTimer: ReturnType<typeof setTimeout> | null = null;
   #directWebSocketSuppressReconnect = false;
   #directWebSocketQueue: string[] = [];
-  #playwrightCommentContext: unknown | null = null;
+  #playwrightCommentContext: NiconamaBrowserContext | null = null;
   #playwrightPageCommentPollTimer: ReturnType<typeof setInterval> | null = null;
   #playwrightWatcherTask: Promise<void> | null = null;
   #pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -189,7 +195,7 @@ export class NiconamaCommentClient {
               .setImmediate as (cb: () => void) => void;
             setImmediate(() => {
               try {
-                cb(comments);
+                cb(comments as AgentComment[]);
               } catch {
                 /* swallow */
               }
@@ -197,7 +203,7 @@ export class NiconamaCommentClient {
           } else {
             globalThis.setTimeout(() => {
               try {
-                cb(comments);
+                cb(comments as AgentComment[]);
               } catch {
                 /* swallow */
               }
@@ -205,7 +211,7 @@ export class NiconamaCommentClient {
           }
         } catch {
           try {
-            cb(comments);
+            cb(comments as AgentComment[]);
           } catch {
             /* swallow */
           }
@@ -265,11 +271,16 @@ export class NiconamaCommentClient {
         ? (() => {
             const embedded = embeddedData as Record<string, unknown>;
             const site = embedded.site as Record<string, unknown> | undefined;
-            const relive1 = (site?.state as Record<string, unknown> | undefined)?.relive as Record<string, unknown> | undefined;
+            const relive1 = (site?.state as Record<string, unknown> | undefined)
+              ?.relive as Record<string, unknown> | undefined;
             const relive2 = site?.relive as Record<string, unknown> | undefined;
-            const relive3 = embedded.relive as Record<string, unknown> | undefined;
+            const relive3 = embedded.relive as
+              | Record<string, unknown>
+              | undefined;
             return Boolean(
-              relive1?.webSocketUrl ?? relive2?.webSocketUrl ?? relive3?.webSocketUrl
+              relive1?.webSocketUrl ??
+                relive2?.webSocketUrl ??
+                relive3?.webSocketUrl,
             );
           })()
         : false;
@@ -372,7 +383,9 @@ export class NiconamaCommentClient {
         if (!embeddedData || typeof embeddedData !== "object") return undefined;
         const embedded = embeddedData as Record<string, unknown>;
         const program = embedded.program as Record<string, unknown> | undefined;
-        const stats = program?.statistics as Record<string, unknown> | undefined;
+        const stats = program?.statistics as
+          | Record<string, unknown>
+          | undefined;
         const count = stats?.commentCount;
         return typeof count === "number" ? count : undefined;
       })();
@@ -431,19 +444,25 @@ export class NiconamaCommentClient {
         if (!obj || typeof obj !== "object") return undefined;
         const rec = obj as Record<string, unknown>;
         const program = rec.program as Record<string, unknown> | undefined;
-        const stats = program?.statistics as Record<string, unknown> | undefined;
+        const stats = program?.statistics as
+          | Record<string, unknown>
+          | undefined;
         const count = stats?.commentCount;
         if (typeof count === "number") return count;
         if (typeof count === "string") return Number(count);
         return undefined;
       };
       const rawTop = getCommentCount(embedded);
-      const rawSite = getCommentCount((embedded as Record<string, unknown>).site);
+      const rawSite = getCommentCount(
+        (embedded as Record<string, unknown>).site,
+      );
       const commentCount = rawTop !== undefined ? rawTop : rawSite;
       try {
         const embRec = embedded as Record<string, unknown>;
         const program = embRec.program as Record<string, unknown> | undefined;
-        const stats = program?.statistics as Record<string, unknown> | undefined;
+        const stats = program?.statistics as
+          | Record<string, unknown>
+          | undefined;
         console.debug(
           "[DEBUG] fetchEmbeddedData embedded program/statistics presence",
           {
@@ -457,9 +476,17 @@ export class NiconamaCommentClient {
       // Treat the synthetic placeholder comment '(コメントあり)' as not a real
       // initial comment so that we still attempt Playwright fallbacks when the
       // embedded metadata only reports a count but no bodies.
-      const initialRealComments = (initialComments || []).filter(
-        (c: unknown) => !(c?.data && c.data.comment === "(コメントあり)"),
-      );
+      const initialRealComments = (initialComments || []).filter((comment) => {
+        const data =
+          typeof comment === "object" && comment !== null
+            ? (comment as Record<string, unknown>).data
+            : undefined;
+        const body =
+          typeof data === "object" && data !== null
+            ? (data as Record<string, unknown>).comment
+            : undefined;
+        return body !== "(コメントあり)";
+      });
       const embeddedWebSocketUrl =
         this.getWebSocketUrlFromEmbeddedData(embedded);
       const embeddedFrontendId = this.getFrontendIdFromEmbeddedData(embedded);
@@ -667,7 +694,9 @@ export class NiconamaCommentClient {
         return null;
       }
 
-      const activePages = context.pages().filter((p: NiconamaBrowserPage) => !p.isClosed());
+      const activePages = context
+        .pages()
+        .filter((p: NiconamaBrowserPage) => !p.isClosed());
       for (const currentPage of activePages) {
         if (currentPage.isClosed()) continue;
         const bodyText = await getBodyTextFromPage(currentPage);
@@ -765,7 +794,9 @@ export class NiconamaCommentClient {
       console.info(
         "[DEBUG] NiconamaCommentClient.stop yielding to event loop before cancelling poll",
       );
-      await new Promise((res) => globalThis.setTimeout(res, 0));
+      await new Promise<void>((resolve) => {
+        globalThis.setTimeout(resolve, 0);
+      });
     }
 
     // Cancel any in-flight poll sleep so stop() can resolve quickly.
@@ -778,7 +809,7 @@ export class NiconamaCommentClient {
         },
       );
       if (this.#pollTimer) {
-        clearTimeout(this.#pollTimer as unknown);
+        clearTimeout(this.#pollTimer);
         this.#pollTimer = null;
       }
       if (this.#pollCancelResolve) {
@@ -1065,9 +1096,11 @@ export class NiconamaCommentClient {
     // Check site.frontendId
     const site = rec.site as Record<string, unknown> | undefined;
     if (site) {
-      if (typeof site.frontendId === "number")
-        return String(site.frontendId);
-      if (typeof site.frontendId === "string" && site.frontendId.trim().length > 0)
+      if (typeof site.frontendId === "number") return String(site.frontendId);
+      if (
+        typeof site.frontendId === "string" &&
+        site.frontendId.trim().length > 0
+      )
         return site.frontendId.trim();
 
       // Check site.state.frontendId
@@ -1075,7 +1108,10 @@ export class NiconamaCommentClient {
       if (state) {
         if (typeof state.frontendId === "number")
           return String(state.frontendId);
-        if (typeof state.frontendId === "string" && state.frontendId.trim().length > 0)
+        if (
+          typeof state.frontendId === "string" &&
+          state.frontendId.trim().length > 0
+        )
           return state.frontendId.trim();
       }
     }
@@ -1179,20 +1215,32 @@ export class NiconamaCommentClient {
                 : { site: { state: { relive: {} } } };
             try {
               const enrichedRec = enriched as Record<string, unknown>;
-              enrichedRec.site = (enrichedRec.site as Record<string, unknown> | undefined) ?? {};
+              enrichedRec.site =
+                (enrichedRec.site as Record<string, unknown> | undefined) ?? {};
               const site = enrichedRec.site as Record<string, unknown>;
-              site.state = (site.state as Record<string, unknown> | undefined) ?? {};
+              site.state =
+                (site.state as Record<string, unknown> | undefined) ?? {};
               const state = site.state as Record<string, unknown>;
-              state.relive = (state.relive as Record<string, unknown> | undefined) ?? {};
+              state.relive =
+                (state.relive as Record<string, unknown> | undefined) ?? {};
               const relive = state.relive as Record<string, unknown>;
               relive.comments = comments.map((c: string) => ({ comment: c }));
             } catch {}
             try {
               const enrichedRec = enriched as Record<string, unknown>;
-              const site = enrichedRec.site as Record<string, unknown> | undefined;
+              const site = enrichedRec.site as
+                | Record<string, unknown>
+                | undefined;
               const state = site?.state as Record<string, unknown> | undefined;
-              const relive = state?.relive as Record<string, unknown> | undefined;
-              const parsedComments = (relive?.comments as Array<Record<string, unknown>> | undefined)?.map((c: unknown) => ({ data: c })) ?? [];
+              const relive = state?.relive as
+                | Record<string, unknown>
+                | undefined;
+              const parsedComments: AgentComment[] =
+                (
+                  relive?.comments as Array<Record<string, unknown>> | undefined
+                )?.map(
+                  (commentData) => ({ data: commentData }) as AgentComment,
+                ) ?? [];
               if (Array.isArray(parsedComments) && parsedComments.length > 0) {
                 this.deliverComments(parsedComments);
               }
@@ -1223,18 +1271,27 @@ export class NiconamaCommentClient {
                   ? JSON.parse(JSON.stringify(existingEmbeddedData))
                   : { site: { state: { relive: {} } } };
               try {
-                (enriched2 as Record<string, unknown>).site =
-                  (enriched2 as Record<string, unknown>).site ?? {};
-                (enriched2 as Record<string, unknown>).site.state =
-                  (enriched2 as Record<string, unknown>).site.state ?? {};
-                (enriched2 as Record<string, unknown>).site.state.relive =
-                  (enriched2 as Record<string, unknown>).site.state.relive ??
-                  {};
-                (
-                  enriched2 as Record<string, unknown>
-                ).site.state.relive.comments = pageComments.map((c: unknown) =>
-                  c?.data ? c.data : { comment: String(c) },
-                );
+                const enrichedRecord = enriched2 as Record<string, unknown>;
+                const site =
+                  (enrichedRecord.site as
+                    | Record<string, unknown>
+                    | undefined) ?? {};
+                enrichedRecord.site = site;
+                const state =
+                  (site.state as Record<string, unknown> | undefined) ?? {};
+                site.state = state;
+                const relive =
+                  (state.relive as Record<string, unknown> | undefined) ?? {};
+                state.relive = relive;
+                relive.comments = pageComments.map((comment) => {
+                  const data =
+                    typeof comment === "object" && comment !== null
+                      ? (comment as Record<string, unknown>).data
+                      : undefined;
+                  return typeof data === "object" && data !== null
+                    ? data
+                    : { comment: String(comment) };
+                });
               } catch {}
               try {
                 this.deliverComments(pageComments);
@@ -1329,7 +1386,9 @@ export class NiconamaCommentClient {
         );
       } else {
         try {
-          const parsed = JSON.parse((out as Record<string, unknown>).stdout);
+          const stdout = (out as Record<string, unknown>).stdout;
+          if (typeof stdout !== "string") return null;
+          const parsed = JSON.parse(stdout);
           if (parsed?.success && parsed.embedded) return parsed.embedded;
           // If child didn't report success but wrote diagnostics, try to
           // read main_response.html from diagnosticsDir to extract embedded-data.
@@ -1552,7 +1611,9 @@ export class NiconamaCommentClient {
           } as unknown) as DirectWebSocket;
         } catch {
           try {
-            ws = new WebSocketConstructor(webSocketUrl, { headers } as unknown) as DirectWebSocket;
+            ws = new WebSocketConstructor(webSocketUrl, {
+              headers,
+            } as unknown) as DirectWebSocket;
           } catch {
             ws = new WebSocketConstructor(webSocketUrl) as DirectWebSocket;
           }
@@ -1606,7 +1667,11 @@ export class NiconamaCommentClient {
 
       ws.onmessage = (event: unknown) => {
         try {
-          const data = event?.data;
+          const eventRecord =
+            typeof event === "object" && event !== null
+              ? (event as Record<string, unknown>)
+              : null;
+          const data = eventRecord?.data;
 
           // Handle string payloads
           if (typeof data === "string") {
@@ -1672,7 +1737,10 @@ export class NiconamaCommentClient {
             data &&
             typeof (data as Record<string, unknown>).arrayBuffer === "function"
           ) {
-            (data as Record<string, unknown>)
+            const dataWithArrayBuffer = data as {
+              arrayBuffer: () => Promise<ArrayBuffer>;
+            };
+            dataWithArrayBuffer
               .arrayBuffer()
               .then((ab: ArrayBuffer) => {
                 const payload = new TextDecoder().decode(ab);
@@ -1707,12 +1775,16 @@ export class NiconamaCommentClient {
         console.warn("[WARN] direct websocket error", event);
       };
 
-      ws.onclose = (event: { code?: number; reason?: string }) => {
+      ws.onclose = (event: unknown) => {
+        const closeEvent =
+          typeof event === "object" && event !== null
+            ? (event as { code?: number; reason?: string })
+            : {};
         console.warn(
           "[WARN] direct websocket closed",
           webSocketUrl,
-          event.code,
-          event.reason,
+          closeEvent.code,
+          closeEvent.reason,
         );
         if (this.#directWebSocket === ws) {
           this.clearDirectWebSocket();
@@ -1741,11 +1813,15 @@ export class NiconamaCommentClient {
 
       this.#directWebSocketKeepSeatTimer = setInterval(() => {
         try {
+          const wsOpenState = (WebSocketClass as { OPEN?: number }).OPEN;
           if (
             this.#directWebSocket &&
-            this.#directWebSocket.readyState === WebSocketClass.OPEN
+            this.#directWebSocket.readyState ===
+              (typeof wsOpenState === "number" ? wsOpenState : 1)
           ) {
-            const keepSeatMessage = { type: "keepSeat" } as unknown;
+            const keepSeatMessage: Record<string, string> = {
+              type: "keepSeat",
+            };
             if (this.#directWebSocketAudienceToken) {
               keepSeatMessage.audienceToken =
                 this.#directWebSocketAudienceToken;
@@ -1840,7 +1916,7 @@ export class NiconamaCommentClient {
         console.debug("[DEBUG] Playwright context created", { attempt });
         this.#playwrightCommentContext = context;
 
-        const attachListeners = (pageRef: unknown) => {
+        const attachListeners = (pageRef: NiconamaBrowserPage) => {
           try {
             pageRef.setDefaultTimeout?.(30_000);
           } catch {}
@@ -1972,7 +2048,15 @@ export class NiconamaCommentClient {
             });
           });
           pageRef.on("request", (request: unknown) => {
-            const url = request.url();
+            if (
+              !request ||
+              typeof request !== "object" ||
+              typeof (request as Record<string, unknown>).url !== "function"
+            ) {
+              return;
+            }
+            const requestRecord = request as { url: () => string };
+            const url = requestRecord.url();
             if (/comment|wsapi|watch|json|data/i.test(url)) {
               console.debug("[DEBUG] Playwright request", url);
             }
@@ -1986,12 +2070,23 @@ export class NiconamaCommentClient {
           // the page may be closed by remote content while Playwright is shutting
           // down; route teardown can trigger CDP errors during cleanup.
           pageRef.on("requestfailed", (request: unknown) => {
-            const url = request.url();
+            if (
+              !request ||
+              typeof request !== "object" ||
+              typeof (request as Record<string, unknown>).url !== "function"
+            ) {
+              return;
+            }
+            const requestRecord = request as {
+              url: () => string;
+              failure?: () => { errorText?: string } | null;
+            };
+            const url = requestRecord.url();
             if (/comment|wsapi|watch|json|data/i.test(url)) {
               console.debug(
                 "[DEBUG] Playwright request failed",
                 url,
-                request.failure?.()?.errorText,
+                requestRecord.failure?.()?.errorText,
               );
             }
           });
@@ -2000,19 +2095,33 @@ export class NiconamaCommentClient {
               const tryProcess = async () => {
                 if (this.#stopRequested) return;
                 if (pageRef.isClosed?.()) return;
-                if (!response || typeof response.text !== "function") return;
+                if (
+                  !response ||
+                  typeof response !== "object" ||
+                  typeof (response as Record<string, unknown>).text !==
+                    "function"
+                ) {
+                  return;
+                }
+                const responseRecord = response as {
+                  text: () => Promise<string>;
+                  url?: () => string;
+                  headers?: () => Record<string, string>;
+                };
                 let url = "";
                 try {
                   url =
-                    typeof response.url === "function" ? response.url() : "";
+                    typeof responseRecord.url === "function"
+                      ? responseRecord.url()
+                      : "";
                 } catch {
                   return;
                 }
                 let ct = "";
                 try {
                   ct =
-                    typeof response.headers === "function"
-                      ? response.headers()["content-type"] || ""
+                    typeof responseRecord.headers === "function"
+                      ? responseRecord.headers()["content-type"] || ""
                       : "";
                 } catch {}
                 if (
@@ -2021,7 +2130,7 @@ export class NiconamaCommentClient {
                 ) {
                   return;
                 }
-                const bodyText = await response.text().catch(() => null);
+                const bodyText = await responseRecord.text().catch(() => null);
                 if (!bodyText) return;
                 const parsed = tryParseJson(bodyText);
                 if (parsed) {
@@ -2064,22 +2173,28 @@ export class NiconamaCommentClient {
             const socketRec = socket as Record<string, unknown>;
             const wsUrl = (socketRec.url as () => string)();
             console.debug("[DEBUG] Playwright websocket connected", wsUrl);
-            (socketRec.on as (event: string, handler: (frame: unknown) => void) => void)("framereceived", (frame: unknown) => {
+            (
+              socketRec.on as (
+                event: string,
+                handler: (frame: unknown) => void,
+              ) => void
+            )("framereceived", (frame: unknown) => {
               const pageRefRec = pageRef as Record<string, unknown>;
-              if ((pageRefRec.isClosed as (() => boolean) | undefined)?.()) return;
+              if ((pageRefRec.isClosed as (() => boolean) | undefined)?.())
+                return;
               const frameRec = frame as Record<string, unknown>;
               let payload = frameRec.payload;
               if (payload instanceof ArrayBuffer) {
                 payload = new TextDecoder().decode(payload);
-              } else if (typeof payload !== "string") {
-                payload = String(payload);
               }
+              const payloadText =
+                typeof payload === "string" ? payload : String(payload);
               console.debug("[DEBUG] Playwright websocket frame", {
                 url: wsUrl,
-                length: (payload as string).length,
-                snippet: (payload as string).slice(0, 200),
+                length: payloadText.length,
+                snippet: payloadText.slice(0, 200),
               });
-              this.handlePlaywrightWebSocketFrame(payload, wsUrl);
+              this.handlePlaywrightWebSocketFrame(payloadText, wsUrl);
             });
           });
 
@@ -2096,7 +2211,13 @@ export class NiconamaCommentClient {
         try {
           context.on?.("page", (p: unknown) => {
             try {
-              attachListeners(p);
+              if (
+                p &&
+                typeof p === "object" &&
+                typeof (p as Record<string, unknown>).on === "function"
+              ) {
+                attachListeners(p as NiconamaBrowserPage);
+              }
             } catch {
               /* ignore */
             }
@@ -2141,9 +2262,13 @@ export class NiconamaCommentClient {
             });
             let respStatus2: number | undefined;
             try {
+              const responseRecord =
+                response && typeof response === "object"
+                  ? (response as Record<string, unknown>)
+                  : null;
               respStatus2 =
-                response && typeof response.status === "function"
-                  ? response.status()
+                responseRecord && typeof responseRecord.status === "function"
+                  ? (responseRecord.status as () => number)()
                   : undefined;
             } catch {}
             let pageUrlSafe2 = "unknown";
@@ -2166,9 +2291,7 @@ export class NiconamaCommentClient {
             // If the page was closed or aborted, try to create a fresh page in the same context
             try {
               if (typeof page.isClosed === "function" && page.isClosed()) {
-                const surviving = context
-                  .pages()
-                  .find((p: unknown) => !p.isClosed());
+                const surviving = context.pages().find((p) => !p.isClosed());
                 if (surviving) {
                   page = surviving;
                 } else {
@@ -2239,7 +2362,7 @@ export class NiconamaCommentClient {
           console.debug("[DEBUG] Playwright page after goto", {
             url: page.url(),
             isClosed: page.isClosed(),
-            pages: context.pages().map((p: unknown) => {
+            pages: context.pages().map((p) => {
               try {
                 return p.url();
               } catch {
@@ -2354,9 +2477,7 @@ export class NiconamaCommentClient {
           return;
         }
         if (page.isClosed()) {
-          const survivingPage = context
-            .pages()
-            .find((p: unknown) => !p.isClosed());
+          const survivingPage = context.pages().find((p) => !p.isClosed());
           if (survivingPage) {
             let survivingUrlSafe = "unknown";
             try {
@@ -2415,27 +2536,19 @@ export class NiconamaCommentClient {
     if (!this.#playwrightCommentContext) return;
     try {
       try {
-        const context = this.#playwrightCommentContext as Record<string, unknown>;
-        const pages =
-          typeof context.pages === "function"
-            ? (context.pages as () => unknown[])()
-            : [];
+        const context = this.#playwrightCommentContext;
+        const pages = context?.pages() ?? [];
         for (const page of pages) {
           try {
-            if (page && typeof (page as Record<string, unknown>).removeAllListeners === "function") {
-              try {
-                ((page as Record<string, unknown>).removeAllListeners as () => void)();
-              } catch {}
-            }
             try {
-              await (page as Record<string, unknown>).close();
+              await page.close();
             } catch {}
           } catch {}
         }
       } catch {}
-      const context = this.#playwrightCommentContext as Record<string, unknown>;
-      if (typeof context.close === "function") {
-        await (context.close as () => Promise<void>)();
+      const context = this.#playwrightCommentContext;
+      if (context && typeof context.close === "function") {
+        await context.close();
       }
     } catch (err) {
       console.warn("[WARN] failed to close Playwright comment watcher", err);
@@ -2444,16 +2557,20 @@ export class NiconamaCommentClient {
     this.#playwrightCommentContext = null;
   }
 
-  private async tryOpenRenderedCommentPanel(page: unknown): Promise<void> {
+  private async tryOpenRenderedCommentPanel(
+    page: NiconamaBrowserPage,
+  ): Promise<void> {
     await tryOpenRenderedCommentPanel(page);
   }
 
-  private async extractPageComments(page: unknown): Promise<AgentComment[]> {
+  private async extractPageComments(
+    page: NiconamaBrowserPage,
+  ): Promise<AgentComment[]> {
     return await extractPageComments(page, this.#seenCommentIdentifiers);
   }
 
   private async pollPageComments(
-    page: unknown,
+    page: NiconamaBrowserPage,
     intervalMs = 1_000,
     maxAttempts = 30,
   ): Promise<AgentComment[]> {
@@ -2465,7 +2582,7 @@ export class NiconamaCommentClient {
     );
   }
 
-  private startPlaywrightPagePolling(page: unknown): void {
+  private startPlaywrightPagePolling(page: NiconamaBrowserPage): void {
     if (this.#playwrightPageCommentPollTimer) return;
     this.#playwrightPageCommentPollTimer = startNiconamaBrowserPagePolling(
       page,
@@ -2481,7 +2598,7 @@ export class NiconamaCommentClient {
   }
 
   private async waitForAnyCommentSelector(
-    page: unknown,
+    page: NiconamaBrowserPage,
     timeoutMs: number,
   ): Promise<void> {
     await waitForAnyCommentSelector(page, timeoutMs);
@@ -2639,23 +2756,39 @@ export class NiconamaCommentClient {
     try {
       const site: Record<string, unknown> =
         embeddedData && typeof embeddedData === "object"
-          ? ((embeddedData as Record<string, unknown>).site as Record<string, unknown>) || {}
+          ? ((embeddedData as Record<string, unknown>).site as Record<
+              string,
+              unknown
+            >) || {}
           : {};
       const program: Record<string, unknown> =
         embeddedData && typeof embeddedData === "object"
-          ? ((embeddedData as Record<string, unknown>).program as Record<string, unknown>) || {}
+          ? ((embeddedData as Record<string, unknown>).program as Record<
+              string,
+              unknown
+            >) || {}
           : {};
       // If no embeddedData was provided, attempt to derive program information
       // from the configured watch URL or by fetching the static watch page.
       let derivedProgramId: string | undefined =
-        (typeof program.nicoliveProgramId === "string" ? program.nicoliveProgramId : undefined) ??
-        (typeof program.programId === "string" ? program.programId : undefined) ??
+        (typeof program.nicoliveProgramId === "string"
+          ? program.nicoliveProgramId
+          : undefined) ??
+        (typeof program.programId === "string"
+          ? program.programId
+          : undefined) ??
         undefined;
       const pollingApiBase: string | undefined =
-        (typeof site.pollingApiBaseUrl === "string" ? site.pollingApiBaseUrl : undefined) ||
-        (typeof site.frontendPublicApiUrl === "string" ? site.frontendPublicApiUrl : undefined) ||
+        (typeof site.pollingApiBaseUrl === "string"
+          ? site.pollingApiBaseUrl
+          : undefined) ||
+        (typeof site.frontendPublicApiUrl === "string"
+          ? site.frontendPublicApiUrl
+          : undefined) ||
         (typeof site.apiBaseUrl === "string" ? site.apiBaseUrl : undefined) ||
-        (typeof site.staticResourceBaseUrl === "string" ? site.staticResourceBaseUrl : undefined);
+        (typeof site.staticResourceBaseUrl === "string"
+          ? site.staticResourceBaseUrl
+          : undefined);
       const watchUrl =
         this.#watchUrl ??
         process.env.NICONAMA_WATCH_URL ??
@@ -2680,13 +2813,17 @@ export class NiconamaCommentClient {
         }
       }
       const frontendApiBase: string | undefined =
-        (typeof site.frontendPublicApiUrl === "string" ? site.frontendPublicApiUrl : undefined) ||
+        (typeof site.frontendPublicApiUrl === "string"
+          ? site.frontendPublicApiUrl
+          : undefined) ||
         (typeof site.apiBaseUrl === "string" ? site.apiBaseUrl : undefined);
 
       const programId =
         derivedProgramId ??
         ((program as Record<string, unknown>).watchPageUrl
-          ? /lv\d+/.exec((program as Record<string, unknown>).watchPageUrl as string)?.[0]
+          ? /lv\d+/.exec(
+              (program as Record<string, unknown>).watchPageUrl as string,
+            )?.[0]
           : undefined) ??
         undefined;
 
@@ -2949,7 +3086,10 @@ export class NiconamaCommentClient {
     }
 
     if (!body) {
-      console.debug("[DEBUG] direct websocket empty body after JSON parse", wsUrl);
+      console.debug(
+        "[DEBUG] direct websocket empty body after JSON parse",
+        wsUrl,
+      );
       return;
     }
 
@@ -2972,7 +3112,10 @@ export class NiconamaCommentClient {
         }
         try {
           const rawStats = (body as Record<string, unknown>)?.data;
-          const stats = (rawStats && typeof rawStats === "object" ? rawStats as Record<string, unknown> : null);
+          const stats =
+            rawStats && typeof rawStats === "object"
+              ? (rawStats as Record<string, unknown>)
+              : null;
           if (
             stats &&
             typeof stats.comments === "number" &&
@@ -2996,7 +3139,10 @@ export class NiconamaCommentClient {
       case "reconnect": {
         try {
           const rawReconnectData = (body as Record<string, unknown>)?.data;
-          const reconnectData = (rawReconnectData && typeof rawReconnectData === "object" ? rawReconnectData as Record<string, unknown> : null);
+          const reconnectData =
+            rawReconnectData && typeof rawReconnectData === "object"
+              ? (rawReconnectData as Record<string, unknown>)
+              : null;
           const newToken = reconnectData?.audienceToken as unknown;
           const waitTimeMs =
             reconnectData &&
