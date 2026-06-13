@@ -47,7 +47,6 @@
     },
     {
       "includes": [
-        "lib/console-proxy.ts",
         "lib/niconamaCommentClient.ts",
         "lib/niconamaCommentClient.helpers.ts",
         "lib/niconamaCommentClient.playwright.ts",
