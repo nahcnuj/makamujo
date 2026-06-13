@@ -135,6 +135,7 @@ export class NiconamaCommentClient {
   #directWebSocketSuppressReconnect = false;
   #directWebSocketQueue: string[] = [];
   #playwrightCommentContext: unknown | null = null;
+  #playwrightCommentPage: unknown | null = null;
   #playwrightPageCommentPollTimer: ReturnType<typeof setInterval> | null = null;
   #playwrightWatcherTask: Promise<void> | null = null;
   #pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1982,11 +1983,14 @@ export class NiconamaCommentClient {
             }
           });
           pageRef.on("websocket", (socket: unknown) => {
-            const wsUrl = socket.url();
+            const socketRec = socket as Record<string, unknown>;
+            const wsUrl = (socketRec.url as () => string)();
             console.debug("[DEBUG] Playwright websocket connected", wsUrl);
-            socket.on("framereceived", (frame: unknown) => {
-              if (pageRef.isClosed?.()) return;
-              let payload = frame.payload;
+            (socketRec.on as (event: string, handler: (frame: unknown) => void) => void)("framereceived", (frame: unknown) => {
+              const pageRefRec = pageRef as Record<string, unknown>;
+              if ((pageRefRec.isClosed as (() => boolean) | undefined)?.()) return;
+              const frameRec = frame as Record<string, unknown>;
+              let payload = frameRec.payload;
               if (payload instanceof ArrayBuffer) {
                 payload = new TextDecoder().decode(payload);
               } else if (typeof payload !== "string") {
@@ -1994,8 +1998,8 @@ export class NiconamaCommentClient {
               }
               console.debug("[DEBUG] Playwright websocket frame", {
                 url: wsUrl,
-                length: payload.length,
-                snippet: payload.slice(0, 200),
+                length: (payload as string).length,
+                snippet: (payload as string).slice(0, 200),
               });
               this.handlePlaywrightWebSocketFrame(payload, wsUrl);
             });
@@ -2334,25 +2338,27 @@ export class NiconamaCommentClient {
     if (!this.#playwrightCommentContext) return;
     try {
       try {
+        const context = this.#playwrightCommentContext as Record<string, unknown>;
         const pages =
-          typeof this.#playwrightCommentContext.pages === "function"
-            ? this.#playwrightCommentContext.pages()
+          typeof context.pages === "function"
+            ? (context.pages as () => unknown[])()
             : [];
         for (const page of pages) {
           try {
-            if (page && typeof page.removeAllListeners === "function") {
+            if (page && typeof (page as Record<string, unknown>).removeAllListeners === "function") {
               try {
-                page.removeAllListeners();
+                ((page as Record<string, unknown>).removeAllListeners as () => void)();
               } catch {}
             }
             try {
-              await page.close();
+              await (page as Record<string, unknown>).close();
             } catch {}
           } catch {}
         }
       } catch {}
-      if (typeof this.#playwrightCommentContext.close === "function") {
-        await this.#playwrightCommentContext.close();
+      const context = this.#playwrightCommentContext as Record<string, unknown>;
+      if (typeof context.close === "function") {
+        await (context.close as () => Promise<void>)();
       }
     } catch (err) {
       console.warn("[WARN] failed to close Playwright comment watcher", err);
@@ -2555,23 +2561,25 @@ export class NiconamaCommentClient {
     embeddedData: unknown,
   ): Promise<AgentComment[]> {
     try {
-      const site =
+      const site: Record<string, unknown> =
         embeddedData && typeof embeddedData === "object"
-          ? (embeddedData as Record<string, unknown>).site || {}
+          ? ((embeddedData as Record<string, unknown>).site as Record<string, unknown>) || {}
           : {};
-      const program =
+      const program: Record<string, unknown> =
         embeddedData && typeof embeddedData === "object"
-          ? (embeddedData as Record<string, unknown>).program || {}
+          ? ((embeddedData as Record<string, unknown>).program as Record<string, unknown>) || {}
           : {};
       // If no embeddedData was provided, attempt to derive program information
       // from the configured watch URL or by fetching the static watch page.
       let derivedProgramId: string | undefined =
-        program.nicoliveProgramId ?? program.programId ?? undefined;
+        (typeof program.nicoliveProgramId === "string" ? program.nicoliveProgramId : undefined) ??
+        (typeof program.programId === "string" ? program.programId : undefined) ??
+        undefined;
       const pollingApiBase: string | undefined =
-        site.pollingApiBaseUrl ||
-        site.frontendPublicApiUrl ||
-        site.apiBaseUrl ||
-        site.staticResourceBaseUrl;
+        (typeof site.pollingApiBaseUrl === "string" ? site.pollingApiBaseUrl : undefined) ||
+        (typeof site.frontendPublicApiUrl === "string" ? site.frontendPublicApiUrl : undefined) ||
+        (typeof site.apiBaseUrl === "string" ? site.apiBaseUrl : undefined) ||
+        (typeof site.staticResourceBaseUrl === "string" ? site.staticResourceBaseUrl : undefined);
       const watchUrl =
         this.#watchUrl ??
         process.env.NICONAMA_WATCH_URL ??
@@ -2596,12 +2604,13 @@ export class NiconamaCommentClient {
         }
       }
       const frontendApiBase: string | undefined =
-        site.frontendPublicApiUrl || site.apiBaseUrl;
+        (typeof site.frontendPublicApiUrl === "string" ? site.frontendPublicApiUrl : undefined) ||
+        (typeof site.apiBaseUrl === "string" ? site.apiBaseUrl : undefined);
 
       const programId =
         derivedProgramId ??
-        (program.watchPageUrl
-          ? /lv\d+/.exec(program.watchPageUrl)?.[0]
+        ((program as Record<string, unknown>).watchPageUrl
+          ? /lv\d+/.exec((program as Record<string, unknown>).watchPageUrl as string)?.[0]
           : undefined) ??
         undefined;
 
@@ -2853,7 +2862,7 @@ export class NiconamaCommentClient {
 
     // Diagnostic: log shape of body when no comments are detected to aid debugging
     try {
-      const keys = Object.keys(body as unknown).slice(0, 10);
+      const keys = Object.keys(body).slice(0, 10);
       console.debug("[DEBUG] direct websocket parsed body keys", {
         wsUrl,
         keys,
@@ -2886,12 +2895,12 @@ export class NiconamaCommentClient {
           this.#callbacks.onMeta(metaState);
         }
         try {
-          const stats = (body as Record<string, unknown>)?.data;
+          const rawStats = (body as Record<string, unknown>)?.data;
+          const stats = (rawStats && typeof rawStats === "object" ? rawStats as Record<string, unknown> : null);
           if (
             stats &&
-            typeof stats === "object" &&
-            (stats as Record<string, unknown>).comments === "number" &&
-            (stats as Record<string, unknown>).comments > 0
+            typeof stats.comments === "number" &&
+            stats.comments > 0
           ) {
             // If statistics report comments, trigger an immediate rescan to try to harvest comment payloads
             void this.resolveWatchUrl()
@@ -2910,12 +2919,14 @@ export class NiconamaCommentClient {
       }
       case "reconnect": {
         try {
-          const reconnectData = (body as Record<string, unknown>)?.data;
-          const newToken = (reconnectData as Record<string, unknown>)?.audienceToken as unknown;
+          const rawReconnectData = (body as Record<string, unknown>)?.data;
+          const reconnectData = (rawReconnectData && typeof rawReconnectData === "object" ? rawReconnectData as Record<string, unknown> : null);
+          const newToken = reconnectData?.audienceToken as unknown;
           const waitTimeMs =
-            typeof (reconnectData as Record<string, unknown>)?.waitTimeSec === "number" &&
-            (reconnectData as Record<string, unknown>).waitTimeSec > 0
-              ? (reconnectData as Record<string, unknown>).waitTimeSec * 1_000
+            reconnectData &&
+            typeof reconnectData.waitTimeSec === "number" &&
+            reconnectData.waitTimeSec > 0
+              ? reconnectData.waitTimeSec * 1_000
               : 1_000;
           this.#directWebSocketSuppressReconnect = true;
           this.clearDirectWebSocket();

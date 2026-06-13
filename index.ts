@@ -211,7 +211,7 @@ let lastPublishedStreamState: unknown;
 (globalThis as Record<string, unknown>).__lastPublishedStreamState =
   (globalThis as Record<string, unknown>).__lastPublishedStreamState ??
   lastPublishedStreamState;
-const wsClients = new Set<ServerWebSocket<WsData>>();
+const wsClients = new Set<Bun.ServerWebSocket<WsData>>();
 const sseClients = new Set<ReadableStreamDefaultController<Uint8Array>>();
 const sseEncoder = new TextEncoder();
 
@@ -266,7 +266,7 @@ function createSseStream(_label: string) {
       try {
         sseClients.forEach((c) => {
           try {
-            if ((c as Record<string, unknown>).desiredSize === null)
+            if ((c as unknown as Record<string, unknown>).desiredSize === null)
               sseClients.delete(c);
           } catch {}
         });
@@ -313,7 +313,7 @@ function sseBroadcast(payload: unknown) {
     const resilient = getResilientProxyControllers();
     for (const c of Array.from(resilient)) {
       try {
-        if ((c as Record<string, unknown>).desiredSize === null) {
+        if ((c as unknown as Record<string, unknown>).desiredSize === null) {
           try {
             resilient.delete(c);
           } catch {}
