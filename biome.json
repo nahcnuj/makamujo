@@ -47,7 +47,6 @@
         "lib/niconamaCommentClient.helpers.ts",
         "lib/niconamaCommentClient.playwright.ts",
         "lib/streamState.ts",
-        "routes/index.ts",
         "scripts/*.ts"
       ],
       "formatter": {
