@@ -47,6 +47,8 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
     ...eventListeners,
   };
 
+  let hasReloadedForShoten = false;
+
   function* runActions(actions: readonly Action.Action[]): Generator<Action.Action, boolean, State> {
     for (const action of actions) {
       const result = yield action;
@@ -124,6 +126,15 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
         }
 
         const sightData = noopResult.name === 'idle' ? noopResult.state : undefined;
+
+        if (!listeners.isSilent()) {
+          hasReloadedForShoten = false;
+        } else if ((sightData as any)?.title?.includes('昇天中') && !hasReloadedForShoten) {
+          hasReloadedForShoten = true;
+          state = { type: 'initialize' };
+          break;
+        }
+
         const clickableElementIds = Array.isArray((sightData as any)?.clickableElementIds)
           ? (sightData as any).clickableElementIds as string[]
           : ['bigCookie'];
