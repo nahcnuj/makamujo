@@ -48,6 +48,7 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
   };
 
   let hasReloadedForShoten = false;
+  let gameData: string | undefined = state?.type === 'initialize' ? state.data : undefined;
 
   function* runActions(actions: readonly Action.Action[]): Generator<Action.Action, boolean, State> {
     for (const action of actions) {
@@ -121,7 +122,7 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
         }
 
         if (noopResult.name === 'idle' && !noopResult.url.startsWith('https://orteil.dashnet.org/cookieclicker/')) {
-          state = { type: 'initialize' };
+          state = { type: 'initialize', data: gameData };
           break;
         }
 
@@ -131,7 +132,7 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
           hasReloadedForShoten = false;
         } else if ((sightData as any)?.title?.includes('昇天中') && !hasReloadedForShoten) {
           hasReloadedForShoten = true;
-          state = { type: 'initialize' };
+          state = { type: 'initialize', data: gameData };
           break;
         }
 
@@ -175,6 +176,7 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
           const result = yield Action.noop;
           if (result.name === 'idle' && result.selectedText) {
             const text = result.selectedText ?? '';
+            gameData = text;
             listeners.onSave.forEach(f => f(text));
           }
         }
