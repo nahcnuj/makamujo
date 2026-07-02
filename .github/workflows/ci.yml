@@ -31,12 +31,12 @@ jobs:
         with:
           version: '1.3.14'
       - name: Restore node_modules from cache (if available)
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - name: Restore Playwright browsers cache (if available)
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -49,12 +49,12 @@ jobs:
             ln -sf "$(command -v bun)" node_modules/.bin/bun
           fi
       - name: Save node_modules to cache
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - name: Save Playwright browsers cache
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -69,7 +69,7 @@ jobs:
         with:
           version: '1.3.14'
       - name: Restore node_modules from cache
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -88,7 +88,7 @@ jobs:
         with:
           version: '1.3.14'
       - name: Restore node_modules from cache
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -115,12 +115,12 @@ jobs:
         with:
           version: '1.3.14'
       - name: Restore node_modules from cache
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - name: Restore Playwright browsers cache (if available)
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -133,7 +133,7 @@ jobs:
       - name: Run ${{ matrix.suite.label }} tests
         run: bun run ${{ matrix.suite.script }}
       - name: Save Playwright browsers cache
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
