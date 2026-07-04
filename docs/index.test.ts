@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 
@@ -16,7 +16,7 @@ describe("docs/index.html", () => {
     const scriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/g;
     let m: RegExpExecArray | null;
     while ((m = scriptRegex.exec(fullHtml)) !== null) {
-      const code = m[1];
+      const code = m[1] ?? "";
       if (code.includes("twq") || code.includes("live-link")) {
         scriptContents.push(code.trim());
       }
@@ -81,7 +81,9 @@ describe("docs/index.html", () => {
     expect(specificEvents.length).toBe(0);
 
     // Simulate click on the link
-    liveLink!.dispatchEvent(new (dom.window as any).MouseEvent("click", { bubbles: true }));
+    liveLink!.dispatchEvent(
+      new (dom.window as any).MouseEvent("click", { bubbles: true }),
+    );
 
     specificEvents = twqCalls.filter(
       (c) => c[0] === "event" && c[1] === "tw-ov0j6-rdexl",
