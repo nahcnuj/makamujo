@@ -16,7 +16,7 @@
     "setup": "bun --version && bun ci && bun run typecheck",
     "start": "NODE_ENV=production bun index.ts --port=7777",
     "typecheck": "tsc --noEmit",
-    "test": "bun test lib/ src/ routes/ console/src/",
+    "test": "bun test lib/ src/ routes/ console/src/ docs/",
     "test:integration": "MAKAMUJO_ALLOW_FALLBACK_TTS=1 bun test tests/integration/",
     "test:bin": "true",
     "test:e2e": "bun run test:e2e:specify -- tests/e2e",
