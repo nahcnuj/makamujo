@@ -41,14 +41,14 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.1",
+    "@biomejs/biome": "2.5.2",
     "@playwright/test": "^1.60.0",
     "@types/bun": "latest",
     "@types/jsdom": "^28.0.3",
     "@types/node": "^25.9.2",
     "jsdom": "^29.1.1",
     "react": "^19.2.7",
-    "tsx": "^4.22.4",
+    "tsx": "^4.22.5",
     "typescript": "^6.0.3"
   }
 }
