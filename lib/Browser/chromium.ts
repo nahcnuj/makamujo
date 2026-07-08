@@ -16,13 +16,19 @@ export const create = async (
   },
 ): Promise<Browser> => {
   const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '60000', 10);
-  // If an explicit executablePath was provided but the file doesn't exist,
-  // ignore it and fall back to the Playwright channel mode so that
-  // installed Playwright browsers can be used in CI environments.
+
+  // If an explicit executablePath was provided *and* the file exists on disk,
+  // use it. Otherwise leave it unset so Playwright uses the exact Chromium
+  // revision that matches this version of the `playwright` package
+  // (installed via `playwright install chromium`).
+  //
+  // We no longer default to `{ channel: 'chromium' }` because that forces
+  // discovery of a *system* browser and frequently leads to launch crashes
+  // (SIGTRAP, early exit) after Playwright updates when the system binary
+  // (e.g. /usr/bin/chromium) is not the matching revision.
   const effectiveExecutablePath = executablePath && existsSync(executablePath) ? executablePath : undefined;
 
-  const launchOpts = {
-    ...(effectiveExecutablePath ? { executablePath: effectiveExecutablePath } : { channel: 'chromium' }),
+  const launchOpts: any = {
     headless: process.env.CHROMIUM_HEADLESS === '1',
     timeout: launchTimeout,
     // https://peter.sh/experiments/chromium-command-line-switches/
@@ -32,6 +38,14 @@ export const create = async (
       '--window-position=1280,600',
     ],
   };
+
+  if (effectiveExecutablePath) {
+    launchOpts.executablePath = effectiveExecutablePath;
+  }
+
+  console.log('[INFO] launching browser', effectiveExecutablePath
+    ? `with executablePath=${effectiveExecutablePath}`
+    : 'using Playwright bundled Chromium (no executablePath)');
 
   const fallbackTimeout = 300000;
 
@@ -45,7 +59,7 @@ export const create = async (
     try {
       return await chromium.launch(firstTryOpts);
     } catch (firstErr) {
-      console.warn('[WARN]', 'chromium-extra launch failed, retrying with playwright.chromium', firstErr);
+      console.warn('[WARN]', 'chromium-extra launch failed, retrying with plain playwright.chromium', firstErr);
       const fallbackOpts = cloneLaunchOpts(baseOpts);
       return await playwright.chromium.launch(fallbackOpts);
     }
@@ -60,6 +74,13 @@ export const create = async (
       const fallbackOpts = { ...launchOpts, timeout: fallbackTimeout };
       browser = await launchWith(fallbackOpts);
     } else {
+      if (err instanceof Error) {
+        err.message = `Failed to launch Chromium. ` +
+          `Make sure you have run "bunx playwright install chromium" (or "playwright install chromium") ` +
+          `after updating Playwright. ` +
+          `If you want to force a system browser set CHROMIUM_EXECUTABLE_PATH.\n` +
+          `Original error: ${err.message}`;
+      }
       throw err;
     }
   }
