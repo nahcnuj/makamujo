@@ -2,7 +2,7 @@
 
 import { statSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { chromium } from "../../lib/Browser/chromium";
+import { launchPersistentContext } from "../../lib/Browser/chromium";
 
 const { values: {
   'user-data-dir': userDataDir,
@@ -16,7 +16,6 @@ const { values: {
     },
     'exec-path': {
       type: 'string',
-      default: '/usr/bin/chromium',
     },
     headless: {
       short: 'y',
@@ -30,10 +29,7 @@ if (!statSync(userDataDir).isDirectory()) {
   throw new Error('--user-data-dir must be a directory path');
 }
 
-const ctx = await chromium.launchPersistentContext(userDataDir, {
-  executablePath,
-  headless,
-});
+const ctx = await launchPersistentContext(userDataDir, { headless, ...(executablePath ? { executablePath } : {}) });
 
 const page = ctx.pages()[0] ?? await ctx.newPage();
 

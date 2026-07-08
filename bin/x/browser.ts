@@ -7,7 +7,6 @@ import { parseArgs } from "node:util";
 import { ServerGames as Games } from "../../lib/Agent/games/server";
 import { create } from "../../lib/Browser/chromium";
 import { createRetrySender } from "../../lib/Browser/socket";
-import { getDefaultBrowserPath } from "../../lib/Browser/getDefaultBrowserPath";
 
 const { values: {
   file,
@@ -25,7 +24,6 @@ const { values: {
     },
     browser: {
       type: 'string',
-      default: getDefaultBrowserPath(),
     },
     lang: {
       type: 'string',
