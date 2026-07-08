@@ -1,12 +1,13 @@
 #!/usr/bin/env bun
 
-import { statSync } from "node:fs";
+import { statSync, existsSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { chromium } from "../../lib/Browser/chromium";
+import { getDefaultBrowserPath } from "../../lib/Browser/getDefaultBrowserPath";
 
 const { values: {
   'user-data-dir': userDataDir,
-  'exec-path': executablePath,
+  'exec-path': execPath,
   headless,
 } } = parseArgs({
   options: {
@@ -16,7 +17,6 @@ const { values: {
     },
     'exec-path': {
       type: 'string',
-      default: '/usr/bin/chromium',
     },
     headless: {
       short: 'y',
@@ -30,9 +30,20 @@ if (!statSync(userDataDir).isDirectory()) {
   throw new Error('--user-data-dir must be a directory path');
 }
 
+// Use explicit --exec-path (or its old default) only if the binary actually exists.
+// Otherwise fall back so that Playwright's bundled Chromium (from `playwright install`)
+// is used. This avoids SIGTRAP / immediate crashes from incompatible system Chromium
+// (common on servers, containers, or when /usr/bin/chromium is a distro build).
+const candidateExecutable = execPath ?? getDefaultBrowserPath();
+const effectiveExecutablePath = candidateExecutable && existsSync(candidateExecutable)
+  ? candidateExecutable
+  : undefined;
+
 const ctx = await chromium.launchPersistentContext(userDataDir, {
-  executablePath,
+  ...(effectiveExecutablePath ? { executablePath: effectiveExecutablePath } : {}),
   headless,
+  // Server/headless/root environments commonly require disabling the sandbox.
+  args: ['--no-sandbox', '--disable-setuid-sandbox'],
 });
 
 const page = ctx.pages()[0] ?? await ctx.newPage();
