@@ -6,7 +6,57 @@ import playwright from "playwright";
 import { chromium as $_ } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
+
 export const chromium = $_.use(StealthPlugin());
+
+/**
+ * Resolve which executable to use for Chromium.
+ * Priority: provided arg > CHROMIUM_EXECUTABLE_PATH env
+ * Returns undefined if no valid executable (Playwright will use bundled).
+ */
+export function resolveExecutablePath(provided?: string): string | undefined {
+  const candidate = provided || process.env.CHROMIUM_EXECUTABLE_PATH;
+  if (candidate && existsSync(candidate)) {
+    return candidate;
+  }
+  return undefined;
+}
+
+async function launchWithFallback<T>(extraFn: () => Promise<T>, plainFn: () => Promise<T>): Promise<T> {
+  try {
+    return await extraFn();
+  } catch (firstErr) {
+    console.warn('[WARN]', 'chromium-extra launch failed, retrying with plain playwright.chromium', firstErr);
+    return await plainFn();
+  }
+}
+
+function getChromiumLaunchOptions(overrideExecutable: string | undefined, base: any = {}) {
+  const effective = resolveExecutablePath(overrideExecutable);
+  const opts = { ...base };
+  if (effective) {
+    opts.executablePath = effective;
+  } else {
+    delete opts.executablePath;
+  }
+  return opts;
+}
+
+/**
+ * Launch a persistent context with the correct executable resolution.
+ * This is the canonical way for tools that need persistent user data (auth, cookies, etc.).
+ * All executable resolution and future launch customizations live here.
+ */
+export async function launchPersistentContext(
+  userDataDir: string,
+  options: any = {}
+) {
+  const launchOpts = getChromiumLaunchOptions(options.executablePath, options);
+  return await launchWithFallback(
+    () => chromium.launchPersistentContext(userDataDir, launchOpts),
+    () => playwright.chromium.launchPersistentContext(userDataDir, launchOpts)
+  );
+}
 
 export const create = async (
   executablePath?: string,
@@ -17,18 +67,8 @@ export const create = async (
 ): Promise<Browser> => {
   const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '60000', 10);
 
-  // If an explicit executablePath was provided *and* the file exists on disk,
-  // use it. Otherwise leave it unset so Playwright uses the exact Chromium
-  // revision that matches this version of the `playwright` package
-  // (installed via `playwright install chromium`).
-  //
-  // We no longer default to `{ channel: 'chromium' }` because that forces
-  // discovery of a *system* browser and frequently leads to launch crashes
-  // (SIGTRAP, early exit) after Playwright updates when the system binary
-  // (e.g. /usr/bin/chromium) is not the matching revision.
-  const effectiveExecutablePath = executablePath && existsSync(executablePath) ? executablePath : undefined;
-
-  const launchOpts: any = {
+  const effectiveExecutablePath = resolveExecutablePath(executablePath);
+  const launchOpts = getChromiumLaunchOptions(executablePath, {
     headless: process.env.CHROMIUM_HEADLESS === '1',
     timeout: launchTimeout,
     // https://peter.sh/experiments/chromium-command-line-switches/
@@ -37,11 +77,7 @@ export const create = async (
       '--window-size=1024,576', // It may be required by `--window-position`.
       '--window-position=1280,600',
     ],
-  };
-
-  if (effectiveExecutablePath) {
-    launchOpts.executablePath = effectiveExecutablePath;
-  }
+  });
 
   console.log('[INFO] launching browser', effectiveExecutablePath
     ? `with executablePath=${effectiveExecutablePath}`
@@ -56,13 +92,11 @@ export const create = async (
 
   const launchWith = async (baseOpts: typeof launchOpts) => {
     const firstTryOpts = cloneLaunchOpts(baseOpts);
-    try {
-      return await chromium.launch(firstTryOpts);
-    } catch (firstErr) {
-      console.warn('[WARN]', 'chromium-extra launch failed, retrying with plain playwright.chromium', firstErr);
-      const fallbackOpts = cloneLaunchOpts(baseOpts);
-      return await playwright.chromium.launch(fallbackOpts);
-    }
+    const plainOpts = cloneLaunchOpts(baseOpts);
+    return await launchWithFallback(
+      () => chromium.launch(firstTryOpts),
+      () => playwright.chromium.launch(plainOpts)
+    );
   };
 
   let browser;
