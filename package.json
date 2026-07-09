@@ -30,7 +30,7 @@
     "lint": "biome check --error-on-warnings ."
   },
   "dependencies": {
-    "@playwright/browser-chromium": "^1.60.0",
+    "@playwright/browser-chromium": "^1.61.1",
     "automated-gameplay-transmitter": "^0.6.4",
     "bun-plugin-tailwind": "^0.1.2",
     "hono": "4.12.28",
