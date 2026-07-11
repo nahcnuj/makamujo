@@ -5,12 +5,12 @@
 | **方針** | 用語の意味と、機能の境界を先に決めてから実装する |
 | **制約** | 動きを変えるときは、先に基準テストを直す |
 
-詳細な設計:
+詳細:
 
 - 配信エージェント → [domain-model-redesign.md](./domain-model-redesign.md)
 - 管理コンソール → [console-domain-model.md](./console-domain-model.md)
 
-設計メモは `architecture/` に置く。`docs/` はサイト用の静的ファイル専用。
+設計メモは `architecture/` のみ。`docs/` はサイト用の静的ファイル専用。
 
 ---
 
@@ -22,7 +22,7 @@
 |----------|------|
 | ゲームを遊ぶ | ブラウザを自動操作する |
 | 話す | 文章を作って読み上げる |
-| コメントに反応する | 外から来たコメントを学習し、話題にする |
+| コメントに反応する | ニコ生から取ったコメントを学習し、話題にする |
 | 状態を見せる | 配信中かどうか・履歴などを画面と管理画面に出す |
 | 運用できる | 起動・停止・ログイン・再起動ができる |
 
@@ -32,17 +32,16 @@
 
 ## 2. 機能の分かれ方
 
-アプリを大きく次のまとまりに分ける。
-
 ```mermaid
 flowchart LR
   subgraph External["外の世界"]
-    Comments["コメントを送るソフト"]
+    Nico["ニコニコ生放送"]
     Game["ゲーム用ブラウザ"]
     Operator["運用する人"]
   end
 
   subgraph Agent["配信エージェント"]
+    Ingress["ニコ生コメント取得"]
     Session["内部の状態"]
     CommentsLogic["コメント処理"]
     Silence["黙るか話すか"]
@@ -60,7 +59,8 @@ flowchart LR
     AdminUI["管理画面の UI"]
   end
 
-  Comments --> CommentsLogic
+  Nico --> Ingress
+  Ingress --> CommentsLogic
   Game <--> Agent
   CommentsLogic --> Session
   Silence --> Session
@@ -75,51 +75,68 @@ flowchart LR
 
 | まとまり | やること | やらないこと |
 |----------|----------|--------------|
-| **配信エージェント** | コメント処理、黙る／話す、発話、内部状態、外に出すデータの組み立て | 管理画面のログインや HTML レイアウト |
-| **管理コンソール** | 誰が入るか、何をどう並べて見せるか、配信側 API への中継 | コメント処理や「黙るか」の規則そのもの |
+| **配信エージェント** | ニコ生からのコメント取得、黙る／話す、発話、内部状態、外に出すデータの組み立て | 管理画面のログインや HTML |
+| **管理コンソール** | 誰が入るか、表示の組み立て、配信 API への中継 | コメント処理や沈黙の規則そのもの |
 | **画面** | 受け取った状態の表示 | ビジネス規則の発明 |
 | **ゲーム用ブラウザ** | 画面操作と状態の供給（別プロセス） | トークや沈黙の判断 |
 
-約束:
-
-1. 管理コンソールは、配信エージェントの **外向けのデータだけ** を見る。内部の生の状態オブジェクトは共有しない。
-2. コメントの意味・黙るか・返信の相手は、配信エージェント側の言葉で決める。
-3. ゲームとのやりとりはブラウザまわりのコードに閉じる。
+1. 管理コンソールは配信エージェントの **外向けのデータだけ** を見る。  
+2. コメントの意味・沈黙・返信相手は配信エージェント側で決める。  
+3. ゲームとのやりとりはブラウザまわりに閉じる。
 
 ---
 
-## 3. 用語
+## 3. コメント（本番契約）
+
+本番のコメント経路は次で確定する（構造は domain 分割、振る舞いは本番向け）。
+
+| 経路 | 仕様 |
+|------|------|
+| **本線** | プロセス内のニコ生クライアント（`composition/niconamaCommentIngress` → `lib/niconamaCommentClient`）。起動後に遅延 start・リトライ |
+| **`POST /` / `PUT /`** | **常に 404**。外部 HTTP でのコメント列投入は使わない |
+
+| 環境変数 | 意味 |
+|----------|------|
+| `NICONAMA_WATCH_URL` | 視聴 URL |
+| `NICONAMA_USER_DATA_DIR` | Playwright プロファイル（既定 `./playwright/.auth/`） |
+| `CHROMIUM_EXECUTABLE_PATH` | 任意。未設定なら同梱 Chromium |
+| `NICONAMA_START_DELAY_MS` | 起動遅延（既定 350） |
+| `NICONAMA_START_MAX_RETRIES` | リトライ回数。`<1` は起動しない（fatal にしない、CI 用） |
+| `NICONAMA_DISABLE=1` | クライアント無効（ローカル・一部テスト） |
+| `DEBUG_NICONAMA_COMMENTS=1` | コメント本文をログ |
+
+コメント反応のテストは単体・クライアント lifecycle・（任意）ライブ e2e に置き、**HTTP PUT に依存しない**。
+
+---
+
+## 4. 用語
 
 | 日本語 | コード上の名前の目安 | 意味 |
 |--------|----------------------|------|
 | 番組 / 配信 | Program / Stream / Live | いまの生放送 |
-| コメント | Comment | 視聴者やシステムの一言。外からアプリに入れる |
-| コメント投入 | — | HTTP などでコメントの列をプロセスに渡すこと |
+| コメント | Comment | 視聴者やシステムの一言 |
+| ニコ生コメント取得 | NiconamaCommentClient | ニコ生からコメントを取るプロセス内クライアント |
 | コメント処理の流れ | CommentPipeline | 数え方・学習・返信相手の決め方 |
 | 沈黙 / 発話可能 | silence / speechable / canSpeak | いま話してよいか |
-| 発話 | Speech | 読み上げる文。履歴に残りうる |
-| 内部の配信状態 | （エージェント内部） | エージェントが持つ live / 終了とメタ情報 |
-| 公開する配信状態 | PublishedStreamPayload | 画面や API が返す形（`niconama` など） |
+| 発話 | Speech | 読み上げる文 |
+| 内部の配信状態 | （エージェント内部） | live / 終了とメタ情報 |
+| 公開する配信状態 | PublishedStreamPayload | SSE/WS/`/api/meta` が返す形 |
 | 返信先コメント | replyTargetComment | いまの発話が反応しているコメント |
 | 内部状態の置き場 | AgentSession | 配信エージェントが状態をまとめて持つ場所 |
-| 外側サーバ | — | インターネット向け HTTPS（本番では IP 制限とパスワード） |
+| 外側サーバ | — | インターネット向け HTTPS（本番は IP 制限とパスワード） |
 | 内側のコンソール | — | 127.0.0.1 だけで動く管理画面本体 |
-| 表示の組み立て | Status plan | 公開データから「何をどの順で出すか」を決める処理 |
-
-言葉の意味を変えるときは、コード名・テスト・画面文言も一緒に直す。
+| 表示の組み立て | Status plan | 公開データから何をどの順で出すか |
 
 ---
 
-## 4. 状態は誰が持つか
+## 5. 状態は誰が持つか
 
 ```text
-操作（コメント投入・onAir など）
-        ↓ 書き込み
-   内部状態（AgentSession）
-        ↓ 組み立てて公開
-   公開する配信状態（API / SSE / WebSocket）
-        ↓
-   配信画面・管理画面の表示
+ニコ生クライアント → コメント処理 → AgentSession（書き込み）
+                                      ↓
+                         公開する配信状態（組み立て）
+                                      ↓
+                         配信画面・管理画面
 ```
 
 | もの | 誰が持つか |
@@ -127,36 +144,35 @@ flowchart LR
 | コメント番号・最終コメント時刻など | 配信エージェントの内部状態 |
 | 黙るかの判断材料 | 同上 + 純粋な判定関数 |
 | 読み上げ待ち | 発話キューと音声出力 |
-| API に載る JSON | その都度組み立てる（内部状態の丸写しではない） |
+| API に載る JSON | その都度組み立てる |
 | 管理画面の各行 | 公開 JSON を入力にした表示用の組み立て |
-| 管理画面パスワード | 設定（環境変数やファイル）。配信ロジックではない |
-
-内部用の形と、外に出す形はわざと違う。変換は「公開用に組み立てる」処理に閉じる。
+| 管理画面パスワード | 設定（環境変数やファイル） |
 
 ---
 
-## 5. コードの置き場所
+## 6. コードの置き場所
 
 | 関心 | 置き場所 | 注意 |
 |------|----------|------|
 | 副作用のない規則 | `lib/domain/**` | ファイル I/O やネットをしない |
 | 内部状態をいじる処理 | `lib/application/**` | 外とのやりとりは引数で渡す |
 | 外から見たエージェント API | `lib/Agent` | 入口をむやみに増やさない |
+| ニコ生コメント取得の配線 | `composition/niconamaCommentIngress.ts` | 起動・停止・リトライ |
+| ニコ生クライアント本体 | `lib/niconamaCommentClient*.ts` | 単体テストは隣の `.test.ts` |
 | プロセスの配線 | `composition/**`, `index.ts` | ここに規則を書かない |
-| 管理コンソールの起動・認証 | `console/index.ts` | ドメイン関数をここから再公開しない |
-| 管理画面 UI | `console/src/**` | テスト専用フォルダを import しない |
+| 管理コンソールの起動・認証 | `console/index.ts` | access を再 export しない |
+| 管理画面 UI | `console/src/**` | `tests/` を import しない |
 | 配信画面 UI | `src/**` | 公開された状態を表示する |
-| HTTP の入口 | `routes/**` | 薄く保つ |
-
-`index.ts` や composition に、コメント処理の分岐や「黙るか」の意味、管理画面の行順の発明を書かない。
+| HTTP の入口 | `routes/**`、ルート `POST`/`PUT /` は **404** | |
 
 ---
 
-## 6. 動かし方の見取り図
+## 7. 動かし方の見取り図
 
 ```mermaid
 flowchart TB
-  HTTP["HTTP でコメント投入"] --> Root["index.ts など"]
+  Nico["ニコ生"] --> Ingress["niconamaCommentIngress"]
+  Ingress --> Root["index.ts + composition"]
   Root --> Facade["MakaMujo"]
   Facade --> App["application"]
   App --> Dom["domain"]
@@ -166,19 +182,6 @@ flowchart TB
   Loop --> Out
   Loop --> Plan["表示の組み立て"]
 ```
-
-### コメントの入れ方（本番）
-
-確定仕様は [integration-spec.md](./integration-spec.md)。
-
-| 経路 | 仕様 |
-|------|------|
-| **本線** | プロセス内ニコ生クライアント（`composition/niconamaCommentIngress`） |
-| **HTTP `POST`/`PUT /`** | **404**（`origin/main` と同じ。外部 HTTP 投入は廃止） |
-
-- 無効化: `NICONAMA_DISABLE=1`
-- 起動しない（fatal にしない）: `NICONAMA_START_MAX_RETRIES=0`（CI）
-- 設定: `NICONAMA_WATCH_URL`、`NICONAMA_USER_DATA_DIR`、`CHROMIUM_EXECUTABLE_PATH`（任意）
 
 管理コンソール（本番）:
 
@@ -190,44 +193,46 @@ flowchart TB
 
 ---
 
-## 7. 壊してはいけないテスト
+## 8. 壊してはいけないテスト
 
 | 領域 | テストの場所 |
 |------|----------------|
-| コメント処理・発話可能・公開の組み立て | `lib/Agent/index.test.ts`、`lib/domain/**` など |
-| コンソールの入場・表示・SSE の切り出し | `lib/domain/console/*.test.ts` |
-| コンソール本体・中継 | `tests/integration/console/**` など |
-| ブラウザの起動パス | `lib/Browser/*` |
+| コメント処理・発話可能・公開の組み立て | `lib/Agent/index.test.ts`、`lib/domain/**` |
+| ニコ生クライアント | `lib/niconamaCommentClient*.test.ts`、`tests/integration/niconamaCommentClient.lifecycle.test.ts` |
+| コメント取得の配線 | `composition/niconamaCommentIngress.test.ts` |
+| コンソール | `lib/domain/console/*.test.ts`、`tests/integration/console/**` |
+| ルート `POST`/`PUT /` | e2e / integration で **404** を期待 |
 
-規則や API の形を変えるときは、設計メモとこれらのテストを先に直す。
+単体テストは実装の隣に `*.test.ts`。統合は `tests/integration/`。e2e は `tests/e2e/`。
 
 ---
 
-## 8. やらないこと
+## 9. やらないこと
 
 | やらないこと | 理由 |
 |--------------|------|
-| ニコ生クライアントを必須にする | コメント投入は外からで足りる。本体を膨らませない |
+| `POST`/`PUT /` でコメントを受け直す | 本番で廃止済み。再び二重経路になる |
 | 管理コンソールが内部状態を直接いじる | 境界が壊れる |
 | 全部を一つの巨大クラスに戻す | 直しにくくなる |
-| 黙る秒数や定型文を、リファクタのついでに変える | 仕様変更は別件 |
+| system Chromium を既定にする | クラッシュの原因になった |
+| 黙る秒数や定型文をリファクタのついでに変える | 仕様変更は別件 |
 
 ---
 
-## 9. 起動・デプロイ（短い）
+## 10. 起動・デプロイ
 
 | 項目 | 内容 |
 |------|------|
+| 本番 | `bootstrap.ts`（console 抑制）→ app。systemd と `make install` |
 | 開発 | `bin/start` / `bin/stop` |
-| 本番 | systemd と `make install`（パスは install 時に埋める） |
-| ブラウザ | 原則 Playwright 同梱版。lock は Singleton* のみ。古い `playwright-*` 一時ディレクトリは起動時に削除し、セッション用はプロセス終了時に削除 |
+| ブラウザ | 同梱 Chromium 既定。lock は Singleton* のみ |
 | 確認の順 | `typecheck` → `lint` → `test` → `test:integration` |
 
-手順の詳細は `etc/systemd/README.md`。
+手順の詳細は `etc/systemd/README.md`。診断用に `scripts/list-niconama-comments.ts` などがある（アプリ必須ではない）。
 
 ---
 
-## 10. 変更の進め方
+## 11. 変更の進め方
 
 1. 用語は合っているか  
 2. どのまとまり（配信 / コンソール）の話か  

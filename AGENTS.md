@@ -20,7 +20,7 @@
 
 その他のディレクトリは人間向けで、あなたが参照する必要はありません。
 ドメイン再設計・`MakaMujo` 分割・配信状態ペイロード変更では、先に `architecture/domain-model-redesign.md` の契約（CommentPipeline・沈黙ポリシー・PublishedStreamPayload）と `architecture/overview.md` を確認し、振る舞いを変えないこと。
-コメントの本番本線はプロセス内ニコ生クライアント（`composition/niconamaCommentIngress`）。`POST`/`PUT /` は 404（origin/main と同じ）。無効化は `NICONAMA_DISABLE=1`。統合仕様は `architecture/integration-spec.md`。
+コメントの本番本線はプロセス内ニコ生クライアント（`composition/niconamaCommentIngress`）。`POST`/`PUT /` は 404。無効化は `NICONAMA_DISABLE=1`。詳細は `architecture/overview.md`。
 
 ## 利用できるコマンド
 このプロジェクトはBunを利用しています。
