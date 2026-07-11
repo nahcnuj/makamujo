@@ -1,4 +1,4 @@
-# 馬可無序 (makamujo) `legacy` ブランチ: ドメインモデル駆動による変更容易性再設計
+# 馬可無序 (makamujo): ドメインモデル駆動による変更容易性再設計
 
 | 項目 | 内容 |
 |------|------|
@@ -6,7 +6,7 @@
 | **Author** | (placeholder) |
 | **Date** | 2026-07-11 |
 | **Status** | Approved（Rev.3）; Phase A/B 実装済; Phase C AGT `./agent` 対応 |
-| **Branch / HEAD** | `legacy` @ `2a12820`（文書執筆時） |
+| **Canonical branch** | `main`（全体像は [main-target-state.md](./main-target-state.md)） |
 | **Runtime** | Bun 1.3.x, TypeScript strict |
 | **Key dependency** | `automated-gameplay-transmitter` ^0.6.4 |
 | **Constraint** | **観測可能な振る舞いを意図的に変更しない**（behavior-preserving refactor + characterization / regression tests） |

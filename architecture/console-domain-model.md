@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |------|------|
 | **Status** | Implemented (initial slice) |
-| **Branch** | `legacy` 上の継続リファクタ |
+| **Canonical branch** | `main`（全体像は [main-target-state.md](./main-target-state.md)） |
 | **Constraint** | 観測可能な振る舞いを変えない |
 
 > `docs/` は静的サイト資産専用。本ドキュメントは `architecture/` に置く。
