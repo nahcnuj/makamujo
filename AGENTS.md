@@ -13,6 +13,9 @@
 - `/src` - 配信画面アプリのフロントエンド（React）
 - `/tests` - テストコード（単体テストを除く）
 - `/architecture` - ドメインモデル・契約・リファクタ計画（エージェントは変更容易性作業時に参照すること）。索引は `architecture/README.md`
+- `/composition` - 配信サーバ composition root 補助（broadcast / agent wiring / idle speech timer）
+- `/lib/domain` - 純関数ポリシー（broadcasting / comments / speech / publication）
+- `/lib/application` - アプリケーション層（例: SpeechQueue）
 - `/docs` - ランディング等の静的サイト資産（設計 Markdown は置かない）
 
 その他のディレクトリは人間向けで、あなたが参照する必要はありません。

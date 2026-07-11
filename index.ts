@@ -5,21 +5,40 @@
 // and initialization succeed.
 import { serve } from "bun";
 import { Hono } from "hono";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 // Use the global `setInterval` timer instead of the Node
 // `timers/promises` async iterator. The async iterator can behave
 // inconsistently across runtimes; using a classic timer keeps the
 // process alive reliably.
 import { parseArgs } from "node:util";
+import {
+  broadcastCurrentPayload,
+  broadcastToWsClients,
+  createSseStream as createSseStreamImpl,
+  sseBroadcast,
+  type WsLike,
+} from "./composition/broadcast";
+import {
+  createFallbackAgent,
+  persistTalkModel,
+  tryCreateExternalAgentApi,
+} from "./composition/agentWiring";
+import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
 import { startConsoleServer } from "./console/index";
+import {
+  assemblePublishedPayload,
+  attachReplyTargetToPublished,
+  extractMetaPostBody,
+  GENERATED_SPEECH_HISTORY_SSE_SIZE,
+} from "./lib/domain/publication/assemblePublishedPayload";
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
+import { normalizePublishedStreamState } from "./lib/streamState";
+import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
 import * as index from "./routes/index";
 import * as speechHistoryRoute from "./routes/api/speech-history";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
 import { handleCatchAll } from "./src/frontendServer";
-import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
-import { normalizePublishedStreamState } from "./lib/streamState";
 
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 process.on('SIGINT', signalHandler.bind(null, { exit: true }));
@@ -114,103 +133,33 @@ const streamer = new MakaMujo(model, tts);
 let lastPublishedStreamState: unknown = undefined;
 let currentSpeechState = { speech: '', silent: false };
 // WebSocket clients connected to the broadcasting server.
-const wsClients = new Set<any>();
+const wsClients = new Set<WsLike>();
 
 // Server-Sent Events (SSE) clients: store controller objects so we can
 // push `data: ...\n\n` frames to each connected client.
 const sseClients = new Set<ReadableStreamDefaultController<string>>();
 
-/**
- * Create a ReadableStream that registers its controller in `sseClients` and
- * removes it when the client disconnects (cancel) or when the handler rejects.
- * Centralising the creation avoids duplicating the closure-capture pattern.
- */
-const createSseStream = (label: string) => {
-  let ctl: ReadableStreamDefaultController<string> | undefined;
-  return new ReadableStream<string>({
-    start(controller) {
-      try { console.log(`[INFO] SSE client connected (${label})`); } catch { }
-      ctl = controller;
-      sseClients.add(controller);
-      try { controller.enqueue(`data: ${JSON.stringify(getCurrentStreamPayload())}\n\n`); } catch { }
-    },
-    cancel() { if (ctl) { try { sseClients.delete(ctl); } catch { } ctl = undefined; } },
-  });
-};
+const createSseStream = (label: string) =>
+  createSseStreamImpl(label, sseClients, getCurrentStreamPayload);
 
-const sseBroadcast = (payload: unknown) => {
-  if (sseClients.size === 0) return;
-  const frame = `data: ${JSON.stringify(payload)}\n\n`;
-  try { console.log('[INFO] sseBroadcast -> sseClients count=', sseClients.size); } catch { }
-  for (const controller of Array.from(sseClients)) {
-    try {
-      // Evict clients under backpressure (desiredSize <= 0) to avoid blocking
-      // the event loop when a slow or unread connection fills its TCP send buffer.
-      // null means the stream is already closed/errored; treat that like healthy.
-      if ((controller.desiredSize ?? 1) <= 0) {
-        try { controller.close(); } catch { }
-        sseClients.delete(controller);
-        continue;
-      }
-      controller.enqueue(frame);
-    } catch (err) {
-      try { controller.close(); } catch { }
-      try { sseClients.delete(controller); } catch { }
-    }
-  }
-};
-
-const broadcastToWsClients = (payload: unknown) => {
-  const message = JSON.stringify(payload);
-  for (const ws of Array.from(wsClients)) {
-    try {
-      ws.send(message);
-    } catch (err) {
-      try { ws.close(); } catch { }
-      try { wsClients.delete(ws); } catch { }
-    }
-  }
-};
-
-const broadcastCurrentPayload = (context: string) => {
-  try {
-    const payload = getCurrentStreamPayload();
-    sseBroadcast(payload);
-    broadcastToWsClients(payload);
-  } catch (err) {
-    console.warn(`[WARN] failed to broadcast to clients (${context}):`, err instanceof Error ? err.message : String(err));
-  }
-};
-
+const broadcastCurrentPayloadLocal = (context: string) =>
+  broadcastCurrentPayload(context, getCurrentStreamPayload, sseClients, wsClients);
 
 const getCurrentStreamPayload = () => {
-  const agentStreamState = agent.getStreamState?.();
-  const streamState = (lastPublishedStreamState === undefined || lastPublishedStreamState === null)
-    ? agentStreamState
-    : lastPublishedStreamState;
-  const normalizedStreamState = normalizePublishedStreamState(streamState);
-  const base = normalizedStreamState && typeof normalizedStreamState === 'object' ? (normalizedStreamState as any) : {};
-  const normalizedAgentStreamState = normalizePublishedStreamState(agentStreamState);
-  const agentBase = normalizedAgentStreamState && typeof normalizedAgentStreamState === 'object'
-    ? (normalizedAgentStreamState as any)
-    : {};
-  const replyTargetComment = base.replyTargetComment && typeof base.replyTargetComment === 'object'
-    ? base.replyTargetComment
-    : agentBase.replyTargetComment && typeof agentBase.replyTargetComment === 'object'
-      ? agentBase.replyTargetComment
-      : undefined;
-
-  return {
-    niconama: base.niconama ?? {},
-    canSpeak: base.canSpeak ?? streamer.canSpeak,
-    currentGame: base.currentGame ?? streamer.currentGame ?? null,
-    nGram: base.nGram ?? streamer.currentNGramSize,
-    nGramRaw: base.nGramRaw ?? streamer.currentNGramSizeRaw,
-    speech: base.speech ?? agent.getSpeech(),
-    speechHistory: (Array.isArray(base.speechHistory) ? base.speechHistory : generatedSpeechHistory).slice(0, GENERATED_SPEECH_HISTORY_SSE_SIZE),
-    replyTargetComment,
-    commentCount: base.commentCount ?? streamer.streamState?.meta?.total?.comments,
-  } as const;
+  return assemblePublishedPayload({
+    lastPublished: lastPublishedStreamState,
+    agentStreamState: agent.getStreamState?.(),
+    streamer: {
+      canSpeak: streamer.canSpeak,
+      currentGame: streamer.currentGame,
+      currentNGramSize: streamer.currentNGramSize,
+      currentNGramSizeRaw: streamer.currentNGramSizeRaw,
+      commentCount: streamer.streamState?.meta?.total?.comments,
+    },
+    speechState: agent.getSpeech(),
+    history: generatedSpeechHistory,
+    historySseSize: GENERATED_SPEECH_HISTORY_SSE_SIZE,
+  });
 };
 
 const normalizeSpeechText = (speech: unknown): string | undefined => {
@@ -233,39 +182,23 @@ const normalizeSpeechText = (speech: unknown): string | undefined => {
   return undefined;
 };
 
-let agent: any = {
-  setSpeech: (text: string) => { currentSpeechState = { speech: text, silent: false }; },
-  getSpeech: () => currentSpeechState,
-  getGame: () => null,
-  getStreamState: () => lastPublishedStreamState,
-  publishStreamState: (data: unknown) => { lastPublishedStreamState = data; },
-  postComments: (_: unknown) => { },
-};
+let agent: any = createFallbackAgent(
+  () => lastPublishedStreamState,
+  (data) => { lastPublishedStreamState = data; },
+  () => currentSpeechState,
+  (state) => { currentSpeechState = state; },
+);
 
 // Attempt to dynamically load the external agent API. This avoids module
 // evaluation side-effects at import time (such as binding to IPC paths)
 // which can cause transient failures in CI and local test runs.
-(async () => {
-  try {
-    const mod = await import("automated-gameplay-transmitter");
-    if (typeof mod.createAgentApi === 'function') {
-      try {
-        const externalAgent = mod.createAgentApi(streamer);
-        agent = externalAgent;
-        console.info('[INFO] external agent API initialized');
-      } catch (err) {
-        console.warn('[WARN] createAgentApi threw, keeping in-memory fallback:', err instanceof Error ? err.message : String(err));
-      }
-    } else {
-      console.warn('[WARN] automated-gameplay-transmitter did not export createAgentApi; using fallback agent');
-    }
-  } catch (err) {
-    console.warn('[WARN] dynamic import failed, continuing with in-memory fallback agent:', err instanceof Error ? err.message : String(err));
+void tryCreateExternalAgentApi(streamer).then((external) => {
+  if (external !== undefined) {
+    agent = external;
   }
-})();
+});
 // Keep a larger buffer in memory for pagination while limiting the SSE payload size.
 const GENERATED_SPEECH_HISTORY_BUFFER_SIZE = 200;
-const GENERATED_SPEECH_HISTORY_SSE_SIZE = 20;
 const generatedSpeechHistory: SpeechHistoryEntry[] = [];
 let generatedSpeechHistorySequence = 0;
 
@@ -296,7 +229,7 @@ streamer.onSpeech(async (event) => {
   }
   agent.setSpeech(speechText);
   // Notify console clients immediately when a new utterance starts.
-  broadcastCurrentPayload('onSpeech');
+  broadcastCurrentPayloadLocal('onSpeech');
 });
 
 streamer.onSpeechComplete(async () => {
@@ -304,7 +237,7 @@ streamer.onSpeechComplete(async () => {
     clearTimeout(clearSpeechTimer);
   }
   // Notify console clients that the utterance has finished.
-  broadcastCurrentPayload('onSpeechComplete');
+  broadcastCurrentPayloadLocal('onSpeechComplete');
   clearSpeechTimer = setTimeout(() => {
     const speechState = agent.getSpeech();
     if (!speechState.silent) {
@@ -312,13 +245,13 @@ streamer.onSpeechComplete(async () => {
     }
     clearSpeechTimer = undefined;
     // Notify console clients that the displayed speech has been cleared.
-    broadcastCurrentPayload('onSpeechClear');
+    broadcastCurrentPayloadLocal('onSpeechClear');
   }, 1000);
 });
 
 // Notify console clients when game state changes via browser IPC.
 streamer.onGameStateChange(() => {
-  broadcastCurrentPayload('onGameStateChange');
+  broadcastCurrentPayloadLocal('onGameStateChange');
 });
 
 // Defer starting the stream playback until after the HTTP servers are up.
@@ -357,20 +290,7 @@ const apiApp = new Hono()
         return Response.json({}, { status: 400 });
       }
 
-      const replyTargetComment = (() => {
-        if (body && typeof body === 'object' && 'replyTargetComment' in body) {
-          return (body as any).replyTargetComment;
-        }
-        const nestedData = body && typeof body === 'object' && 'data' in body ? (body as any).data : undefined;
-        if (nestedData && typeof nestedData === 'object' && 'replyTargetComment' in nestedData) {
-          return (nestedData as any).replyTargetComment;
-        }
-        return undefined;
-      })();
-      let published: unknown = body;
-      if (published && typeof published === 'object' && !('type' in published) && 'data' in published) {
-        published = (published as any).data;
-      }
+      let { replyTargetComment, published } = extractMetaPostBody(body);
 
       try {
         agent.publishStreamState?.(published);
@@ -380,13 +300,7 @@ const apiApp = new Hono()
 
       try {
         published = normalizePublishedStreamState(published);
-        if (replyTargetComment !== undefined) {
-          if (published && typeof published === 'object') {
-            (published as any).replyTargetComment = replyTargetComment;
-          } else {
-            published = { replyTargetComment };
-          }
-        }
+        published = attachReplyTargetToPublished(published, replyTargetComment);
       } catch (err) {
         console.warn('[WARN] failed to normalize published stream state:', err instanceof Error ? err.message : String(err));
       }
@@ -398,12 +312,12 @@ const apiApp = new Hono()
       }
 
       try {
-        broadcastToWsClients(getCurrentStreamPayload());
+        broadcastToWsClients(wsClients, getCurrentStreamPayload());
       } catch (err) {
         console.warn('[WARN] failed to broadcast to WebSocket clients:', err instanceof Error ? err.message : String(err));
       }
       try {
-        sseBroadcast(getCurrentStreamPayload());
+        sseBroadcast(sseClients, getCurrentStreamPayload());
       } catch (err) {
         console.warn('[WARN] failed to broadcast to SSE clients:', err instanceof Error ? err.message : String(err));
       }
@@ -555,15 +469,9 @@ const mainApp = new Hono()
       return Response.json({}, { status: 500 });
     }
     agent.postComments(comments);
-    broadcastCurrentPayload('onComment');
+    broadcastCurrentPayloadLocal('onComment');
 
-    if (modelFile) {
-      try {
-        writeFileSync(modelFile, streamer.talkModel.toJSON());
-      } catch (err) {
-        console.warn('[WARN]', 'failed to write model', modelFile, err);
-      }
-    }
+    persistTalkModel(modelFile, () => streamer.talkModel.toJSON());
 
     return Response.json({});
   })
@@ -654,21 +562,8 @@ try {
   console.warn('[WARN] streamer.play failed during startup:', err instanceof Error ? err.message : String(err));
 }
 
-let running = false;
-// Use a classic repeating timer instead of the async iterator-based
-// `setInterval` from `node:timers/promises`. The async iterator can
-// behave inconsistently in some environments; a standard timer keeps
-// the process alive reliably and is sufficient for our needs.
-setInterval(async () => {
-  if (!running && streamer.speechable) {
-    try {
-      running = true;
-      await streamer.speech();
-    } finally {
-      running = false;
-    }
-  }
-}, 1_000);
+// Use a classic repeating timer (composition/idleSpeechTimer) for idle speech.
+startIdleSpeechTimer(streamer, 1_000);
 
 /**
  * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}

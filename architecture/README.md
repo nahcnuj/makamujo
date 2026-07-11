@@ -17,6 +17,18 @@
 3. `CommentApplicationService` 等の大きな分割は Phase B。Phase A 完了後に必要性を判断してよい（浅いモジュール化での停止も正当）。
 4. コード変更時は既存の `lib/Agent/index.test.ts` と設計書の CommentPipeline / `speechable` 順序アルゴリズムをゴールデンとする。
 
+## 実装マップ（Phase A）
+
+| 領域 | パス |
+|------|------|
+| NGram / Silence | `lib/domain/broadcasting/` |
+| Topic / System scripts | `lib/domain/comments/` |
+| 空発話ルール | `lib/domain/speech/` |
+| Publication assemble | `lib/domain/publication/` |
+| SpeechQueue | `lib/application/SpeechQueue.ts` |
+| composition helpers | `composition/` |
+| ファサード | `lib/Agent/index.ts` |
+
 ## 関連
 
 - プロジェクト指示: [`AGENTS.md`](../AGENTS.md)
