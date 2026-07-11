@@ -3,7 +3,8 @@
  * Override with `BROADCASTING_AGENT_API_BASE_URL` when the console and
  * broadcasting app are not co-located in the same runtime.
  */
-const BROADCASTING_AGENT_BASE_URL = process.env.BROADCASTING_AGENT_API_BASE_URL ?? "http://127.0.0.1:7777";
+const BROADCASTING_AGENT_BASE_URL =
+  process.env.BROADCASTING_AGENT_API_BASE_URL ?? "http://127.0.0.1:7777";
 const SPEECH_HISTORY_TIMEOUT_MS = 5_000;
 
 export async function GET(req: Request) {
@@ -16,13 +17,20 @@ export async function GET(req: Request) {
   if (limit !== null) targetUrl.searchParams.set("limit", limit);
 
   const abortController = new AbortController();
-  const timeoutId = setTimeout(() => abortController.abort(), SPEECH_HISTORY_TIMEOUT_MS);
+  const timeoutId = setTimeout(
+    () => abortController.abort(),
+    SPEECH_HISTORY_TIMEOUT_MS,
+  );
 
   try {
-    const response = await fetch(targetUrl.toString(), { signal: abortController.signal });
+    const response = await fetch(targetUrl.toString(), {
+      signal: abortController.signal,
+    });
     if (!response.ok) {
       return Response.json(
-        { error: `failed to fetch /api/speech-history: ${response.status} ${response.statusText}` },
+        {
+          error: `failed to fetch /api/speech-history: ${response.status} ${response.statusText}`,
+        },
         { status: 502 },
       );
     }
@@ -30,12 +38,16 @@ export async function GET(req: Request) {
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
       return Response.json(
-        { error: `failed to fetch /api/speech-history: request timed out (${SPEECH_HISTORY_TIMEOUT_MS}ms)` },
+        {
+          error: `failed to fetch /api/speech-history: request timed out (${SPEECH_HISTORY_TIMEOUT_MS}ms)`,
+        },
         { status: 502 },
       );
     }
     return Response.json(
-      { error: `failed to fetch /api/speech-history: ${error instanceof Error ? error.message : String(error)}` },
+      {
+        error: `failed to fetch /api/speech-history: ${error instanceof Error ? error.message : String(error)}`,
+      },
       { status: 502 },
     );
   } finally {

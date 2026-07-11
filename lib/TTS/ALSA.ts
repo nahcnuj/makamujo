@@ -5,10 +5,7 @@ const execFile = promisify($_);
 
 export const play = async (file: `${string}.wav`) => {
   try {
-    await execFile('aplay', [
-      '-q',
-      file,
-    ]);
+    await execFile("aplay", ["-q", file]);
   } catch {
     // do nothing
   }

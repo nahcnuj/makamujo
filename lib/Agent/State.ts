@@ -1,15 +1,15 @@
 import type { StreamState as AGTStreamState } from "automated-gameplay-transmitter";
 
 export type StreamMeta = {
-  title: string
-  url: string
-  start: number
+  title: string;
+  url: string;
+  start: number;
   total?: {
-    listeners: number
-    gift: number
-    ad: number
-    comments?: number
-  }
+    listeners: number;
+    gift: number;
+    ad: number;
+    comments?: number;
+  };
 };
 
 export type StreamState = AGTStreamState;

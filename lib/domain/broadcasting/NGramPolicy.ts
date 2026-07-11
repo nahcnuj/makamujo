@@ -10,7 +10,7 @@ export const INITIAL_COMMENT_NUMBER = 1;
  */
 export const inferNGramSizeRaw = (commentNumber: number): number => {
   const safeCommentNumber = Math.max(1, commentNumber);
-  return (N_GRAM_LOG_SCALE * Math.log10(safeCommentNumber)) - N_GRAM_LOG_BASELINE;
+  return N_GRAM_LOG_SCALE * Math.log10(safeCommentNumber) - N_GRAM_LOG_BASELINE;
 };
 
 /** Floored n-gram size, at least 1. */
@@ -18,5 +18,7 @@ export const inferNGramSize = (commentNumber: number): number => {
   return Math.max(1, Math.floor(inferNGramSizeRaw(commentNumber)));
 };
 
-export const initialNGramSize = (): number => inferNGramSize(INITIAL_COMMENT_NUMBER);
-export const initialNGramSizeRaw = (): number => inferNGramSizeRaw(INITIAL_COMMENT_NUMBER);
+export const initialNGramSize = (): number =>
+  inferNGramSize(INITIAL_COMMENT_NUMBER);
+export const initialNGramSizeRaw = (): number =>
+  inferNGramSizeRaw(INITIAL_COMMENT_NUMBER);

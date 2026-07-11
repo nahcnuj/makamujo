@@ -1,13 +1,12 @@
-import type { Browser } from "automated-gameplay-transmitter";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
+import type { Browser } from "automated-gameplay-transmitter";
 import type { ViewportSize } from "playwright";
 import playwright from "playwright";
 import { chromium as $_ } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
-
 
 export const chromium = $_.use(StealthPlugin());
 
@@ -24,16 +23,26 @@ export function resolveExecutablePath(provided?: string): string | undefined {
   return undefined;
 }
 
-async function launchWithFallback<T>(extraFn: () => Promise<T>, plainFn: () => Promise<T>): Promise<T> {
+async function launchWithFallback<T>(
+  extraFn: () => Promise<T>,
+  plainFn: () => Promise<T>,
+): Promise<T> {
   try {
     return await extraFn();
   } catch (firstErr) {
-    console.warn('[WARN]', 'chromium-extra launch failed, retrying with plain playwright.chromium', firstErr);
+    console.warn(
+      "[WARN]",
+      "chromium-extra launch failed, retrying with plain playwright.chromium",
+      firstErr,
+    );
     return await plainFn();
   }
 }
 
-function getChromiumLaunchOptions(overrideExecutable: string | undefined, base: any = {}) {
+function getChromiumLaunchOptions(
+  overrideExecutable: string | undefined,
+  base: any = {},
+) {
   const effective = resolveExecutablePath(overrideExecutable);
   const opts = { ...base };
   if (effective) {
@@ -84,7 +93,9 @@ export async function launchPersistentContext(
   cleanupChromiumLockFiles(userDataDir);
 
   const launchOpts = getChromiumLaunchOptions(
-    typeof options.executablePath === "string" ? options.executablePath : undefined,
+    typeof options.executablePath === "string"
+      ? options.executablePath
+      : undefined,
     options,
   );
   const maxRetries = 3;
@@ -95,7 +106,8 @@ export async function launchPersistentContext(
     try {
       return await launchWithFallback(
         () => chromium.launchPersistentContext(userDataDir, launchOpts),
-        () => playwright.chromium.launchPersistentContext(userDataDir, launchOpts),
+        () =>
+          playwright.chromium.launchPersistentContext(userDataDir, launchOpts),
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -105,10 +117,14 @@ export async function launchPersistentContext(
         try {
           const tmpDir = mkdtempSync(join(tmpdir(), "playwright-"));
           cleanupChromiumLockFiles(tmpDir);
-          console.warn("[WARN] userDataDir locked, retrying with temp dir", tmpDir);
+          console.warn(
+            "[WARN] userDataDir locked, retrying with temp dir",
+            tmpDir,
+          );
           return await launchWithFallback(
             () => chromium.launchPersistentContext(tmpDir, launchOpts),
-            () => playwright.chromium.launchPersistentContext(tmpDir, launchOpts),
+            () =>
+              playwright.chromium.launchPersistentContext(tmpDir, launchOpts),
           );
         } catch {
           // fall through to retry / rethrow
@@ -137,23 +153,29 @@ export const create = async (
     height: 720,
   },
 ): Promise<Browser> => {
-  const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '60000', 10);
+  const launchTimeout = Number.parseInt(
+    process.env.CHROMIUM_LAUNCH_TIMEOUT ?? "60000",
+    10,
+  );
 
   const effectiveExecutablePath = resolveExecutablePath(executablePath);
   const launchOpts = getChromiumLaunchOptions(executablePath, {
-    headless: process.env.CHROMIUM_HEADLESS === '1',
+    headless: process.env.CHROMIUM_HEADLESS === "1",
     timeout: launchTimeout,
     // https://peter.sh/experiments/chromium-command-line-switches/
     args: [
-      '--hide-scrollbars',
-      '--window-size=1024,576', // It may be required by `--window-position`.
-      '--window-position=1280,600',
+      "--hide-scrollbars",
+      "--window-size=1024,576", // It may be required by `--window-position`.
+      "--window-position=1280,600",
     ],
   });
 
-  console.log('[INFO] launching browser', effectiveExecutablePath
-    ? `with executablePath=${effectiveExecutablePath}`
-    : 'using Playwright bundled Chromium (no executablePath)');
+  console.log(
+    "[INFO] launching browser",
+    effectiveExecutablePath
+      ? `with executablePath=${effectiveExecutablePath}`
+      : "using Playwright bundled Chromium (no executablePath)",
+  );
 
   const fallbackTimeout = 300000;
 
@@ -167,7 +189,7 @@ export const create = async (
     const plainOpts = cloneLaunchOpts(baseOpts);
     return await launchWithFallback(
       () => chromium.launch(firstTryOpts),
-      () => playwright.chromium.launch(plainOpts)
+      () => playwright.chromium.launch(plainOpts),
     );
   };
 
@@ -175,13 +197,21 @@ export const create = async (
   try {
     browser = await launchWith(launchOpts);
   } catch (err) {
-    if (launchTimeout < fallbackTimeout && err instanceof Error && /Timeout/.test(err.message)) {
-      console.warn('[WARN]', `launch timeout ${launchTimeout}ms exceeded, retrying with ${fallbackTimeout}ms`);
+    if (
+      launchTimeout < fallbackTimeout &&
+      err instanceof Error &&
+      /Timeout/.test(err.message)
+    ) {
+      console.warn(
+        "[WARN]",
+        `launch timeout ${launchTimeout}ms exceeded, retrying with ${fallbackTimeout}ms`,
+      );
       const fallbackOpts = { ...launchOpts, timeout: fallbackTimeout };
       browser = await launchWith(fallbackOpts);
     } else {
       if (err instanceof Error) {
-        err.message = `Failed to launch Chromium. ` +
+        err.message =
+          `Failed to launch Chromium. ` +
           `Make sure you have run "bunx playwright install chromium" (or "playwright install chromium") ` +
           `after updating Playwright. ` +
           `If you want to force a system browser set CHROMIUM_EXECUTABLE_PATH.\n` +
@@ -198,21 +228,22 @@ export const create = async (
 
   const page = await ctx.newPage();
 
-  const cookieclickerUrl = 'https://orteil.dashnet.org/cookieclicker/';
+  const cookieclickerUrl = "https://orteil.dashnet.org/cookieclicker/";
 
   // Close any new tabs (e.g. ad popups) that open in the browser context.
-  ctx.on('page', createPopupPageHandler(page));
+  ctx.on("page", createPopupPageHandler(page));
 
   // If the main page navigates away from Cookie Clicker, redirect it back.
-  page.on('framenavigated', createRedirectToHomeHandler(
-    page.mainFrame(),
-    cookieclickerUrl,
-    (url) => page.goto(url, { waitUntil: 'domcontentloaded' }),
-  ));
+  page.on(
+    "framenavigated",
+    createRedirectToHomeHandler(page.mainFrame(), cookieclickerUrl, (url) =>
+      page.goto(url, { waitUntil: "domcontentloaded" }),
+    ),
+  );
 
   return {
     open: async (url: string) => {
-      await page.goto(url, { waitUntil: 'domcontentloaded' });
+      await page.goto(url, { waitUntil: "domcontentloaded" });
     },
     close: async () => {
       await ctx.close();
@@ -226,18 +257,24 @@ export const create = async (
       const maxAttempts = 5;
       do {
         if (attempts >= maxAttempts) {
-          throw new Error(`clickByText: "${text}" not found or not clickable after ${maxAttempts} attempt(s)`);
+          throw new Error(
+            `clickByText: "${text}" not found or not clickable after ${maxAttempts} attempt(s)`,
+          );
         }
         attempts++;
-        if (await ls.count() > 0) {
-          console.debug('[DEBUG]', 'clickByText targets:', await ls.allInnerTexts());
+        if ((await ls.count()) > 0) {
+          console.debug(
+            "[DEBUG]",
+            "clickByText targets:",
+            await ls.allInnerTexts(),
+          );
           for (const l of await ls.all()) {
             try {
               await l.click({ timeout: 1_000 });
               retry = false;
               break;
             } catch (err) {
-              console.warn('[WARN]', err);
+              console.warn("[WARN]", err);
             }
           }
           if (retry) {
@@ -255,20 +292,24 @@ export const create = async (
     },
 
     fillByRole: async (value, role, selector) => {
-      await page.locator(selector).getByRole(role as any).fill(value);
+      await page
+        .locator(selector)
+        .getByRole(role as any)
+        .fill(value);
     },
 
     evaluate: async (f) => {
-      return await page.evaluate(
-        (fnSource) => {
-          const evaluated = globalThis.eval(`(${fnSource})`) as (document: Document) => ReturnType<typeof f>;
-          return evaluated(document);
-        },
-        f.toString(),
-      );
+      return await page.evaluate((fnSource) => {
+        const evaluated = globalThis.eval(`(${fnSource})`) as (
+          document: Document,
+        ) => ReturnType<typeof f>;
+        return evaluated(document);
+      }, f.toString());
     },
 
-    get url() { return page.url() },
+    get url() {
+      return page.url();
+    },
   } satisfies Browser;
 };
 
@@ -278,10 +319,11 @@ type PageLike = { url(): string; close(): Promise<void> };
  * Returns an event handler for the BrowserContext `page` event that immediately
  * closes any page other than the designated main page (e.g. ad popup tabs).
  */
-export const createPopupPageHandler = (mainPage: PageLike) =>
+export const createPopupPageHandler =
+  (mainPage: PageLike) =>
   async (newPage: PageLike): Promise<void> => {
     if (newPage !== mainPage) {
-      console.warn('[WARN]', 'Closing unexpected new tab:', newPage.url());
+      console.warn("[WARN]", "Closing unexpected new tab:", newPage.url());
       await newPage.close();
     }
   };
@@ -302,17 +344,21 @@ export const createRedirectToHomeHandler = (
   return (frame: FrameLike): void => {
     if (frame !== mainFrame) return;
     const url = frame.url();
-    if (url === 'about:blank') return;
+    if (url === "about:blank") return;
     if (url.startsWith(homeUrl)) {
       isRedirecting = false;
       return;
     }
     if (isRedirecting) return;
     isRedirecting = true;
-    console.warn('[WARN]', 'Main page navigated away from home, redirecting back:', url);
+    console.warn(
+      "[WARN]",
+      "Main page navigated away from home, redirecting back:",
+      url,
+    );
     redirectTo(homeUrl).catch((redirectError) => {
       isRedirecting = false;
-      console.warn('[WARN]', 'Failed to redirect back to home:', redirectError);
+      console.warn("[WARN]", "Failed to redirect back to home:", redirectError);
     });
   };
 };
@@ -330,7 +376,8 @@ type ClickablePageLike = {
  * Returns a function that clicks the first element matching the given ID selector,
  * even when multiple elements in the DOM share the same `id` attribute.
  */
-export const createClickByElementId = (page: ClickablePageLike) =>
+export const createClickByElementId =
+  (page: ClickablePageLike) =>
   async (id: string): Promise<void> => {
     await page.locator(`#${id}`).first().click({ timeout: 5_000 });
   };

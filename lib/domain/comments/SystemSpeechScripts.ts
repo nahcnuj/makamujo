@@ -1,6 +1,7 @@
 /** Fixed system utterance scripts (Comment domain, pure constants + helpers). */
 
-export const CRUISE_QUOTE_START_COMMENT = "「生放送クルーズさん」が引用を開始しました";
+export const CRUISE_QUOTE_START_COMMENT =
+  "「生放送クルーズさん」が引用を開始しました";
 export const STREAM_END_ONE_MINUTE_COMMENT = "配信終了1分前です";
 export const COMMENT_PROMPT_TEXT = "コメントしていってね〜";
 
@@ -29,12 +30,19 @@ export const isAdCompletedComment = (rawComment: string): boolean =>
 
 /** Extract advertiser display name from ad system comment (legacy slice rules). */
 export const extractAdName = (rawComment: string): string => {
-  return rawComment.slice(rawComment.indexOf("】") + "】".length, rawComment.lastIndexOf("さんが"));
+  return rawComment.slice(
+    rawComment.indexOf("】") + "】".length,
+    rawComment.lastIndexOf("さんが"),
+  );
 };
 
-export const formatAdThanks = (name: string): string => `${name}さん、広告ありがとうございます！`;
+export const formatAdThanks = (name: string): string =>
+  `${name}さん、広告ありがとうございます！`;
 
-export const formatGiftThanks = (name: string | undefined, anonymity: boolean): string => {
+export const formatGiftThanks = (
+  name: string | undefined,
+  anonymity: boolean,
+): string => {
   if (anonymity) {
     return "ギフトありがとうございます！";
   }

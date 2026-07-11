@@ -13,7 +13,8 @@ export const findSseBoundary = (buffer: string): SseBoundary | null => {
   const lfIdx = buffer.indexOf("\n\n");
   const crlfIdx = buffer.indexOf("\r\n\r\n");
   if (lfIdx === -1 && crlfIdx === -1) return null;
-  if (lfIdx !== -1 && (crlfIdx === -1 || lfIdx <= crlfIdx)) return { end: lfIdx, length: 2 };
+  if (lfIdx !== -1 && (crlfIdx === -1 || lfIdx <= crlfIdx))
+    return { end: lfIdx, length: 2 };
   return { end: crlfIdx, length: 4 };
 };
 
@@ -28,7 +29,9 @@ export type SseFrameExtractResult = {
  * Split a buffer into zero or more complete SSE frames and leftover incomplete text.
  * Incomplete frames are not included in `frames` (discarded on upstream drop by the proxy).
  */
-export const extractCompleteSseFrames = (buffer: string): SseFrameExtractResult => {
+export const extractCompleteSseFrames = (
+  buffer: string,
+): SseFrameExtractResult => {
   const frames: string[] = [];
   let rest = buffer;
   let boundary = findSseBoundary(rest);
@@ -46,7 +49,9 @@ export const extractCompleteSseFrames = (buffer: string): SseFrameExtractResult 
  * Returns null when the event has no data lines.
  */
 export const extractSseDataPayload = (eventBlock: string): string | null => {
-  const dataLines = eventBlock.split(/\r?\n/).filter((l) => l.startsWith("data:"));
+  const dataLines = eventBlock
+    .split(/\r?\n/)
+    .filter((l) => l.startsWith("data:"));
   if (dataLines.length === 0) return null;
   return dataLines.map((l) => l.replace(/^data:\s?/, "")).join("\n");
 };
@@ -55,7 +60,9 @@ export const extractSseDataPayload = (eventBlock: string): string | null => {
  * Consume buffered SSE text for `forwardSSEEventsToSink`-style sinks:
  * emit data payloads for complete events; keep incomplete tail in buffer.
  */
-export const drainSseDataPayloads = (buffer: string): { payloads: string[]; rest: string } => {
+export const drainSseDataPayloads = (
+  buffer: string,
+): { payloads: string[]; rest: string } => {
   const payloads: string[] = [];
   let rest = buffer;
   // Use same boundary scan as legacy forwardSSEEventsToSink

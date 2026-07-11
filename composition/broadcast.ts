@@ -13,35 +13,66 @@ export const createSseStream = (
   let ctl: SseController | undefined;
   return new ReadableStream<string>({
     start(controller) {
-      try { console.log(`[INFO] SSE client connected (${label})`); } catch { /* ignore */ }
+      try {
+        console.log(`[INFO] SSE client connected (${label})`);
+      } catch {
+        /* ignore */
+      }
       ctl = controller;
       sseClients.add(controller);
-      try { controller.enqueue(`data: ${JSON.stringify(getInitialPayload())}\n\n`); } catch { /* ignore */ }
+      try {
+        controller.enqueue(`data: ${JSON.stringify(getInitialPayload())}\n\n`);
+      } catch {
+        /* ignore */
+      }
     },
     cancel() {
       if (ctl) {
-        try { sseClients.delete(ctl); } catch { /* ignore */ }
+        try {
+          sseClients.delete(ctl);
+        } catch {
+          /* ignore */
+        }
         ctl = undefined;
       }
     },
   });
 };
 
-export const sseBroadcast = (sseClients: Set<SseController>, payload: unknown): void => {
+export const sseBroadcast = (
+  sseClients: Set<SseController>,
+  payload: unknown,
+): void => {
   if (sseClients.size === 0) return;
   const frame = `data: ${JSON.stringify(payload)}\n\n`;
-  try { console.log("[INFO] sseBroadcast -> sseClients count=", sseClients.size); } catch { /* ignore */ }
+  try {
+    console.log("[INFO] sseBroadcast -> sseClients count=", sseClients.size);
+  } catch {
+    /* ignore */
+  }
   for (const controller of Array.from(sseClients)) {
     try {
       if ((controller.desiredSize ?? 1) <= 0) {
-        try { controller.close(); } catch { /* ignore */ }
+        try {
+          controller.close();
+        } catch {
+          /* ignore */
+        }
         sseClients.delete(controller);
         continue;
       }
       controller.enqueue(frame);
     } catch {
-      try { controller.close(); } catch { /* ignore */ }
-      try { sseClients.delete(controller); } catch { /* ignore */ }
+      try {
+        controller.close();
+      } catch {
+        /* ignore */
+      }
+      try {
+        sseClients.delete(controller);
+      } catch {
+        /* ignore */
+      }
     }
   }
 };
@@ -51,14 +82,25 @@ export type WsLike = {
   close: () => void;
 };
 
-export const broadcastToWsClients = (wsClients: Set<WsLike>, payload: unknown): void => {
+export const broadcastToWsClients = (
+  wsClients: Set<WsLike>,
+  payload: unknown,
+): void => {
   const message = JSON.stringify(payload);
   for (const ws of Array.from(wsClients)) {
     try {
       ws.send(message);
     } catch {
-      try { ws.close(); } catch { /* ignore */ }
-      try { wsClients.delete(ws); } catch { /* ignore */ }
+      try {
+        ws.close();
+      } catch {
+        /* ignore */
+      }
+      try {
+        wsClients.delete(ws);
+      } catch {
+        /* ignore */
+      }
     }
   }
 };
@@ -74,6 +116,9 @@ export const broadcastCurrentPayload = (
     sseBroadcast(sseClients, payload);
     broadcastToWsClients(wsClients, payload);
   } catch (err) {
-    console.warn(`[WARN] failed to broadcast to clients (${context}):`, err instanceof Error ? err.message : String(err));
+    console.warn(
+      `[WARN] failed to broadcast to clients (${context}):`,
+      err instanceof Error ? err.message : String(err),
+    );
   }
 };

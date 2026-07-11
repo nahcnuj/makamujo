@@ -34,10 +34,10 @@ declare module "*.png" {
  */
 declare module "automated-gameplay-transmitter/agent" {
   export {
-    createAgentApi,
     type AgentApi,
     type AgentComment,
     type AgentLike,
+    createAgentApi,
     type SpeechState,
   } from "automated-gameplay-transmitter";
 }

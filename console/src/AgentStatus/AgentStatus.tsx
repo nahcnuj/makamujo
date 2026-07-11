@@ -1,32 +1,36 @@
-import { Container } from "../agt-compat";
 import { useCallback, useLayoutEffect, useState } from "hono/jsx";
-import type { AgentStatusSection, AgentStateResponse } from "./types";
+import { Container } from "../agt-compat";
+import { AgentStatusHeader } from "./AgentStatusHeader";
 import {
-  AGENT_STATE_MOCK_NOTICE_MESSAGE,
-  INVALID_AGENT_STATE_RESPONSE_ERROR,
   createMockAgentStateResponse,
-  isAgentStateMockQueryEnabled,
-  shouldUseMockAgentState,
+  INVALID_AGENT_STATE_RESPONSE_ERROR,
   parseAgentStateResponse,
+  shouldUseMockAgentState,
   startAgentStateAutoRefresh,
 } from "./agentStatusState";
+import { formatStreamStartTime } from "./agentStatusUtils";
 import { createAgentStatusSections } from "./createAgentStatusSections";
 import { GameStatusSection } from "./GameStatusSection";
-import { LIVE_DELIVERY_SECTION_TITLE } from "./LiveDeliveryStatusSection";
-import { LiveDeliveryStatusSection } from "./LiveDeliveryStatusSection";
-import { MARKOV_MODEL_SECTION_TITLE } from "./MarkovModelStatusSection";
-import { MarkovModelStatusSection } from "./MarkovModelStatusSection";
-import { AgentStatusHeader } from "./AgentStatusHeader";
-import { formatStreamStartTime } from "./agentStatusUtils";
+import {
+  LIVE_DELIVERY_SECTION_TITLE,
+  LiveDeliveryStatusSection,
+} from "./LiveDeliveryStatusSection";
+import {
+  MARKOV_MODEL_SECTION_TITLE,
+  MarkovModelStatusSection,
+} from "./MarkovModelStatusSection";
+import type { AgentStateResponse, AgentStatusSection } from "./types";
 
 const AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS = "grid-rows-[auto_minmax(0,1fr)]";
 
 export const AgentStatus = () => {
-  const [agentStateResponse, setAgentStateResponse] = useState<AgentStateResponse | null>(null);
+  const [agentStateResponse, setAgentStateResponse] =
+    useState<AgentStateResponse | null>(null);
   const [agentStatusError, setAgentStatusError] = useState<string | null>(null);
   const [lastUpdatedTime, setLastUpdatedTime] = useState("");
   const [isLoadingAgentState, setIsLoadingAgentState] = useState(false);
-  const [isShowingMockAgentState, setIsShowingMockAgentState] = useState(false);
+  const [_isShowingMockAgentState, setIsShowingMockAgentState] =
+    useState(false);
 
   const fetchAgentState = useCallback(async () => {
     setIsLoadingAgentState(true);
@@ -70,8 +74,12 @@ export const AgentStatus = () => {
     let es: EventSource | null = null;
     (async () => {
       const sseUrl = "/console/api/ws";
-      try { (window as any).__sseUrl = sseUrl; } catch {}
-      try { console.log("[TRACE] AgentStatus connecting EventSource ->", sseUrl); } catch {}
+      try {
+        (window as any).__sseUrl = sseUrl;
+      } catch {}
+      try {
+        console.log("[TRACE] AgentStatus connecting EventSource ->", sseUrl);
+      } catch {}
       try {
         es = new EventSource(sseUrl);
       } catch {
@@ -105,7 +113,9 @@ export const AgentStatus = () => {
     })();
 
     return () => {
-      try { es?.close(); } catch {}
+      try {
+        es?.close();
+      } catch {}
     };
   }, [fetchAgentState]);
 
@@ -116,24 +126,32 @@ export const AgentStatus = () => {
     : undefined;
 
   const agentStatusSections = createAgentStatusSections(agentStateResponse);
-  const sectionMap = agentStatusSections.reduce<Partial<Record<AgentStatusSection["title"], AgentStatusSection>>>(
-    (accumulatedSections, section) => {
-      accumulatedSections[section.title] = section;
-      return accumulatedSections;
-    },
-    {},
-  );
+  const sectionMap = agentStatusSections.reduce<
+    Partial<Record<AgentStatusSection["title"], AgentStatusSection>>
+  >((accumulatedSections, section) => {
+    accumulatedSections[section.title] = section;
+    return accumulatedSections;
+  }, {});
   const liveDeliverySection = sectionMap[LIVE_DELIVERY_SECTION_TITLE];
   const markovModelSection = sectionMap[MARKOV_MODEL_SECTION_TITLE];
-  const gameSection = agentStatusSections.find((section) => section.title.includes("プレイ中"));
-  const hasPrimaryColumnSections = liveDeliverySection !== undefined || gameSection !== undefined;
+  const gameSection = agentStatusSections.find((section) =>
+    section.title.includes("プレイ中"),
+  );
+  const hasPrimaryColumnSections =
+    liveDeliverySection !== undefined || gameSection !== undefined;
 
   return (
-    <div className={`mx-auto w-full max-w-7xl h-full min-h-0 text-left grid ${AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS} gap-4`}>
+    <div
+      className={`mx-auto w-full max-w-7xl h-full min-h-0 text-left grid ${AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS} gap-4`}
+    >
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold">
-            <a href="https://live.nicovideo.jp/watch/user/14171889" target="_blank" rel="noopener noreferrer">
+            <a
+              href="https://live.nicovideo.jp/watch/user/14171889"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               馬可無序
             </a>
           </h1>
@@ -143,10 +161,20 @@ export const AgentStatus = () => {
             startTime={streamStartTime}
           />
           <p
-            data-testid={agentStatusError ? "agent-status-error" : "agent-status-last-updated"}
-            className={agentStatusError ? "text-sm text-red-200 whitespace-nowrap" : "text-sm text-emerald-200 whitespace-nowrap"}
+            data-testid={
+              agentStatusError
+                ? "agent-status-error"
+                : "agent-status-last-updated"
+            }
+            className={
+              agentStatusError
+                ? "text-sm text-red-200 whitespace-nowrap"
+                : "text-sm text-emerald-200 whitespace-nowrap"
+            }
           >
-            {agentStatusError ? `取得エラー: ${agentStatusError}` : `最終更新: ${lastUpdatedTime || "未取得"}`}
+            {agentStatusError
+              ? `取得エラー: ${agentStatusError}`
+              : `最終更新: ${lastUpdatedTime || "未取得"}`}
           </p>
         </div>
       </div>
@@ -166,17 +194,29 @@ export const AgentStatus = () => {
         >
           {hasPrimaryColumnSections ? (
             <div className="min-w-0 min-h-0 h-full flex flex-col gap-4 overflow-hidden">
-              {liveDeliverySection ? <LiveDeliveryStatusSection liveDeliveryRows={liveDeliverySection.rows} /> : null}
+              {liveDeliverySection ? (
+                <LiveDeliveryStatusSection
+                  liveDeliveryRows={liveDeliverySection.rows}
+                />
+              ) : null}
               {gameSection ? (
                 <div className="min-h-0 flex-1 overflow-hidden">
-                  <GameStatusSection title={gameSection.title} gameRows={gameSection.rows} className="h-full" />
+                  <GameStatusSection
+                    title={gameSection.title}
+                    gameRows={gameSection.rows}
+                    className="h-full"
+                  />
                 </div>
               ) : null}
             </div>
           ) : null}
           {markovModelSection ? (
-            <div className={`min-w-0 min-h-0 h-full overflow-y-auto${hasPrimaryColumnSections ? " xl:col-start-2" : ""}`}>
-              <MarkovModelStatusSection markovModelRows={markovModelSection.rows} />
+            <div
+              className={`min-w-0 min-h-0 h-full overflow-y-auto${hasPrimaryColumnSections ? " xl:col-start-2" : ""}`}
+            >
+              <MarkovModelStatusSection
+                markovModelRows={markovModelSection.rows}
+              />
             </div>
           ) : null}
         </div>

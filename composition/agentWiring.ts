@@ -24,7 +24,10 @@ export type AgentLikeHost = {
   listen: (comments: any[]) => void;
 };
 
-type CreateAgentApiFn = (agent: AgentLikeHost, initialSpeech?: string) => unknown;
+type CreateAgentApiFn = (
+  agent: AgentLikeHost,
+  initialSpeech?: string,
+) => unknown;
 
 type AgentApiModule = {
   createAgentApi?: CreateAgentApiFn;
@@ -34,10 +37,14 @@ type AgentApiModule = {
  * Load createAgentApi without pulling React UI or Node IPC when the
  * `./agent` export is available (AGT ≥ 0.6.5).
  */
-export const loadCreateAgentApi = async (): Promise<CreateAgentApiFn | undefined> => {
+export const loadCreateAgentApi = async (): Promise<
+  CreateAgentApiFn | undefined
+> => {
   // Prefer side-effect-free entry (Phase C).
   try {
-    const agentMod = await import("automated-gameplay-transmitter/agent") as AgentApiModule;
+    const agentMod = (await import(
+      "automated-gameplay-transmitter/agent"
+    )) as AgentApiModule;
     if (typeof agentMod.createAgentApi === "function") {
       return agentMod.createAgentApi;
     }
@@ -46,7 +53,9 @@ export const loadCreateAgentApi = async (): Promise<CreateAgentApiFn | undefined
   }
 
   try {
-    const rootMod = await import("automated-gameplay-transmitter") as AgentApiModule;
+    const rootMod = (await import(
+      "automated-gameplay-transmitter"
+    )) as AgentApiModule;
     if (typeof rootMod.createAgentApi === "function") {
       return rootMod.createAgentApi;
     }
@@ -69,11 +78,15 @@ export const createFallbackAgent = (
   setSpeechState: (state: { speech: string; silent: boolean }) => void,
   forwardComments?: (comments: unknown[]) => void,
 ): FallbackAgent => ({
-  setSpeech: (text: string) => { setSpeechState({ speech: text, silent: false }); },
+  setSpeech: (text: string) => {
+    setSpeechState({ speech: text, silent: false });
+  },
   getSpeech: () => getSpeechState(),
   getGame: () => null,
   getStreamState: () => getLastPublished(),
-  publishStreamState: (data: unknown) => { setLastPublished(data); },
+  publishStreamState: (data: unknown) => {
+    setLastPublished(data);
+  },
   postComments: (comments: unknown) => {
     if (!forwardComments) return;
     if (Array.isArray(comments)) {
@@ -94,7 +107,9 @@ export const tryCreateExternalAgentApi = async (
   try {
     const createAgentApi = await loadCreateAgentApi();
     if (typeof createAgentApi !== "function") {
-      console.warn("[WARN] automated-gameplay-transmitter did not export createAgentApi; using fallback agent");
+      console.warn(
+        "[WARN] automated-gameplay-transmitter did not export createAgentApi; using fallback agent",
+      );
       return undefined;
     }
     try {
@@ -102,11 +117,17 @@ export const tryCreateExternalAgentApi = async (
       console.info("[INFO] external agent API initialized");
       return externalAgent;
     } catch (err) {
-      console.warn("[WARN] createAgentApi threw, keeping in-memory fallback:", err instanceof Error ? err.message : String(err));
+      console.warn(
+        "[WARN] createAgentApi threw, keeping in-memory fallback:",
+        err instanceof Error ? err.message : String(err),
+      );
       return undefined;
     }
   } catch (err) {
-    console.warn("[WARN] dynamic import failed, continuing with in-memory fallback agent:", err instanceof Error ? err.message : String(err));
+    console.warn(
+      "[WARN] dynamic import failed, continuing with in-memory fallback agent:",
+      err instanceof Error ? err.message : String(err),
+    );
     return undefined;
   }
 };

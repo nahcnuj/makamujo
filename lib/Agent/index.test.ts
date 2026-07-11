@@ -6,20 +6,20 @@ import { MakaMujo, SILENCE_THRESHOLD_MS, type TalkModel, type TTS } from ".";
 let mockCapturedIpcCallback: ((state: any) => any) | undefined;
 const mockSolverControl = { done: false };
 
-mock.module('../Browser/socket', () => ({
+mock.module("../Browser/socket", () => ({
   createReceiver: (cb: (state: any) => any) => {
     mockCapturedIpcCallback = cb;
   },
 }));
 
-mock.module('./games/server', () => ({
+mock.module("./games/server", () => ({
   ServerGames: {
     CookieClicker: {
       solver: () => ({
         next: () =>
           mockSolverControl.done
             ? { done: true as const, value: undefined }
-            : { done: false as const, value: { name: 'noop' } },
+            : { done: false as const, value: { name: "noop" } },
       }),
       sight: () => ({}),
       Component: () => null,
@@ -28,9 +28,9 @@ mock.module('./games/server', () => ({
 }));
 
 const stubTalkModel: TalkModel = {
-  generate: () => '',
+  generate: () => "",
   learn: () => {},
-  toJSON: () => '{}',
+  toJSON: () => "{}",
 };
 
 const stubTts: TTS = {
@@ -38,40 +38,40 @@ const stubTts: TTS = {
 };
 
 const niconamaLive = (total: number) => ({
-  type: 'niconama' as const,
+  type: "niconama" as const,
   data: {
-    title: 'test',
+    title: "test",
     isLive: true,
     startTime: 0,
     total,
     points: { gift: 0, ad: 0 },
-    url: 'https://example.com',
+    url: "https://example.com",
   },
 });
 
 const niconamaOffline = {
-  type: 'niconama' as const,
+  type: "niconama" as const,
   data: {
-    title: 'test',
+    title: "test",
     isLive: false,
     startTime: 0,
     total: 0,
     points: { gift: 0, ad: 0 },
-    url: 'https://example.com',
+    url: "https://example.com",
   },
 };
 
 const viewerComment = {
   data: {
-    comment: 'こんにちは',
+    comment: "こんにちは",
     no: 1,
     anonymity: false,
     hasGift: false,
   },
 };
 
-describe('per-program comment tracking', () => {
-  it('initializes comments to 0 and sets the latest comment number for user comments', () => {
+describe("per-program comment tracking", () => {
+  it("initializes comments to 0 and sets the latest comment number for user comments", () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaLive(10));
 
@@ -81,16 +81,25 @@ describe('per-program comment tracking', () => {
     expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(1);
   });
 
-  it('updates to the latest comment number when new comments arrive', () => {
+  it("updates to the latest comment number when new comments arrive", () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaLive(10));
     agent.listen([viewerComment]);
 
-    agent.listen([{ data: { comment: 'こんにちは', no: 3, anonymity: false, hasGift: false } } as any]);
+    agent.listen([
+      {
+        data: {
+          comment: "こんにちは",
+          no: 3,
+          anonymity: false,
+          hasGift: false,
+        },
+      } as any,
+    ]);
     expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(3);
   });
 
-  it('stores replyTargetComment in the stream state when a comment triggers reply generation', () => {
+  it("stores replyTargetComment in the stream state when a comment triggers reply generation", () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaLive(10));
 
@@ -98,27 +107,48 @@ describe('per-program comment tracking', () => {
 
     const streamState = agent.streamState as any;
     expect(streamState?.replyTargetComment).toBeDefined();
-    expect(streamState.replyTargetComment.text).toBe('こんにちは');
-    expect(typeof streamState.replyTargetComment.pickedTopic).toBe('string');
-    expect(streamState.replyTargetComment.pickedTopic.length).toBeGreaterThan(0);
+    expect(streamState.replyTargetComment.text).toBe("こんにちは");
+    expect(typeof streamState.replyTargetComment.pickedTopic).toBe("string");
+    expect(streamState.replyTargetComment.pickedTopic.length).toBeGreaterThan(
+      0,
+    );
   });
 
-  it('does not count system messages as user comments', () => {
+  it("does not count system messages as user comments", () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaLive(10));
 
-    agent.listen([{ data: { comment: 'system', anonymity: false, hasGift: false, userId: 'onecomme.system' } } as any]);
+    agent.listen([
+      {
+        data: {
+          comment: "system",
+          anonymity: false,
+          hasGift: false,
+          userId: "onecomme.system",
+        },
+      } as any,
+    ]);
     expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(0);
   });
 
-  it('resets comment count when the stream URL changes', () => {
+  it("resets comment count when the stream URL changes", () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaLive(10));
     agent.listen([viewerComment]);
     expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(1);
 
     // Simulate a new stream with a different URL
-    agent.onAir({ type: 'niconama', data: { title: 'test2', isLive: true, startTime: 0, total: 5, points: { gift: 0, ad: 0 }, url: 'https://example.com/other' } });
+    agent.onAir({
+      type: "niconama",
+      data: {
+        title: "test2",
+        isLive: true,
+        startTime: 0,
+        total: 5,
+        points: { gift: 0, ad: 0 },
+        url: "https://example.com/other",
+      },
+    });
     expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(0);
   });
 });
@@ -127,80 +157,80 @@ beforeEach(() => {
   jest.restoreAllMocks();
 });
 
-describe('speechable', () => {
-  it('should be true when no stream state is set', () => {
+describe("speechable", () => {
+  it("should be true when no stream state is set", () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     expect(agent.speechable).toBeTrue();
   });
 
-  it('should be true when stream is offline', () => {
+  it("should be true when stream is offline", () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaOffline);
     expect(agent.speechable).toBeTrue();
   });
 
-  it('should be true when stream is live and listener count just changed', () => {
-    jest.spyOn(Date, 'now').mockReturnValue(0);
+  it("should be true when stream is live and listener count just changed", () => {
+    jest.spyOn(Date, "now").mockReturnValue(0);
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaLive(10));
 
     // listener count just changed, so not stale yet
-    jest.spyOn(Date, 'now').mockReturnValue(SILENCE_THRESHOLD_MS - 1);
+    jest.spyOn(Date, "now").mockReturnValue(SILENCE_THRESHOLD_MS - 1);
     expect(agent.speechable).toBeTrue();
   });
 
-  it('should be false when listener count is stale and no comments have ever been received', () => {
-    jest.spyOn(Date, 'now').mockReturnValue(0);
+  it("should be false when listener count is stale and no comments have ever been received", () => {
+    jest.spyOn(Date, "now").mockReturnValue(0);
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaLive(10));
 
     // listener count is stale and no comment ever received → both stale → false
-    jest.spyOn(Date, 'now').mockReturnValue(SILENCE_THRESHOLD_MS);
+    jest.spyOn(Date, "now").mockReturnValue(SILENCE_THRESHOLD_MS);
     expect(agent.speechable).toBeFalse();
   });
 
-  it('should be true when listener count is stale but a comment was just received', () => {
-    jest.spyOn(Date, 'now').mockReturnValue(0);
+  it("should be true when listener count is stale but a comment was just received", () => {
+    jest.spyOn(Date, "now").mockReturnValue(0);
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaLive(10));
 
-    jest.spyOn(Date, 'now').mockReturnValue(SILENCE_THRESHOLD_MS);
+    jest.spyOn(Date, "now").mockReturnValue(SILENCE_THRESHOLD_MS);
     agent.listen([viewerComment]);
 
     // listener stale but comment just received
     expect(agent.speechable).toBeTrue();
   });
 
-  it('should remain silent when a comment was received long ago and listener count just changed', () => {
-    jest.spyOn(Date, 'now').mockReturnValue(0);
+  it("should remain silent when a comment was received long ago and listener count just changed", () => {
+    jest.spyOn(Date, "now").mockReturnValue(0);
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.listen([viewerComment]);
 
-    jest.spyOn(Date, 'now').mockReturnValue(SILENCE_THRESHOLD_MS);
+    jest.spyOn(Date, "now").mockReturnValue(SILENCE_THRESHOLD_MS);
     // listener count just changed — resets listenersStaleSince
     agent.onAir(niconamaLive(10));
 
     expect(agent.speechable).toBeFalse();
   });
 
-  it('should be false when both listener count and last comment are stale', () => {
-    jest.spyOn(Date, 'now').mockReturnValue(0);
+  it("should be false when both listener count and last comment are stale", () => {
+    jest.spyOn(Date, "now").mockReturnValue(0);
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaLive(10));
     agent.listen([viewerComment]);
 
     // advance past silence threshold
-    jest.spyOn(Date, 'now').mockReturnValue(SILENCE_THRESHOLD_MS);
+    jest.spyOn(Date, "now").mockReturnValue(SILENCE_THRESHOLD_MS);
     expect(agent.speechable).toBeFalse();
   });
 
-  it('should be true again after a new comment arrives following silence', () => {
-    jest.spyOn(Date, 'now').mockReturnValue(0);
+  it("should be true again after a new comment arrives following silence", () => {
+    jest.spyOn(Date, "now").mockReturnValue(0);
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaLive(10));
     agent.listen([viewerComment]);
 
-    jest.spyOn(Date, 'now').mockReturnValue(SILENCE_THRESHOLD_MS);
+    jest.spyOn(Date, "now").mockReturnValue(SILENCE_THRESHOLD_MS);
     expect(agent.speechable).toBeFalse();
 
     // new comment arrives
@@ -208,15 +238,15 @@ describe('speechable', () => {
     expect(agent.speechable).toBeTrue();
   });
 
-  it('prompts once on viewer increase during silence but remains silent', async () => {
-    jest.spyOn(Date, 'now').mockReturnValue(0);
+  it("prompts once on viewer increase during silence but remains silent", async () => {
+    jest.spyOn(Date, "now").mockReturnValue(0);
     const called = jest.fn(async () => {});
     const spyTts: TTS = { speech: called };
     const agent = new MakaMujo(stubTalkModel, spyTts);
     agent.onAir(niconamaLive(10));
     agent.listen([viewerComment]);
 
-    jest.spyOn(Date, 'now').mockReturnValue(SILENCE_THRESHOLD_MS);
+    jest.spyOn(Date, "now").mockReturnValue(SILENCE_THRESHOLD_MS);
     expect(agent.speechable).toBeFalse();
 
     // viewer count changes — should prompt once but remain speechable=false
@@ -227,15 +257,17 @@ describe('speechable', () => {
     expect(called).toHaveBeenCalledTimes(1);
   });
 
-  it('resets prompted flag when direct TTS playback fails and allows speechable', async () => {
-    jest.spyOn(Date, 'now').mockReturnValue(0);
-    const fail = jest.fn(async () => { throw new Error('boom'); });
+  it("resets prompted flag when direct TTS playback fails and allows speechable", async () => {
+    jest.spyOn(Date, "now").mockReturnValue(0);
+    const fail = jest.fn(async () => {
+      throw new Error("boom");
+    });
     const failTts: TTS = { speech: fail };
     const agent = new MakaMujo(stubTalkModel, failTts);
     agent.onAir(niconamaLive(10));
     agent.listen([viewerComment]);
 
-    jest.spyOn(Date, 'now').mockReturnValue(SILENCE_THRESHOLD_MS);
+    jest.spyOn(Date, "now").mockReturnValue(SILENCE_THRESHOLD_MS);
     expect(agent.speechable).toBeFalse();
 
     // viewer count changes — prompt attempted; wait for the speech task
@@ -248,10 +280,10 @@ describe('speechable', () => {
     expect(agent.speechable).toBeTrue();
   });
 
-  it('prompts immediately even when main speech is blocked', async () => {
-    jest.spyOn(Date, 'now').mockReturnValue(0);
+  it("prompts immediately even when main speech is blocked", async () => {
+    jest.spyOn(Date, "now").mockReturnValue(0);
     const called = jest.fn(async (text: string) => {
-      if (text === 'main-block') {
+      if (text === "main-block") {
         return new Promise<void>(() => {});
       }
       return;
@@ -261,29 +293,35 @@ describe('speechable', () => {
     agent.onAir(niconamaLive(10));
     agent.listen([viewerComment]);
 
-    jest.spyOn(Date, 'now').mockReturnValue(SILENCE_THRESHOLD_MS);
+    jest.spyOn(Date, "now").mockReturnValue(SILENCE_THRESHOLD_MS);
     expect(agent.speechable).toBeFalse();
 
     // Start a long-running main speech without awaiting it
-    agent.speech('main-block');
+    agent.speech("main-block");
     // viewer count changes — prompt should be queued (not played) while main speech is pending
     agent.onAir(niconamaLive(11));
     // allow scheduled tasks to run
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(called).toHaveBeenCalledWith('main-block', { additionalHalfTone: 3, speakingRate: 1.2 });
-    expect(called).not.toHaveBeenCalledWith('コメントしていってね〜', { additionalHalfTone: 3, speakingRate: 1.2 });
+    expect(called).toHaveBeenCalledWith("main-block", {
+      additionalHalfTone: 3,
+      speakingRate: 1.2,
+    });
+    expect(called).not.toHaveBeenCalledWith("コメントしていってね〜", {
+      additionalHalfTone: 3,
+      speakingRate: 1.2,
+    });
     expect(agent.speechable).toBeFalse();
   });
 
-  it('clears prompt-flag if prompt playback fails while main speech blocked', async () => {
-    jest.spyOn(Date, 'now').mockReturnValue(0);
+  it("clears prompt-flag if prompt playback fails while main speech blocked", async () => {
+    jest.spyOn(Date, "now").mockReturnValue(0);
     const fail = jest.fn(async (text: string) => {
-      if (text === 'main-block') {
+      if (text === "main-block") {
         return new Promise<void>(() => {});
       }
-      if (text === 'コメントしていってね〜') {
-        return Promise.reject(new Error('boom'));
+      if (text === "コメントしていってね〜") {
+        return Promise.reject(new Error("boom"));
       }
       return;
     });
@@ -292,25 +330,25 @@ describe('speechable', () => {
     agent.onAir(niconamaLive(10));
     agent.listen([viewerComment]);
 
-    jest.spyOn(Date, 'now').mockReturnValue(SILENCE_THRESHOLD_MS);
+    jest.spyOn(Date, "now").mockReturnValue(SILENCE_THRESHOLD_MS);
     expect(agent.speechable).toBeFalse();
 
-    agent.speech('main-block');
+    agent.speech("main-block");
     agent.onAir(niconamaLive(11));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     // With queued behavior the prompt is not played while main speech is pending.
-    expect(fail).not.toHaveBeenCalledWith('コメントしていってね〜');
+    expect(fail).not.toHaveBeenCalledWith("コメントしていってね〜");
     expect(agent.speechable).toBeFalse();
   });
 
-  it('should be true again after stream goes offline following silence', () => {
-    jest.spyOn(Date, 'now').mockReturnValue(0);
+  it("should be true again after stream goes offline following silence", () => {
+    jest.spyOn(Date, "now").mockReturnValue(0);
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaLive(10));
     agent.listen([viewerComment]);
 
-    jest.spyOn(Date, 'now').mockReturnValue(SILENCE_THRESHOLD_MS);
+    jest.spyOn(Date, "now").mockReturnValue(SILENCE_THRESHOLD_MS);
     expect(agent.speechable).toBeFalse();
 
     agent.onAir(niconamaOffline);
@@ -318,8 +356,8 @@ describe('speechable', () => {
   });
 });
 
-describe('speech completion hooks', () => {
-  it('calls onSpeechComplete after speech playback finishes', async () => {
+describe("speech completion hooks", () => {
+  it("calls onSpeechComplete after speech playback finishes", async () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     const speechListener = jest.fn(async () => {});
     const completeListener = jest.fn(async () => {});
@@ -327,16 +365,18 @@ describe('speech completion hooks', () => {
     agent.onSpeech(speechListener);
     agent.onSpeechComplete(completeListener);
 
-    await agent.speech('hello');
+    await agent.speech("hello");
 
-    expect(speechListener).toHaveBeenCalledWith(expect.objectContaining({
-      text: 'hello',
-    }));
+    expect(speechListener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: "hello",
+      }),
+    );
     expect(completeListener).toHaveBeenCalled();
   });
 });
 
-describe('comment response speech', () => {
+describe("comment response speech", () => {
   const comment = (text: string, no: number) => ({
     data: {
       comment: text,
@@ -346,85 +386,93 @@ describe('comment response speech', () => {
     },
   });
 
-  it('calls TTS with topic-generated text when generate returns a non-empty string', async () => {
-    const called = jest.fn(async () => {});
-    const spyTts: TTS = { speech: called };
-    const talkModel: TalkModel = {
-      generate: jest.fn((start) => start === 'こんにちは' ? 'こんにちは、ようこそ。' : ''),
-      learn: () => {},
-      toJSON: () => '{}',
-    };
-    const agent = new MakaMujo(talkModel, spyTts);
-
-    agent.listen([comment('こんにちは', 1)]);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(called).toHaveBeenCalledWith('こんにちは、ようこそ。', expect.anything());
-  });
-
-  it('calls TTS with topic-generated text when generate returns a non-empty object', async () => {
+  it("calls TTS with topic-generated text when generate returns a non-empty string", async () => {
     const called = jest.fn(async () => {});
     const spyTts: TTS = { speech: called };
     const talkModel: TalkModel = {
       generate: jest.fn((start) =>
-        start === 'こんにちは'
-          ? { text: 'こんにちは、ようこそ。', nodes: ['、', 'ようこそ', '。'] }
-          : '',
+        start === "こんにちは" ? "こんにちは、ようこそ。" : "",
       ),
       learn: () => {},
-      toJSON: () => '{}',
+      toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, spyTts);
 
-    agent.listen([comment('こんにちは', 1)]);
+    agent.listen([comment("こんにちは", 1)]);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(called).toHaveBeenCalledWith('こんにちは、ようこそ。', expect.anything());
+    expect(called).toHaveBeenCalledWith(
+      "こんにちは、ようこそ。",
+      expect.anything(),
+    );
   });
 
-  it('does not call TTS when generate returns empty text', async () => {
+  it("calls TTS with topic-generated text when generate returns a non-empty object", async () => {
     const called = jest.fn(async () => {});
     const spyTts: TTS = { speech: called };
     const talkModel: TalkModel = {
-      generate: jest.fn(() => ''),
+      generate: jest.fn((start) =>
+        start === "こんにちは"
+          ? { text: "こんにちは、ようこそ。", nodes: ["、", "ようこそ", "。"] }
+          : "",
+      ),
       learn: () => {},
-      toJSON: () => '{}',
+      toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, spyTts);
 
-    agent.listen([comment('こんにちは', 1)]);
+    agent.listen([comment("こんにちは", 1)]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(called).toHaveBeenCalledWith(
+      "こんにちは、ようこそ。",
+      expect.anything(),
+    );
+  });
+
+  it("does not call TTS when generate returns empty text", async () => {
+    const called = jest.fn(async () => {});
+    const spyTts: TTS = { speech: called };
+    const talkModel: TalkModel = {
+      generate: jest.fn(() => ""),
+      learn: () => {},
+      toJSON: () => "{}",
+    };
+    const agent = new MakaMujo(talkModel, spyTts);
+
+    agent.listen([comment("こんにちは", 1)]);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(called).not.toHaveBeenCalled();
   });
 
-  it('does not call generate a second time when the first generate returns an object result', async () => {
+  it("does not call generate a second time when the first generate returns an object result", async () => {
     const spyTts: TTS = { speech: jest.fn(async () => {}) };
     const generate = jest.fn((start: string | undefined) =>
-      start === 'こんにちは'
-        ? { text: 'こんにちは、ようこそ。', nodes: ['。'] }
-        : '',
+      start === "こんにちは"
+        ? { text: "こんにちは、ようこそ。", nodes: ["。"] }
+        : "",
     );
     const talkModel: TalkModel = {
       generate,
       learn: () => {},
-      toJSON: () => '{}',
+      toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, spyTts);
 
-    agent.listen([comment('こんにちは', 1)]);
+    agent.listen([comment("こんにちは", 1)]);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     // generate should only be called once (for the topic), not a second time with ''
     expect(generate).toHaveBeenCalledTimes(1);
-    expect(generate).toHaveBeenCalledWith('こんにちは', expect.anything());
+    expect(generate).toHaveBeenCalledWith("こんにちは", expect.anything());
   });
 });
 
-describe('comment learning n-gram size', () => {
+describe("comment learning n-gram size", () => {
   const comment = (no: number) => ({
     data: {
-      comment: 'こんにちは',
+      comment: "こんにちは",
       no,
       anonymity: false,
       hasGift: false,
@@ -441,49 +489,49 @@ describe('comment learning n-gram size', () => {
     { no: 5_000, expected: 5 },
     { no: 9_999, expected: 5 },
     { no: 10_000, expected: 6 },
-  ])('generates with n=$expected for comment no=$no', ({ no, expected }) => {
-    const generate = jest.fn(() => '');
+  ])("generates with n=$expected for comment no=$no", ({ no, expected }) => {
+    const generate = jest.fn(() => "");
     const learn = jest.fn();
     const talkModel: TalkModel = {
       generate,
       learn,
-      toJSON: () => '{}',
+      toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, stubTts);
 
     agent.listen([comment(no)]);
 
-    expect(learn).toHaveBeenCalledWith('こんにちは。');
-    expect(generate).toHaveBeenCalledWith('こんにちは', expected);
+    expect(learn).toHaveBeenCalledWith("こんにちは。");
+    expect(generate).toHaveBeenCalledWith("こんにちは", expected);
   });
 
-  it('uses latest inferred n when generating default speech', async () => {
-    const generate = jest.fn(() => '');
+  it("uses latest inferred n when generating default speech", async () => {
+    const generate = jest.fn(() => "");
     const talkModel: TalkModel = {
       generate,
       learn: () => {},
-      toJSON: () => '{}',
+      toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, stubTts);
 
     agent.listen([comment(1_000)]);
     await agent.speech();
 
-    expect(generate).toHaveBeenLastCalledWith('', 4);
+    expect(generate).toHaveBeenLastCalledWith("", 4);
   });
 
-  it('initializes currentNGramSizeRaw from initial comment number', () => {
+  it("initializes currentNGramSizeRaw from initial comment number", () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     expect(agent.currentNGramSizeRaw).toBe(-2);
   });
 
-  it('updates currentNGramSizeRaw from comment number before flooring', () => {
+  it("updates currentNGramSizeRaw from comment number before flooring", () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.listen([comment(5_000)]);
     expect(agent.currentNGramSizeRaw).toBeCloseTo(5.3979400086720375);
   });
 
-  it('does not update n-gram raw state when no is 0', () => {
+  it("does not update n-gram raw state when no is 0", () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     const initialRaw = agent.currentNGramSizeRaw;
 
@@ -492,13 +540,13 @@ describe('comment learning n-gram size', () => {
     expect(agent.currentNGramSizeRaw).toBe(initialRaw);
   });
 
-  it('does not learn comment when no is 0', () => {
-    const generate = jest.fn(() => '');
+  it("does not learn comment when no is 0", () => {
+    const generate = jest.fn(() => "");
     const learn = jest.fn();
     const talkModel: TalkModel = {
       generate,
       learn,
-      toJSON: () => '{}',
+      toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, stubTts);
 
@@ -509,25 +557,30 @@ describe('comment learning n-gram size', () => {
   });
 });
 
-describe('CommentPipeline characterization', () => {
-  it('learns owner comments without no', () => {
+describe("CommentPipeline characterization", () => {
+  it("learns owner comments without no", () => {
     const learn = jest.fn();
-    const generate = jest.fn(() => '');
-    const agent = new MakaMujo({ generate, learn, toJSON: () => '{}' }, stubTts);
+    const generate = jest.fn(() => "");
+    const agent = new MakaMujo(
+      { generate, learn, toJSON: () => "{}" },
+      stubTts,
+    );
 
-    agent.listen([{
-      data: {
-        comment: 'オーナーです',
-        isOwner: true,
-        anonymity: false,
-        hasGift: false,
-      },
-    } as any]);
+    agent.listen([
+      {
+        data: {
+          comment: "オーナーです",
+          isOwner: true,
+          anonymity: false,
+          hasGift: false,
+        },
+      } as any,
+    ]);
 
-    expect(learn).toHaveBeenCalledWith('オーナーです。');
+    expect(learn).toHaveBeenCalledWith("オーナーです。");
   });
 
-  it('system messages refresh lastCommentAt (affects speechable after silence)', () => {
+  it("system messages refresh lastCommentAt (affects speechable after silence)", () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaLive(1));
     agent.listen([viewerComment]);
@@ -536,76 +589,96 @@ describe('CommentPipeline characterization', () => {
     const now = Date.now();
     // force stale via fake timers would be ideal; instead re-listen after manual delay using Date
     // We only assert system message runs learn path not; assert it does not throw and clears prompt flag
-    agent.listen([{
-      data: {
-        comment: 'system ping',
-        anonymity: false,
-        hasGift: false,
-        userId: 'onecomme.system',
-      },
-    } as any]);
+    agent.listen([
+      {
+        data: {
+          comment: "system ping",
+          anonymity: false,
+          hasGift: false,
+          userId: "onecomme.system",
+        },
+      } as any,
+    ]);
     // After any comment, prompted flag is false so speechable not locked by prompt
     expect(agent.speechable).toBe(true);
     expect(now).toBeGreaterThan(0);
   });
 
-  it('ad system comment does not also gift-thank when hasGift is set', async () => {
+  it("ad system comment does not also gift-thank when hasGift is set", async () => {
     const spoken: string[] = [];
     const tts: TTS = {
-      speech: async (text) => { spoken.push(text); },
+      speech: async (text) => {
+        spoken.push(text);
+      },
     };
     const agent = new MakaMujo(stubTalkModel, tts);
 
-    agent.listen([{
-      data: {
-        comment: '【広告】太郎さんが広告しました',
-        userId: 'onecomme.system',
-        anonymity: false,
-        hasGift: true,
-        origin: { message: { gift: { advertiserName: '花子' } } },
-      },
-    } as any]);
+    agent.listen([
+      {
+        data: {
+          comment: "【広告】太郎さんが広告しました",
+          userId: "onecomme.system",
+          anonymity: false,
+          hasGift: true,
+          origin: { message: { gift: { advertiserName: "花子" } } },
+        },
+      } as any,
+    ]);
 
     // drain speech queue
     await new Promise((r) => setTimeout(r, 50));
-    expect(spoken.some((t) => t.includes('広告'))).toBe(true);
-    expect(spoken.some((t) => t.includes('ギフト'))).toBe(false);
+    expect(spoken.some((t) => t.includes("広告"))).toBe(true);
+    expect(spoken.some((t) => t.includes("ギフト"))).toBe(false);
   });
 
-  it('allows non-monotonic program comment numbers (stores last observed no)', () => {
+  it("allows non-monotonic program comment numbers (stores last observed no)", () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaLive(10));
-    agent.listen([{ data: { comment: 'a', no: 50, anonymity: false, hasGift: false } } as any]);
+    agent.listen([
+      {
+        data: { comment: "a", no: 50, anonymity: false, hasGift: false },
+      } as any,
+    ]);
     expect(agent.streamState?.meta?.total?.comments).toBe(50);
-    agent.listen([{ data: { comment: 'b', no: 10, anonymity: false, hasGift: false } } as any]);
+    agent.listen([
+      {
+        data: { comment: "b", no: 10, anonymity: false, hasGift: false },
+      } as any,
+    ]);
     expect(agent.streamState?.meta?.total?.comments).toBe(10);
   });
 
-  it('queues cruise welcome speeches for quote-start system message', async () => {
+  it("queues cruise welcome speeches for quote-start system message", async () => {
     const spoken: string[] = [];
-    const tts: TTS = { speech: async (text) => { spoken.push(text); } };
+    const tts: TTS = {
+      speech: async (text) => {
+        spoken.push(text);
+      },
+    };
     const agent = new MakaMujo(stubTalkModel, tts);
 
-    agent.listen([{
-      data: {
-        comment: '「生放送クルーズさん」が引用を開始しました',
-        userId: 'onecomme.system',
-        anonymity: false,
-        hasGift: false,
-      },
-    } as any]);
+    agent.listen([
+      {
+        data: {
+          comment: "「生放送クルーズさん」が引用を開始しました",
+          userId: "onecomme.system",
+          anonymity: false,
+          hasGift: false,
+        },
+      } as any,
+    ]);
 
     await new Promise((r) => setTimeout(r, 50));
     expect(spoken).toEqual([
-      '生放送クルーズのみなさん、こんにちは',
-      'AI Vチューバーの馬可無序です',
-      'コメントを学習してお話ししています',
-      'ぜひ上のリンクから遊びに来てね',
+      "生放送クルーズのみなさん、こんにちは",
+      "AI Vチューバーの馬可無序です",
+      "コメントを学習してお話ししています",
+      "ぜひ上のリンクから遊びに来てね",
     ]);
   });
 });
 
-describe('onGameStateChange', () => {
+describe("onGameStateChange", () => {
   beforeEach(() => {
     mockCapturedIpcCallback = undefined;
     mockSolverControl.done = false;
@@ -613,95 +686,99 @@ describe('onGameStateChange', () => {
 
   const flushMicrotasks = () => Promise.resolve();
 
-  it('calls listener when IPC receives closed state', async () => {
+  it("calls listener when IPC receives closed state", async () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     const listener = jest.fn();
     agent.onGameStateChange(listener);
 
-    agent.play('CookieClicker');
-    mockCapturedIpcCallback!({ name: 'closed' });
+    agent.play("CookieClicker");
+    mockCapturedIpcCallback!({ name: "closed" });
     await flushMicrotasks();
 
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
-  it('calls listener when IPC receives idle state with game state payload', async () => {
+  it("calls listener when IPC receives idle state with game state payload", async () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     const listener = jest.fn();
     agent.onGameStateChange(listener);
 
-    agent.play('CookieClicker');
-    mockCapturedIpcCallback!({ name: 'idle', state: { cookies: 42 } });
+    agent.play("CookieClicker");
+    mockCapturedIpcCallback!({ name: "idle", state: { cookies: 42 } });
     await flushMicrotasks();
 
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
-  it('does not call listener when IPC receives idle state without game state payload', async () => {
+  it("does not call listener when IPC receives idle state without game state payload", async () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     const listener = jest.fn();
     agent.onGameStateChange(listener);
 
-    agent.play('CookieClicker');
-    mockCapturedIpcCallback!({ name: 'idle' });
+    agent.play("CookieClicker");
+    mockCapturedIpcCallback!({ name: "idle" });
     await flushMicrotasks();
 
     expect(listener).not.toHaveBeenCalled();
   });
 
-  it('calls listener when solver signals done', async () => {
+  it("calls listener when solver signals done", async () => {
     mockSolverControl.done = true;
     const agent = new MakaMujo(stubTalkModel, stubTts);
     const listener = jest.fn();
     agent.onGameStateChange(listener);
 
-    agent.play('CookieClicker');
-    mockCapturedIpcCallback!({ name: 'idle' });
+    agent.play("CookieClicker");
+    mockCapturedIpcCallback!({ name: "idle" });
     await flushMicrotasks();
 
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
-  it('defers listener execution via queueMicrotask so IPC receiver is not blocked', async () => {
+  it("defers listener execution via queueMicrotask so IPC receiver is not blocked", async () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     const callOrder: string[] = [];
-    agent.onGameStateChange(() => { callOrder.push('listener'); });
+    agent.onGameStateChange(() => {
+      callOrder.push("listener");
+    });
 
-    agent.play('CookieClicker');
-    mockCapturedIpcCallback!({ name: 'closed' });
-    callOrder.push('afterReceiver');
+    agent.play("CookieClicker");
+    mockCapturedIpcCallback!({ name: "closed" });
+    callOrder.push("afterReceiver");
 
     // Listener must not have run synchronously
-    expect(callOrder).toEqual(['afterReceiver']);
+    expect(callOrder).toEqual(["afterReceiver"]);
 
     await flushMicrotasks();
-    expect(callOrder).toEqual(['afterReceiver', 'listener']);
+    expect(callOrder).toEqual(["afterReceiver", "listener"]);
   });
 
-  it('calls all registered listeners', async () => {
+  it("calls all registered listeners", async () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
     const listenerA = jest.fn();
     const listenerB = jest.fn();
     agent.onGameStateChange(listenerA);
     agent.onGameStateChange(listenerB);
 
-    agent.play('CookieClicker');
-    mockCapturedIpcCallback!({ name: 'closed' });
+    agent.play("CookieClicker");
+    mockCapturedIpcCallback!({ name: "closed" });
     await flushMicrotasks();
 
     expect(listenerA).toHaveBeenCalledTimes(1);
     expect(listenerB).toHaveBeenCalledTimes(1);
   });
 
-  it('continues calling remaining listeners even if one throws', async () => {
+  it("continues calling remaining listeners even if one throws", async () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
-    const failingListener = jest.fn(() => { throw new Error('boom'); });
+    const failingListener = jest.fn(() => {
+      throw new Error("boom");
+    });
     const succeedingListener = jest.fn();
     agent.onGameStateChange(failingListener);
     agent.onGameStateChange(succeedingListener);
 
-    agent.play('CookieClicker');
-    mockCapturedIpcCallback!({ name: 'closed' });
+    agent.play("CookieClicker");
+    mockCapturedIpcCallback!({ name: "closed" });
     await flushMicrotasks();
 
     expect(failingListener).toHaveBeenCalledTimes(1);

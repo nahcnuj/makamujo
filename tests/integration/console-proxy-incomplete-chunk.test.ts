@@ -1,13 +1,13 @@
-import { test, expect, beforeAll, afterAll } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
 import {
   allocateFreePort,
   killProcessTree,
   makamujoIpcPath,
   resolveBunExecutable,
+  type SpawnedServer,
   waitForPortRelease,
   waitForSpawnedReady,
-  type SpawnedServer,
 } from "../helpers/integrationServer";
 
 let upstream: SpawnedServer | null = null;
@@ -32,21 +32,17 @@ beforeAll(async () => {
     timeoutMs: 5_000,
   });
 
-  server = spawn(
-    bunBin,
-    ["index.ts", "--port", String(mainServerPort)],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: "production",
-        CONSOLE_LOOPBACK_ONLY: "1",
-        BROADCASTING_HOST: "127.0.0.1",
-        BROADCASTING_PORT: String(upstreamPort),
-        MAKAMUJO_IPC_PATH: makamujoIpcPath(`incomplete-chunk-${mainServerPort}`),
-      },
-      stdio: ["ignore", "pipe", "pipe"],
+  server = spawn(bunBin, ["index.ts", "--port", String(mainServerPort)], {
+    env: {
+      ...process.env,
+      NODE_ENV: "production",
+      CONSOLE_LOOPBACK_ONLY: "1",
+      BROADCASTING_HOST: "127.0.0.1",
+      BROADCASTING_PORT: String(upstreamPort),
+      MAKAMUJO_IPC_PATH: makamujoIpcPath(`incomplete-chunk-${mainServerPort}`),
     },
-  ) as unknown as SpawnedServer;
+    stdio: ["ignore", "pipe", "pipe"],
+  }) as unknown as SpawnedServer;
 
   // Must wait for Console URL: this test hits the console proxy → mock upstream HELLO stream.
   const output = await waitForSpawnedReady(server, {
@@ -57,7 +53,9 @@ beforeAll(async () => {
 
   const m = output.match(/🚀 Console running at (https?:\/\/[^\s]+)/);
   if (!m?.[1]) {
-    throw new Error(`Console URL not found in server output:\n${output.slice(-1500)}`);
+    throw new Error(
+      `Console URL not found in server output:\n${output.slice(-1500)}`,
+    );
   }
   consoleBaseUrl = m[1];
 });
@@ -75,7 +73,9 @@ const READ_TIMEOUT_MS = 8000;
 test("proxy maintains SSE connection and reconnects when upstream drops", async () => {
   if (!consoleBaseUrl) throw new Error("consoleBaseUrl not set");
   const base = consoleBaseUrl;
-  const res = await fetch(`${base}/console/api/ws`, { headers: { accept: "text/event-stream" } });
+  const res = await fetch(`${base}/console/api/ws`, {
+    headers: { accept: "text/event-stream" },
+  });
   expect(res.ok).toBeTruthy();
   const body: any = res.body;
   expect(body).toBeTruthy();
@@ -87,7 +87,10 @@ test("proxy maintains SSE connection and reconnects when upstream drops", async 
 
   const readWithTimeout = () =>
     Promise.race([
-      reader.read() as Promise<{ done: boolean; value: Uint8Array | undefined }>,
+      reader.read() as Promise<{
+        done: boolean;
+        value: Uint8Array | undefined;
+      }>,
       new Promise<{ done: true; value: undefined }>((r) =>
         setTimeout(() => r({ done: true, value: undefined }), READ_TIMEOUT_MS),
       ),
@@ -101,7 +104,11 @@ test("proxy maintains SSE connection and reconnects when upstream drops", async 
       if (value) accumulated += decoder.decode(value);
     }
   } finally {
-    try { reader.cancel(); } catch { /* ignore */ }
+    try {
+      reader.cancel();
+    } catch {
+      /* ignore */
+    }
   }
 
   const helloCount = (accumulated.match(/data: HELLO/g) ?? []).length;

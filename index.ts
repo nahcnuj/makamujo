@@ -3,8 +3,7 @@
 // can cause uncaught exceptions on CI (e.g., named-pipe collisions).
 // We'll initialize a fallback agent first and replace it if the import
 // and initialization succeed.
-import { serve } from "bun";
-import { Hono } from "hono";
+
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 // Use the global `setInterval` timer instead of the Node
@@ -12,6 +11,13 @@ import { resolve } from "node:path";
 // inconsistently across runtimes; using a classic timer keeps the
 // process alive reliably.
 import { parseArgs } from "node:util";
+import { serve } from "bun";
+import { Hono } from "hono";
+import {
+  createFallbackAgent,
+  persistTalkModel,
+  tryCreateExternalAgentApi,
+} from "./composition/agentWiring";
 import {
   broadcastCurrentPayload,
   broadcastToWsClients,
@@ -19,11 +25,6 @@ import {
   sseBroadcast,
   type WsLike,
 } from "./composition/broadcast";
-import {
-  createFallbackAgent,
-  persistTalkModel,
-  tryCreateExternalAgentApi,
-} from "./composition/agentWiring";
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
 import { startConsoleServer } from "./console/index";
 import {
@@ -35,40 +36,57 @@ import {
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import { normalizePublishedStreamState } from "./lib/streamState";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
-import * as index from "./routes/index";
-import * as speechHistoryRoute from "./routes/api/speech-history";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
+import * as speechHistoryRoute from "./routes/api/speech-history";
+import * as index from "./routes/index";
 import { handleCatchAll } from "./src/frontendServer";
 
-process.on('exit', exitHandler.bind(null, { cleanup: true }));
-process.on('SIGINT', signalHandler.bind(null, { exit: true }));
-process.on('SIGUSR1', signalHandler.bind(null, { exit: true }));
-process.on('SIGUSR2', signalHandler.bind(null, { exit: true }));
+process.on("exit", exitHandler.bind(null, { cleanup: true }));
+process.on("SIGINT", signalHandler.bind(null, { exit: true }));
+process.on("SIGUSR1", signalHandler.bind(null, { exit: true }));
+process.on("SIGUSR2", signalHandler.bind(null, { exit: true }));
 // Log uncaught exceptions for better diagnostics before invoking the
 // existing exit handler which terminates the process.
-process.on('uncaughtException', (err) => {
+process.on("uncaughtException", (err) => {
   try {
-    console.error('[UNCAUGHT_EXCEPTION]', err instanceof Error ? err.stack ?? err.message : String(err));
+    console.error(
+      "[UNCAUGHT_EXCEPTION]",
+      err instanceof Error ? (err.stack ?? err.message) : String(err),
+    );
   } catch {
     // ignore logging failures
   }
 });
-process.on('unhandledRejection', (reason) => {
+process.on("unhandledRejection", (reason) => {
   try {
-    console.error('[UNHANDLED_REJECTION]', reason instanceof Error ? reason.stack ?? reason.message : String(reason));
-  } catch { }
+    console.error(
+      "[UNHANDLED_REJECTION]",
+      reason instanceof Error
+        ? (reason.stack ?? reason.message)
+        : String(reason),
+    );
+  } catch {}
 });
-process.on('uncaughtException', (err) => {
+process.on("uncaughtException", (err) => {
   try {
     // Log the exception for diagnostics
-    console.error('[UNCAUGHT_EXCEPTION]', err instanceof Error ? err.stack ?? err.message : String(err));
-  } catch { }
+    console.error(
+      "[UNCAUGHT_EXCEPTION]",
+      err instanceof Error ? (err.stack ?? err.message) : String(err),
+    );
+  } catch {}
 
   // Do not terminate the process for transient IPC listen failures
   // (e.g., EADDRINUSE on Windows named pipes) so tests can recover.
-  const message = err instanceof Error ? (err.message ?? '') : String(err);
-  if (message.includes('Failed to listen at') || message.includes('EADDRINUSE')) {
-    console.warn('[WARN] Ignoring transient IPC listen error to keep server running for tests:', message);
+  const message = err instanceof Error ? (err.message ?? "") : String(err);
+  if (
+    message.includes("Failed to listen at") ||
+    message.includes("EADDRINUSE")
+  ) {
+    console.warn(
+      "[WARN] Ignoring transient IPC listen error to keep server running for tests:",
+      message,
+    );
     return;
   }
 
@@ -76,52 +94,52 @@ process.on('uncaughtException', (err) => {
   exitHandler({ exit: true }, 1);
 });
 
-const { values: {
-  model: modelFile,
-  data: dataFile,
-  port,
-} } = parseArgs({
+const {
+  values: { model: modelFile, data: dataFile, port },
+} = parseArgs({
   options: {
     model: {
-      short: 'm',
-      type: 'string',
-      default: './var/model.json',
+      short: "m",
+      type: "string",
+      default: "./var/model.json",
     },
     data: {
-      short: 'd',
-      type: 'string',
-      default: './var/cookieclicker.txt',
+      short: "d",
+      type: "string",
+      default: "./var/cookieclicker.txt",
     },
     port: {
-      short: 'p',
+      short: "p",
       // parseArgs only supports 'string' and 'boolean'; convert to Number when using
-      type: 'string',
-      default: '7777',
+      type: "string",
+      default: "7777",
     },
   },
 });
 
 // Rely on Bun's `--hot` and Bun.build watch mode in development.
 
-const model = (file => {
+const model = ((file) => {
   try {
     return MarkovChainModel.fromFile(file);
-  } catch (err) {
-    console.warn('failed to open the file', file);
+  } catch (_err) {
+    console.warn("failed to open the file", file);
     return new MarkovChainModel();
   }
 })(modelFile);
 
-const tts = process.platform !== 'win32' ?
-  (() => {
-    const htsvoiceFile = '/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice';
-    const dictionaryDir = '/var/lib/mecab/dic/open-jtalk/naist-jdic';
-    return new TTS({
-      htsvoiceFile,
-      dictionaryDir,
-    });
-  })() :
-  new FallbackTTS();
+const tts =
+  process.platform !== "win32"
+    ? (() => {
+        const htsvoiceFile =
+          "/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice";
+        const dictionaryDir = "/var/lib/mecab/dic/open-jtalk/naist-jdic";
+        return new TTS({
+          htsvoiceFile,
+          dictionaryDir,
+        });
+      })()
+    : new FallbackTTS();
 
 const streamer = new MakaMujo(model, tts);
 
@@ -130,8 +148,8 @@ const streamer = new MakaMujo(model, tts);
 // import. We'll try to dynamically import and initialize the real
 // `automated-gameplay-transmitter` agent later and replace this fallback
 // when possible.
-let lastPublishedStreamState: unknown = undefined;
-let currentSpeechState = { speech: '', silent: false };
+let lastPublishedStreamState: unknown;
+let currentSpeechState = { speech: "", silent: false };
 // WebSocket clients connected to the broadcasting server.
 const wsClients = new Set<WsLike>();
 
@@ -143,7 +161,12 @@ const createSseStream = (label: string) =>
   createSseStreamImpl(label, sseClients, getCurrentStreamPayload);
 
 const broadcastCurrentPayloadLocal = (context: string) =>
-  broadcastCurrentPayload(context, getCurrentStreamPayload, sseClients, wsClients);
+  broadcastCurrentPayload(
+    context,
+    getCurrentStreamPayload,
+    sseClients,
+    wsClients,
+  );
 
 const getCurrentStreamPayload = () => {
   return assemblePublishedPayload({
@@ -163,19 +186,19 @@ const getCurrentStreamPayload = () => {
 };
 
 const normalizeSpeechText = (speech: unknown): string | undefined => {
-  if (typeof speech === 'string') {
+  if (typeof speech === "string") {
     return speech;
   }
 
-  if (!speech || typeof speech !== 'object') {
+  if (!speech || typeof speech !== "object") {
     return undefined;
   }
 
-  if (typeof (speech as any).text === 'string') {
+  if (typeof (speech as any).text === "string") {
     return (speech as any).text;
   }
 
-  if (typeof (speech as any).speech === 'string') {
+  if (typeof (speech as any).speech === "string") {
     return (speech as any).speech;
   }
 
@@ -184,11 +207,17 @@ const normalizeSpeechText = (speech: unknown): string | undefined => {
 
 let agent: any = createFallbackAgent(
   () => lastPublishedStreamState,
-  (data) => { lastPublishedStreamState = data; },
+  (data) => {
+    lastPublishedStreamState = data;
+  },
   () => currentSpeechState,
-  (state) => { currentSpeechState = state; },
+  (state) => {
+    currentSpeechState = state;
+  },
   // Keep comments flowing while AGT createAgentApi is loading (or if it fails).
-  (comments) => { streamer.listen(comments as Parameters<typeof streamer.listen>[0]); },
+  (comments) => {
+    streamer.listen(comments as Parameters<typeof streamer.listen>[0]);
+  },
 );
 
 // Attempt to dynamically load the external agent API. This avoids module
@@ -207,13 +236,28 @@ let generatedSpeechHistorySequence = 0;
 // Bind the in-memory array to the speech-history route handler.
 speechHistoryRoute.setSpeechHistoryRef(generatedSpeechHistory);
 
-let clearSpeechTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+let clearSpeechTimer: ReturnType<typeof setTimeout> | undefined;
 
 streamer.onSpeech(async (event) => {
-  const speechText = normalizeSpeechText(event) ?? '';
-  const traceNodes = typeof event === 'object' && event !== null && Array.isArray((event as any).nodes) ? (event as any).nodes : undefined;
-  const nGram = typeof event === 'object' && event !== null && typeof (event as any).nGram === 'number' ? (event as any).nGram : streamer.currentNGramSize;
-  const nGramRaw = typeof event === 'object' && event !== null && typeof (event as any).nGramRaw === 'number' ? (event as any).nGramRaw : streamer.currentNGramSizeRaw;
+  const speechText = normalizeSpeechText(event) ?? "";
+  const traceNodes =
+    typeof event === "object" &&
+    event !== null &&
+    Array.isArray((event as any).nodes)
+      ? (event as any).nodes
+      : undefined;
+  const nGram =
+    typeof event === "object" &&
+    event !== null &&
+    typeof (event as any).nGram === "number"
+      ? (event as any).nGram
+      : streamer.currentNGramSize;
+  const nGramRaw =
+    typeof event === "object" &&
+    event !== null &&
+    typeof (event as any).nGramRaw === "number"
+      ? (event as any).nGramRaw
+      : streamer.currentNGramSizeRaw;
   generatedSpeechHistorySequence += 1;
   generatedSpeechHistory.unshift({
     id: `speech-${generatedSpeechHistorySequence}`,
@@ -231,7 +275,7 @@ streamer.onSpeech(async (event) => {
   }
   agent.setSpeech(speechText);
   // Notify console clients immediately when a new utterance starts.
-  broadcastCurrentPayloadLocal('onSpeech');
+  broadcastCurrentPayloadLocal("onSpeech");
 });
 
 streamer.onSpeechComplete(async () => {
@@ -239,21 +283,21 @@ streamer.onSpeechComplete(async () => {
     clearTimeout(clearSpeechTimer);
   }
   // Notify console clients that the utterance has finished.
-  broadcastCurrentPayloadLocal('onSpeechComplete');
+  broadcastCurrentPayloadLocal("onSpeechComplete");
   clearSpeechTimer = setTimeout(() => {
     const speechState = agent.getSpeech();
     if (!speechState.silent) {
-      agent.setSpeech('');
+      agent.setSpeech("");
     }
     clearSpeechTimer = undefined;
     // Notify console clients that the displayed speech has been cleared.
-    broadcastCurrentPayloadLocal('onSpeechClear');
+    broadcastCurrentPayloadLocal("onSpeechClear");
   }, 1000);
 });
 
 // Notify console clients when game state changes via browser IPC.
 streamer.onGameStateChange(() => {
-  broadcastCurrentPayloadLocal('onGameStateChange');
+  broadcastCurrentPayloadLocal("onGameStateChange");
 });
 
 // Defer starting the stream playback until after the HTTP servers are up.
@@ -262,33 +306,40 @@ streamer.onGameStateChange(() => {
 
 const portNumber = parseInt(port ?? "7777", 10);
 if (!Number.isFinite(portNumber) || portNumber < 1 || portNumber > 65535) {
-  console.error(`Invalid port: ${port}. Must be an integer between 1 and 65535.`);
+  console.error(
+    `Invalid port: ${port}. Must be an integer between 1 and 65535.`,
+  );
   process.exit(1);
 }
 
 // Hono app for API routes (delegated from the '/api/*' route below).
 const apiApp = new Hono()
-  .get('/api/speech', () => {
+  .get("/api/speech", () => {
     const speechState = agent.getSpeech();
     return Response.json({
-      speech: normalizeSpeechText(speechState) ?? '',
-      silent: !!(speechState && typeof speechState === 'object' ? (speechState as any).silent : false),
+      speech: normalizeSpeechText(speechState) ?? "",
+      silent: !!(speechState && typeof speechState === "object"
+        ? (speechState as any).silent
+        : false),
     });
   })
-  .get('/api/speech-history', (c) => speechHistoryRoute.GET(c.req.raw))
-  .get('/api/game', () => {
+  .get("/api/speech-history", (c) => speechHistoryRoute.GET(c.req.raw))
+  .get("/api/game", () => {
     return Response.json(agent.getGame() ?? {});
   })
-  .get('/api/meta', () => {
+  .get("/api/meta", () => {
     return Response.json(getCurrentStreamPayload());
   })
-  .post('/api/meta', async (c) => {
+  .post("/api/meta", async (c) => {
     try {
       let body: any;
       try {
         body = await c.req.json();
       } catch (err) {
-        console.warn('[WARN] POST /api/meta failed to parse JSON body:', err instanceof Error ? err.message : String(err));
+        console.warn(
+          "[WARN] POST /api/meta failed to parse JSON body:",
+          err instanceof Error ? err.message : String(err),
+        );
         return Response.json({}, { status: 400 });
       }
 
@@ -297,53 +348,76 @@ const apiApp = new Hono()
       try {
         agent.publishStreamState?.(published);
       } catch (err) {
-        console.warn('[WARN] failed to forward stream state to streamer:', err instanceof Error ? err.message : String(err));
+        console.warn(
+          "[WARN] failed to forward stream state to streamer:",
+          err instanceof Error ? err.message : String(err),
+        );
       }
 
       try {
         published = normalizePublishedStreamState(published);
         published = attachReplyTargetToPublished(published, replyTargetComment);
       } catch (err) {
-        console.warn('[WARN] failed to normalize published stream state:', err instanceof Error ? err.message : String(err));
+        console.warn(
+          "[WARN] failed to normalize published stream state:",
+          err instanceof Error ? err.message : String(err),
+        );
       }
 
       try {
         lastPublishedStreamState = published;
       } catch (err) {
-        console.warn('[WARN] failed to persist published stream state locally:', err instanceof Error ? err.message : String(err));
+        console.warn(
+          "[WARN] failed to persist published stream state locally:",
+          err instanceof Error ? err.message : String(err),
+        );
       }
 
       try {
         broadcastToWsClients(wsClients, getCurrentStreamPayload());
       } catch (err) {
-        console.warn('[WARN] failed to broadcast to WebSocket clients:', err instanceof Error ? err.message : String(err));
+        console.warn(
+          "[WARN] failed to broadcast to WebSocket clients:",
+          err instanceof Error ? err.message : String(err),
+        );
       }
       try {
         sseBroadcast(sseClients, getCurrentStreamPayload());
       } catch (err) {
-        console.warn('[WARN] failed to broadcast to SSE clients:', err instanceof Error ? err.message : String(err));
+        console.warn(
+          "[WARN] failed to broadcast to SSE clients:",
+          err instanceof Error ? err.message : String(err),
+        );
       }
 
       return Response.json({});
     } catch (err) {
-      console.error('[ERROR] POST /api/meta handler crashed:', err instanceof Error ? err.stack ?? err.message : String(err));
+      console.error(
+        "[ERROR] POST /api/meta handler crashed:",
+        err instanceof Error ? (err.stack ?? err.message) : String(err),
+      );
       return Response.json({}, { status: 500 });
     }
   });
 
 type WsData = { label: string };
 
-const MAIN_BUILD_PATH = resolve(process.cwd(), 'var/main/build');
-const MAIN_SOURCE_HTML_PATH = resolve(process.cwd(), 'src/index.html');
+const MAIN_BUILD_PATH = resolve(process.cwd(), "var/main/build");
+const MAIN_SOURCE_HTML_PATH = resolve(process.cwd(), "src/index.html");
 
 let mainBuildPromise: Promise<void> | null = null;
-let builtMainHtml: string | null = null;
+let _builtMainHtml: string | null = null;
 
 function normalizeMainHtml(source: string): string {
   // Replace the TypeScript entrypoint reference with the compiled output filename.
-  const result = source.replace(/src=(["'])\.\/frontend\.tsx\1/, 'src=$1./frontend.js$1');
+  const result = source.replace(
+    /src=(["'])\.\/frontend\.tsx\1/,
+    "src=$1./frontend.js$1",
+  );
   if (result === source) {
-    console.warn('[WARN] normalizeMainHtml: expected <script src="./frontend.tsx"> was not found in HTML');
+    console.warn(
+      '[WARN] normalizeMainHtml: expected <script src="./frontend.tsx"> was not found in HTML',
+    );
   }
   return result;
 }
@@ -351,12 +425,12 @@ function normalizeMainHtml(source: string): string {
 async function buildMainFrontend() {
   mkdirSync(MAIN_BUILD_PATH, { recursive: true });
   const result = await Bun.build({
-    entrypoints: [resolve(process.cwd(), 'src/frontend.tsx')],
+    entrypoints: [resolve(process.cwd(), "src/frontend.tsx")],
     outdir: MAIN_BUILD_PATH,
-    publicPath: '/',
+    publicPath: "/",
     splitting: true,
-    target: 'browser',
-    minify: process.env.NODE_ENV === 'production',
+    target: "browser",
+    minify: process.env.NODE_ENV === "production",
     // Redirect React imports to hono/jsx/dom so AGT components share the
     // same JSX runtime as the app's own hono/jsx/dom code.
     // This is safe because the AGT components used in this codebase (Box,
@@ -367,21 +441,23 @@ async function buildMainFrontend() {
     // own separate build.
     // @ts-expect-error: alias is a valid Bun.build option but not yet typed in bun-types
     alias: {
-      'react': 'hono/jsx/dom',
-      'react/jsx-runtime': 'hono/jsx/dom/jsx-runtime',
-      'react/jsx-dev-runtime': 'hono/jsx/dom/jsx-dev-runtime',
-      'hono/jsx': 'hono/jsx/dom',
-      'hono/jsx/jsx-runtime': 'hono/jsx/dom/jsx-runtime',
-      'hono/jsx/jsx-dev-runtime': 'hono/jsx/dom/jsx-dev-runtime',
+      react: "hono/jsx/dom",
+      "react/jsx-runtime": "hono/jsx/dom/jsx-runtime",
+      "react/jsx-dev-runtime": "hono/jsx/dom/jsx-dev-runtime",
+      "hono/jsx": "hono/jsx/dom",
+      "hono/jsx/jsx-runtime": "hono/jsx/dom/jsx-runtime",
+      "hono/jsx/jsx-dev-runtime": "hono/jsx/dom/jsx-dev-runtime",
     },
   });
   if (!result.success) {
-    throw new Error('Main frontend build failed');
+    throw new Error("Main frontend build failed");
   }
-  builtMainHtml = normalizeMainHtml(readFileSync(MAIN_SOURCE_HTML_PATH, 'utf-8'));
+  _builtMainHtml = normalizeMainHtml(
+    readFileSync(MAIN_SOURCE_HTML_PATH, "utf-8"),
+  );
 }
 
-function ensureMainFrontendBuilt(): Promise<void> {
+function _ensureMainFrontendBuilt(): Promise<void> {
   if (!mainBuildPromise) {
     mainBuildPromise = (async () => {
       try {
@@ -389,7 +465,7 @@ function ensureMainFrontendBuilt(): Promise<void> {
       } catch (error) {
         // Reset so the next request can retry the build.
         mainBuildPromise = null;
-        console.error('[ERROR] main frontend build failed', error);
+        console.error("[ERROR] main frontend build failed", error);
         throw error;
       }
     })();
@@ -397,23 +473,23 @@ function ensureMainFrontendBuilt(): Promise<void> {
   return mainBuildPromise;
 }
 
-function getMainFrontendAssetPath(pathname: string): string | null {
+function _getMainFrontendAssetPath(pathname: string): string | null {
   // Only serve files (paths with an extension that aren't root-only)
-  if (!pathname.includes('.') || pathname.endsWith('/')) return null;
+  if (!pathname.includes(".") || pathname.endsWith("/")) return null;
   const resolved = resolve(MAIN_BUILD_PATH, pathname.slice(1));
   // Prevent path traversal: ensure the resolved path is within the build directory.
   // Normalize both paths before comparing to handle any OS-specific separator differences.
   const normalizedBuildPath = resolve(MAIN_BUILD_PATH);
   const normalizedResolved = resolve(resolved);
-  if (!normalizedResolved.startsWith(normalizedBuildPath + '/')) return null;
+  if (!normalizedResolved.startsWith(`${normalizedBuildPath}/`)) return null;
   if (!existsSync(normalizedResolved)) return null;
   return normalizedResolved;
 }
 
-function getMainAssetContentType(filePath: string): string | undefined {
-  if (filePath.endsWith('.js')) return 'application/javascript; charset=utf-8';
-  if (filePath.endsWith('.css')) return 'text/css; charset=utf-8';
-  if (filePath.endsWith('.html')) return 'text/html; charset=utf-8';
+function _getMainAssetContentType(filePath: string): string | undefined {
+  if (filePath.endsWith(".js")) return "application/javascript; charset=utf-8";
+  if (filePath.endsWith(".css")) return "text/css; charset=utf-8";
+  if (filePath.endsWith(".html")) return "text/html; charset=utf-8";
   return undefined;
 }
 
@@ -422,22 +498,30 @@ function getMainAssetContentType(filePath: string): string | undefined {
  * Returns an SSE stream when `Accept: text/event-stream` is requested.
  * WebSocket upgrades are handled at the serve.fetch level before Hono.
  */
-const makeStreamHandler = (label: string) =>
+const makeStreamHandler =
+  (label: string) =>
   (req: Request): Response => {
-    const accept = req.headers.get('accept') ?? '';
-    try { console.log(`[TRACE] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
-    if (accept.includes('text/event-stream')) {
+    const accept = req.headers.get("accept") ?? "";
+    try {
+      console.log(
+        `[TRACE] ${label} handler invoked, accept=`,
+        accept,
+        "upgrade=",
+        req.headers.get("upgrade"),
+      );
+    } catch {}
+    if (accept.includes("text/event-stream")) {
       return new Response(createSseStream(label), {
         headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
-          'Access-Control-Allow-Origin': '*',
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+          "Access-Control-Allow-Origin": "*",
         },
         status: 200,
       });
     }
-    return new Response('websocket upgrade unavailable', { status: 501 });
+    return new Response("websocket upgrade unavailable", { status: 501 });
   };
 
 // mainServer is assigned synchronously via `const server = mainServer = serve(...)`
@@ -451,30 +535,39 @@ let mainServer: Bun.Server<WsData> | undefined;
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 
 const getMainServer = (): Bun.Server<WsData> => {
-  if (!mainServer) throw new Error('Server not yet initialized');
+  if (!mainServer) throw new Error("Server not yet initialized");
   return mainServer;
 };
 
 const mainApp = new Hono()
   // Static assets from the public directory
-  .get('/nc433974.png', () => new Response(Bun.file('./src/public/nc433974.png')))
-  .get('/favicon-32x32.png', () => new Response(Bun.file('./src/public/favicon-32x32.png')))
+  .get(
+    "/nc433974.png",
+    () => new Response(Bun.file("./src/public/nc433974.png")),
+  )
+  .get(
+    "/favicon-32x32.png",
+    () => new Response(Bun.file("./src/public/favicon-32x32.png")),
+  )
 
   // Root HTTP handlers (broadcast/comment ingestion)
-  .post('/', (c) => index.POST(c.req.raw, getMainServer().requestIP(c.req.raw)))
-  .put('/', async (c) => {
-    const res = await index.PUT(c.req.raw, getMainServer().requestIP(c.req.raw));
+  .post("/", (c) => index.POST(c.req.raw, getMainServer().requestIP(c.req.raw)))
+  .put("/", async (c) => {
+    const res = await index.PUT(
+      c.req.raw,
+      getMainServer().requestIP(c.req.raw),
+    );
     if (!res.ok) {
-      console.error('response is not ok', res);
+      console.error("response is not ok", res);
       return res;
     }
     const comments = await res.json();
     if (!Array.isArray(comments)) {
-      console.error('response data was unprocessed', comments);
+      console.error("response data was unprocessed", comments);
       return Response.json({}, { status: 500 });
     }
     agent.postComments(comments);
-    broadcastCurrentPayloadLocal('onComment');
+    broadcastCurrentPayloadLocal("onComment");
 
     persistTalkModel(modelFile, () => streamer.talkModel.toJSON());
 
@@ -482,38 +575,61 @@ const mainApp = new Hono()
   })
 
   // WebSocket / SSE endpoints
-  .get('/api/ws', (c) => makeStreamHandler('/api/ws')(c.req.raw))
-  .get('/console/api/ws', (c) => makeStreamHandler('/console/api/ws')(c.req.raw))
-  .get('/index.css', async (c) => {
-    const css = await compileTailwindCss('src/index.css');
+  .get("/api/ws", (c) => makeStreamHandler("/api/ws")(c.req.raw))
+  .get("/console/api/ws", (c) =>
+    makeStreamHandler("/console/api/ws")(c.req.raw),
+  )
+  .get("/index.css", async (c) => {
+    const css = await compileTailwindCss("src/index.css");
     return createCssResponse(css, c.req.raw);
   })
 
   // Delegate all /api/* routes to the existing Hono app
-  .route('/', apiApp)
+  .route("/", apiApp)
 
   // Serve the built frontend (HTML + JS/CSS assets)
-  .all('*', async (c) => handleCatchAll(c.req.raw));
+  .all("*", async (c) => handleCatchAll(c.req.raw));
 
-const server = mainServer = serve<WsData>({
+const server = (mainServer = serve<WsData>({
   port: portNumber,
   async fetch(req: Request, server: Bun.Server<WsData>) {
     const url = new URL(req.url);
-    const isWsEndpoint = url.pathname === '/api/ws' || url.pathname === '/console/api/ws';
-    const accept = req.headers.get('accept') ?? '';
-    const forceDisableWs = process.env.FORCE_DISABLE_WS_UPGRADE === '1' || process.env.FORCE_DISABLE_WS_UPGRADE === 'true';
+    const isWsEndpoint =
+      url.pathname === "/api/ws" || url.pathname === "/console/api/ws";
+    const accept = req.headers.get("accept") ?? "";
+    const forceDisableWs =
+      process.env.FORCE_DISABLE_WS_UPGRADE === "1" ||
+      process.env.FORCE_DISABLE_WS_UPGRADE === "true";
 
-    if (isWsEndpoint && !accept.includes('text/event-stream') && !forceDisableWs) {
+    if (
+      isWsEndpoint &&
+      !accept.includes("text/event-stream") &&
+      !forceDisableWs
+    ) {
       const label = url.pathname;
-      try { console.log(`[TRACE] ${label} handler invoked, accept=`, accept, 'upgrade=', req.headers.get('upgrade')); } catch { }
-      const upgraded = server.upgrade(req, { data: { label } satisfies WsData });
+      try {
+        console.log(
+          `[TRACE] ${label} handler invoked, accept=`,
+          accept,
+          "upgrade=",
+          req.headers.get("upgrade"),
+        );
+      } catch {}
+      const upgraded = server.upgrade(req, {
+        data: { label } satisfies WsData,
+      });
       if (upgraded) {
         // undefined signals Bun that the connection was upgraded to WebSocket
         // and no HTTP response should be sent back.
         return undefined;
       }
-      try { console.warn(`[WARN] WebSocket upgrade failed for ${label}`, { upgrade: req.headers.get('upgrade'), secWebSocketKey: req.headers.get('sec-websocket-key') }); } catch {}
-      return new Response('WebSocket upgrade failed', { status: 400 });
+      try {
+        console.warn(`[WARN] WebSocket upgrade failed for ${label}`, {
+          upgrade: req.headers.get("upgrade"),
+          secWebSocketKey: req.headers.get("sec-websocket-key"),
+        });
+      } catch {}
+      return new Response("WebSocket upgrade failed", { status: 400 });
     }
 
     return mainApp.fetch(req);
@@ -522,14 +638,24 @@ const server = mainServer = serve<WsData>({
   websocket: {
     open(ws) {
       const { label } = ws.data;
-      try { console.log(`[INFO] WebSocket client connected (${label})`); } catch { }
-      try { wsClients.add(ws); } catch { }
-      try { ws.send(JSON.stringify(getCurrentStreamPayload())); } catch { }
+      try {
+        console.log(`[INFO] WebSocket client connected (${label})`);
+      } catch {}
+      try {
+        wsClients.add(ws);
+      } catch {}
+      try {
+        ws.send(JSON.stringify(getCurrentStreamPayload()));
+      } catch {}
     },
-    message() { },
-    close(ws) { try { wsClients.delete(ws); } catch { } },
+    message() {},
+    close(ws) {
+      try {
+        wsClients.delete(ws);
+      } catch {}
+    },
   },
-});
+}));
 
 console.log(`🚀 Server running at ${server.url}`);
 
@@ -537,33 +663,39 @@ if (process.env.NODE_ENV === "production") {
   void (async () => {
     try {
       await Promise.all([
-        compileTailwindCss('src/index.css'),
-        compileTailwindCss('console/src/index.css'),
+        compileTailwindCss("src/index.css"),
+        compileTailwindCss("console/src/index.css"),
       ]);
-      console.log('[INFO] Tailwind CSS cache primed');
+      console.log("[INFO] Tailwind CSS cache primed");
     } catch (err) {
-      console.warn('[WARN] failed to prime Tailwind CSS cache', err);
+      console.warn("[WARN] failed to prime Tailwind CSS cache", err);
     }
   })();
 }
 try {
   consoleServer = startConsoleServer({
-    broadcastingHost: process.env.BROADCASTING_HOST ?? '127.0.0.1',
+    broadcastingHost: process.env.BROADCASTING_HOST ?? "127.0.0.1",
     broadcastingPort: process.env.BROADCASTING_PORT ?? server.port,
   });
   console.log(`🚀 Console running at ${consoleServer.url}`);
 } catch (err) {
-  const consoleStartupError = err instanceof Error ? (err.stack ?? err.message) : String(err);
-  console.error(`[ERROR] CONSOLE_STARTUP_FAILED ${JSON.stringify(consoleStartupError)}`);
+  const consoleStartupError =
+    err instanceof Error ? (err.stack ?? err.message) : String(err);
+  console.error(
+    `[ERROR] CONSOLE_STARTUP_FAILED ${JSON.stringify(consoleStartupError)}`,
+  );
   process.exit(1);
 }
 
 // Start the stream playback after servers are listening so startup is
 // responsive for health checks used by tests and CI.
 try {
-  streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
+  streamer.play("CookieClicker", readFileSync(dataFile, { encoding: "utf-8" }));
 } catch (err) {
-  console.warn('[WARN] streamer.play failed during startup:', err instanceof Error ? err.message : String(err));
+  console.warn(
+    "[WARN] streamer.play failed during startup:",
+    err instanceof Error ? err.message : String(err),
+  );
 }
 
 // Use a classic repeating timer (composition/idleSpeechTimer) for idle speech.
@@ -572,23 +704,30 @@ startIdleSpeechTimer(streamer, 1_000);
 /**
  * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}
  */
-function exitHandler(options: { cleanup: true; exit?: never } | { cleanup?: never; exit: true }, exitCode?: number) {
+function exitHandler(
+  options: { cleanup: true; exit?: never } | { cleanup?: never; exit: true },
+  exitCode?: number,
+) {
   if (options.cleanup) {
-    console.log('[INFO]', 'server stopping...');
+    console.log("[INFO]", "server stopping...");
     // Use mainServer (let) rather than const `server` to avoid TDZ when serve() fails before assignment.
     try {
       if (mainServer) {
         mainServer.stop(options.exit);
       }
-    } catch { /* ignore stop failures during crash paths */ }
+    } catch {
+      /* ignore stop failures during crash paths */
+    }
     try {
       if (consoleServer) {
         consoleServer.stop(options.exit);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
-  if (typeof exitCode === 'number') {
+  if (typeof exitCode === "number") {
     process.exitCode = exitCode;
   }
 
@@ -597,6 +736,10 @@ function exitHandler(options: { cleanup: true; exit?: never } | { cleanup?: neve
   }
 }
 
-function signalHandler(options: { cleanup: true; exit?: never } | { cleanup?: never; exit: true }, _: string, exitCode?: number) {
+function signalHandler(
+  options: { cleanup: true; exit?: never } | { cleanup?: never; exit: true },
+  _: string,
+  exitCode?: number,
+) {
   exitHandler(options, exitCode);
 }

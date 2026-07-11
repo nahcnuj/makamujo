@@ -61,13 +61,22 @@
 |----|------|------|
 | #453, #454 | profile nav 縦並び、X event、adsense | **docs に port + テスト** |
 
-### D. 意図的にまだ取り込まない
+### D. 追加で取り込んだもの（本 PR 追記）
+
+| 元 | 内容 |
+|----|------|
+| #412 / #433 周辺 | Biome（`biome.json`, `@biomejs/biome`, `format`/`lint` scripts, 実 CI `lint`） |
+| hooks / policy | `.githooks/*`, `scripts/install-git-hooks.sh`, `docs/IMPORT_POLICY.md`, `check-no-test-imports` |
+| deps patch | hono `4.12.28`, tailwindcss `^4.3.2`, 型・react/tsx の patch 更新（Playwright は 1.61 維持） |
+
+Biome は recommended を基に、legacy ツリーで一括リライトが必要なルール（`noExplicitAny` 等）は off にして CI 緑化。整形は `biome check --write` 済み。
+
+### E. 意図的にまだ取り込まない
 
 | 元 | 理由 |
 |----|------|
 | `lib/niconamaCommentClient*` 一式 | main 不安定の中核候補。legacy は HTTP 注入で動く。別 PR で要設計 |
-| Biome 一括 (#412, #433) | 差分が巨大でレビュー不能。必要なら独立タスク |
-| main 側 deps の全面追従 | hono/playwright の下げ上げを含む。動作確認後に段階的に |
+| main の Playwright 下げ (`^1.60`) | legacy は bundled Chromium 方針で 1.61 を維持 |
 | main の `index.ts` / console モノリス | legacy の domain 分割を捨てることになり本末転倒 |
 | main で `bin/start` 削除 | legacy の手動起動・test:bin を壊す |
 
@@ -79,6 +88,7 @@
 4. Console Basic auth 生成・検証（`lib/domain/console/access`）
 5. SSE `res.ok` ガード
 6. docs ランディング更新 + `docs/index.test.ts`
+7. Biome + githooks + IMPORT_POLICY + deps patch（main ツールチェーン）
 
 ## 推奨ワークフロー（今後）
 

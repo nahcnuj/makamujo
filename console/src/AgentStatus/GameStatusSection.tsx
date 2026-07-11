@@ -7,6 +7,16 @@ type GameStatusSectionProps = {
   className?: string;
 };
 
-export const GameStatusSection = ({ title, gameRows, className }: GameStatusSectionProps) => {
-  return <AgentStatusSectionCard title={title} rows={gameRows} className={className} />;
+export const GameStatusSection = ({
+  title,
+  gameRows,
+  className,
+}: GameStatusSectionProps) => {
+  return (
+    <AgentStatusSectionCard
+      title={title}
+      rows={gameRows}
+      className={className}
+    />
+  );
 };

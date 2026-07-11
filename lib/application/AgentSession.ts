@@ -1,10 +1,10 @@
 import type { State } from "automated-gameplay-transmitter";
+import type { GameName } from "../Agent/games/server";
+import type { AgentState } from "../Agent/State";
 import {
   initialNGramSize,
   initialNGramSizeRaw,
 } from "../domain/broadcasting/NGramPolicy";
-import type { AgentState } from "../Agent/State";
-import type { GameName } from "../Agent/games/server";
 
 export type PlayingGame = {
   name: GameName;

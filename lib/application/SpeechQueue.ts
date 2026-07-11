@@ -1,4 +1,7 @@
-import { shouldInvokeTts, trimmedSpeechText } from "../domain/speech/emptySpeech";
+import {
+  shouldInvokeTts,
+  trimmedSpeechText,
+} from "../domain/speech/emptySpeech";
 
 export type SpeechEvent = {
   text: string;
@@ -49,23 +52,33 @@ export class SpeechQueue {
   }
 
   enqueue(event: SpeechEvent): Promise<void> {
-    this.#speechPromise = this.#speechPromise.then(async () => {
-      const tasks: Array<Promise<void>> = [
-        ...this.#speechListeners.map((f) => f(event)),
-      ];
-      const trimmedText = trimmedSpeechText(event.text);
-      if (shouldInvokeTts(event.text)) {
-        const ttsTask = this.#tts.speech(trimmedText, { additionalHalfTone: 3, speakingRate: 1.2 }).catch((err) => {
-          for (const h of this.#ttsErrorHandlers) {
-            try { void h(trimmedText, err); } catch { /* ignore handler errors */ }
-          }
-          throw err;
-        });
-        tasks.unshift(ttsTask);
-      }
-      await Promise.all(tasks);
-      await Promise.all(this.#speechCompleteListeners.map((f) => Promise.resolve(f())));
-    }).catch(() => Promise.resolve());
+    this.#speechPromise = this.#speechPromise
+      .then(async () => {
+        const tasks: Array<Promise<void>> = [
+          ...this.#speechListeners.map((f) => f(event)),
+        ];
+        const trimmedText = trimmedSpeechText(event.text);
+        if (shouldInvokeTts(event.text)) {
+          const ttsTask = this.#tts
+            .speech(trimmedText, { additionalHalfTone: 3, speakingRate: 1.2 })
+            .catch((err) => {
+              for (const h of this.#ttsErrorHandlers) {
+                try {
+                  void h(trimmedText, err);
+                } catch {
+                  /* ignore handler errors */
+                }
+              }
+              throw err;
+            });
+          tasks.unshift(ttsTask);
+        }
+        await Promise.all(tasks);
+        await Promise.all(
+          this.#speechCompleteListeners.map((f) => Promise.resolve(f())),
+        );
+      })
+      .catch(() => Promise.resolve());
 
     return this.#speechPromise;
   }

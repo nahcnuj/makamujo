@@ -1,5 +1,9 @@
 import { describe, expect, it, mock } from "bun:test";
-import { createFallbackAgent, loadCreateAgentApi, tryCreateExternalAgentApi } from "./agentWiring";
+import {
+  createFallbackAgent,
+  loadCreateAgentApi,
+  tryCreateExternalAgentApi,
+} from "./agentWiring";
 
 describe("createFallbackAgent", () => {
   it("stores speech and published stream state", () => {
@@ -7,9 +11,13 @@ describe("createFallbackAgent", () => {
     let speech = { speech: "", silent: false };
     const agent = createFallbackAgent(
       () => lastPublished,
-      (d) => { lastPublished = d; },
+      (d) => {
+        lastPublished = d;
+      },
       () => speech,
-      (s) => { speech = s; },
+      (s) => {
+        speech = s;
+      },
     );
 
     agent.setSpeech("hello");
@@ -25,7 +33,9 @@ describe("createFallbackAgent", () => {
       () => {},
       () => ({ speech: "", silent: false }),
       () => {},
-      (comments) => { received.push(comments); },
+      (comments) => {
+        received.push(comments);
+      },
     );
 
     const batch = [{ data: { comment: "hi", no: 1 } }];
@@ -74,6 +84,8 @@ describe("tryCreateExternalAgentApi", () => {
       return;
     }
     expect(result).toBeTruthy();
-    expect(typeof (result as { getSpeech: () => unknown }).getSpeech).toBe("function");
+    expect(typeof (result as { getSpeech: () => unknown }).getSpeech).toBe(
+      "function",
+    );
   });
 });

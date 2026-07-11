@@ -1,16 +1,26 @@
-import { compile } from "tailwindcss";
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
+import { compile } from "tailwindcss";
 
-const TAILWIND_CSS_PATH = resolve(process.cwd(), "node_modules/tailwindcss/index.css");
+const TAILWIND_CSS_PATH = resolve(
+  process.cwd(),
+  "node_modules/tailwindcss/index.css",
+);
 const compiledCssCache = new Map<string, Promise<string>>();
-const candidateExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".html", ".css"]);
+const candidateExtensions = new Set([
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".html",
+  ".css",
+]);
 const excludedDirectories = new Set(["node_modules", ".git", "build"]);
 
 function tokenizeCandidates(source: string): Set<string> {
   const candidates = new Set<string>();
-  const tokenRegex = /[A-Za-z][A-Za-z0-9_\-:\/\[\]\(\),]{0,99}/g;
+  const tokenRegex = /[A-Za-z][A-Za-z0-9_\-:/[\](),]{0,99}/g;
   for (const token of source.match(tokenRegex) ?? []) {
     if (token.includes("class=") || token.includes("className=")) continue;
     candidates.add(token);
@@ -18,9 +28,13 @@ function tokenizeCandidates(source: string): Set<string> {
   return candidates;
 }
 
-function extractCandidatesFromContent(content: string, extension: string): Set<string> {
+function extractCandidatesFromContent(
+  content: string,
+  extension: string,
+): Set<string> {
   const candidates = new Set<string>();
-  const classAttributeRegex = /(?:class|className)\s*=\s*(?:\{\s*)?(?:`([^`]+)`|(['"])(.*?)\2)\s*(?:\})?/gs;
+  const classAttributeRegex =
+    /(?:class|className)\s*=\s*(?:\{\s*)?(?:`([^`]+)`|(['"])(.*?)\2)\s*(?:\})?/gs;
   for (const match of content.matchAll(classAttributeRegex)) {
     const raw = match[1] ?? match[3] ?? "";
     for (const candidate of raw.trim().split(/\s+/)) {
@@ -47,7 +61,8 @@ function extractCandidatesFromContent(content: string, extension: string): Set<s
 
 function walkFiles(directory: string, candidates: Set<string>) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if (entry.name.startsWith('.') || excludedDirectories.has(entry.name)) continue;
+    if (entry.name.startsWith(".") || excludedDirectories.has(entry.name))
+      continue;
     const fullPath = join(directory, entry.name);
     if (entry.isDirectory()) {
       walkFiles(fullPath, candidates);
@@ -65,11 +80,16 @@ function walkFiles(directory: string, candidates: Set<string>) {
 
 function gatherCandidatesForSource(sourcePath: string): string[] {
   const rootDirectories = [
-    sourcePath.startsWith("console/") ? resolve(process.cwd(), "console/src") : resolve(process.cwd(), "src"),
+    sourcePath.startsWith("console/")
+      ? resolve(process.cwd(), "console/src")
+      : resolve(process.cwd(), "src"),
   ];
 
   if (!sourcePath.startsWith("console/")) {
-    const agtDist = resolve(process.cwd(), "node_modules/automated-gameplay-transmitter/dist");
+    const agtDist = resolve(
+      process.cwd(),
+      "node_modules/automated-gameplay-transmitter/dist",
+    );
     try {
       if (statSync(agtDist).isDirectory()) {
         rootDirectories.push(agtDist);
@@ -128,8 +148,9 @@ function buildCssHeaders(css: string): Record<string, string> {
 
   if (process.env.NODE_ENV === "production") {
     const etag = `"${createHash("sha256").update(css).digest("hex")}"`;
-    headers["Cache-Control"] = "public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400";
-    headers["ETag"] = etag;
+    headers["Cache-Control"] =
+      "public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400";
+    headers.ETag = etag;
   } else {
     headers["Cache-Control"] = "no-cache";
   }
@@ -139,7 +160,10 @@ function buildCssHeaders(css: string): Record<string, string> {
 
 export function createCssResponse(css: string, req?: Request): Response {
   const headers = buildCssHeaders(css);
-  if (process.env.NODE_ENV === "production" && req?.headers.get("if-none-match") === headers["ETag"]) {
+  if (
+    process.env.NODE_ENV === "production" &&
+    req?.headers.get("if-none-match") === headers.ETag
+  ) {
     return new Response(null, { status: 304, headers });
   }
   return new Response(css, { headers });

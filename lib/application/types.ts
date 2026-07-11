@@ -1,20 +1,19 @@
 /** Shared stream / comment payload shapes used by application services. */
 
-export type StreamData =
-  | {
-    type: "niconama";
-    data: {
-      title: string;
-      isLive: boolean;
-      startTime: number;
-      total: number;
-      points: {
-        gift: number | string;
-        ad: number | string;
-      };
-      url: string;
+export type StreamData = {
+  type: "niconama";
+  data: {
+    title: string;
+    isLive: boolean;
+    startTime: number;
+    total: number;
+    points: {
+      gift: number | string;
+      ad: number | string;
     };
+    url: string;
   };
+};
 
 export type CommentData = {
   comment: string;
@@ -26,7 +25,9 @@ export type CommentData = {
   hasGift: boolean;
 };
 
-export type TalkModelGenerateResult = string | { text: string; nodes?: string[] };
+export type TalkModelGenerateResult =
+  | string
+  | { text: string; nodes?: string[] };
 
 export type TalkModelPort = {
   generate(start?: string, nGram?: number): TalkModelGenerateResult;

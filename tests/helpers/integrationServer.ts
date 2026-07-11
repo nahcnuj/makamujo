@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 
 /** stdout/stderr pipe child (stdin ignored). */
@@ -42,11 +42,17 @@ export const allocateFreePort = (): Promise<number> =>
  * Bun/console children holding ports and named pipes.
  * Waits for `taskkill` to finish so the next suite does not race on ports/pipes.
  */
-export const killProcessTree = (proc: SpawnedServer | null | undefined): void => {
+export const killProcessTree = (
+  proc: SpawnedServer | null | undefined,
+): void => {
   if (!proc) return;
   const pid = proc.pid;
   if (pid === undefined) {
-    try { proc.kill(); } catch { /* ignore */ }
+    try {
+      proc.kill();
+    } catch {
+      /* ignore */
+    }
     return;
   }
   if (process.platform === "win32") {
@@ -56,10 +62,18 @@ export const killProcessTree = (proc: SpawnedServer | null | undefined): void =>
         windowsHide: true,
       });
     } catch {
-      try { proc.kill(); } catch { /* ignore */ }
+      try {
+        proc.kill();
+      } catch {
+        /* ignore */
+      }
     }
   } else {
-    try { proc.kill("SIGTERM"); } catch { /* ignore */ }
+    try {
+      proc.kill("SIGTERM");
+    } catch {
+      /* ignore */
+    }
   }
 };
 
@@ -67,8 +81,9 @@ export const killProcessTree = (proc: SpawnedServer | null | undefined): void =>
  * Brief pause so OS can release TCP ports / named pipes after kill.
  * Windows needs a longer default after taskkill.
  */
-export const waitForPortRelease = (ms = process.platform === "win32" ? 500 : 300): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+export const waitForPortRelease = (
+  ms = process.platform === "win32" ? 500 : 300,
+): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 export type WaitForServerReadyOptions = {
   timeoutMs?: number;
@@ -95,7 +110,11 @@ export const waitForSpawnedReady = (
 
     const timeout = setTimeout(() => {
       cleanup();
-      reject(new Error(`${label} startup timed out after ${timeoutMs}ms. Output:\n${buffer.slice(-2000)}`));
+      reject(
+        new Error(
+          `${label} startup timed out after ${timeoutMs}ms. Output:\n${buffer.slice(-2000)}`,
+        ),
+      );
     }, timeoutMs);
 
     const check = () => {
@@ -118,16 +137,30 @@ export const waitForSpawnedReady = (
 
     const onExit = (code: number | null) => {
       cleanup();
-      reject(new Error(
-        `${label} exited early with code ${code}. Output:\n${buffer.slice(-2000)}`,
-      ));
+      reject(
+        new Error(
+          `${label} exited early with code ${code}. Output:\n${buffer.slice(-2000)}`,
+        ),
+      );
     };
 
     const cleanup = () => {
       clearTimeout(timeout);
-      try { proc.stdout.off("data", onData); } catch { /* ignore */ }
-      try { proc.stderr.off("data", onData); } catch { /* ignore */ }
-      try { proc.off("exit", onExit); } catch { /* ignore */ }
+      try {
+        proc.stdout.off("data", onData);
+      } catch {
+        /* ignore */
+      }
+      try {
+        proc.stderr.off("data", onData);
+      } catch {
+        /* ignore */
+      }
+      try {
+        proc.off("exit", onExit);
+      } catch {
+        /* ignore */
+      }
     };
 
     proc.stdout.on("data", onData);

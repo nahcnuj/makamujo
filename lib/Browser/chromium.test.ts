@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdtempSync, writeFileSync, existsSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -9,42 +9,48 @@ import {
   createRedirectToHomeHandler,
 } from "./chromium";
 
-const HOME_URL = 'https://orteil.dashnet.org/cookieclicker/';
+const HOME_URL = "https://orteil.dashnet.org/cookieclicker/";
 
-describe('cleanupChromiumLockFiles', () => {
-  it('removes SingletonLock and SingletonSocket when present', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'chromium-lock-'));
+describe("cleanupChromiumLockFiles", () => {
+  it("removes SingletonLock and SingletonSocket when present", () => {
+    const dir = mkdtempSync(join(tmpdir(), "chromium-lock-"));
     try {
-      writeFileSync(join(dir, 'SingletonLock'), 'x');
-      writeFileSync(join(dir, 'SingletonSocket'), 'y');
-      writeFileSync(join(dir, 'keep-me'), 'z');
+      writeFileSync(join(dir, "SingletonLock"), "x");
+      writeFileSync(join(dir, "SingletonSocket"), "y");
+      writeFileSync(join(dir, "keep-me"), "z");
       cleanupChromiumLockFiles(dir);
-      expect(existsSync(join(dir, 'SingletonLock'))).toBe(false);
-      expect(existsSync(join(dir, 'SingletonSocket'))).toBe(false);
-      expect(existsSync(join(dir, 'keep-me'))).toBe(true);
+      expect(existsSync(join(dir, "SingletonLock"))).toBe(false);
+      expect(existsSync(join(dir, "SingletonSocket"))).toBe(false);
+      expect(existsSync(join(dir, "keep-me"))).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it('is a no-op when the directory does not exist', () => {
-    expect(() => cleanupChromiumLockFiles(join(tmpdir(), 'missing-chromium-profile'))).not.toThrow();
+  it("is a no-op when the directory does not exist", () => {
+    expect(() =>
+      cleanupChromiumLockFiles(join(tmpdir(), "missing-chromium-profile")),
+    ).not.toThrow();
   });
 });
 
-describe('createPopupPageHandler', () => {
+describe("createPopupPageHandler", () => {
   const makePageLike = (url: string) => {
     let closed = false;
     return {
       url: () => url,
-      close: async () => { closed = true; },
-      get closed() { return closed; },
+      close: async () => {
+        closed = true;
+      },
+      get closed() {
+        return closed;
+      },
     };
   };
 
-  it('should close a new tab that is not the main page', async () => {
+  it("should close a new tab that is not the main page", async () => {
     const mainPage = makePageLike(HOME_URL);
-    const popupPage = makePageLike('https://example.com/ad');
+    const popupPage = makePageLike("https://example.com/ad");
     const handler = createPopupPageHandler(mainPage);
 
     await handler(popupPage);
@@ -52,7 +58,7 @@ describe('createPopupPageHandler', () => {
     expect(popupPage.closed).toBeTrue();
   });
 
-  it('should not close the main page itself', async () => {
+  it("should not close the main page itself", async () => {
     const mainPage = makePageLike(HOME_URL);
     const handler = createPopupPageHandler(mainPage);
 
@@ -62,16 +68,18 @@ describe('createPopupPageHandler', () => {
   });
 });
 
-describe('createRedirectToHomeHandler', () => {
+describe("createRedirectToHomeHandler", () => {
   const makeFrameLike = (url: string) => ({ url: () => url });
 
-  it('should redirect when the main frame navigates away from home', async () => {
-    const mainFrame = makeFrameLike('https://example.com/ad');
+  it("should redirect when the main frame navigates away from home", async () => {
+    const mainFrame = makeFrameLike("https://example.com/ad");
     const redirectedUrls: string[] = [];
     const handler = createRedirectToHomeHandler(
       mainFrame,
       HOME_URL,
-      async (url) => { redirectedUrls.push(url); },
+      async (url) => {
+        redirectedUrls.push(url);
+      },
     );
 
     handler(mainFrame);
@@ -80,13 +88,15 @@ describe('createRedirectToHomeHandler', () => {
     expect(redirectedUrls).toEqual([HOME_URL]);
   });
 
-  it('should not redirect when already at the home URL', () => {
+  it("should not redirect when already at the home URL", () => {
     const mainFrame = makeFrameLike(HOME_URL);
     const redirectedUrls: string[] = [];
     const handler = createRedirectToHomeHandler(
       mainFrame,
       HOME_URL,
-      async (url) => { redirectedUrls.push(url); },
+      async (url) => {
+        redirectedUrls.push(url);
+      },
     );
 
     handler(mainFrame);
@@ -94,13 +104,15 @@ describe('createRedirectToHomeHandler', () => {
     expect(redirectedUrls).toBeEmpty();
   });
 
-  it('should not redirect when already at a sub-path of the home URL', () => {
-    const mainFrame = makeFrameLike(HOME_URL + '?some=param');
+  it("should not redirect when already at a sub-path of the home URL", () => {
+    const mainFrame = makeFrameLike(HOME_URL + "?some=param");
     const redirectedUrls: string[] = [];
     const handler = createRedirectToHomeHandler(
       mainFrame,
       HOME_URL,
-      async (url) => { redirectedUrls.push(url); },
+      async (url) => {
+        redirectedUrls.push(url);
+      },
     );
 
     handler(mainFrame);
@@ -108,13 +120,15 @@ describe('createRedirectToHomeHandler', () => {
     expect(redirectedUrls).toBeEmpty();
   });
 
-  it('should not redirect for about:blank', () => {
-    const mainFrame = makeFrameLike('about:blank');
+  it("should not redirect for about:blank", () => {
+    const mainFrame = makeFrameLike("about:blank");
     const redirectedUrls: string[] = [];
     const handler = createRedirectToHomeHandler(
       mainFrame,
       HOME_URL,
-      async (url) => { redirectedUrls.push(url); },
+      async (url) => {
+        redirectedUrls.push(url);
+      },
     );
 
     handler(mainFrame);
@@ -122,14 +136,16 @@ describe('createRedirectToHomeHandler', () => {
     expect(redirectedUrls).toBeEmpty();
   });
 
-  it('should not redirect when a sub-frame navigates away', () => {
+  it("should not redirect when a sub-frame navigates away", () => {
     const mainFrame = makeFrameLike(HOME_URL);
-    const subFrame = makeFrameLike('https://example.com/ad');
+    const subFrame = makeFrameLike("https://example.com/ad");
     const redirectedUrls: string[] = [];
     const handler = createRedirectToHomeHandler(
       mainFrame,
       HOME_URL,
-      async (url) => { redirectedUrls.push(url); },
+      async (url) => {
+        redirectedUrls.push(url);
+      },
     );
 
     handler(subFrame);
@@ -137,11 +153,13 @@ describe('createRedirectToHomeHandler', () => {
     expect(redirectedUrls).toBeEmpty();
   });
 
-  it('should not trigger a second redirect while one is already in progress', async () => {
+  it("should not trigger a second redirect while one is already in progress", async () => {
     let resolveFirst!: () => void;
-    const firstRedirectDone = new Promise<void>((resolve) => { resolveFirst = resolve; });
+    const firstRedirectDone = new Promise<void>((resolve) => {
+      resolveFirst = resolve;
+    });
 
-    const mainFrame = makeFrameLike('https://example.com/ad');
+    const mainFrame = makeFrameLike("https://example.com/ad");
     const redirectedUrls: string[] = [];
     const handler = createRedirectToHomeHandler(
       mainFrame,
@@ -161,15 +179,15 @@ describe('createRedirectToHomeHandler', () => {
     expect(redirectedUrls).toHaveLength(1);
   });
 
-  it('should allow a redirect again after a failed redirect', async () => {
-    const mainFrame = makeFrameLike('https://example.com/');
+  it("should allow a redirect again after a failed redirect", async () => {
+    const mainFrame = makeFrameLike("https://example.com/");
     let callCount = 0;
     const handler = createRedirectToHomeHandler(
       mainFrame,
       HOME_URL,
       async () => {
         callCount++;
-        throw new Error('navigation failed');
+        throw new Error("navigation failed");
       },
     );
 
@@ -183,13 +201,15 @@ describe('createRedirectToHomeHandler', () => {
     expect(callCount).toBe(2);
   });
 
-  it('should reset the redirecting flag when the main frame reaches home', () => {
-    const mainFrame = makeFrameLike('https://example.com/ad');
+  it("should reset the redirecting flag when the main frame reaches home", () => {
+    const mainFrame = makeFrameLike("https://example.com/ad");
     const redirectedUrls: string[] = [];
     const handler = createRedirectToHomeHandler(
       mainFrame,
       HOME_URL,
-      async (url) => { redirectedUrls.push(url); },
+      async (url) => {
+        redirectedUrls.push(url);
+      },
     );
 
     handler(mainFrame); // triggers redirect, sets isRedirecting = true
@@ -201,39 +221,43 @@ describe('createRedirectToHomeHandler', () => {
     handler(arrivedMainFrame); // should reset isRedirecting = false
 
     // Now another navigation away should trigger a redirect again
-    Object.assign(arrivedMainFrame, { url: () => 'https://example.com/ad2' });
+    Object.assign(arrivedMainFrame, { url: () => "https://example.com/ad2" });
     handler(arrivedMainFrame);
 
     expect(redirectedUrls.length).toBeGreaterThanOrEqual(2);
   });
 });
 
-describe('createClickByElementId', () => {
+describe("createClickByElementId", () => {
   const makeLocatorLike = (onClick: () => void) => {
     const locator = {
       first: () => locator,
-      click: async (_opts?: { timeout?: number }) => { onClick(); },
+      click: async (_opts?: { timeout?: number }) => {
+        onClick();
+      },
     };
     return locator;
   };
 
-  it('should click the element matching the given ID', async () => {
-    let clickedSelector = '';
+  it("should click the element matching the given ID", async () => {
+    let clickedSelector = "";
     let clicked = false;
     const page = {
       locator: (selector: string) => {
         clickedSelector = selector;
-        return makeLocatorLike(() => { clicked = true; });
+        return makeLocatorLike(() => {
+          clicked = true;
+        });
       },
     };
 
-    await createClickByElementId(page)('bigCookie');
+    await createClickByElementId(page)("bigCookie");
 
-    expect(clickedSelector).toBe('#bigCookie');
+    expect(clickedSelector).toBe("#bigCookie");
     expect(clicked).toBeTrue();
   });
 
-  it('should use first() so that duplicate IDs do not cause a strict mode error', async () => {
+  it("should use first() so that duplicate IDs do not cause a strict mode error", async () => {
     let firstCalled = false;
     const page = {
       locator: (_selector: string) => ({
@@ -245,7 +269,7 @@ describe('createClickByElementId', () => {
       }),
     };
 
-    await createClickByElementId(page)('promptOption0');
+    await createClickByElementId(page)("promptOption0");
 
     expect(firstCalled).toBeTrue();
   });

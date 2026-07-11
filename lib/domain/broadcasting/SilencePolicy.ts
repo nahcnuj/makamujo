@@ -21,10 +21,12 @@ export type SilenceClockInput = {
  */
 export const evaluateSpeechable = (input: SilenceClockInput): boolean => {
   if (input.streamLive) {
-    const listenersStale = input.listenersStaleSince !== undefined &&
-      (input.nowMs - input.listenersStaleSince.getTime()) >= input.thresholdMs;
-    const commentsStale = input.lastCommentAt === undefined ||
-      (input.nowMs - input.lastCommentAt.getTime()) >= input.thresholdMs;
+    const listenersStale =
+      input.listenersStaleSince !== undefined &&
+      input.nowMs - input.listenersStaleSince.getTime() >= input.thresholdMs;
+    const commentsStale =
+      input.lastCommentAt === undefined ||
+      input.nowMs - input.lastCommentAt.getTime() >= input.thresholdMs;
 
     if (commentsStale && input.hasPromptedCommentForViewerIncrease) {
       return false;
@@ -45,8 +47,14 @@ export type CommentPromptInput = {
 };
 
 /** Pure decision for viewer-increase comment prompt (side effects stay in onAir). */
-export const shouldPromptCommentAfterViewerIncrease = (input: CommentPromptInput): boolean => {
-  return input.hadCommentBefore && input.commentsStale && !input.hasPromptedCommentForViewerIncrease;
+export const shouldPromptCommentAfterViewerIncrease = (
+  input: CommentPromptInput,
+): boolean => {
+  return (
+    input.hadCommentBefore &&
+    input.commentsStale &&
+    !input.hasPromptedCommentForViewerIncrease
+  );
 };
 
 export const isCommentsStale = (
@@ -54,5 +62,8 @@ export const isCommentsStale = (
   nowMs: number,
   thresholdMs: number,
 ): boolean => {
-  return lastCommentAt === undefined || (nowMs - lastCommentAt.getTime()) >= thresholdMs;
+  return (
+    lastCommentAt === undefined ||
+    nowMs - lastCommentAt.getTime() >= thresholdMs
+  );
 };

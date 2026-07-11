@@ -7,23 +7,23 @@ import { Action, type State } from "automated-gameplay-transmitter";
 type GameState =
   | undefined
   | {
-    type: 'initialize'
-    data?: string
-  }
+      type: "initialize";
+      data?: string;
+    }
   | {
-    type: 'idle'
-    count: number
-  }
+      type: "idle";
+      count: number;
+    }
   | {
-    type: 'seeStats'
-    failureCount: number
-  }
-  | { type: 'save'; failureCount: number }
-  | { type: 'closed' };
+      type: "seeStats";
+      failureCount: number;
+    }
+  | { type: "save"; failureCount: number }
+  | { type: "closed" };
 
 type SolverEventListeners = {
-  onSave: Array<(text: string) => void>
-  isSilent: () => boolean
+  onSave: Array<(text: string) => void>;
+  isSilent: () => boolean;
 };
 
 const MAX_CONSECUTIVE_FAILURES = 3;
@@ -32,15 +32,20 @@ const MAX_CONSECUTIVE_FAILURES = 3;
  * Increments the `failureCount` of the given state by one.
  * If the updated count reaches {@link MAX_CONSECUTIVE_FAILURES}, returns an `idle` state instead.
  */
-function bumpFailureCount<T extends { failureCount: number }>(state: T): T | { type: 'idle'; count: number } {
+function bumpFailureCount<T extends { failureCount: number }>(
+  state: T,
+): T | { type: "idle"; count: number } {
   const next = { ...state, failureCount: state.failureCount + 1 };
   if (next.failureCount >= MAX_CONSECUTIVE_FAILURES) {
-    return { type: 'idle', count: 0 };
+    return { type: "idle", count: 0 };
   }
   return next;
 }
 
-export function* solver(state: GameState = { type: 'initialize' }, eventListeners: Partial<SolverEventListeners> = {}): Generator<Action.Action, undefined, State> {
+export function* solver(
+  state: GameState = { type: "initialize" },
+  eventListeners: Partial<SolverEventListeners> = {},
+): Generator<Action.Action, undefined, State> {
   const listeners: SolverEventListeners = {
     onSave: [],
     isSilent: () => false,
@@ -48,124 +53,153 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
   };
 
   let hasReloadedForShoten = false;
-  let gameData: string | undefined = state?.type === 'initialize' ? state.data : undefined;
+  let gameData: string | undefined =
+    state?.type === "initialize" ? state.data : undefined;
 
-  function* runActions(actions: readonly Action.Action[]): Generator<Action.Action, boolean, State> {
+  function* runActions(
+    actions: readonly Action.Action[],
+  ): Generator<Action.Action, boolean, State> {
     for (const action of actions) {
       const result = yield action;
-      if (result.name === 'closed') {
-        state = { type: 'closed' };
+      if (result.name === "closed") {
+        state = { type: "closed" };
         return false;
       }
-      if (action.name !== 'noop') {
-        if (result.name === 'result') {
+      if (action.name !== "noop") {
+        if (result.name === "result") {
           if (!result.succeeded) {
             console.error(`failed to`, result.action);
-            const escapeKeyPressResult = yield { name: 'press', key: 'Escape' } as const;
-            if (escapeKeyPressResult.name === 'closed') {
-              state = { type: 'closed' };
+            const escapeKeyPressResult = yield {
+              name: "press",
+              key: "Escape",
+            } as const;
+            if (escapeKeyPressResult.name === "closed") {
+              state = { type: "closed" };
             }
             return false;
           }
         } else {
-          console.warn('unexpected result', result);
+          console.warn("unexpected result", result);
         }
       }
     }
     return true;
   }
 
-  while (state.type !== 'closed') {
+  while (state.type !== "closed") {
     switch (state.type) {
-      case 'initialize': {
-        if (!(yield* runActions([Action.open('https://orteil.dashnet.org/cookieclicker/')]))) break;
+      case "initialize": {
+        if (
+          !(yield* runActions([
+            Action.open("https://orteil.dashnet.org/cookieclicker/"),
+          ]))
+        )
+          break;
 
         // These dialogs may not always appear (e.g. when already set or dismissed).
         // Treat each as optional: continue initialization even if a step fails.
         for (const action of [
-          Action.clickByText('日本語'),
-          Action.clickByText('Got it'),
-          Action.clickByText('次回から表示しない'),
+          Action.clickByText("日本語"),
+          Action.clickByText("Got it"),
+          Action.clickByText("次回から表示しない"),
         ]) {
           const result = yield action;
-          if (result.name === 'closed') {
-            state = { type: 'closed' };
+          if (result.name === "closed") {
+            state = { type: "closed" };
             break;
           }
         }
 
-        if (state.type === 'closed') break;
+        if (state.type === "closed") break;
 
         if (state.data) {
-          if (!(yield* runActions([
-            { name: 'press', key: 'Control+O' },
-            {
-              name: 'fill',
-              value: state.data,
-              on: { selector: '#game', role: 'textbox' },
-            },
-            { name: 'press', key: 'Enter' },
-          ]))) break;
+          if (
+            !(yield* runActions([
+              { name: "press", key: "Control+O" },
+              {
+                name: "fill",
+                value: state.data,
+                on: { selector: "#game", role: "textbox" },
+              },
+              { name: "press", key: "Enter" },
+            ]))
+          )
+            break;
         }
 
         state = {
-          type: 'idle',
+          type: "idle",
           count: 0,
         };
         break;
       }
-      case 'idle': {
+      case "idle": {
         const noopResult = yield Action.noop;
-        if (noopResult.name === 'closed') {
-          state = { type: 'closed' };
+        if (noopResult.name === "closed") {
+          state = { type: "closed" };
           break;
         }
 
-        if (noopResult.name === 'idle' && !noopResult.url.startsWith('https://orteil.dashnet.org/cookieclicker/')) {
-          state = { type: 'initialize', data: gameData };
+        if (
+          noopResult.name === "idle" &&
+          !noopResult.url.startsWith(
+            "https://orteil.dashnet.org/cookieclicker/",
+          )
+        ) {
+          state = { type: "initialize", data: gameData };
           break;
         }
 
-        const sightData = noopResult.name === 'idle' ? noopResult.state : undefined;
+        const sightData =
+          noopResult.name === "idle" ? noopResult.state : undefined;
 
         if (!listeners.isSilent()) {
           hasReloadedForShoten = false;
-        } else if ((sightData as any)?.title?.includes('昇天中') && !hasReloadedForShoten) {
+        } else if (
+          (sightData as any)?.title?.includes("昇天中") &&
+          !hasReloadedForShoten
+        ) {
           hasReloadedForShoten = true;
-          state = { type: 'initialize', data: gameData };
+          state = { type: "initialize", data: gameData };
           break;
         }
 
-        const clickableElementIds = Array.isArray((sightData as any)?.clickableElementIds)
-          ? (sightData as any).clickableElementIds as string[]
-          : ['bigCookie'];
+        const clickableElementIds = Array.isArray(
+          (sightData as any)?.clickableElementIds,
+        )
+          ? ((sightData as any).clickableElementIds as string[])
+          : ["bigCookie"];
         const candidateIds = listeners.isSilent()
-          ? ['bigCookie']
-          : clickableElementIds.length > 0 ? clickableElementIds : ['bigCookie'];
-        const targetId = candidateIds[Math.floor(Math.random() * candidateIds.length)]!;
+          ? ["bigCookie"]
+          : clickableElementIds.length > 0
+            ? clickableElementIds
+            : ["bigCookie"];
+        const targetId =
+          candidateIds[Math.floor(Math.random() * candidateIds.length)]!;
 
         if (!(yield* runActions([Action.clickByElementId(targetId)]))) break;
 
-        state = state.count >= 1_000 ?
-          {
-            type: 'save',
-            failureCount: 0,
-          } :
-          {
-            ...state,
-            count: state.count + 1,
-          };
+        state =
+          state.count >= 1_000
+            ? {
+                type: "save",
+                failureCount: 0,
+              }
+            : {
+                ...state,
+                count: state.count + 1,
+              };
         break;
       }
-      case 'save': {
+      case "save": {
         {
           const actions = [
-            Action.clickByText('オプション'),
-            Action.clickByText('セーブをエクスポート'),
+            Action.clickByText("オプション"),
+            Action.clickByText("セーブをエクスポート"),
           ];
 
           if (!(yield* runActions(actions))) {
-            if (state.type === 'save') {
+            if (state.type === "save") {
               state = bumpFailureCount(state);
             }
             break;
@@ -174,50 +208,45 @@ export function* solver(state: GameState = { type: 'initialize' }, eventListener
 
         {
           const result = yield Action.noop;
-          if (result.name === 'idle' && result.selectedText) {
-            const text = result.selectedText ?? '';
+          if (result.name === "idle" && result.selectedText) {
+            const text = result.selectedText ?? "";
             gameData = text;
-            listeners.onSave.forEach(f => f(text));
+            listeners.onSave.forEach((f) => f(text));
           }
         }
 
         {
-          const actions = [
-            { name: 'press', key: 'Escape' },
-          ] as const;
+          const actions = [{ name: "press", key: "Escape" }] as const;
 
           if (!(yield* runActions(actions))) {
-            if (state.type === 'save') {
+            if (state.type === "save") {
               state = bumpFailureCount(state);
             }
             break;
           }
         }
-        state = { type: 'seeStats', failureCount: 0 };
+        state = { type: "seeStats", failureCount: 0 };
         break;
       }
-      case 'seeStats': {
-        const actions = [
-          Action.clickByText('記録'),
-          Action.noop,
-        ];
+      case "seeStats": {
+        const actions = [Action.clickByText("記録"), Action.noop];
 
         if (!(yield* runActions(actions))) {
-          if (state.type === 'seeStats') {
+          if (state.type === "seeStats") {
             state = bumpFailureCount(state);
           }
           break;
         }
 
         state = {
-          type: 'idle',
+          type: "idle",
           count: 0,
         };
         break;
       }
       default: {
         const _: never = state;
-        throw new Error('unreachable');
+        throw new Error("unreachable");
       }
     }
   }

@@ -44,7 +44,10 @@ export const generateConsoleBasicAuthPassword = (
   randomBytes: Uint8Array = crypto.getRandomValues(new Uint8Array(16)),
 ): string =>
   Array.from(randomBytes)
-    .map((byte) => BASIC_AUTH_PASSWORD_CHARS[byte % BASIC_AUTH_PASSWORD_CHARS.length]!)
+    .map(
+      (byte) =>
+        BASIC_AUTH_PASSWORD_CHARS[byte % BASIC_AUTH_PASSWORD_CHARS.length]!,
+    )
     .join("");
 
 /**
@@ -119,7 +122,9 @@ const HOP_BY_HOP_HEADERS = [
  * Headers safe to forward from the outer console to the loopback console.
  * Strips hop-by-hop headers (RFC 7230), Host, Origin, and Referer.
  */
-export const createLoopbackProxyHeaders = (originalHeaders: Headers): Headers => {
+export const createLoopbackProxyHeaders = (
+  originalHeaders: Headers,
+): Headers => {
   const headers = new Headers(originalHeaders);
   const connectionValue = headers.get("connection");
   for (const header of HOP_BY_HOP_HEADERS) {
@@ -129,7 +134,9 @@ export const createLoopbackProxyHeaders = (originalHeaders: Headers): Headers =>
   headers.delete("origin");
   headers.delete("referer");
   if (connectionValue) {
-    for (const token of connectionValue.split(",").map((t) => t.trim().toLowerCase())) {
+    for (const token of connectionValue
+      .split(",")
+      .map((t) => t.trim().toLowerCase())) {
       if (token) headers.delete(token);
     }
   }

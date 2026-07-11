@@ -58,7 +58,11 @@ describe("planAgentStatusRows", () => {
       canSpeak: true,
       speech: { speech: "hello", silent: true },
     });
-    expect(plans.some((p) => p.kind === "speechContent" || p.kind === "speechUnavailable")).toBe(false);
+    expect(
+      plans.some(
+        (p) => p.kind === "speechContent" || p.kind === "speechUnavailable",
+      ),
+    ).toBe(false);
   });
 
   it("prefers speech history over standalone reply target when history is displayable", () => {

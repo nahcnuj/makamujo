@@ -26,7 +26,11 @@ export class CommentApplicationService {
   #talkModel: TalkModelPort;
   #speech: SpeechPort;
 
-  constructor(session: AgentSession, talkModel: TalkModelPort, speech: SpeechPort) {
+  constructor(
+    session: AgentSession,
+    talkModel: TalkModelPort,
+    speech: SpeechPort,
+  ) {
     this.#session = session;
     this.#talkModel = talkModel;
     this.#speech = speech;
@@ -57,7 +61,10 @@ export class CommentApplicationService {
       }
 
       // Step 6 — user no or cruise name
-      if (data.no || (data.userId === "onecomme.system" && data.name === "生放送クルーズ")) {
+      if (
+        data.no ||
+        (data.userId === "onecomme.system" && data.name === "生放送クルーズ")
+      ) {
         console.log("[INFO]", `got a comment: "${comment}"`);
         const topic = pickTopic(comment);
         if (topic) {
@@ -67,7 +74,9 @@ export class CommentApplicationService {
               pickedTopic: topic,
             };
           }
-          void this.#speech.speech(this.#talkModel.generate(topic, this.#session.currentNGramSize));
+          void this.#speech.speech(
+            this.#talkModel.generate(topic, this.#session.currentNGramSize),
+          );
         }
       }
 
@@ -102,24 +111,39 @@ export class CommentApplicationService {
       }
 
       // Step 8 — program comment counter (not monotonic)
-      if (typeof commentData.no === "number" && commentData.no > 0 && this.#session.currentProgramUrl) {
+      if (
+        typeof commentData.no === "number" &&
+        commentData.no > 0 &&
+        this.#session.currentProgramUrl
+      ) {
         this.#session.currentProgramLatestCommentNo = commentData.no;
-        if (this.#session.streamState && this.#session.streamState.meta) {
-          const existingTotal = this.#session.streamState.meta.total ?? { listeners: 0, gift: 0, ad: 0 };
+        if (this.#session.streamState?.meta) {
+          const existingTotal = this.#session.streamState.meta.total ?? {
+            listeners: 0,
+            gift: 0,
+            ad: 0,
+          };
           this.#session.streamState.meta = {
             ...this.#session.streamState.meta,
-            total: { ...existingTotal, comments: this.#session.currentProgramLatestCommentNo },
+            total: {
+              ...existingTotal,
+              comments: this.#session.currentProgramLatestCommentNo,
+            },
           };
         }
       }
 
       // Step 9 — gift
       if (data.hasGift && !isAd) {
-        const name = (data as { origin?: { message?: { gift?: { advertiserName?: string } } } })
-          .origin?.message?.gift?.advertiserName;
+        const name = (
+          data as {
+            origin?: { message?: { gift?: { advertiserName?: string } } };
+          }
+        ).origin?.message?.gift?.advertiserName;
         console.log(`[GIFT] ${name}`);
-        void this.#speech.speech(formatGiftThanks(name, Boolean(data.anonymity)));
-        continue;
+        void this.#speech.speech(
+          formatGiftThanks(name, Boolean(data.anonymity)),
+        );
       }
     }
   }

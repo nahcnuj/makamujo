@@ -1,0 +1,13 @@
+name: Check no test imports
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  no-test-imports:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run import check
+        run: sh scripts/check-no-test-imports.sh

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { resolveExecutablePath } from "./chromium";
 
 describe("resolveExecutablePath", () => {
@@ -14,7 +14,9 @@ describe("resolveExecutablePath", () => {
   });
 
   it("returns undefined for non-existing provided path", () => {
-    expect(resolveExecutablePath("/non/existent/path/to/chrome")).toBeUndefined();
+    expect(
+      resolveExecutablePath("/non/existent/path/to/chrome"),
+    ).toBeUndefined();
   });
 
   it("falls back to CHROMIUM_EXECUTABLE_PATH env (if set and exists)", () => {

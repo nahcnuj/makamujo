@@ -1,14 +1,14 @@
-import { test, expect } from "bun:test";
+import { expect, test } from "bun:test";
 import { spawn } from "node:child_process";
-import { existsSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import {
   allocateFreePort,
   killProcessTree,
   makamujoIpcPath,
   resolveBunExecutable,
+  type SpawnedServer,
   waitForPortRelease,
   waitForSpawnedReady,
-  type SpawnedServer,
 } from "../helpers/integrationServer";
 
 test("returns 501 when websocket upgrade unavailable", async () => {
@@ -16,7 +16,11 @@ test("returns 501 when websocket upgrade unavailable", async () => {
   const BASE = `http://127.0.0.1:${port}`;
 
   if (!existsSync("./var/cookieclicker.txt")) {
-    try { mkdirSync("./var", { recursive: true }); } catch { /* ignore */ }
+    try {
+      mkdirSync("./var", { recursive: true });
+    } catch {
+      /* ignore */
+    }
     writeFileSync("./var/cookieclicker.txt", "");
   }
 

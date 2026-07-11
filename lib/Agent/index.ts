@@ -2,7 +2,7 @@ import type { AgentComment } from "automated-gameplay-transmitter";
 import { AgentSession } from "../application/AgentSession";
 import { CommentApplicationService } from "../application/CommentApplicationService";
 import { GameplayApplicationService } from "../application/GameplayApplicationService";
-import { SpeechQueue, type SpeechEvent } from "../application/SpeechQueue";
+import { type SpeechEvent, SpeechQueue } from "../application/SpeechQueue";
 import { StreamApplicationService } from "../application/StreamApplicationService";
 import type { TalkModelGenerateResult as AppTalkModelGenerateResult } from "../application/types";
 import { evaluateSpeechable } from "../domain/broadcasting/SilencePolicy";
@@ -14,7 +14,6 @@ export const SILENCE_THRESHOLD_MS = 5 * 60 * 1_000; // 5 minutes
  */
 export class MakaMujo {
   #talkModel: TalkModel;
-  #tts: TTS;
   #session = new AgentSession();
   #speechQueue: SpeechQueue;
   #comments: CommentApplicationService;
@@ -24,14 +23,18 @@ export class MakaMujo {
 
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
-    this.#tts = tts;
     this.#speechQueue = new SpeechQueue(tts);
 
     const speechPort = {
-      speech: (generated?: AppTalkModelGenerateResult) => this.speech(generated),
+      speech: (generated?: AppTalkModelGenerateResult) =>
+        this.speech(generated),
     };
 
-    this.#comments = new CommentApplicationService(this.#session, talkModel, speechPort);
+    this.#comments = new CommentApplicationService(
+      this.#session,
+      talkModel,
+      speechPort,
+    );
     this.#stream = new StreamApplicationService(
       this.#session,
       speechPort,
@@ -51,20 +54,30 @@ export class MakaMujo {
 
   async speech(generated?: TalkModelGenerateResult) {
     const session = this.#session;
-    const event: SpeechEvent = typeof generated === "string" ? { text: generated } : generated !== undefined ? {
-      nGram: session.currentNGramSize,
-      nGramRaw: session.currentNGramSizeRaw,
-      ...generated,
-    } : (() => {
-      const ret = this.#talkModel.generate("", session.currentNGramSize);
-      return typeof ret === "string" ? {
-        text: ret,
-      } : {
-        nGram: session.currentNGramSize,
-        nGramRaw: session.currentNGramSizeRaw,
-        ...ret,
-      };
-    })();
+    const event: SpeechEvent =
+      typeof generated === "string"
+        ? { text: generated }
+        : generated !== undefined
+          ? {
+              nGram: session.currentNGramSize,
+              nGramRaw: session.currentNGramSizeRaw,
+              ...generated,
+            }
+          : (() => {
+              const ret = this.#talkModel.generate(
+                "",
+                session.currentNGramSize,
+              );
+              return typeof ret === "string"
+                ? {
+                    text: ret,
+                  }
+                : {
+                    nGram: session.currentNGramSize,
+                    nGramRaw: session.currentNGramSizeRaw,
+                    ...ret,
+                  };
+            })();
 
     await this.#speechQueue.enqueue(event);
   }
@@ -93,7 +106,11 @@ export class MakaMujo {
     const listenersSnapshot = [...this.#gameStateChangeListeners];
     queueMicrotask(() => {
       for (const listener of listenersSnapshot) {
-        try { listener(); } catch { /* ignore */ }
+        try {
+          listener();
+        } catch {
+          /* ignore */
+        }
       }
     });
   }
@@ -112,7 +129,8 @@ export class MakaMujo {
       streamLive: session.streamState !== undefined,
       lastCommentAt: session.lastCommentAt,
       listenersStaleSince: session.listenersStaleSince,
-      hasPromptedCommentForViewerIncrease: session.hasPromptedCommentForViewerIncrease,
+      hasPromptedCommentForViewerIncrease:
+        session.hasPromptedCommentForViewerIncrease,
       browserStateName: session.browserState?.name,
       nowMs: Date.now(),
       thresholdMs: SILENCE_THRESHOLD_MS,
@@ -152,7 +170,9 @@ export class MakaMujo {
   }
 }
 
-export type TalkModelGenerateResult = string | { text: string; nodes?: string[] };
+export type TalkModelGenerateResult =
+  | string
+  | { text: string; nodes?: string[] };
 
 export interface TalkModel {
   generate(start?: string, nGram?: number): TalkModelGenerateResult;

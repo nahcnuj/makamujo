@@ -3,8 +3,8 @@ import {
   shouldPromptCommentAfterViewerIncrease,
 } from "../domain/broadcasting/SilencePolicy";
 import { COMMENT_PROMPT_TEXT } from "../domain/comments/SystemSpeechScripts";
-import type { SpeechQueue } from "./SpeechQueue";
 import type { AgentSession } from "./AgentSession";
+import type { SpeechQueue } from "./SpeechQueue";
 import type { SpeechPort, StreamData } from "./types";
 
 export type StreamApplicationServiceOptions = {
@@ -36,7 +36,14 @@ export class StreamApplicationService {
     const streamData = state as StreamData | undefined;
     switch (streamData?.type) {
       case "niconama": {
-        const { isLive, title, startTime: start, url, total: listeners, points } = streamData.data;
+        const {
+          isLive,
+          title,
+          startTime: start,
+          url,
+          total: listeners,
+          points,
+        } = streamData.data;
         if (isLive) {
           if (this.#session.currentProgramUrl !== url) {
             this.#session.currentProgramUrl = url;
@@ -54,11 +61,14 @@ export class StreamApplicationService {
               this.#silenceThresholdMs,
             );
             const hadCommentBefore = this.#session.lastCommentAt !== undefined;
-            if (shouldPromptCommentAfterViewerIncrease({
-              hadCommentBefore,
-              commentsStale,
-              hasPromptedCommentForViewerIncrease: this.#session.hasPromptedCommentForViewerIncrease,
-            })) {
+            if (
+              shouldPromptCommentAfterViewerIncrease({
+                hadCommentBefore,
+                commentsStale,
+                hasPromptedCommentForViewerIncrease:
+                  this.#session.hasPromptedCommentForViewerIncrease,
+              })
+            ) {
               this.#session.hasPromptedCommentForViewerIncrease = true;
               const promptText = COMMENT_PROMPT_TEXT;
               const clearOnError = (text: string, err: unknown) => {
@@ -80,20 +90,28 @@ export class StreamApplicationService {
           this.#session.currentProgramLatestCommentNo = 0;
         }
 
-        this.#session.streamState = isLive ? {
-          type: "live",
-          meta: {
-            title,
-            start,
-            url,
-            total: {
-              listeners,
-              gift: typeof points?.gift === "string" ? Number.parseFloat(points.gift) : points?.gift,
-              ad: typeof points?.ad === "string" ? Number.parseFloat(points.ad) : points?.ad,
-              comments: this.#session.currentProgramLatestCommentNo,
-            },
-          },
-        } : undefined;
+        this.#session.streamState = isLive
+          ? {
+              type: "live",
+              meta: {
+                title,
+                start,
+                url,
+                total: {
+                  listeners,
+                  gift:
+                    typeof points?.gift === "string"
+                      ? Number.parseFloat(points.gift)
+                      : points?.gift,
+                  ad:
+                    typeof points?.ad === "string"
+                      ? Number.parseFloat(points.ad)
+                      : points?.ad,
+                  comments: this.#session.currentProgramLatestCommentNo,
+                },
+              },
+            }
+          : undefined;
         break;
       }
     }

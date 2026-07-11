@@ -1,21 +1,26 @@
-import { createContext, useContext, useState, type PropsWithChildren } from "hono/jsx/dom";
+import {
+  createContext,
+  type PropsWithChildren,
+  useContext,
+  useState,
+} from "hono/jsx/dom";
 import type { Games } from "../../lib/Agent/games";
 import type { AgentState } from "../../lib/Agent/State";
 import { useInterval } from "../hooks/useInterval";
 import { updateSpeechState } from "./speechState";
 
 type Data = {
-  speech: string
-  silent: boolean
+  speech: string;
+  silent: boolean;
   playing?: {
-    name: keyof typeof Games
-    state: any
-  }
-  streamState?: AgentState
+    name: keyof typeof Games;
+    state: any;
+  };
+  streamState?: AgentState;
 };
 
 const AgentContext = createContext<Data>({
-  speech: '',
+  speech: "",
   silent: false,
 });
 
@@ -54,35 +59,35 @@ export const setStreamStateFromMetaApiResponse = (
 };
 
 export const AgentProvider = ({ children }: PropsWithChildren) => {
-  const [speech, setSpeech] = useState('');
+  const [speech, setSpeech] = useState("");
   const [silent, setSilent] = useState(false);
-  const [playing, setPlaying] = useState<Data['playing']>();
+  const [playing, setPlaying] = useState<Data["playing"]>();
   const [streamState, setStreamState] = useState<AgentState>();
 
   useInterval(100, async () => {
-    const res = await fetch('/api/speech', { unix: './var/api-speech.sock' })
-      .then(res => res.ok ? res.json() : null)
-      .catch(err => {
-        console.warn('[WARN]', err);
+    const res = await fetch("/api/speech", { unix: "./var/api-speech.sock" })
+      .then((res) => (res.ok ? res.json() : null))
+      .catch((err) => {
+        console.warn("[WARN]", err);
         return null;
       });
     updateSpeechStateFromSpeechApiResponse(res, speech, setSpeech, setSilent);
   });
 
   useInterval(100, async () => {
-    const res = await fetch('/api/game', { unix: './var/api-game.sock' })
-      .then(res => res.ok ? res.json() : { error: 'not ok' })
-      .catch(error => ({ error }));
+    const res = await fetch("/api/game", { unix: "./var/api-game.sock" })
+      .then((res) => (res.ok ? res.json() : { error: "not ok" }))
+      .catch((error) => ({ error }));
     if (res?.name) {
       setPlaying(res);
     }
   });
 
   useInterval(100, async () => {
-    const res = await fetch('/api/meta', { unix: './var/api-meta.sock' })
-      .then(res => res.ok ? res.json() : null)
-      .catch(error => {
-        console.warn('[WARN]', error);
+    const res = await fetch("/api/meta", { unix: "./var/api-meta.sock" })
+      .then((res) => (res.ok ? res.json() : null))
+      .catch((error) => {
+        console.warn("[WARN]", error);
         return null;
       });
     setStreamStateFromMetaApiResponse(res, setStreamState);
