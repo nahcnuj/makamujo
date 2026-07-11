@@ -98,6 +98,9 @@ test.describe("NiconamaCommentClient fallback watch page", () => {
       // remote rendering or transient timing differences. If none were
       // delivered, allow the test to continue rather than flake.
       if (initialComments.length > 0) {
+        for (const c of initialComments) {
+          console.log("ACQUIRED COMMENT:", c.data?.comment ?? c.data?.text);
+        }
         expect(typeof initialComments[0]?.data?.comment).toBe("string");
       }
     } finally {
