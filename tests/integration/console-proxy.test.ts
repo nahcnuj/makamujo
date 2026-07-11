@@ -197,39 +197,15 @@ test("proxy forwards WebSocket upgrades to broadcasting server", async () => {
   expect(parsed).toHaveProperty("niconama");
 });
 
-test("comment count in /api/meta reflects PUT comments after POST /api/meta stream state", async () => {
-  await fetch(`${broadcastingBaseUrl}/`, {
+test("root POST and PUT are 404 (external HTTP comment routes removed on main)", async () => {
+  const postRes = await fetch(`${broadcastingBaseUrl}/`, {
     method: "POST",
     body: "{}",
     headers: { "content-type": "application/json" },
   });
+  expect(postRes.status).toBe(404);
 
-  const streamStateBody = JSON.stringify({
-    type: "niconama",
-    data: {
-      isLive: true,
-      title: "テスト配信",
-      startTime: 1_700_000_000,
-      total: 10,
-      points: { gift: 0, ad: 0 },
-      url: "https://live.nicovideo.jp/watch/lv999999999",
-    },
-  });
-
-  let initialMeta: any = null;
-  for (let i = 0; i < 30; i++) {
-    await fetch(`${broadcastingBaseUrl}/api/meta`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: streamStateBody,
-    });
-    initialMeta = await (await fetch(`${broadcastingBaseUrl}/api/meta`)).json();
-    if (initialMeta.commentCount === 0) break;
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  expect(initialMeta.commentCount).toBe(0);
-
-  await fetch(`${broadcastingBaseUrl}/`, {
+  const putRes = await fetch(`${broadcastingBaseUrl}/`, {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify([
@@ -243,29 +219,5 @@ test("comment count in /api/meta reflects PUT comments after POST /api/meta stre
       },
     ]),
   });
-
-  let updatedMeta = (await (
-    await fetch(`${broadcastingBaseUrl}/api/meta`)
-  ).json()) as any;
-  expect(updatedMeta.commentCount).toBe(1);
-
-  await fetch(`${broadcastingBaseUrl}/`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify([
-      {
-        data: {
-          comment: "こんばんは",
-          no: 3,
-          anonymity: false,
-          hasGift: false,
-        },
-      },
-    ]),
-  });
-
-  updatedMeta = (await (
-    await fetch(`${broadcastingBaseUrl}/api/meta`)
-  ).json()) as any;
-  expect(updatedMeta.commentCount).toBe(3);
+  expect(putRes.status).toBe(404);
 });

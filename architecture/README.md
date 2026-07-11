@@ -9,6 +9,7 @@
 | ファイル | 内容 |
 |----------|------|
 | [overview.md](./overview.md) | 全体の分かれ方・用語・状態の持ち方 |
+| [integration-spec.md](./integration-spec.md) | main×legacy 統合の確定仕様（コメント経路など） |
 | [domain-model-redesign.md](./domain-model-redesign.md) | 配信エージェントの詳細 |
 | [console-domain-model.md](./console-domain-model.md) | 管理コンソールの詳細 |
 

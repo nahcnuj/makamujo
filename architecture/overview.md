@@ -169,16 +169,16 @@ flowchart TB
 
 ### コメントの入れ方（本番）
 
-`origin/main` の本番経路に合わせる。
+確定仕様は [integration-spec.md](./integration-spec.md)。
 
-| 経路 | 役割 |
+| 経路 | 仕様 |
 |------|------|
-| **本線** | プロセス内のニコ生コメントクライアント（`composition/niconamaCommentIngress.ts` → `lib/niconamaCommentClient`）。起動後に遅延 start。 |
-| **副線** | HTTP `POST`/`PUT /` でコメント列を投入（ツール・テスト・外部ソフト用）。main では 404 だったが、こちらは残す。 |
+| **本線** | プロセス内ニコ生クライアント（`composition/niconamaCommentIngress`） |
+| **HTTP `POST`/`PUT /`** | **404**（`origin/main` と同じ。外部 HTTP 投入は廃止） |
 
-- 無効化: `NICONAMA_DISABLE=1`（副線 HTTP のみ）
-- 起動しない（致命扱いにしない）: `NICONAMA_START_MAX_RETRIES=0`（CI 用）
-- 設定: `NICONAMA_WATCH_URL`、`NICONAMA_USER_DATA_DIR`、`CHROMIUM_EXECUTABLE_PATH`（任意）、`NICONAMA_START_DELAY_MS` など
+- 無効化: `NICONAMA_DISABLE=1`
+- 起動しない（fatal にしない）: `NICONAMA_START_MAX_RETRIES=0`（CI）
+- 設定: `NICONAMA_WATCH_URL`、`NICONAMA_USER_DATA_DIR`、`CHROMIUM_EXECUTABLE_PATH`（任意）
 
 管理コンソール（本番）:
 

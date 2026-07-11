@@ -39,7 +39,6 @@ import { normalizePublishedStreamState } from "./lib/streamState";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
 import * as speechHistoryRoute from "./routes/api/speech-history";
-import * as index from "./routes/index";
 import { handleCatchAll } from "./src/frontendServer";
 
 process.on("exit", exitHandler.bind(null, { cleanup: true }));
@@ -537,11 +536,6 @@ let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 /** NicoNico comment client stop handle (assigned after servers start). */
 let niconamaIngress: { stop: () => Promise<void> } | null = null;
 
-const getMainServer = (): Bun.Server<WsData> => {
-  if (!mainServer) throw new Error("Server not yet initialized");
-  return mainServer;
-};
-
 const mainApp = new Hono()
   // Static assets from the public directory
   .get(
@@ -553,29 +547,10 @@ const mainApp = new Hono()
     () => new Response(Bun.file("./src/public/favicon-32x32.png")),
   )
 
-  // Root HTTP handlers (broadcast/comment ingestion)
-  .post("/", (c) => index.POST(c.req.raw, getMainServer().requestIP(c.req.raw)))
-  .put("/", async (c) => {
-    const res = await index.PUT(
-      c.req.raw,
-      getMainServer().requestIP(c.req.raw),
-    );
-    if (!res.ok) {
-      console.error("response is not ok", res);
-      return res;
-    }
-    const comments = await res.json();
-    if (!Array.isArray(comments)) {
-      console.error("response data was unprocessed", comments);
-      return Response.json({}, { status: 500 });
-    }
-    agent.postComments(comments);
-    broadcastCurrentPayloadLocal("onComment");
-
-    persistTalkModel(modelFile, () => streamer.talkModel.toJSON());
-
-    return Response.json({});
-  })
+  // origin/main: external HTTP comment routes removed. Production ingress is
+  // the in-process NicoNico client (composition/niconamaCommentIngress).
+  .post("/", () => new Response(null, { status: 404 }))
+  .put("/", () => new Response(null, { status: 404 }))
 
   // WebSocket / SSE endpoints
   .get("/api/ws", (c) => makeStreamHandler("/api/ws")(c.req.raw))
@@ -706,8 +681,8 @@ try {
   );
 }
 
-// Production comment ingress: in-process NicoNico client (from origin/main).
-// HTTP POST/PUT / remains available as a secondary path for tools and tests.
+// Production comment ingress: in-process NicoNico client (origin/main).
+// Root POST/PUT / are 404; do not reintroduce HTTP comment ingestion.
 niconamaIngress = scheduleNiconamaCommentIngress({
   postComments: (comments) => {
     try {

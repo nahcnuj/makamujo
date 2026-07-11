@@ -17,7 +17,7 @@
     "start": "NODE_ENV=production bun bootstrap.ts --port=7777",
     "typecheck": "tsc --noEmit",
     "test": "bun test lib/ src/ routes/ console/src/ composition/ docs/",
-    "test:integration": "bun test tests/integration/",
+    "test:integration": "MAKAMUJO_ALLOW_FALLBACK_TTS=1 bun test tests/integration/",
     "test:bin": "bash tests/bin/stop.test.sh",
     "pretest:e2e": "playwright install --with-deps chromium && if [ -n \"${CI:-}\" ]; then bash scripts/setup-e2e-tls.sh; fi",
     "test:e2e": "NICONAMA_DISABLE=1 CONSOLE_TLS_CERT=var/e2e-tls/fullchain.pem CONSOLE_TLS_KEY=var/e2e-tls/privkey.pem playwright test tests/e2e --timeout=60000",
@@ -25,7 +25,8 @@
     "generate-ogp": "bun run scripts/generate-ogp.ts",
     "screenshot:console-agent-status": "bun run scripts/capture-console-agent-status.ts",
     "format": "biome format --write .",
-    "lint": "biome check --error-on-warnings ."
+    "lint": "biome check --error-on-warnings .",
+    "print-comments": "bun run scripts/print-niconama-comment-bodies.ts"
   },
   "dependencies": {
     "@playwright/browser-chromium": "^1.61.1",

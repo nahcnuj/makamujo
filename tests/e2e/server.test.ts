@@ -255,59 +255,23 @@ test.describe("server", () => {
     });
   });
 
-  test("keeps comment-triggered replyTargetComment in /api/meta after stream state is published", async ({
+  // origin/main: external HTTP comment routes removed (production uses niconama client).
+  test("rejects root POST / after external comment routes are removed", async ({
     request,
   }) => {
-    const streamStateRes = await request.post(`${BASE_URL}/api/meta`, {
-      data: {
-        type: "niconama",
-        data: {
-          isLive: true,
-          title: "reply target propagation",
-          startTime: 1_700_000_000,
-          total: 5,
-          points: { gift: 0, ad: 0 },
-          url: "https://example.com/reply-target-propagation",
-        },
-      },
-    });
-    expect(streamStateRes.ok()).toBeTruthy();
-
-    const allowIpRes = await request.post(`${BASE_URL}/`);
-    expect(allowIpRes.ok()).toBeTruthy();
-
-    const putCommentRes = await request.put(`${BASE_URL}/`, {
-      data: [
-        {
-          data: {
-            comment: "こんばんは",
-            no: 7,
-            anonymity: false,
-            hasGift: false,
-          },
-        },
-      ],
-    });
-    expect(putCommentRes.ok()).toBeTruthy();
-
-    const metaRes = await request.get(`${BASE_URL}/api/meta`);
-    expect(metaRes.ok()).toBeTruthy();
-    const metaJson = await metaRes.json();
-    expect(metaJson).toHaveProperty("replyTargetComment.text", "こんばんは");
-    expect(typeof metaJson.replyTargetComment?.pickedTopic).toBe("string");
-    expect(metaJson.replyTargetComment?.pickedTopic.length).toBeGreaterThan(0);
+    const res = await request.post(`${BASE_URL}/`, { data: {} });
+    expect(res.status()).toBe(404);
   });
 
-  test("accepts PUT / via comment route", async ({ request }) => {
-    const postRes = await request.post(`${BASE_URL}/`);
-    expect(postRes.ok()).toBeTruthy();
-
+  test("rejects root PUT / after external comment routes are removed", async ({
+    request,
+  }) => {
     const res = await request.put(`${BASE_URL}/`, {
       data: [
         { data: { comment: "hello", no: 1, anonymity: false, hasGift: false } },
       ],
     });
-    expect(res.ok()).toBeTruthy();
+    expect(res.status()).toBe(404);
   });
 
   test("serves /nc433974.png", async ({ request }) => {

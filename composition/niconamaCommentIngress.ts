@@ -1,6 +1,6 @@
 /**
  * Production comment ingress from NicoNico live (in-process client).
- * HTTP POST/PUT remains available as a secondary ingress for tools/tests.
+ * origin/main removed external HTTP POST/PUT / comment routes (always 404).
  */
 import {
   createNiconamaCommentClient,
@@ -118,7 +118,7 @@ export const applyNiconamaCommentsToPublishedState = (
  * Start the NicoNico comment client after a short delay (with retries).
  * Returns a stop() for process shutdown.
  *
- * - `NICONAMA_DISABLE=1` — do not start (HTTP ingress only).
+ * - `NICONAMA_DISABLE=1` — do not start.
  * - `NICONAMA_START_MAX_RETRIES=0` — do not start, do not treat as fatal.
  * - Default max retries 3; on exhaustion calls onFatalStartFailure or exit(1).
  */
@@ -184,7 +184,7 @@ export function scheduleNiconamaCommentIngress(
 
   if (disabled) {
     console.info(
-      "[INFO] niconama comment client disabled (NICONAMA_DISABLE=1); use HTTP comment ingress",
+      "[INFO] niconama comment client disabled (NICONAMA_DISABLE=1)",
     );
     return {
       stop: async () => {
