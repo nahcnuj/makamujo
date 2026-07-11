@@ -1,19 +1,5 @@
 # AGENTS.md
 
-## Copilot instructions
-This file serves as the primary repository-specific instruction source for GitHub Copilot and related agents.
-Do not modify `.github/copilot-instructions.md`; keep that reference file unchanged and maintain any existing symlink behavior.
-
-### Required checks before commit
-- `bun run typecheck`
-- `bun run test`
-- `bun run test:integration`
-- `bun run test:e2e`
-- If a pre-push hook runs and fails, inspect the hook execution log to understand the failure.
-
-> Note: This repository does not currently define a `test:unit` npm script in `package.json`.
-> The CI uses `bun run test` as the unit test suite.
-
 ## 目的
 このファイルはAIエージェント専用の指示書です。
 あなたが作業を始める前に参照し、正確に作業できるようにプロジェクトのコンテキストやルールを提供します。
@@ -26,8 +12,16 @@ Do not modify `.github/copilot-instructions.md`; keep that reference file unchan
 - `/scripts` - 小物スクリプト
 - `/src` - 配信画面アプリのフロントエンド（React）
 - `/tests` - テストコード（単体テストを除く）
+- `/architecture` - ドメインモデル・契約・リファクタ計画（エージェントは変更容易性作業時に参照すること）。索引は `architecture/README.md`
+- `/composition` - 配信サーバ composition root 補助（broadcast / agent wiring / idle speech timer）
+- `/lib/domain` - 純関数ポリシー（broadcasting / comments / speech / publication）
+- `/lib/application` - アプリケーション層（例: SpeechQueue）
+- `/docs` - ランディング等の静的サイト資産（設計 Markdown は置かない）
 
 その他のディレクトリは人間向けで、あなたが参照する必要はありません。
+ドメイン再設計・`MakaMujo` 分割・配信状態ペイロード変更では、先に `architecture/domain-model-redesign.md` の契約（CommentPipeline・沈黙ポリシー・PublishedStreamPayload）と `architecture/overview.md` を確認し、振る舞いを変えないこと。
+コメントの本番本線はプロセス内ニコ生クライアント（`composition/niconamaCommentIngress`）。`POST`/`PUT /` は 404。  
+CI e2e は `NICONAMA_LIVE_TESTS=1` で未ログインでも見える公開番組向け検証を動かす（`NICONAMA_DISABLE` で止めない）。詳細は `architecture/overview.md`。
 
 ## 利用できるコマンド
 このプロジェクトはBunを利用しています。
@@ -35,11 +29,6 @@ Do not modify `.github/copilot-instructions.md`; keep that reference file unchan
 - 開発サーバー起動: `bun run dev`
 - テスト実行: `bun run test`
 - E2Eテスト実行: `bun run test:e2e`
-- E2Eテストの特定ケース実行: `bun run test:e2e:specify -- {test_path_or_pattern}`
-  - 例: `bun run test:e2e:specify -- tests/e2e/console.test.ts` （特定ファイルを実行）
-  - 例: `bun run test:e2e:specify -- --grep "pattern"` （パターンマッチで実行）
-- 単一のテストファイルを実行: `bun test path/to/file.test.ts`
-- TypeScriptスクリプトを実行: `bun ./path/to/script.ts`
 
 その他、package.jsonのscriptsに書かれているスクリプトが実行できます。
 
@@ -101,11 +90,6 @@ Do not modify `.github/copilot-instructions.md`; keep that reference file unchan
 - `main`ブランチから機能ブランチを作成
 - プルリクエストでコードレビュー
 - 新規機能にはドキュメント(JSDoc)を更新
-
-## エージェントの禁止事項
-- **Git `--no-verify` の禁止:** Copilot や自動化エージェントは、`git commit` および `git push` に `--no-verify` を付与してフックを回避することを禁止します。エージェントがコミットやプッシュを行う際は、必ずフックを通すようにしてください。
-- **承認が必要な場合:** フックを無効化する必要がある正当な理由がある場合は、人間のレビュアーを指名して明示的な承認を得た上で、手動で操作してください。エージェントが自動的にフラグを付与することは許可されません。
-
 
 ## 補足: マルチルートワークスペースとWindows環境
 - このリポジトリはマルチルートワークスペースで開かれている場合があります。主要なフォルダ:

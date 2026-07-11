@@ -1,4 +1,10 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
@@ -9,6 +15,226 @@ import { chromium as $_ } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
 export const chromium = $_.use(StealthPlugin());
+
+/** Default Playwright user-data dir for long-lived clients (e.g. niconama). */
+export const DEFAULT_PLAYWRIGHT_USER_DATA_DIR =
+  process.env.PLAYWRIGHT_USER_DATA_DIR ?? "/tmp/playwright-user-data";
+
+/**
+ * Default Chromium executable for clients that prefer an env override.
+ * Empty string means "let Playwright pick bundled Chromium".
+ */
+export const DEFAULT_CHROMIUM_EXECUTABLE_PATH =
+  process.env.CHROMIUM_EXECUTABLE_PATH ?? "";
+
+/** Temp user-data dirs created this process for ProcessSingleton fallback. */
+const sessionTempUserDataDirs: string[] = [];
+
+const registerSessionTempUserDataDir = (dir: string): void => {
+  sessionTempUserDataDirs.push(dir);
+};
+
+const removeSessionTempUserDataDirs = (): void => {
+  for (const dir of sessionTempUserDataDirs) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // best-effort
+    }
+  }
+  sessionTempUserDataDirs.length = 0;
+};
+
+if (typeof process !== "undefined" && typeof process.once === "function") {
+  process.once("exit", removeSessionTempUserDataDirs);
+  process.once("beforeExit", removeSessionTempUserDataDirs);
+}
+
+/**
+ * Delete leftover Playwright temp profiles under os.tmpdir() older than maxAgeMs.
+ * Call on launch to limit /tmp growth from past ProcessSingleton fallbacks.
+ */
+export function cleanupStalePlaywrightTempProfiles(
+  maxAgeMs = 24 * 60 * 60 * 1000,
+  tempRoot: string = tmpdir(),
+): number {
+  let removed = 0;
+  let entries: string[];
+  try {
+    entries = readdirSync(tempRoot);
+  } catch {
+    return 0;
+  }
+  const now = Date.now();
+  for (const name of entries) {
+    if (!name.startsWith("playwright-")) continue;
+    const fullPath = join(tempRoot, name);
+    try {
+      const st = statSync(fullPath);
+      if (!st.isDirectory()) continue;
+      if (now - st.mtimeMs < maxAgeMs) continue;
+      rmSync(fullPath, { recursive: true, force: true });
+      removed += 1;
+      console.warn(`[WARN] removed stale Playwright temp profile: ${fullPath}`);
+    } catch {
+      // best-effort
+    }
+  }
+  return removed;
+}
+
+/**
+ * Resolve which executable to use for Chromium.
+ * Priority: provided arg > CHROMIUM_EXECUTABLE_PATH env
+ * Returns undefined if no valid executable (Playwright will use bundled).
+ */
+export function resolveExecutablePath(provided?: string): string | undefined {
+  const candidate = provided || process.env.CHROMIUM_EXECUTABLE_PATH;
+  if (candidate && existsSync(candidate)) {
+    return candidate;
+  }
+  return undefined;
+}
+
+async function launchWithFallback<T>(
+  extraFn: () => Promise<T>,
+  plainFn: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await extraFn();
+  } catch (firstErr) {
+    console.warn(
+      "[WARN]",
+      "chromium-extra launch failed, retrying with plain playwright.chromium",
+      firstErr,
+    );
+    return await plainFn();
+  }
+}
+
+function getChromiumLaunchOptions(
+  overrideExecutable: string | undefined,
+  base: any = {},
+) {
+  const effective = resolveExecutablePath(overrideExecutable);
+  const opts = { ...base };
+  if (effective) {
+    opts.executablePath = effective;
+  } else {
+    delete opts.executablePath;
+  }
+  return opts;
+}
+
+/**
+ * Remove stale Chromium profile lock files that can block relaunch after a crash
+ * (ProcessSingleton / SingletonLock errors). Ported from main #425.
+ */
+export function cleanupChromiumLockFiles(userDataDir: string): void {
+  if (!existsSync(userDataDir)) {
+    return;
+  }
+  // Only Chromium ProcessSingleton lock files — never profile subdirs like .ssh.
+  const lockFiles = [
+    "SingletonLock",
+    "SingletonSocket",
+    "SingletonCookie",
+  ] as const;
+  for (const lockFile of lockFiles) {
+    const lockPath = join(userDataDir, lockFile);
+    if (!existsSync(lockPath)) continue;
+    try {
+      rmSync(lockPath, { force: true });
+      console.warn(`[WARN] cleaned up lock file: ${lockPath}`);
+    } catch (err) {
+      console.warn(
+        `[WARN] failed to clean up lock file ${lockPath}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+}
+
+const isTransientLaunchError = (message: string): boolean =>
+  /Failed to connect|spawn|ECONNREFUSED|pipe|Timeout|ProcessSingleton|SingletonLock/i.test(
+    message,
+  );
+
+/**
+ * Launch a persistent context with the correct executable resolution.
+ * Retries transient subprocess errors and cleans stale lock files (#425, #431 from main).
+ */
+export async function launchPersistentContext(
+  userDataDir: string,
+  options: Record<string, unknown> = {},
+) {
+  cleanupStalePlaywrightTempProfiles();
+  cleanupChromiumLockFiles(userDataDir);
+
+  const launchOpts = getChromiumLaunchOptions(
+    typeof options.executablePath === "string"
+      ? options.executablePath
+      : undefined,
+    options,
+  );
+  const maxRetries = 3;
+  const baseRetryDelayMs = 500;
+  let lastError: Error | undefined;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await launchWithFallback(
+        () => chromium.launchPersistentContext(userDataDir, launchOpts),
+        () =>
+          playwright.chromium.launchPersistentContext(userDataDir, launchOpts),
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      lastError = err instanceof Error ? err : new Error(message);
+
+      if (/ProcessSingleton|SingletonLock/i.test(message)) {
+        let tmpDir: string | undefined;
+        try {
+          tmpDir = mkdtempSync(join(tmpdir(), "playwright-"));
+          cleanupChromiumLockFiles(tmpDir);
+          console.warn(
+            "[WARN] userDataDir locked, retrying with temp dir",
+            tmpDir,
+          );
+          const context = await launchWithFallback(
+            () => chromium.launchPersistentContext(tmpDir!, launchOpts),
+            () =>
+              playwright.chromium.launchPersistentContext(tmpDir!, launchOpts),
+          );
+          // Keep dir for this process; remove on process exit and via stale cleanup.
+          registerSessionTempUserDataDir(tmpDir);
+          return context;
+        } catch {
+          if (tmpDir) {
+            try {
+              rmSync(tmpDir, { recursive: true, force: true });
+            } catch {
+              // best-effort cleanup of unused temp profile
+            }
+          }
+          // fall through to retry / rethrow
+        }
+      }
+
+      if (isTransientLaunchError(message) && attempt < maxRetries - 1) {
+        const delayMs = baseRetryDelayMs * 2 ** attempt;
+        console.warn(
+          `[WARN] launchPersistentContext transient error (attempt ${attempt + 1}/${maxRetries}), retrying in ${delayMs}ms:`,
+          message,
+        );
+        await setTimeout(delayMs);
+        continue;
+      }
+      throw lastError;
+    }
+  }
+  throw lastError ?? new Error("launchPersistentContext failed");
+}
 
 export const create = async (
   executablePath?: string,
@@ -21,16 +247,9 @@ export const create = async (
     process.env.CHROMIUM_LAUNCH_TIMEOUT ?? "60000",
     10,
   );
-  // If an explicit executablePath was provided but the file doesn't exist,
-  // ignore it and fall back to the Playwright channel mode so that
-  // installed Playwright browsers can be used in CI environments.
-  const effectiveExecutablePath =
-    executablePath && existsSync(executablePath) ? executablePath : undefined;
 
-  const launchOpts = {
-    ...(effectiveExecutablePath
-      ? { executablePath: effectiveExecutablePath }
-      : { channel: "chromium" }),
+  const effectiveExecutablePath = resolveExecutablePath(executablePath);
+  const launchOpts = getChromiumLaunchOptions(executablePath, {
     headless: process.env.CHROMIUM_HEADLESS === "1",
     timeout: launchTimeout,
     // https://peter.sh/experiments/chromium-command-line-switches/
@@ -38,16 +257,15 @@ export const create = async (
       "--hide-scrollbars",
       "--window-size=1024,576", // It may be required by `--window-position`.
       "--window-position=1280,600",
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--disable-extensions",
-      "--disable-background-networking",
-      "--disable-background-timer-throttling",
-      "--disable-popup-blocking",
     ],
-  };
+  });
+
+  console.log(
+    "[INFO] launching browser",
+    effectiveExecutablePath
+      ? `with executablePath=${effectiveExecutablePath}`
+      : "using Playwright bundled Chromium (no executablePath)",
+  );
 
   const fallbackTimeout = 300000;
 
@@ -58,17 +276,11 @@ export const create = async (
 
   const launchWith = async (baseOpts: typeof launchOpts) => {
     const firstTryOpts = cloneLaunchOpts(baseOpts);
-    try {
-      return await chromium.launch(firstTryOpts);
-    } catch (firstErr) {
-      console.warn(
-        "[WARN]",
-        "chromium-extra launch failed, retrying with playwright.chromium",
-        firstErr,
-      );
-      const fallbackOpts = cloneLaunchOpts(baseOpts);
-      return await playwright.chromium.launch(fallbackOpts);
-    }
+    const plainOpts = cloneLaunchOpts(baseOpts);
+    return await launchWithFallback(
+      () => chromium.launch(firstTryOpts),
+      () => playwright.chromium.launch(plainOpts),
+    );
   };
 
   let browser: Awaited<ReturnType<typeof launchWith>>;
@@ -87,6 +299,14 @@ export const create = async (
       const fallbackOpts = { ...launchOpts, timeout: fallbackTimeout };
       browser = await launchWith(fallbackOpts);
     } else {
+      if (err instanceof Error) {
+        err.message =
+          `Failed to launch Chromium. ` +
+          `Make sure you have run "bunx playwright install chromium" (or "playwright install chromium") ` +
+          `after updating Playwright. ` +
+          `If you want to force a system browser set CHROMIUM_EXECUTABLE_PATH.\n` +
+          `Original error: ${err.message}`;
+      }
       throw err;
     }
   }
@@ -94,7 +314,7 @@ export const create = async (
   const ctx = await browser.newContext({
     viewport,
   });
-  ctx.setDefaultTimeout(30_000);
+  ctx.setDefaultTimeout(0);
 
   const page = await ctx.newPage();
 
@@ -121,71 +341,39 @@ export const create = async (
     },
 
     clickByText: async (text) => {
-      // biome-ignore lint/suspicious/noExplicitAny: Playwright API types are complex
-      const locatorFactories: Array<() => any> = [
-        // biome-ignore lint/suspicious/noExplicitAny: Playwright type casting needed
-        () => page.getByRole("button", { name: text, exact: true } as any),
-        // biome-ignore lint/suspicious/noExplicitAny: Playwright type casting needed
-        () => page.getByRole("button", { name: text } as any),
-        () => page.getByText(text, { exact: true }),
-        () => page.getByText(text),
-        () => page.locator(`text=${JSON.stringify(text)}`),
-        () => page.locator(`text=${text}`),
-      ];
-
+      const ls = page.getByText(text, { exact: true }).or(page.getByText(text));
+      let retry = true;
       let attempts = 0;
-      const maxAttempts = 7;
-      while (attempts < maxAttempts) {
-        attempts += 1;
-        let clicked = false;
-
-        for (const createLocator of locatorFactories) {
-          // biome-ignore lint/suspicious/noExplicitAny: Playwright locator type is complex
-          let locator: any;
-          try {
-            locator = createLocator();
-          } catch {
-            continue;
-          }
-
-          let count = 0;
-          try {
-            count = await locator.count({ timeout: 1_000 });
-          } catch {
-            count = 0;
-          }
-
-          if (count === 0) continue;
-
-          let targetTexts: string[] = [];
-          try {
-            targetTexts = await locator.allInnerTexts();
-          } catch {
-            targetTexts = [];
-          }
-          console.debug("[DEBUG]", "clickByText targets:", targetTexts);
-
-          const elements = await locator.all();
-          for (const element of elements) {
+      const maxAttempts = 5;
+      do {
+        if (attempts >= maxAttempts) {
+          throw new Error(
+            `clickByText: "${text}" not found or not clickable after ${maxAttempts} attempt(s)`,
+          );
+        }
+        attempts++;
+        if ((await ls.count()) > 0) {
+          console.debug(
+            "[DEBUG]",
+            "clickByText targets:",
+            await ls.allInnerTexts(),
+          );
+          for (const l of await ls.all()) {
             try {
-              await element.click({ timeout: 2_000 });
-              clicked = true;
+              await l.click({ timeout: 1_000 });
+              retry = false;
               break;
             } catch (err) {
-              console.warn("[WARN]", "clickByText element click failed", err);
+              console.warn("[WARN]", err);
             }
           }
-
-          if (clicked) break;
+          if (retry) {
+            await setTimeout(1_000);
+          }
+        } else {
+          await setTimeout(1_000);
         }
-
-        if (clicked) return;
-        await setTimeout(1_000);
-      }
-
-      throw new Error(
-        `clickByText: "${text}" not found or not clickable after ${maxAttempts} attempt(s)`,
-      );
+      } while (retry);
     },
     clickByElementId: createClickByElementId(page),
 
@@ -196,15 +384,13 @@ export const create = async (
     fillByRole: async (value, role, selector) => {
       await page
         .locator(selector)
-        // biome-ignore lint/suspicious/noExplicitAny: Playwright role type needs casting
         .getByRole(role as any)
         .fill(value);
     },
 
     evaluate: async (f) => {
       return await page.evaluate((fnSource) => {
-        // Use Function constructor instead of eval for security
-        const evaluated = new Function(`return (${fnSource})`)() as (
+        const evaluated = globalThis.eval(`(${fnSource})`) as (
           document: Document,
         ) => ReturnType<typeof f>;
         return evaluated(document);
@@ -283,176 +469,5 @@ type ClickablePageLike = {
 export const createClickByElementId =
   (page: ClickablePageLike) =>
   async (id: string): Promise<void> => {
-    // Prefer a DOM-evaluated click when available (real Playwright Page)
-    // to avoid visibility/stability flakiness. Fall back to the locator
-    // approach used in tests which provides a minimal `locator()` API.
-    // biome-ignore lint/suspicious/noExplicitAny: Playwright Page type needs casting for evaluate method
-    const anyPage = page as any;
-    if (typeof anyPage.evaluate === "function") {
-      const clicked = await anyPage.evaluate((targetId: string) => {
-        const els = Array.from(
-          document.querySelectorAll(`#${CSS.escape(targetId)}`),
-        );
-        const el = els[0] as HTMLElement | undefined;
-        if (!el) return false;
-        el.click();
-        return true;
-      }, id);
-      if (!clicked) {
-        throw new Error(
-          `createClickByElementId: element with id "${id}" not found`,
-        );
-      }
-      return;
-    }
-
-    // Fallback for test doubles that only expose `locator()`.
     await page.locator(`#${id}`).first().click({ timeout: 5_000 });
   };
-
-// Defaults used by other modules.
-export const DEFAULT_PLAYWRIGHT_USER_DATA_DIR =
-  process.env.PLAYWRIGHT_USER_DATA_DIR ?? "/tmp/playwright-user-data";
-export const DEFAULT_CHROMIUM_EXECUTABLE_PATH =
-  process.env.CHROMIUM_EXECUTABLE_PATH ?? "";
-
-// Clean up Chromium lock files that may prevent launching a new instance.
-// This helps avoid "ProcessSingleton" errors when a previous instance crashed
-// or didn't clean up properly.
-const cleanupChromiumLockFiles = (userDataDir: string): void => {
-  if (!existsSync(userDataDir)) {
-    return;
-  }
-
-  const lockFiles = ["SingletonLock", "SingletonSocket", ".ssh"];
-  for (const lockFile of lockFiles) {
-    const lockPath = join(userDataDir, lockFile);
-    if (existsSync(lockPath)) {
-      try {
-        rmSync(lockPath, { force: true, recursive: true });
-        console.warn(`[WARN] cleaned up lock file: ${lockPath}`);
-      } catch (err) {
-        console.warn(
-          `[WARN] failed to clean up lock file ${lockPath}:`,
-          err instanceof Error ? err.message : String(err),
-        );
-      }
-    }
-  }
-};
-
-// Provide a launchPersistentContext helper that prefers playwright-extra's
-// chromium wrapper but falls back to Playwright's chromium implementation.
-export const launchPersistentContext = async (
-  userDataDir: string,
-  options: Record<string, unknown> = {},
-) => {
-  // Clean up any stale lock files before attempting to launch
-  cleanupChromiumLockFiles(userDataDir);
-
-  const maxRetries = 3;
-  const baseRetryDelayMs = 500;
-  let lastError: Error | undefined;
-
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      // biome-ignore lint/suspicious/noExplicitAny: chromium may not have type definitions
-      if (typeof (chromium as any).launchPersistentContext === "function") {
-        try {
-          // biome-ignore lint/suspicious/noExplicitAny: chromium object may not have proper types
-          return await (chromium as any).launchPersistentContext(
-            userDataDir,
-            // biome-ignore lint/suspicious/noExplicitAny: Playwright options type is open-ended
-            options as any,
-          );
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (/ProcessSingleton|SingletonLock/i.test(msg)) {
-            // Profile appears locked; create a temporary user data dir to avoid
-            // the ProcessSingleton conflict and retry.
-            try {
-              const tmpDir = mkdtempSync(join(tmpdir(), "playwright-"));
-              cleanupChromiumLockFiles(tmpDir);
-              console.warn(
-                "[WARN] userDataDir locked, retrying with temp dir",
-                tmpDir,
-              );
-              // biome-ignore lint/suspicious/noExplicitAny: chromium may not have type definitions
-              return await (chromium as any).launchPersistentContext(
-                tmpDir,
-                // biome-ignore lint/suspicious/noExplicitAny: Playwright options type is open-ended
-                options as any,
-              );
-            } catch {
-              // Fall through to rethrow original error below.
-            }
-          }
-          // Check for transient connection errors
-          if (
-            /Failed to connect|spawn|ECONNREFUSED|pipe|Timeout/i.test(msg) &&
-            attempt < maxRetries - 1
-          ) {
-            lastError = err instanceof Error ? err : new Error(String(err));
-            const delayMs = baseRetryDelayMs * 2 ** attempt;
-            console.warn(
-              `[WARN] launchPersistentContext transient error (attempt ${attempt + 1}/${maxRetries}), retrying in ${delayMs}ms:`,
-              msg,
-            );
-            await setTimeout(delayMs);
-            continue;
-          }
-          throw err;
-        }
-      }
-      try {
-        return await playwright.chromium.launchPersistentContext(
-          userDataDir,
-          // biome-ignore lint/suspicious/noExplicitAny: Playwright options type is open-ended
-          options as any,
-        );
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (/ProcessSingleton|SingletonLock/i.test(msg)) {
-          try {
-            const tmpDir = mkdtempSync(join(tmpdir(), "playwright-"));
-            cleanupChromiumLockFiles(tmpDir);
-            console.warn(
-              "[WARN] userDataDir locked, retrying with temp dir",
-              tmpDir,
-            );
-            return await playwright.chromium.launchPersistentContext(
-              tmpDir,
-              // biome-ignore lint/suspicious/noExplicitAny: Playwright options type is open-ended
-              options as any,
-            );
-          } catch {
-            // fall through
-          }
-        }
-        // Check for transient connection errors
-        if (
-          /Failed to connect|spawn|ECONNREFUSED|pipe|Timeout/i.test(msg) &&
-          attempt < maxRetries - 1
-        ) {
-          lastError = err instanceof Error ? err : new Error(String(err));
-          const delayMs = baseRetryDelayMs * 2 ** attempt;
-          console.warn(
-            `[WARN] launchPersistentContext fallback transient error (attempt ${attempt + 1}/${maxRetries}), retrying in ${delayMs}ms:`,
-            msg,
-          );
-          await setTimeout(delayMs);
-          continue;
-        }
-        throw err;
-      }
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      if (attempt === maxRetries - 1) {
-        throw lastError;
-      }
-    }
-  }
-  if (lastError) {
-    throw lastError;
-  }
-};

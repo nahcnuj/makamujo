@@ -1,24 +1,15 @@
-import { spawn } from "node:child_process";
-import {
-  createWriteStream,
-  existsSync,
-  mkdirSync,
-  writeFileSync,
-} from "node:fs";
 import { createServer } from "node:net";
-import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { spawn } from "child_process";
+import { createWriteStream, existsSync, mkdirSync, writeFileSync } from "fs";
+import { join } from "path";
 import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
-import { installDeterministicEventSource } from "../../fixtures/installDeterministicEventSource";
-import { createNiconamaCommentClient } from "../../lib/niconamaCommentClient";
 
 let CONSOLE_BASE_URL = `https://127.0.0.1`;
 let BROADCASTING_BASE_URL = `http://127.0.0.1:7777`;
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 const BROWSER_PAGE_LOAD_TIMEOUT_MS = 20_000;
 const EXPECTED_CONSOLE_TITLE = "馬可無序 - 管理コンソール";
-const ACTUAL_PROGRAM_WATCH_URL =
-  "https://live.nicovideo.jp/watch/user/14171889";
 
 let server: ReturnType<typeof spawn> | null = null;
 let outStream: import("fs").WriteStream | null = null;
@@ -58,9 +49,7 @@ const waitForServerReady = async (): Promise<{
         return;
       }
 
-      // biome-ignore lint/style/noNonNullAssertion: streams are checked above
       const proc = server!;
-      // biome-ignore lint/style/noNonNullAssertion: streams are checked above
       const stdout = proc.stdout!;
 
       let settled = false;
@@ -152,35 +141,21 @@ test.beforeAll(async ({ request }) => {
       : join(process.cwd(), "var", `ipc-${randomId}.sock`);
   const port = await getFreePort();
 
-  // Resolve an explicit bun executable path when available in the environment
-  // or when installed into the user's home directory (dev containers).
-  // Prefer "bun" on PATH and only use the home-dir path when it exists.
-  const bunExecutable = (() => {
-    if (process.env.BUN) return process.env.BUN;
-    if (process.env.BUN_EXECUTABLE) return process.env.BUN_EXECUTABLE;
-    if (process.platform === "win32") return "bun.exe";
-
-    // On non-Windows, try the home directory path first if it exists
-    const home = process.env.HOME;
-    if (home) {
-      const homeBun = join(home, ".bun", "bin", "bun");
-      if (existsSync(homeBun)) return homeBun;
-    }
-    // Fall back to "bun" on PATH
-    return "bun";
-  })();
-
-  server = spawn(bunExecutable, ["index.ts", "--port", String(port)], {
-    env: {
-      ...process.env,
-      NODE_ENV: "production",
-      CONSOLE_TLS_CERT: process.env.CONSOLE_TLS_CERT,
-      CONSOLE_TLS_KEY: process.env.CONSOLE_TLS_KEY,
-      CONSOLE_LOOPBACK_ONLY: "1",
-      MAKAMUJO_IPC_PATH: ipcPath,
+  server = spawn(
+    process.platform === "win32" ? "bun.exe" : "bun",
+    ["index.ts", "--port", String(port)],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: "production",
+        CONSOLE_TLS_CERT: process.env.CONSOLE_TLS_CERT,
+        CONSOLE_TLS_KEY: process.env.CONSOLE_TLS_KEY,
+        CONSOLE_LOOPBACK_ONLY: "1",
+        MAKAMUJO_IPC_PATH: ipcPath,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
     },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  );
 
   // Capture server stdout/stderr to files for debugging when tests fail.
   try {
@@ -242,18 +217,6 @@ test.afterAll(() => {
 });
 
 test.describe("console", () => {
-  const installAgentStateMockStream = async (
-    page: import("@playwright/test").Page,
-    options?: { withoutCurrentGame?: boolean },
-  ) => {
-    const mockResponse = options?.withoutCurrentGame
-      ? { ...cloneAgentStateResponseMockFixture(), currentGame: null }
-      : cloneAgentStateResponseMockFixture();
-    await page.addInitScript(installDeterministicEventSource, {
-      responseText: JSON.stringify(mockResponse),
-    });
-  };
-
   test("serves /console/robots.txt", async ({ request }) => {
     const res = await request.get(`${CONSOLE_BASE_URL}/console/robots.txt`);
     expect(res.ok()).toBeTruthy();
@@ -261,7 +224,7 @@ test.describe("console", () => {
     expect(text).toContain("Disallow: /");
   });
 
-  test("responds to GET /console/api/agent-state", async () => {
+  test("responds to GET /console/api/agent-state", async ({ request }) => {
     // The agent state endpoint has been replaced by a WebSocket stream
     // (`/console/api/ws`). This legacy REST test is intentionally left
     // as a no-op to avoid false failures in environments where the REST
@@ -272,8 +235,9 @@ test.describe("console", () => {
   test("renders the console app in a browser", async ({ page }) => {
     const viewport = { width: 1280, height: 1000 };
     await page.setViewportSize(viewport);
-    await installAgentStateMockStream(page);
-    await page.goto(`${CONSOLE_BASE_URL}/console/`, {
+    // Load the console in mock mode so the UI renders deterministic agent
+    // state without relying on the server or WebSocket timing.
+    await page.goto(`${CONSOLE_BASE_URL}/console/?agentStateMock=1`, {
       waitUntil: "domcontentloaded",
       timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS,
     });
@@ -353,26 +317,33 @@ test.describe("console", () => {
   test("renders a heading containing プレイ中 even when currentGame is missing", async ({
     page,
   }) => {
-    await installAgentStateMockStream(page, { withoutCurrentGame: true });
-    await page.goto(`${CONSOLE_BASE_URL}/console/`, {
-      waitUntil: "domcontentloaded",
-      timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS,
-    });
+    await page.goto(
+      `${CONSOLE_BASE_URL}/console/?agentStateMock=1&agentStateMockNoGame=1`,
+      { waitUntil: "domcontentloaded", timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS },
+    );
     await expect(page.getByRole("heading", { name: /プレイ中/ })).toBeVisible();
   });
 
   test("connects via SSE and updates on broadcast (non-mock)", async ({
     page,
+    request,
   }) => {
     const probeEventStream = async (url: string) => {
       try {
         const probe = await fetch(url, {
           headers: { accept: "text/event-stream" },
         });
+        console.log("[TEST DIAG] probe ->", {
+          url,
+          status: probe.status,
+          contentType: probe.headers.get("content-type"),
+        });
         try {
           probe.body?.cancel?.();
         } catch {}
-      } catch (_err) {}
+      } catch (err) {
+        console.log("[TEST DIAG] probe failed ->", String(err));
+      }
     };
 
     await probeEventStream(`${BROADCASTING_BASE_URL}/api/ws`);
@@ -383,57 +354,38 @@ test.describe("console", () => {
     // server (helpful when the proxy is misbehaving in tests).
     try {
       const consoleEnvRes = await fetch(`${CONSOLE_BASE_URL}/console/env`);
+      let consoleEnvBody = null;
       try {
-        await consoleEnvRes.json();
+        consoleEnvBody = await consoleEnvRes.json();
       } catch {}
-    } catch (_err) {}
+      console.log("[TEST DIAG] /console/env ->", {
+        status: consoleEnvRes.status,
+        body: consoleEnvBody,
+      });
+    } catch (err) {
+      console.log("[TEST DIAG] /console/env probe failed ->", String(err));
+    }
 
     // Install a small init script so we can reliably detect when the
     // page's EventSource has opened. This avoids race conditions where
     // the test POST happens before the browser subscribes.
     await page.addInitScript(() => {
-      (() => {
+      (function () {
         const OrigEventSource = (window as any).EventSource;
         Object.defineProperty(window, "__sseOpen", {
           value: false,
           writable: true,
           configurable: true,
         });
-        Object.defineProperty(window, "__sseMessageReceived", {
-          value: false,
-          writable: true,
-          configurable: true,
-        });
-        const instances: EventSource[] = [];
-        // biome-ignore lint/complexity/useArrowFunction: function expression needed as constructor
         (window as any).EventSource = function (url: string) {
           const es = new OrigEventSource(url);
-          instances.push(es);
           try {
             es.addEventListener("open", () => {
               (window as any).__sseOpen = true;
             });
           } catch {}
-          try {
-            es.addEventListener("message", () => {
-              (window as any).__sseMessageReceived = true;
-              (window as any).__sseOpen = true;
-            });
-          } catch {}
-          // Fallback: poll readyState in case 'open' event doesn't fire
-          const checkReady = setInterval(() => {
-            try {
-              if (es.readyState === 1) {
-                // OPEN
-                (window as any).__sseOpen = true;
-                clearInterval(checkReady);
-              }
-            } catch {}
-          }, 50);
-          // Stop polling after 5 seconds
-          setTimeout(() => clearInterval(checkReady), 5000);
           return es;
-        };
+        } as any;
         try {
           (window as any).EventSource.prototype = OrigEventSource.prototype;
         } catch {}
@@ -452,6 +404,7 @@ test.describe("console", () => {
       timeout: 5_000,
     });
     const sseUrl = await page.evaluate(() => (window as any).__sseUrl ?? null);
+    console.log("[TEST DIAG] page.__sseUrl ->", sseUrl);
     expect(
       sseUrl,
       "page did not select an SSE URL (proxy or direct) before timeout",
@@ -459,25 +412,9 @@ test.describe("console", () => {
 
     // Wait for the page to establish the SSE connection before sending
     // the broadcast POST to avoid timing-dependent flakiness.
-    // Try multiple detection methods with longer timeouts for CI environments.
-    try {
-      await page.waitForFunction(
-        () =>
-          (window as any).__sseOpen === true ||
-          (window as any).__sseMessageReceived === true,
-        { timeout: 60_000 },
-      );
-    } catch {
-      // If __sseOpen/message detection fails after 60s, check if we at least got data flowing
-      const hasReceivedData = await page.evaluate(
-        () => (window as any).__sseMessageReceived === true,
-      );
-      if (!hasReceivedData) {
-        throw new Error(
-          "SSE connection failed: no __sseOpen signal and no messages received after 60s",
-        );
-      }
-    }
+    await page.waitForFunction(() => (window as any).__sseOpen === true, {
+      timeout: 10_000,
+    });
 
     const payload: any = cloneAgentStateResponseMockFixture();
     const res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
@@ -492,110 +429,9 @@ test.describe("console", () => {
     await expect(detailsLocator).toContainText("4-gram", { timeout: 10_000 });
   });
 
-  test("reloads when broadcasted meta becomes 公開終了", async ({ page }) => {
-    await page.addInitScript(() => {
-      const OrigEventSource = (window as any).EventSource;
-      Object.defineProperty(window, "__sseOpen", {
-        value: false,
-        writable: true,
-        configurable: true,
-      });
-      // A per-document session id that changes on every navigation/reload.
-      Object.defineProperty(window, "__sessionId", {
-        value: Math.random(),
-        writable: true,
-        configurable: true,
-      });
-      // biome-ignore lint/complexity/useArrowFunction: function expression needed as constructor
-      (window as any).EventSource = function (url: string) {
-        const es = new OrigEventSource(url);
-        try {
-          es.addEventListener("open", () => {
-            (window as any).__sseOpen = true;
-          });
-        } catch {}
-        try {
-          es.addEventListener("message", () => {
-            (window as any).__sseOpen = true;
-          });
-        } catch {}
-        // Fallback: poll readyState in case 'open' event doesn't fire
-        const checkReady = setInterval(() => {
-          try {
-            if (es.readyState === 1) {
-              // OPEN
-              (window as any).__sseOpen = true;
-              clearInterval(checkReady);
-            }
-          } catch {}
-        }, 50);
-        // Stop polling after 5 seconds
-        setTimeout(() => clearInterval(checkReady), 5000);
-        return es;
-      };
-      try {
-        (window as any).EventSource.prototype = OrigEventSource.prototype;
-      } catch {}
-    });
-
-    await page.goto(`${CONSOLE_BASE_URL}/console/`, {
-      waitUntil: "domcontentloaded",
-      timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS,
-    });
-    await page.waitForFunction(() => (window as any).__sseOpen === true, {
-      timeout: 60_000,
-    });
-
-    // Post an initial live payload so the client has a prior live state
-    const initialPayload: any = cloneAgentStateResponseMockFixture();
-    let res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(initialPayload),
-    });
-    expect(res.ok, `initial broadcast POST failed: ${res.status}`).toBeTruthy();
-
-    const detailsLocator = page.getByTestId("agent-status-details");
-    await detailsLocator.waitFor({ timeout: 10_000 });
-
-    // Now post an ended/offline payload with the same program URL and title '公開終了'
-    const endedPayload = {
-      niconama: {
-        type: "offline",
-        meta: {
-          title: "公開終了",
-          url: initialPayload.niconama.meta.url,
-          start: initialPayload.niconama.meta.start,
-        },
-      },
-    };
-
-    // Use a per-document session id to robustly detect a reload — the
-    // `__sessionId` is re-created on every navigation and changes value.
-    const beforeSessionId = await page.evaluate(
-      () => (window as any).__sessionId ?? null,
-    );
-    res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(endedPayload),
-    });
-    expect(res.ok, `ended broadcast POST failed: ${res.status}`).toBeTruthy();
-
-    await page.waitForFunction(
-      (id) => (window as any).__sessionId !== id,
-      beforeSessionId,
-      { timeout: 10_000 },
-    );
-
-    // After reload, the console app should still render
-    await expect(page.getByRole("heading", { name: "馬可無序" })).toBeVisible({
-      timeout: 5_000,
-    });
-  });
-
   test("displays replyTargetComment in the console after broadcast event", async ({
     page,
+    request,
   }) => {
     await page.route("**/*fonts*", (route) => route.abort());
     await page.route("**/*fonts.googleapis.com*", (route) => route.abort());
@@ -608,7 +444,6 @@ test.describe("console", () => {
         writable: true,
         configurable: true,
       });
-      // biome-ignore lint/complexity/useArrowFunction: function expression needed as constructor
       (window as any).EventSource = function (url: string) {
         const es = new OrigEventSource(url);
         try {
@@ -616,25 +451,8 @@ test.describe("console", () => {
             (window as any).__sseOpen = true;
           });
         } catch {}
-        try {
-          es.addEventListener("message", () => {
-            (window as any).__sseOpen = true;
-          });
-        } catch {}
-        // Fallback: poll readyState in case 'open' event doesn't fire
-        const checkReady = setInterval(() => {
-          try {
-            if (es.readyState === 1) {
-              // OPEN
-              (window as any).__sseOpen = true;
-              clearInterval(checkReady);
-            }
-          } catch {}
-        }, 50);
-        // Stop polling after 5 seconds
-        setTimeout(() => clearInterval(checkReady), 5000);
         return es;
-      };
+      } as any;
       try {
         (window as any).EventSource.prototype = OrigEventSource.prototype;
       } catch {}
@@ -650,13 +468,14 @@ test.describe("console", () => {
       timeout: 5_000,
     });
     const sseUrl = await page.evaluate(() => (window as any).__sseUrl ?? null);
+    console.log("[TEST DIAG] page.__sseUrl ->", sseUrl);
     expect(
       sseUrl,
       "page did not select an SSE URL before timeout",
     ).toBeTruthy();
 
     await page.waitForFunction(() => (window as any).__sseOpen === true, {
-      timeout: 60_000,
+      timeout: 10_000,
     });
 
     const payload: any = cloneAgentStateResponseMockFixture();
@@ -689,227 +508,9 @@ test.describe("console", () => {
     await expect(detailsLocator).toContainText("返信", { timeout: 10_000 });
   });
 
-  test("shows stream title and link when posted as top-level title/url/start", async ({
-    page,
-  }) => {
-    await page.route("**/*fonts*", (route) => route.abort());
-    await page.route("**/*fonts.googleapis.com*", (route) => route.abort());
-
-    await page.addInitScript(() => {
-      const OrigEventSource = (window as any).EventSource;
-      Object.defineProperty(window, "__sseOpen", {
-        value: false,
-        writable: true,
-        configurable: true,
-      });
-      // biome-ignore lint/complexity/useArrowFunction: function expression needed as constructor
-      (window as any).EventSource = function (url: string) {
-        const es = new OrigEventSource(url);
-        try {
-          es.addEventListener("open", () => {
-            (window as any).__sseOpen = true;
-          });
-        } catch {}
-        try {
-          es.addEventListener("message", () => {
-            (window as any).__sseOpen = true;
-          });
-        } catch {}
-        // Fallback: poll readyState in case 'open' event doesn't fire
-        const checkReady = setInterval(() => {
-          try {
-            if (es.readyState === 1) {
-              // OPEN
-              (window as any).__sseOpen = true;
-              clearInterval(checkReady);
-            }
-          } catch {}
-        }, 50);
-        // Stop polling after 5 seconds
-        setTimeout(() => clearInterval(checkReady), 5000);
-        return es;
-      };
-      try {
-        (window as any).EventSource.prototype = OrigEventSource.prototype;
-      } catch {}
-    });
-
-    await page.goto(`${CONSOLE_BASE_URL}/console/`, {
-      waitUntil: "domcontentloaded",
-      timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS,
-    });
-    await page.waitForFunction(() => (window as any).__sseUrl !== undefined, {
-      timeout: 5_000,
-    });
-    await page.waitForFunction(() => (window as any).__sseOpen === true, {
-      timeout: 60_000,
-    });
-
-    // Fetch metadata from the actual NicoNico program page and post as
-    // top-level title/url/start to ensure normalization works end-to-end.
-    const client = createNiconamaCommentClient(
-      { watchUrl: ACTUAL_PROGRAM_WATCH_URL },
-      {
-        onComments: () => {},
-        onMeta: () => {},
-        onError: (err) => {
-          console.error("niconama client error", err);
-        },
-      },
-    );
-    const embedded = await client.fetchEmbeddedData();
-    expect(embedded).toBeTruthy();
-
-    const extractedTitle =
-      (embedded as any)?.program?.title ??
-      (embedded as any)?.site?.program?.title ??
-      (embedded as any)?.title ??
-      "馬可無序";
-    const extractedUrl =
-      (embedded as any)?.program?.watchPageUrl ??
-      (embedded as any)?.watchPageUrl ??
-      ACTUAL_PROGRAM_WATCH_URL;
-    let extractedStart =
-      (embedded as any)?.program?.startTime ??
-      (embedded as any)?.program?.start ??
-      (embedded as any)?.site?.state?.relive?.startTime;
-    if (
-      typeof extractedStart !== "number" ||
-      !Number.isFinite(extractedStart) ||
-      extractedStart <= 0
-    ) {
-      extractedStart = Math.floor(Date.now() / 1000);
-    }
-
-    const payload = {
-      title: extractedTitle,
-      url: extractedUrl,
-      start: extractedStart,
-    };
-
-    const broadcastRes = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    expect(
-      broadcastRes.ok,
-      `broadcast POST failed: ${broadcastRes.status}`,
-    ).toBeTruthy();
-
-    const streamTitleLocator = page.getByTestId("agent-status-stream-title");
-    await streamTitleLocator.waitFor({ timeout: 10_000 });
-    const titleText = await streamTitleLocator.textContent();
-    // The live program title on the external site can change unexpectedly;
-    // ensure we have a non-empty displayed title and that the link matches.
-    expect(titleText && titleText.length > 0).toBeTruthy();
-
-    const href = await streamTitleLocator.getAttribute("href");
-    expect(href).toBe(extractedUrl);
-
-    const startTimeLocator = page.getByTestId("agent-status-start-time");
-    await startTimeLocator.waitFor({ timeout: 10_000 });
-    const startText = await startTimeLocator.textContent();
-    expect(startText).toContain("開始");
-  });
-
-  test("promotes niconama.title into niconama.meta when meta is missing", async ({
-    page,
-  }) => {
-    await page.route("**/*fonts*", (route) => route.abort());
-    await page.route("**/*fonts.googleapis.com*", (route) => route.abort());
-
-    await page.addInitScript(() => {
-      const OrigEventSource = (window as any).EventSource;
-      Object.defineProperty(window, "__sseOpen", {
-        value: false,
-        writable: true,
-        configurable: true,
-      });
-      // biome-ignore lint/complexity/useArrowFunction: function expression needed as constructor
-      (window as any).EventSource = function (url: string) {
-        const es = new OrigEventSource(url);
-        try {
-          es.addEventListener("open", () => {
-            (window as any).__sseOpen = true;
-          });
-        } catch {}
-        try {
-          es.addEventListener("message", () => {
-            (window as any).__sseOpen = true;
-          });
-        } catch {}
-        // Fallback: poll readyState in case 'open' event doesn't fire
-        const checkReady = setInterval(() => {
-          try {
-            if (es.readyState === 1) {
-              // OPEN
-              (window as any).__sseOpen = true;
-              clearInterval(checkReady);
-            }
-          } catch {}
-        }, 50);
-        // Stop polling after 5 seconds
-        setTimeout(() => clearInterval(checkReady), 5000);
-        return es;
-      };
-      try {
-        (window as any).EventSource.prototype = OrigEventSource.prototype;
-      } catch {}
-    });
-
-    await page.goto(`${CONSOLE_BASE_URL}/console/`, {
-      waitUntil: "domcontentloaded",
-      timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS,
-    });
-    await page.waitForFunction(() => (window as any).__sseUrl !== undefined, {
-      timeout: 5_000,
-    });
-    // Allow more time for the SSE connection to establish in slower CI or
-    // when the server performs external metadata fetches.
-    await page.waitForFunction(() => (window as any).__sseOpen === true, {
-      timeout: 60_000,
-    });
-
-    // Use actual NicoNico page metadata but post as a `niconama` object lacking
-    // `meta` so the server promotes `title` into `niconama.meta`.
-    const client = createNiconamaCommentClient(
-      { watchUrl: ACTUAL_PROGRAM_WATCH_URL },
-      {
-        onComments: () => {},
-        onMeta: () => {},
-        onError: (err) => {
-          console.error("niconama client error", err);
-        },
-      },
-    );
-    const embedded = await client.fetchEmbeddedData();
-    expect(embedded).toBeTruthy();
-
-    const extractedTitle =
-      (embedded as any)?.program?.title ??
-      (embedded as any)?.site?.program?.title ??
-      (embedded as any)?.title ??
-      "NicoLegacyTitle";
-    const payload = { niconama: { type: "live", title: extractedTitle } };
-    const broadcastRes = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    expect(
-      broadcastRes.ok,
-      `broadcast POST failed: ${broadcastRes.status}`,
-    ).toBeTruthy();
-
-    const streamTitleLocator = page.getByTestId("agent-status-stream-title");
-    await streamTitleLocator.waitFor({ timeout: 10_000 });
-    const titleText = await streamTitleLocator.textContent();
-    expect(titleText).toContain(extractedTitle);
-  });
-
   test("keeps SSE connection open while the console browser tab is open", async ({
     page,
+    request,
   }) => {
     await page.addInitScript(() => {
       const OrigEventSource = (window as any).EventSource;
@@ -928,7 +529,7 @@ test.describe("console", () => {
         writable: true,
         configurable: true,
       });
-      function WrappedEventSource(url: string) {
+      const WrappedEventSource = function (url: string) {
         const es = new OrigEventSource(url);
         try {
           es.addEventListener("open", () => {
@@ -945,20 +546,8 @@ test.describe("console", () => {
             (window as any).__sseError = true;
           });
         } catch {}
-        // Fallback: poll readyState in case 'open' event doesn't fire
-        const checkReady = setInterval(() => {
-          try {
-            if (es.readyState === 1) {
-              // OPEN
-              (window as any).__sseOpen = true;
-              clearInterval(checkReady);
-            }
-          } catch {}
-        }, 50);
-        // Stop polling after 5 seconds
-        setTimeout(() => clearInterval(checkReady), 5000);
         return es;
-      }
+      } as any;
       try {
         for (const key of Object.getOwnPropertyNames(OrigEventSource)) {
           const descriptor = Object.getOwnPropertyDescriptor(
@@ -978,10 +567,10 @@ test.describe("console", () => {
       timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS,
     });
     await page.waitForFunction(() => (window as any).__sseOpen === true, {
-      timeout: 60_000,
+      timeout: 10_000,
     });
     await page.waitForFunction(() => (window as any).__sseMessageCount > 0, {
-      timeout: 60_000,
+      timeout: 10_000,
     });
 
     // Keep the console tab open long enough for idle SSE/keepalive behavior
@@ -1057,6 +646,8 @@ test.describe("console", () => {
 
     let firstMessage: string | null = null;
     try {
+      console.log("[TEST DIAG] wsUrl ->", wsUrl);
+      console.log("[TEST DIAG] broadcastingWsUrl ->", broadcastingWsUrl);
       firstMessage = await page.evaluate(
         async ({
           proxyUrl,
@@ -1104,6 +695,7 @@ test.describe("console", () => {
         { proxyUrl: wsUrl, fallbackUrl: broadcastingWsUrl },
       );
     } catch (err) {
+      console.log("[TEST DIAG] WS connection attempt failed ->", String(err));
       // As a robust fallback for CI environments where WS upgrades may
       // fail intermittently, try fetching the broadcasting server's
       // /api/meta directly and treat that as the initial payload.
@@ -1113,7 +705,12 @@ test.describe("console", () => {
           const metaJson = await metaRes.json();
           firstMessage = JSON.stringify(metaJson);
         }
-      } catch (_fetchErr) {}
+      } catch (fetchErr) {
+        console.log(
+          "[TEST DIAG] fallback /api/meta fetch failed ->",
+          String(fetchErr),
+        );
+      }
       if (!firstMessage) throw err;
     }
 

@@ -4,23 +4,22 @@ After=graphical.target xorg10.service x11vnc-10.service
 Wants=graphical.target xorg10.service x11vnc-10.service makamujo-screen.service makamujo-browser.service makamujo-obs.service
 PartOf=graphical.target
 
-# Service coordinates child services (screen, browser, obs) through dependency ordering.
-# systemd will start them according to After= directives in their definitions.
+# Parent unit coordinates child services (screen, browser, obs) via Wants=/After=.
+# Placeholders @PREFIX@ and @BUN_BIN@ are substituted by `make install-systemd`.
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/opt/makamujo
+WorkingDirectory=@PREFIX@
 User=root
-Environment=PATH=/root/.bun/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=@PREFIX@/bin:/usr/local/bin:/usr/bin:/bin
 Environment=NODE_ENV=production
 Environment=DISPLAY=:10
+# Prefer fixed password in production:
+# Environment=CONSOLE_BASIC_AUTH_PASSWORD=...
+# Or rely on @PREFIX@/var/console-basic-auth-password (auto-created on first start).
 ExecStart=/bin/true
 StandardOutput=journal
 StandardError=journal
-# If you want to run it as a different user, change `User=` and set `XAUTHORITY` accordingly:
-# User=yourusername
-# Environment=DISPLAY=:0
-# Environment=XAUTHORITY=/home/yourusername/.Xauthority
 
 [Install]
 WantedBy=graphical.target

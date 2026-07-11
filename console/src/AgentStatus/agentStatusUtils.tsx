@@ -1,118 +1,27 @@
 import type { Child, CSSProperties } from "hono/jsx";
+import {
+  formatMetricValue,
+  formatNGramValue,
+  formatStartDate,
+  formatStateLabel,
+  formatStreamStartTime,
+  normalizeSpeechText,
+  SPEECH_UNAVAILABLE_INDICATOR,
+} from "../../../lib/domain/console/agentStatusPlan";
 import type { AgentStateResponse } from "./types";
 
-const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
+// Re-export pure presentation helpers from the console domain (single source of truth).
+export {
+  formatMetricValue,
+  formatNGramValue,
+  formatStartDate,
+  formatStateLabel,
+  formatStreamStartTime,
+  normalizeSpeechText,
+};
+
 const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
 const GAME_STATE_EMPTY_OBJECT_LABEL = "(空のオブジェクト)";
-const SPEECH_UNAVAILABLE_INDICATOR = "（コメントしてね）";
-
-export const formatStateLabel = (type: string | undefined): string => {
-  if (type === "live") {
-    return "配信中";
-  }
-  if (type === "offline") {
-    return "停止中";
-  }
-  return type ?? "-";
-};
-
-export const formatStartDate = (
-  startAtUnixTime: number | undefined,
-): string => {
-  if (
-    typeof startAtUnixTime !== "number" ||
-    !Number.isFinite(startAtUnixTime) ||
-    startAtUnixTime <= 0
-  ) {
-    return "-";
-  }
-  const startAtUnixTimeMilliseconds =
-    startAtUnixTime >= UNIX_MILLISECONDS_THRESHOLD
-      ? startAtUnixTime
-      : startAtUnixTime * 1000;
-  return new Date(startAtUnixTimeMilliseconds).toLocaleString("ja-JP");
-};
-
-export const formatStreamStartTime = (
-  startAtUnixTime: number | undefined,
-): string | undefined => {
-  if (
-    typeof startAtUnixTime !== "number" ||
-    !Number.isFinite(startAtUnixTime) ||
-    startAtUnixTime <= 0
-  ) {
-    return undefined;
-  }
-  const startAtUnixTimeMilliseconds =
-    startAtUnixTime >= UNIX_MILLISECONDS_THRESHOLD
-      ? startAtUnixTime
-      : startAtUnixTime * 1000;
-  const date = new Date(startAtUnixTimeMilliseconds);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  return `${year}/${month}/${day} ${hour}:${minute} 開始`;
-};
-
-export const formatMetricValue = (metricValue: number | undefined): string => {
-  return metricValue === undefined ? "-" : String(metricValue);
-};
-
-export const formatNGramValue = (
-  nGram: number | undefined,
-  nGramRaw: number | undefined,
-): string => {
-  if (nGram === undefined || !Number.isFinite(nGram) || nGram < 1) {
-    return "-";
-  }
-  const nGramValue = `${Math.floor(nGram)}-gram`;
-  if (nGramRaw === undefined || !Number.isFinite(nGramRaw) || nGramRaw < 1) {
-    return nGramValue;
-  }
-  const formattedRaw = Number(nGramRaw).toFixed(2);
-  return `${nGramValue} (${formattedRaw})`;
-};
-
-type SpeechPayload =
-  | string
-  | { text?: string; nodes?: readonly string[] }
-  | {
-      speech?:
-        | string
-        | { text?: string; nodes?: readonly string[] }
-        | { speech?: string; text?: string; nodes?: readonly string[] };
-      silent?: boolean;
-    }
-  | undefined;
-
-export const normalizeSpeechText = (
-  speech: SpeechPayload,
-): string | undefined => {
-  if (typeof speech === "string") {
-    return speech.trim() || undefined;
-  }
-
-  if (speech && typeof speech === "object") {
-    const obj = speech as Record<string, unknown>;
-    const textValue =
-      typeof obj.text === "string"
-        ? obj.text
-        : typeof obj.speech === "string"
-          ? obj.speech
-          : typeof obj.speech === "object" && obj.speech !== null
-            ? typeof (obj.speech as Record<string, unknown>).text === "string"
-              ? (obj.speech as Record<string, unknown>).text
-              : undefined
-            : undefined;
-    return typeof textValue === "string"
-      ? textValue.trim() || undefined
-      : undefined;
-  }
-
-  return undefined;
-};
 
 const createHighlightedCommentLines = (
   commentText: string,
@@ -131,18 +40,10 @@ const createHighlightedCommentLines = (
     );
 };
 
-export const normalizeReplyTargetCommentText = (
-  text: string | undefined,
-): string | undefined => {
-  if (typeof text !== "string") return undefined;
-  const normalized = text.trim();
-  return normalized.replace(/^#\d+[ 　]+/, "").trimStart() || undefined;
-};
-
 export const createReplyTargetCommentValueComponent = (
   replyTargetComment: AgentStateResponse["replyTargetComment"],
 ): Child => {
-  const text = normalizeReplyTargetCommentText(replyTargetComment?.text);
+  const text = replyTargetComment?.text?.trim();
   const pickedTopic = replyTargetComment?.pickedTopic?.trim();
   if (!text) {
     return <span>-</span>;
@@ -158,63 +59,16 @@ export const createReplyTargetCommentValueComponent = (
         {commentNodes.map((part, index) =>
           index % 2 === 1 ? (
             <span
-              key={`highlighted-topic-${part}`}
+              key={`highlighted-topic-${index}`}
               className="rounded bg-emerald-300/30 px-1 font-semibold text-emerald-100"
             >
               {part}
             </span>
           ) : (
-            <span key={`comment-part-${part}`}>{part}</span>
+            <span key={`comment-part-${index}`}>{part}</span>
           ),
         )}
       </p>
-    </div>
-  );
-};
-
-import { formatAgentCommentEntry } from "../../../lib/niconamaCommentClient.helpers";
-
-const createRecentCommentEntryComponent = (entry: string): Child => {
-  const match = entry.match(/^#(\d+)\b(?:\s*)([\s\S]*)$/);
-  if (!match) {
-    return entry;
-  }
-
-  const [, number, remainder] = match;
-  return (
-    <>
-      <span className="text-emerald-200">#{number}</span>
-      {remainder ? ` ${remainder}` : null}
-    </>
-  );
-};
-
-export const createRecentCommentsValueComponent = (
-  recentComments: AgentStateResponse["recentComments"],
-): Child => {
-  if (!Array.isArray(recentComments) || recentComments.length === 0) {
-    return <span>-</span>;
-  }
-
-  const commentsToRender = [...recentComments].reverse();
-
-  return (
-    <div className="space-y-2">
-      {commentsToRender.map((comment) => {
-        const entry = formatAgentCommentEntry(comment) ?? "-";
-        const commentData = comment as Record<string, unknown>;
-        const commentNo = ((commentData?.data as Record<string, unknown>)?.no ??
-          "") as string | number;
-
-        return (
-          <p
-            key={`recent-comment-${commentNo}`}
-            className="break-words whitespace-pre-wrap rounded-md border border-emerald-300/30 bg-emerald-950/30 px-3 py-2 text-sm"
-          >
-            {createRecentCommentEntryComponent(entry)}
-          </p>
-        );
-      })}
     </div>
   );
 };
@@ -267,7 +121,7 @@ export const createSpeechHistoryDisplayItems = (
       return accumulatedItems;
     }
 
-    const traceNodes = speechHistoryItem.nodes;
+    const traceNodes = (speechHistoryItem as any).nodes;
     const hasTrace = Array.isArray(traceNodes) && traceNodes.length > 0;
     const hasValidNGram =
       speechHistoryItem.nGram !== undefined &&
@@ -351,17 +205,17 @@ export const createSpeechHistoryValueComponent = (
           <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-2">
             <div className="flex flex-wrap gap-1">
               {speechHistoryItem.nodes && Array.isArray(speechHistoryItem.nodes)
-                ? speechHistoryItem.nodes.map((word) => (
+                ? speechHistoryItem.nodes.map((word, wi) => (
                     <span
-                      key={`${speechHistoryItem.id}-node-${word}`}
+                      key={`${speechHistoryItem.id}-node-${wi}`}
                       className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
                     >
                       {word}
                     </span>
                   ))
-                : speechHistoryItem.speechText.split(/\s+/).map((word) => (
+                : speechHistoryItem.speechText.split(/\s+/).map((word, wi) => (
                     <span
-                      key={`${speechHistoryItem.id}-word-${word}`}
+                      key={`${speechHistoryItem.id}-word-${wi}`}
                       className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
                     >
                       {word}
@@ -394,8 +248,6 @@ export const createSpeechHistoryValueComponent = (
 export const createLiveDeliveryMetricsValueComponent = (
   niconamaState: AgentStateResponse["niconama"],
   commentCount: AgentStateResponse["commentCount"],
-  isRecentCommentsOpen?: boolean,
-  toggleRecentComments?: () => void,
 ): Child => {
   const liveMetricItems = [
     { label: "配信状況", value: formatStateLabel(niconamaState?.type) },
@@ -403,22 +255,7 @@ export const createLiveDeliveryMetricsValueComponent = (
       label: "視聴者数",
       value: formatMetricValue(niconamaState?.meta?.total?.listeners),
     },
-    {
-      label: "コメント数",
-      valueComponent: toggleRecentComments ? (
-        <button
-          type="button"
-          onClick={toggleRecentComments}
-          aria-expanded={isRecentCommentsOpen ? "true" : "false"}
-          className="text-sm underline decoration-emerald-300/50 underline-offset-2 transition hover:text-emerald-50"
-          title="クリックで最近のコメントを表示/非表示"
-        >
-          {formatMetricValue(commentCount)}
-        </button>
-      ) : (
-        formatMetricValue(commentCount)
-      ),
-    },
+    { label: "コメント数", value: formatMetricValue(commentCount) },
     {
       label: "ギフト",
       value: formatMetricValue(niconamaState?.meta?.total?.gift),
@@ -445,7 +282,7 @@ export const createLiveDeliveryMetricsValueComponent = (
           key={`value-${liveMetricItem.label}`}
           className="text-center whitespace-nowrap"
         >
-          {liveMetricItem.valueComponent ?? liveMetricItem.value}
+          {liveMetricItem.value}
         </p>
       ))}
     </div>

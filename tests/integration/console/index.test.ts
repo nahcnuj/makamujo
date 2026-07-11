@@ -2,14 +2,19 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { startConsoleServer } from "../../../console/index";
 import {
-  consoleBasePath,
-  consoleRedirectURL,
   createAccessDeniedRedirectResponse,
   createLoopbackProxyHeaders,
+  createUnauthorizedConsoleResponse,
+  DEFAULT_CONSOLE_BASE_PATH,
+  hasValidConsoleAuthorization,
   isConsoleIPRestrictionEnabled,
-  startConsoleServer,
-} from "../../../console/index";
+} from "../../../lib/domain/console/access";
+
+const consoleRedirectURL =
+  process.env.CONSOLE_REDIRECT_URL ??
+  "https://live.nicovideo.jp/watch/user/14171889";
 
 test("throws when TLS certificate file is missing", () => {
   const tmpDir = mkdtempSync(join(tmpdir(), "console-test-"));
@@ -45,6 +50,9 @@ test("throws when TLS certificate file exists but key file is missing", () => {
 test("returns 303 to watch page for denied /console/ access", () => {
   const response = createAccessDeniedRedirectResponse(
     new URL("https://example.com/console/?q=1"),
+    {
+      consoleRedirectURL,
+    },
   );
   expect(response.status).toBe(303);
   expect(response.headers.get("location")).toBe(consoleRedirectURL);
@@ -53,9 +61,12 @@ test("returns 303 to watch page for denied /console/ access", () => {
 test("returns 308 to /console/ for denied non-console access", () => {
   const response = createAccessDeniedRedirectResponse(
     new URL("https://example.com/other/path"),
+    {
+      consoleRedirectURL,
+    },
   );
   expect(response.status).toBe(308);
-  expect(response.headers.get("location")).toBe(consoleBasePath);
+  expect(response.headers.get("location")).toBe(DEFAULT_CONSOLE_BASE_PATH);
 });
 
 test("strips hop-by-hop headers from loopback proxy requests", () => {
@@ -126,4 +137,17 @@ test("enables console IP restriction in production mode", () => {
   } finally {
     process.env.NODE_ENV = originalNodeEnv;
   }
+});
+
+test("production console Basic auth rejects missing credentials with 401", () => {
+  expect(hasValidConsoleAuthorization(null, "expected-secret")).toBe(false);
+  const unauthorized = createUnauthorizedConsoleResponse();
+  expect(unauthorized.status).toBe(401);
+  expect(unauthorized.headers.get("WWW-Authenticate")).toContain("Basic");
+});
+
+test("production console Basic auth accepts admin credentials", () => {
+  const header = `Basic ${btoa("admin:expected-secret")}`;
+  expect(hasValidConsoleAuthorization(header, "expected-secret")).toBe(true);
+  expect(hasValidConsoleAuthorization(header, "other-secret")).toBe(false);
 });

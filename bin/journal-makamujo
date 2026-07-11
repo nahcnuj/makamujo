@@ -2,7 +2,7 @@
 
 set -eu
 
-# Helper to follow logs for all makamujo transient units
+# Follow logs for makamujo child units
 UNITS="makamujo-screen.service makamujo-browser.service makamujo-obs.service"
 
 JARGS=""

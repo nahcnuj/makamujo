@@ -73,17 +73,17 @@ export const SpeechHistoryListItem = ({
             </span>
           ) : null}
           {speechHistoryItem.nodes && Array.isArray(speechHistoryItem.nodes)
-            ? speechHistoryItem.nodes.map((word) => (
+            ? speechHistoryItem.nodes.map((word, wi) => (
                 <span
-                  key={`${speechHistoryItem.id}-node-${word}`}
+                  key={`${speechHistoryItem.id}-node-${wi}`}
                   className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
                 >
                   {word}
                 </span>
               ))
-            : speechHistoryItem.speechText.split(/\s+/).map((word) => (
+            : speechHistoryItem.speechText.split(/\s+/).map((word, wi) => (
                 <span
-                  key={`${speechHistoryItem.id}-word-${word}`}
+                  key={`${speechHistoryItem.id}-word-${wi}`}
                   className="speech-word-chip inline-block rounded-md border border-emerald-300/30 bg-emerald-950/40 px-2 py-1 text-sm"
                 >
                   {word}
@@ -131,13 +131,13 @@ const renderReplyAnnotation = (
       {segments.map((part, idx) =>
         idx % 2 === 1 ? (
           <span
-            key={`reply-highlight-${part}`}
+            key={`reply-highlight-${idx}`}
             className="rounded bg-emerald-300/30 px-0.5 font-semibold text-emerald-100"
           >
             {part}
           </span>
         ) : (
-          <span key={`reply-part-${part}`}>{part}</span>
+          <span key={`reply-part-${idx}`}>{part}</span>
         ),
       )}
     </>

@@ -17,8 +17,8 @@ const server = http.createServer((req, res) => {
       try {
         res.write("data: PARTIAL"); // no terminating newline(s)
         // Abruptly close the socket to simulate an upstream truncation
-        res.socket?.destroy?.();
-      } catch {}
+        res.socket && (res.socket as any).destroy();
+      } catch (_e) {}
     }, 50);
     return;
   }
@@ -27,7 +27,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(port, () => {
-  const addr = server.address();
-  const boundPort = typeof addr === "object" && addr ? addr.port : port;
-  console.log(`mock-upstream ready on ${boundPort}`);
+  console.log("mock-upstream ready");
 });

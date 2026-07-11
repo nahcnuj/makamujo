@@ -20,10 +20,10 @@ export const GET = (req: Request): Response => {
   const url = new URL(req.url);
   const beforeId = url.searchParams.get("before");
   const limitParam = url.searchParams.get("limit");
-  const limit =
-    limitParam !== null
-      ? Math.max(1, Number.parseInt(limitParam, 10) || 1)
-      : speechHistoryRef.length;
+  const limit = Math.min(
+    Math.max(1, Number.parseInt(limitParam ?? "10", 10) || 10),
+    50,
+  );
 
   let startIndex = 0;
   if (beforeId !== null) {

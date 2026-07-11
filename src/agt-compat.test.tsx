@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import { Box, CharacterSprite, Container, Layout } from "./agt-compat";
 
 test("Box returns a Hono JSX element wrapper", () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const element = (
     <Box
       borderColor="border-emerald-300"
@@ -20,7 +19,6 @@ test("Box returns a Hono JSX element wrapper", () => {
 });
 
 test("Layout returns a Hono JSX element wrapper with three children", () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const element = (
     <Layout count={10} span={8} className="bg-emerald-950/30">
       <Container>main</Container>
@@ -38,7 +36,6 @@ test("Layout returns a Hono JSX element wrapper with three children", () => {
 });
 
 test("CharacterSprite returns a Hono JSX element wrapper", () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const element = (
     <CharacterSprite
       src="/nc433974.png"

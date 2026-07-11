@@ -38,7 +38,6 @@ export const extractWatchUrlFromHtml = (
     const match = normalizedHtml.match(pattern);
     if (!match) continue;
     try {
-      // biome-ignore lint/style/noNonNullAssertion: regex match group guaranteed by condition
       return new URL(match[1]!, baseUrl).href;
     } catch {}
   }
@@ -135,7 +134,6 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
       const dpIndex = lowerTag.indexOf("data-props=", searchIndex);
       if (dpIndex === -1) return null;
       let cursor = dpIndex + "data-props=".length;
-      // biome-ignore lint/style/noNonNullAssertion: cursor guaranteed within bounds
       while (cursor < openTag.length && /\s/.test(openTag[cursor]!))
         cursor += 1;
       const quote = openTag[cursor];
@@ -181,7 +179,6 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
 
   const attrMatch = html.match(/data-props=(['"])([\s\S]*?)\1/i);
   if (attrMatch?.[2]) {
-    // biome-ignore lint/style/noNonNullAssertion: matched group guaranteed by condition
     const parsed = parseJsonFromRaw(attrMatch[2]!);
     if (parsed) return parsed;
   }
@@ -190,7 +187,6 @@ export const extractEmbeddedDataFromHtml = (html: string): unknown | null => {
     /<(?:div|script)[^>]*id=['"]embedded-data['"][^>]*>([\s\S]*?)<\/(?:div|script)>/i,
   );
   if (innerMatch?.[1]) {
-    // biome-ignore lint/style/noNonNullAssertion: matched group guaranteed by condition
     const parsed = parseJsonFromRaw(innerMatch[1]!);
     if (parsed) return parsed;
   }

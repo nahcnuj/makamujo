@@ -5,7 +5,6 @@ set -eu
 SCRIPT_PATH=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_PATH/.." && pwd)
 
-# OBS config and cache directories
 OBS_CONFIG_DIR="$REPO_ROOT/obs-studio"
 OBS_CACHE_DIR="$REPO_ROOT/.cache"
 

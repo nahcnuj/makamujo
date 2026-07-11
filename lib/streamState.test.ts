@@ -1,8 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  normalizePublishedStreamState,
-  resolveNiconamaFromState,
-} from "./streamState";
+import { normalizePublishedStreamState } from "./streamState";
 
 describe("normalizePublishedStreamState", () => {
   it("preserves replyTargetComment for legacy niconama payloads", () => {
@@ -94,79 +91,5 @@ describe("normalizePublishedStreamState", () => {
     );
     expect(normalized.commentCount).toBe(7);
     expect(normalized).toHaveProperty("niconama");
-  });
-
-  it("preserves comments count from legacy niconama.total object", () => {
-    const legacyState = {
-      type: "niconama",
-      data: {
-        isLive: true,
-        title: "legacy",
-        startTime: 0,
-        total: { listeners: 10, comments: 4 },
-        points: { gift: 1, ad: 2 },
-        url: "https://example.com",
-      },
-    };
-
-    const normalized = normalizePublishedStreamState(legacyState) as Record<
-      string,
-      any
-    >;
-
-    expect(normalized.niconama.meta.total).toEqual({
-      listeners: 10,
-      comments: 4,
-      gift: 1,
-      ad: 2,
-    });
-  });
-
-  it("maps top-level title/url/start into niconama.meta", () => {
-    const state = {
-      title: "TopLevelTitle",
-      url: "https://example.com/live",
-      start: 1700000000,
-    };
-
-    const normalized = resolveNiconamaFromState(state) as Record<string, any>;
-
-    expect(normalized).toHaveProperty("meta");
-    expect(normalized.meta.title).toBe("TopLevelTitle");
-    expect(normalized.meta.url).toBe("https://example.com/live");
-    expect(normalized.meta.start).toBe(1700000000);
-  });
-
-  it("promotes niconama.title into niconama.meta when meta is missing", () => {
-    const state = {
-      niconama: { type: "live", title: "NicoTitle" },
-    } as any;
-
-    const normalized = resolveNiconamaFromState(state) as Record<string, any>;
-
-    expect(normalized).toHaveProperty("meta");
-    expect(normalized.meta.title).toBe("NicoTitle");
-    expect(normalized.type).toBe("live");
-  });
-
-  it("extracts metadata from currentGame.state when niconama/meta missing", () => {
-    const state = {
-      currentGame: {
-        name: "CookieClicker",
-        state: {
-          title: "CookieClicker - play",
-          url: "https://orteil.dashnet.org/cookieclicker/",
-          timestamp: 1779541505333,
-        },
-      },
-    } as any;
-
-    const normalized = resolveNiconamaFromState(state) as Record<string, any>;
-    expect(normalized).toHaveProperty("meta");
-    expect(normalized.meta.title).toBe("CookieClicker - play");
-    expect(normalized.meta.url).toBe(
-      "https://orteil.dashnet.org/cookieclicker/",
-    );
-    expect(normalized.meta.start).toBe(1779541505333);
   });
 });

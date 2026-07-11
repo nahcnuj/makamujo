@@ -10,7 +10,7 @@
   },
   "workspaceMount": "source=${localWorkspaceFolder},target=${containerWorkspaceFolder},type=bind,consistency=cached",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
-  "postCreateCommand": "bash ./scripts/install-git-hooks.sh && bun ci --ignore-scripts",
+  "postCreateCommand": "bun ci",
   "forwardPorts": [443, 8777],
   "runArgs": ["--cap-add=NET_BIND_SERVICE"],
   "remoteEnv": {

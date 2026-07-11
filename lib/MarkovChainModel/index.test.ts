@@ -116,7 +116,7 @@ describe("a distribution with two even branches", () => {
   it("should choose each branch evenly", () => {
     const randomSpy = jest.spyOn(Math, "random");
     for (const i in [...new Array(times)]) {
-      randomSpy.mockReturnValue(Number.parseInt(i, 10) / times);
+      randomSpy.mockReturnValue(Number.parseInt(i) / times);
       const got = getResultText(model.generate()) as
         | "こんにちは。"
         | "こんばんは。";

@@ -35,8 +35,7 @@ export function GamePanel() {
   return (
     <div className="h-full flex flex-col justify-between text-2xl/8">
       <div className="flex-none">
-        {/* biome-ignore lint/suspicious/noExplicitAny: Component is polymorphic across games */}
-        {playing && <Component state={playing.state as any} />}
+        {playing && <Component state={playing.state} />}
       </div>
       <div className="flex-none">
         {streamState?.meta?.total && (

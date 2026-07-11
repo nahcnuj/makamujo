@@ -131,34 +131,18 @@ async function serveConsoleAppHtml(): Promise<Response> {
 }
 
 try {
-  console.debug("[DEBUG] routes/console initializing");
+  console.log("[DEBUG] routes/console initializing");
 } catch {}
 
 export const { upgradeWebSocket, websocket } = createBunWebSocket();
 
 export const app = new Hono()
-  // Ensure /api/meta is available on the loopback console server by proxying
-  // requests to the broadcasting server. Some test setups may point the
-  // broadcasting base URL at the console loopback; forwarding here ensures
-  // a JSON response is always returned.
-  .get("/api/meta", async (c) => {
-    try {
-      const proxyBase = computeProxyBase(c.req.raw);
-      const res = await fetch(`${proxyBase}/api/meta`);
-      return res;
-    } catch {
-      return new Response("{}", {
-        status: 502,
-        headers: { "content-type": "application/json" },
-      });
-    }
-  })
   .get(
     "/console/api/ws",
     async (c, next) => {
       try {
-        console.debug(
-          "[DEBUG] incoming request headers ->",
+        console.log(
+          "[TRACE] incoming request headers ->",
           Object.fromEntries(c.req.raw.headers),
         );
       } catch {}
@@ -166,7 +150,7 @@ export const app = new Hono()
         const proxyBase = computeProxyBase(c.req.raw);
         const proxyUrl = computeProxyUrl(c.req.raw, proxyBase);
         try {
-          console.debug("[DEBUG] /console/api/ws proxy ->", {
+          console.log("[DEBUG] /console/api/ws proxy ->", {
             url: proxyUrl,
             method: c.req.method,
             accept: c.req.header("accept"),
@@ -178,26 +162,14 @@ export const app = new Hono()
 
         const upgradeHeader = (c.req.header("upgrade") ?? "").toLowerCase();
         const hasSecWebSocketKey = !!c.req.header("sec-websocket-key");
-        const forceDisableWs =
-          process.env.FORCE_DISABLE_WS_UPGRADE === "1" ||
-          process.env.FORCE_DISABLE_WS_UPGRADE === "true";
         if (upgradeHeader === "websocket" || hasSecWebSocketKey) {
-          if (forceDisableWs) {
-            return new Response("websocket upgrade unavailable", {
-              status: 501,
-            });
-          }
           // Hand off to the upgradeWebSocket middleware below.
           return next();
         }
 
         const proxyHeaders = buildProxyHeaders(c.req.raw, proxyBase);
-        // Proxy the request to the broadcasting server so the console client
-        // receives the upstream SSE stream (with resilient reconnects) or the
-        // proxied HTTP response. Avoid special-casing self-proxying here to
-        // ensure console clients get the authoritative upstream events.
         return proxyConsoleApiWsRequest(c.req.raw, proxyUrl, proxyHeaders);
-      } catch {
+      } catch (_err) {
         return new Response("proxy failed", { status: 502 });
       }
     },
@@ -210,24 +182,25 @@ export const app = new Hono()
           (async () => {
             try {
               try {
-                console.debug(
+                console.log(
                   "[DEBUG] websocket upgrade accepted; starting SSE->WS forwarder",
                 );
               } catch {}
               const sseUrl = `${proxyBase}/console/api/ws`;
               try {
-                console.debug("[DEBUG] opening upstream SSE fetch ->", sseUrl);
+                console.log("[DEBUG] opening upstream SSE fetch ->", sseUrl);
               } catch {}
               const res = await fetch(sseUrl, {
                 headers: { accept: "text/event-stream" },
               });
               try {
-                console.debug("[DEBUG] upstream SSE response ->", {
+                console.log("[DEBUG] upstream SSE response ->", {
                   status: res.status,
                   contentType: res.headers.get("content-type"),
                 });
               } catch {}
 
+              // Avoid unhandled rejections when upstream is temporarily down (main #429).
               if (!res.ok) {
                 try {
                   console.warn(
@@ -235,7 +208,6 @@ export const app = new Hono()
                     res.status,
                   );
                 } catch {}
-                // Send local metadata and close gracefully instead of erroring
                 try {
                   const metaJson = await fetchMetaSnapshot(proxyBase).catch(
                     () => ({}),
@@ -244,6 +216,9 @@ export const app = new Hono()
                     ws.send(JSON.stringify(metaJson));
                   } catch {}
                 } catch {}
+                try {
+                  ws.close();
+                } catch {}
                 return;
               }
 
@@ -251,38 +226,6 @@ export const app = new Hono()
                 const metaJson = await fetchMetaSnapshot(proxyBase);
                 try {
                   ws.send(JSON.stringify(metaJson));
-                } catch {}
-
-                // If the proxied HTTP snapshot lacked `niconama`, prefer the
-                // authoritative local payload mirror when available so WebSocket
-                // upgrade clients receive immediate stream metadata.
-                try {
-                  if (
-                    !metaJson ||
-                    typeof metaJson !== "object" ||
-                    !(metaJson as Record<string, unknown>).niconama
-                  ) {
-                    const globalThis$ = globalThis as Record<string, unknown>;
-                    const getPayload = globalThis$.__getCurrentStreamPayload;
-                    const local =
-                      typeof getPayload === "function"
-                        ? getPayload()
-                        : undefined;
-                    if (
-                      local &&
-                      typeof local === "object" &&
-                      (local as Record<string, unknown>).niconama
-                    ) {
-                      try {
-                        ws.send(JSON.stringify(local));
-                      } catch {}
-                      try {
-                        console.debug(
-                          "[DIAG] websocket sent local mirrored payload with niconama",
-                        );
-                      } catch {}
-                    }
-                  }
                 } catch {}
               } catch (err) {
                 try {
@@ -317,14 +260,7 @@ export const app = new Hono()
                 ws.close();
               } catch {}
             }
-          })().catch((err) => {
-            try {
-              console.error(
-                "[ERROR] websocket onOpen handler error",
-                String(err),
-              );
-            } catch {}
-          });
+          })();
         },
         onMessage() {},
         onClose() {
@@ -337,7 +273,7 @@ export const app = new Hono()
     }),
   )
   .get("/console/robots.txt", () => robotsTxt.clone())
-  .get("/console/api/agent-state", (c) => agentState.GET(c.req.raw))
+  .get("/console/api/agent-state", () => agentState.GET())
   .get("/console/api/speech-history", (c) => speechHistory.GET(c.req.raw))
   .get("/console/index.css", async (c) => {
     const css = await compileTailwindCss("console/src/index.css");
@@ -349,7 +285,6 @@ export const app = new Hono()
       (await serveConsoleAsset(c.req.raw)) ??
       new Response("Not Found", { status: 404 }),
   )
-  .get("/console", () => serveConsoleAppHtml())
   .get(
     "/console/frontend.css",
     async (c) =>

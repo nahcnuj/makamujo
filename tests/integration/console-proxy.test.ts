@@ -1,57 +1,62 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import {
+  allocateFreePort,
+  killProcessTree,
+  makamujoIpcPath,
+  resolveBunExecutable,
+  type SpawnedServer,
+  waitForPortRelease,
+} from "../helpers/integrationServer";
 
-let BROADCASTING_BASE_URL = "";
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 
-// Integration test runner default timeouts can be too short on CI runners.
-// We avoid altering runner timeouts here and instead wait for the server
-// readiness message on stdout so the hook completes quickly.
-
-let server: ReturnType<typeof spawn> | null = null;
+let server: SpawnedServer | null = null;
+let broadcastingBaseUrl = "";
+let mainServerPort = 0;
 
 beforeAll(async () => {
   if (!existsSync("./var/cookieclicker.txt")) {
     try {
       mkdirSync("./var", { recursive: true });
-    } catch {}
+    } catch {
+      /* ignore */
+    }
     writeFileSync("./var/cookieclicker.txt", "");
   }
 
-  const ipcPath =
-    process.platform === "win32"
-      ? `\\.\\pipe\\makamujo-test-ipc`
-      : `./var/ipc-test.sock`;
+  mainServerPort = await allocateFreePort();
+  broadcastingBaseUrl = `http://127.0.0.1:${mainServerPort}`;
 
   server = spawn(
-    process.platform === "win32" ? "bun.exe" : "bun",
-    ["index.ts", "--port", "0"],
+    resolveBunExecutable(),
+    ["index.ts", "--port", String(mainServerPort)],
     {
       env: {
         ...process.env,
         NODE_ENV: "production",
         CONSOLE_LOOPBACK_ONLY: "1",
-        MAKAMUJO_IPC_PATH: ipcPath,
+        MAKAMUJO_IPC_PATH: makamujoIpcPath(`console-proxy-${mainServerPort}`),
       },
       stdio: ["ignore", "pipe", "pipe"],
     },
-  );
-  // Wait for the server process to emit a ready message on stdout as well as
-  // the external agent initialization log (success or fallback). The agent is
-  // loaded asynchronously after the server starts listening, so we need to
-  // wait for both to avoid race conditions in tests that depend on the agent.
+  ) as unknown as SpawnedServer;
+
+  // Wait for server listen + external agent init (success or fallback).
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
       cleanupListeners();
-      reject(new Error("Server startup timed out"));
+      reject(
+        new Error(`Server startup timed out. Output:\n${buffer.slice(-2000)}`),
+      );
     }, SERVER_STARTUP_TIMEOUT_MS);
 
     let buffer = "";
     let serverRunning = false;
     let agentReady = false;
-    const stdout = server?.stdout;
-    const stderr = server?.stderr;
+    const stdout = server!.stdout;
+    const stderr = server!.stderr;
 
     function checkReady() {
       if (serverRunning && agentReady) {
@@ -61,16 +66,15 @@ beforeAll(async () => {
       }
     }
 
-    function onData(chunk: any) {
+    function onData(chunk: Buffer | string) {
       buffer += String(chunk);
-      if (!serverRunning) {
-        const m = buffer.match(/🚀 Server running at (https?:\/\/[^\s]+)/);
-        if (m?.[1]) {
-          BROADCASTING_BASE_URL = m[1];
-          serverRunning = true;
-        }
+      if (
+        !serverRunning &&
+        (buffer.includes("Server running") ||
+          buffer.includes("🚀 Server running"))
+      ) {
+        serverRunning = true;
       }
-      // The external agent initialization completes with one of these messages.
       if (
         !agentReady &&
         (buffer.includes("[INFO] external agent API initialized") ||
@@ -88,19 +92,29 @@ beforeAll(async () => {
     function onExit(code: number | null) {
       clearTimeout(timeout);
       cleanupListeners();
-      reject(new Error(`Server exited early with code ${code}`));
+      reject(
+        new Error(
+          `Server exited early with code ${code}. Output:\n${buffer.slice(-2000)}`,
+        ),
+      );
     }
 
     function cleanupListeners() {
       try {
         stdout?.off("data", onData);
-      } catch {}
+      } catch {
+        /* ignore */
+      }
       try {
         stderr?.off("data", onData);
-      } catch {}
+      } catch {
+        /* ignore */
+      }
       try {
         server?.off("exit", onExit);
-      } catch {}
+      } catch {
+        /* ignore */
+      }
     }
 
     try {
@@ -115,15 +129,14 @@ beforeAll(async () => {
   });
 });
 
-afterAll(() => {
-  if (server && !server.killed) {
-    server.kill();
-  }
+afterAll(async () => {
+  killProcessTree(server);
   server = null;
+  await waitForPortRelease(400);
 });
 
 test("proxy returns SSE content-type at /console/api/ws", async () => {
-  const res = await fetch(`${BROADCASTING_BASE_URL}/console/api/ws`, {
+  const res = await fetch(`${broadcastingBaseUrl}/console/api/ws`, {
     headers: { accept: "text/event-stream" },
   });
   expect(res.ok).toBeTruthy();
@@ -132,11 +145,8 @@ test("proxy returns SSE content-type at /console/api/ws", async () => {
 });
 
 test("proxy forwards WebSocket upgrades to broadcasting server", async () => {
-  // Some Bun runtimes used in CI may not expose a server-side
-  // `upgradeWebSocket` API. Detect unsupported environments and
-  // skip the WebSocket-specific assertions to keep tests stable.
   try {
-    const probe = await fetch(`${BROADCASTING_BASE_URL}/console/api/ws`, {
+    const probe = await fetch(`${broadcastingBaseUrl}/console/api/ws`, {
       method: "GET",
       headers: {
         Upgrade: "websocket",
@@ -146,37 +156,39 @@ test("proxy forwards WebSocket upgrades to broadcasting server", async () => {
       },
     });
     if (probe.status !== 101) {
-      // Server does not support WS upgrades in this runtime — skip.
       return;
     }
   } catch {
-    // If probing fails assume upgrades are unavailable and skip.
     return;
   }
 
-  const broadcastingBaseUrl = new URL(BROADCASTING_BASE_URL);
-  const wsProtocol = broadcastingBaseUrl.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${wsProtocol}//${broadcastingBaseUrl.host}/console/api/ws`;
+  const wsUrl = `ws://127.0.0.1:${mainServerPort}/console/api/ws`;
   const firstMessage = await new Promise<any>((resolve, reject) => {
     const ws = new WebSocket(wsUrl);
     const timeout = setTimeout(() => {
       try {
         ws.close();
-      } catch {}
+      } catch {
+        /* ignore */
+      }
       reject(new Error("timeout"));
     }, 5000);
     ws.onmessage = (ev: any) => {
       clearTimeout(timeout);
       try {
         ws.close();
-      } catch {}
+      } catch {
+        /* ignore */
+      }
       resolve(ev.data);
     };
     ws.onerror = (e: any) => {
       clearTimeout(timeout);
       try {
         ws.close();
-      } catch {}
+      } catch {
+        /* ignore */
+      }
       reject(e);
     };
   });
@@ -185,32 +197,27 @@ test("proxy forwards WebSocket upgrades to broadcasting server", async () => {
   expect(parsed).toHaveProperty("niconama");
 });
 
-test("comment count in /api/meta reflects POST /api/meta stream state", async () => {
-  const streamStateBody = JSON.stringify({
-    type: "niconama",
-    data: {
-      isLive: true,
-      title: "テスト配信",
-      startTime: 1_700_000_000,
-      total: 10,
-      points: { gift: 0, ad: 0 },
-      url: "https://live.nicovideo.jp/watch/lv999999999",
-    },
+test("root POST and PUT are 404 (external HTTP comment routes removed on main)", async () => {
+  const postRes = await fetch(`${broadcastingBaseUrl}/`, {
+    method: "POST",
+    body: "{}",
+    headers: { "content-type": "application/json" },
   });
+  expect(postRes.status).toBe(404);
 
-  let initialMeta: any = null;
-  for (let i = 0; i < 30; i++) {
-    await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: streamStateBody,
-    });
-    initialMeta = await (
-      await fetch(`${BROADCASTING_BASE_URL}/api/meta`)
-    ).json();
-    if (initialMeta.commentCount === 0) break;
-    await new Promise((r) => setTimeout(r, 100));
-  }
-
-  expect(initialMeta.commentCount).toBe(0);
+  const putRes = await fetch(`${broadcastingBaseUrl}/`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify([
+      {
+        data: {
+          comment: "こんにちは",
+          no: 1,
+          anonymity: false,
+          hasGift: false,
+        },
+      },
+    ]),
+  });
+  expect(putRes.status).toBe(404);
 });

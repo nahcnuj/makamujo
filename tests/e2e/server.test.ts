@@ -1,16 +1,15 @@
-import { spawn } from "node:child_process";
-import { existsSync, unlinkSync, writeFileSync } from "node:fs";
-import net from "node:net";
-import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { spawn } from "child_process";
+import { existsSync, unlinkSync, writeFileSync } from "fs";
+import { join } from "path";
 import {
   createReceiverWithPath,
   createSenderWithPath,
 } from "../../lib/Browser/socket";
 
-let PORT = 0;
-let BASE_URL = "";
-const SERVER_STARTUP_TIMEOUT_MS = 30_000;
+const PORT = 17777;
+const BASE_URL = `http://localhost:${PORT}`;
+const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 
 let server: ReturnType<typeof spawn> | null = null;
 
@@ -44,7 +43,7 @@ const waitForServerReady = async () => {
       reject(new Error(`Server process exited early with code ${code}`));
     });
 
-    server.stderr.on("data", (_chunk) => {
+    server.stderr.on("data", (chunk) => {
       // optionally log server stderr for diagnosis
       // console.error("server stderr:", chunk.toString());
     });
@@ -55,26 +54,6 @@ test.beforeAll(async () => {
   if (!existsSync("./var/cookieclicker.txt")) {
     writeFileSync("./var/cookieclicker.txt", "");
   }
-  PORT = await new Promise<number>((resolve, reject) => {
-    const probe = net.createServer();
-    probe.on("error", reject);
-    probe.listen(0, "127.0.0.1", () => {
-      const address = probe.address();
-      if (!address || typeof address === "string") {
-        probe.close(() => reject(new Error("failed to acquire a free port")));
-        return;
-      }
-      const port = address.port;
-      probe.close((closeErr) => {
-        if (closeErr) {
-          reject(closeErr);
-        } else {
-          resolve(port);
-        }
-      });
-    });
-  });
-  BASE_URL = `http://127.0.0.1:${PORT}`;
   // Use a unique IPC path per server run to avoid conflicts on Windows.
   const randomId =
     Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -83,30 +62,19 @@ test.beforeAll(async () => {
       ? `\\\\.\\pipe\\makamujo-ipc-${randomId}`
       : join(process.cwd(), "var", `ipc-${randomId}.sock`);
 
-  const bunExecutable = (() => {
-    if (process.env.BUN) return process.env.BUN;
-    if (process.env.BUN_EXECUTABLE) return process.env.BUN_EXECUTABLE;
-    if (process.platform === "win32") return "bun.exe";
-
-    // On non-Windows, try the home directory path first if it exists
-    const home = process.env.HOME;
-    if (home) {
-      const homeBun = join(home, ".bun", "bin", "bun");
-      if (existsSync(homeBun)) return homeBun;
-    }
-    // Fall back to "bun" on PATH
-    return "bun";
-  })();
-
-  server = spawn(bunExecutable, ["index.ts", "--port", String(PORT)], {
-    env: {
-      ...process.env,
-      NODE_ENV: "production",
-      CONSOLE_LOOPBACK_ONLY: "1",
-      MAKAMUJO_IPC_PATH: ipcPath,
+  server = spawn(
+    process.platform === "win32" ? "bun.exe" : "bun",
+    ["index.ts", "--port", String(PORT)],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: "production",
+        CONSOLE_LOOPBACK_ONLY: "1",
+        MAKAMUJO_IPC_PATH: ipcPath,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
     },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  );
 
   await waitForServerReady();
 });
@@ -120,18 +88,8 @@ test.afterAll(() => {
 
 test.describe("server", () => {
   test("serves the frontend HTML", async ({ request }) => {
-    // Retry the GET a few times to avoid transient CI timing issues.
-    let res = null as any;
-    for (let attempt = 0; attempt < 40; attempt++) {
-      try {
-        res = await request.get(BASE_URL);
-        if (res.ok()) break;
-      } catch (_) {
-        // ignore and retry
-      }
-      await new Promise((r) => setTimeout(r, 250));
-    }
-    expect(res?.ok(), "frontend HTML should respond OK").toBeTruthy();
+    const res = await request.get(BASE_URL);
+    expect(res.ok()).toBeTruthy();
     const html = await res.text();
     expect(html).toContain("<title>馬可無序");
     expect(html).toContain('<div id="root">');
@@ -297,6 +255,7 @@ test.describe("server", () => {
     });
   });
 
+  // origin/main: external HTTP comment routes removed (production uses niconama client).
   test("rejects root POST / after external comment routes are removed", async ({
     request,
   }) => {
@@ -342,12 +301,11 @@ test.describe("server", () => {
     }
 
     let receivedState: unknown = null;
-    let publishPromise: Promise<void> | null = null;
     const receiver = createReceiverWithPath(ipcPath);
     receiver((state) => {
       receivedState = state;
-      // Mirror stream status into the running server via /api/meta
-      publishPromise = request
+      // Mirror stream status into the running server via /api/meta (fire and forget)
+      void request
         .post(`${BASE_URL}/api/meta`, {
           data: {
             data: {
@@ -363,7 +321,6 @@ test.describe("server", () => {
             },
           },
         })
-        .then(() => undefined)
         .catch(() => undefined);
       return { name: "noop" };
     });
@@ -374,12 +331,7 @@ test.describe("server", () => {
     });
 
     sender({ name: "idle", url: "https://example.com", state: { foo: "bar" } });
-
-    // Wait for IPC state to be received
-    await new Promise((r) => setTimeout(r, 100));
-    if (publishPromise) {
-      await publishPromise;
-    }
+    await new Promise((r) => setTimeout(r, 400));
 
     expect(receivedState).toEqual({
       name: "idle",
@@ -387,70 +339,15 @@ test.describe("server", () => {
       state: { foo: "bar" },
     });
 
-    // Poll until the correct meta is returned, with timeout
-    // Retry posting if needed in case of race condition
-    let metaJson: Record<string, unknown> | null = null;
-    const pollStartTime = Date.now();
-    const pollTimeoutMs = 10000;
-    let attemptCount = 0;
+    const metaRes = await request.get(`${BASE_URL}/api/meta`);
+    expect(metaRes.ok()).toBeTruthy();
 
-    while (Date.now() - pollStartTime < pollTimeoutMs) {
-      // Occasionally re-post in case of timing issues
-      if (attemptCount % 5 === 0 && attemptCount > 0) {
-        await request
-          .post(`${BASE_URL}/api/meta`, {
-            data: {
-              data: {
-                type: "niconama",
-                data: {
-                  isLive: true,
-                  title: "IPC integration test",
-                  startTime: 0,
-                  total: 0,
-                  points: { gift: 0, ad: 0 },
-                  url: "https://example.com",
-                },
-              },
-            },
-          })
-          .catch(() => undefined);
-        await new Promise((r) => setTimeout(r, 50));
-      }
-
-      const metaRes = await request.get(`${BASE_URL}/api/meta`);
-      if (!metaRes.ok()) {
-        await new Promise((r) => setTimeout(r, 100));
-        attemptCount++;
-        continue;
-      }
-
-      metaJson = await metaRes.json();
-
-      // Check if we got the correct title
-      if (
-        metaJson &&
-        typeof metaJson === "object" &&
-        "niconama" in metaJson &&
-        metaJson.niconama &&
-        typeof metaJson.niconama === "object" &&
-        "meta" in metaJson.niconama &&
-        metaJson.niconama.meta &&
-        typeof metaJson.niconama.meta === "object" &&
-        "title" in metaJson.niconama.meta &&
-        metaJson.niconama.meta.title === "IPC integration test"
-      ) {
-        break;
-      }
-      await new Promise((r) => setTimeout(r, 100));
-      attemptCount++;
-    }
-
-    expect(metaJson).not.toBeNull();
+    const metaJson = await metaRes.json();
     expect(metaJson).toHaveProperty("niconama");
 
     // agent.getStreamState returns { type:'live', meta:{...} }
-    expect((metaJson as any).niconama).toHaveProperty("type", "live");
-    expect((metaJson as any).niconama).toHaveProperty(
+    expect(metaJson.niconama).toHaveProperty("type", "live");
+    expect(metaJson.niconama).toHaveProperty(
       "meta.title",
       "IPC integration test",
     );

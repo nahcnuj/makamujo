@@ -8,7 +8,7 @@ PartOf=makamujo.service
 Type=simple
 User=root
 Environment=DISPLAY=:10
-ExecStart=/opt/makamujo/bin/x11vnc-10
+ExecStart=@PREFIX@/bin/x11vnc-10
 Restart=always
 RestartSec=5
 

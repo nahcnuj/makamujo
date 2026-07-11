@@ -23,7 +23,7 @@ describe("solver", () => {
       Action.noop,
     ];
 
-    let prev: (typeof actions)[number] | undefined;
+    let prev;
     for (const action of actions) {
       expectOk(solve, prev).toEqual(action);
       prev = action;
@@ -50,7 +50,7 @@ describe("solver", () => {
       Action.noop,
     ];
 
-    let prev: (typeof actions)[number] | undefined;
+    let prev;
     for (const action of actions) {
       expectOk(solve, prev).toEqual(action);
       prev = action;

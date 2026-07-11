@@ -52,6 +52,10 @@ export function* solver(
     ...eventListeners,
   };
 
+  let hasReloadedForShoten = false;
+  let gameData: string | undefined =
+    state?.type === "initialize" ? state.data : undefined;
+
   function* runActions(
     actions: readonly Action.Action[],
   ): Generator<Action.Action, boolean, State> {
@@ -142,17 +146,28 @@ export function* solver(
             "https://orteil.dashnet.org/cookieclicker/",
           )
         ) {
-          state = { type: "initialize" };
+          state = { type: "initialize", data: gameData };
           break;
         }
 
         const sightData =
           noopResult.name === "idle" ? noopResult.state : undefined;
+
+        if (!listeners.isSilent()) {
+          hasReloadedForShoten = false;
+        } else if (
+          (sightData as any)?.title?.includes("昇天中") &&
+          !hasReloadedForShoten
+        ) {
+          hasReloadedForShoten = true;
+          state = { type: "initialize", data: gameData };
+          break;
+        }
+
         const clickableElementIds = Array.isArray(
-          (sightData as Record<string, unknown>)?.clickableElementIds,
+          (sightData as any)?.clickableElementIds,
         )
-          ? ((sightData as Record<string, unknown>)
-              .clickableElementIds as string[])
+          ? ((sightData as any).clickableElementIds as string[])
           : ["bigCookie"];
         const candidateIds = listeners.isSilent()
           ? ["bigCookie"]
@@ -160,7 +175,6 @@ export function* solver(
             ? clickableElementIds
             : ["bigCookie"];
         const targetId =
-          // biome-ignore lint/style/noNonNullAssertion: solver guaranteed to have candidates
           candidateIds[Math.floor(Math.random() * candidateIds.length)]!;
 
         if (!(yield* runActions([Action.clickByElementId(targetId)]))) break;
@@ -196,9 +210,10 @@ export function* solver(
           const result = yield Action.noop;
           if (result.name === "idle" && result.selectedText) {
             const text = result.selectedText ?? "";
-            listeners.onSave.forEach((f) => {
+            gameData = text;
+            for (const f of listeners.onSave) {
               f(text);
-            });
+            }
           }
         }
 

@@ -8,7 +8,7 @@ PartOf=makamujo.service
 Type=simple
 User=root
 Environment=DISPLAY=:10
-ExecStart=/opt/makamujo/bin/xorg10
+ExecStart=@PREFIX@/bin/xorg10
 Restart=always
 RestartSec=5
 

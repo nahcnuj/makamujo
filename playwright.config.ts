@@ -4,8 +4,5 @@ export default defineConfig({
   workers: 1,
   use: {
     ignoreHTTPSErrors: true,
-    screenshot: "only-on-failure",
-    trace: "retain-on-failure",
   },
-  quiet: true,
 });

@@ -6,14 +6,17 @@ import { parseArgs } from "node:util";
 import { ActionResult } from "automated-gameplay-transmitter";
 import { ServerGames as Games } from "../../lib/Agent/games/server";
 import { create } from "../../lib/Browser/chromium";
-import { getDefaultBrowserPath } from "../../lib/Browser/getDefaultBrowserPath";
 import { createRetrySender } from "../../lib/Browser/socket";
-import { createConsoleLogger } from "../../lib/consoleLogger";
-
-const console = createConsoleLogger();
 
 const {
-  values: { browser: browserArg, timeout: timeoutStr, display, xauthority },
+  values: {
+    file: gameDataFile,
+    browser: browserArg,
+    lang,
+    timeout: timeoutStr,
+    display,
+    xauthority,
+  },
 } = parseArgs({
   options: {
     file: {
@@ -23,7 +26,6 @@ const {
     },
     browser: {
       type: "string",
-      default: getDefaultBrowserPath(),
     },
     lang: {
       type: "string",
@@ -44,7 +46,6 @@ const {
 
 // When --display is not given, auto-detect the display from the first X11
 // socket found in /tmp/.X11-unix/ (e.g. xrdp uses :10, not :0).
-
 const resolvedDisplay =
   display ??
   (() => {
@@ -65,7 +66,6 @@ const resolvedDisplay =
 if (resolvedDisplay) {
   process.env.DISPLAY = resolvedDisplay;
 }
-
 if (xauthority) {
   process.env.XAUTHORITY = xauthority;
 } else if (resolvedDisplay !== undefined) {
@@ -97,6 +97,18 @@ if (xauthority) {
 
 const timeout = Number.parseInt(timeoutStr, 10);
 const executablePath = (browserArg?.toString() ?? "").trim() || undefined;
+// Persist CLI options for solvers / diagnostics (save path + UI language).
+const resolvedGameDataFile = gameDataFile ?? "./var/cookieclicker.txt";
+process.env.MAKAMUJO_GAME_DATA_FILE = resolvedGameDataFile;
+if (lang) {
+  process.env.MAKAMUJO_BROWSER_LANG = lang;
+}
+console.log(
+  "[INFO] browser worker options",
+  `gameDataFile=${resolvedGameDataFile}`,
+  `lang=${lang ?? ""}`,
+  executablePath ? `executablePath=${executablePath}` : "bundled Chromium",
+);
 
 const browser = await create(executablePath, {
   width: 1280,

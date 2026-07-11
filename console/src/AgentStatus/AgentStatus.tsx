@@ -1,9 +1,12 @@
-import { useLayoutEffect, useRef, useState } from "hono/jsx";
+import { useCallback, useLayoutEffect, useState } from "hono/jsx";
 import { Container } from "../agt-compat";
 import { AgentStatusHeader } from "./AgentStatusHeader";
 import {
+  createMockAgentStateResponse,
   INVALID_AGENT_STATE_RESPONSE_ERROR,
   parseAgentStateResponse,
+  shouldUseMockAgentState,
+  startAgentStateAutoRefresh,
 } from "./agentStatusState";
 import { formatStreamStartTime } from "./agentStatusUtils";
 import { createAgentStatusSections } from "./createAgentStatusSections";
@@ -18,12 +21,6 @@ import {
 } from "./MarkovModelStatusSection";
 import type { AgentStateResponse, AgentStatusSection } from "./types";
 
-declare global {
-  interface Window {
-    __sseUrl?: string;
-  }
-}
-
 const AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS = "grid-rows-[auto_minmax(0,1fr)]";
 
 export const AgentStatus = () => {
@@ -32,10 +29,44 @@ export const AgentStatus = () => {
   const [agentStatusError, setAgentStatusError] = useState<string | null>(null);
   const [lastUpdatedTime, setLastUpdatedTime] = useState("");
   const [isLoadingAgentState, setIsLoadingAgentState] = useState(false);
-  const prevTypeRef = useRef<string | undefined>(undefined);
+  const [_isShowingMockAgentState, setIsShowingMockAgentState] =
+    useState(false);
+
+  const fetchAgentState = useCallback(async () => {
+    setIsLoadingAgentState(true);
+    try {
+      if (shouldUseMockAgentState()) {
+        setAgentStateResponse(createMockAgentStateResponse());
+        setAgentStatusError(null);
+        setIsShowingMockAgentState(true);
+        setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
+        return;
+      }
+
+      throw new Error("ライブ更新はSSEでのみ提供されます。");
+    } catch (error) {
+      const errorMessage =
+        error instanceof SyntaxError
+          ? INVALID_AGENT_STATE_RESPONSE_ERROR
+          : error instanceof Error
+            ? error.message
+            : String(error);
+      setAgentStatusError(errorMessage);
+      setAgentStateResponse(null);
+      setIsShowingMockAgentState(false);
+      setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
+    } finally {
+      setIsLoadingAgentState(false);
+    }
+  }, []);
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
+
+    if (shouldUseMockAgentState()) {
+      void fetchAgentState();
+      return startAgentStateAutoRefresh(fetchAgentState);
+    }
 
     setIsLoadingAgentState(false);
     setAgentStatusError(null);
@@ -44,7 +75,10 @@ export const AgentStatus = () => {
     (async () => {
       const sseUrl = "/console/api/ws";
       try {
-        window.__sseUrl = sseUrl;
+        (window as any).__sseUrl = sseUrl;
+      } catch {}
+      try {
+        console.log("[TRACE] AgentStatus connecting EventSource ->", sseUrl);
       } catch {}
       try {
         es = new EventSource(sseUrl);
@@ -59,44 +93,9 @@ export const AgentStatus = () => {
       es.onmessage = (ev: MessageEvent) => {
         try {
           const responseData = parseAgentStateResponse(String(ev.data));
-
-          // Detect end-of-program and reload the page when appropriate.
-          try {
-            const currentType = responseData?.niconama?.type;
-            const currentUrl = responseData?.niconama?.meta?.url as
-              | string
-              | undefined;
-            const currentTitle = responseData?.niconama?.meta?.title as
-              | string
-              | undefined;
-
-            const prevType = prevTypeRef.current;
-
-            if (currentType === "offline" && prevType === "live") {
-              try {
-                window.location.reload();
-                return;
-              } catch {}
-            }
-
-            if (currentTitle?.includes("公開終了") && currentUrl) {
-              try {
-                const endedKey = `program-ended-${currentUrl}`;
-                if (!sessionStorage.getItem(endedKey)) {
-                  sessionStorage.setItem(endedKey, "1");
-                  window.location.reload();
-                  return;
-                }
-              } catch {}
-            }
-
-            prevTypeRef.current = currentType;
-          } catch {
-            // ignore detection errors
-          }
-
           setAgentStateResponse(responseData);
           setAgentStatusError(null);
+          setIsShowingMockAgentState(false);
           setLastUpdatedTime(new Date().toLocaleTimeString("ja-JP"));
         } catch {
           setAgentStatusError(INVALID_AGENT_STATE_RESPONSE_ERROR);
@@ -118,7 +117,7 @@ export const AgentStatus = () => {
         es?.close();
       } catch {}
     };
-  }, []);
+  }, [fetchAgentState]);
 
   const streamTitle = agentStateResponse?.niconama?.meta?.title;
   const streamUrl = agentStateResponse?.niconama?.meta?.url;
@@ -126,15 +125,7 @@ export const AgentStatus = () => {
     ? formatStreamStartTime(agentStateResponse.niconama.meta.start)
     : undefined;
 
-  const [isRecentCommentsOpen, setIsRecentCommentsOpen] = useState(false);
-  const toggleRecentComments = () => {
-    setIsRecentCommentsOpen((current) => !current);
-  };
-
-  const agentStatusSections = createAgentStatusSections(agentStateResponse, {
-    showRecentComments: isRecentCommentsOpen,
-    toggleRecentComments,
-  });
+  const agentStatusSections = createAgentStatusSections(agentStateResponse);
   const sectionMap = agentStatusSections.reduce<
     Partial<Record<AgentStatusSection["title"], AgentStatusSection>>
   >((accumulatedSections, section) => {

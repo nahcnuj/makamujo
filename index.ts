@@ -4,9 +4,8 @@
 // We'll initialize a fallback agent first and replace it if the import
 // and initialization succeed.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 // Use the global `setInterval` timer instead of the Node
 // `timers/promises` async iterator. The async iterator can behave
 // inconsistently across runtimes; using a classic timer keeps the
@@ -14,40 +13,34 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { serve } from "bun";
 import { Hono } from "hono";
+import {
+  createFallbackAgent,
+  persistTalkModel,
+  tryCreateExternalAgentApi,
+} from "./composition/agentWiring";
+import {
+  broadcastCurrentPayload,
+  broadcastToWsClients,
+  createSseStream as createSseStreamImpl,
+  sseBroadcast,
+  type WsLike,
+} from "./composition/broadcast";
+import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
+import { scheduleNiconamaCommentIngress } from "./composition/niconamaCommentIngress";
 import { startConsoleServer } from "./console/index";
-import type { TTS } from "./lib/Agent";
 import { AllowedIP } from "./lib/allowedIP";
-import { getResilientProxyControllers } from "./lib/console-proxy";
-import { installConsoleLogger } from "./lib/consoleLogger";
 import {
-  createNiconamaCommentClient,
-  filterAgentCommentsWithText,
-  getCommentTextFromAgentComment,
-  type NiconamaCommentClient,
-} from "./lib/niconamaCommentClient";
-import {
-  coerceToAgentComments,
-  countNumberedAgentComments,
-} from "./lib/niconamaCommentClient.helpers";
-import { FallbackTTS, MakaMujo, MarkovChainModel } from "./lib/server";
-import {
-  normalizePublishedStreamState,
-  resolveNiconamaFromState,
-} from "./lib/streamState";
-import OpenJTalkTTS from "./lib/TTS";
+  assemblePublishedPayload,
+  attachReplyTargetToPublished,
+  extractMetaPostBody,
+  GENERATED_SPEECH_HISTORY_SSE_SIZE,
+} from "./lib/domain/publication/assemblePublishedPayload";
+import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
+import { normalizePublishedStreamState } from "./lib/streamState";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
 import * as speechHistoryRoute from "./routes/api/speech-history";
-import * as consoleRoutes from "./routes/console/index";
 import { handleCatchAll } from "./src/frontendServer";
-
-const console = installConsoleLogger();
-let _server: Bun.Server<unknown> | null = null;
-let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
-let niconamaCommentClient: NiconamaCommentClient | null = null;
-
-// Console server will be started after the main server is initialized
-// so that the broadcasting port can be passed to the console proxy.
 
 process.on("exit", exitHandler.bind(null, { cleanup: true }));
 process.on("SIGINT", signalHandler.bind(null, { exit: true }));
@@ -55,20 +48,10 @@ process.on("SIGUSR1", signalHandler.bind(null, { exit: true }));
 process.on("SIGUSR2", signalHandler.bind(null, { exit: true }));
 // Log uncaught exceptions for better diagnostics before invoking the
 // existing exit handler which terminates the process.
-
-// Safe references used by the global exit handler to avoid accessing
-// variables that may still be in the temporal dead zone during early
-// startup failures. These are assigned once the corresponding resources
-// have been initialized.
-let __serverForExit: Bun.Server<unknown> | null = null;
-let __consoleServerForExit: ReturnType<typeof startConsoleServer> | null = null;
-
-// Console server already started above; skip repeated initialization.
-
 process.on("uncaughtException", (err) => {
   try {
     console.error(
-      "[ERROR]",
+      "[UNCAUGHT_EXCEPTION]",
       err instanceof Error ? (err.stack ?? err.message) : String(err),
     );
   } catch {
@@ -78,7 +61,7 @@ process.on("uncaughtException", (err) => {
 process.on("unhandledRejection", (reason) => {
   try {
     console.error(
-      "[ERROR]",
+      "[UNHANDLED_REJECTION]",
       reason instanceof Error
         ? (reason.stack ?? reason.message)
         : String(reason),
@@ -89,7 +72,7 @@ process.on("uncaughtException", (err) => {
   try {
     // Log the exception for diagnostics
     console.error(
-      "[ERROR]",
+      "[UNCAUGHT_EXCEPTION]",
       err instanceof Error ? (err.stack ?? err.message) : String(err),
     );
   } catch {}
@@ -112,10 +95,8 @@ process.on("uncaughtException", (err) => {
   exitHandler({ exit: true }, 1);
 });
 
-const PROJECT_ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)));
-
 const {
-  values: { model: modelFileArg, data: dataFileArg, port },
+  values: { model: modelFile, data: dataFile, port },
 } = parseArgs({
   options: {
     model: {
@@ -137,591 +118,72 @@ const {
   },
 });
 
-const modelFile = resolve(PROJECT_ROOT, modelFileArg);
-const dataFile = resolve(PROJECT_ROOT, dataFileArg);
-
 // Rely on Bun's `--hot` and Bun.build watch mode in development.
 
 const model = ((file) => {
   try {
     return MarkovChainModel.fromFile(file);
-  } catch {
-    console.warn("[WARN]", "failed to open the file", file);
+  } catch (_err) {
+    console.warn("failed to open the file", file);
     return new MarkovChainModel();
   }
 })(modelFile);
 
-const DEFAULT_OPEN_JTALK_DICTIONARY_DIR =
-  "/var/lib/mecab/dic/open-jtalk/naist-jdic";
-const DEFAULT_OPEN_JTALK_HTSVOICE_FILE =
-  "/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice";
-const openJTalkDictionaryDir = existsSync(DEFAULT_OPEN_JTALK_DICTIONARY_DIR)
-  ? DEFAULT_OPEN_JTALK_DICTIONARY_DIR
-  : undefined;
-const openJTalkHtsvoiceFile = existsSync(DEFAULT_OPEN_JTALK_HTSVOICE_FILE)
-  ? DEFAULT_OPEN_JTALK_HTSVOICE_FILE
-  : undefined;
-const allowFallbackTts = process.env.MAKAMUJO_ALLOW_FALLBACK_TTS === "1";
-const requireOpenJTalkAssets =
-  process.env.NODE_ENV === "production" && !allowFallbackTts;
-
-let tts: TTS = new FallbackTTS();
-if (openJTalkDictionaryDir && openJTalkHtsvoiceFile) {
-  tts = new OpenJTalkTTS({
-    htsvoiceFile: openJTalkHtsvoiceFile,
-    dictionaryDir: openJTalkDictionaryDir,
-  });
-} else {
-  const commonConfig = {
-    expectedDictionaryDir: DEFAULT_OPEN_JTALK_DICTIONARY_DIR,
-    dictionaryDirExists: openJTalkDictionaryDir !== undefined,
-    expectedHtsvoiceFile: DEFAULT_OPEN_JTALK_HTSVOICE_FILE,
-    htsvoiceFileExists: openJTalkHtsvoiceFile !== undefined,
-  };
-
-  if (requireOpenJTalkAssets) {
-    const message =
-      "OpenJTalk assets are required in production. Please install the fixed OpenJTalk HTS voice and dictionary files.";
-    console.error("[ERROR]", message, commonConfig);
-    process.exit(1);
-  }
-
-  console.warn(
-    "[WARN]",
-    "OpenJTalk is not configured or the configured assets are missing. Falling back to FallbackTTS.",
-    commonConfig,
-  );
-}
-console.info("[INFO]", "selected TTS backend", {
-  backend:
-    openJTalkDictionaryDir && openJTalkHtsvoiceFile
-      ? "OpenJTalk"
-      : "FallbackTTS",
-  htsvoiceFile: openJTalkHtsvoiceFile,
-  dictionaryDir: openJTalkDictionaryDir,
-  allowFallbackTts,
-});
+const tts =
+  process.platform !== "win32"
+    ? (() => {
+        const htsvoiceFile =
+          "/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice";
+        const dictionaryDir = "/var/lib/mecab/dic/open-jtalk/naist-jdic";
+        return new TTS({
+          htsvoiceFile,
+          dictionaryDir,
+        });
+      })()
+    : new FallbackTTS();
 
 const streamer = new MakaMujo(model, tts);
 
-// Global stream state and client registries used by SSE/WS endpoints.
+// Provide an in-memory fallback agent synchronously so the rest of the
+// server initialization can reference `agent` without awaiting a dynamic
+// import. We'll try to dynamically import and initialize the real
+// `automated-gameplay-transmitter` agent later and replace this fallback
+// when possible.
 let lastPublishedStreamState: unknown;
-// Mirror published state on globalThis so callbacks from other async
-// modules can access it even if module evaluation order differs.
-(globalThis as Record<string, unknown>).__lastPublishedStreamState =
-  (globalThis as Record<string, unknown>).__lastPublishedStreamState ??
-  lastPublishedStreamState;
-const wsClients = new Set<Bun.ServerWebSocket<WsData>>();
-const sseClients = new Set<ReadableStreamDefaultController<Uint8Array>>();
-const sseEncoder = new TextEncoder();
+let currentSpeechState = { speech: "", silent: false };
+// WebSocket clients connected to the broadcasting server.
+const wsClients = new Set<WsLike>();
 
-function createSseStream(_label: string) {
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      sseClients.add(controller);
-      try {
-        console.debug("[DIAG] SSE client connected, total=", sseClients.size);
-      } catch {}
-      try {
-        controller.enqueue(sseEncoder.encode(": connected\n\n"));
-      } catch {}
-      try {
-        const payload = getCurrentStreamPayload();
-        controller.enqueue(
-          sseEncoder.encode(`data: ${JSON.stringify(payload ?? {})}\n\n`),
-        );
-        // If the initial payload lacks `niconama`, schedule a couple of
-        // retransmits shortly after connect to give async upstream
-        // callbacks time to populate published state (mirrors WS logic).
-        try {
-          if (
-            payload &&
-            typeof payload === "object" &&
-            !(payload as Record<string, unknown>).niconama
-          ) {
-            setTimeout(() => {
-              try {
-                controller.enqueue(
-                  sseEncoder.encode(
-                    `data: ${JSON.stringify(getCurrentStreamPayload() ?? {})}\n\n`,
-                  ),
-                );
-              } catch {}
-            }, 250);
-            setTimeout(() => {
-              try {
-                controller.enqueue(
-                  sseEncoder.encode(
-                    `data: ${JSON.stringify(getCurrentStreamPayload() ?? {})}\n\n`,
-                  ),
-                );
-              } catch {}
-            }, 1000);
-          }
-        } catch {}
-      } catch {}
-    },
-    cancel() {
-      // Remove any controllers that are closed or canceled.
-      try {
-        sseClients.forEach((c) => {
-          try {
-            if ((c as unknown as Record<string, unknown>).desiredSize === null)
-              sseClients.delete(c);
-          } catch {}
-        });
-      } catch {}
-      try {
-        console.debug(
-          "[DIAG] SSE client disconnected, total=",
-          sseClients.size,
-        );
-      } catch {}
-    },
-  });
-}
+// Server-Sent Events (SSE) clients: store controller objects so we can
+// push `data: ...\n\n` frames to each connected client.
+const sseClients = new Set<ReadableStreamDefaultController<string>>();
 
-function sseBroadcast(payload: unknown) {
-  const data = JSON.stringify(payload ?? {});
-  const chunk = sseEncoder.encode(`data: ${data}\n\n`);
-  try {
-    console.debug(
-      "[DIAG] sseBroadcast payload keys ->",
-      Object.keys(
-        payload && typeof payload === "object"
-          ? (payload as Record<string, unknown>)
-          : {},
-      ),
-      "hasNiconama=",
-      !!(
-        payload &&
-        typeof payload === "object" &&
-        (payload as Record<string, unknown>).niconama
-      ),
-    );
-  } catch {}
-  for (const c of Array.from(sseClients)) {
-    try {
-      c.enqueue(chunk);
-    } catch {
-      try {
-        sseClients.delete(c);
-      } catch {}
-    }
-  }
-  try {
-    const resilient = getResilientProxyControllers();
-    for (const c of Array.from(resilient)) {
-      try {
-        if ((c as unknown as Record<string, unknown>).desiredSize === null) {
-          try {
-            resilient.delete(c);
-          } catch {}
-          continue;
-        }
-        c.enqueue(chunk);
-      } catch {
-        try {
-          resilient.delete(c);
-        } catch {}
-      }
-    }
-  } catch {}
-}
+const createSseStream = (label: string) =>
+  createSseStreamImpl(label, sseClients, getCurrentStreamPayload);
 
-// Expose SSE broadcaster for external callers (tests, agents) to invoke.
-(globalThis as Record<string, unknown>).__sseBroadcast = sseBroadcast;
-
-const broadcastToWsClients = (payload: unknown) => {
-  const message = JSON.stringify(payload);
-  try {
-    console.debug(
-      "[DIAG] broadcastToWsClients sending keys ->",
-      Object.keys(
-        payload && typeof payload === "object"
-          ? (payload as Record<string, unknown>)
-          : {},
-      ),
-      "hasNiconama=",
-      !!(
-        payload &&
-        typeof payload === "object" &&
-        (payload as Record<string, unknown>).niconama
-      ),
-    );
-  } catch {}
-  for (const ws of Array.from(wsClients)) {
-    try {
-      ws.send(message);
-    } catch {
-      try {
-        ws.close();
-      } catch {}
-      try {
-        wsClients.delete(ws);
-      } catch {}
-    }
-  }
-};
-
-// Expose WS broadcaster as well for external callers.
-(globalThis as Record<string, unknown>).__broadcastToWsClients =
-  broadcastToWsClients;
-
-const broadcastCurrentPayload = (context: string) => {
-  try {
-    const payload = getCurrentStreamPayload();
-    sseBroadcast(payload);
-    broadcastToWsClients(payload);
-  } catch (err) {
-    console.warn(
-      `[WARN] failed to broadcast to clients (${context}):`,
-      err instanceof Error ? err.message : String(err),
-    );
-  }
-};
-
-// Current speech state exposed to the console agent API.
-let currentSpeechState: { speech: string; silent: boolean } | undefined;
-
-interface AgentApi {
-  setSpeech: (text: string) => void;
-  getSpeech: () => { speech: string; silent: boolean } | undefined;
-  getGame: () => unknown;
-  getStreamState: () => unknown;
-  publishStreamState: (data: unknown) => void;
-  postComments: (comments: unknown) => void;
-}
-
-let agent: AgentApi = {
-  setSpeech: (text: string) => {
-    currentSpeechState = { speech: text, silent: false };
-  },
-  getSpeech: () => currentSpeechState,
-  getGame: () => null,
-  getStreamState: () => lastPublishedStreamState,
-  publishStreamState: (data: unknown) => {
-    lastPublishedStreamState = data;
-  },
-  postComments: (comments: unknown) => {
-    try {
-      // Forward received comments to the internal streamer so the agent
-      // can learn and speak in response. `streamer.listen` accepts an
-      // array of AgentComment objects.
-      if (Array.isArray(comments)) {
-        streamer.listen(coerceToAgentComments(comments));
-      } else if (comments) {
-        streamer.listen(coerceToAgentComments([comments]));
-      }
-    } catch {
-      // swallow errors in the fallback to avoid crashing startup
-    }
-  },
-};
+const broadcastCurrentPayloadLocal = (context: string) =>
+  broadcastCurrentPayload(
+    context,
+    getCurrentStreamPayload,
+    sseClients,
+    wsClients,
+  );
 
 const getCurrentStreamPayload = () => {
-  const agentStreamState = agent.getStreamState?.();
-  // Prefer the locally tracked published state, but fall back to any
-  // `globalThis` mirror (set by other modules) to handle cross-module
-  // initialization ordering where the global may have been written but
-  // the local variable has not yet been updated.
-  const globalPublished = (globalThis as Record<string, unknown>)
-    .__lastPublishedStreamState;
-  const streamState =
-    lastPublishedStreamState === undefined || lastPublishedStreamState === null
-      ? (globalPublished ?? agentStreamState)
-      : lastPublishedStreamState;
-  const normalizedStreamState = normalizePublishedStreamState(streamState);
-  const base =
-    normalizedStreamState && typeof normalizedStreamState === "object"
-      ? (normalizedStreamState as Record<string, unknown>)
-      : {};
-  const normalizedAgentStreamState =
-    normalizePublishedStreamState(agentStreamState);
-  const agentBase =
-    normalizedAgentStreamState && typeof normalizedAgentStreamState === "object"
-      ? (normalizedAgentStreamState as Record<string, unknown>)
-      : {};
-  const replyTargetComment =
-    base.replyTargetComment && typeof base.replyTargetComment === "object"
-      ? base.replyTargetComment
-      : agentBase.replyTargetComment &&
-          typeof agentBase.replyTargetComment === "object"
-        ? agentBase.replyTargetComment
-        : undefined;
-  const tryResolveNiconama = (src: unknown) => {
-    const resolved = resolveNiconamaFromState(src as unknown) as unknown;
-    if (
-      resolved &&
-      typeof resolved === "object" &&
-      Object.keys(resolved).length > 0
-    )
-      return resolved;
-    return undefined;
-  };
-
-  // Prefer published payload but fall back to the agent's internal
-  // stream state or the streamer's state so consumers receive useful
-  // metadata instead of `{}` or an empty/omitted field.
-  const niconamaFromPublished = tryResolveNiconama(base);
-  const niconamaFromAgent = tryResolveNiconama(agentBase);
-  const niconamaFromStreamer = tryResolveNiconama(streamer.streamState);
-  const niconamaFinal =
-    niconamaFromPublished ??
-    niconamaFromAgent ??
-    niconamaFromStreamer ??
-    undefined;
-
-  const explicitSpeechHistory =
-    Array.isArray(base.speechHistory) && base.speechHistory.length > 0
-      ? base.speechHistory
-      : generatedSpeechHistory;
-
-  speechHistoryRoute.setSpeechHistoryRef(explicitSpeechHistory);
-
-  const payload = {
-    niconama: niconamaFinal,
-    canSpeak: base.canSpeak ?? streamer.canSpeak,
-    currentGame: base.currentGame ?? streamer.currentGame ?? null,
-    nGram: base.nGram ?? streamer.currentNGramSize,
-    nGramRaw: base.nGramRaw ?? streamer.currentNGramSizeRaw,
-    speech: base.speech ?? agent.getSpeech(),
-    speechHistory: explicitSpeechHistory,
-    replyTargetComment,
-    commentCount:
-      base.commentCount ?? streamer.streamState?.meta?.total?.comments,
-    recentComments: base.recentComments ?? agentBase.recentComments,
-  } as const;
-
-  // Expose a local shortcut so other modules (console proxy) can request the
-  // current payload without performing an HTTP fetch which may race with
-  // in-flight published state updates.
-  try {
-    (globalThis as Record<string, unknown>).__getCurrentStreamPayload =
-      getCurrentStreamPayload;
-  } catch {}
-
-  return payload;
-};
-
-const extractReplyTargetComment = (payload: unknown): unknown => {
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "replyTargetComment" in payload
-  ) {
-    return (payload as Record<string, unknown>).replyTargetComment;
-  }
-  const nestedData =
-    payload && typeof payload === "object" && "data" in payload
-      ? (payload as Record<string, unknown>).data
-      : undefined;
-  if (
-    nestedData &&
-    typeof nestedData === "object" &&
-    "replyTargetComment" in nestedData
-  ) {
-    return nestedData.replyTargetComment;
-  }
-  return undefined;
-};
-
-const handlePublishedStreamState = (payload: unknown): void => {
-  try {
-    console.debug(
-      "[DIAG] handlePublishedStreamState invoked with payload ->",
-      payload && typeof payload === "object"
-        ? Object.keys(payload as Record<string, unknown>)
-        : String(payload),
-    );
-  } catch {}
-  const replyTargetComment = extractReplyTargetComment(payload);
-  let published: unknown = payload;
-
-  if (
-    published &&
-    typeof published === "object" &&
-    !("type" in published) &&
-    "data" in published
-  ) {
-    published = (published as Record<string, unknown>).data;
-  }
-
-  try {
-    agent.publishStreamState?.(published);
-  } catch (err) {
-    console.warn(
-      "[WARN] failed to forward stream state to streamer:",
-      err instanceof Error ? err.message : String(err),
-    );
-  }
-
-  try {
-    published = normalizePublishedStreamState(published);
-    if (replyTargetComment !== undefined) {
-      if (published && typeof published === "object") {
-        (published as Record<string, unknown>).replyTargetComment =
-          replyTargetComment;
-      } else {
-        published = { replyTargetComment };
-      }
-    }
-  } catch (err) {
-    console.warn(
-      "[WARN] failed to normalize published stream state:",
-      err instanceof Error ? err.message : String(err),
-    );
-  }
-
-  try {
-    // Merge with existing published state so transient external updates
-    // (e.g. automatic niconama client updates) do not unintentionally
-    // remove explicit fields posted by clients. New `published` values
-    // take precedence.
-    try {
-      const prev =
-        lastPublishedStreamState && typeof lastPublishedStreamState === "object"
-          ? (lastPublishedStreamState as Record<string, unknown>)
-          : {};
-      const next =
-        published && typeof published === "object"
-          ? (published as Record<string, unknown>)
-          : {};
-      // Normalize the incoming published payload to determine any `niconama`
-      // metadata it implies (e.g. top-level title/url/start -> niconama.meta).
-      const normalizedNext = normalizePublishedStreamState(next) as unknown;
-
-      // Start with a shallow merge, but ensure that any `niconama` produced
-      // from the new payload takes precedence over the previous `niconama`.
-      const merged: Record<string, unknown> = { ...prev, ...next };
-      if (
-        normalizedNext &&
-        typeof normalizedNext === "object" &&
-        "niconama" in normalizedNext
-      ) {
-        merged.niconama = normalizedNext.niconama;
-      } else {
-        // If the normalized next didn't yield a `niconama` field, attempt to
-        // derive one from top-level title/url/start fields so client-posted
-        // metadata overrides previous nested `niconama` values.
-        try {
-          const derived = resolveNiconamaFromState(next) as unknown;
-          if (
-            derived &&
-            typeof derived === "object" &&
-            Object.keys(derived).length > 0
-          ) {
-            merged.niconama = derived;
-          }
-        } catch {}
-
-        // Extra safeguard: if the incoming payload had explicit top-level
-        // title/url/start fields, prefer those values unconditionally so a
-        // client posting these fields cannot be overridden by prior state.
-        try {
-          const hasTopLevel =
-            next &&
-            typeof next === "object" &&
-            (typeof (next as Record<string, unknown>).title === "string" ||
-              typeof (next as Record<string, unknown>).url === "string" ||
-              typeof (next as Record<string, unknown>).start === "number" ||
-              typeof (next as Record<string, unknown>).startTime === "number");
-          if (hasTopLevel) {
-            const forced = resolveNiconamaFromState(next) as unknown;
-            if (
-              forced &&
-              typeof forced === "object" &&
-              Object.keys(forced).length > 0
-            ) {
-              merged.niconama = forced;
-            }
-          }
-        } catch {}
-      }
-
-      // Ensure any nested `niconama` stored in the published state includes
-      // a normalized `meta` object when possible. This makes downstream
-      // consumers (SSE/WS clients) receive promoted metadata immediately
-      // without relying on runtime normalization in `getCurrentStreamPayload`.
-      try {
-        if (merged && typeof merged === "object" && "niconama" in merged) {
-          const resolved = resolveNiconamaFromState({
-            niconama: merged.niconama,
-          }) as unknown;
-          if (
-            resolved &&
-            typeof resolved === "object" &&
-            Object.keys(resolved).length > 0
-          ) {
-            merged.niconama = resolved;
-          }
-        }
-      } catch {}
-
-      lastPublishedStreamState = merged;
-      try {
-        (globalThis as Record<string, unknown>).__lastPublishedStreamState =
-          merged;
-      } catch {}
-      try {
-        console.debug(
-          "[DIAG] lastPublishedStreamState updated ->",
-          merged && typeof merged === "object"
-            ? Object.keys(merged as Record<string, unknown>)
-            : String(merged),
-          "niconamaKeys=",
-          merged &&
-            typeof merged === "object" &&
-            (merged as Record<string, unknown>).niconama
-            ? Object.keys(
-                (merged as Record<string, unknown>).niconama as Record<
-                  string,
-                  unknown
-                >,
-              )
-            : undefined,
-        );
-      } catch {}
-    } catch {
-      // Fallback to direct assignment if merge fails for unexpected types.
-      lastPublishedStreamState = published;
-      try {
-        (globalThis as Record<string, unknown>).__lastPublishedStreamState =
-          published;
-      } catch {}
-      try {
-        console.debug(
-          "[DIAG] lastPublishedStreamState updated ->",
-          published && typeof published === "object"
-            ? Object.keys(published as Record<string, unknown>)
-            : String(published),
-        );
-      } catch {}
-    }
-  } catch (err) {
-    console.warn(
-      "[WARN] failed to persist published stream state locally:",
-      err instanceof Error ? err.message : String(err),
-    );
-  }
-
-  try {
-    broadcastToWsClients(getCurrentStreamPayload());
-  } catch (err) {
-    console.warn(
-      "[WARN] failed to broadcast to WebSocket clients:",
-      err instanceof Error ? err.message : String(err),
-    );
-  }
-
-  try {
-    sseBroadcast(getCurrentStreamPayload());
-  } catch (err) {
-    console.warn(
-      "[WARN] failed to broadcast to SSE clients:",
-      err instanceof Error ? err.message : String(err),
-    );
-  }
+  return assemblePublishedPayload({
+    lastPublished: lastPublishedStreamState,
+    agentStreamState: agent.getStreamState?.(),
+    streamer: {
+      canSpeak: streamer.canSpeak,
+      currentGame: streamer.currentGame,
+      currentNGramSize: streamer.currentNGramSize,
+      currentNGramSizeRaw: streamer.currentNGramSizeRaw,
+      commentCount: streamer.streamState?.meta?.total?.comments,
+    },
+    speechState: agent.getSpeech(),
+    history: generatedSpeechHistory,
+    historySseSize: GENERATED_SPEECH_HISTORY_SSE_SIZE,
+  });
 };
 
 const normalizeSpeechText = (speech: unknown): string | undefined => {
@@ -733,49 +195,42 @@ const normalizeSpeechText = (speech: unknown): string | undefined => {
     return undefined;
   }
 
-  if (typeof (speech as Record<string, unknown>).text === "string") {
-    return (speech as Record<string, unknown>).text as string;
+  if (typeof (speech as any).text === "string") {
+    return (speech as any).text;
   }
 
-  if (typeof (speech as Record<string, unknown>).speech === "string") {
-    return (speech as Record<string, unknown>).speech as string;
+  if (typeof (speech as any).speech === "string") {
+    return (speech as any).speech;
   }
 
   return undefined;
 };
-let _externalAgentInitialized = false;
+
+let agent: any = createFallbackAgent(
+  () => lastPublishedStreamState,
+  (data) => {
+    lastPublishedStreamState = data;
+  },
+  () => currentSpeechState,
+  (state) => {
+    currentSpeechState = state;
+  },
+  // Keep comments flowing while AGT createAgentApi is loading (or if it fails).
+  (comments) => {
+    streamer.listen(comments as Parameters<typeof streamer.listen>[0]);
+  },
+);
 
 // Attempt to dynamically load the external agent API. This avoids module
 // evaluation side-effects at import time (such as binding to IPC paths)
 // which can cause transient failures in CI and local test runs.
-(async () => {
-  try {
-    const mod = await import("automated-gameplay-transmitter");
-    if (typeof mod.createAgentApi === "function") {
-      try {
-        const externalAgent = mod.createAgentApi(streamer) as AgentApi;
-        agent = externalAgent;
-        _externalAgentInitialized = true;
-        console.info("[INFO] external agent API initialized");
-      } catch (err) {
-        console.warn(
-          "[WARN] createAgentApi threw, keeping in-memory fallback:",
-          err instanceof Error ? err.message : String(err),
-        );
-      }
-    } else {
-      console.warn(
-        "[WARN] automated-gameplay-transmitter did not export createAgentApi; using fallback agent",
-      );
-    }
-  } catch (err) {
-    console.warn(
-      "[WARN] dynamic import failed, continuing with in-memory fallback agent:",
-      err instanceof Error ? err.message : String(err),
-    );
+void tryCreateExternalAgentApi(streamer).then((external) => {
+  if (external !== undefined) {
+    agent = external;
   }
-})();
-// Keep speech history indefinitely in memory; do not cap the buffer or SSE payload.
+});
+// Keep a larger buffer in memory for pagination while limiting the SSE payload size.
+const GENERATED_SPEECH_HISTORY_BUFFER_SIZE = 200;
 const generatedSpeechHistory: SpeechHistoryEntry[] = [];
 let generatedSpeechHistorySequence = 0;
 
@@ -789,20 +244,20 @@ streamer.onSpeech(async (event) => {
   const traceNodes =
     typeof event === "object" &&
     event !== null &&
-    Array.isArray((event as Record<string, unknown>).nodes)
-      ? ((event as Record<string, unknown>).nodes as string[])
+    Array.isArray((event as any).nodes)
+      ? (event as any).nodes
       : undefined;
   const nGram =
     typeof event === "object" &&
     event !== null &&
-    typeof (event as Record<string, unknown>).nGram === "number"
-      ? ((event as Record<string, unknown>).nGram as number)
+    typeof (event as any).nGram === "number"
+      ? (event as any).nGram
       : streamer.currentNGramSize;
   const nGramRaw =
     typeof event === "object" &&
     event !== null &&
-    typeof (event as Record<string, unknown>).nGramRaw === "number"
-      ? ((event as Record<string, unknown>).nGramRaw as number)
+    typeof (event as any).nGramRaw === "number"
+      ? (event as any).nGramRaw
       : streamer.currentNGramSizeRaw;
   generatedSpeechHistorySequence += 1;
   generatedSpeechHistory.unshift({
@@ -812,13 +267,16 @@ streamer.onSpeech(async (event) => {
     nGramRaw,
     nodes: traceNodes,
   });
+  if (generatedSpeechHistory.length > GENERATED_SPEECH_HISTORY_BUFFER_SIZE) {
+    generatedSpeechHistory.length = GENERATED_SPEECH_HISTORY_BUFFER_SIZE;
+  }
   if (clearSpeechTimer) {
     clearTimeout(clearSpeechTimer);
     clearSpeechTimer = undefined;
   }
   agent.setSpeech(speechText);
   // Notify console clients immediately when a new utterance starts.
-  broadcastCurrentPayload("onSpeech");
+  broadcastCurrentPayloadLocal("onSpeech");
 });
 
 streamer.onSpeechComplete(async () => {
@@ -826,21 +284,21 @@ streamer.onSpeechComplete(async () => {
     clearTimeout(clearSpeechTimer);
   }
   // Notify console clients that the utterance has finished.
-  broadcastCurrentPayload("onSpeechComplete");
+  broadcastCurrentPayloadLocal("onSpeechComplete");
   clearSpeechTimer = setTimeout(() => {
     const speechState = agent.getSpeech();
-    if (speechState && !speechState.silent) {
+    if (!speechState.silent) {
       agent.setSpeech("");
     }
     clearSpeechTimer = undefined;
     // Notify console clients that the displayed speech has been cleared.
-    broadcastCurrentPayload("onSpeechClear");
+    broadcastCurrentPayloadLocal("onSpeechClear");
   }, 1000);
 });
 
 // Notify console clients when game state changes via browser IPC.
 streamer.onGameStateChange(() => {
-  broadcastCurrentPayload("onGameStateChange");
+  broadcastCurrentPayloadLocal("onGameStateChange");
 });
 
 // Defer starting the stream playback until after the HTTP servers are up.
@@ -848,10 +306,9 @@ streamer.onGameStateChange(() => {
 // could delay the process becoming responsive to health checks.
 
 const portNumber = parseInt(port ?? "7777", 10);
-if (!Number.isFinite(portNumber) || portNumber < 0 || portNumber > 65535) {
+if (!Number.isFinite(portNumber) || portNumber < 1 || portNumber > 65535) {
   console.error(
-    "[ERROR]",
-    `Invalid port: ${port}. Must be an integer between 0 and 65535.`,
+    `Invalid port: ${port}. Must be an integer between 1 and 65535.`,
   );
   process.exit(1);
 }
@@ -863,7 +320,7 @@ const apiApp = new Hono()
     return Response.json({
       speech: normalizeSpeechText(speechState) ?? "",
       silent: !!(speechState && typeof speechState === "object"
-        ? (speechState as Record<string, unknown>).silent
+        ? (speechState as any).silent
         : false),
     });
   })
@@ -872,33 +329,11 @@ const apiApp = new Hono()
     return Response.json(agent.getGame() ?? {});
   })
   .get("/api/meta", () => {
-    try {
-      console.log("[DEBUG] GET /api/meta invoked");
-    } catch {}
-    try {
-      const payload = getCurrentStreamPayload();
-      try {
-        console.log("[DEBUG] GET /api/meta payload ->", {
-          keys: Object.keys(payload || {}),
-        });
-      } catch {}
-      return Response.json(payload);
-    } catch (err) {
-      try {
-        console.error(
-          "[ERROR] GET /api/meta failed to produce JSON payload:",
-          err instanceof Error ? (err.stack ?? err.message) : String(err),
-        );
-      } catch {}
-      return new Response(JSON.stringify({}), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    }
+    return Response.json(getCurrentStreamPayload());
   })
   .post("/api/meta", async (c) => {
     try {
-      let body: Record<string, unknown>;
+      let body: any;
       try {
         body = await c.req.json();
       } catch (err) {
@@ -909,7 +344,53 @@ const apiApp = new Hono()
         return Response.json({}, { status: 400 });
       }
 
-      handlePublishedStreamState(body);
+      let { replyTargetComment, published } = extractMetaPostBody(body);
+
+      try {
+        agent.publishStreamState?.(published);
+      } catch (err) {
+        console.warn(
+          "[WARN] failed to forward stream state to streamer:",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+
+      try {
+        published = normalizePublishedStreamState(published);
+        published = attachReplyTargetToPublished(published, replyTargetComment);
+      } catch (err) {
+        console.warn(
+          "[WARN] failed to normalize published stream state:",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+
+      try {
+        lastPublishedStreamState = published;
+      } catch (err) {
+        console.warn(
+          "[WARN] failed to persist published stream state locally:",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+
+      try {
+        broadcastToWsClients(wsClients, getCurrentStreamPayload());
+      } catch (err) {
+        console.warn(
+          "[WARN] failed to broadcast to WebSocket clients:",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+      try {
+        sseBroadcast(sseClients, getCurrentStreamPayload());
+      } catch (err) {
+        console.warn(
+          "[WARN] failed to broadcast to SSE clients:",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+
       return Response.json({});
     } catch (err) {
       console.error(
@@ -919,10 +400,6 @@ const apiApp = new Hono()
       return Response.json({}, { status: 500 });
     }
   });
-
-declare global {
-  function upgrade<T>(req: Request, options?: { data?: T }): boolean;
-}
 
 type WsData = { label: string };
 
@@ -1027,8 +504,8 @@ const makeStreamHandler =
   (req: Request): Response => {
     const accept = req.headers.get("accept") ?? "";
     try {
-      console.debug(
-        `[DEBUG] ${label} handler invoked, accept=`,
+      console.log(
+        `[TRACE] ${label} handler invoked, accept=`,
         accept,
         "upgrade=",
         req.headers.get("upgrade"),
@@ -1048,6 +525,18 @@ const makeStreamHandler =
     return new Response("websocket upgrade unavailable", { status: 501 });
   };
 
+// mainServer is assigned synchronously via `const server = mainServer = serve(...)`
+// below. Route handlers only run when requests arrive (after the event-loop
+// yields), so mainServer is always defined by the time a handler executes.
+// The non-null assertion (!) is therefore safe; the runtime check below
+// provides an extra guard for unexpected scenarios.
+/** Initialized after serve(); optional so crash-path exitHandler avoids TDZ. */
+let mainServer: Bun.Server<WsData> | undefined;
+/** Hoisted for exitHandler safety if startup fails mid-module. */
+let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
+/** NicoNico comment client stop handle (assigned after servers start). */
+let niconamaIngress: { stop: () => Promise<void> } | null = null;
+
 const mainApp = new Hono()
   // Static assets from the public directory
   .get(
@@ -1058,15 +547,17 @@ const mainApp = new Hono()
     "/favicon-32x32.png",
     () => new Response(Bun.file("./src/public/favicon-32x32.png")),
   )
+
+  // origin/main: external HTTP comment routes removed. Production ingress is
+  // the in-process NicoNico client (composition/niconamaCommentIngress).
   .post("/", () => new Response(null, { status: 404 }))
   .put("/", () => new Response(null, { status: 404 }))
 
   // WebSocket / SSE endpoints
   .get("/api/ws", (c) => makeStreamHandler("/api/ws")(c.req.raw))
-  // Delegate /console/api/ws to the console routes so the proxy logic
-  // (including upstream probing and resilient SSE proxying) executes
-  // using the console module's helper functions.
-  .get("/console/api/ws", (c) => consoleRoutes.app.fetch(c.req.raw))
+  .get("/console/api/ws", (c) =>
+    makeStreamHandler("/console/api/ws")(c.req.raw),
+  )
   .get("/index.css", async (c) => {
     const css = await compileTailwindCss("src/index.css");
     return createCssResponse(css, c.req.raw);
@@ -1078,12 +569,9 @@ const mainApp = new Hono()
   // Serve the built frontend (HTML + JS/CSS assets)
   .all("*", async (c) => handleCatchAll(c.req.raw));
 
-const serverInstance: Bun.Server<WsData> = serve<WsData>({
+mainServer = serve<WsData>({
   port: portNumber,
-  async fetch(
-    req: Request,
-    server: Bun.Server<WsData>,
-  ): Promise<Response | undefined> {
+  async fetch(req: Request, server: Bun.Server<WsData>) {
     const url = new URL(req.url);
     const isWsEndpoint =
       url.pathname === "/api/ws" || url.pathname === "/console/api/ws";
@@ -1099,8 +587,8 @@ const serverInstance: Bun.Server<WsData> = serve<WsData>({
     ) {
       const label = url.pathname;
       try {
-        console.debug(
-          `[DEBUG] ${label} handler invoked, accept=`,
+        console.log(
+          `[TRACE] ${label} handler invoked, accept=`,
           accept,
           "upgrade=",
           req.headers.get("upgrade"),
@@ -1114,10 +602,18 @@ const serverInstance: Bun.Server<WsData> = serve<WsData>({
         // and no HTTP response should be sent back.
         return undefined;
       }
+      try {
+        console.warn(`[WARN] WebSocket upgrade failed for ${label}`, {
+          upgrade: req.headers.get("upgrade"),
+          secWebSocketKey: req.headers.get("sec-websocket-key"),
+        });
+      } catch {}
+      return new Response("WebSocket upgrade failed", { status: 400 });
     }
 
     return mainApp.fetch(req);
   },
+
   websocket: {
     open(ws) {
       const { label } = ws.data;
@@ -1128,30 +624,7 @@ const serverInstance: Bun.Server<WsData> = serve<WsData>({
         wsClients.add(ws);
       } catch {}
       try {
-        const payload = getCurrentStreamPayload();
-        try {
-          ws.send(JSON.stringify(payload));
-        } catch {}
-
-        // If the initial payload lacks `niconama`, resend shortly after
-        // to give async upstream callbacks time to populate published state.
-        if (
-          payload &&
-          typeof payload === "object" &&
-          !(payload as Record<string, unknown>).niconama
-        ) {
-          setTimeout(() => {
-            try {
-              ws.send(JSON.stringify(getCurrentStreamPayload()));
-            } catch {}
-          }, 250);
-          // Second attempt in case upstream callbacks are slower.
-          setTimeout(() => {
-            try {
-              ws.send(JSON.stringify(getCurrentStreamPayload()));
-            } catch {}
-          }, 1000);
-        }
+        ws.send(JSON.stringify(getCurrentStreamPayload()));
       } catch {}
     },
     message() {},
@@ -1162,29 +635,13 @@ const serverInstance: Bun.Server<WsData> = serve<WsData>({
     },
   },
 });
-_server = serverInstance as Bun.Server<unknown>;
-__serverForExit = serverInstance as Bun.Server<unknown>;
-const serverUrl = String(serverInstance.url).replace(/\/+$|^\s+|\s+$/g, "");
-console.log(`🚀 Server running at ${serverUrl}`);
 
-// Start the console server now that the broadcasting server port is known
-try {
-  consoleServer = startConsoleServer({
-    broadcastingHost: process.env.BROADCASTING_HOST ?? "127.0.0.1",
-    broadcastingPort: process.env.BROADCASTING_PORT ?? serverInstance.port,
-  });
-  const consoleUrl = String(consoleServer.url).replace(/\/+$|^\s+|\s+$/g, "");
-  console.log(`🚀 Console running at ${consoleUrl}`);
-  __consoleServerForExit = consoleServer;
-  if (process.env.NODE_ENV === "production") {
-    AllowedIP.set({ family: "IPv4", address: "127.0.0.1" });
-  }
-} catch (err) {
-  console.warn(
-    "[WARN] failed to start console server:",
-    err instanceof Error ? err.message : String(err),
-  );
+const server = mainServer;
+if (!server) {
+  throw new Error("Failed to start main server");
 }
+
+console.log(`🚀 Server running at ${server.url}`);
 
 if (process.env.NODE_ENV === "production") {
   void (async () => {
@@ -1199,245 +656,30 @@ if (process.env.NODE_ENV === "production") {
     }
   })();
 }
-
-const NICONAMA_WATCH_URL =
-  process.env.NICONAMA_WATCH_URL ?? process.env.NICONAMA_TEST_WATCH_URL;
-const NICONAMA_USER_DATA_DIR =
-  process.env.NICONAMA_USER_DATA_DIR ?? "./playwright/.auth/";
-const NICONAMA_CHROMIUM_EXECUTABLE_PATH =
-  process.env.CHROMIUM_EXECUTABLE_PATH ?? "/usr/bin/chromium";
-const DEBUG_NICONAMA_COMMENTS = process.env.DEBUG_NICONAMA_COMMENTS === "1";
-
-const createNiconamaClientOptions = () => {
-  const options: Record<string, string | number | undefined> = {
-    userDataDir: NICONAMA_USER_DATA_DIR,
-    executablePath: NICONAMA_CHROMIUM_EXECUTABLE_PATH,
-    pollIntervalMs: 30_000,
-  };
-  if (typeof NICONAMA_WATCH_URL === "string" && NICONAMA_WATCH_URL.length > 0) {
-    options.watchUrl = NICONAMA_WATCH_URL;
-  }
-  return options;
-};
-
-const handleNiconamaComments = (comments: unknown) => {
-  const parsed = coerceToAgentComments(comments);
-  const filteredComments = filterAgentCommentsWithText(parsed);
-  if (DEBUG_NICONAMA_COMMENTS) {
-    for (const comment of filteredComments) {
-      const text = getCommentTextFromAgentComment(comment);
-      if (text) {
-        console.log("[NICONAMA COMMENT]", text);
-      }
-    }
-  }
-
-  try {
-    agent.postComments(parsed);
-  } catch (err) {
-    console.warn(
-      "[WARN] agent.postComments threw:",
-      err instanceof Error ? err.message : String(err),
-    );
-  }
-
-  try {
-    const payload = getCurrentStreamPayload();
-
-    // Helper to safely extract comment count from nested structure
-    const getCommentCountFromPayload = (obj: unknown): number => {
-      if (typeof obj === "object" && obj !== null) {
-        const rec = obj as Record<string, unknown>;
-        if (typeof rec.commentCount === "number") {
-          return rec.commentCount;
-        }
-        const niconama = rec.niconama;
-        if (typeof niconama === "object" && niconama !== null) {
-          const niconamaRec = niconama as Record<string, unknown>;
-          const meta = niconamaRec.meta;
-          if (typeof meta === "object" && meta !== null) {
-            const metaRec = meta as Record<string, unknown>;
-            const total = metaRec.total;
-            if (typeof total === "object" && total !== null) {
-              const totalRec = total as Record<string, unknown>;
-              if (typeof totalRec.comments === "number") {
-                return totalRec.comments;
-              }
-            }
-          }
-        }
-      }
-      return 0;
-    };
-
-    const currentCount: number = getCommentCountFromPayload(payload);
-    const numberedCommentsCount = countNumberedAgentComments(filteredComments);
-    const newCount = currentCount + numberedCommentsCount;
-
-    lastPublishedStreamState =
-      lastPublishedStreamState && typeof lastPublishedStreamState === "object"
-        ? { ...lastPublishedStreamState }
-        : {};
-    try {
-      (lastPublishedStreamState as Record<string, unknown>).commentCount =
-        newCount;
-    } catch {}
-
-    try {
-      const existingRecent = Array.isArray(
-        (lastPublishedStreamState as Record<string, unknown>).recentComments,
-      )
-        ? [
-            ...((lastPublishedStreamState as Record<string, unknown>)
-              .recentComments as Array<unknown>),
-          ]
-        : [];
-      const recentComments = [...existingRecent, ...filteredComments];
-      (lastPublishedStreamState as Record<string, unknown>).recentComments =
-        recentComments;
-    } catch {}
-
-    try {
-      if (
-        !(lastPublishedStreamState as Record<string, unknown>).niconama ||
-        typeof (lastPublishedStreamState as Record<string, unknown>)
-          .niconama !== "object"
-      ) {
-        (lastPublishedStreamState as Record<string, unknown>).niconama = {
-          meta: { total: { comments: newCount } },
-        };
-      } else {
-        const meta = (lastPublishedStreamState as Record<string, unknown>)
-          .niconama as Record<string, unknown> | undefined;
-        const metaObj = (meta ?? {}) as Record<string, unknown>;
-        (lastPublishedStreamState as Record<string, unknown>).niconama = meta;
-        metaObj.total = metaObj.total ?? {};
-        (metaObj.total as Record<string, unknown>).comments = newCount;
-      }
-    } catch {}
-  } catch (err) {
-    console.warn(
-      "[WARN] failed to update fallback commentCount:",
-      err instanceof Error ? err.message : String(err),
-    );
-  }
-
-  broadcastCurrentPayload("onComment");
-  if (modelFile) {
-    try {
-      writeFileSync(modelFile, streamer.talkModel.toJSON());
-    } catch (err) {
-      console.warn("[WARN]", "failed to write model", modelFile, err);
-    }
-  }
-};
-
-const createNiconamaCommentClientIfNeeded = () => {
-  return createNiconamaCommentClient(createNiconamaClientOptions(), {
-    onMeta: handlePublishedStreamState,
-    onComments: handleNiconamaComments,
-    onError: (err) => {
-      console.warn(
-        "[WARN] niconama comment client error:",
-        err instanceof Error ? err.message : String(err),
-      );
-    },
+try {
+  consoleServer = startConsoleServer({
+    broadcastingHost: process.env.BROADCASTING_HOST ?? "127.0.0.1",
+    broadcastingPort: process.env.BROADCASTING_PORT ?? server.port,
   });
-};
-
-// Defer creation/start of the niconama client until after servers are
-// responsive. A retry loop with backoff handles transient Playwright
-// navigation failures seen in CI (e.g., slow page load or timeouts).
-try {
-  const startDelayMs = Number(process.env.NICONAMA_START_DELAY_MS ?? "350");
-  const maxRetries = Number(process.env.NICONAMA_START_MAX_RETRIES ?? "3");
-  setTimeout(async () => {
-    let attempt = 0;
-    while (attempt < maxRetries) {
-      attempt += 1;
-      try {
-        niconamaCommentClient = createNiconamaCommentClientIfNeeded();
-        await niconamaCommentClient.start();
-        console.info("[INFO] niconamaCommentClient started successfully", {
-          watchUrl: NICONAMA_WATCH_URL ?? "unset",
-        });
-        break;
-      } catch (err) {
-        console.warn(
-          "[WARN] niconamaCommentClient start attempt failed:",
-          err instanceof Error ? err.message : String(err),
-          "attempt=",
-          attempt,
-        );
-        if (attempt >= maxRetries) {
-          console.error(
-            "[ERROR] reached max retries for niconama start; treating as fatal",
-          );
-          try {
-            exitHandler({ cleanup: true }, 1);
-          } catch (exitErr) {
-            console.error(
-              "[ERROR] failed during cleanup for fatal niconama startup failure:",
-              exitErr instanceof Error
-                ? (exitErr.stack ?? exitErr.message)
-                : String(exitErr),
-            );
-          }
-          process.exit(1);
-          return;
-        }
-        const backoff = 500 * attempt;
-        await new Promise((res) => setTimeout(res, backoff));
-      }
-    }
-  }, startDelayMs);
+  console.log(`🚀 Console running at ${consoleServer.url}`);
+  // Root POST / no longer seeds the allowlist (returns 404). In production,
+  // lock console access to loopback until a real operator IP model exists.
+  if (process.env.NODE_ENV === "production") {
+    AllowedIP.set({ family: "IPv4", address: "127.0.0.1" });
+  }
 } catch (err) {
-  console.warn(
-    "[WARN] failed to schedule niconamaCommentClient delayed start:",
-    err instanceof Error ? err.message : String(err),
+  const consoleStartupError =
+    err instanceof Error ? (err.stack ?? err.message) : String(err);
+  console.error(
+    `[ERROR] CONSOLE_STARTUP_FAILED ${JSON.stringify(consoleStartupError)}`,
   );
-}
-
-// Small startup delay before launching the external nicovideo comment client.
-// This reduces a race where the client's callbacks run before broadcasting
-// helpers and mirrored state are fully initialized, causing initial payloads
-// sent to newly-connected clients to omit `niconama` intermittently in E2E.
-try {
-  const startDelayMs = Number(process.env.NICONAMA_START_DELAY_MS ?? "350");
-  setTimeout(() => {
-    try {
-      if (!niconamaCommentClient) {
-        niconamaCommentClient = createNiconamaCommentClientIfNeeded();
-        void niconamaCommentClient.start().catch((err) => {
-          console.warn(
-            "[WARN] failed to start delayed niconamaCommentClient:",
-            err instanceof Error ? err.message : String(err),
-          );
-        });
-      }
-    } catch (err) {
-      console.warn(
-        "[WARN] delayed niconamaCommentClient init failed:",
-        err instanceof Error ? err.message : String(err),
-      );
-    }
-  }, startDelayMs);
-} catch (err) {
-  // If the delay setup fails for any reason, log and continue.
-  console.warn(
-    "[WARN] failed to schedule niconamaCommentClient delayed start:",
-    err instanceof Error ? err.message : String(err),
-  );
+  process.exit(1);
 }
 
 // Start the stream playback after servers are listening so startup is
 // responsive for health checks used by tests and CI.
 try {
-  streamer.play(
-    "CookieClicker",
-    readFileSync(dataFile, { encoding: "utf-8" }),
-    { savePath: dataFile },
-  );
+  streamer.play("CookieClicker", readFileSync(dataFile, { encoding: "utf-8" }));
 } catch (err) {
   console.warn(
     "[WARN] streamer.play failed during startup:",
@@ -1445,21 +687,67 @@ try {
   );
 }
 
-let running = false;
-// Use a classic repeating timer instead of the async iterator-based
-// `setInterval` from `node:timers/promises`. The async iterator can
-// behave inconsistently in some environments; a standard timer keeps
-// the process alive reliably and is sufficient for our needs.
-setInterval(async () => {
-  if (!running && streamer.speechable) {
+// Production comment ingress: in-process NicoNico client (origin/main).
+// Root POST/PUT / are 404; do not reintroduce HTTP comment ingestion.
+niconamaIngress = scheduleNiconamaCommentIngress({
+  postComments: (comments) => {
     try {
-      running = true;
-      await streamer.speech();
-    } finally {
-      running = false;
+      agent.postComments(comments);
+    } catch (err) {
+      console.warn(
+        "[WARN] agent.postComments threw:",
+        err instanceof Error ? err.message : String(err),
+      );
     }
-  }
-}, 1_000);
+  },
+  onMeta: (payload) => {
+    try {
+      const published = normalizePublishedStreamState(payload);
+      agent.publishStreamState?.(published);
+      const prev =
+        lastPublishedStreamState && typeof lastPublishedStreamState === "object"
+          ? (lastPublishedStreamState as Record<string, unknown>)
+          : {};
+      const next =
+        published && typeof published === "object"
+          ? (published as Record<string, unknown>)
+          : {};
+      lastPublishedStreamState = { ...prev, ...next };
+      broadcastCurrentPayloadLocal("onNiconamaMeta");
+    } catch (err) {
+      console.warn(
+        "[WARN] niconama onMeta failed:",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  },
+  getCurrentStreamPayload,
+  getLastPublished: () => lastPublishedStreamState,
+  setLastPublished: (value) => {
+    lastPublishedStreamState = value;
+  },
+  broadcastOnComment: () => broadcastCurrentPayloadLocal("onComment"),
+  persistTalkModel: () => {
+    if (modelFile) {
+      try {
+        persistTalkModel(modelFile, () => streamer.talkModel.toJSON());
+      } catch (err) {
+        console.warn("[WARN]", "failed to write model", modelFile, err);
+      }
+    }
+  },
+  onFatalStartFailure: () => {
+    try {
+      exitHandler({ cleanup: true }, 1);
+    } catch {
+      /* ignore */
+    }
+    process.exit(1);
+  },
+});
+
+// Use a classic repeating timer (composition/idleSpeechTimer) for idle speech.
+startIdleSpeechTimer(streamer, 1_000);
 
 /**
  * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}
@@ -1470,27 +758,25 @@ function exitHandler(
 ) {
   if (options.cleanup) {
     console.log("[INFO]", "server stopping...");
+    // Use mainServer (let) rather than const `server` to avoid TDZ when serve() fails before assignment.
     try {
-      if (__serverForExit) {
-        __serverForExit.stop(options.exit);
+      if (mainServer) {
+        mainServer.stop(options.exit);
       }
     } catch {
-      // ignore errors while attempting to stop the server during cleanup
+      /* ignore stop failures during crash paths */
     }
     try {
-      if (__consoleServerForExit) {
-        __consoleServerForExit.stop(options.exit);
+      if (consoleServer) {
+        consoleServer.stop(options.exit);
       }
     } catch {
-      // ignore console stop errors
+      /* ignore */
     }
-    if (niconamaCommentClient) {
-      void niconamaCommentClient.stop().catch((err) => {
-        console.warn(
-          "[WARN] failed to stop niconamaCommentClient:",
-          err instanceof Error ? err.message : String(err),
-        );
-      });
+    try {
+      void niconamaIngress?.stop();
+    } catch {
+      /* ignore */
     }
   }
 

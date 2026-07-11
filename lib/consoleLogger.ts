@@ -12,10 +12,6 @@ type LoggerOptions = {
   now?: () => Date;
 };
 
-export type ConsoleLoggerOptions = {
-  environment?: string;
-};
-
 export type JsonLogRecord = Record<string, unknown>;
 
 export type DailyRotatingJsonLogger = {
@@ -166,6 +162,13 @@ export function formatUnknownError(error: unknown): string {
   return String(error);
 }
 
+export type ConsoleLoggerOptions = {
+  environment?: string | undefined;
+};
+
+/**
+ * Console that suppresses [DEBUG] lines and console.debug in production.
+ */
 export function createConsoleLogger({
   environment = process.env.NODE_ENV,
 }: ConsoleLoggerOptions = {}): Console {
@@ -199,7 +202,7 @@ export function createConsoleLogger({
   logger.debug =
     environment === "production"
       ? () => {
-          /* suppress debug output when configured for production */
+          /* suppress debug output in production */
         }
       : (...args: unknown[]): void => {
           originalDebug(...args);
@@ -208,6 +211,7 @@ export function createConsoleLogger({
   return logger;
 }
 
+/** Replace globalThis.console (call before loading the rest of the app). */
 export function installConsoleLogger(
   options: ConsoleLoggerOptions = {},
 ): Console {
