@@ -7,43 +7,25 @@ import {
   type OuterConsoleWsData,
 } from "../composition/consoleOuterWebSocket";
 import {
-  createAccessDeniedRedirectResponse as createAccessDeniedRedirectResponseDomain,
-  createLoopbackProxyHeaders as createLoopbackProxyHeadersDomain,
+  createAccessDeniedRedirectResponse,
+  createLoopbackProxyHeaders,
   DEFAULT_CONSOLE_BASE_PATH,
-  isConsoleIPRestrictionEnabled as isConsoleIPRestrictionEnabledDomain,
+  isConsoleIPRestrictionEnabled,
 } from "../lib/domain/console/access";
 import { createDailyRotatingJsonLogger, formatUnknownError } from "../lib/consoleLogger";
 import * as consoleRoutes from "../routes/console/index";
 
 const consoleCertPath = process.env.CONSOLE_TLS_CERT ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem';
 const consoleKeyPath = process.env.CONSOLE_TLS_KEY ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem';
-export const consoleRedirectURL = process.env.CONSOLE_REDIRECT_URL ?? 'https://live.nicovideo.jp/watch/user/14171889';
+const consoleRedirectURL = process.env.CONSOLE_REDIRECT_URL ?? 'https://live.nicovideo.jp/watch/user/14171889';
 const consoleAccessLogPath = resolve(process.cwd(), 'var/log/console/access.log');
 const consoleErrorLogPath = resolve(process.cwd(), 'var/log/console/error.log');
-export const consoleBasePath = DEFAULT_CONSOLE_BASE_PATH;
+const consoleBasePath = DEFAULT_CONSOLE_BASE_PATH;
 
 export type ConsoleServer = {
   readonly url: URL;
   stop(closeActiveConnections?: boolean): void;
 };
-
-/** @see lib/domain/console/access.ts */
-export function createAccessDeniedRedirectResponse(requestURL: URL): Response {
-  return createAccessDeniedRedirectResponseDomain(requestURL, {
-    consoleBasePath,
-    consoleRedirectURL,
-  });
-}
-
-/** @see lib/domain/console/access.ts */
-export function isConsoleIPRestrictionEnabled(): boolean {
-  return isConsoleIPRestrictionEnabledDomain();
-}
-
-/** @see lib/domain/console/access.ts */
-export function createLoopbackProxyHeaders(originalHeaders: Headers): Headers {
-  return createLoopbackProxyHeadersDomain(originalHeaders);
-}
 
 /**
  * Start the console server.
@@ -129,7 +111,10 @@ export function startConsoleServer({
         let statusCode = 500;
         const consoleIpRestrictionEnabled = isConsoleIPRestrictionEnabled();
         if (consoleIpRestrictionEnabled && (!ip || !AllowedIP.equals(ip))) {
-          const redirectResponse = createAccessDeniedRedirectResponse(requestURL);
+          const redirectResponse = createAccessDeniedRedirectResponse(requestURL, {
+            consoleBasePath,
+            consoleRedirectURL,
+          });
           statusCode = redirectResponse.status;
           errorLogger.write({
             event: 'console_access_denied',

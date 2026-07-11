@@ -63,8 +63,8 @@ flowchart LR
 |------|------|
 | Access pure | `lib/domain/console/access.ts` |
 | Status plan pure | `lib/domain/console/agentStatusPlan.ts` |
-| Host re-export | `console/index.ts`（既存 import パス維持） |
-| UI re-export formatters | `console/src/AgentStatus/agentStatusUtils.tsx` |
+| Host (wiring only) | `console/index.ts` は `startConsoleServer` のみ公開。access 純関数は re-export しない |
+| UI re-export formatters | `console/src/AgentStatus/agentStatusUtils.tsx`（表示用の既存 import 互換） |
 | 公開ペイロード型 | `lib/domain/publication/types.ts` ↔ `console/.../types.ts`（文書で整合） |
 
 ## 追加スライス（実装済）
