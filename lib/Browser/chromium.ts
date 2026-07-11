@@ -61,12 +61,17 @@ export function cleanupChromiumLockFiles(userDataDir: string): void {
   if (!existsSync(userDataDir)) {
     return;
   }
-  const lockFiles = ["SingletonLock", "SingletonSocket", ".ssh"] as const;
+  // Only Chromium ProcessSingleton lock files — never profile subdirs like .ssh.
+  const lockFiles = [
+    "SingletonLock",
+    "SingletonSocket",
+    "SingletonCookie",
+  ] as const;
   for (const lockFile of lockFiles) {
     const lockPath = join(userDataDir, lockFile);
     if (!existsSync(lockPath)) continue;
     try {
-      rmSync(lockPath, { force: true, recursive: true });
+      rmSync(lockPath, { force: true });
       console.warn(`[WARN] cleaned up lock file: ${lockPath}`);
     } catch (err) {
       console.warn(
@@ -114,19 +119,28 @@ export async function launchPersistentContext(
       lastError = err instanceof Error ? err : new Error(message);
 
       if (/ProcessSingleton|SingletonLock/i.test(message)) {
+        let tmpDir: string | undefined;
         try {
-          const tmpDir = mkdtempSync(join(tmpdir(), "playwright-"));
+          tmpDir = mkdtempSync(join(tmpdir(), "playwright-"));
           cleanupChromiumLockFiles(tmpDir);
           console.warn(
             "[WARN] userDataDir locked, retrying with temp dir",
             tmpDir,
           );
+          // On success the browser keeps using tmpDir for this session (not deleted).
           return await launchWithFallback(
-            () => chromium.launchPersistentContext(tmpDir, launchOpts),
+            () => chromium.launchPersistentContext(tmpDir!, launchOpts),
             () =>
-              playwright.chromium.launchPersistentContext(tmpDir, launchOpts),
+              playwright.chromium.launchPersistentContext(tmpDir!, launchOpts),
           );
         } catch {
+          if (tmpDir) {
+            try {
+              rmSync(tmpDir, { recursive: true, force: true });
+            } catch {
+              // best-effort cleanup of unused temp profile
+            }
+          }
           // fall through to retry / rethrow
         }
       }

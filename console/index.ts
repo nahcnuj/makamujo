@@ -6,6 +6,7 @@ import {
   type OuterConsoleWsData,
 } from "../composition/consoleOuterWebSocket";
 import { AllowedIP } from "../lib/allowedIP";
+import { loadOrCreateConsoleBasicAuthPassword } from "../lib/consoleBasicAuthPassword";
 import {
   createDailyRotatingJsonLogger,
   formatUnknownError,
@@ -17,7 +18,6 @@ import {
   DEFAULT_CONSOLE_BASE_PATH,
   hasValidConsoleAuthorization,
   isConsoleIPRestrictionEnabled,
-  resolveConsoleBasicAuthPassword,
 } from "../lib/domain/console/access";
 import * as consoleRoutes from "../routes/console/index";
 
@@ -90,7 +90,9 @@ export function startConsoleServer({
   const {
     password: consoleBasicAuthPassword,
     generated: consoleBasicAuthGenerated,
-  } = resolveConsoleBasicAuthPassword();
+    source: consoleBasicAuthSource,
+    passwordFilePath: consoleBasicAuthPasswordFile,
+  } = loadOrCreateConsoleBasicAuthPassword();
 
   // If running in loopback-only mode (used by tests), return the loopback
   // server without attempting to start the outer TLS-enabled server.
@@ -105,10 +107,18 @@ export function startConsoleServer({
     };
   }
 
-  // Log auto-generated password so operators can retrieve it via journalctl
-  // (ported from main #426).
+  // Prefer CONSOLE_BASIC_AUTH_PASSWORD in production. When unset, reuse
+  // var/console-basic-auth-password (or CONSOLE_BASIC_AUTH_PASSWORD_FILE) so
+  // restarts do not rotate credentials. Log only when newly generated.
   if (consoleBasicAuthGenerated) {
     console.log(`Console Basic auth password: ${consoleBasicAuthPassword}`);
+    console.log(
+      `Console Basic auth password persisted to ${consoleBasicAuthPasswordFile} (set CONSOLE_BASIC_AUTH_PASSWORD to override)`,
+    );
+  } else if (consoleAccessControlEnabled && consoleBasicAuthSource === "file") {
+    console.log(
+      `Console Basic auth password loaded from ${consoleBasicAuthPasswordFile}`,
+    );
   }
 
   // Fail fast if TLS cert/key files are missing before starting the outer server.

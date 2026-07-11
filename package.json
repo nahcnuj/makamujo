@@ -24,7 +24,7 @@
     "browser": "node --import tsx ./bin/x/browser.ts",
     "generate-ogp": "bun run scripts/generate-ogp.ts",
     "screenshot:console-agent-status": "bun run scripts/capture-console-agent-status.ts",
-    "format": "biome check --write . || true",
+    "format": "biome format --write .",
     "lint": "biome check --error-on-warnings ."
   },
   "dependencies": {

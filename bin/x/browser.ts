@@ -10,9 +10,9 @@ import { createRetrySender } from "../../lib/Browser/socket";
 
 const {
   values: {
-    file: _file,
+    file: gameDataFile,
     browser: browserArg,
-    lang: _lang,
+    lang,
     timeout: timeoutStr,
     display,
     xauthority,
@@ -97,6 +97,18 @@ if (xauthority) {
 
 const timeout = Number.parseInt(timeoutStr, 10);
 const executablePath = (browserArg?.toString() ?? "").trim() || undefined;
+// Persist CLI options for solvers / diagnostics (save path + UI language).
+const resolvedGameDataFile = gameDataFile ?? "./var/cookieclicker.txt";
+process.env.MAKAMUJO_GAME_DATA_FILE = resolvedGameDataFile;
+if (lang) {
+  process.env.MAKAMUJO_BROWSER_LANG = lang;
+}
+console.log(
+  "[INFO] browser worker options",
+  `gameDataFile=${resolvedGameDataFile}`,
+  `lang=${lang ?? ""}`,
+  executablePath ? `executablePath=${executablePath}` : "bundled Chromium",
+);
 
 const browser = await create(executablePath, {
   width: 1280,

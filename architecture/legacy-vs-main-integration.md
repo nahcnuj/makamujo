@@ -1,6 +1,6 @@
 # legacy vs main 取り込み整理
 
-最終更新: 2026-07-11（`legacy` 上での取り込み作業）
+最終更新: 2026-07-11（`feat/port-main-ops-onto-legacy` / PR #466）
 
 ## 背景
 
@@ -90,15 +90,41 @@ Biome は recommended を基に、legacy ツリーで一括リライトが必要
 6. docs ランディング更新 + `docs/index.test.ts`
 7. Biome + githooks + IMPORT_POLICY + deps patch（main ツールチェーン）
 
+## マージ時の運用注意（PR #466）
+
+この PR を `main` に入れると **orphan `main` のツリーは稼働 `legacy` 系に置き換わる**。
+
+| 項目 | 内容 |
+|------|------|
+| コメント | **組み込み niconama クライアントは無い**。HTTP で配信プロセスへコメントを投入する構成を前提にする |
+| コンソール auth | production は IP + Basic（user `admin`）。`CONSOLE_BASIC_AUTH_PASSWORD` 固定を推奨。未設定時は `var/console-basic-auth-password` に永続化して再起動で再利用 |
+| デプロイ | `sudo make install PREFIX=... BUN_BIN=...`。unit の `@PREFIX@` / `@BUN_BIN@` は install 時に置換 |
+| Biome | 導入済み。一括 `noExplicitAny` 等は未強制（段階的に強化する） |
+| Chromium | ProcessSingleton 用に lock ファイルのみ掃除（`.ssh` は削除しない）。temp profile は成功時セッション用に残る |
+
+## レビュー指摘への対応（Low 以上）
+
+| 指摘 | 対応 |
+|------|------|
+| PR が main 置き換えである | 本節・PR 本文で明記 |
+| Basic auth が毎回変わる | ファイル永続化 + env 優先 |
+| Chromium が `.ssh` を消す | lock ファイルのみに限定 |
+| temp dir リーク | 失敗時は削除（成功時は profile 利用のため保持） |
+| Biome ゲートが緩い | `format` を `biome format` に分離（`\|\| true` 撤去）。lint ルールは段階的強化 |
+| systemd パス固定 | `@PREFIX@` / `@BUN_BIN@` を make で置換 |
+| Basic auth テスト薄い | domain + integration に 401/認可テスト追加 |
+| CI actions 版 | checkout@v7 / cache@v6 |
+| browser CLI 未使用 | `file` / `lang` を env とログに反映 |
+
 ## 推奨ワークフロー（今後）
 
-1. **ベースは常に `legacy`**
-2. main から欲しい変更は **パッチ単位で port**（cherry-pick は SHA 無関係のため不可に近い）
-3. niconama クライアントを戻す場合は、先に `architecture/domain-model-redesign.md` の契約に沿った差し込み設計を書く
-4. 動作確認: `bun run typecheck` → `bun run test` → `bun run test:integration`
-5. 将来 `main` をレガシー履歴に戻すなら、orphan を捨てて `legacy` を `main` に fast-forward / force する運用を検討（要合意）
+1. **ベースは常に稼働線（旧 legacy / 本 PR 後の main）**
+2. 欠落機能（niconama クライアント等）は **domain 契約に沿って別 PR**
+3. 動作確認: `bun run typecheck` → `bun run lint` → `bun run test` → `bun run test:integration`
+4. Biome の `noExplicitAny` 等を段階的に on にする
 
 ## 関連
 
 - [domain-model-redesign.md](./domain-model-redesign.md)
 - [console-domain-model.md](./console-domain-model.md)
+

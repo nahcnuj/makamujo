@@ -2,6 +2,7 @@
  * Console access-control and reverse-proxy header pure rules.
  * Side-effect free — used by the outer TLS console server.
  */
+import { timingSafeEqual } from "node:crypto";
 
 export const DEFAULT_CONSOLE_BASE_PATH = "/console/";
 
@@ -50,17 +51,41 @@ export const generateConsoleBasicAuthPassword = (
     )
     .join("");
 
+export type ConsoleBasicAuthPasswordSource = "env" | "file" | "generated";
+
+export type ResolvedConsoleBasicAuthPassword = {
+  password: string;
+  /** True only when a new password was minted (not env/file). */
+  generated: boolean;
+  source: ConsoleBasicAuthPasswordSource;
+};
+
 /**
- * Resolve the console Basic-auth password: env wins; otherwise generate and
- * return `{ password, generated: true }` so the host can log it once.
+ * Resolve the console Basic-auth password (pure).
+ * Precedence: env → persisted file contents → generate.
+ * Production should set `CONSOLE_BASIC_AUTH_PASSWORD` (or a password file) so
+ * restarts do not rotate credentials.
  */
-export const resolveConsoleBasicAuthPassword = (
-  envPassword: string | undefined = process.env.CONSOLE_BASIC_AUTH_PASSWORD,
-): { password: string; generated: boolean } => {
+export const resolveConsoleBasicAuthPassword = (options?: {
+  envPassword?: string | undefined;
+  filePassword?: string | undefined;
+}): ResolvedConsoleBasicAuthPassword => {
+  const envPassword =
+    options?.envPassword !== undefined
+      ? options.envPassword
+      : process.env.CONSOLE_BASIC_AUTH_PASSWORD;
   if (envPassword) {
-    return { password: envPassword, generated: false };
+    return { password: envPassword, generated: false, source: "env" };
   }
-  return { password: generateConsoleBasicAuthPassword(), generated: true };
+  const filePassword = options?.filePassword;
+  if (filePassword) {
+    return { password: filePassword, generated: false, source: "file" };
+  }
+  return {
+    password: generateConsoleBasicAuthPassword(),
+    generated: true,
+    source: "generated",
+  };
 };
 
 /** Parse `Authorization: Basic …` into username/password, or null if invalid. */
@@ -84,6 +109,16 @@ export const parseBasicAuthCredentials = (
   };
 };
 
+/** Constant-time string equality for secrets of equal length. */
+export const secretsEqual = (left: string, right: string): boolean => {
+  const leftBytes = Buffer.from(left, "utf8");
+  const rightBytes = Buffer.from(right, "utf8");
+  if (leftBytes.length !== rightBytes.length) {
+    return false;
+  }
+  return timingSafeEqual(leftBytes, rightBytes);
+};
+
 /** True when Authorization matches admin + expected password. */
 export const hasValidConsoleAuthorization = (
   authorizationHeader: string | null,
@@ -91,11 +126,9 @@ export const hasValidConsoleAuthorization = (
   expectedUsername = "admin",
 ): boolean => {
   const credentials = parseBasicAuthCredentials(authorizationHeader);
-  return (
-    credentials !== null &&
-    credentials.username === expectedUsername &&
-    credentials.password === expectedPassword
-  );
+  if (credentials === null) return false;
+  if (credentials.username !== expectedUsername) return false;
+  return secretsEqual(credentials.password, expectedPassword);
 };
 
 export const createUnauthorizedConsoleResponse = (): Response =>

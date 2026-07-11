@@ -36,7 +36,8 @@ flowchart LR
 
 | BC | 責務 | 配置 |
 |----|------|------|
-| Console Access | 拒否時リダイレクト、IP 制限フラグ、hop-by-hop ヘッダ除去 | `lib/domain/console/access.ts` |
+| Console Access | 拒否時リダイレクト、IP 制限フラグ、hop-by-hop ヘッダ除去、Basic auth 純関数 | `lib/domain/console/access.ts` |
+| Console Basic auth store | env / ファイル永続化 / 初回生成（ホスト I/O） | `lib/consoleBasicAuthPassword.ts` |
 | Agent Status Presentation | 行の有無・表示文言（純関数） | `lib/domain/console/agentStatusPlan.ts` |
 | Console UI | JSX / レイアウト | `console/src/AgentStatus/*` |
 | Console Host | TLS・プロキシ・WebSocket ブリッジ | `console/index.ts` |

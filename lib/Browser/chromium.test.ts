@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -12,16 +18,21 @@ import {
 const HOME_URL = "https://orteil.dashnet.org/cookieclicker/";
 
 describe("cleanupChromiumLockFiles", () => {
-  it("removes SingletonLock and SingletonSocket when present", () => {
+  it("removes Singleton lock files but not unrelated paths", () => {
     const dir = mkdtempSync(join(tmpdir(), "chromium-lock-"));
     try {
       writeFileSync(join(dir, "SingletonLock"), "x");
       writeFileSync(join(dir, "SingletonSocket"), "y");
+      writeFileSync(join(dir, "SingletonCookie"), "c");
       writeFileSync(join(dir, "keep-me"), "z");
+      mkdirSync(join(dir, ".ssh"));
+      writeFileSync(join(dir, ".ssh", "id"), "secret");
       cleanupChromiumLockFiles(dir);
       expect(existsSync(join(dir, "SingletonLock"))).toBe(false);
       expect(existsSync(join(dir, "SingletonSocket"))).toBe(false);
+      expect(existsSync(join(dir, "SingletonCookie"))).toBe(false);
       expect(existsSync(join(dir, "keep-me"))).toBe(true);
+      expect(existsSync(join(dir, ".ssh", "id"))).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

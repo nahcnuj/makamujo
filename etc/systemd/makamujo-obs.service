@@ -5,15 +5,14 @@ PartOf=makamujo.service
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/makamujo
+WorkingDirectory=@PREFIX@
 User=root
-Environment=PATH=/root/.bun/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=@PREFIX@/bin:/usr/local/bin:/usr/bin:/bin
 Environment=DISPLAY=:10
-# Ensure OBS config and cache directories are accessible (flatpak)
-Environment=XDG_CONFIG_HOME=/opt/makamujo
-Environment=XDG_DATA_HOME=/opt/makamujo
-Environment=XDG_CACHE_HOME=/opt/makamujo/.cache
-ExecStart=/bin/sh -lc "cd '/opt/makamujo' && '/opt/makamujo/bin/x/obs'"
+Environment=XDG_CONFIG_HOME=@PREFIX@
+Environment=XDG_DATA_HOME=@PREFIX@
+Environment=XDG_CACHE_HOME=@PREFIX@/.cache
+ExecStart=/bin/sh -lc "cd '@PREFIX@' && '@PREFIX@/bin/x/obs'"
 StandardOutput=journal
 StandardError=journal
 Restart=on-failure

@@ -6,7 +6,9 @@ import { startConsoleServer } from "../../../console/index";
 import {
   createAccessDeniedRedirectResponse,
   createLoopbackProxyHeaders,
+  createUnauthorizedConsoleResponse,
   DEFAULT_CONSOLE_BASE_PATH,
+  hasValidConsoleAuthorization,
   isConsoleIPRestrictionEnabled,
 } from "../../../lib/domain/console/access";
 
@@ -135,4 +137,17 @@ test("enables console IP restriction in production mode", () => {
   } finally {
     process.env.NODE_ENV = originalNodeEnv;
   }
+});
+
+test("production console Basic auth rejects missing credentials with 401", () => {
+  expect(hasValidConsoleAuthorization(null, "expected-secret")).toBe(false);
+  const unauthorized = createUnauthorizedConsoleResponse();
+  expect(unauthorized.status).toBe(401);
+  expect(unauthorized.headers.get("WWW-Authenticate")).toContain("Basic");
+});
+
+test("production console Basic auth accepts admin credentials", () => {
+  const header = `Basic ${btoa("admin:expected-secret")}`;
+  expect(hasValidConsoleAuthorization(header, "expected-secret")).toBe(true);
+  expect(hasValidConsoleAuthorization(header, "other-secret")).toBe(false);
 });

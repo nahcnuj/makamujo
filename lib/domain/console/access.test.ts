@@ -63,13 +63,44 @@ describe("console access domain", () => {
   });
 
   it("uses CONSOLE_BASIC_AUTH_PASSWORD when provided", () => {
-    const resolved = resolveConsoleBasicAuthPassword("fixed-secret");
-    expect(resolved).toEqual({ password: "fixed-secret", generated: false });
+    const resolved = resolveConsoleBasicAuthPassword({
+      envPassword: "fixed-secret",
+    });
+    expect(resolved).toEqual({
+      password: "fixed-secret",
+      generated: false,
+      source: "env",
+    });
   });
 
-  it("generates a password when env is empty", () => {
-    const resolved = resolveConsoleBasicAuthPassword(undefined);
+  it("prefers env over file password", () => {
+    const resolved = resolveConsoleBasicAuthPassword({
+      envPassword: "env-secret",
+      filePassword: "file-secret",
+    });
+    expect(resolved.source).toBe("env");
+    expect(resolved.password).toBe("env-secret");
+  });
+
+  it("uses file password when env is empty", () => {
+    const resolved = resolveConsoleBasicAuthPassword({
+      envPassword: undefined,
+      filePassword: "file-secret",
+    });
+    expect(resolved).toEqual({
+      password: "file-secret",
+      generated: false,
+      source: "file",
+    });
+  });
+
+  it("generates a password when env and file are empty", () => {
+    const resolved = resolveConsoleBasicAuthPassword({
+      envPassword: undefined,
+      filePassword: undefined,
+    });
     expect(resolved.generated).toBe(true);
+    expect(resolved.source).toBe("generated");
     expect(resolved.password).toHaveLength(16);
   });
 

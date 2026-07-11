@@ -5,12 +5,13 @@ PartOf=makamujo.service
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/makamujo
+WorkingDirectory=@PREFIX@
 User=root
-Environment=PATH=/root/.bun/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=@PREFIX@/bin:/usr/local/bin:/usr/bin:/bin
 Environment=NODE_ENV=production
 Environment=DISPLAY=:10
-ExecStart=/bin/sh -lc "cd '/opt/makamujo' && NODE_ENV=production /root/.bun/bin/bun start"
+# Environment=CONSOLE_BASIC_AUTH_PASSWORD=...
+ExecStart=/bin/sh -lc "cd '@PREFIX@' && NODE_ENV=production '@BUN_BIN@' start"
 StandardOutput=journal
 StandardError=journal
 Restart=on-failure
