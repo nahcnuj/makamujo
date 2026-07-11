@@ -148,3 +148,6 @@ var/e2e-tls/
 # Auto-generated console Basic auth secret (prefer CONSOLE_BASIC_AUTH_PASSWORD env)
 var/console-basic-auth-password
 
+
+playwright/.auth/
+
