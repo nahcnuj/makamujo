@@ -2,71 +2,30 @@ import { serve } from "bun";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { AllowedIP } from "../lib/allowedIP";
+import {
+  createOuterConsoleWebSocketHandler,
+  type OuterConsoleWsData,
+} from "../composition/consoleOuterWebSocket";
+import {
+  createAccessDeniedRedirectResponse,
+  createLoopbackProxyHeaders,
+  DEFAULT_CONSOLE_BASE_PATH,
+  isConsoleIPRestrictionEnabled,
+} from "../lib/domain/console/access";
 import { createDailyRotatingJsonLogger, formatUnknownError } from "../lib/consoleLogger";
 import * as consoleRoutes from "../routes/console/index";
 
 const consoleCertPath = process.env.CONSOLE_TLS_CERT ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem';
 const consoleKeyPath = process.env.CONSOLE_TLS_KEY ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem';
-export const consoleRedirectURL = process.env.CONSOLE_REDIRECT_URL ?? 'https://live.nicovideo.jp/watch/user/14171889';
+const consoleRedirectURL = process.env.CONSOLE_REDIRECT_URL ?? 'https://live.nicovideo.jp/watch/user/14171889';
 const consoleAccessLogPath = resolve(process.cwd(), 'var/log/console/access.log');
 const consoleErrorLogPath = resolve(process.cwd(), 'var/log/console/error.log');
-export const consoleBasePath = '/console/';
+const consoleBasePath = DEFAULT_CONSOLE_BASE_PATH;
 
 export type ConsoleServer = {
   readonly url: URL;
   stop(closeActiveConnections?: boolean): void;
 };
-
-/**
- * Build the redirect response used when an access to the outer console server is denied.
- *
- * - Requests to `/console/` (including descendants) are redirected to the configured watch page.
- * - Requests to all other paths are permanently redirected to `/console/`.
- *
- * @param requestURL - Original request URL.
- * @returns Redirect response with status and location based on the request path.
- */
-export function createAccessDeniedRedirectResponse(requestURL: URL): Response {
-  if (requestURL.pathname.startsWith(consoleBasePath)) {
-    return Response.redirect(consoleRedirectURL, 303);
-  }
-  return new Response(null, {
-    status: 308,
-    headers: { location: consoleBasePath },
-  });
-}
-
-export function isConsoleIPRestrictionEnabled(): boolean {
-  return process.env.NODE_ENV === 'production';
-}
-
-export function createLoopbackProxyHeaders(originalHeaders: Headers): Headers {
-  const headers = new Headers(originalHeaders);
-  // Save Connection header value before removing it, so we can strip RFC 7230 tokens after.
-  const connectionValue = headers.get('connection');
-  const hopByHopHeaders = [
-    'connection',
-    'keep-alive',
-    'proxy-authenticate',
-    'proxy-authorization',
-    'proxy-connection',
-    'transfer-encoding',
-    'te',
-    'trailer',
-    'upgrade',
-  ];
-  hopByHopHeaders.forEach((header) => headers.delete(header));
-  headers.delete('host');
-  headers.delete('origin');
-  headers.delete('referer');
-  // Per RFC 7230, also remove any header names listed in the Connection header value.
-  if (connectionValue) {
-    connectionValue.split(',').map(t => t.trim().toLowerCase()).forEach(token => {
-      if (token) headers.delete(token);
-    });
-  }
-  return headers;
-}
 
 /**
  * Start the console server.
@@ -136,49 +95,11 @@ export function startConsoleServer({
 
   // Outer console server: exposed publicly on port 443.
   // Checks the client IP against the shared allowlist before proxying to the loopback server.
-  type OuterWsData = {
-    loopbackWsUrl: string;
-    protocols: string[] | undefined;
-    target?: WebSocket;
-  };
-
-  const outerWebSocket: Bun.WebSocketHandler<OuterWsData> = {
-    open(ws) {
-      const { loopbackWsUrl, protocols } = ws.data;
-      try {
-        const target = new WebSocket(loopbackWsUrl, protocols);
-
-        target.binaryType = 'arraybuffer';
-
-        target.onopen = () => {
-          // noop
-        };
-
-        target.onmessage = (ev) => {
-          try { ws.send(ev.data as string | ArrayBuffer); } catch {}
-        };
-
-        target.onclose = () => { try { ws.close(); } catch {} };
-        target.onerror = () => { try { ws.close(); } catch {} };
-
-        ws.data.target = target;
-      } catch (err) {
-        try { ws.close(); } catch {}
-      }
-    },
-    message(ws, data) {
-      const { target } = ws.data;
-      if (target) try { target.send(data as string | ArrayBuffer); } catch {}
-    },
-    close(ws) {
-      const { target } = ws.data;
-      if (target) try { target.close(); } catch {}
-    },
-  };
+  const outerWebSocket = createOuterConsoleWebSocketHandler();
 
   let outerServer: ReturnType<typeof serve>;
   try {
-    outerServer = serve<OuterWsData>({
+    outerServer = serve<OuterConsoleWsData>({
       port: 443,
       async fetch(req, server) {
         const requestStartTime = Date.now();
@@ -190,7 +111,10 @@ export function startConsoleServer({
         let statusCode = 500;
         const consoleIpRestrictionEnabled = isConsoleIPRestrictionEnabled();
         if (consoleIpRestrictionEnabled && (!ip || !AllowedIP.equals(ip))) {
-          const redirectResponse = createAccessDeniedRedirectResponse(requestURL);
+          const redirectResponse = createAccessDeniedRedirectResponse(requestURL, {
+            consoleBasePath,
+            consoleRedirectURL,
+          });
           statusCode = redirectResponse.status;
           errorLogger.write({
             event: 'console_access_denied',

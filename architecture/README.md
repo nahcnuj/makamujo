@@ -8,28 +8,26 @@
 
 | ファイル | 内容 |
 |----------|------|
-| [domain-model-redesign.md](./domain-model-redesign.md) | `legacy` 向けドメインモデル駆動再設計（正本）。ユビキタス言語、境界づけられたコンテキスト、CommentPipeline / silence / Publication 契約、Phase A/B/C の PR Plan |
+| [domain-model-redesign.md](./domain-model-redesign.md) | 配信エージェント BC 再設計（#463 マージ済）。CommentPipeline / silence / Publication |
+| [console-domain-model.md](./console-domain-model.md) | **管理コンソール BC**（Access / Status plan）。UI は `console/src`、純関数は `lib/domain/console` |
 
 ## 読み方（実装エージェント向け）
 
 1. 振る舞い変更はしない。観測可能な契約は設計書の characterization / observables 節に従う。
-2. 実装は **Phase A から**（契約文書 → 回帰テスト → 純関数 → Publication → composition 薄型化）。
-3. `CommentApplicationService` 等の大きな分割は Phase B。Phase A 完了後に必要性を判断してよい（浅いモジュール化での停止も正当）。
-4. コード変更時は既存の `lib/Agent/index.test.ts` と設計書の CommentPipeline / `speechable` 順序アルゴリズムをゴールデンとする。
+2. **配信エージェント**（#463 済）: `lib/Agent/index.test.ts` と CommentPipeline / `speechable` がゴールデン。
+3. **管理コンソール**（継続）: `lib/domain/console/*` の純関数 + 既存 `console/src` / integration テストがゴールデン。
+4. `docs/` は静的サイト専用。設計 Markdown は `architecture/` のみ。
 
-## 実装マップ（Phase A）
+## 実装マップ
 
-| 領域 | パス |
-|------|------|
-| NGram / Silence | `lib/domain/broadcasting/` |
-| Topic / System scripts | `lib/domain/comments/` |
-| 空発話ルール | `lib/domain/speech/` |
-| Publication assemble | `lib/domain/publication/` |
-| SpeechQueue | `lib/application/SpeechQueue.ts` |
-| composition helpers | `composition/` |
-| AgentSession + application services | `lib/application/`（Phase B） |
-| ファサード | `lib/Agent/index.ts` |
-| AGT `./agent` 優先 import | `composition/agentWiring.ts`（Phase C; AGT ≥ 0.6.5） |
+| 領域 | パス | 状態 |
+|------|------|------|
+| NGram / Silence / Topic / Scripts | `lib/domain/*` | 済 |
+| Publication assemble | `lib/domain/publication/` | 済 |
+| AgentSession + services | `lib/application/` | 済 |
+| Console access / status plan / SSE frames | `lib/domain/console/` | 済 |
+| Outer console WS bridge | `composition/consoleOuterWebSocket.ts` | 済 |
+| Console UI | `console/src/AgentStatus/` | ファサード維持 |
 
 ## 関連
 

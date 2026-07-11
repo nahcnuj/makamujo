@@ -1,3 +1,11 @@
+import {
+  drainSseDataPayloads,
+  extractCompleteSseFrames,
+  findSseBoundary,
+} from "./domain/console/sseFrames";
+
+export { findSseBoundary, extractCompleteSseFrames } from "./domain/console/sseFrames";
+
 export function streamUpstreamResponse(proxied: Response) {
   const responseHeaders = new Headers(proxied.headers);
   responseHeaders.set('cache-control', 'no-cache');
@@ -48,18 +56,10 @@ export function forwardSSEEventsToSink(upstreamBody: any, sink: (data: string) =
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        let idx = buffer.indexOf('\r\n\r\n');
-        if (idx === -1) idx = buffer.indexOf('\n\n');
-        while (idx !== -1) {
-          const event = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + (buffer.startsWith('\r\n', idx) ? 4 : 2));
-          const dataLines = event.split(/\r?\n/).filter((l) => l.startsWith('data:'));
-          if (dataLines.length > 0) {
-            const data = dataLines.map((l) => l.replace(/^data:\s?/, '')).join('\n');
-            try { sink(data); } catch {}
-          }
-          idx = buffer.indexOf('\r\n\r\n');
-          if (idx === -1) idx = buffer.indexOf('\n\n');
+        const drained = drainSseDataPayloads(buffer);
+        buffer = drained.rest;
+        for (const data of drained.payloads) {
+          try { sink(data); } catch {}
         }
       }
     } catch (err) {
@@ -129,18 +129,6 @@ export async function fetchMetaSnapshot(proxyBase: string): Promise<any> {
 }
 
 /**
- * Returns the position and length of the first SSE frame boundary (\n\n or \r\n\r\n)
- * in the given buffer, or null if no complete boundary is found.
- */
-function findSseBoundary(buffer: string): { end: number; length: number } | null {
-  const lfIdx = buffer.indexOf('\n\n');
-  const crlfIdx = buffer.indexOf('\r\n\r\n');
-  if (lfIdx === -1 && crlfIdx === -1) return null;
-  if (lfIdx !== -1 && (crlfIdx === -1 || lfIdx <= crlfIdx)) return { end: lfIdx, length: 2 };
-  return { end: crlfIdx, length: 4 };
-}
-
-/**
  * Creates an SSE Response that stays connected even when the upstream drops.
  * When the upstream closes or errors, it automatically reconnects and continues
  * streaming. This prevents ERR_INCOMPLETE_CHUNKED_ENCODING errors in the browser
@@ -195,13 +183,10 @@ export function createResilientSseProxy(
         sseBuffer += decoder.decode(value, { stream: true });
 
         // Emit only complete SSE frames; buffer incomplete ones until the next chunk.
-        let boundary = findSseBoundary(sseBuffer);
-        while (boundary !== null) {
-          const { end, length } = boundary;
-          const frame = sseBuffer.slice(0, end + length);
-          sseBuffer = sseBuffer.slice(end + length);
+        const extracted = extractCompleteSseFrames(sseBuffer);
+        sseBuffer = extracted.rest;
+        for (const frame of extracted.frames) {
           try { controller.enqueue(encoder.encode(frame)); } catch {}
-          boundary = findSseBoundary(sseBuffer);
         }
       }
     } finally {

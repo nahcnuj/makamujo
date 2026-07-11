@@ -1,5 +1,10 @@
 import type { Child } from "hono/jsx";
 
+/**
+ * Console view of the broadcasting published payload.
+ * Structurally aligned with `PublishedStreamPayload` (`lib/domain/publication/types.ts`);
+ * fields remain optional here because SSE/HTTP may deliver partial frames.
+ */
 export type AgentStatusRow = {
   label: string
   href?: string
