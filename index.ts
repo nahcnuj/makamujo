@@ -443,7 +443,10 @@ const makeStreamHandler = (label: string) =>
 // yields), so mainServer is always defined by the time a handler executes.
 // The non-null assertion (!) is therefore safe; the runtime check below
 // provides an extra guard for unexpected scenarios.
-let mainServer!: Bun.Server<WsData>;
+/** Initialized after serve(); optional so crash-path exitHandler avoids TDZ. */
+let mainServer: Bun.Server<WsData> | undefined;
+/** Hoisted for exitHandler safety if startup fails mid-module. */
+let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 
 const getMainServer = (): Bun.Server<WsData> => {
   if (!mainServer) throw new Error('Server not yet initialized');
@@ -528,7 +531,6 @@ const server = mainServer = serve<WsData>({
 
 console.log(`🚀 Server running at ${server.url}`);
 
-let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 if (process.env.NODE_ENV === "production") {
   void (async () => {
     try {
@@ -571,12 +573,17 @@ startIdleSpeechTimer(streamer, 1_000);
 function exitHandler(options: { cleanup: true; exit?: never } | { cleanup?: never; exit: true }, exitCode?: number) {
   if (options.cleanup) {
     console.log('[INFO]', 'server stopping...');
-    if (server) {
-      server.stop(options.exit);
-    }
-    if (consoleServer) {
-      consoleServer.stop(options.exit);
-    }
+    // Use mainServer (let) rather than const `server` to avoid TDZ when serve() fails before assignment.
+    try {
+      if (mainServer) {
+        mainServer.stop(options.exit);
+      }
+    } catch { /* ignore stop failures during crash paths */ }
+    try {
+      if (consoleServer) {
+        consoleServer.stop(options.exit);
+      }
+    } catch { /* ignore */ }
   }
 
   if (typeof exitCode === 'number') {
