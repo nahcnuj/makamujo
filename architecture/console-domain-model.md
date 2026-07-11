@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |------|------|
 | **Status** | Implemented (initial slice) |
-| **Canonical branch** | `main`（全体像は [main-target-state.md](./main-target-state.md)） |
+| **Canonical model** | システム全体は [main-target-state.md](./main-target-state.md)。本文書は **Console BC** の詳細 |
 | **Constraint** | 観測可能な振る舞いを変えない |
 
 > `docs/` は静的サイト資産専用。本ドキュメントは `architecture/` に置く。

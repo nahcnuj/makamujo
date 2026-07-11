@@ -6,7 +6,7 @@
 | **Author** | (placeholder) |
 | **Date** | 2026-07-11 |
 | **Status** | Approved（Rev.3）; Phase A/B 実装済; Phase C AGT `./agent` 対応 |
-| **Canonical branch** | `main`（全体像は [main-target-state.md](./main-target-state.md)） |
+| **Canonical model** | システム全体は [main-target-state.md](./main-target-state.md)。本文書は **Broadcasting BC** の詳細 |
 | **Runtime** | Bun 1.3.x, TypeScript strict |
 | **Key dependency** | `automated-gameplay-transmitter` ^0.6.4 |
 | **Constraint** | **観測可能な振る舞いを意図的に変更しない**（behavior-preserving refactor + characterization / regression tests） |
