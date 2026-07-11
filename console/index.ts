@@ -2,6 +2,12 @@ import { serve } from "bun";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { AllowedIP } from "../lib/allowedIP";
+import {
+  createAccessDeniedRedirectResponse as createAccessDeniedRedirectResponseDomain,
+  createLoopbackProxyHeaders as createLoopbackProxyHeadersDomain,
+  DEFAULT_CONSOLE_BASE_PATH,
+  isConsoleIPRestrictionEnabled as isConsoleIPRestrictionEnabledDomain,
+} from "../lib/domain/console/access";
 import { createDailyRotatingJsonLogger, formatUnknownError } from "../lib/consoleLogger";
 import * as consoleRoutes from "../routes/console/index";
 
@@ -10,62 +16,29 @@ const consoleKeyPath = process.env.CONSOLE_TLS_KEY ?? '/etc/letsencrypt/live/x85
 export const consoleRedirectURL = process.env.CONSOLE_REDIRECT_URL ?? 'https://live.nicovideo.jp/watch/user/14171889';
 const consoleAccessLogPath = resolve(process.cwd(), 'var/log/console/access.log');
 const consoleErrorLogPath = resolve(process.cwd(), 'var/log/console/error.log');
-export const consoleBasePath = '/console/';
+export const consoleBasePath = DEFAULT_CONSOLE_BASE_PATH;
 
 export type ConsoleServer = {
   readonly url: URL;
   stop(closeActiveConnections?: boolean): void;
 };
 
-/**
- * Build the redirect response used when an access to the outer console server is denied.
- *
- * - Requests to `/console/` (including descendants) are redirected to the configured watch page.
- * - Requests to all other paths are permanently redirected to `/console/`.
- *
- * @param requestURL - Original request URL.
- * @returns Redirect response with status and location based on the request path.
- */
+/** @see lib/domain/console/access.ts */
 export function createAccessDeniedRedirectResponse(requestURL: URL): Response {
-  if (requestURL.pathname.startsWith(consoleBasePath)) {
-    return Response.redirect(consoleRedirectURL, 303);
-  }
-  return new Response(null, {
-    status: 308,
-    headers: { location: consoleBasePath },
+  return createAccessDeniedRedirectResponseDomain(requestURL, {
+    consoleBasePath,
+    consoleRedirectURL,
   });
 }
 
+/** @see lib/domain/console/access.ts */
 export function isConsoleIPRestrictionEnabled(): boolean {
-  return process.env.NODE_ENV === 'production';
+  return isConsoleIPRestrictionEnabledDomain();
 }
 
+/** @see lib/domain/console/access.ts */
 export function createLoopbackProxyHeaders(originalHeaders: Headers): Headers {
-  const headers = new Headers(originalHeaders);
-  // Save Connection header value before removing it, so we can strip RFC 7230 tokens after.
-  const connectionValue = headers.get('connection');
-  const hopByHopHeaders = [
-    'connection',
-    'keep-alive',
-    'proxy-authenticate',
-    'proxy-authorization',
-    'proxy-connection',
-    'transfer-encoding',
-    'te',
-    'trailer',
-    'upgrade',
-  ];
-  hopByHopHeaders.forEach((header) => headers.delete(header));
-  headers.delete('host');
-  headers.delete('origin');
-  headers.delete('referer');
-  // Per RFC 7230, also remove any header names listed in the Connection header value.
-  if (connectionValue) {
-    connectionValue.split(',').map(t => t.trim().toLowerCase()).forEach(token => {
-      if (token) headers.delete(token);
-    });
-  }
-  return headers;
+  return createLoopbackProxyHeadersDomain(originalHeaders);
 }
 
 /**

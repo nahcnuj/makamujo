@@ -1,89 +1,28 @@
 import type { AgentStateResponse } from "./types";
 import type { Child, CSSProperties } from "hono/jsx";
+import {
+  formatMetricValue,
+  formatNGramValue,
+  formatStartDate,
+  formatStateLabel,
+  formatStreamStartTime,
+  normalizeSpeechText,
+  SPEECH_UNAVAILABLE_INDICATOR,
+  type SpeechPayload,
+} from "../../../lib/domain/console/agentStatusPlan";
 
-const UNIX_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
+// Re-export pure presentation helpers from the console domain (single source of truth).
+export {
+  formatMetricValue,
+  formatNGramValue,
+  formatStartDate,
+  formatStateLabel,
+  formatStreamStartTime,
+  normalizeSpeechText,
+};
+
 const GAME_STATE_EMPTY_ARRAY_LABEL = "(空の配列)";
 const GAME_STATE_EMPTY_OBJECT_LABEL = "(空のオブジェクト)";
-const SPEECH_UNAVAILABLE_INDICATOR = "（コメントしてね）";
-
-export const formatStateLabel = (type: string | undefined): string => {
-  if (type === "live") {
-    return "配信中";
-  }
-  if (type === "offline") {
-    return "停止中";
-  }
-  return type ?? "-";
-};
-
-export const formatStartDate = (startAtUnixTime: number | undefined): string => {
-  if (typeof startAtUnixTime !== "number" || !Number.isFinite(startAtUnixTime) || startAtUnixTime <= 0) {
-    return "-";
-  }
-  const startAtUnixTimeMilliseconds = startAtUnixTime >= UNIX_MILLISECONDS_THRESHOLD
-    ? startAtUnixTime
-    : startAtUnixTime * 1000;
-  return new Date(startAtUnixTimeMilliseconds).toLocaleString("ja-JP");
-};
-
-export const formatStreamStartTime = (startAtUnixTime: number | undefined): string | undefined => {
-  if (typeof startAtUnixTime !== "number" || !Number.isFinite(startAtUnixTime) || startAtUnixTime <= 0) {
-    return undefined;
-  }
-  const startAtUnixTimeMilliseconds = startAtUnixTime >= UNIX_MILLISECONDS_THRESHOLD
-    ? startAtUnixTime
-    : startAtUnixTime * 1000;
-  const date = new Date(startAtUnixTimeMilliseconds);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  return `${year}/${month}/${day} ${hour}:${minute} 開始`;
-};
-
-export const formatMetricValue = (metricValue: number | undefined): string => {
-  return metricValue === undefined ? "-" : String(metricValue);
-};
-
-export const formatNGramValue = (nGram: number | undefined, nGramRaw: number | undefined): string => {
-  if (nGram === undefined || !Number.isFinite(nGram) || nGram < 1) {
-    return "-";
-  }
-  const nGramValue = `${Math.floor(nGram)}-gram`;
-  if (nGramRaw === undefined || !Number.isFinite(nGramRaw) || nGramRaw < 1) {
-    return nGramValue;
-  }
-  const formattedRaw = Number(nGramRaw).toFixed(2);
-  return `${nGramValue} (${formattedRaw})`;
-};
-
-type SpeechPayload =
-  | string
-  | { text?: string; nodes?: readonly string[] }
-  | ({ speech?: string | { text?: string; nodes?: readonly string[] } | { speech?: string; text?: string; nodes?: readonly string[] }; silent?: boolean })
-  | undefined;
-
-export const normalizeSpeechText = (speech: SpeechPayload): string | undefined => {
-  if (typeof speech === "string") {
-    return speech.trim() || undefined;
-  }
-
-  if (speech && typeof speech === "object") {
-    const textValue = typeof (speech as any).text === "string"
-      ? (speech as any).text
-      : typeof (speech as any).speech === "string"
-        ? (speech as any).speech
-        : typeof (speech as any).speech === "object"
-          ? typeof (speech as any).speech.text === "string"
-            ? (speech as any).speech.text
-            : undefined
-          : undefined;
-    return typeof textValue === "string" ? textValue.trim() || undefined : undefined;
-  }
-
-  return undefined;
-};
 
 const createHighlightedCommentLines = (commentText: string, pickedTopic: string) => {
   if (!pickedTopic) {
