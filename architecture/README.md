@@ -27,6 +27,7 @@
 | Publication assemble | `lib/domain/publication/` |
 | SpeechQueue | `lib/application/SpeechQueue.ts` |
 | composition helpers | `composition/` |
+| AgentSession + application services | `lib/application/`（Phase B） |
 | ファサード | `lib/Agent/index.ts` |
 
 ## 関連
