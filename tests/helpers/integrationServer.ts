@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 
 /** stdout/stderr pipe child (stdin ignored). */
@@ -11,6 +11,10 @@ export type SpawnedServer = {
   on: (event: string, listener: (...args: any[]) => void) => any;
   off: (event: string, listener: (...args: any[]) => void) => any;
 };
+
+/** Platform-aware Bun binary for child spawns (Windows prefers `bun.exe` on PATH). */
+export const resolveBunExecutable = (): string =>
+  process.platform === "win32" ? "bun.exe" : "bun";
 
 /** Allocate an unused TCP port on 127.0.0.1 (avoids fixed-port collisions across suites). */
 export const allocateFreePort = (): Promise<number> =>
@@ -36,6 +40,7 @@ export const allocateFreePort = (): Promise<number> =>
 /**
  * Kill a process and its children. On Windows, `proc.kill()` alone often leaves
  * Bun/console children holding ports and named pipes.
+ * Waits for `taskkill` to finish so the next suite does not race on ports/pipes.
  */
 export const killProcessTree = (proc: SpawnedServer | null | undefined): void => {
   if (!proc) return;
@@ -46,7 +51,7 @@ export const killProcessTree = (proc: SpawnedServer | null | undefined): void =>
   }
   if (process.platform === "win32") {
     try {
-      spawn("taskkill", ["/pid", String(pid), "/T", "/F"], {
+      spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], {
         stdio: "ignore",
         windowsHide: true,
       });
@@ -58,8 +63,11 @@ export const killProcessTree = (proc: SpawnedServer | null | undefined): void =>
   }
 };
 
-/** Brief pause so OS can release TCP ports / named pipes after kill. */
-export const waitForPortRelease = (ms = 300): Promise<void> =>
+/**
+ * Brief pause so OS can release TCP ports / named pipes after kill.
+ * Windows needs a longer default after taskkill.
+ */
+export const waitForPortRelease = (ms = process.platform === "win32" ? 500 : 300): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 export type WaitForServerReadyOptions = {

@@ -5,6 +5,7 @@ import {
   allocateFreePort,
   killProcessTree,
   makamujoIpcPath,
+  resolveBunExecutable,
   waitForPortRelease,
   type SpawnedServer,
 } from "../helpers/integrationServer";
@@ -25,7 +26,7 @@ beforeAll(async () => {
   broadcastingBaseUrl = `http://127.0.0.1:${mainServerPort}`;
 
   server = spawn(
-    process.platform === "win32" ? "bun.exe" : "bun",
+    resolveBunExecutable(),
     ["index.ts", "--port", String(mainServerPort)],
     {
       env: {

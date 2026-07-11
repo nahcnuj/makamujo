@@ -5,6 +5,7 @@ import {
   allocateFreePort,
   killProcessTree,
   makamujoIpcPath,
+  resolveBunExecutable,
   waitForPortRelease,
   waitForSpawnedReady,
   type SpawnedServer,
@@ -20,7 +21,7 @@ test("returns 501 when websocket upgrade unavailable", async () => {
   }
 
   const server = spawn(
-    process.platform === "win32" ? "bun.exe" : "bun",
+    resolveBunExecutable(),
     ["index.ts", "--port", String(port)],
     {
       env: {

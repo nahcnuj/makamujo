@@ -16,7 +16,7 @@
     "setup": "bun --version && bun ci && bun run typecheck",
     "start": "NODE_ENV=production bun index.ts --port=7777",
     "typecheck": "tsc --noEmit",
-    "test": "bun test lib/ src/ routes/ console/src/",
+    "test": "bun test lib/ src/ routes/ console/src/ composition/",
     "test:integration": "bun run scripts/run-integration-tests.ts",
     "test:bin": "bash tests/bin/stop.test.sh",
     "pretest:e2e": "playwright install --with-deps chromium && if [ -n \"${CI:-}\" ]; then bash scripts/setup-e2e-tls.sh; fi",

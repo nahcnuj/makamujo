@@ -57,18 +57,32 @@ export const loadCreateAgentApi = async (): Promise<CreateAgentApiFn | undefined
   return undefined;
 };
 
+/**
+ * In-memory agent used before (or instead of) AGT createAgentApi.
+ * When `forwardComments` is provided, PUT comments still reach the streamer
+ * during the async import window / import-failure path.
+ */
 export const createFallbackAgent = (
   getLastPublished: () => unknown,
   setLastPublished: (data: unknown) => void,
   getSpeechState: () => { speech: string; silent: boolean },
   setSpeechState: (state: { speech: string; silent: boolean }) => void,
+  forwardComments?: (comments: unknown[]) => void,
 ): FallbackAgent => ({
   setSpeech: (text: string) => { setSpeechState({ speech: text, silent: false }); },
   getSpeech: () => getSpeechState(),
   getGame: () => null,
   getStreamState: () => getLastPublished(),
   publishStreamState: (data: unknown) => { setLastPublished(data); },
-  postComments: (_: unknown) => { },
+  postComments: (comments: unknown) => {
+    if (!forwardComments) return;
+    if (Array.isArray(comments)) {
+      forwardComments(comments);
+      return;
+    }
+    // Defensive: treat non-array payloads as a single-element batch (should not happen via PUT).
+    forwardComments([comments]);
+  },
 });
 
 /**

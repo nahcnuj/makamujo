@@ -48,15 +48,6 @@ export class SpeechQueue {
     this.#ttsErrorHandlers = this.#ttsErrorHandlers.filter((h) => h !== cb);
   }
 
-  get ttsErrorHandlers(): ReadonlyArray<(text: string, err: unknown) => void> {
-    return this.#ttsErrorHandlers;
-  }
-
-  /** Replace handlers list (used when filtering temporary prompt handlers). */
-  setTtsErrorHandlers(handlers: Array<(text: string, err: unknown) => void>): void {
-    this.#ttsErrorHandlers = handlers;
-  }
-
   enqueue(event: SpeechEvent): Promise<void> {
     this.#speechPromise = this.#speechPromise.then(async () => {
       const tasks: Array<Promise<void>> = [

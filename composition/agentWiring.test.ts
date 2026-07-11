@@ -17,6 +17,31 @@ describe("createFallbackAgent", () => {
     agent.publishStreamState({ niconama: { type: "live" } });
     expect(agent.getStreamState()).toEqual({ niconama: { type: "live" } });
   });
+
+  it("forwards postComments to the streamer when forwardComments is provided", () => {
+    const received: unknown[][] = [];
+    const agent = createFallbackAgent(
+      () => undefined,
+      () => {},
+      () => ({ speech: "", silent: false }),
+      () => {},
+      (comments) => { received.push(comments); },
+    );
+
+    const batch = [{ data: { comment: "hi", no: 1 } }];
+    agent.postComments(batch);
+    expect(received).toEqual([batch]);
+  });
+
+  it("no-ops postComments when forwardComments is omitted", () => {
+    const agent = createFallbackAgent(
+      () => undefined,
+      () => {},
+      () => ({ speech: "", silent: false }),
+      () => {},
+    );
+    expect(() => agent.postComments([{ data: {} }])).not.toThrow();
+  });
 });
 
 describe("loadCreateAgentApi", () => {

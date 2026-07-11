@@ -4,6 +4,7 @@ import {
   allocateFreePort,
   killProcessTree,
   makamujoIpcPath,
+  resolveBunExecutable,
   waitForPortRelease,
   waitForSpawnedReady,
   type SpawnedServer,
@@ -18,7 +19,9 @@ beforeAll(async () => {
   const upstreamPort = await allocateFreePort();
   mainServerPort = await allocateFreePort();
 
-  upstream = spawn("bun", ["tests/helpers/mock-upstream-server.ts"], {
+  const bunBin = resolveBunExecutable();
+
+  upstream = spawn(bunBin, ["tests/helpers/mock-upstream-server.ts"], {
     env: { ...process.env, PORT: String(upstreamPort) },
     stdio: ["ignore", "pipe", "pipe"],
   }) as unknown as SpawnedServer;
@@ -30,7 +33,7 @@ beforeAll(async () => {
   });
 
   server = spawn(
-    process.platform === "win32" ? "bun.exe" : "bun",
+    bunBin,
     ["index.ts", "--port", String(mainServerPort)],
     {
       env: {

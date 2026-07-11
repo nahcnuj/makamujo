@@ -187,6 +187,8 @@ let agent: any = createFallbackAgent(
   (data) => { lastPublishedStreamState = data; },
   () => currentSpeechState,
   (state) => { currentSpeechState = state; },
+  // Keep comments flowing while AGT createAgentApi is loading (or if it fails).
+  (comments) => { streamer.listen(comments as Parameters<typeof streamer.listen>[0]); },
 );
 
 // Attempt to dynamically load the external agent API. This avoids module

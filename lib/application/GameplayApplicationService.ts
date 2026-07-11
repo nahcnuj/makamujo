@@ -45,12 +45,16 @@ export class GameplayApplicationService {
 
         if (state.name === "idle") {
           if (state.state) {
+            const previousState = this.#session.playing?.state ?? {};
+            const nextState = (state.state !== null && typeof state.state === "object")
+              ? state.state as Record<string, unknown>
+              : {};
             this.#session.playing = {
               name,
               state: {
-                ...this.#session.playing?.state ?? {},
-                ...state.state,
-              } as any,
+                ...previousState,
+                ...nextState,
+              },
             };
             this.#notifyGameStateChange();
           }
