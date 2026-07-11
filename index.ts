@@ -28,6 +28,7 @@ import {
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
 import { scheduleNiconamaCommentIngress } from "./composition/niconamaCommentIngress";
 import { startConsoleServer } from "./console/index";
+import { AllowedIP } from "./lib/allowedIP";
 import {
   assemblePublishedPayload,
   attachReplyTargetToPublished,
@@ -661,6 +662,11 @@ try {
     broadcastingPort: process.env.BROADCASTING_PORT ?? server.port,
   });
   console.log(`🚀 Console running at ${consoleServer.url}`);
+  // Root POST / no longer seeds the allowlist (returns 404). In production,
+  // lock console access to loopback until a real operator IP model exists.
+  if (process.env.NODE_ENV === "production") {
+    AllowedIP.set({ family: "IPv4", address: "127.0.0.1" });
+  }
 } catch (err) {
   const consoleStartupError =
     err instanceof Error ? (err.stack ?? err.message) : String(err);
