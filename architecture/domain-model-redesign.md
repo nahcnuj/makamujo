@@ -6,7 +6,7 @@
 | **Author** | (placeholder) |
 | **Date** | 2026-07-11 |
 | **Status** | Approved（Rev.3）; Phase A/B 実装済; Phase C AGT `./agent` 対応 |
-| **概要** | [overview.md](./overview.md)。本文書は **Broadcasting BC** の詳細 |
+| **概要** | [overview.md](./overview.md)。本文書は **配信エージェント** の詳細 |
 | **Runtime** | Bun 1.3.x, TypeScript strict |
 | **Key dependency** | `automated-gameplay-transmitter` ^0.6.4 |
 | **Constraint** | **観測可能な振る舞いを意図的に変更しない**（behavior-preserving refactor + characterization / regression tests） |
@@ -16,8 +16,8 @@
 | パス | 内容 |
 |------|------|
 | `architecture/README.md` | 索引 |
-| `architecture/overview.md` | システム概要（BC・用語・状態所有） |
-| `architecture/domain-model-redesign.md` | 本設計書（Broadcasting BC） |
+| `architecture/overview.md` | 全体の分かれ方・用語・状態の持ち方 |
+| `architecture/domain-model-redesign.md` | 本設計書（配信エージェント） |
 
 > **配置方針**: 既存 `docs/` は静的サイト資産（`index.html`, OGP, favicon 等）専用。エンジニアリング文書は **`architecture/`** に置く（`docs/*.md` と混在させない）。
 
@@ -32,7 +32,7 @@
 1. **エージェント内部** `AgentInternalStreamState` — `onAir` が書く `{ type: 'live', meta?, replyTargetComment? }`（offline は `undefined`）
 2. **公開** `PublishedStreamPayload` — SSE/WS/`GET /api/meta` が返す `{ niconama, canSpeak, … }`（レガシー正規化経由）
 
-本設計は **ミノ駆動** のもとユビキタス言語と境界づけられたコンテキストを固定し、**振る舞いを保ったまま変更容易性を上げる**。実装可能性の核は **単一の可変 `AgentSession` 集約** にランタイム状態を集約し、サービスはそれに対する操作として定義することである。外部エントリはストラングラー / ファサードで安定させる。
+本設計は、**用語の意味と機能の境界を先に固定し**、振る舞いを保ったまま直しやすくすることを目的とする。実装の核は **単一の可変 `AgentSession`** にランタイム状態をまとめ、サービスはそれを読み書きする形にすることである。外から見える入口（`MakaMujo` など）は互換を保つ。
 
 **実装フェーズ**: Phase A（契約文書・characterization・純関数・Publication）でリスクの大半を下げ、Phase B（サービス/ファサード）は Phase A の学びを条件に進める。Phase C（任意 AGT）は独立。
 
@@ -94,8 +94,8 @@ flowchart TB
 
 ### Goals
 
-1. ユビキタス言語と BC を文書化し、**`AgentSession` による状態所有**を固定する。
-2. **CommentPipeline / silence 決定表 / Publication 二重モデル**をゴールデン契約にする。
+1. 用語と機能の分かれ方を文書化し、**`AgentSession` による状態所有**を固定する。
+2. **CommentPipeline / silence 決定表 / Publication 二重モデル**を基準となる契約にする。
 3. 純関数ポリシー抽出と Publication アセンブラ集約で変更容易性を上げる（Phase A）。
 4. 必要ならアプリケーションサービスへ段階分割（Phase B）。ファサード public API は維持。
 5. Characterization を構造移動前または同時に整備。

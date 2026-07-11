@@ -2,227 +2,231 @@
 
 | 項目 | 内容 |
 |------|------|
-| **方式** | ミノ駆動（ユビキタス言語・境界づけられたコンテキストを先に固定） |
-| **制約** | 振る舞い変更は観測可能な契約（ゴールデンテスト）を先に更新する |
+| **方針** | 用語の意味と、機能の境界を先に決めてから実装する |
+| **制約** | 動きを変えるときは、先に基準テストを直す |
 
-詳細:
+詳細な設計:
 
-- Broadcasting BC → [domain-model-redesign.md](./domain-model-redesign.md)
-- Console BC → [console-domain-model.md](./console-domain-model.md)
+- 配信エージェント → [domain-model-redesign.md](./domain-model-redesign.md)
+- 管理コンソール → [console-domain-model.md](./console-domain-model.md)
 
-エンジニアリング文書は `architecture/` のみ。`docs/` はランディング静的資産専用。
-
----
-
-## 1. プロダクト
-
-**馬可無序（MAKA Mujo）** は、AI がゲームをプレイし、マルコフ連鎖によるトークとコメント反応を伴ってライブ配信する AI VTuber のアプリケーション層である。
-
-| 目的 | 説明 |
-|------|------|
-| 自律プレイ | ゲームブラウザを IPC 経由で操作する |
-| トーク | トークモデル生成 → TTS → 視聴者へ提示 |
-| コメント反応 | 投入コメントの学習と返信トピック |
-| 状態の公開 | 沈黙可否・メタ・履歴を画面とコンソールへ投影 |
-| 運用 | 起動・停止・認証・再起動が可能であること |
-
-変更容易性は「テストが緑」だけでなく、**境界をまたがずに意図を変えられるか**、**用語が実装と一致しているか** で測る。
+設計メモは `architecture/` に置く。`docs/` はサイト用の静的ファイル専用。
 
 ---
 
-## 2. コンテキスト地図
+## 1. このプロダクトは何か
+
+**馬可無序（MAKA Mujo）** は、AI がゲームを遊び、トークとコメント反応付きでライブ配信する AI VTuber 用のアプリである。
+
+| やること | 内容 |
+|----------|------|
+| ゲームを遊ぶ | ブラウザを自動操作する |
+| 話す | 文章を作って読み上げる |
+| コメントに反応する | 外から来たコメントを学習し、話題にする |
+| 状態を見せる | 配信中かどうか・履歴などを画面と管理画面に出す |
+| 運用できる | 起動・停止・ログイン・再起動ができる |
+
+コードを直すときの判断は、「テストが通るか」だけでなく、**別の機能の境界をまたいでいないか**、**同じ言葉が同じ意味で使われているか** を見る。
+
+---
+
+## 2. 機能の分かれ方
+
+アプリを大きく次のまとまりに分ける。
 
 ```mermaid
 flowchart LR
-  subgraph Upstream["外部"]
-    CommentIngress["コメント投入<br/>HTTP"]
-    GameBrowser["ゲームブラウザ"]
-    HumanOp["運用者"]
+  subgraph External["外の世界"]
+    Comments["コメントを送るソフト"]
+    Game["ゲーム用ブラウザ"]
+    Operator["運用する人"]
   end
 
-  subgraph Broadcasting["Broadcasting BC"]
-    Session["AgentSession"]
-    CommentPipe["CommentPipeline"]
-    Silence["沈黙ポリシー"]
-    Publish["Publication"]
+  subgraph Agent["配信エージェント"]
+    Session["内部の状態"]
+    CommentsLogic["コメント処理"]
+    Silence["黙るか話すか"]
+    Publish["外に出す状態"]
   end
 
-  subgraph Console["Console BC"]
-    Access["Access"]
-    ViewPlan["Status 表示計画"]
-    Proxy["上流プロキシ"]
+  subgraph Admin["管理コンソール"]
+    Login["誰が入ってよいか"]
+    Display["画面に何を出すか"]
+    Bridge["配信側とのつなぎ"]
   end
 
-  subgraph Delivery["Delivery"]
-    Screen["配信画面"]
-    ConsoleUI["コンソール UI"]
+  subgraph Screens["見る側"]
+    LiveUI["配信画面"]
+    AdminUI["管理画面の UI"]
   end
 
-  CommentIngress --> CommentPipe
-  GameBrowser <--> Broadcasting
-  CommentPipe --> Session
+  Comments --> CommentsLogic
+  Game <--> Agent
+  CommentsLogic --> Session
   Silence --> Session
   Session --> Publish
-  Publish --> Screen
-  Publish --> Proxy
-  Proxy --> ViewPlan
-  ViewPlan --> ConsoleUI
-  HumanOp --> Access
-  Access --> Proxy
+  Publish --> LiveUI
+  Publish --> Bridge
+  Bridge --> Display
+  Display --> AdminUI
+  Operator --> Login
+  Login --> Bridge
 ```
 
-| コンテキスト | 責務 | 持たないもの |
-|--------------|------|--------------|
-| **Broadcasting** | コメント処理、沈黙、発話キュー、内部状態、公開ペイロードの組み立て | コンソールの IP/Basic、HTML レイアウト |
-| **Console** | アクセス制御、表示計画、上流 SSE/HTTP の橋渡し | CommentPipeline や沈黙の規則そのもの |
-| **Delivery** | 投影の描画 | ドメイン規則の発明 |
-| **ゲームブラウザ** | 画面操作と State 供給（別プロセス） | トークモデル・沈黙 |
+| まとまり | やること | やらないこと |
+|----------|----------|--------------|
+| **配信エージェント** | コメント処理、黙る／話す、発話、内部状態、外に出すデータの組み立て | 管理画面のログインや HTML レイアウト |
+| **管理コンソール** | 誰が入るか、何をどう並べて見せるか、配信側 API への中継 | コメント処理や「黙るか」の規則そのもの |
+| **画面** | 受け取った状態の表示 | ビジネス規則の発明 |
+| **ゲーム用ブラウザ** | 画面操作と状態の供給（別プロセス） | トークや沈黙の判断 |
 
-1. Console は Broadcasting の **公開投影だけ** を読む。`AgentSession` は共有しない。
-2. コメント・沈黙・返信トピックは Broadcasting の用語で決める。
-3. ゲーム IPC は `lib/Browser` / AGT 境界に閉じる。
+約束:
 
----
-
-## 3. ユビキタス言語
-
-| 日本語 | 識別子の目安 | 定義 |
-|--------|--------------|------|
-| 番組 / 配信 | Program / Stream / Live | 生放送の継続単位 |
-| コメント | Comment / AgentComment | 視聴者またはシステムの発話単位。外部から投入される |
-| コメント投入 | Comment ingress | HTTP 等でプロセスへコメント列を渡すこと |
-| CommentPipeline | CommentPipeline | 数え・学習・返信対象決定の一連の規則 |
-| 沈黙 / 発話可能 | Silence / speechable / canSpeak | 今しゃべってよいか |
-| 発話 | Speech | TTS に載せる生成結果 |
-| 内部配信状態 | Agent internal stream state | エージェントが持つ live/offline と meta |
-| 公開ペイロード | PublishedStreamPayload | SSE/WS/`/api/meta` が返す投影 |
-| 返信先コメント | replyTargetComment | 発話が反応しているコメント |
-| AgentSession | AgentSession | Broadcasting のランタイム状態の所有点 |
-| 外側サーバ | Outer console | :443 TLS。production で IP + Basic |
-| ループバックコンソール | Loopback console | 127.0.0.1 上のコンソール本体 |
-| 表示計画 | Status plan | 公開ペイロードから見せる行を決める純関数結果 |
-
-用語変更は識別子・テスト・UI と同時に揃える。
+1. 管理コンソールは、配信エージェントの **外向けのデータだけ** を見る。内部の生の状態オブジェクトは共有しない。
+2. コメントの意味・黙るか・返信の相手は、配信エージェント側の言葉で決める。
+3. ゲームとのやりとりはブラウザまわりのコードに閉じる。
 
 ---
 
-## 4. 状態所有
+## 3. 用語
+
+| 日本語 | コード上の名前の目安 | 意味 |
+|--------|----------------------|------|
+| 番組 / 配信 | Program / Stream / Live | いまの生放送 |
+| コメント | Comment | 視聴者やシステムの一言。外からアプリに入れる |
+| コメント投入 | — | HTTP などでコメントの列をプロセスに渡すこと |
+| コメント処理の流れ | CommentPipeline | 数え方・学習・返信相手の決め方 |
+| 沈黙 / 発話可能 | silence / speechable / canSpeak | いま話してよいか |
+| 発話 | Speech | 読み上げる文。履歴に残りうる |
+| 内部の配信状態 | （エージェント内部） | エージェントが持つ live / 終了とメタ情報 |
+| 公開する配信状態 | PublishedStreamPayload | 画面や API が返す形（`niconama` など） |
+| 返信先コメント | replyTargetComment | いまの発話が反応しているコメント |
+| 内部状態の置き場 | AgentSession | 配信エージェントが状態をまとめて持つ場所 |
+| 外側サーバ | — | インターネット向け HTTPS（本番では IP 制限とパスワード） |
+| 内側のコンソール | — | 127.0.0.1 だけで動く管理画面本体 |
+| 表示の組み立て | Status plan | 公開データから「何をどの順で出すか」を決める処理 |
+
+言葉の意味を変えるときは、コード名・テスト・画面文言も一緒に直す。
+
+---
+
+## 4. 状態は誰が持つか
 
 ```text
-commands                         project
-Comment / onAir  →  AgentSession  →  PublishedStreamPayload
-                    （書き込み）         （読みモデル）
-                                            ↓
-                                   配信画面 / コンソール表示計画
+操作（コメント投入・onAir など）
+        ↓ 書き込み
+   内部状態（AgentSession）
+        ↓ 組み立てて公開
+   公開する配信状態（API / SSE / WebSocket）
+        ↓
+   配信画面・管理画面の表示
 ```
 
-| 対象 | 所有者 |
-|------|--------|
-| コメント番号・最終コメント時刻・prompt フラグ等 | `AgentSession` |
-| 沈黙判定の入力 | `AgentSession` + `SilencePolicy`（純関数） |
-| 発話キュー | SpeechQueue + TTS ポート |
-| 公開 JSON | Publication アセンブラが都度投影 |
-| コンソールの行 | Console の plan（公開 JSON が入力） |
-| Basic auth パスワード | 運用設定（env / ファイル）。ドメイン規則ではない |
+| もの | 誰が持つか |
+|------|------------|
+| コメント番号・最終コメント時刻など | 配信エージェントの内部状態 |
+| 黙るかの判断材料 | 同上 + 純粋な判定関数 |
+| 読み上げ待ち | 発話キューと音声出力 |
+| API に載る JSON | その都度組み立てる（内部状態の丸写しではない） |
+| 管理画面の各行 | 公開 JSON を入力にした表示用の組み立て |
+| 管理画面パスワード | 設定（環境変数やファイル）。配信ロジックではない |
 
-内部 stream と公開 `niconama` 形は意図的に異なる。正規化は publication 境界に閉じる。
-
----
-
-## 5. 配置
-
-フォルダは BC を表現する手段であり、BC の定義そのものではない。
-
-| 関心 | 置き場 | 制約 |
-|------|--------|------|
-| 純規則 | `lib/domain/**` | 副作用なし |
-| Session 操作 | `lib/application/**` | I/O はポートで受ける |
-| AgentLike 入口 | `lib/Agent` | ファサードを不用意に広げない |
-| 配線 | `composition/**`, `index.ts` | ドメイン規則を書かない |
-| コンソール host | `console/index.ts` | access を re-export しない |
-| コンソール UI | `console/src/**` | `tests/` を import しない |
-| 配信画面 | `src/**` | 公開投影の消費 |
-| HTTP | `routes/**` | 薄いアダプタ |
-
-Composition / host に CommentPipeline 分岐や沈黙の意味、表示行順の発明を書かない。
+内部用の形と、外に出す形はわざと違う。変換は「公開用に組み立てる」処理に閉じる。
 
 ---
 
-## 6. ランタイム
+## 5. コードの置き場所
+
+| 関心 | 置き場所 | 注意 |
+|------|----------|------|
+| 副作用のない規則 | `lib/domain/**` | ファイル I/O やネットをしない |
+| 内部状態をいじる処理 | `lib/application/**` | 外とのやりとりは引数で渡す |
+| 外から見たエージェント API | `lib/Agent` | 入口をむやみに増やさない |
+| プロセスの配線 | `composition/**`, `index.ts` | ここに規則を書かない |
+| 管理コンソールの起動・認証 | `console/index.ts` | ドメイン関数をここから再公開しない |
+| 管理画面 UI | `console/src/**` | テスト専用フォルダを import しない |
+| 配信画面 UI | `src/**` | 公開された状態を表示する |
+| HTTP の入口 | `routes/**` | 薄く保つ |
+
+`index.ts` や composition に、コメント処理の分岐や「黙るか」の意味、管理画面の行順の発明を書かない。
+
+---
+
+## 6. 動かし方の見取り図
 
 ```mermaid
 flowchart TB
-  HTTP["HTTP コメント投入"] --> Root["index.ts + composition"]
+  HTTP["HTTP でコメント投入"] --> Root["index.ts など"]
   Root --> Facade["MakaMujo"]
   Facade --> App["application"]
   App --> Dom["domain"]
-  App --> Pub["assemblePublishedPayload"]
-  Pub --> Out["SSE / WS /api/meta"]
-  Outer["Outer TLS + Access"] --> Loop["Loopback Hono"]
+  App --> Pub["公開状態の組み立て"]
+  Pub --> Out["SSE / WebSocket /api/meta"]
+  Outer["外側 HTTPS + 認証"] --> Loop["内側の管理画面"]
   Loop --> Out
-  Loop --> Plan["status plan"]
+  Loop --> Plan["表示の組み立て"]
 ```
 
-- **コメントの標準境界**: プロセス外からの HTTP 投入。
-- プロセス内ニコ生 WebSocket / Playwright クライアントは必須にしない。入れるなら Comment ingress のアダプタとして切り、Broadcasting 用語に翻訳してから Session へ。
+- **コメントの標準の入れ方**: 外のソフトが HTTP で送る。
+- アプリ本体にニコ生 WebSocket クライアントを必ず入れる必要はない。入れるなら「コメントを入れるためのつなぎ」として切り、配信エージェントの用語に直してから内部状態へ渡す。
 
-Console の運用契約（詳細は console 文書）:
+管理コンソール（本番）:
 
-| 項目 | 契約 |
+| 項目 | 内容 |
 |------|------|
-| production | AllowedIP かつ Basic（user `admin`） |
-| 秘密 | `CONSOLE_BASIC_AUTH_PASSWORD` 優先。なければ永続ファイル |
-| 上流障害 | SSE 非 2xx を unhandled にしない |
+| 入場 | 許可した IP と Basic 認証（ユーザー `admin`） |
+| パスワード | 環境変数を優先。なければファイルに保存して再利用 |
+| 上流が落ちたとき | エラーでプロセスを落とさない |
 
 ---
 
-## 7. ゴールデン
+## 7. 壊してはいけないテスト
 
-| 領域 | テスト |
-|------|--------|
-| CommentPipeline / speechable / 公開合成 | `lib/Agent/index.test.ts`、`lib/domain/**`、publication |
-| Console access / plan / SSE | `lib/domain/console/*.test.ts` |
-| Console host / proxy | `tests/integration/console/**`, `console-proxy*.ts` |
-| ブラウザ起動解決 | `lib/Browser/*` |
+| 領域 | テストの場所 |
+|------|----------------|
+| コメント処理・発話可能・公開の組み立て | `lib/Agent/index.test.ts`、`lib/domain/**` など |
+| コンソールの入場・表示・SSE の切り出し | `lib/domain/console/*.test.ts` |
+| コンソール本体・中継 | `tests/integration/console/**` など |
+| ブラウザの起動パス | `lib/Browser/*` |
 
-規則やペイロードを変えるときは、該当 BC 文書とゴールデンを先に直す。
-
----
-
-## 8. 非目標
-
-| 非目標 | 理由 |
-|--------|------|
-| プロセス内ニコ生クライアント必須化 | ingress はアダプタに切り、Broadcasting を肥大化させない |
-| コンソールが Session を直接共有 | 境界破壊 |
-| God object への巻き戻し | 変更容易性の否定 |
-| 沈黙閾値・プロンプトの暗黙変更 | 仕様変更でありリファクタの名で行わない |
+規則や API の形を変えるときは、設計メモとこれらのテストを先に直す。
 
 ---
 
-## 9. 運用アダプタ
+## 8. やらないこと
 
-モデルの外側。手順の詳細は `etc/systemd/README.md`。
+| やらないこと | 理由 |
+|--------------|------|
+| ニコ生クライアントを必須にする | コメント投入は外からで足りる。本体を膨らませない |
+| 管理コンソールが内部状態を直接いじる | 境界が壊れる |
+| 全部を一つの巨大クラスに戻す | 直しにくくなる |
+| 黙る秒数や定型文を、リファクタのついでに変える | 仕様変更は別件 |
+
+---
+
+## 9. 起動・デプロイ（短い）
 
 | 項目 | 内容 |
 |------|------|
 | 開発 | `bin/start` / `bin/stop` |
-| 本番 | systemd + `make install`（`@PREFIX@` / `@BUN_BIN@` を置換） |
-| Chromium | 既定 bundled。lock は Singleton* のみ |
-| 確認順 | `typecheck` → `lint` → `test` → `test:integration` |
+| 本番 | systemd と `make install`（パスは install 時に埋める） |
+| ブラウザ | 原則 Playwright 同梱版。ロックファイル掃除は Chromium の Singleton* のみ |
+| 確認の順 | `typecheck` → `lint` → `test` → `test:integration` |
+
+手順の詳細は `etc/systemd/README.md`。
 
 ---
 
-## 10. 変更手順
+## 10. 変更の進め方
 
-1. 言葉（ユビキタス言語）  
-2. 境界（どの BC か）  
-3. 所有（誰が書くか）  
-4. 契約（ゴールデン）  
-5. 配置（domain → application → host）  
-6. 検証  
+1. 用語は合っているか  
+2. どのまとまり（配信 / コンソール）の話か  
+3. 状態を書くのは誰か  
+4. 基準テストを先に直すか足すか  
+5. domain → application → 配線の順で厚くする  
+6. 型チェックとテスト  
 
-入口: [`AGENTS.md`](../AGENTS.md) → 本ファイル → 対象 BC 文書。
+入口: [`AGENTS.md`](../AGENTS.md) → 本ファイル → 配信エージェントまたは管理コンソールの詳細設計。
 
 ---
 

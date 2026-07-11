@@ -1,80 +1,79 @@
-# 管理コンソール境界: ドメインモデルと変更容易性
+# 管理コンソールの設計
 
 | 項目 | 内容 |
 |------|------|
-| **Status** | Implemented (initial slice) |
-| **概要** | [overview.md](./overview.md)。本文書は **Console BC** の詳細 |
-| **Constraint** | 観測可能な振る舞いを変えない |
+| **状態** | 実装済み（初期範囲） |
+| **概要** | [overview.md](./overview.md)。本文書は **管理コンソール** の詳細 |
+| **制約** | 観測できる動きを変えない（変えるならテストを先に直す） |
 
-> `docs/` は静的サイト資産専用。本ドキュメントは `architecture/` に置く。
+> `docs/` はサイト用。設計メモは `architecture/` に置く。
 
 ## 背景
 
-配信エージェント本体（`MakaMujo` / Publication）は #463 でドメイン分割済み。  
-**管理コンソール**は当時の対象外だったが、次の複雑さが残る。
+配信エージェント本体は分割済み。管理コンソール側には次が残っていた。
 
-- 外側 TLS + IP 許可リスト + ループバックプロキシ（`console/index.ts`）
-- 配信公開ペイロードの **表示計画**（`createAgentStatusRows` / `agentStatusUtils`）
-- 放送 API への SSE/HTTP プロキシ（`lib/console-proxy.ts`）
+- 外側の HTTPS + IP 制限 + 内側への中継（`console/index.ts`）
+- 配信状態の **表示の組み立て**（`createAgentStatusRows` など）
+- 配信 API への SSE / HTTP 中継（`lib/console-proxy.ts`）
 
-## 境界づけられたコンテキスト
+## 配信エージェントとの関係
 
 ```mermaid
 flowchart LR
-  subgraph Broadcasting["Broadcasting BC（#463 済）"]
-    Pub["PublishedStreamPayload"]
+  subgraph Agent["配信エージェント"]
+    Pub["公開する配信状態"]
   end
-  subgraph Console["Console BC"]
-    Access["Access / Redirect"]
-    Proxy["Loopback Proxy"]
-    View["Agent Status View Plan"]
+  subgraph Admin["管理コンソール"]
+    Access["入場・認証"]
+    Proxy["中継"]
+    View["表示の組み立て"]
   end
   Pub -->|GET/SSE /api/meta| Proxy
   Proxy --> View
   Access --> Proxy
 ```
 
-| BC | 責務 | 配置 |
-|----|------|------|
-| Console Access | 拒否時リダイレクト、IP 制限フラグ、hop-by-hop ヘッダ除去、Basic auth 純関数 | `lib/domain/console/access.ts` |
-| Console Basic auth store | env / ファイル永続化 / 初回生成（ホスト I/O） | `lib/consoleBasicAuthPassword.ts` |
-| Agent Status Presentation | 行の有無・表示文言（純関数） | `lib/domain/console/agentStatusPlan.ts` |
-| Console UI | JSX / レイアウト | `console/src/AgentStatus/*` |
-| Console Host | TLS・プロキシ・WebSocket ブリッジ | `console/index.ts` |
+| 部品 | やること | 置き場所 |
+|------|----------|----------|
+| 入場・リダイレクト・Basic 認証の規則 | 拒否時の飛ばし先、本番だけの IP 制限など | `lib/domain/console/access.ts` |
+| パスワードの読み書き | 環境変数 / ファイル / 初回生成 | `lib/consoleBasicAuthPassword.ts` |
+| 表示の組み立て | 行の有無・文言（副作用なし） | `lib/domain/console/agentStatusPlan.ts` |
+| 画面 UI | JSX・レイアウト | `console/src/AgentStatus/*` |
+| 起動と中継 | TLS・プロキシ・WebSocket | `console/index.ts` |
 
-## ユビキタス言語（Console）
+## 用語（管理コンソール）
 
 | 用語 | 意味 |
 |------|------|
-| 外側サーバ | :443 TLS、AllowedIP 検査後にループバックへ転送 |
-| ループバックコンソール | 127.0.0.1 の Hono ルート本体 |
-| 配信指標行 | niconama meta + commentCount の表示ブロック |
-| 発話不可インジケータ | canSpeak=false 時の「（コメントしてね）」 |
-| 表示可能履歴 | speech 正規化可能かつ nGram≥1 または nodes あり |
+| 外側サーバ | ポート 443 の HTTPS。許可 IP のあと内側へ転送 |
+| 内側のコンソール | 127.0.0.1 だけで動く管理画面本体 |
+| 配信指標の行 | タイトル・来場者など meta とコメント数の表示 |
+| 発話不可の表示 | canSpeak=false のときの「（コメントしてね）」など |
+| 表示できる履歴 | 発話文として扱え、nGram または nodes があるもの |
 
-## 契約（振る舞い維持）
+## 守る動き
 
-1. **Access**: `/console/*` 拒否 → 303 watch URL、それ以外 → 308 `/console/`。IP 制限は production のみ。
-2. **Loopback headers**: Connection 列挙トークンを含む hop-by-hop と Host/Origin/Referer を削除。
-3. **Status rows order**: metrics → game → n-gram → history|reply → speech（`planAgentStatusRows` と `createAgentStatusRows` が同じ順序）。
+1. **入場**: `/console/*` を拒否 → 303 で視聴 URL。それ以外 → 308 で `/console/`。IP 制限は本番のみ。
+2. **内側へ渡すヘッダ**: hop-by-hop と Host / Origin / Referer を落とす。
+3. **行の順**: 指標 → ゲーム → n-gram → 履歴または返信 → 発話（`planAgentStatusRows` と UI が同じ順）。
 
-## 実装マップ
-
-| 領域 | パス |
-|------|------|
-| Access pure | `lib/domain/console/access.ts` |
-| Status plan pure | `lib/domain/console/agentStatusPlan.ts` |
-| Host (wiring only) | `console/index.ts` は `startConsoleServer` のみ公開。access 純関数は re-export しない |
-| UI re-export formatters | `console/src/AgentStatus/agentStatusUtils.tsx`（表示用の既存 import 互換） |
-| 公開ペイロード型 | `lib/domain/publication/types.ts` ↔ `console/.../types.ts`（文書で整合） |
-
-## 追加スライス（実装済）
+## コード対応
 
 | 領域 | パス |
 |------|------|
-| SSE 境界 / 完全フレーム抽出 | `lib/domain/console/sseFrames.ts` |
-| 外側 WS ブリッジ | `composition/consoleOuterWebSocket.ts` |
-| プロキシ本体 | `lib/console-proxy.ts`（純関数を利用） |
+| 入場の規則 | `lib/domain/console/access.ts` |
+| 表示の組み立て | `lib/domain/console/agentStatusPlan.ts` |
+| 起動 | `console/index.ts` は `startConsoleServer` だけ公開。access をここから再 export しない |
+| UI 用の整形の再 export | `console/src/AgentStatus/agentStatusUtils.tsx` |
+| 公開状態の型 | `lib/domain/publication/types.ts` と console 側 types を揃える |
+
+## 追加で入れたもの
+
+| 領域 | パス |
+|------|------|
+| SSE の区切り・完全なフレーム | `lib/domain/console/sseFrames.ts` |
+| 外側 WebSocket の橋 | `composition/consoleOuterWebSocket.ts` |
+| 中継本体 | `lib/console-proxy.ts` |
 
 ## 今後（任意）
 
