@@ -177,7 +177,8 @@ flowchart TB
 | **副線** | HTTP `POST`/`PUT /` でコメント列を投入（ツール・テスト・外部ソフト用）。main では 404 だったが、こちらは残す。 |
 
 - 無効化: `NICONAMA_DISABLE=1`（副線 HTTP のみ）
-- 設定: `NICONAMA_WATCH_URL`、`NICONAMA_USER_DATA_DIR`、`CHROMIUM_EXECUTABLE_PATH`（任意）、`NICONAMA_START_MAX_RETRIES` など
+- 起動しない（致命扱いにしない）: `NICONAMA_START_MAX_RETRIES=0`（CI 用）
+- 設定: `NICONAMA_WATCH_URL`、`NICONAMA_USER_DATA_DIR`、`CHROMIUM_EXECUTABLE_PATH`（任意）、`NICONAMA_START_DELAY_MS` など
 
 管理コンソール（本番）:
 

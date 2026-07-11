@@ -27,6 +27,10 @@ export type NiconamaCommentIngressDeps = {
   onFatalStartFailure?: () => void;
 };
 
+export type NiconamaCommentIngressHandle = {
+  stop: () => Promise<void>;
+};
+
 const getCommentCountFromPayload = (obj: unknown): number => {
   if (typeof obj !== "object" || obj === null) return 0;
   const rec = obj as Record<string, unknown>;
@@ -41,7 +45,7 @@ const getCommentCountFromPayload = (obj: unknown): number => {
   return typeof comments === "number" ? comments : 0;
 };
 
-const buildClientOptions = () => {
+export const buildNiconamaClientOptions = () => {
   const watchUrl =
     process.env.NICONAMA_WATCH_URL ?? process.env.NICONAMA_TEST_WATCH_URL;
   const userDataDir =
@@ -63,15 +67,66 @@ const buildClientOptions = () => {
 };
 
 /**
+ * Update last-published mirror after comments (commentCount / recentComments).
+ * Pure enough to unit-test without starting the live client.
+ */
+export const applyNiconamaCommentsToPublishedState = (
+  lastPublished: unknown,
+  currentPayload: unknown,
+  comments: unknown[],
+): Record<string, unknown> => {
+  const filteredComments = filterAgentCommentsWithText(
+    coerceToAgentComments(comments),
+  );
+  const currentCount = getCommentCountFromPayload(currentPayload);
+  const numberedCommentsCount = countNumberedAgentComments(filteredComments);
+  const newCount = currentCount + numberedCommentsCount;
+
+  const last: Record<string, unknown> =
+    lastPublished && typeof lastPublished === "object"
+      ? { ...(lastPublished as object) }
+      : {};
+  last.commentCount = newCount;
+
+  const existingRecent = Array.isArray(last.recentComments)
+    ? [...(last.recentComments as unknown[])]
+    : [];
+  last.recentComments = [...existingRecent, ...filteredComments];
+
+  if (!last.niconama || typeof last.niconama !== "object") {
+    last.niconama = { meta: { total: { comments: newCount } } };
+  } else {
+    const nico = { ...(last.niconama as object) } as Record<string, unknown>;
+    const meta =
+      typeof nico.meta === "object" && nico.meta !== null
+        ? { ...(nico.meta as object) }
+        : {};
+    const metaRec = meta as Record<string, unknown>;
+    const total =
+      typeof metaRec.total === "object" && metaRec.total !== null
+        ? { ...(metaRec.total as object) }
+        : {};
+    (total as Record<string, unknown>).comments = newCount;
+    metaRec.total = total;
+    nico.meta = metaRec;
+    last.niconama = nico;
+  }
+  return last;
+};
+
+/**
  * Start the NicoNico comment client after a short delay (with retries).
  * Returns a stop() for process shutdown.
  *
- * Disable automatic start with NICONAMA_DISABLE=1 (e.g. pure HTTP-only tests).
+ * - `NICONAMA_DISABLE=1` — do not start (HTTP ingress only).
+ * - `NICONAMA_START_MAX_RETRIES=0` — do not start, do not treat as fatal.
+ * - Default max retries 3; on exhaustion calls onFatalStartFailure or exit(1).
  */
 export function scheduleNiconamaCommentIngress(
   deps: NiconamaCommentIngressDeps,
-): { stop: () => Promise<void> } {
+): NiconamaCommentIngressHandle {
   let client: NiconamaCommentClient | null = null;
+  let cancelled = false;
   const debugComments = process.env.DEBUG_NICONAMA_COMMENTS === "1";
   const disabled =
     process.env.NICONAMA_DISABLE === "1" ||
@@ -88,6 +143,7 @@ export function scheduleNiconamaCommentIngress(
     }
 
     try {
+      // Match origin/main: post full coerced list (not only text-bearing).
       deps.postComments(parsed);
     } catch (err) {
       console.warn(
@@ -97,42 +153,12 @@ export function scheduleNiconamaCommentIngress(
     }
 
     try {
-      const payload = deps.getCurrentStreamPayload();
-      const currentCount = getCommentCountFromPayload(payload);
-      const numberedCommentsCount =
-        countNumberedAgentComments(filteredComments);
-      const newCount = currentCount + numberedCommentsCount;
-
-      let last = deps.getLastPublished();
-      last = last && typeof last === "object" ? { ...(last as object) } : {};
-      const lastRec = last as Record<string, unknown>;
-      lastRec.commentCount = newCount;
-
-      const existingRecent = Array.isArray(lastRec.recentComments)
-        ? [...(lastRec.recentComments as unknown[])]
-        : [];
-      lastRec.recentComments = [...existingRecent, ...filteredComments];
-
-      if (!lastRec.niconama || typeof lastRec.niconama !== "object") {
-        lastRec.niconama = { meta: { total: { comments: newCount } } };
-      } else {
-        const nico = lastRec.niconama as Record<string, unknown>;
-        const meta =
-          typeof nico.meta === "object" && nico.meta !== null
-            ? { ...(nico.meta as object) }
-            : {};
-        const metaRec = meta as Record<string, unknown>;
-        const total =
-          typeof metaRec.total === "object" && metaRec.total !== null
-            ? { ...(metaRec.total as object) }
-            : {};
-        (total as Record<string, unknown>).comments = newCount;
-        metaRec.total = total;
-        nico.meta = metaRec;
-        lastRec.niconama = nico;
-      }
-
-      deps.setLastPublished(last);
+      const next = applyNiconamaCommentsToPublishedState(
+        deps.getLastPublished(),
+        deps.getCurrentStreamPayload(),
+        parsed,
+      );
+      deps.setLastPublished(next);
     } catch (err) {
       console.warn(
         "[WARN] failed to update fallback commentCount:",
@@ -145,7 +171,7 @@ export function scheduleNiconamaCommentIngress(
   };
 
   const createClient = () =>
-    createNiconamaCommentClient(buildClientOptions(), {
+    createNiconamaCommentClient(buildNiconamaClientOptions(), {
       onMeta: deps.onMeta,
       onComments: handleComments,
       onError: (err) => {
@@ -161,20 +187,39 @@ export function scheduleNiconamaCommentIngress(
       "[INFO] niconama comment client disabled (NICONAMA_DISABLE=1); use HTTP comment ingress",
     );
     return {
-      stop: async () => {},
+      stop: async () => {
+        cancelled = true;
+      },
     };
   }
 
   const startDelayMs = Number(process.env.NICONAMA_START_DELAY_MS ?? "350");
   const maxRetries = Number(process.env.NICONAMA_START_MAX_RETRIES ?? "3");
 
+  // 0 or negative: skip automatic start without failing the process (CI / dry-run).
+  if (!Number.isFinite(maxRetries) || maxRetries < 1) {
+    console.info(
+      "[INFO] niconama comment client not started (NICONAMA_START_MAX_RETRIES < 1)",
+    );
+    return {
+      stop: async () => {
+        cancelled = true;
+      },
+    };
+  }
+
   setTimeout(async () => {
     let attempt = 0;
-    while (attempt < maxRetries) {
+    while (!cancelled && attempt < maxRetries) {
       attempt += 1;
       try {
         client = createClient();
         await client.start();
+        if (cancelled) {
+          await client.stop().catch(() => {});
+          client = null;
+          return;
+        }
         console.info("[INFO] niconamaCommentClient started successfully", {
           watchUrl:
             process.env.NICONAMA_WATCH_URL ??
@@ -183,6 +228,7 @@ export function scheduleNiconamaCommentIngress(
         });
         return;
       } catch (err) {
+        if (cancelled) return;
         console.warn(
           "[WARN] niconamaCommentClient start attempt failed:",
           err instanceof Error ? err.message : String(err),
@@ -207,6 +253,7 @@ export function scheduleNiconamaCommentIngress(
 
   return {
     stop: async () => {
+      cancelled = true;
       if (!client) return;
       try {
         await client.stop();
