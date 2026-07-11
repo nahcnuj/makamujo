@@ -29,6 +29,7 @@
 | composition helpers | `composition/` |
 | AgentSession + application services | `lib/application/`（Phase B） |
 | ファサード | `lib/Agent/index.ts` |
+| AGT `./agent` 優先 import | `composition/agentWiring.ts`（Phase C; AGT ≥ 0.6.5） |
 
 ## 関連
 

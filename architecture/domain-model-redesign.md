@@ -5,7 +5,7 @@
 | **Document** | Domain-model-driven redesign for changeability |
 | **Author** | (placeholder) |
 | **Date** | 2026-07-11 |
-| **Status** | Approved（設計レビュー合意 Rev.3 / PR-A0 配置） |
+| **Status** | Approved（Rev.3）; Phase A/B 実装済; Phase C AGT `./agent` 対応 |
 | **Branch / HEAD** | `legacy` @ `2a12820`（文書執筆時） |
 | **Runtime** | Bun 1.3.x, TypeScript strict |
 | **Key dependency** | `automated-gameplay-transmitter` ^0.6.4 |

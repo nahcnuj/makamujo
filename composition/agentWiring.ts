@@ -1,6 +1,7 @@
 /**
  * Dynamic AGT agent API wiring: fallback in-memory agent, then optional createAgentApi.
- * Preserves single `let agent` replacement race and initialization logs.
+ * Prefers `automated-gameplay-transmitter/agent` (side-effect free) when available,
+ * then falls back to the package root export.
  */
 
 import { writeFileSync } from "node:fs";
@@ -21,6 +22,39 @@ export type AgentLikeHost = {
   onAir: (state: unknown) => void;
   // Parameter type is contravariant; accept any array (AGT AgentComment[] at runtime).
   listen: (comments: any[]) => void;
+};
+
+type CreateAgentApiFn = (agent: AgentLikeHost, initialSpeech?: string) => unknown;
+
+type AgentApiModule = {
+  createAgentApi?: CreateAgentApiFn;
+};
+
+/**
+ * Load createAgentApi without pulling React UI or Node IPC when the
+ * `./agent` export is available (AGT ≥ 0.6.5).
+ */
+export const loadCreateAgentApi = async (): Promise<CreateAgentApiFn | undefined> => {
+  // Prefer side-effect-free entry (Phase C).
+  try {
+    const agentMod = await import("automated-gameplay-transmitter/agent") as AgentApiModule;
+    if (typeof agentMod.createAgentApi === "function") {
+      return agentMod.createAgentApi;
+    }
+  } catch {
+    // Package without ./agent export (pre-0.6.5) or unresolved path — fall through.
+  }
+
+  try {
+    const rootMod = await import("automated-gameplay-transmitter") as AgentApiModule;
+    if (typeof rootMod.createAgentApi === "function") {
+      return rootMod.createAgentApi;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
 };
 
 export const createFallbackAgent = (
@@ -44,19 +78,19 @@ export const tryCreateExternalAgentApi = async (
   streamer: AgentLikeHost,
 ): Promise<unknown | undefined> => {
   try {
-    const mod = await import("automated-gameplay-transmitter");
-    if (typeof mod.createAgentApi === "function") {
-      try {
-        const externalAgent = mod.createAgentApi(streamer as any);
-        console.info("[INFO] external agent API initialized");
-        return externalAgent;
-      } catch (err) {
-        console.warn("[WARN] createAgentApi threw, keeping in-memory fallback:", err instanceof Error ? err.message : String(err));
-        return undefined;
-      }
+    const createAgentApi = await loadCreateAgentApi();
+    if (typeof createAgentApi !== "function") {
+      console.warn("[WARN] automated-gameplay-transmitter did not export createAgentApi; using fallback agent");
+      return undefined;
     }
-    console.warn("[WARN] automated-gameplay-transmitter did not export createAgentApi; using fallback agent");
-    return undefined;
+    try {
+      const externalAgent = createAgentApi(streamer);
+      console.info("[INFO] external agent API initialized");
+      return externalAgent;
+    } catch (err) {
+      console.warn("[WARN] createAgentApi threw, keeping in-memory fallback:", err instanceof Error ? err.message : String(err));
+      return undefined;
+    }
   } catch (err) {
     console.warn("[WARN] dynamic import failed, continuing with in-memory fallback agent:", err instanceof Error ? err.message : String(err));
     return undefined;
