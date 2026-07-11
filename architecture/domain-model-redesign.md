@@ -6,7 +6,7 @@
 | **Author** | (placeholder) |
 | **Date** | 2026-07-11 |
 | **Status** | Approved（Rev.3）; Phase A/B 実装済; Phase C AGT `./agent` 対応 |
-| **Canonical model** | システム全体は [main-target-state.md](./main-target-state.md)。本文書は **Broadcasting BC** の詳細 |
+| **概要** | [overview.md](./overview.md)。本文書は **Broadcasting BC** の詳細 |
 | **Runtime** | Bun 1.3.x, TypeScript strict |
 | **Key dependency** | `automated-gameplay-transmitter` ^0.6.4 |
 | **Constraint** | **観測可能な振る舞いを意図的に変更しない**（behavior-preserving refactor + characterization / regression tests） |
@@ -15,9 +15,9 @@
 
 | パス | 内容 |
 |------|------|
-| `architecture/README.md` | 索引・読み方 |
-| `architecture/domain-model-redesign.md` | 本設計書（ドメインモデル・契約・PR Plan の正本） |
-| （将来）`architecture/domain-model.md` 等 | 長大化したら本ファイルから分割 |
+| `architecture/README.md` | 索引 |
+| `architecture/overview.md` | システム概要（BC・用語・状態所有） |
+| `architecture/domain-model-redesign.md` | 本設計書（Broadcasting BC） |
 
 > **配置方針**: 既存 `docs/` は静的サイト資産（`index.html`, OGP, favicon 等）専用。エンジニアリング文書は **`architecture/`** に置く（`docs/*.md` と混在させない）。
 
