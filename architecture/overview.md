@@ -101,11 +101,13 @@ flowchart LR
 | `NICONAMA_USER_DATA_DIR` | Playwright プロファイル（既定 `./playwright/.auth/`） |
 | `CHROMIUM_EXECUTABLE_PATH` | 任意。未設定なら同梱 Chromium |
 | `NICONAMA_START_DELAY_MS` | 起動遅延（既定 350） |
-| `NICONAMA_START_MAX_RETRIES` | リトライ回数。`<1` は起動しない（fatal にしない、CI 用） |
-| `NICONAMA_DISABLE=1` | クライアント無効（ローカル・一部テスト） |
+| `NICONAMA_START_MAX_RETRIES` | リトライ回数。`<1` は起動しない（fatal にしない）。e2e では `0` にし、サーバ起動時の本線クライアントは止めつつライブ検証は別テストで行う |
+| `NICONAMA_DISABLE=1` | クライアント完全無効（必要なときだけ） |
+| `NICONAMA_LIVE_TESTS=1` | ログイン不要の公開視聴ページ向けライブ e2e を有効化（CI で使用） |
 | `DEBUG_NICONAMA_COMMENTS=1` | コメント本文をログ |
 
-コメント反応のテストは単体・クライアント lifecycle・（任意）ライブ e2e に置き、**HTTP PUT に依存しない**。
+コメント反応のテストは単体・クライアント lifecycle・**ライブ e2e**（公開番組 `watch/user/14171889` など、未ログインでも見える分）に置き、**HTTP PUT に依存しない**。  
+e2e では `NICONAMA_DISABLE` は使わず、`NICONAMA_LIVE_TESTS=1` + `NICONAMA_START_MAX_RETRIES=0` とする（origin/main と同じ）。
 
 ---
 
