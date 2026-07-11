@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+
+set -eu
+
+# Follow logs for makamujo child units
+UNITS="makamujo-screen.service makamujo-browser.service makamujo-obs.service"
+
+JARGS=""
+for u in $UNITS; do
+  JARGS="$JARGS -u $u"
+done
+
+exec journalctl --no-pager -f $JARGS

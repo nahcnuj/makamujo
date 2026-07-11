@@ -1,6 +1,8 @@
 import type { Browser } from "automated-gameplay-transmitter";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
-import { existsSync } from "node:fs";
 import type { ViewportSize } from "playwright";
 import playwright from "playwright";
 import { chromium as $_ } from "playwright-extra";
@@ -43,19 +45,89 @@ function getChromiumLaunchOptions(overrideExecutable: string | undefined, base: 
 }
 
 /**
+ * Remove stale Chromium profile lock files that can block relaunch after a crash
+ * (ProcessSingleton / SingletonLock errors). Ported from main #425.
+ */
+export function cleanupChromiumLockFiles(userDataDir: string): void {
+  if (!existsSync(userDataDir)) {
+    return;
+  }
+  const lockFiles = ["SingletonLock", "SingletonSocket", ".ssh"] as const;
+  for (const lockFile of lockFiles) {
+    const lockPath = join(userDataDir, lockFile);
+    if (!existsSync(lockPath)) continue;
+    try {
+      rmSync(lockPath, { force: true, recursive: true });
+      console.warn(`[WARN] cleaned up lock file: ${lockPath}`);
+    } catch (err) {
+      console.warn(
+        `[WARN] failed to clean up lock file ${lockPath}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+}
+
+const isTransientLaunchError = (message: string): boolean =>
+  /Failed to connect|spawn|ECONNREFUSED|pipe|Timeout|ProcessSingleton|SingletonLock/i.test(
+    message,
+  );
+
+/**
  * Launch a persistent context with the correct executable resolution.
- * This is the canonical way for tools that need persistent user data (auth, cookies, etc.).
- * All executable resolution and future launch customizations live here.
+ * Retries transient subprocess errors and cleans stale lock files (#425, #431 from main).
  */
 export async function launchPersistentContext(
   userDataDir: string,
-  options: any = {}
+  options: Record<string, unknown> = {},
 ) {
-  const launchOpts = getChromiumLaunchOptions(options.executablePath, options);
-  return await launchWithFallback(
-    () => chromium.launchPersistentContext(userDataDir, launchOpts),
-    () => playwright.chromium.launchPersistentContext(userDataDir, launchOpts)
+  cleanupChromiumLockFiles(userDataDir);
+
+  const launchOpts = getChromiumLaunchOptions(
+    typeof options.executablePath === "string" ? options.executablePath : undefined,
+    options,
   );
+  const maxRetries = 3;
+  const baseRetryDelayMs = 500;
+  let lastError: Error | undefined;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await launchWithFallback(
+        () => chromium.launchPersistentContext(userDataDir, launchOpts),
+        () => playwright.chromium.launchPersistentContext(userDataDir, launchOpts),
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      lastError = err instanceof Error ? err : new Error(message);
+
+      if (/ProcessSingleton|SingletonLock/i.test(message)) {
+        try {
+          const tmpDir = mkdtempSync(join(tmpdir(), "playwright-"));
+          cleanupChromiumLockFiles(tmpDir);
+          console.warn("[WARN] userDataDir locked, retrying with temp dir", tmpDir);
+          return await launchWithFallback(
+            () => chromium.launchPersistentContext(tmpDir, launchOpts),
+            () => playwright.chromium.launchPersistentContext(tmpDir, launchOpts),
+          );
+        } catch {
+          // fall through to retry / rethrow
+        }
+      }
+
+      if (isTransientLaunchError(message) && attempt < maxRetries - 1) {
+        const delayMs = baseRetryDelayMs * 2 ** attempt;
+        console.warn(
+          `[WARN] launchPersistentContext transient error (attempt ${attempt + 1}/${maxRetries}), retrying in ${delayMs}ms:`,
+          message,
+        );
+        await setTimeout(delayMs);
+        continue;
+      }
+      throw lastError;
+    }
+  }
+  throw lastError ?? new Error("launchPersistentContext failed");
 }
 
 export const create = async (

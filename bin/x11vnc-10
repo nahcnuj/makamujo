@@ -1,0 +1,18 @@
+#!/usr/bin/env sh
+set -eu
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+X11VNC_BIN="$(command -v x11vnc 2>/dev/null || true)"
+if [ -z "$X11VNC_BIN" ]; then
+  echo "x11vnc binary not found" >&2
+  exit 1
+fi
+
+AUTH_FILE="${AUTH_FILE:-/root/.Xauthority}"
+if [ ! -e "$AUTH_FILE" ]; then
+  echo "Warning: XAUTHORITY file not found: $AUTH_FILE" >&2
+fi
+
+exec "$X11VNC_BIN" -display :10 -forever -shared -rfbport 5910 -auth "$AUTH_FILE"

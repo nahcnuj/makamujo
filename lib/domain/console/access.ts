@@ -33,6 +33,76 @@ export const isConsoleIPRestrictionEnabled = (
   nodeEnv: string | undefined = process.env.NODE_ENV,
 ): boolean => nodeEnv === "production";
 
+const BASIC_AUTH_PASSWORD_CHARS =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+/**
+ * Generate a random console Basic-auth password (16 chars).
+ * Ported from main #426 for journalctl retrieval on service start.
+ */
+export const generateConsoleBasicAuthPassword = (
+  randomBytes: Uint8Array = crypto.getRandomValues(new Uint8Array(16)),
+): string =>
+  Array.from(randomBytes)
+    .map((byte) => BASIC_AUTH_PASSWORD_CHARS[byte % BASIC_AUTH_PASSWORD_CHARS.length]!)
+    .join("");
+
+/**
+ * Resolve the console Basic-auth password: env wins; otherwise generate and
+ * return `{ password, generated: true }` so the host can log it once.
+ */
+export const resolveConsoleBasicAuthPassword = (
+  envPassword: string | undefined = process.env.CONSOLE_BASIC_AUTH_PASSWORD,
+): { password: string; generated: boolean } => {
+  if (envPassword) {
+    return { password: envPassword, generated: false };
+  }
+  return { password: generateConsoleBasicAuthPassword(), generated: true };
+};
+
+/** Parse `Authorization: Basic …` into username/password, or null if invalid. */
+export const parseBasicAuthCredentials = (
+  value: string | null,
+): { username: string; password: string } | null => {
+  if (!value) return null;
+  const parts = value.split(" ");
+  if (parts.length !== 2 || parts[0] !== "Basic" || !parts[1]) return null;
+  let decoded: string;
+  try {
+    decoded = atob(parts[1]);
+  } catch {
+    return null;
+  }
+  const separator = decoded.indexOf(":");
+  if (separator < 0) return null;
+  return {
+    username: decoded.slice(0, separator),
+    password: decoded.slice(separator + 1),
+  };
+};
+
+/** True when Authorization matches admin + expected password. */
+export const hasValidConsoleAuthorization = (
+  authorizationHeader: string | null,
+  expectedPassword: string,
+  expectedUsername = "admin",
+): boolean => {
+  const credentials = parseBasicAuthCredentials(authorizationHeader);
+  return (
+    credentials !== null &&
+    credentials.username === expectedUsername &&
+    credentials.password === expectedPassword
+  );
+};
+
+export const createUnauthorizedConsoleResponse = (): Response =>
+  new Response("Unauthorized", {
+    status: 401,
+    headers: {
+      "WWW-Authenticate": 'Basic realm="makamujo-console"',
+    },
+  });
+
 const HOP_BY_HOP_HEADERS = [
   "connection",
   "keep-alive",

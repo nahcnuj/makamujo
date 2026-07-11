@@ -1,7 +1,36 @@
 import { describe, expect, it } from "bun:test";
-import { createClickByElementId, createPopupPageHandler, createRedirectToHomeHandler } from "./chromium";
+import { mkdtempSync, writeFileSync, existsSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  cleanupChromiumLockFiles,
+  createClickByElementId,
+  createPopupPageHandler,
+  createRedirectToHomeHandler,
+} from "./chromium";
 
 const HOME_URL = 'https://orteil.dashnet.org/cookieclicker/';
+
+describe('cleanupChromiumLockFiles', () => {
+  it('removes SingletonLock and SingletonSocket when present', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'chromium-lock-'));
+    try {
+      writeFileSync(join(dir, 'SingletonLock'), 'x');
+      writeFileSync(join(dir, 'SingletonSocket'), 'y');
+      writeFileSync(join(dir, 'keep-me'), 'z');
+      cleanupChromiumLockFiles(dir);
+      expect(existsSync(join(dir, 'SingletonLock'))).toBe(false);
+      expect(existsSync(join(dir, 'SingletonSocket'))).toBe(false);
+      expect(existsSync(join(dir, 'keep-me'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('is a no-op when the directory does not exist', () => {
+    expect(() => cleanupChromiumLockFiles(join(tmpdir(), 'missing-chromium-profile'))).not.toThrow();
+  });
+});
 
 describe('createPopupPageHandler', () => {
   const makePageLike = (url: string) => {

@@ -10,6 +10,7 @@
 |----------|------|
 | [domain-model-redesign.md](./domain-model-redesign.md) | 配信エージェント BC 再設計（#463 マージ済）。CommentPipeline / silence / Publication |
 | [console-domain-model.md](./console-domain-model.md) | **管理コンソール BC**（Access / Status plan）。UI は `console/src`、純関数は `lib/domain/console` |
+| [legacy-vs-main-integration.md](./legacy-vs-main-integration.md) | **`legacy` vs `main` 差分整理と取り込み方針**（orphan main、port 済み/未着手） |
 
 ## 読み方（実装エージェント向け）
 
@@ -25,7 +26,8 @@
 | NGram / Silence / Topic / Scripts | `lib/domain/*` | 済 |
 | Publication assemble | `lib/domain/publication/` | 済 |
 | AgentSession + services | `lib/application/` | 済 |
-| Console access / status plan / SSE frames | `lib/domain/console/` | 済 |
+| Console access / status plan / SSE frames | `lib/domain/console/` | 済（Basic auth 純関数含む） |
+| systemd / make install（main から port） | `Makefile`, `etc/systemd/` | 済 |
 | Outer console WS bridge | `composition/consoleOuterWebSocket.ts` | 済 |
 | Console UI | `console/src/AgentStatus/` | ファサード維持 |
 

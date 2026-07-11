@@ -1,0 +1,21 @@
+[Unit]
+Description=makamujo service
+After=graphical.target xorg10.service x11vnc-10.service
+Wants=graphical.target xorg10.service x11vnc-10.service makamujo-screen.service makamujo-browser.service makamujo-obs.service
+PartOf=graphical.target
+
+# Parent unit coordinates child services (screen, browser, obs) via Wants=/After=.
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/makamujo
+User=root
+Environment=PATH=/root/.bun/bin:/usr/local/bin:/usr/bin:/bin
+Environment=NODE_ENV=production
+Environment=DISPLAY=:10
+ExecStart=/bin/true
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target

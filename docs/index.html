@@ -21,9 +21,10 @@
     <link rel="canonical" href="https://www.nahcnuj.work/makamujo/index.html" />
     <link rel="icon" href="favicon-32x32.png" type="image/png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1645913691678081" crossorigin="anonymous"></script>
     <style>
       *, *::before, *::after {
         box-sizing: border-box;
@@ -129,11 +130,11 @@
         display: inline-block;
       }
 
-      /* ── Social links ── */
+      /* ── Profile nav ── */
       .links {
         display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
+        flex-direction: column;
+        gap: 0.5rem;
         margin-top: 0.5rem;
       }
 
@@ -252,14 +253,17 @@
           <span class="tagline-line">AIが自らゲームをプレイし、</span><span class="tagline-line">マルコフ連鎖によるトークとともにライブ配信するバーチャルYouTuberです。</span>
         </p>
         <div class="links">
-          <a class="link-btn link-btn--primary" href="https://live.nicovideo.jp/watch/user/14171889" target="_blank" rel="noopener noreferrer">
-            📺 ニコニコ生放送
+          <a class="link-btn link-btn--primary" href="https://live.nicovideo.jp/watch/user/14171889" target="_blank" rel="noopener noreferrer" id="live-link">
+            ニコニコ生放送で常時配信中！
           </a>
           <a class="link-btn" href="https://x.com/makamujo" target="_blank" rel="noopener noreferrer">
-            𝕏 @makamujo
+            X 公式アカウント @makamujo
           </a>
-          <a class="link-btn" href="https://github.com/nahcnuj/makamujo" target="_blank" rel="noopener noreferrer">
-            ⌨ GitHub
+          <a class="link-btn" href="https://github.com/nahcnuj/automated-gameplay-transmitter" target="_blank" rel="noopener noreferrer">
+            AIVTuberの配信フレームワーク
+          </a>
+          <a class="link-btn" href="https://github.com/sponsors/nahcnuj" target="_blank" rel="noopener noreferrer">
+            開発を支援する
           </a>
         </div>
       </div>
@@ -298,5 +302,17 @@ a=t.getElementsByTagName(n)[0],a.parentNode.insertBefore(u,a))}(window,document,
 twq('config','ov0j6');
 </script>
 <!-- End X conversion tracking base code -->
+<script>
+(function () {
+  var liveLink = document.getElementById("live-link");
+  if (liveLink) {
+    liveLink.addEventListener("click", function () {
+      // X conversion tracking event code
+      twq("event", "tw-ov0j6-rdexl", {});
+      // End X conversion tracking event code
+    });
+  }
+})();
+</script>
   </body>
 </html>

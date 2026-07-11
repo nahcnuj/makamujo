@@ -2,8 +2,13 @@ import { describe, expect, it } from "bun:test";
 import {
   createAccessDeniedRedirectResponse,
   createLoopbackProxyHeaders,
+  createUnauthorizedConsoleResponse,
   DEFAULT_CONSOLE_BASE_PATH,
+  generateConsoleBasicAuthPassword,
+  hasValidConsoleAuthorization,
   isConsoleIPRestrictionEnabled,
+  parseBasicAuthCredentials,
+  resolveConsoleBasicAuthPassword,
 } from "./access";
 
 describe("console access domain", () => {
@@ -49,5 +54,39 @@ describe("console access domain", () => {
     expect(headers.has("host")).toBe(false);
     expect(headers.has("origin")).toBe(false);
     expect(headers.has("referer")).toBe(false);
+  });
+
+  it("generates a 16-character alphanumeric Basic auth password", () => {
+    const password = generateConsoleBasicAuthPassword();
+    expect(password).toHaveLength(16);
+    expect(password).toMatch(/^[A-Za-z0-9_-]+$/);
+  });
+
+  it("uses CONSOLE_BASIC_AUTH_PASSWORD when provided", () => {
+    const resolved = resolveConsoleBasicAuthPassword("fixed-secret");
+    expect(resolved).toEqual({ password: "fixed-secret", generated: false });
+  });
+
+  it("generates a password when env is empty", () => {
+    const resolved = resolveConsoleBasicAuthPassword(undefined);
+    expect(resolved.generated).toBe(true);
+    expect(resolved.password).toHaveLength(16);
+  });
+
+  it("parses and validates Basic auth credentials", () => {
+    const header = `Basic ${btoa("admin:s3cret")}`;
+    expect(parseBasicAuthCredentials(header)).toEqual({
+      username: "admin",
+      password: "s3cret",
+    });
+    expect(hasValidConsoleAuthorization(header, "s3cret")).toBe(true);
+    expect(hasValidConsoleAuthorization(header, "wrong")).toBe(false);
+    expect(hasValidConsoleAuthorization(null, "s3cret")).toBe(false);
+  });
+
+  it("builds a 401 challenge response", () => {
+    const response = createUnauthorizedConsoleResponse();
+    expect(response.status).toBe(401);
+    expect(response.headers.get("WWW-Authenticate")).toContain("Basic");
   });
 });

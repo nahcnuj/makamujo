@@ -1,0 +1,20 @@
+[Unit]
+Description=makamujo OBS service
+After=makamujo-browser.service
+PartOf=makamujo.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/makamujo
+User=root
+Environment=PATH=/root/.bun/bin:/usr/local/bin:/usr/bin:/bin
+Environment=DISPLAY=:10
+# Ensure OBS config and cache directories are accessible (flatpak)
+Environment=XDG_CONFIG_HOME=/opt/makamujo
+Environment=XDG_DATA_HOME=/opt/makamujo
+Environment=XDG_CACHE_HOME=/opt/makamujo/.cache
+ExecStart=/bin/sh -lc "cd '/opt/makamujo' && '/opt/makamujo/bin/x/obs'"
+StandardOutput=journal
+StandardError=journal
+Restart=on-failure
+RestartSec=5s

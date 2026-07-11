@@ -164,6 +164,20 @@ export const app = new Hono()
             try { console.log('[DEBUG] opening upstream SSE fetch ->', sseUrl); } catch {}
             const res = await fetch(sseUrl, { headers: { accept: 'text/event-stream' } });
             try { console.log('[DEBUG] upstream SSE response ->', { status: res.status, contentType: res.headers.get('content-type') }); } catch {}
+
+            // Avoid unhandled rejections when upstream is temporarily down (main #429).
+            if (!res.ok) {
+              try {
+                console.warn('[WARN] upstream SSE fetch failed with status', res.status);
+              } catch {}
+              try {
+                const metaJson = await fetchMetaSnapshot(proxyBase).catch(() => ({}));
+                try { ws.send(JSON.stringify(metaJson)); } catch {}
+              } catch {}
+              try { ws.close(); } catch {}
+              return;
+            }
+
             try {
               const metaJson = await fetchMetaSnapshot(proxyBase);
               try { ws.send(JSON.stringify(metaJson)); } catch {}

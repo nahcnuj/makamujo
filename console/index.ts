@@ -9,8 +9,11 @@ import {
 import {
   createAccessDeniedRedirectResponse,
   createLoopbackProxyHeaders,
+  createUnauthorizedConsoleResponse,
   DEFAULT_CONSOLE_BASE_PATH,
+  hasValidConsoleAuthorization,
   isConsoleIPRestrictionEnabled,
+  resolveConsoleBasicAuthPassword,
 } from "../lib/domain/console/access";
 import { createDailyRotatingJsonLogger, formatUnknownError } from "../lib/consoleLogger";
 import * as consoleRoutes from "../routes/console/index";
@@ -71,6 +74,9 @@ export function startConsoleServer({
   });
 
   const loopbackConsolePort = loopbackServer.port;
+  const consoleAccessControlEnabled = isConsoleIPRestrictionEnabled();
+  const { password: consoleBasicAuthPassword, generated: consoleBasicAuthGenerated } =
+    resolveConsoleBasicAuthPassword();
 
   // If running in loopback-only mode (used by tests), return the loopback
   // server without attempting to start the outer TLS-enabled server.
@@ -81,6 +87,12 @@ export function startConsoleServer({
         loopbackServer.stop(closeActiveConnections);
       },
     };
+  }
+
+  // Log auto-generated password so operators can retrieve it via journalctl
+  // (ported from main #426).
+  if (consoleBasicAuthGenerated) {
+    console.log(`Console Basic auth password: ${consoleBasicAuthPassword}`);
   }
 
   // Fail fast if TLS cert/key files are missing before starting the outer server.
@@ -109,8 +121,7 @@ export function startConsoleServer({
         const ip = server.requestIP(req);
         const clientIpAddress = ip ? `${ip.family}/${ip.address}` : 'unknown';
         let statusCode = 500;
-        const consoleIpRestrictionEnabled = isConsoleIPRestrictionEnabled();
-        if (consoleIpRestrictionEnabled && (!ip || !AllowedIP.equals(ip))) {
+        if (consoleAccessControlEnabled && (!ip || !AllowedIP.equals(ip))) {
           const redirectResponse = createAccessDeniedRedirectResponse(requestURL, {
             consoleBasePath,
             consoleRedirectURL,
@@ -139,6 +150,35 @@ export function startConsoleServer({
           });
           console.error(`got ${clientIpAddress}, want ${AllowedIP.toString()}`);
           return redirectResponse;
+        }
+
+        if (
+          consoleAccessControlEnabled &&
+          !hasValidConsoleAuthorization(req.headers.get('authorization'), consoleBasicAuthPassword)
+        ) {
+          const unauthorized = createUnauthorizedConsoleResponse();
+          statusCode = unauthorized.status;
+          errorLogger.write({
+            event: 'console_unauthorized',
+            clientIp: clientIpAddress,
+            method: req.method,
+            path: requestURL.pathname,
+            query: requestURL.search,
+            userAgent,
+            referer,
+          });
+          accessLogger.write({
+            event: 'console_access',
+            clientIp: clientIpAddress,
+            method: req.method,
+            path: requestURL.pathname,
+            query: requestURL.search,
+            status: statusCode,
+            responseTimeMs: Date.now() - requestStartTime,
+            userAgent,
+            referer,
+          });
+          return unauthorized;
         }
 
         try {
