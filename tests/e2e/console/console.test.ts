@@ -201,7 +201,6 @@ test.beforeAll(async ({ request }) => {
       `Console server not responding at ${CONSOLE_BASE_URL}: ${String(lastErr)}`,
     );
   }
-
 });
 
 test.afterAll(() => {
