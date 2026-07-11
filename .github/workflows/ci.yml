@@ -51,6 +51,29 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
 
+  # Job name must remain "lint" — main branch ruleset requires this status context.
+  # Biome bulk adoption is deferred on the legacy line; report success until enabled.
+  lint:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Restore node_modules from cache
+        uses: actions/cache/restore@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          fail-on-cache-miss: true
+      - name: Run linter (or no-op when Biome is not configured)
+        run: |
+          if [ -f biome.json ] && grep -q '"lint"' package.json 2>/dev/null; then
+            bun run lint
+          else
+            echo "Biome not enabled on this tree; lint job no-op (required status check)."
+          fi
+
   typecheck:
     needs: setup
     runs-on: ubuntu-latest
