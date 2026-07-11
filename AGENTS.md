@@ -19,7 +19,8 @@
 - `/docs` - ランディング等の静的サイト資産（設計 Markdown は置かない）
 
 その他のディレクトリは人間向けで、あなたが参照する必要はありません。
-ドメイン再設計・`MakaMujo` 分割・配信状態ペイロード変更では、先に `architecture/domain-model-redesign.md` の契約（CommentPipeline・沈黙ポリシー・PublishedStreamPayload）を確認し、振る舞いを変えないこと。
+ドメイン再設計・`MakaMujo` 分割・配信状態ペイロード変更では、先に `architecture/domain-model-redesign.md` の契約（CommentPipeline・沈黙ポリシー・PublishedStreamPayload）と `architecture/overview.md` を確認し、振る舞いを変えないこと。
+コメントは外から HTTP で投入する経路が標準である（プロセス内ニコ生クライアントは必須ではない）。
 
 ## 利用できるコマンド
 このプロジェクトはBunを利用しています。

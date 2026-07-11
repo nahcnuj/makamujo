@@ -590,7 +590,7 @@ const mainApp = new Hono()
   // Serve the built frontend (HTML + JS/CSS assets)
   .all("*", async (c) => handleCatchAll(c.req.raw));
 
-const server = (mainServer = serve<WsData>({
+mainServer = serve<WsData>({
   port: portNumber,
   async fetch(req: Request, server: Bun.Server<WsData>) {
     const url = new URL(req.url);
@@ -655,7 +655,12 @@ const server = (mainServer = serve<WsData>({
       } catch {}
     },
   },
-}));
+});
+
+const server = mainServer;
+if (!server) {
+  throw new Error("Failed to start main server");
+}
 
 console.log(`🚀 Server running at ${server.url}`);
 

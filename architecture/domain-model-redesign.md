@@ -112,7 +112,7 @@ flowchart TB
 
 ---
 
-## Ubiquitous Language（ユビキタス言語）
+## 用語集
 
 | 用語（日本語） | 英語識別子 | 定義（現行コード） |
 |----------------|------------|-------------------|
@@ -140,7 +140,7 @@ flowchart TB
 
 ---
 
-## Bounded Contexts
+## 機能の分かれ方
 
 | Context | 責務 | 所有する不変条件 / 状態 |
 |---------|------|-------------------------|
@@ -226,7 +226,7 @@ classDiagram
 
 ---
 
-## CommentPipeline specification（ゴールデン契約）
+## CommentPipeline specification（基準となる契約）
 
 `MakaMujo.listen` と **同一順序**。PR-A2（characterization）/ PR-B2（service 化）の完了条件。実装前に `architecture/maka-mujo-invariants.md` とテストへ落とす。
 
@@ -564,7 +564,7 @@ architecture/                     # 設計 md（docs/ と分離）
 |------|------|
 | 純関数 + Publication 集約 + 薄い index 分割だけで変更容易性の大半 | サービス境界の明示は弱い |
 | PR・レビュー負荷が小さい | CommentPipeline が巨大関数のまま残りうる |
-| 既存テストを最大限再利用 | 「BC ごとのオーナー」がフォルダ規約に留まる |
+| 既存テストを最大限再利用 | 領域ごとのオーナーがフォルダ規約に留まる |
 
 **採用基準**:
 

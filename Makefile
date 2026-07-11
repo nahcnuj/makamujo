@@ -5,7 +5,7 @@ UNIT_DIR ?= /etc/systemd/system
 # Prefer PATH bun; fall back to common install location.
 BUN_BIN ?= $(shell command -v bun 2>/dev/null || echo /root/.bun/bin/bun)
 INSTALL_BIN = bin/x bin/xorg10 bin/x11vnc-10 bin/obs-studio bin/journal-makamujo bin/start bin/stop
-INSTALL_DATA = package.json bunfig.toml tsconfig.json index.ts lib routes src console composition architecture obs-studio
+INSTALL_DATA = package.json bunfig.toml tsconfig.json index.ts bootstrap.ts lib routes src console composition architecture obs-studio
 SERVICE = makamujo.service
 UNIT_TEMPLATES = makamujo.service makamujo-screen.service makamujo-browser.service makamujo-obs.service xorg10.service x11vnc-10.service
 

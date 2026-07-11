@@ -86,16 +86,8 @@ export function startConsoleServer({
   });
 
   const loopbackConsolePort = loopbackServer.port;
-  const consoleAccessControlEnabled = isConsoleIPRestrictionEnabled();
-  const {
-    password: consoleBasicAuthPassword,
-    generated: consoleBasicAuthGenerated,
-    source: consoleBasicAuthSource,
-    passwordFilePath: consoleBasicAuthPasswordFile,
-  } = loadOrCreateConsoleBasicAuthPassword();
 
-  // If running in loopback-only mode (used by tests), return the loopback
-  // server without attempting to start the outer TLS-enabled server.
+  // Loopback-only (tests / local): no outer TLS, no Basic auth store side effects.
   if (process.env.CONSOLE_LOOPBACK_ONLY === "1") {
     return {
       get url() {
@@ -106,6 +98,14 @@ export function startConsoleServer({
       },
     };
   }
+
+  const consoleAccessControlEnabled = isConsoleIPRestrictionEnabled();
+  const {
+    password: consoleBasicAuthPassword,
+    generated: consoleBasicAuthGenerated,
+    source: consoleBasicAuthSource,
+    passwordFilePath: consoleBasicAuthPasswordFile,
+  } = loadOrCreateConsoleBasicAuthPassword();
 
   // Prefer CONSOLE_BASIC_AUTH_PASSWORD in production. When unset, reuse
   // var/console-basic-auth-password (or CONSOLE_BASIC_AUTH_PASSWORD_FILE) so

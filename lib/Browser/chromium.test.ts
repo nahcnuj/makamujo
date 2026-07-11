@@ -4,12 +4,14 @@ import {
   mkdirSync,
   mkdtempSync,
   rmSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   cleanupChromiumLockFiles,
+  cleanupStalePlaywrightTempProfiles,
   createClickByElementId,
   createPopupPageHandler,
   createRedirectToHomeHandler,
@@ -42,6 +44,35 @@ describe("cleanupChromiumLockFiles", () => {
     expect(() =>
       cleanupChromiumLockFiles(join(tmpdir(), "missing-chromium-profile")),
     ).not.toThrow();
+  });
+});
+
+describe("cleanupStalePlaywrightTempProfiles", () => {
+  it("removes only old playwright-* directories", () => {
+    const root = mkdtempSync(join(tmpdir(), "pw-temp-root-"));
+    try {
+      const oldDir = join(root, "playwright-old");
+      const freshDir = join(root, "playwright-fresh");
+      const otherDir = join(root, "not-playwright");
+      mkdirSync(oldDir);
+      mkdirSync(freshDir);
+      mkdirSync(otherDir);
+      writeFileSync(join(oldDir, "x"), "1");
+      writeFileSync(join(freshDir, "x"), "1");
+      const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+      utimesSync(oldDir, twoDaysAgo, twoDaysAgo);
+
+      const removed = cleanupStalePlaywrightTempProfiles(
+        24 * 60 * 60 * 1000,
+        root,
+      );
+      expect(removed).toBe(1);
+      expect(existsSync(oldDir)).toBe(false);
+      expect(existsSync(freshDir)).toBe(true);
+      expect(existsSync(otherDir)).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

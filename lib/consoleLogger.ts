@@ -161,3 +161,61 @@ export function formatUnknownError(error: unknown): string {
   }
   return String(error);
 }
+
+export type ConsoleLoggerOptions = {
+  environment?: string | undefined;
+};
+
+/**
+ * Console that suppresses [DEBUG] lines and console.debug in production.
+ */
+export function createConsoleLogger({
+  environment = process.env.NODE_ENV,
+}: ConsoleLoggerOptions = {}): Console {
+  const originalConsole = globalThis.console;
+  const originalLog = originalConsole.log.bind(originalConsole);
+  const originalInfo = originalConsole.info.bind(originalConsole);
+  const originalDebug = originalConsole.debug.bind(originalConsole);
+
+  const logger = Object.create(originalConsole) as Console;
+
+  const isSuppressedDebug = (args: unknown[]): boolean =>
+    environment === "production" &&
+    args.length > 0 &&
+    typeof args[0] === "string" &&
+    args[0].startsWith("[DEBUG]");
+
+  logger.log = (...args: unknown[]): void => {
+    if (isSuppressedDebug(args)) {
+      return;
+    }
+    originalLog(...args);
+  };
+
+  logger.info = (...args: unknown[]): void => {
+    if (isSuppressedDebug(args)) {
+      return;
+    }
+    originalInfo(...args);
+  };
+
+  logger.debug =
+    environment === "production"
+      ? () => {
+          /* suppress debug output in production */
+        }
+      : (...args: unknown[]): void => {
+          originalDebug(...args);
+        };
+
+  return logger;
+}
+
+/** Replace globalThis.console (call before loading the rest of the app). */
+export function installConsoleLogger(
+  options: ConsoleLoggerOptions = {},
+): Console {
+  const logger = createConsoleLogger(options);
+  globalThis.console = logger;
+  return logger;
+}

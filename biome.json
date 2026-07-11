@@ -27,21 +27,21 @@
       "suspicious": {
         "noExplicitAny": "off",
         "noArrayIndexKey": "off",
-        "noAssignInExpressions": "off",
-        "noImplicitAnyLet": "off",
-        "useIterableCallbackReturn": "off"
+        "noAssignInExpressions": "error",
+        "noImplicitAnyLet": "error",
+        "useIterableCallbackReturn": "error"
       },
       "style": {
         "noNonNullAssertion": "off"
       },
       "complexity": {
-        "noBannedTypes": "off"
+        "noBannedTypes": "error"
       },
       "security": {
         "noGlobalEval": "off"
       },
       "a11y": {
-        "useAltText": "off"
+        "useAltText": "error"
       },
       "performance": {
         "noAccumulatingSpread": "off"

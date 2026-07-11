@@ -211,7 +211,9 @@ export function* solver(
           if (result.name === "idle" && result.selectedText) {
             const text = result.selectedText ?? "";
             gameData = text;
-            listeners.onSave.forEach((f) => f(text));
+            for (const f of listeners.onSave) {
+              f(text);
+            }
           }
         }
 

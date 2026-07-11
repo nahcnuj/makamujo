@@ -1,4 +1,10 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
@@ -9,6 +15,62 @@ import { chromium as $_ } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
 export const chromium = $_.use(StealthPlugin());
+
+/** Temp user-data dirs created this process for ProcessSingleton fallback. */
+const sessionTempUserDataDirs: string[] = [];
+
+const registerSessionTempUserDataDir = (dir: string): void => {
+  sessionTempUserDataDirs.push(dir);
+};
+
+const removeSessionTempUserDataDirs = (): void => {
+  for (const dir of sessionTempUserDataDirs) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // best-effort
+    }
+  }
+  sessionTempUserDataDirs.length = 0;
+};
+
+if (typeof process !== "undefined" && typeof process.once === "function") {
+  process.once("exit", removeSessionTempUserDataDirs);
+  process.once("beforeExit", removeSessionTempUserDataDirs);
+}
+
+/**
+ * Delete leftover Playwright temp profiles under os.tmpdir() older than maxAgeMs.
+ * Call on launch to limit /tmp growth from past ProcessSingleton fallbacks.
+ */
+export function cleanupStalePlaywrightTempProfiles(
+  maxAgeMs = 24 * 60 * 60 * 1000,
+  tempRoot: string = tmpdir(),
+): number {
+  let removed = 0;
+  let entries: string[];
+  try {
+    entries = readdirSync(tempRoot);
+  } catch {
+    return 0;
+  }
+  const now = Date.now();
+  for (const name of entries) {
+    if (!name.startsWith("playwright-")) continue;
+    const fullPath = join(tempRoot, name);
+    try {
+      const st = statSync(fullPath);
+      if (!st.isDirectory()) continue;
+      if (now - st.mtimeMs < maxAgeMs) continue;
+      rmSync(fullPath, { recursive: true, force: true });
+      removed += 1;
+      console.warn(`[WARN] removed stale Playwright temp profile: ${fullPath}`);
+    } catch {
+      // best-effort
+    }
+  }
+  return removed;
+}
 
 /**
  * Resolve which executable to use for Chromium.
@@ -95,6 +157,7 @@ export async function launchPersistentContext(
   userDataDir: string,
   options: Record<string, unknown> = {},
 ) {
+  cleanupStalePlaywrightTempProfiles();
   cleanupChromiumLockFiles(userDataDir);
 
   const launchOpts = getChromiumLaunchOptions(
@@ -127,12 +190,14 @@ export async function launchPersistentContext(
             "[WARN] userDataDir locked, retrying with temp dir",
             tmpDir,
           );
-          // On success the browser keeps using tmpDir for this session (not deleted).
-          return await launchWithFallback(
+          const context = await launchWithFallback(
             () => chromium.launchPersistentContext(tmpDir!, launchOpts),
             () =>
               playwright.chromium.launchPersistentContext(tmpDir!, launchOpts),
           );
+          // Keep dir for this process; remove on process exit and via stale cleanup.
+          registerSessionTempUserDataDir(tmpDir);
+          return context;
         } catch {
           if (tmpDir) {
             try {
@@ -207,7 +272,7 @@ export const create = async (
     );
   };
 
-  let browser;
+  let browser: Awaited<ReturnType<typeof launchWith>>;
   try {
     browser = await launchWith(launchOpts);
   } catch (err) {

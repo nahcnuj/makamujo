@@ -21,7 +21,7 @@ export { useInterval } from "./hooks/useInterval";
 
 // Derive the valid hono component return type from FC so we stay aligned
 // with hono's own type definitions without importing internal hono types.
-type HonoReturn = ReturnType<FC<{}>>;
+type HonoReturn = ReturnType<FC<Record<string, never>>>;
 
 type HonoizeChildren<Props> = Omit<Props, "children"> & { children?: Child };
 
@@ -134,6 +134,7 @@ export function CharacterSprite({
   return (
     <img
       src={src}
+      alt=""
       width="720"
       height="960"
       className={["h-full object-cover object-top", className]

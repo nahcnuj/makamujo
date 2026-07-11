@@ -3,10 +3,9 @@ import { promisify } from "node:util";
 
 const execFile = promisify($_);
 
+/**
+ * Play a WAV via ALSA `aplay`. Rejects when aplay fails (device busy, missing, etc.).
+ */
 export const play = async (file: `${string}.wav`) => {
-  try {
-    await execFile("aplay", ["-q", file]);
-  } catch {
-    // do nothing
-  }
+  await execFile("aplay", ["-q", file]);
 };
