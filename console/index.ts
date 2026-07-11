@@ -3,6 +3,10 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { AllowedIP } from "../lib/allowedIP";
 import {
+  createOuterConsoleWebSocketHandler,
+  type OuterConsoleWsData,
+} from "../composition/consoleOuterWebSocket";
+import {
   createAccessDeniedRedirectResponse as createAccessDeniedRedirectResponseDomain,
   createLoopbackProxyHeaders as createLoopbackProxyHeadersDomain,
   DEFAULT_CONSOLE_BASE_PATH,
@@ -109,49 +113,11 @@ export function startConsoleServer({
 
   // Outer console server: exposed publicly on port 443.
   // Checks the client IP against the shared allowlist before proxying to the loopback server.
-  type OuterWsData = {
-    loopbackWsUrl: string;
-    protocols: string[] | undefined;
-    target?: WebSocket;
-  };
-
-  const outerWebSocket: Bun.WebSocketHandler<OuterWsData> = {
-    open(ws) {
-      const { loopbackWsUrl, protocols } = ws.data;
-      try {
-        const target = new WebSocket(loopbackWsUrl, protocols);
-
-        target.binaryType = 'arraybuffer';
-
-        target.onopen = () => {
-          // noop
-        };
-
-        target.onmessage = (ev) => {
-          try { ws.send(ev.data as string | ArrayBuffer); } catch {}
-        };
-
-        target.onclose = () => { try { ws.close(); } catch {} };
-        target.onerror = () => { try { ws.close(); } catch {} };
-
-        ws.data.target = target;
-      } catch (err) {
-        try { ws.close(); } catch {}
-      }
-    },
-    message(ws, data) {
-      const { target } = ws.data;
-      if (target) try { target.send(data as string | ArrayBuffer); } catch {}
-    },
-    close(ws) {
-      const { target } = ws.data;
-      if (target) try { target.close(); } catch {}
-    },
-  };
+  const outerWebSocket = createOuterConsoleWebSocketHandler();
 
   let outerServer: ReturnType<typeof serve>;
   try {
-    outerServer = serve<OuterWsData>({
+    outerServer = serve<OuterConsoleWsData>({
       port: 443,
       async fetch(req, server) {
         const requestStartTime = Date.now();

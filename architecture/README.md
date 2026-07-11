@@ -25,7 +25,8 @@
 | NGram / Silence / Topic / Scripts | `lib/domain/*` | 済 |
 | Publication assemble | `lib/domain/publication/` | 済 |
 | AgentSession + services | `lib/application/` | 済 |
-| Console access / status plan | `lib/domain/console/` | 本スライス |
+| Console access / status plan / SSE frames | `lib/domain/console/` | 済 |
+| Outer console WS bridge | `composition/consoleOuterWebSocket.ts` | 済 |
 | Console UI | `console/src/AgentStatus/` | ファサード維持 |
 
 ## 関連

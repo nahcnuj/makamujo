@@ -67,10 +67,17 @@ flowchart LR
 | UI re-export formatters | `console/src/AgentStatus/agentStatusUtils.tsx` |
 | 公開ペイロード型 | `lib/domain/publication/types.ts` ↔ `console/.../types.ts`（文書で整合） |
 
+## 追加スライス（実装済）
+
+| 領域 | パス |
+|------|------|
+| SSE 境界 / 完全フレーム抽出 | `lib/domain/console/sseFrames.ts` |
+| 外側 WS ブリッジ | `composition/consoleOuterWebSocket.ts` |
+| プロキシ本体 | `lib/console-proxy.ts`（純関数を利用） |
+
 ## 今後（任意）
 
-- `console-proxy.ts` の SSE フレーム分割を domain 純関数化
-- 外側 WebSocket ブリッジを `composition/consoleOuterServer.ts` へ
+- 外側 `fetch` ハンドラ全体を composition へ移し、`console/index.ts` を配線のみにする
 - AGT 更新は不要（コンソールは HTTP/SSE クライアント）
 
 ## 検証
