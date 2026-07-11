@@ -1,4 +1,4 @@
-import { cloneAgentStateResponseMockFixture } from "../../../tests/fixtures/agentStateResponseMock";
+import { cloneAgentStateResponseMockFixture } from "../fixtures/agentStateResponseMock";
 import type { AgentStateResponse } from "./types";
 
 export const AGENT_STATE_REFRESH_INTERVAL_MS = 1_000;
