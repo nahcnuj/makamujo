@@ -12,8 +12,14 @@
 - `/scripts` - 小物スクリプト
 - `/src` - 配信画面アプリのフロントエンド（React）
 - `/tests` - テストコード（単体テストを除く）
+- `/architecture` - ドメインモデル・契約・リファクタ計画（エージェントは変更容易性作業時に参照すること）。索引は `architecture/README.md`
+- `/composition` - 配信サーバ composition root 補助（broadcast / agent wiring / idle speech timer）
+- `/lib/domain` - 純関数ポリシー（broadcasting / comments / speech / publication）
+- `/lib/application` - アプリケーション層（例: SpeechQueue）
+- `/docs` - ランディング等の静的サイト資産（設計 Markdown は置かない）
 
 その他のディレクトリは人間向けで、あなたが参照する必要はありません。
+ドメイン再設計・`MakaMujo` 分割・配信状態ペイロード変更では、先に `architecture/domain-model-redesign.md` の契約（CommentPipeline・沈黙ポリシー・PublishedStreamPayload）を確認し、振る舞いを変えないこと。
 
 ## 利用できるコマンド
 このプロジェクトはBunを利用しています。

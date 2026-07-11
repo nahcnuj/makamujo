@@ -27,3 +27,17 @@ declare module "*.png" {
   const path: `${string}.png`;
   export = path;
 }
+
+/**
+ * AGT ≥ 0.6.5 side-effect-free agent entry (optional until dependency is bumped).
+ * Declared so TypeScript accepts dynamic import before the published types land.
+ */
+declare module "automated-gameplay-transmitter/agent" {
+  export {
+    createAgentApi,
+    type AgentApi,
+    type AgentComment,
+    type AgentLike,
+    type SpeechState,
+  } from "automated-gameplay-transmitter";
+}
