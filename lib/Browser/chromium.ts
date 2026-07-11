@@ -16,6 +16,17 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
 export const chromium = $_.use(StealthPlugin());
 
+/** Default Playwright user-data dir for long-lived clients (e.g. niconama). */
+export const DEFAULT_PLAYWRIGHT_USER_DATA_DIR =
+  process.env.PLAYWRIGHT_USER_DATA_DIR ?? "/tmp/playwright-user-data";
+
+/**
+ * Default Chromium executable for clients that prefer an env override.
+ * Empty string means "let Playwright pick bundled Chromium".
+ */
+export const DEFAULT_CHROMIUM_EXECUTABLE_PATH =
+  process.env.CHROMIUM_EXECUTABLE_PATH ?? "";
+
 /** Temp user-data dirs created this process for ProcessSingleton fallback. */
 const sessionTempUserDataDirs: string[] = [];
 

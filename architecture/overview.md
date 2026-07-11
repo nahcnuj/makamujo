@@ -167,11 +167,17 @@ flowchart TB
   Loop --> Plan["表示の組み立て"]
 ```
 
-### コメントの入れ方（本番で確認すること）
+### コメントの入れ方（本番）
 
-- **標準**: 外のソフト（ワンコメ等）が **HTTP でコメント列を投入**する。アプリ内にニコ生 WebSocket クライアントは載せない。
-- マージ後・デプロイ後は、実際にコメントがエージェントまで届く経路を一度確認する。
-- アプリ内クライアントが必要になったら、配信ロジックの外の「つなぎ」として切り、用語を揃えてから内部状態へ渡す（別設計）。
+`origin/main` の本番経路に合わせる。
+
+| 経路 | 役割 |
+|------|------|
+| **本線** | プロセス内のニコ生コメントクライアント（`composition/niconamaCommentIngress.ts` → `lib/niconamaCommentClient`）。起動後に遅延 start。 |
+| **副線** | HTTP `POST`/`PUT /` でコメント列を投入（ツール・テスト・外部ソフト用）。main では 404 だったが、こちらは残す。 |
+
+- 無効化: `NICONAMA_DISABLE=1`（副線 HTTP のみ）
+- 設定: `NICONAMA_WATCH_URL`、`NICONAMA_USER_DATA_DIR`、`CHROMIUM_EXECUTABLE_PATH`（任意）、`NICONAMA_START_MAX_RETRIES` など
 
 管理コンソール（本番）:
 

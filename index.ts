@@ -26,6 +26,7 @@ import {
   type WsLike,
 } from "./composition/broadcast";
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
+import { scheduleNiconamaCommentIngress } from "./composition/niconamaCommentIngress";
 import { startConsoleServer } from "./console/index";
 import {
   assemblePublishedPayload,
@@ -533,6 +534,8 @@ const makeStreamHandler =
 let mainServer: Bun.Server<WsData> | undefined;
 /** Hoisted for exitHandler safety if startup fails mid-module. */
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
+/** NicoNico comment client stop handle (assigned after servers start). */
+let niconamaIngress: { stop: () => Promise<void> } | null = null;
 
 const getMainServer = (): Bun.Server<WsData> => {
   if (!mainServer) throw new Error("Server not yet initialized");
@@ -703,6 +706,65 @@ try {
   );
 }
 
+// Production comment ingress: in-process NicoNico client (from origin/main).
+// HTTP POST/PUT / remains available as a secondary path for tools and tests.
+niconamaIngress = scheduleNiconamaCommentIngress({
+  postComments: (comments) => {
+    try {
+      agent.postComments(comments);
+    } catch (err) {
+      console.warn(
+        "[WARN] agent.postComments threw:",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  },
+  onMeta: (payload) => {
+    try {
+      const published = normalizePublishedStreamState(payload);
+      agent.publishStreamState?.(published);
+      const prev =
+        lastPublishedStreamState && typeof lastPublishedStreamState === "object"
+          ? (lastPublishedStreamState as Record<string, unknown>)
+          : {};
+      const next =
+        published && typeof published === "object"
+          ? (published as Record<string, unknown>)
+          : {};
+      lastPublishedStreamState = { ...prev, ...next };
+      broadcastCurrentPayloadLocal("onNiconamaMeta");
+    } catch (err) {
+      console.warn(
+        "[WARN] niconama onMeta failed:",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  },
+  getCurrentStreamPayload,
+  getLastPublished: () => lastPublishedStreamState,
+  setLastPublished: (value) => {
+    lastPublishedStreamState = value;
+  },
+  broadcastOnComment: () => broadcastCurrentPayloadLocal("onComment"),
+  persistTalkModel: () => {
+    if (modelFile) {
+      try {
+        persistTalkModel(modelFile, () => streamer.talkModel.toJSON());
+      } catch (err) {
+        console.warn("[WARN]", "failed to write model", modelFile, err);
+      }
+    }
+  },
+  onFatalStartFailure: () => {
+    try {
+      exitHandler({ cleanup: true }, 1);
+    } catch {
+      /* ignore */
+    }
+    process.exit(1);
+  },
+});
+
 // Use a classic repeating timer (composition/idleSpeechTimer) for idle speech.
 startIdleSpeechTimer(streamer, 1_000);
 
@@ -727,6 +789,11 @@ function exitHandler(
       if (consoleServer) {
         consoleServer.stop(options.exit);
       }
+    } catch {
+      /* ignore */
+    }
+    try {
+      void niconamaIngress?.stop();
     } catch {
       /* ignore */
     }
