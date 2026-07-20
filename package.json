@@ -33,15 +33,15 @@
     "@playwright/browser-chromium": "^1.60.0",
     "automated-gameplay-transmitter": "^0.6.4",
     "bun-plugin-tailwind": "^0.1.2",
-    "hono": "4.12.28",
+    "hono": "4.12.30",
     "playwright": "^1.60.0",
     "playwright-extra": "^4.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "tailwindcss": "^4.3.2",
-    "ws": "^8.21.0"
+    "tailwindcss": "^4.3.3",
+    "ws": "^8.21.1"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.2",
+    "@biomejs/biome": "2.5.4",
     "@playwright/test": "^1.60.0",
     "@types/bun": "latest",
     "@types/jsdom": "^28.0.3",
