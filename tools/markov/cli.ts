@@ -33,6 +33,15 @@ const printCsv = (header: string[], rows: (string | number)[][]) => {
   }
 };
 
+
+function splitPhrase(phrase: string, delimiter: string): string[] {
+  const d = delimiter || " ";
+  return phrase
+    .split(d)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 const { values, positionals } = parseArgs({
   args: expandInPlaceArgs(Bun.argv.slice(2)),
   options: {
@@ -40,6 +49,7 @@ const { values, positionals } = parseArgs({
     top: { type: "string", default: "50" },
     "in-place": { type: "boolean", short: "i", default: false },
     suffix: { type: "string", default: "" },
+    delimiter: { type: "string", short: "d", default: " " },
     help: { type: "boolean", short: "h" },
   },
   allowPositionals: true,
@@ -58,10 +68,10 @@ function load(path: string): MarkovChainModel {
 
 function usage(): never {
   console.error(`Usage:
-  bun run tools/markov/cli.ts decrement-phrase <modelPath> <phrase> [--delta N] [-i|-iSUFFIX] [--suffix SUFFIX]
+  bun run tools/markov/cli.ts decrement-phrase <modelPath> <phrase> [--delta N] [-i|-iSUFFIX] [-d DELIM]
   bun run tools/markov/cli.ts tokens <modelPath> [--top N]
   bun run tools/markov/cli.ts search <modelPath> <query>
-  bun run tools/markov/cli.ts transitions <modelPath> <word>`);
+  bun run tools/markov/cli.ts transitions <modelPath> <word> [-d DELIM]`);
   process.exit(values.help ? 0 : 1);
 }
 
@@ -74,7 +84,7 @@ switch (cmd) {
       console.error("modelPath and phrase are required");
       usage();
     }
-    const tokens = phrase.trim().split(/\s+/).filter(Boolean);
+    const tokens = splitPhrase(phrase, values.delimiter ?? " ");
     if (tokens.length === 0) {
       console.error("phrase is empty");
       process.exit(1);
@@ -141,8 +151,8 @@ switch (cmd) {
   case "transitions": {
     const [modelPath, word] = rest;
     if (!modelPath || word == null) usage();
-    const t = load(modelPath).transitionsOf(word);
-    const normalized = word.trim().split(/\s+/).filter(Boolean).join("\u0000");
+    const t = load(modelPath).transitionsOf(splitPhrase(word, values.delimiter ?? " ").join(" "));
+    const normalized = splitPhrase(word, values.delimiter ?? " ").join("\u0000");
     printCsv(
       ["direction", "context", "other", "weight"],
       [
