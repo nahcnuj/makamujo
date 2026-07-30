@@ -46,11 +46,11 @@ const { values, positionals } = parseArgs({
   args: expandInPlaceArgs(Bun.argv.slice(2)),
   options: {
     delta: { type: "string", default: "1" },
-    top: { type: "string", default: "50" },
     "in-place": { type: "boolean", short: "i", default: false },
     suffix: { type: "string", default: "" },
     delimiter: { type: "string", short: "d", default: " " },
     purge: { type: "boolean", default: false },
+    sort: { type: "string", default: "asToWeight" },
     help: { type: "boolean", short: "h" },
   },
   allowPositionals: true,
@@ -70,7 +70,7 @@ function load(path: string): MarkovChainModel {
 function usage(): never {
   console.error(`Usage:
   bun run tools/markov/cli.ts decrement-phrase <modelPath> <phrase> [--delta N | --purge] [-i|-iSUFFIX] [-d DELIM]
-  bun run tools/markov/cli.ts tokens <modelPath> [--top N]
+  bun run tools/markov/cli.ts tokens <modelPath> [--sort token|asFrom|asToWeight]
   bun run tools/markov/cli.ts search <modelPath> <query>
   bun run tools/markov/cli.ts transitions <modelPath> <word> [-d DELIM]`);
   process.exit(values.help ? 0 : 1);
@@ -142,8 +142,18 @@ switch (cmd) {
   case "tokens": {
     const [modelPath] = rest;
     if (!modelPath) usage();
-    const top = Math.max(1, parseInt(values.top ?? "50", 10) || 50);
-    const stats = load(modelPath).tokenStats().slice(0, top);
+    const sort = values.sort ?? "asToWeight";
+    let stats = load(modelPath).tokenStats();
+    if (sort === "token") {
+      stats = [...stats].sort((a, b) => a.token.localeCompare(b.token, "ja"));
+    } else if (sort === "asFrom") {
+      stats = [...stats].sort((a, b) => b.asFrom - a.asFrom);
+    } else if (sort === "asToWeight") {
+      stats = [...stats].sort((a, b) => b.asToWeight - a.asToWeight);
+    } else {
+      console.error(`unknown --sort: ${sort} (token|asFrom|asToWeight)`);
+      process.exit(1);
+    }
     printCsv(
       ["token", "asFrom", "asToWeight"],
       stats.map((s) => [vis(s.token), s.asFrom, s.asToWeight]),

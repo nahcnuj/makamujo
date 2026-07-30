@@ -302,3 +302,57 @@ describe("markov cli decrement-phrase --purge", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 });
+
+describe("markov cli tokens", () => {
+  it("tokens sorts by column", async () => {
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(
+      modelPath,
+      JSON.stringify({
+        model: {
+          "": { b: 1, a: 5 },
+          a: { x: 1 },
+          b: { x: 1, y: 1 },
+        },
+        corpus: [],
+      }),
+    );
+
+    const run = async (args: string[]) => {
+      const proc = Bun.spawn(
+        ["bun", "run", "tools/markov/cli.ts", "tokens", modelPath, ...args],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+      const stdout = await new Response(proc.stdout).text();
+      const code = await proc.exited;
+      expect(code).toBe(0);
+      return stdout.trim().split("\n").slice(1).map((l) => l.split(",")[0]);
+    };
+
+    const byToken = await run(["--sort", "token"]);
+    expect(byToken).toEqual(["a", "b", "x", "y"]);
+
+    const byTo = await run(["--sort", "asToWeight"]);
+    expect(byTo[0]).toBe("a"); // asToWeight 5
+
+    const byFrom = await run(["--sort", "asFrom"]);
+    expect(byFrom[0]).toBe("b"); // asFrom 2
+
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("rejects unknown --sort", async () => {
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(
+      modelPath,
+      JSON.stringify({ model: { "": { a: 1 } }, corpus: [] }),
+    );
+    const proc = Bun.spawn(
+      ["bun", "run", "tools/markov/cli.ts", "tokens", modelPath, "--sort", "nope"],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const code = await proc.exited;
+    expect(code).toBe(1);
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
