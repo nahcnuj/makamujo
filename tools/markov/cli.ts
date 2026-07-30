@@ -2,6 +2,21 @@
 import { parseArgs } from "node:util";
 import { MarkovChainModel } from "../../lib/MarkovChainModel";
 
+const csvEscape = (value: string | number): string => {
+  const s = String(value);
+  if (/[",\n\r]/.test(s)) {
+    return `"${s.replaceAll('"', '""')}"`;
+  }
+  return s;
+};
+
+const printCsv = (header: string[], rows: (string | number)[][]) => {
+  console.log(header.map(csvEscape).join(","));
+  for (const row of rows) {
+    console.log(row.map(csvEscape).join(","));
+  }
+};
+
 const { values, positionals } = parseArgs({
   args: Bun.argv.slice(2),
   options: {
@@ -57,20 +72,34 @@ switch (cmd) {
     const [modelPath] = rest;
     if (!modelPath) usage();
     const top = Math.max(1, parseInt(values.top ?? "50", 10) || 50);
-    console.log(JSON.stringify(load(modelPath).tokenStats().slice(0, top), null, 2));
+    const stats = load(modelPath).tokenStats().slice(0, top);
+    printCsv(
+      ["token", "asFrom", "asToWeight"],
+      stats.map((s) => [s.token, s.asFrom, s.asToWeight]),
+    );
     break;
   }
   case "search": {
     const [modelPath, query] = rest;
     if (!modelPath || query == null) usage();
     const hits = load(modelPath).tokenStats().filter((t) => t.token.includes(query));
-    console.log(JSON.stringify(hits, null, 2));
+    printCsv(
+      ["token", "asFrom", "asToWeight"],
+      hits.map((s) => [s.token, s.asFrom, s.asToWeight]),
+    );
     break;
   }
   case "transitions": {
     const [modelPath, word] = rest;
     if (!modelPath || word == null) usage();
-    console.log(JSON.stringify(load(modelPath).transitionsOf(word), null, 2));
+    const t = load(modelPath).transitionsOf(word);
+    printCsv(
+      ["direction", "other", "weight"],
+      [
+        ...Object.entries(t.asFrom).map(([other, weight]) => ["from", other, weight] as (string | number)[]),
+        ...t.asTo.map(({ from, weight }) => ["to", from, weight] as (string | number)[]),
+      ],
+    );
     break;
   }
   default:
