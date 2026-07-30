@@ -174,3 +174,31 @@ describe("markov cli decrement-phrase -iSUFFIX", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 });
+
+describe("markov cli search visibility", () => {
+  it("search prints n-gram keys with slash", async () => {
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(
+      modelPath,
+      JSON.stringify({
+        model: {
+          "": { "パンティー": 1 },
+          ["ベージュ" + String.fromCharCode(0) + "パンティー"]: { "。": 2 },
+        },
+        corpus: [],
+      }),
+    );
+
+    const proc = Bun.spawn(
+      ["bun", "run", "tools/markov/cli.ts", "search", modelPath, "パンティー"],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const stdout = await new Response(proc.stdout).text();
+    const code = await proc.exited;
+    expect(code).toBe(0);
+    expect(stdout).toContain("ベージュ/パンティー");
+    expect(stdout.includes(String.fromCharCode(0))).toBe(false);
+
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
