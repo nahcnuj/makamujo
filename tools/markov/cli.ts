@@ -1,5 +1,19 @@
 ﻿#!/usr/bin/env bun
 import { parseArgs } from "node:util";
+import { writeFileSync, copyFileSync } from "node:fs";
+
+function expandInPlaceArgs(argv: string[]): string[] {
+  const out: string[] = [];
+  for (const a of argv) {
+    if (a.startsWith("-i") && a.length > 2 && !a.startsWith("--")) {
+      out.push("-i", "--suffix", a.slice(2));
+    } else {
+      out.push(a);
+    }
+  }
+  return out;
+}
+
 import { MarkovChainModel } from "../../lib/MarkovChainModel";
 
 const vis = (s: string) => s.replaceAll("\u0000", "/");
@@ -20,10 +34,12 @@ const printCsv = (header: string[], rows: (string | number)[][]) => {
 };
 
 const { values, positionals } = parseArgs({
-  args: Bun.argv.slice(2),
+  args: expandInPlaceArgs(Bun.argv.slice(2)),
   options: {
     delta: { type: "string", default: "1" },
     top: { type: "string", default: "50" },
+    "in-place": { type: "boolean", short: "i", default: false },
+    suffix: { type: "string", default: "" },
     help: { type: "boolean", short: "h" },
   },
   allowPositionals: true,
@@ -42,7 +58,7 @@ function load(path: string): MarkovChainModel {
 
 function usage(): never {
   console.error(`Usage:
-  bun run tools/markov/cli.ts decrement-phrase <modelPath> <phrase> [--delta N]
+  bun run tools/markov/cli.ts decrement-phrase <modelPath> <phrase> [--delta N] [-i|-iSUFFIX] [--suffix SUFFIX]
   bun run tools/markov/cli.ts tokens <modelPath> [--top N]
   bun run tools/markov/cli.ts search <modelPath> <query>
   bun run tools/markov/cli.ts transitions <modelPath> <word>`);
@@ -86,8 +102,19 @@ switch (cmd) {
     }
     console.error(`changed: ${changed} transitions`);
 
-    process.stdout.write(updated.toJSON());
-    if (process.stdout.isTTY) process.stdout.write("\n");
+    if (values["in-place"]) {
+      const suffix = values.suffix ?? "";
+      if (suffix) {
+        const backupPath = modelPath + suffix;
+        copyFileSync(modelPath, backupPath);
+        console.error(`backup: ${backupPath}`);
+      }
+      writeFileSync(modelPath, updated.toJSON(), "utf8");
+      console.error(`wrote: ${modelPath}`);
+    } else {
+      process.stdout.write(updated.toJSON());
+      if (process.stdout.isTTY) process.stdout.write("\n");
+    }
     break;
   }
   case "tokens": {

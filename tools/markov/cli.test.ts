@@ -85,3 +85,92 @@ describe("markov cli decrement-phrase", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 });
+
+describe("markov cli decrement-phrase --in-place", () => {
+  it("in-place writes model back without stdout JSON", async () => {
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(
+      modelPath,
+      JSON.stringify({
+        model: {
+          "": { beige: 2 },
+          beige: { panty: 3 },
+        },
+        corpus: [],
+      }),
+    );
+
+    const proc = Bun.spawn(
+      [
+        "bun",
+        "run",
+        "tools/markov/cli.ts",
+        "decrement-phrase",
+        "-i",
+        modelPath,
+        "beige panty",
+        "--delta",
+        "1",
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    const code = await proc.exited;
+
+    expect(code).toBe(0);
+    expect(stdout.trim()).toBe("");
+    expect(stderr).toContain("changed:");
+    expect(stderr).toContain("wrote:");
+
+    const saved = JSON.parse(require("fs").readFileSync(modelPath, "utf8"));
+    expect(saved.model[""].beige).toBe(1);
+    expect(saved.model.beige.panty).toBe(2);
+
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
+
+describe("markov cli decrement-phrase -iSUFFIX", () => {
+  it("writes backup with suffix then overwrites model", async () => {
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(
+      modelPath,
+      JSON.stringify({
+        model: { "": { beige: 2 }, beige: { panty: 3 } },
+        corpus: [],
+      }),
+    );
+
+    const proc = Bun.spawn(
+      [
+        "bun",
+        "run",
+        "tools/markov/cli.ts",
+        "decrement-phrase",
+        modelPath,
+        "beige panty",
+        "--delta",
+        "1",
+        "-i.bak",
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    const code = await proc.exited;
+
+    expect(code).toBe(0);
+    expect(stdout.trim()).toBe("");
+    expect(stderr).toContain("backup:");
+    expect(stderr).toContain("wrote:");
+
+    const backup = JSON.parse(require("fs").readFileSync(modelPath + ".bak", "utf8"));
+    expect(backup.model[""].beige).toBe(2);
+
+    const saved = JSON.parse(require("fs").readFileSync(modelPath, "utf8"));
+    expect(saved.model[""].beige).toBe(1);
+
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
