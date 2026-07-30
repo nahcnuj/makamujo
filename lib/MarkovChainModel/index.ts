@@ -121,4 +121,66 @@ export class MarkovChainModel implements TalkModel {
   toJSON(): string {
     return JSON.stringify(this.#model.json, null, 0);
   }
+
+  decrementPhrase(tokens: string[], delta = 1): MarkovChainModel {
+    if (tokens.length === 0 || delta === 0) return this;
+    const current = this.#model.json as { model: Distribution; corpus: string[] };
+    const model = current.model;
+    const corpus = current.corpus;
+    const next: Distribution = { '': {} };
+    for (const [from, cands] of Object.entries(model)) {
+      next[from] = { ...cands };
+    }
+    const dec = (key: string, token: string) => {
+      if (!next[key] || next[key][token] == null) return;
+      next[key][token] -= delta;
+      if (next[key][token] <= 0) delete next[key][token];
+      if (Object.keys(next[key]).length === 0) delete next[key];
+    };
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i]!;
+      if (i === 0) dec("", token);
+      const maxN = Math.min(this.#maxLearnContext, i);
+      for (let n = 1; n <= maxN; n++) {
+        const context = tokens.slice(i - n, i).join("\u0000");
+        dec(context, token);
+      }
+    }
+    if (!next[""] || Object.keys(next[""]).length === 0) next[""] = { "。": 1 };
+    return MarkovChainModel.#fromJson({ model: next, corpus }, this.#maxLearnContext);
+  }
+
+  tokenStats(): { token: string; asFrom: number; asToWeight: number }[] {
+    const { model } = this.#model.json as { model: Distribution; corpus: string[] };
+    const map = new Map();
+    for (const [from, cands] of Object.entries(model)) {
+      if (from !== "") {
+        const cur = map.get(from) ?? { asFrom: 0, asToWeight: 0 };
+        cur.asFrom += Object.keys(cands).length;
+        map.set(from, cur);
+      }
+      for (const [to, w] of Object.entries(cands)) {
+        const cur = map.get(to) ?? { asFrom: 0, asToWeight: 0 };
+        cur.asToWeight += w;
+        map.set(to, cur);
+      }
+    }
+    return [...map.entries()]
+      .map(([token, v]) => ({ token, ...v }))
+      .sort((a, b) => (b.asToWeight + b.asFrom) - (a.asToWeight + a.asFrom));
+  }
+
+  transitionsOf(word: string): {
+    asFrom: WeightedCandidates;
+    asTo: { from: string; weight: number }[];
+  } {
+    const { model } = this.#model.json as { model: Distribution; corpus: string[] };
+    const asFrom = { ...(model[word] ?? {}) };
+    const asTo = [];
+    for (const [from, cands] of Object.entries(model)) {
+      if (cands[word] != null) asTo.push({ from, weight: cands[word] });
+    }
+    return { asFrom, asTo };
+  }
+
 };

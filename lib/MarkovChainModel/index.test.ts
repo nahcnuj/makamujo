@@ -204,3 +204,79 @@ describe('learn', () => {
     expect(copied.corpus).toContain('こんばんは。');
   });
 });
+
+
+describe("decrementPhrase", () => {
+  it("decrements transition weights along the given token sequence", () => {
+    const model = new MarkovChainModel({
+      "": { "あ": 3 },
+      "あ": { "んま": 2 },
+      "んま": { "り": 2 },
+      "あ\u0000んま": { "り": 1 },
+      "り": { "。": 1 },
+    });
+    const updated = model.decrementPhrase(["あ", "んま", "り"], 1);
+    const json = JSON.parse(updated.toJSON()).model;
+    expect(json[""]?.["あ"]).toBe(2);
+    expect(json["あ"]?.["んま"]).toBe(1);
+    expect(json["んま"]?.["り"]).toBe(1);
+    expect(json["あ\u0000んま"]?.["り"]).toBeUndefined();
+  });
+
+  it("removes entries when weight reaches zero or below", () => {
+    const model = new MarkovChainModel({
+      "": { "x": 1 },
+      "x": { "y": 1 },
+      "y": { "。": 1 },
+    });
+    const updated = model.decrementPhrase(["x", "y"], 1);
+    const json = JSON.parse(updated.toJSON()).model;
+    expect(json[""]?.["x"]).toBeUndefined();
+    expect(json["x"]).toBeUndefined();
+  });
+
+  it("does not modify corpus", () => {
+    const model = new MarkovChainModel();
+    model.learn("テスト文。");
+    const before = JSON.parse(model.toJSON()).corpus;
+    const updated = model.decrementPhrase(["テ", "スト"], 1);
+    const after = JSON.parse(updated.toJSON()).corpus;
+    expect(after).toEqual(before);
+  });
+
+  it("keeps a fallback start distribution when emptied", () => {
+    const model = new MarkovChainModel({ "": { "x": 1 } });
+    const updated = model.decrementPhrase(["x"], 1);
+    const json = JSON.parse(updated.toJSON()).model;
+    expect(json[""]).toEqual({ "。": 1 });
+  });
+});
+
+describe("tokenStats and transitionsOf", () => {
+  const model = new MarkovChainModel({
+    "": { "こん": 2 },
+    "こん": { "にち": 1, "ばん": 1 },
+    "にち": { "は": 1 },
+    "ばん": { "は": 1 },
+    "は": { "。": 1 },
+  });
+
+  it("tokenStats returns frequency-like ranking", () => {
+    const stats = model.tokenStats();
+    expect(stats.length).toBeGreaterThan(0);
+    expect(stats[0]!.token).toBeTruthy();
+    expect(typeof stats[0]!.asFrom).toBe("number");
+    expect(typeof stats[0]!.asToWeight).toBe("number");
+  });
+
+  it("transitionsOf returns asFrom and asTo", () => {
+    const t = model.transitionsOf("こん");
+    expect(t.asFrom).toEqual({ "にち": 1, "ばん": 1 });
+    expect(t.asTo.some((x) => x.from === "" && x.weight === 2)).toBe(true);
+  });
+
+  it("search-like filtering works via tokenStats", () => {
+    const hits = model.tokenStats().filter((x) => x.token.includes("こん"));
+    expect(hits.some((x) => x.token === "こん")).toBe(true);
+  });
+});
