@@ -273,10 +273,59 @@ describe("tokenStats and transitionsOf", () => {
     const t = model.transitionsOf("こん");
     expect(t.asFrom).toEqual({ "にち": 1, "ばん": 1 });
     expect(t.asTo.some((x) => x.from === "" && x.weight === 2)).toBe(true);
+    expect(t.fromContexts.some((x) => x.context === "こん" && x.next === "にち")).toBe(true);
+    expect(t.fromContexts.some((x) => x.context === "こん" && x.next === "ばん")).toBe(true);
   });
 
   it("search-like filtering works via tokenStats", () => {
     const hits = model.tokenStats().filter((x) => x.token.includes("こん"));
     expect(hits.some((x) => x.token === "こん")).toBe(true);
+  });
+});
+
+describe("transitionsOf n-gram contexts", () => {
+  const model = new MarkovChainModel({
+    "": { "パンティー": 5 },
+    "パンティー": { "。": 10, "を": 3 },
+    "パンティー\u0000を": { "穿": 2 },
+    "の\u0000パンティー": { "。": 7 },
+    "あ\u0000の": { "パンティー": 1 },
+    "の": { "パンティー": 4 },
+    "無関係": { "語": 1 },
+  });
+
+  it("fromContexts includes keys that contain the token as a segment", () => {
+    const t = model.transitionsOf("パンティー");
+    expect(t.fromContexts).toEqual(
+      expect.arrayContaining([
+        { context: "パンティー", next: "。", weight: 10 },
+        { context: "パンティー", next: "を", weight: 3 },
+        { context: "パンティー\u0000を", next: "穿", weight: 2 },
+        { context: "の\u0000パンティー", next: "。", weight: 7 },
+      ]),
+    );
+    expect(t.fromContexts.some((x) => x.context === "無関係")).toBe(false);
+    expect(t.fromContexts.some((x) => x.context === "の")).toBe(false);
+  });
+
+  it("asTo includes n-gram keys that transition to the word", () => {
+    const t = model.transitionsOf("パンティー");
+    expect(t.asTo).toEqual(
+      expect.arrayContaining([
+        { from: "", weight: 5 },
+        { from: "の", weight: 4 },
+        { from: "あ\u0000の", weight: 1 },
+      ]),
+    );
+  });
+
+  it("normalizes space-separated phrase to null-separated key", () => {
+    const t = model.transitionsOf("パンティー を");
+    expect(t.asFrom).toEqual({ "穿": 2 });
+    expect(t.fromContexts).toEqual(
+      expect.arrayContaining([
+        { context: "パンティー\u0000を", next: "穿", weight: 2 },
+      ]),
+    );
   });
 });
