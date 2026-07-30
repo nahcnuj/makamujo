@@ -85,7 +85,7 @@ switch (cmd) {
     const updated = model.decrementPhrase(tokens, delta);
     const after = JSON.parse(updated.toJSON()).model as Record<string, Record<string, number>>;
 
-    const ctxLabel = (s: string) => s.replaceAll("\u0000", "/") || "(BOS)";
+    const ctxLabel = (s: string) => vis(s) || "(BOS)";
     let changed = 0;
     console.error(`decrement-phrase delta=${delta} tokens=${JSON.stringify(tokens)}`);
     for (const k of new Set([...Object.keys(before), ...Object.keys(after)])) {
@@ -95,7 +95,7 @@ switch (cmd) {
         const wa = ka[t] ?? 0;
         const wb = kb[t] ?? 0;
         if (wa !== wb) {
-          console.error(`${ctxLabel(k)} -> ${t}: ${wa} => ${wb}`);
+          console.error(`${ctxLabel(k)} -> ${vis(t)}: ${wa} => ${wb}`);
           changed++;
         }
       }
@@ -124,7 +124,7 @@ switch (cmd) {
     const stats = load(modelPath).tokenStats().slice(0, top);
     printCsv(
       ["token", "asFrom", "asToWeight"],
-      stats.map((s) => [s.token, s.asFrom, s.asToWeight]),
+      stats.map((s) => [vis(s.token), s.asFrom, s.asToWeight]),
     );
     break;
   }
@@ -134,7 +134,7 @@ switch (cmd) {
     const hits = load(modelPath).tokenStats().filter((t) => t.token.includes(query));
     printCsv(
       ["token", "asFrom", "asToWeight"],
-      hits.map((s) => [s.token, s.asFrom, s.asToWeight]),
+      hits.map((s) => [vis(s.token), s.asFrom, s.asToWeight]),
     );
     break;
   }
