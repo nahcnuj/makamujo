@@ -146,6 +146,26 @@ export class MarkovChainModel implements TalkModel {
         dec(context, token);
       }
     }
+
+    // Weaken outgoing edges from n-gram state keys equal to the phrase,
+    // or containing the phrase as consecutive segments.
+    const phraseParts = tokens;
+    const keyHasPhrase = (from: string): boolean => {
+      if (from === tokens.join("\u0000")) return true;
+      const segs = from.split("\u0000");
+      for (let i = 0; i <= segs.length - phraseParts.length; i++) {
+        if (phraseParts.every((tok, j) => segs[i + j] === tok)) return true;
+      }
+      return false;
+    };
+    for (const from of Object.keys(next)) {
+      if (!keyHasPhrase(from)) continue;
+      for (const to of Object.keys({ ...next[from] })) {
+        dec(from, to);
+      }
+    }
+
+
     if (!next[""] || Object.keys(next[""]).length === 0) next[""] = { "。": 1 };
     return MarkovChainModel.#fromJson({ model: next, corpus }, this.#maxLearnContext);
   }

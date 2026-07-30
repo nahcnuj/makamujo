@@ -250,6 +250,39 @@ describe("decrementPhrase", () => {
     const json = JSON.parse(updated.toJSON()).model;
     expect(json[""]).toEqual({ "。": 1 });
   });
+
+  it("decrements outgoing edges from phrase n-gram state keys", () => {
+    const model = new MarkovChainModel({
+      "": { beige: 2 },
+      beige: { panty: 3 },
+      ["beige" + String.fromCharCode(0) + "panty"]: { end: 5, other: 2 },
+      ["pre" + String.fromCharCode(0) + "beige" + String.fromCharCode(0) + "panty"]: { end: 4 },
+      unrelated: { x: 9 },
+    });
+
+    const updated = model.decrementPhrase(["beige", "panty"], 1);
+    const m = JSON.parse(updated.toJSON()).model;
+    const phraseKey = "beige" + String.fromCharCode(0) + "panty";
+    const longKey = "pre" + String.fromCharCode(0) + "beige" + String.fromCharCode(0) + "panty";
+
+    expect(m[""]?.beige).toBe(1);
+    expect(m.beige?.panty).toBe(2);
+    expect(m[phraseKey]?.end).toBe(4);
+    expect(m[phraseKey]?.other).toBe(1);
+    expect(m[longKey]?.end).toBe(3);
+    expect(m.unrelated?.x).toBe(9);
+  });
+
+  it("removes phrase state outgoings when weight reaches zero", () => {
+    const phraseKey = "beige" + String.fromCharCode(0) + "panty";
+    const model = new MarkovChainModel({
+      [phraseKey]: { end: 1 },
+    });
+    const updated = model.decrementPhrase(["beige", "panty"], 1);
+    const m = JSON.parse(updated.toJSON()).model;
+    expect(m[phraseKey]).toBeUndefined();
+  });
+
 });
 
 describe("tokenStats and transitionsOf", () => {
