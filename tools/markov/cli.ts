@@ -101,7 +101,10 @@ switch (cmd) {
     const delta = Math.max(1, parseInt(values.delta ?? "1", 10) || 1);
     const model = load(modelPath);
     const before = JSON.parse(model.toJSON()).model as Record<string, Record<string, number>>;
-    const updated = model.decrementPhrase(tokens, delta, values.purge ? { purge: true } : undefined);
+    const updated = model.decrementPhrase(
+      tokens,
+      values.purge ? { purge: true } : { delta },
+    );
     const after = JSON.parse(updated.toJSON()).model as Record<string, Record<string, number>>;
 
     const ctxLabel = (s: string) => vis(s) || "(BOS)";

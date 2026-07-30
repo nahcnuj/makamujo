@@ -6,6 +6,11 @@ const jaJP = new Intl.Locale('ja-JP');
 
 type WeightedCandidates = Record<string, number>;
 
+export type DecrementPhraseOptions =
+  | { readonly purge: true; readonly delta?: never }
+  | { readonly purge?: false; readonly delta?: number };
+
+
 type Distribution = {
   /** initial word candidates */
   '': WeightedCandidates
@@ -122,9 +127,8 @@ export class MarkovChainModel implements TalkModel {
     return JSON.stringify(this.#model.json, null, 0);
   }
 
-  decrementPhrase(tokens: string[], delta = 1, opts?: { purge?: boolean }): MarkovChainModel {
+  decrementPhrase(tokens: string[], opts: DecrementPhraseOptions = { delta: 1 }): MarkovChainModel {
     if (tokens.length === 0) return this;
-    if (!opts?.purge && delta === 0) return this;
     const current = this.#model.json as { model: Distribution; corpus: string[] };
     const model = current.model;
     const corpus = current.corpus;
@@ -139,7 +143,7 @@ export class MarkovChainModel implements TalkModel {
       if (Object.keys(next[key]).length === 0) delete next[key];
     };
 
-    if (opts?.purge) {
+    if (opts.purge === true) {
       const phraseParts = tokens;
       const keyHasPhrase = (from: string): boolean => {
         if (from === tokens.join("\u0000")) return true;
@@ -164,6 +168,9 @@ export class MarkovChainModel implements TalkModel {
       if (!next[""] || Object.keys(next[""]).length === 0) next[""] = { "。": 1 };
       return MarkovChainModel.#fromJson({ model: next, corpus }, this.#maxLearnContext);
     }
+
+    const delta = opts.delta ?? 1;
+    if (delta === 0) return this;
 
     for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i]!;
