@@ -127,7 +127,7 @@ export class MarkovChainModel implements TalkModel {
     const current = this.#model.json as { model: Distribution; corpus: string[] };
     const model = current.model;
     const corpus = current.corpus;
-    const next: Distribution = {};
+    const next: Distribution = { '': {} };
     for (const [from, cands] of Object.entries(model)) {
       next[from] = { ...cands };
     }

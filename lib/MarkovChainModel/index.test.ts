@@ -264,9 +264,9 @@ describe("tokenStats and transitionsOf", () => {
   it("tokenStats returns frequency-like ranking", () => {
     const stats = model.tokenStats();
     expect(stats.length).toBeGreaterThan(0);
-    expect(stats[0].token).toBeTruthy();
-    expect(typeof stats[0].asFrom).toBe("number");
-    expect(typeof stats[0].asToWeight).toBe("number");
+    expect(stats[0]!.token).toBeTruthy();
+    expect(typeof stats[0]!.asFrom).toBe("number");
+    expect(typeof stats[0]!.asToWeight).toBe("number");
   });
 
   it("transitionsOf returns asFrom and asTo", () => {
