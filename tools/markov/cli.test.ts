@@ -202,3 +202,41 @@ describe("markov cli search visibility", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 });
+
+describe("markov cli delimiter", () => {
+  it("decrement-phrase accepts slash delimiter", async () => {
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(
+      modelPath,
+      JSON.stringify({
+        model: {
+          "": { beige: 2 },
+          beige: { panty: 3 },
+        },
+        corpus: [],
+      }),
+    );
+
+    const proc = Bun.spawn(
+      [
+        "bun",
+        "run",
+        "tools/markov/cli.ts",
+        "decrement-phrase",
+        modelPath,
+        "beige/panty",
+        "--delta",
+        "1",
+        "-d/",
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const stderr = await new Response(proc.stderr).text();
+    const code = await proc.exited;
+    expect(code).toBe(0);
+    expect(stderr).toContain('tokens=["beige","panty"]');
+    expect(stderr).toContain("changed:");
+
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
