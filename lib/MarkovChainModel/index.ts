@@ -127,81 +127,97 @@ export class MarkovChainModel implements TalkModel {
     return JSON.stringify(this.#model.json, null, 0);
   }
 
-  decrementPhrase(tokens: string[], opts: DecrementPhraseOptions = { delta: 1 }): MarkovChainModel {
+  decrementPhrase(
+    tokens: string[],
+    opts: DecrementPhraseOptions = { delta: 1 },
+  ): MarkovChainModel {
     if (tokens.length === 0) return this;
+
     const current = this.#model.json as { model: Distribution; corpus: string[] };
     const model = current.model;
     const corpus = current.corpus;
-    const next: Distribution = { '': {} };
+    const next: Distribution = { "": {} };
     for (const [from, cands] of Object.entries(model)) {
       next[from] = { ...cands };
     }
-    const dec = (key: string, token: string) => {
-      if (!next[key] || next[key][token] == null) return;
-      next[key][token] -= delta;
-      if (next[key][token] <= 0) delete next[key][token];
-      if (Object.keys(next[key]).length === 0) delete next[key];
-    };
 
-    if (opts.purge === true) {
-      const phraseParts = tokens;
-      const keyHasPhrase = (from: string): boolean => {
-        if (from === tokens.join("\u0000")) return true;
-        const segs = from.split("\u0000");
-        for (let i = 0; i <= segs.length - phraseParts.length; i++) {
-          if (phraseParts.every((tok, j) => segs[i + j] === tok)) return true;
-        }
-        return false;
-      };
-      for (const from of Object.keys(next)) {
-        if (keyHasPhrase(from)) {
-          delete next[from];
-          continue;
-        }
-        const cands = next[from];
-        if (!cands) continue;
-        for (const tok of tokens) {
-          if (cands[tok] != null) delete cands[tok];
-        }
-        if (Object.keys(cands).length === 0) delete next[from];
-      }
-      if (!next[""] || Object.keys(next[""]).length === 0) next[""] = { "。": 1 };
-      return MarkovChainModel.#fromJson({ model: next, corpus }, this.#maxLearnContext);
-    }
-
-    const delta = opts.delta ?? 1;
-    if (delta === 0) return this;
-
-    for (let i = 0; i < tokens.length; i++) {
-      const token = tokens[i]!;
-      if (i === 0) dec("", token);
-      const maxN = Math.min(this.#maxLearnContext, i);
-      for (let n = 1; n <= maxN; n++) {
-        const context = tokens.slice(i - n, i).join("\u0000");
-        dec(context, token);
-      }
-    }
-
-    // Weaken outgoing edges from n-gram state keys equal to the phrase,
-    // or containing the phrase as consecutive segments.
-    const phraseParts = tokens;
-    const keyHasPhrase = (from: string): boolean => {
-      if (from === tokens.join("\u0000")) return true;
+    const phraseKey = tokens.join("\u0000");
+    const keyHasConsecutivePhrase = (from: string): boolean => {
+      if (from === phraseKey) return true;
       const segs = from.split("\u0000");
-      for (let i = 0; i <= segs.length - phraseParts.length; i++) {
-        if (phraseParts.every((tok, j) => segs[i + j] === tok)) return true;
+      for (let i = 0; i <= segs.length - tokens.length; i++) {
+        if (tokens.every((tok, j) => segs[i + j] === tok)) return true;
       }
       return false;
     };
-    for (const from of Object.keys(next)) {
-      if (!keyHasPhrase(from)) continue;
-      const cands = next[from];
-      if (!cands) continue;
-      for (const to of Object.keys(cands)) {
-        dec(from, to);
+
+    const dec = (key: string, token: string, amount: number) => {
+      if (!next[key] || next[key]![token] == null) return;
+      next[key]![token]! -= amount;
+      if (next[key]![token]! <= 0) delete next[key]![token];
+      if (Object.keys(next[key]!).length === 0) delete next[key];
+    };
+
+    // Edges along the phrase path only: ""→t0, t0→t1, t0\0t1→t2, ...
+    const pathEdge = (i: number): { from: string; to: string } => {
+      const to = tokens[i]!;
+      const from = i === 0 ? "" : tokens.slice(0, i).join("\u0000");
+      return { from, to };
+    };
+
+    if (opts.purge === true) {
+      // 1) delete n-gram keys that contain the phrase as consecutive segments
+      for (const from of Object.keys(next)) {
+        if (keyHasConsecutivePhrase(from)) delete next[from];
+      }
+      // 2) delete only path edges for the phrase
+      for (let i = 0; i < tokens.length; i++) {
+        const { from, to } = pathEdge(i);
+        if (next[from] && next[from]![to] != null) {
+          delete next[from]![to];
+          if (Object.keys(next[from]!).length === 0) delete next[from];
+        }
+      }
+      // 3) single-token only: remove ALL edges to that token + keys containing it
+      if (tokens.length === 1) {
+        const tok = tokens[0]!;
+        for (const from of Object.keys(next)) {
+          if (from.split("\u0000").includes(tok)) {
+            delete next[from];
+            continue;
+          }
+          const cands = next[from];
+          if (cands && cands[tok] != null) {
+            delete cands[tok];
+            if (Object.keys(cands).length === 0) delete next[from];
+          }
+        }
+      }
+    } else {
+      const delta = opts.delta ?? 1;
+      if (delta === 0) return this;
+
+      // path edges only (sliding windows from the phrase itself; each edge once)
+      for (let i = 0; i < tokens.length; i++) {
+        const to = tokens[i]!;
+        if (i === 0) dec("", to, delta);
+        const maxN = Math.min(this.#maxLearnContext, i);
+        for (let n = 1; n <= maxN; n++) {
+          const context = tokens.slice(i - n, i).join("\u0000");
+          dec(context, to, delta);
+        }
+      }
+
+      // weaken outgoings from keys that contain the consecutive phrase
+      for (const from of Object.keys(next)) {
+        if (!keyHasConsecutivePhrase(from)) continue;
+        const cands = next[from];
+        if (!cands) continue;
+        for (const to of Object.keys(cands)) {
+          dec(from, to, delta);
+        }
       }
     }
-
 
     if (!next[""] || Object.keys(next[""]).length === 0) next[""] = { "。": 1 };
     return MarkovChainModel.#fromJson({ model: next, corpus }, this.#maxLearnContext);
