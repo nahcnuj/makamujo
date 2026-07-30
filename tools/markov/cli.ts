@@ -2,6 +2,8 @@
 import { parseArgs } from "node:util";
 import { MarkovChainModel } from "../../lib/MarkovChainModel";
 
+const vis = (s: string) => s.replaceAll("\u0000", "/");
+
 const csvEscape = (value: string | number): string => {
   const s = String(value);
   if (/[",\n\r]/.test(s)) {
@@ -93,11 +95,18 @@ switch (cmd) {
     const [modelPath, word] = rest;
     if (!modelPath || word == null) usage();
     const t = load(modelPath).transitionsOf(word);
+    const normalized = word.trim().split(/\s+/).filter(Boolean).join("\u0000");
     printCsv(
-      ["direction", "other", "weight"],
+      ["direction", "context", "other", "weight"],
       [
-        ...Object.entries(t.asFrom).map(([other, weight]) => ["from", other, weight] as (string | number)[]),
-        ...t.asTo.map(({ from, weight }) => ["to", from, weight] as (string | number)[]),
+        ...t.fromContexts.map(
+          ({ context, next, weight }) =>
+            ["from", vis(context), next, weight] as (string | number)[],
+        ),
+        ...t.asTo.map(
+          ({ from, weight }) =>
+            ["to", vis(from), vis(normalized), weight] as (string | number)[],
+        ),
       ],
     );
     break;
