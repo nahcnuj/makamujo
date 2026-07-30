@@ -284,6 +284,41 @@ describe("decrementPhrase", () => {
     expect(m[phraseKey]).toBeUndefined();
   });
 
+
+  it("purge removes all edges to tokens and matching n-gram keys", () => {
+    const model = new MarkovChainModel({
+      "": { beige: 2, other: 1 },
+      beige: { panty: 3 },
+      no: { panty: 4 },
+      ["beige" + String.fromCharCode(0) + "panty"]: { end: 5 },
+      ["pre" + String.fromCharCode(0) + "beige" + String.fromCharCode(0) + "panty"]: { end: 4 },
+      unrelated: { x: 9 },
+    });
+    const updated = model.decrementPhrase(["beige", "panty"], 1, { purge: true });
+    const m = JSON.parse(updated.toJSON()).model;
+    const phraseKey = "beige" + String.fromCharCode(0) + "panty";
+    const longKey = "pre" + String.fromCharCode(0) + "beige" + String.fromCharCode(0) + "panty";
+
+    expect(m[""]?.beige).toBeUndefined();
+    expect(m[""]?.other).toBe(1);
+    expect(m.beige).toBeUndefined();
+    expect(m.no?.panty).toBeUndefined();
+    expect(m[phraseKey]).toBeUndefined();
+    expect(m[longKey]).toBeUndefined();
+    expect(m.unrelated?.x).toBe(9);
+  });
+
+  it("purge and normal delta remain distinct", () => {
+    const model = new MarkovChainModel({
+      "": { beige: 5 },
+      beige: { panty: 5 },
+    });
+    const a = JSON.parse(model.decrementPhrase(["beige"], 1).toJSON()).model;
+    expect(a[""]?.beige).toBe(4);
+    const b = JSON.parse(model.decrementPhrase(["beige"], 1, { purge: true }).toJSON()).model;
+    expect(b[""]?.beige).toBeUndefined();
+  });
+
 });
 
 describe("tokenStats and transitionsOf", () => {

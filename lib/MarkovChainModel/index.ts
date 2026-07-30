@@ -122,8 +122,9 @@ export class MarkovChainModel implements TalkModel {
     return JSON.stringify(this.#model.json, null, 0);
   }
 
-  decrementPhrase(tokens: string[], delta = 1): MarkovChainModel {
-    if (tokens.length === 0 || delta === 0) return this;
+  decrementPhrase(tokens: string[], delta = 1, opts?: { purge?: boolean }): MarkovChainModel {
+    if (tokens.length === 0) return this;
+    if (!opts?.purge && delta === 0) return this;
     const current = this.#model.json as { model: Distribution; corpus: string[] };
     const model = current.model;
     const corpus = current.corpus;
@@ -137,6 +138,33 @@ export class MarkovChainModel implements TalkModel {
       if (next[key][token] <= 0) delete next[key][token];
       if (Object.keys(next[key]).length === 0) delete next[key];
     };
+
+    if (opts?.purge) {
+      const phraseParts = tokens;
+      const keyHasPhrase = (from: string): boolean => {
+        if (from === tokens.join("\u0000")) return true;
+        const segs = from.split("\u0000");
+        for (let i = 0; i <= segs.length - phraseParts.length; i++) {
+          if (phraseParts.every((tok, j) => segs[i + j] === tok)) return true;
+        }
+        return false;
+      };
+      for (const from of Object.keys(next)) {
+        if (keyHasPhrase(from)) {
+          delete next[from];
+          continue;
+        }
+        const cands = next[from];
+        if (!cands) continue;
+        for (const tok of tokens) {
+          if (cands[tok] != null) delete cands[tok];
+        }
+        if (Object.keys(cands).length === 0) delete next[from];
+      }
+      if (!next[""] || Object.keys(next[""]).length === 0) next[""] = { "。": 1 };
+      return MarkovChainModel.#fromJson({ model: next, corpus }, this.#maxLearnContext);
+    }
+
     for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i]!;
       if (i === 0) dec("", token);

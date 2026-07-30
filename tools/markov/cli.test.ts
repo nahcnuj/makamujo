@@ -240,3 +240,65 @@ describe("markov cli delimiter", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 });
+
+describe("markov cli decrement-phrase --purge", () => {
+  it("rejects --purge with --delta", async () => {
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(
+      modelPath,
+      JSON.stringify({ model: { "": { a: 1 } }, corpus: [] }),
+    );
+    const proc = Bun.spawn(
+      [
+        "bun",
+        "run",
+        "tools/markov/cli.ts",
+        "decrement-phrase",
+        modelPath,
+        "a",
+        "--purge",
+        "--delta",
+        "1",
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const stderr = await new Response(proc.stderr).text();
+    const code = await proc.exited;
+    expect(code).toBe(1);
+    expect(stderr).toContain("--purge and --delta cannot be used together");
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("purge removes token edges", async () => {
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(
+      modelPath,
+      JSON.stringify({
+        model: { "": { beige: 2, x: 1 }, no: { beige: 3 } },
+        corpus: [],
+      }),
+    );
+    const proc = Bun.spawn(
+      [
+        "bun",
+        "run",
+        "tools/markov/cli.ts",
+        "decrement-phrase",
+        modelPath,
+        "beige",
+        "--purge",
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    const code = await proc.exited;
+    expect(code).toBe(0);
+    expect(stderr).toContain("purge");
+    const out = JSON.parse(stdout);
+    expect(out.model[""]?.beige).toBeUndefined();
+    expect(out.model[""]?.x).toBe(1);
+    expect(out.model.no?.beige).toBeUndefined();
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
