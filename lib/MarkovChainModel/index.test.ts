@@ -215,7 +215,7 @@ describe("decrementPhrase", () => {
       "あ\u0000んま": { "り": 1 },
       "り": { "。": 1 },
     });
-    const updated = model.decrementPhrase(["あ", "んま", "り"], 1);
+    const updated = model.decrementPhrase(["あ", "んま", "り"], { delta: 1 });
     const json = JSON.parse(updated.toJSON()).model;
     expect(json[""]?.["あ"]).toBe(2);
     expect(json["あ"]?.["んま"]).toBe(1);
@@ -229,7 +229,7 @@ describe("decrementPhrase", () => {
       "x": { "y": 1 },
       "y": { "。": 1 },
     });
-    const updated = model.decrementPhrase(["x", "y"], 1);
+    const updated = model.decrementPhrase(["x", "y"], { delta: 1 });
     const json = JSON.parse(updated.toJSON()).model;
     expect(json[""]?.["x"]).toBeUndefined();
     expect(json["x"]).toBeUndefined();
@@ -239,14 +239,14 @@ describe("decrementPhrase", () => {
     const model = new MarkovChainModel();
     model.learn("テスト文。");
     const before = JSON.parse(model.toJSON()).corpus;
-    const updated = model.decrementPhrase(["テ", "スト"], 1);
+    const updated = model.decrementPhrase(["テ", "スト"], { delta: 1 });
     const after = JSON.parse(updated.toJSON()).corpus;
     expect(after).toEqual(before);
   });
 
   it("keeps a fallback start distribution when emptied", () => {
     const model = new MarkovChainModel({ "": { "x": 1 } });
-    const updated = model.decrementPhrase(["x"], 1);
+    const updated = model.decrementPhrase(["x"], { delta: 1 });
     const json = JSON.parse(updated.toJSON()).model;
     expect(json[""]).toEqual({ "。": 1 });
   });
@@ -260,7 +260,7 @@ describe("decrementPhrase", () => {
       unrelated: { x: 9 },
     });
 
-    const updated = model.decrementPhrase(["beige", "panty"], 1);
+    const updated = model.decrementPhrase(["beige", "panty"], { delta: 1 });
     const m = JSON.parse(updated.toJSON()).model;
     const phraseKey = "beige" + String.fromCharCode(0) + "panty";
     const longKey = "pre" + String.fromCharCode(0) + "beige" + String.fromCharCode(0) + "panty";
@@ -279,9 +279,44 @@ describe("decrementPhrase", () => {
       "": {},
       [phraseKey]: { end: 1 },
     });
-    const updated = model.decrementPhrase(["beige", "panty"], 1);
+    const updated = model.decrementPhrase(["beige", "panty"], { delta: 1 });
     const m = JSON.parse(updated.toJSON()).model;
     expect(m[phraseKey]).toBeUndefined();
+  });
+
+
+  it("purge removes all edges to tokens and matching n-gram keys", () => {
+    const model = new MarkovChainModel({
+      "": { beige: 2, other: 1 },
+      beige: { panty: 3 },
+      no: { panty: 4 },
+      ["beige" + String.fromCharCode(0) + "panty"]: { end: 5 },
+      ["pre" + String.fromCharCode(0) + "beige" + String.fromCharCode(0) + "panty"]: { end: 4 },
+      unrelated: { x: 9 },
+    });
+    const updated = model.decrementPhrase(["beige", "panty"], { purge: true });
+    const m = JSON.parse(updated.toJSON()).model;
+    const phraseKey = "beige" + String.fromCharCode(0) + "panty";
+    const longKey = "pre" + String.fromCharCode(0) + "beige" + String.fromCharCode(0) + "panty";
+
+    expect(m[""]?.beige).toBeUndefined();
+    expect(m[""]?.other).toBe(1);
+    expect(m.beige).toBeUndefined();
+    expect(m.no?.panty).toBeUndefined();
+    expect(m[phraseKey]).toBeUndefined();
+    expect(m[longKey]).toBeUndefined();
+    expect(m.unrelated?.x).toBe(9);
+  });
+
+  it("purge and normal delta remain distinct", () => {
+    const model = new MarkovChainModel({
+      "": { beige: 5 },
+      beige: { panty: 5 },
+    });
+    const a = JSON.parse(model.decrementPhrase(["beige"], { delta: 1 }).toJSON()).model;
+    expect(a[""]?.beige).toBe(4);
+    const b = JSON.parse(model.decrementPhrase(["beige"], { purge: true }).toJSON()).model;
+    expect(b[""]?.beige).toBeUndefined();
   });
 
 });

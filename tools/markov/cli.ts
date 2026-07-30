@@ -50,6 +50,7 @@ const { values, positionals } = parseArgs({
     "in-place": { type: "boolean", short: "i", default: false },
     suffix: { type: "string", default: "" },
     delimiter: { type: "string", short: "d", default: " " },
+    purge: { type: "boolean", default: false },
     help: { type: "boolean", short: "h" },
   },
   allowPositionals: true,
@@ -68,7 +69,7 @@ function load(path: string): MarkovChainModel {
 
 function usage(): never {
   console.error(`Usage:
-  bun run tools/markov/cli.ts decrement-phrase <modelPath> <phrase> [--delta N] [-i|-iSUFFIX] [-d DELIM]
+  bun run tools/markov/cli.ts decrement-phrase <modelPath> <phrase> [--delta N | --purge] [-i|-iSUFFIX] [-d DELIM]
   bun run tools/markov/cli.ts tokens <modelPath> [--top N]
   bun run tools/markov/cli.ts search <modelPath> <query>
   bun run tools/markov/cli.ts transitions <modelPath> <word> [-d DELIM]`);
@@ -89,15 +90,26 @@ switch (cmd) {
       console.error("phrase is empty");
       process.exit(1);
     }
+    
+    const deltaExplicit = Bun.argv.slice(2).some(
+      (a) => a === "--delta" || a.startsWith("--delta="),
+    );
+    if (values.purge && deltaExplicit) {
+      console.error("--purge and --delta cannot be used together");
+      process.exit(1);
+    }
     const delta = Math.max(1, parseInt(values.delta ?? "1", 10) || 1);
     const model = load(modelPath);
     const before = JSON.parse(model.toJSON()).model as Record<string, Record<string, number>>;
-    const updated = model.decrementPhrase(tokens, delta);
+    const updated = model.decrementPhrase(
+      tokens,
+      values.purge ? { purge: true } : { delta },
+    );
     const after = JSON.parse(updated.toJSON()).model as Record<string, Record<string, number>>;
 
     const ctxLabel = (s: string) => vis(s) || "(BOS)";
     let changed = 0;
-    console.error(`decrement-phrase delta=${delta} tokens=${JSON.stringify(tokens)}`);
+    console.error(`decrement-phrase ${values.purge ? "purge" : `delta=${delta}`} tokens=${JSON.stringify(tokens)}`);
     for (const k of new Set([...Object.keys(before), ...Object.keys(after)])) {
       const ka = before[k] ?? {};
       const kb = after[k] ?? {};
