@@ -65,7 +65,27 @@ switch (cmd) {
     }
     const delta = Math.max(1, parseInt(values.delta ?? "1", 10) || 1);
     const model = load(modelPath);
+    const before = JSON.parse(model.toJSON()).model as Record<string, Record<string, number>>;
     const updated = model.decrementPhrase(tokens, delta);
+    const after = JSON.parse(updated.toJSON()).model as Record<string, Record<string, number>>;
+
+    const ctxLabel = (s: string) => s.replaceAll("\u0000", "/") || "(BOS)";
+    let changed = 0;
+    console.error(`decrement-phrase delta=${delta} tokens=${JSON.stringify(tokens)}`);
+    for (const k of new Set([...Object.keys(before), ...Object.keys(after)])) {
+      const ka = before[k] ?? {};
+      const kb = after[k] ?? {};
+      for (const t of new Set([...Object.keys(ka), ...Object.keys(kb)])) {
+        const wa = ka[t] ?? 0;
+        const wb = kb[t] ?? 0;
+        if (wa !== wb) {
+          console.error(`${ctxLabel(k)} -> ${t}: ${wa} => ${wb}`);
+          changed++;
+        }
+      }
+    }
+    console.error(`changed: ${changed} transitions`);
+
     process.stdout.write(updated.toJSON());
     if (process.stdout.isTTY) process.stdout.write("\n");
     break;

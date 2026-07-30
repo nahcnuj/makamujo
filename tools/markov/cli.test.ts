@@ -39,3 +39,49 @@ describe("markov cli transitions", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 });
+
+describe("markov cli decrement-phrase", () => {
+  it("logs changed transitions to stderr and model JSON to stdout", async () => {
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(
+      modelPath,
+      JSON.stringify({
+        model: {
+          "": { beige: 2 },
+          beige: { panty: 3 },
+          panty: { "\u3002": 1 },
+        },
+        corpus: [],
+      }),
+    );
+
+    const proc = Bun.spawn(
+      [
+        "bun",
+        "run",
+        "tools/markov/cli.ts",
+        "decrement-phrase",
+        modelPath,
+        "beige panty",
+        "--delta",
+        "1",
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    const code = await proc.exited;
+
+    expect(code).toBe(0);
+    expect(stderr).toContain('tokens=["beige","panty"]');
+    expect(stderr).toContain("(BOS) -> beige: 2 => 1");
+    expect(stderr).toContain("beige -> panty: 3 => 2");
+    expect(stderr).toContain("changed: 2 transitions");
+
+    const out = JSON.parse(stdout);
+    expect(out.model[""].beige).toBe(1);
+    expect(out.model.beige.panty).toBe(2);
+
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
