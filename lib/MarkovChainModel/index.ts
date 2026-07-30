@@ -170,17 +170,43 @@ export class MarkovChainModel implements TalkModel {
       .sort((a, b) => (b.asToWeight + b.asFrom) - (a.asToWeight + a.asFrom));
   }
 
-  transitionsOf(word: string): {
+  transitionsOf(wordOrPhrase: string): {
     asFrom: WeightedCandidates;
     asTo: { from: string; weight: number }[];
+    fromContexts: { context: string; next: string; weight: number }[];
   } {
     const { model } = this.#model.json as { model: Distribution; corpus: string[] };
-    const asFrom = { ...(model[word] ?? {}) };
-    const asTo = [];
+    const key = wordOrPhrase.trim().split(/\s+/).filter(Boolean).join("\u0000");
+    const needle = key.split("\u0000");
+    const asFrom = { ...(model[key] ?? {}) };
+    const asTo: { from: string; weight: number }[] = [];
+    const fromContexts: { context: string; next: string; weight: number }[] = [];
+
+    const contextContains = (from: string): boolean => {
+      if (from === key) return true;
+      const segs = from.split("\u0000");
+      if (needle.length === 1) {
+        return segs.includes(needle[0]!);
+      }
+      for (let i = 0; i <= segs.length - needle.length; i++) {
+        if (needle.every((tok, j) => segs[i + j] === tok)) return true;
+      }
+      return false;
+    };
+
     for (const [from, cands] of Object.entries(model)) {
-      if (cands[word] != null) asTo.push({ from, weight: cands[word] });
+      const toWeight = cands[key] ?? (needle.length === 1 ? cands[needle[0]!] : undefined);
+      if (toWeight != null) asTo.push({ from, weight: toWeight });
+
+      if (contextContains(from)) {
+        for (const [next, w] of Object.entries(cands)) {
+          fromContexts.push({ context: from, next, weight: w });
+        }
+      }
     }
-    return { asFrom, asTo };
+    fromContexts.sort((a, b) => b.weight - a.weight);
+    asTo.sort((a, b) => b.weight - a.weight);
+    return { asFrom, asTo, fromContexts };
   }
 
 };
