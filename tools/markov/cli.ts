@@ -1,5 +1,6 @@
 ﻿#!/usr/bin/env bun
 import { parseArgs } from "node:util";
+import { writeFileSync } from "node:fs";
 import { MarkovChainModel } from "../../lib/MarkovChainModel";
 
 const vis = (s: string) => s.replaceAll("\u0000", "/");
@@ -24,6 +25,7 @@ const { values, positionals } = parseArgs({
   options: {
     delta: { type: "string", default: "1" },
     top: { type: "string", default: "50" },
+    "in-place": { type: "boolean", short: "i", default: false },
     help: { type: "boolean", short: "h" },
   },
   allowPositionals: true,
@@ -42,7 +44,7 @@ function load(path: string): MarkovChainModel {
 
 function usage(): never {
   console.error(`Usage:
-  bun run tools/markov/cli.ts decrement-phrase <modelPath> <phrase> [--delta N]
+  bun run tools/markov/cli.ts decrement-phrase <modelPath> <phrase> [--delta N] [--in-place|-i]
   bun run tools/markov/cli.ts tokens <modelPath> [--top N]
   bun run tools/markov/cli.ts search <modelPath> <query>
   bun run tools/markov/cli.ts transitions <modelPath> <word>`);
@@ -86,8 +88,13 @@ switch (cmd) {
     }
     console.error(`changed: ${changed} transitions`);
 
-    process.stdout.write(updated.toJSON());
-    if (process.stdout.isTTY) process.stdout.write("\n");
+    if (values["in-place"]) {
+      writeFileSync(modelPath, updated.toJSON(), "utf8");
+      console.error(`wrote: ${modelPath}`);
+    } else {
+      process.stdout.write(updated.toJSON());
+      if (process.stdout.isTTY) process.stdout.write("\n");
+    }
     break;
   }
   case "tokens": {
