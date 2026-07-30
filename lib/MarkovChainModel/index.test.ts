@@ -285,7 +285,7 @@ describe("decrementPhrase", () => {
   });
 
 
-  it("purge removes all edges to tokens and matching n-gram keys", () => {
+  it("purge removes phrase path and consecutive n-gram keys only", () => {
     const model = new MarkovChainModel({
       "": { beige: 2, other: 1 },
       beige: { panty: 3 },
@@ -299,24 +299,39 @@ describe("decrementPhrase", () => {
     const phraseKey = "beige" + String.fromCharCode(0) + "panty";
     const longKey = "pre" + String.fromCharCode(0) + "beige" + String.fromCharCode(0) + "panty";
 
+    // path edges removed
     expect(m[""]?.beige).toBeUndefined();
-    expect(m[""]?.other).toBe(1);
-    expect(m.beige).toBeUndefined();
-    expect(m.no?.panty).toBeUndefined();
+    expect(m.beige?.panty).toBeUndefined();
+    // consecutive phrase keys removed
     expect(m[phraseKey]).toBeUndefined();
     expect(m[longKey]).toBeUndefined();
+    // unrelated edge to panty remains (not part of this phrase path)
+    expect(m.no?.panty).toBe(4);
+    expect(m[""]?.other).toBe(1);
     expect(m.unrelated?.x).toBe(9);
   });
 
-  it("purge and normal delta remain distinct", () => {
+  it("single-token purge removes all edges to that token", () => {
+    const model = new MarkovChainModel({
+      "": { beige: 5, x: 1 },
+      no: { beige: 3 },
+    });
+    const b = JSON.parse(model.decrementPhrase(["beige"], { purge: true }).toJSON()).model;
+    expect(b[""]?.beige).toBeUndefined();
+    expect(b.no?.beige).toBeUndefined();
+    expect(b[""]?.x).toBe(1);
+  });
+
+  it("delta does not remove unrelated edges to later tokens", () => {
     const model = new MarkovChainModel({
       "": { beige: 5 },
       beige: { panty: 5 },
+      no: { panty: 4 },
     });
-    const a = JSON.parse(model.decrementPhrase(["beige"], { delta: 1 }).toJSON()).model;
+    const a = JSON.parse(model.decrementPhrase(["beige", "panty"], { delta: 1 }).toJSON()).model;
     expect(a[""]?.beige).toBe(4);
-    const b = JSON.parse(model.decrementPhrase(["beige"], { purge: true }).toJSON()).model;
-    expect(b[""]?.beige).toBeUndefined();
+    expect(a.beige?.panty).toBe(4);
+    expect(a.no?.panty).toBe(4);
   });
 
 });
