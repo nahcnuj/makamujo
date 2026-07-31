@@ -3,6 +3,7 @@
 const MS_PER_CHAR = 45;
 const MIN_MS = 200;
 const MAX_MS = 2000;
+const TIP_FADE_MS = 120;
 
 const graphemeSegmenter = new Intl.Segmenter("ja", { granularity: "grapheme" });
 
@@ -59,6 +60,18 @@ export function runReveal(
   return () => scheduler.cancel(id);
 }
 
+/** Split revealed graphemes into solid body + fading tip (for tests). */
+export function splitReveal(
+  graphemes: string[],
+  count: number,
+  animate: boolean,
+): { body: string; tip: string; done: boolean } {
+  const done = !animate || count >= graphemes.length;
+  const body = graphemes.slice(0, done ? count : Math.max(0, count - 1)).join("");
+  const tip = !done && count > 0 ? graphemes[count - 1]! : "";
+  return { body, tip, done };
+}
+
 export function SpeechLine({
   text,
   animate = true,
@@ -89,9 +102,21 @@ export function SpeechLine({
     });
   }, [display, animate, graphemes.length]);
 
+  const { body, tip } = splitReveal(graphemes, count, animate);
+
   return (
     <div className="overflow-hidden whitespace-pre-wrap break-all">
-      {graphemes.slice(0, count).join("")}
+      <span>{body}</span>
+      {tip !== "" && (
+        <span
+          key={count}
+          style={{
+            animation: `speech-fade-in ${TIP_FADE_MS}ms linear forwards`,
+          }}
+        >
+          {tip}
+        </span>
+      )}
     </div>
   );
 }
