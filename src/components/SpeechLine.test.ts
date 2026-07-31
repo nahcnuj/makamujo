@@ -73,8 +73,8 @@ describe("render", () => {
     expect(visual?.textContent).toBe("ab");
     const spans = [...visual!.querySelectorAll(":scope > span")] as HTMLElement[];
     expect(spans).toHaveLength(2);
-    expect(spans[0]!.style.animationDelay).toBe("0ms");
-    expect(spans[1]!.style.animationDelay).toBe("45ms");
+    expect(spans[0]!.style.animationDelay).toBe(`${animationDelayMs(0)}ms`);
+    expect(spans[1]!.style.animationDelay).toBe(`${animationDelayMs(1)}ms`);
   });
 
   it("SpeechLine: no animation styles when animate is false", () => {
