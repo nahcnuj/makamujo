@@ -1,4 +1,4 @@
-﻿import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { JSDOM } from "jsdom";
 import { jsx, render } from "hono/jsx/dom";
 import {
@@ -32,8 +32,8 @@ describe("graphemeList", () => {
 describe("animationDelayMs", () => {
   it("staggers by MS_PER_CHAR", () => {
     expect(animationDelayMs(0)).toBe(0);
-    expect(animationDelayMs(1)).toBe(45);
-    expect(animationDelayMs(10)).toBe(450);
+    expect(animationDelayMs(1)).toBe(55);
+    expect(animationDelayMs(10)).toBe(550);
   });
 });
 
