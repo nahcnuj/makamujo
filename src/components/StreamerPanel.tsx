@@ -10,7 +10,7 @@ export function StreamerPanel() {
   const { speechLines, silent } = useAgentContext();
   const [displayLines, setDisplayLines] = useState<string[]>(speechLines);
   const [risePx, setRisePx] = useState(0);
-  const firstRef = useRef<HTMLDivElement>(null);
+  const firstRef = useRef<HTMLDivElement | null>(null);
   const displayRef = useRef(displayLines);
   displayRef.current = displayLines;
 
