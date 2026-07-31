@@ -129,6 +129,18 @@ describe('updateSpeechState', () => {
       expect(setSpeechLines).toHaveBeenCalledWith(['太郎さん、広告ありがとうございます！']);
     });
 
+    it('replaces after ありがとうございます！ as topic end', () => {
+      const setSpeechLines = mock((_: string[]) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState(
+        { speech: '次の話題' },
+        ['太郎さん、広告ありがとうございます！'],
+        setSpeechLines,
+        setSilent,
+      );
+      expect(setSpeechLines).toHaveBeenCalledWith(['次の話題']);
+    });
+
     it('does not update when speech text is unchanged', () => {
       const setSpeechLines = mock((_: string[]) => {});
       const setSilent = mock((_: boolean) => {});
