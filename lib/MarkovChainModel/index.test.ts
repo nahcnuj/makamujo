@@ -285,27 +285,22 @@ describe("decrementPhrase", () => {
   });
 
 
-  it("purge removes phrase path and consecutive n-gram keys only", () => {
+  it("multi-token purge subtracts min weight along phrase path", () => {
     const model = new MarkovChainModel({
-      "": { beige: 2, other: 1 },
+      "": { beige: 10, other: 1 },
       beige: { panty: 3 },
       no: { panty: 4 },
       ["beige" + String.fromCharCode(0) + "panty"]: { end: 5 },
-      ["pre" + String.fromCharCode(0) + "beige" + String.fromCharCode(0) + "panty"]: { end: 4 },
       unrelated: { x: 9 },
     });
     const updated = model.decrementPhrase(["beige", "panty"], { purge: true });
     const m = JSON.parse(updated.toJSON()).model;
     const phraseKey = "beige" + String.fromCharCode(0) + "panty";
-    const longKey = "pre" + String.fromCharCode(0) + "beige" + String.fromCharCode(0) + "panty";
 
-    // path edges removed
-    expect(m[""]?.beige).toBeUndefined();
-    expect(m.beige?.panty).toBeUndefined();
-    // consecutive phrase keys removed
-    expect(m[phraseKey]).toBeUndefined();
-    expect(m[longKey]).toBeUndefined();
-    // unrelated edge to panty remains (not part of this phrase path)
+    // min(10, 3) = 3
+    expect(m[""]?.beige).toBe(7);
+    expect(m.beige?.panty).toBeUndefined(); // 3 - 3
+    expect(m[phraseKey]?.end).toBe(2); // 5 - 3
     expect(m.no?.panty).toBe(4);
     expect(m[""]?.other).toBe(1);
     expect(m.unrelated?.x).toBe(9);
