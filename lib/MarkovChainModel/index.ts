@@ -152,33 +152,32 @@ export class MarkovChainModel implements TalkModel {
     };
 
     const dec = (key: string, token: string, amount: number) => {
-      if (!next[key] || next[key]![token] == null) return;
-      next[key]![token]! -= amount;
-      if (next[key]![token]! <= 0) delete next[key]![token];
-      if (Object.keys(next[key]!).length === 0) delete next[key];
+      const cands = next[key];
+      if (!cands || cands[token] == null) return;
+      cands[token]! -= amount;
+      if (cands[token]! <= 0) delete cands[token];
+      if (Object.keys(cands).length === 0) delete next[key];
     };
 
-    // Edges along the phrase path only: ""→t0, t0→t1, t0\0t1→t2, ...
-    const pathEdge = (i: number): { from: string; to: string } => {
-      const to = tokens[i]!;
-      const from = i === 0 ? "" : tokens.slice(0, i).join("\u0000");
-      return { from, to };
+    const pathEdges = (): { from: string; to: string }[] => {
+      const edges: { from: string; to: string }[] = [];
+      for (let i = 0; i < tokens.length; i++) {
+        const to = tokens[i]!;
+        if (i === 0) {
+          edges.push({ from: "", to });
+        }
+        const maxN = Math.min(this.#maxLearnContext, i);
+        for (let n = 1; n <= maxN; n++) {
+          edges.push({
+            from: tokens.slice(i - n, i).join("\u0000"),
+            to,
+          });
+        }
+      }
+      return edges;
     };
 
     if (opts.purge === true) {
-      // 1) delete n-gram keys that contain the phrase as consecutive segments
-      for (const from of Object.keys(next)) {
-        if (keyHasConsecutivePhrase(from)) delete next[from];
-      }
-      // 2) delete only path edges for the phrase
-      for (let i = 0; i < tokens.length; i++) {
-        const { from, to } = pathEdge(i);
-        if (next[from] && next[from]![to] != null) {
-          delete next[from]![to];
-          if (Object.keys(next[from]!).length === 0) delete next[from];
-        }
-      }
-      // 3) single-token only: remove ALL edges to that token + keys containing it
       if (tokens.length === 1) {
         const tok = tokens[0]!;
         for (const from of Object.keys(next)) {
@@ -192,12 +191,34 @@ export class MarkovChainModel implements TalkModel {
             if (Object.keys(cands).length === 0) delete next[from];
           }
         }
+      } else {
+        // Multi-token purge: subtract min weight along phrase path edges
+        const edges = pathEdges();
+        let minW = Infinity;
+        for (const { from, to } of edges) {
+          const w = next[from]?.[to];
+          if (w == null) continue;
+          if (w < minW) minW = w;
+        }
+        if (minW !== Infinity && minW > 0) {
+          for (const { from, to } of edges) {
+            dec(from, to, minW);
+          }
+          // consecutive phrase state keys: weaken all outgoings by min
+          for (const from of Object.keys(next)) {
+            if (!keyHasConsecutivePhrase(from)) continue;
+            const cands = next[from];
+            if (!cands) continue;
+            for (const to of Object.keys(cands)) {
+              dec(from, to, minW);
+            }
+          }
+        }
       }
     } else {
       const delta = opts.delta ?? 1;
       if (delta === 0) return this;
 
-      // path edges only (sliding windows from the phrase itself; each edge once)
       for (let i = 0; i < tokens.length; i++) {
         const to = tokens[i]!;
         if (i === 0) dec("", to, delta);
@@ -208,7 +229,6 @@ export class MarkovChainModel implements TalkModel {
         }
       }
 
-      // weaken outgoings from keys that contain the consecutive phrase
       for (const from of Object.keys(next)) {
         if (!keyHasConsecutivePhrase(from)) continue;
         const cands = next[from];
