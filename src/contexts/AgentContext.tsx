@@ -5,7 +5,7 @@ import { useInterval } from "../hooks/useInterval";
 import { updateSpeechState } from "./speechState";
 
 type Data = {
-  speech: string
+  speechLines: string[]
   silent: boolean
   playing?: {
     name: keyof typeof Games
@@ -15,7 +15,7 @@ type Data = {
 };
 
 const AgentContext = createContext<Data>({
-  speech: '',
+  speechLines: [],
   silent: false,
 });
 
@@ -28,14 +28,14 @@ export const useAgentContext = () => useContext(AgentContext);
  */
 export const updateSpeechStateFromSpeechApiResponse = (
   res: { speech?: string; silent?: boolean } | null,
-  currentSpeech: string,
-  setSpeech: (speech: string) => void,
+  currentLines: string[],
+  setSpeechLines: (lines: string[]) => void,
   setSilent: (silent: boolean) => void,
 ): void => {
   if (res === null) {
     return;
   }
-  updateSpeechState(res, currentSpeech, setSpeech, setSilent);
+  updateSpeechState(res, currentLines, setSpeechLines, setSilent);
 };
 
 /**
@@ -54,7 +54,7 @@ export const setStreamStateFromMetaApiResponse = (
 };
 
 export const AgentProvider = ({ children }: PropsWithChildren) => {
-  const [speech, setSpeech] = useState('');
+  const [speechLines, setSpeechLines] = useState<string[]>([]);
   const [silent, setSilent] = useState(false);
   const [playing, setPlaying] = useState<Data['playing']>();
   const [streamState, setStreamState] = useState<AgentState>();
@@ -66,7 +66,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
         console.warn('[WARN]', err);
         return null;
       });
-    updateSpeechStateFromSpeechApiResponse(res, speech, setSpeech, setSilent);
+    updateSpeechStateFromSpeechApiResponse(res, speechLines, setSpeechLines, setSilent);
   });
 
   useInterval(100, async () => {
@@ -89,7 +89,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
   });
 
   return (
-    <AgentContext.Provider value={{ speech, silent, streamState, playing }}>
+    <AgentContext.Provider value={{ speechLines, silent, streamState, playing }}>
       {children}
     </AgentContext.Provider>
   );

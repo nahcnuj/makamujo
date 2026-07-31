@@ -3,8 +3,7 @@ import { useAgentContext } from "../contexts/AgentContext";
 import { CharacterSprite } from "./CharacterSprite";
 
 export function StreamerPanel() {
-  const { speech, silent } = useAgentContext();
-  const speechText = typeof speech === 'string' ? speech : '';
+  const { speechLines, silent } = useAgentContext();
 
   return (
     <div className="flex gap-2 h-full">
@@ -15,7 +14,13 @@ export function StreamerPanel() {
         <Box borderColor="border-emerald-300" borderWidth="border-8" borderStyle="border-double" rounded="rounded-xl">
           <Container>
             <div className="w-full h-full text-3xl/9 break-all text-ellipsis overflow-hidden">
-              {silent ? '（コメントしてね）' : speechText.replace(/。$/, '')}
+              {silent
+                ? '（コメントしてね）'
+                : speechLines.map((line, i) => (
+                    <div key={`${i}-${line}`}>
+                      {line.replace(/。$/, '')}
+                    </div>
+                  ))}
             </div>
           </Container>
         </Box>
