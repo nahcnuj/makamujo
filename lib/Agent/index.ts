@@ -21,6 +21,11 @@ export class MakaMujo {
   #stream: StreamApplicationService;
   #gameplay: GameplayApplicationService;
   #gameStateChangeListeners: Array<() => void> = [];
+  /**
+   * Pending Markov start tokens for the next spontaneous turn.
+   * Empty → generate("") (legacy random seed).
+   */
+  #nextStart: string[] = [];
 
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
@@ -51,22 +56,72 @@ export class MakaMujo {
 
   async speech(generated?: TalkModelGenerateResult) {
     const session = this.#session;
-    const event: SpeechEvent = typeof generated === "string" ? { text: generated } : generated !== undefined ? {
-      nGram: session.currentNGramSize,
-      nGramRaw: session.currentNGramSizeRaw,
-      ...generated,
-    } : (() => {
-      const ret = this.#talkModel.generate("", session.currentNGramSize);
-      return typeof ret === "string" ? {
-        text: ret,
-      } : {
+    const event: SpeechEvent = (() => {
+      if (typeof generated === "string") {
+        return { text: generated };
+      }
+      if (generated !== undefined) {
+        return {
+          nGram: session.currentNGramSize,
+          nGramRaw: session.currentNGramSizeRaw,
+          ...generated,
+        };
+      }
+
+      // Spontaneous / continuation: AGT gen accepts a single bos token.
+      const pending = this.#nextStart;
+      this.#nextStart = [];
+      const start = pending.length > 0 ? pending[pending.length - 1]! : "";
+      const ret = this.#talkModel.generate(start, session.currentNGramSize);
+      if (typeof ret === "string") {
+        const text =
+          start && ret.startsWith(start) ? ret.slice(start.length) : ret;
+        return { text };
+      }
+      const rawText = ret.text;
+      const text =
+        start && rawText.startsWith(start)
+          ? rawText.slice(start.length)
+          : rawText;
+      const nodes = Array.isArray(ret.nodes)
+        ? start && ret.nodes[0] === start
+          ? ret.nodes.slice(1)
+          : ret.nodes
+        : undefined;
+      return {
         nGram: session.currentNGramSize,
         nGramRaw: session.currentNGramSizeRaw,
-        ...ret,
+        text,
+        nodes,
       };
     })();
 
     await this.#speechQueue.enqueue(event);
+
+    // After TTS, queue continuation when the chunk does not end with "。".
+    this.#maybeQueueContinuation(event);
+  }
+
+  #maybeQueueContinuation(event: SpeechEvent): void {
+    const text = event.text.trimEnd();
+    if (!text || text.endsWith("。")) {
+      return;
+    }
+
+    const nodes = event.nodes;
+    if (nodes === undefined || nodes.length === 0) {
+      return;
+    }
+    const seed = nodes[nodes.length - 1];
+    if (seed === undefined || seed === "。") {
+      return;
+    }
+
+    if (this.#nextStart.length > 0) {
+      return;
+    }
+    this.#nextStart = [seed];
+    void this.speech();
   }
 
   onSpeech(cb: (event: SpeechEvent) => Promise<void>): MakaMujo {
