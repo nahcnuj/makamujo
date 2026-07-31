@@ -79,6 +79,6 @@ export function updateSpeechState(
       return;
     }
 
-    setSpeechLines([...currentLines, newSpeech]);
+    setSpeechLines([...currentLines, newSpeech].slice(-2));
   }
 }
