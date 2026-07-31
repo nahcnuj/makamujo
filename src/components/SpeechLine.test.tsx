@@ -1,4 +1,4 @@
-﻿import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { JSDOM } from "jsdom";
 import { render } from "hono/jsx/dom";
 import {
@@ -164,16 +164,33 @@ describe("SpeechLine (render)", () => {
     expect(root.textContent).toBe("こんにちは");
   });
 
-  it("reveals text over time when animate is true", () => {
+  it("reveals text over time when animate is true", async () => {
     render(<SpeechLine text="abcd" animate={true} />, root);
+
+    // useEffect → first rAF
+    await Promise.resolve();
+    await Promise.resolve();
     expect(root.textContent).toBe("");
 
-    flushRaf(0);
-    // first rAF schedules progress from start=0
-    flushRaf(45);
-    expect(root.textContent!.length).toBeGreaterThan(0);
+    const drain = async (t: number) => {
+      flushRaf(t);
+      await Promise.resolve();
+    };
 
-    flushRaf(2000);
+    // Until something is visible (fake clock only; no real wait)
+    for (let t = 0; t <= 2000; t += 16) {
+      if ((root.textContent ?? "").length > 0) break;
+      await drain(t);
+    }
+    const mid = root.textContent ?? "";
+    expect(mid.length).toBeGreaterThan(0);
+    expect(mid.length).toBeLessThan(4);
+
+    // Until complete
+    for (let i = 0; i < 120; i++) {
+      if ((root.textContent ?? "") === "abcd" && rafQueue.length === 0) break;
+      await drain(10_000);
+    }
     expect(root.textContent).toBe("abcd");
   });
 
