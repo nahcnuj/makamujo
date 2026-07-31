@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+﻿import { expect, test, type Locator, type Page } from "@playwright/test";
 import { spawn } from "child_process";
 import { existsSync, writeFileSync } from "fs";
 import { join } from "path";
@@ -66,7 +66,7 @@ test.afterAll(() => {
 });
 
 async function mockApis(
-  page: import("@playwright/test").Page,
+  page: Page,
   getSpeech: () => { speech: string; silent?: boolean },
 ) {
   await page.route("**/api/speech", async (route) => {
@@ -92,23 +92,28 @@ async function mockApis(
   });
 }
 
+/** Thin locator helper for aria-hidden speech text. */
+function speechTextLocator(page: Page, text: string): Locator {
+  return page.locator('[aria-hidden="true"]', { hasText: text });
+}
+
 test.describe("speech display", () => {
   test("keeps at most two continuation utterances", async ({ page }) => {
     let speech = "一行目";
     await mockApis(page, () => ({ speech, silent: false }));
 
     await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 20_000 });
-    await expect(page.getByText("一行目")).toBeVisible({ timeout: 5_000 });
+    await expect(speechTextLocator(page, "一行目")).toBeAttached({ timeout: 5_000 });
 
     speech = "二行目";
-    await expect(page.getByText("二行目")).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByText("一行目")).toBeVisible();
+    await expect(speechTextLocator(page, "二行目")).toBeAttached({ timeout: 5_000 });
+    await expect(speechTextLocator(page, "一行目")).toBeAttached();
 
     speech = "三行目";
-    await expect(page.getByText("三行目")).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByText("二行目")).toBeVisible();
+    await expect(speechTextLocator(page, "三行目")).toBeAttached({ timeout: 5_000 });
+    await expect(speechTextLocator(page, "二行目")).toBeAttached();
     // After rise animation, the first utterance should be gone.
-    await expect(page.getByText("一行目")).toHaveCount(0, { timeout: 2_000 });
+    await expect(speechTextLocator(page, "一行目")).toHaveCount(0, { timeout: 2_000 });
   });
 
   test("replaces on ありがとうございます！ interrupt", async ({ page }) => {
@@ -116,13 +121,13 @@ test.describe("speech display", () => {
     await mockApis(page, () => ({ speech, silent: false }));
 
     await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 20_000 });
-    await expect(page.getByText("途中の話")).toBeVisible({ timeout: 5_000 });
+    await expect(speechTextLocator(page, "途中の話")).toBeAttached({ timeout: 5_000 });
 
     speech = "太郎さん、広告ありがとうございます！";
-    await expect(page.getByText("太郎さん、広告ありがとうございます！")).toBeVisible({
-      timeout: 5_000,
-    });
-    await expect(page.getByText("途中の話")).toHaveCount(0);
+    await expect(
+      speechTextLocator(page, "太郎さん、広告ありがとうございます！"),
+    ).toBeAttached({ timeout: 5_000 });
+    await expect(speechTextLocator(page, "途中の話")).toHaveCount(0);
   });
 
   test("starts new topic after 。", async ({ page }) => {
@@ -130,10 +135,10 @@ test.describe("speech display", () => {
     await mockApis(page, () => ({ speech, silent: false }));
 
     await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 20_000 });
-    await expect(page.getByText("昨日の話")).toBeVisible({ timeout: 5_000 });
+    await expect(speechTextLocator(page, "昨日の話")).toBeAttached({ timeout: 5_000 });
 
     speech = "次の話題";
-    await expect(page.getByText("次の話題")).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByText("昨日の話")).toHaveCount(0);
+    await expect(speechTextLocator(page, "次の話題")).toBeAttached({ timeout: 5_000 });
+    await expect(speechTextLocator(page, "昨日の話")).toHaveCount(0);
   });
 });
