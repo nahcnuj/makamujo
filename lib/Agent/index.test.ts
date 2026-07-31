@@ -336,6 +336,65 @@ describe('speech completion hooks', () => {
   });
 });
 
+describe("Markov speech continuation", () => {
+  const scriptedGenerate = (...results: TalkModelGenerateResult[]) => {
+    const it = (function* () {
+      yield* results;
+    })();
+    return () => {
+      const step = it.next();
+      if (step.done) throw new Error("generate called too many times");
+      return step.value;
+    };
+  };
+
+  const createAgent = (generate: TalkModel["generate"], spoken: string[]) =>
+    new MakaMujo(
+      { generate, learn: () => {}, toJSON: () => "{}" },
+      { speech: async (text) => { spoken.push(text); } },
+    );
+
+  it("continues until 。", async () => {
+    const spoken: string[] = [];
+    await createAgent(
+      scriptedGenerate(
+        { text: "今日は公園", nodes: ["今日", "は", "公園"] },
+        { text: "公園に行った。", nodes: ["に", "行った", "。"] },
+      ),
+      spoken,
+    ).speech();
+    await Bun.sleep(0);
+    expect(spoken).toEqual(["今日は公園", "に行った。"]);
+  });
+
+  it("omits seed on continuation", async () => {
+    const spoken: string[] = [];
+    await createAgent(
+      scriptedGenerate({ text: "に行った。", nodes: ["に", "行った", "。"] }),
+      spoken,
+    ).speech({ text: "公園に", nodes: ["公園", "に"] });
+    await Bun.sleep(0);
+    expect(spoken).toEqual(["公園に", "行った。"]);
+  });
+
+  it("stops when ends with 。", async () => {
+    const spoken: string[] = [];
+    await createAgent(
+      scriptedGenerate({ text: "こんにちは。", nodes: ["こんにちは", "。"] }),
+      spoken,
+    ).speech();
+    await Bun.sleep(0);
+    expect(spoken).toEqual(["こんにちは。"]);
+  });
+
+  it("stops without nodes", async () => {
+    const spoken: string[] = [];
+    await createAgent(scriptedGenerate({ text: "途中で切れた" }), spoken).speech();
+    await Bun.sleep(0);
+    expect(spoken).toEqual(["途中で切れた"]);
+  });
+});
+
 describe('comment response speech', () => {
   const comment = (text: string, no: number) => ({
     data: {
