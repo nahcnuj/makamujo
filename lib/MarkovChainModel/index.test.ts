@@ -329,6 +329,19 @@ describe("decrementPhrase", () => {
     expect(a.no?.panty).toBe(4);
   });
 
+
+  it("multi-token purge is no-op when any path edge is missing", () => {
+    const model = new MarkovChainModel({
+      "": { other: 1 },
+      // 女→教師 only; スケベ→女 is missing
+      "女": { "教師": 119 },
+    });
+    const updated = model.decrementPhrase(["スケベ", "女", "教師"], { purge: true });
+    const m = JSON.parse(updated.toJSON()).model;
+    expect(m["女"]?.["教師"]).toBe(119);
+    expect(m[""]?.other).toBe(1);
+  });
+
 });
 
 describe("tokenStats and transitionsOf", () => {
