@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, jest, mock } from "bun:test";
-import { MakaMujo, SILENCE_THRESHOLD_MS, type TalkModel, type TTS } from ".";
+import { MakaMujo, SILENCE_THRESHOLD_MS, type TalkModel, type TalkModelGenerateResult, type TTS } from ".";
 
 // Variables starting with "mock" are available in mock.module factory closures
 // even after hoisting (following the same convention as jest.mock).
