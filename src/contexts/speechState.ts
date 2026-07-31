@@ -35,7 +35,8 @@ const isThanksInterrupt = (text: string): boolean =>
   text.trimEnd().endsWith('ありがとうございます！');
 
 const isTopicEnd = (text: string): boolean =>
-  text.trimEnd().endsWith('。');
+  text.trimEnd().endsWith('。') ||
+  text.trimEnd().endsWith('ありがとうございます！');
 
 export function updateSpeechState(
   res: { speech?: SpeechPayload; silent?: boolean },
@@ -79,6 +80,6 @@ export function updateSpeechState(
       return;
     }
 
-    setSpeechLines([...currentLines, newSpeech]);
+    setSpeechLines([...currentLines, newSpeech].slice(-2));
   }
 }

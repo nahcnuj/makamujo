@@ -93,6 +93,18 @@ describe('updateSpeechState', () => {
       expect(setSilent).toHaveBeenCalledWith(false);
     });
 
+    it('keeps only the last 2 lines on continuation', () => {
+      const setSpeechLines = mock((_: string[]) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState(
+        { speech: '三行目' },
+        ['一行目', '二行目'],
+        setSpeechLines,
+        setSilent,
+      );
+      expect(setSpeechLines).toHaveBeenCalledWith(['二行目', '三行目']);
+    });
+
     it('replaces when previous line ends with 。', () => {
       const setSpeechLines = mock((_: string[]) => {});
       const setSilent = mock((_: boolean) => {});
@@ -115,6 +127,18 @@ describe('updateSpeechState', () => {
         setSilent,
       );
       expect(setSpeechLines).toHaveBeenCalledWith(['太郎さん、広告ありがとうございます！']);
+    });
+
+    it('replaces after ありがとうございます！ as topic end', () => {
+      const setSpeechLines = mock((_: string[]) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState(
+        { speech: '次の話題' },
+        ['太郎さん、広告ありがとうございます！'],
+        setSpeechLines,
+        setSilent,
+      );
+      expect(setSpeechLines).toHaveBeenCalledWith(['次の話題']);
     });
 
     it('does not update when speech text is unchanged', () => {
