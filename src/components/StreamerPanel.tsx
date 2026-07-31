@@ -15,7 +15,7 @@ export function StreamerPanel() {
   displayRef.current = displayLines;
 
   useEffect(() => {
-    const prev = displayRef.current;
+    const prev = displayRef.current ?? [];
     const next = speechLines;
 
     const isShift =
@@ -57,17 +57,25 @@ export function StreamerPanel() {
                 "（コメントしてね）"
               ) : (
                 <div
-                  style={{
-                    transform: risePx ? `translateY(-${risePx}px)` : undefined,
-                    transition: risePx
-                      ? `transform ${RISE_MS}ms ease-out`
-                      : undefined,
-                  }}
+                  style={
+                    risePx > 0
+                      ? {
+                          transform: `translateY(-${risePx}px)`,
+                          transition: `transform ${RISE_MS}ms ease-out`,
+                        }
+                      : {}
+                  }
                 >
                   {displayLines.map((line, i) => (
                     <div
                       key={`${i}-${line}`}
-                      ref={i === 0 ? firstRef : undefined}
+                      ref={
+                        i === 0
+                          ? (el: HTMLDivElement | null) => {
+                              firstRef.current = el;
+                            }
+                          : undefined
+                      }
                     >
                       <SpeechLine
                         text={line}
