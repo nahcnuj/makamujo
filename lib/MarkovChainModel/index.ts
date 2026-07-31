@@ -196,11 +196,10 @@ export class MarkovChainModel implements TalkModel {
         const edges = pathEdges();
         let minW = Infinity;
         for (const { from, to } of edges) {
-          const w = next[from]?.[to];
-          if (w == null) continue;
+          const w = next[from]?.[to] ?? 0;
           if (w < minW) minW = w;
         }
-        if (minW !== Infinity && minW > 0) {
+        if (minW > 0) {
           for (const { from, to } of edges) {
             dec(from, to, minW);
           }
