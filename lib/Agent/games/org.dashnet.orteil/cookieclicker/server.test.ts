@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { buildSightResult, collectClickableElementIds } from "./server";
+import {
+  buildSightResult,
+  collectClickableElementIds,
+  enrichStatisticsGeneral,
+} from "./server";
 import type { ElementLike, SightRawData } from "./server";
 
 type StyleLike = Pick<CSSStyleDeclaration, 'cursor' | 'pointerEvents'>;
@@ -279,8 +283,113 @@ describe('buildSightResult', () => {
     });
   });
 
+it('enriches Japanese statistics keys with parsed numbers', () => {
+    const result = buildSightResult({
+      ...baseSightRawData,
+      statisticsGeneralListings: [
+        { key: '遺産の始まり：', innerText: ' 362日前, 昇天 107回' },
+        { key: 'クリック回数：', innerText: ' 1,009' },
+        { key: '貯まったクッキー：', innerText: ' 9.68e+37' },
+      ],
+    });
+    expect(result.statistics?.general['遺産の始まり：']).toEqual({
+      innerText: ' 362日前, 昇天 107回',
+      ascensions: 107,
+      daysAgo: 362,
+    });
+    expect(result.statistics?.general['クリック回数：']).toEqual({
+      innerText: ' 1,009',
+      value: 1009,
+    });
+    expect(result.statistics?.general['貯まったクッキー：']).toEqual({
+      innerText: ' 9.68e+37',
+    });
+  });
+
   it('sets statistics to undefined when no listings are provided', () => {
     const result = buildSightResult({ ...baseSightRawData, statisticsGeneralListings: undefined });
     expect(result.statistics).toBeUndefined();
+  });
+});
+
+describe('enrichStatisticsGeneral', () => {
+  it('parses ascensions and daysAgo from 遺産の始まり', () => {
+    const result = enrichStatisticsGeneral({
+      '遺産の始まり：': { innerText: ' 362日前, 昇天 107回' },
+    });
+    expect(result['遺産の始まり：']).toEqual({
+      innerText: ' 362日前, 昇天 107回',
+      ascensions: 107,
+      daysAgo: 362,
+    });
+  });
+
+  it('parses ascensions without daysAgo when only 昇天 is present', () => {
+    const result = enrichStatisticsGeneral({
+      '遺産の始まり：': { innerText: ' 昇天 1,234回' },
+    });
+    expect(result['遺産の始まり：']).toEqual({
+      innerText: ' 昇天 1,234回',
+      ascensions: 1234,
+    });
+  });
+
+  it('leaves 遺産の始まり as innerText-only when ascensions cannot be parsed', () => {
+    const result = enrichStatisticsGeneral({
+      '遺産の始まり：': { innerText: ' 362日前' },
+    });
+    expect(result['遺産の始まり：']).toEqual({
+      innerText: ' 362日前',
+    });
+  });
+
+  it('parses クリック回数 with comma separators', () => {
+    const result = enrichStatisticsGeneral({
+      'クリック回数：': { innerText: ' 1,009' },
+    });
+    expect(result['クリック回数：']).toEqual({
+      innerText: ' 1,009',
+      value: 1009,
+    });
+  });
+
+  it('parses クリック回数 without commas', () => {
+    const result = enrichStatisticsGeneral({
+      'クリック回数：': { innerText: ' 42' },
+    });
+    expect(result['クリック回数：']).toEqual({
+      innerText: ' 42',
+      value: 42,
+    });
+  });
+
+  it('leaves クリック回数 as innerText-only when not a number', () => {
+    const result = enrichStatisticsGeneral({
+      'クリック回数：': { innerText: ' 不明' },
+    });
+    expect(result['クリック回数：']).toEqual({
+      innerText: ' 不明',
+    });
+  });
+
+  it('does not mutate the input object', () => {
+    const input = {
+      'クリック回数：': { innerText: ' 10' },
+      '貯まったクッキー：': { innerText: ' 1e+10' },
+    };
+    const snapshot = structuredClone(input);
+    enrichStatisticsGeneral(input);
+    expect(input).toEqual(snapshot);
+  });
+
+  it('passes through unrelated keys unchanged', () => {
+    const result = enrichStatisticsGeneral({
+      'Cookie clicks': { innerText: ' 42' },
+      '所有建物：': { innerText: ' 457' },
+    });
+    expect(result).toEqual({
+      'Cookie clicks': { innerText: ' 42' },
+      '所有建物：': { innerText: ' 457' },
+    });
   });
 });

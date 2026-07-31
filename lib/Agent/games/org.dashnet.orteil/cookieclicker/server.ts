@@ -1,3 +1,5 @@
+import type { Statistics } from "./State";
+
 export type ElementLike = {
   readonly id: string;
   readonly parentElement: ElementLike | null;
@@ -101,6 +103,52 @@ export type SightRawData = {
 };
 
 /**
+ * general の一部キーだけ、innerText から数値フィールドを付与する。
+ * - 1値の項目は value
+ * - 複数値の項目は意味のある名前（ascensions / daysAgo など）
+ *
+ * 未知キーやパース不能な行は { innerText } のまま残す。
+ */
+export const enrichStatisticsGeneral = (
+  general: Record<string, { innerText: string }>,
+): Statistics["general"] => {
+  const out: Statistics["general"] = { ...general };
+
+  const legacy = general["遺産の始まり："];
+  if (legacy) {
+    const ascensionsM = legacy.innerText.match(/昇天\s*([\d,]+)\s*回/);
+    const daysM = legacy.innerText.match(/([\d,]+)\s*日前/);
+    const ascensions = ascensionsM?.[1] !== undefined
+      ? Number(ascensionsM[1].replaceAll(",", ""))
+      : Number.NaN;
+    if (Number.isFinite(ascensions)) {
+      const daysAgo = daysM?.[1] !== undefined
+        ? Number(daysM[1].replaceAll(",", ""))
+        : Number.NaN;
+      out["遺産の始まり："] = {
+        innerText: legacy.innerText,
+        ascensions,
+        ...(Number.isFinite(daysAgo) ? { daysAgo } : {}),
+      };
+    }
+  }
+
+  const clicks = general["クリック回数："];
+  if (clicks) {
+    const value = Number(clicks.innerText.trim().replaceAll(",", ""));
+    if (Number.isFinite(value)) {
+      out["クリック回数："] = {
+        innerText: clicks.innerText,
+        value,
+      };
+    }
+  }
+
+  return out;
+};
+
+
+/**
  * Transforms raw sight data into the structured sight result.
  * This pure function is exported to enable unit testing of sight()'s
  * data-transformation logic without a browser environment.
@@ -119,13 +167,19 @@ export const buildSightResult = (data: SightRawData) => {
     return mode === 'buy' || mode === 'sell' ? mode : undefined;
   };
 
-  const statistics = data.statisticsGeneralListings !== undefined
-    ? {
-        general: Object.fromEntries(
-          data.statisticsGeneralListings.map(({ key, innerText }) => [key, { innerText }]),
-        ),
-      }
-    : undefined;
+  const statistics =
+    data.statisticsGeneralListings !== undefined
+      ? {
+          general: enrichStatisticsGeneral(
+            Object.fromEntries(
+              data.statisticsGeneralListings.map(({ key, innerText }) => [
+                key,
+                { innerText },
+              ]),
+            ),
+          ),
+        }
+      : undefined;
 
   return {
     clickableElementIds: data.clickableElementIds,
@@ -240,13 +294,17 @@ export const sight = () => {
     });
   })();
 
-  const statistics = statisticsGeneralListings !== undefined
-    ? {
-        general: Object.fromEntries(
-          statisticsGeneralListings.map(({ key, innerText }) => [key, { innerText }]),
-        ),
-      }
-    : undefined;
+  const statistics =
+    statisticsGeneralListings !== undefined
+      ? {
+          general: Object.fromEntries(
+            statisticsGeneralListings.map(({ key, innerText }) => [
+              key,
+              { innerText },
+            ]),
+          ),
+        }
+      : undefined;
 
   return {
     clickableElementIds,
