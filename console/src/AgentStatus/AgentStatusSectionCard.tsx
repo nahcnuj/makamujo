@@ -35,7 +35,7 @@ export const AgentStatusSectionCard = ({
         >
           {rows.map((row) => (
             <div
-              key={`${title}:${row.label}:${"value" in row ? row.value : "value-component"}:${row.href ?? "-"}`}
+              key={`${title ?? ""}:${row.label}`}
               className="contents"
             >
               <dt className={row.hideLabel ? "hidden" : "font-bold whitespace-nowrap"}>{row.label}</dt>

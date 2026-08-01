@@ -68,7 +68,7 @@ export function StreamerPanel() {
                 >
                   {displayLines.map((line, i) => (
                     <div
-                      key={`${i}-${line}`}
+                      key={line}
                       ref={
                         i === 0
                           ? (el: HTMLDivElement | null) => {
