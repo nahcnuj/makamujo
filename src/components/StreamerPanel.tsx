@@ -8,7 +8,7 @@ import {
   SHOW_THEN_FADE,
   VISIBLE,
   onListenersUpdate,
-  spriteOpacityStyle,
+  spriteAwayStyle,
   visibilityFromSilenceClock,
   type SpriteVisibility,
 } from "./spriteVisibility";
@@ -27,7 +27,26 @@ export function StreamerPanel() {
   const listenersChangedAtRef = useRef<number>(Date.now());
   const [visibility, setVisibility] = useState<SpriteVisibility>(VISIBLE);
 
+  const silentRef = useRef(silent);
+  silentRef.current = silent;
+  const fadeRafRef = useRef<number | null>(null);
+
+  const cancelPendingFade = () => {
+    if (fadeRafRef.current != null) {
+      cancelAnimationFrame(fadeRafRef.current);
+      fadeRafRef.current = null;
+    }
+  };
+
   const listeners = streamState?.meta?.total?.listeners ?? undefined;
+
+  // 不変条件: 沈黙でなければ常に表示（予約中のフェードも破棄）
+  useEffect(() => {
+    if (!silent) {
+      cancelPendingFade();
+      setVisibility(VISIBLE);
+    }
+  }, [silent]);
 
   useEffect(() => {
     const result = onListenersUpdate({
@@ -42,23 +61,43 @@ export function StreamerPanel() {
     listenersChangedAtRef.current = result.listenersChangedAtMs;
 
     if (result.visibility === SHOW_THEN_FADE) {
+      if (!silentRef.current) {
+        cancelPendingFade();
+        setVisibility(VISIBLE);
+        return;
+      }
+      cancelPendingFade();
       setVisibility(VISIBLE);
-      requestAnimationFrame(() => {
+      fadeRafRef.current = requestAnimationFrame(() => {
+        fadeRafRef.current = null;
+        if (!silentRef.current) {
+          setVisibility(VISIBLE);
+          return;
+        }
         setVisibility(SHOW_THEN_FADE);
       });
       return;
     }
 
+    if (!silentRef.current) {
+      setVisibility(VISIBLE);
+      return;
+    }
     setVisibility(result.visibility);
   }, [listeners, silent]);
 
   useEffect(() => {
     if (!silent) {
+      cancelPendingFade();
       setVisibility(VISIBLE);
       return;
     }
 
     const tick = () => {
+      if (!silentRef.current) {
+        setVisibility(VISIBLE);
+        return;
+      }
       setVisibility(
         visibilityFromSilenceClock({
           silent: true,
@@ -89,7 +128,6 @@ export function StreamerPanel() {
       return;
     }
 
-    // Rise first with three utterances, then drop the top one.
     setDisplayLines([prev[0]!, prev[1]!, next[1]!]);
     setRisePx(0);
 
@@ -103,13 +141,13 @@ export function StreamerPanel() {
     });
   }, [speechLines]);
 
-  const opacityStyle = spriteOpacityStyle(visibility, FADE_OUT_MS);
+  const awayStyle = spriteAwayStyle(visibility, FADE_OUT_MS);
 
   return (
     <div className="flex gap-2 h-full">
       <div
         className="flex-none w-45 max-h-full -m-1 aspect-square"
-        style={opacityStyle}
+        style={awayStyle}
       >
         <CharacterSprite />
       </div>
