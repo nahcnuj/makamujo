@@ -7,7 +7,7 @@ import {
   VISIBLE,
   isListenersStale,
   onListenersUpdate,
-  spriteOpacityStyle,
+  spriteAwayStyle,
   visibilityFromSilenceClock,
 } from "./spriteVisibility";
 
@@ -120,22 +120,22 @@ describe("visibilityFromSilenceClock", () => {
   });
 });
 
-describe("spriteOpacityStyle", () => {
-  it("visible: opacity 1, no transition", () => {
-    expect(spriteOpacityStyle(VISIBLE)).toEqual({
-      opacity: 1,
+describe("spriteAwayStyle", () => {
+  it("visible: brightness(1), no transition", () => {
+    expect(spriteAwayStyle(VISIBLE)).toEqual({
+      filter: "brightness(1)",
       transition: "none",
     });
   });
 
-  it("fading out: opacity 0 with linear transition", () => {
-    expect(spriteOpacityStyle(HIDDEN_FADING)).toEqual({
-      opacity: 0,
-      transition: `opacity ${FADE_OUT_MS}ms linear`,
+  it("fading out: brightness(0) with linear filter transition", () => {
+    expect(spriteAwayStyle(HIDDEN_FADING)).toEqual({
+      filter: "brightness(0)",
+      transition: `filter ${FADE_OUT_MS}ms linear`,
     });
-    expect(spriteOpacityStyle(SHOW_THEN_FADE)).toEqual({
-      opacity: 0,
-      transition: `opacity ${FADE_OUT_MS}ms linear`,
+    expect(spriteAwayStyle(SHOW_THEN_FADE)).toEqual({
+      filter: "brightness(0)",
+      transition: `filter ${FADE_OUT_MS}ms linear`,
     });
   });
 });

@@ -1,11 +1,11 @@
 /** サーバー SILENCE_THRESHOLD_MS と揃える（5分） */
 export const SPRITE_HIDE_THRESHOLD_MS = 5 * 60 * 1_000;
-/** 消えるときだけ約2.5分かけて opacity 0 へ */
+/** 暗くなるときだけ約2.5分かけて brightness を落とす */
 export const FADE_OUT_MS = 2.5 * 60 * 1_000;
 
 export type SpriteVisibility = {
   spriteHidden: boolean;
-  /** true のときだけ transition を付ける（表示復帰は即 opacity 1） */
+  /** true のときだけ transition を付ける（復帰は即 brightness 1） */
   fadingOut: boolean;
 };
 
@@ -80,12 +80,13 @@ export function visibilityFromSilenceClock(input: {
   return VISIBLE;
 }
 
-export function spriteOpacityStyle(
+/** 不在時は brightness を落とす（opacity ではなく照明が落ちるイメージ） */
+export function spriteAwayStyle(
   visibility: SpriteVisibility,
   fadeOutMs: number = FADE_OUT_MS,
-): { opacity: number; transition: string } {
+): { filter: string; transition: string } {
   return {
-    opacity: visibility.spriteHidden ? 0 : 1,
-    transition: visibility.fadingOut ? `opacity ${fadeOutMs}ms linear` : "none",
+    filter: visibility.spriteHidden ? "brightness(0)" : "brightness(1)",
+    transition: visibility.fadingOut ? `filter ${fadeOutMs}ms linear` : "none",
   };
 }

@@ -8,7 +8,7 @@ import {
   SHOW_THEN_FADE,
   VISIBLE,
   onListenersUpdate,
-  spriteOpacityStyle,
+  spriteAwayStyle,
   visibilityFromSilenceClock,
   type SpriteVisibility,
 } from "./spriteVisibility";
@@ -89,7 +89,6 @@ export function StreamerPanel() {
       return;
     }
 
-    // Rise first with three utterances, then drop the top one.
     setDisplayLines([prev[0]!, prev[1]!, next[1]!]);
     setRisePx(0);
 
@@ -103,13 +102,13 @@ export function StreamerPanel() {
     });
   }, [speechLines]);
 
-  const opacityStyle = spriteOpacityStyle(visibility, FADE_OUT_MS);
+  const awayStyle = spriteAwayStyle(visibility, FADE_OUT_MS);
 
   return (
     <div className="flex gap-2 h-full">
       <div
         className="flex-none w-45 max-h-full -m-1 aspect-square"
-        style={opacityStyle}
+        style={awayStyle}
       >
         <CharacterSprite />
       </div>
