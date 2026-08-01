@@ -20,12 +20,25 @@ describe("evaluateSpeechable", () => {
     })).toBe(true);
   });
 
-  it("returns false when prompted and comments stale even if listeners are fresh", () => {
+  it("returns false when comments are stale even if listeners are fresh", () => {
     const nowMs = 1_000_000;
     expect(evaluateSpeechable({
       streamLive: true,
       lastCommentAt: new Date(nowMs - thresholdMs - 1),
-      listenersStaleSince: new Date(nowMs), // fresh
+      listenersStaleSince: new Date(nowMs), // fresh listeners
+      hasPromptedCommentForViewerIncrease: false,
+      browserStateName: "idle",
+      nowMs,
+      thresholdMs,
+    })).toBe(false);
+  });
+
+  it("returns false when comments are stale even after viewer-increase prompt", () => {
+    const nowMs = 1_000_000;
+    expect(evaluateSpeechable({
+      streamLive: true,
+      lastCommentAt: new Date(nowMs - thresholdMs - 1),
+      listenersStaleSince: new Date(nowMs),
       hasPromptedCommentForViewerIncrease: true,
       browserStateName: "idle",
       nowMs,
@@ -46,7 +59,20 @@ describe("evaluateSpeechable", () => {
     })).toBe(false);
   });
 
-  it("returns false when browser is not speechable even if silence clocks are fine", () => {
+  it("returns true when comments are fresh and browser is speechable", () => {
+    const nowMs = 1_000_000;
+    expect(evaluateSpeechable({
+      streamLive: true,
+      lastCommentAt: new Date(nowMs - 1_000),
+      listenersStaleSince: new Date(nowMs - thresholdMs - 1),
+      hasPromptedCommentForViewerIncrease: false,
+      browserStateName: "idle",
+      nowMs,
+      thresholdMs,
+    })).toBe(true);
+  });
+
+  it("returns false when browser is not speechable even if comments are fine", () => {
     const nowMs = 1_000_000;
     expect(evaluateSpeechable({
       streamLive: true,
