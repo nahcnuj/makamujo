@@ -55,7 +55,7 @@ export class SpeechQueue {
       ];
       const trimmedText = trimmedSpeechText(event.text);
       if (shouldInvokeTts(event.text)) {
-        const ttsTask = this.#tts.speech(trimmedText, { additionalHalfTone: 3, speakingRate: 1.2 }).catch((err) => {
+        const ttsTask = this.#tts.speech(trimmedText, { additionalHalfTone: 6, speakingRate: 1.15 }).catch((err) => {
           for (const h of this.#ttsErrorHandlers) {
             try { void h(trimmedText, err); } catch { /* ignore handler errors */ }
           }
