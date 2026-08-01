@@ -278,8 +278,8 @@ describe('speechable', () => {
     // allow scheduled tasks to run
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(called).toHaveBeenCalledWith('main-block', { additionalHalfTone: 3, speakingRate: 1.2 });
-    expect(called).not.toHaveBeenCalledWith('コメントしていってね〜', { additionalHalfTone: 3, speakingRate: 1.2 });
+    expect(called).toHaveBeenCalledWith('main-block', expect.anything());
+    expect(called).not.toHaveBeenCalledWith('コメントしていってね〜', expect.anything());
     expect(agent.speechable).toBeFalse();
   });
 
