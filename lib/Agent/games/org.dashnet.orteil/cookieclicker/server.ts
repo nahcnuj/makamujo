@@ -158,6 +158,22 @@ export const enrichStatisticsGeneral = (
  * module-level definitions. sight() therefore implements the same
  * transformation inline.
  */
+
+
+/** Host-side: parse numbers on statistics after browser sight(). */
+export function enrichSightState<T extends { statistics?: { general?: Record<string, { innerText: string } & Record<string, unknown>> } }>(
+  state: T,
+): T {
+  const general = state.statistics?.general;
+  if (!general) return state;
+  return {
+    ...state,
+    statistics: {
+      ...state.statistics,
+      general: enrichStatisticsGeneral(general as Parameters<typeof enrichStatisticsGeneral>[0]),
+    },
+  };
+}
 export const buildSightResult = (data: SightRawData) => {
   const parseNumber = (text?: string): number =>
     text ? Number.parseFloat(text.replaceAll(',', '')) : Number.NaN;

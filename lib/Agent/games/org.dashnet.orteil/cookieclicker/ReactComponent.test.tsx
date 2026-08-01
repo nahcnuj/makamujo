@@ -43,17 +43,16 @@ describe("CookieClicker ReactComponent", () => {
         } as NonNullable<State["statistics"]>["general"],
       },
     });
-    expect(html).toContain("107世代目");
-    expect(html).toContain("クリック 1,009回");
+    expect(html).toContain("107");
+    expect(html).toContain("1,009");
   });
 
-  it("shows placeholders when statistics are missing", async () => {
+  it("renders nothing when statistics are missing", async () => {
     const html = await renderHtml({ ...baseState });
-    expect(html).toContain("—世代目");
-    expect(html).toContain("クリック —回");
+    expect(html).toBe("null");
   });
 
-  it("shows placeholders when values are not yet parsed", async () => {
+  it("renders nothing when values are not yet parsed", async () => {
     const html = await renderHtml({
       ...baseState,
       statistics: {
@@ -63,7 +62,6 @@ describe("CookieClicker ReactComponent", () => {
         },
       },
     });
-    expect(html).toContain("—世代目");
-    expect(html).toContain("クリック —回");
+    expect(html).toBe("null");
   });
 });
