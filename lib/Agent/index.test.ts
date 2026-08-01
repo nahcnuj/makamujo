@@ -139,14 +139,14 @@ describe('speechable', () => {
     expect(agent.speechable).toBeTrue();
   });
 
-  it('should be true when stream is live and listener count just changed', () => {
+  it('should be false when stream is live with no comments even if listener count just changed', () => {
     jest.spyOn(Date, 'now').mockReturnValue(0);
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaLive(10));
 
-    // listener count just changed, so not stale yet
+    // listeners are fresh, but comments have never arrived → still silent
     jest.spyOn(Date, 'now').mockReturnValue(SILENCE_THRESHOLD_MS - 1);
-    expect(agent.speechable).toBeTrue();
+    expect(agent.speechable).toBeFalse();
   });
 
   it('should be false when listener count is stale and no comments have ever been received', () => {
@@ -227,7 +227,7 @@ describe('speechable', () => {
     expect(called).toHaveBeenCalledTimes(1);
   });
 
-  it('resets prompted flag when direct TTS playback fails and allows speechable', async () => {
+  it('resets prompted flag when direct TTS playback fails but remains silent while comments are stale', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(0);
     const fail = jest.fn(async () => { throw new Error('boom'); });
     const failTts: TTS = { speech: fail };
@@ -244,8 +244,15 @@ describe('speechable', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(fail).toHaveBeenCalledTimes(1);
-    // after failed playback the prompt flag should be cleared and speechable true
-    expect(agent.speechable).toBeTrue();
+    // prompt flag cleared so a later viewer increase can prompt again,
+    // but comments are still stale → speechable stays false
+    expect(agent.speechable).toBeFalse();
+
+    // second viewer increase should prompt again (flag was reset)
+    agent.onAir(niconamaLive(12));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fail).toHaveBeenCalledTimes(2);
+    expect(agent.speechable).toBeFalse();
   });
 
   it('prompts immediately even when main speech is blocked', async () => {
