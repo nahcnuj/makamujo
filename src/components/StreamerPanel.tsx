@@ -3,16 +3,75 @@ import { Box, Container } from "../agt-compat";
 import { useAgentContext } from "../contexts/AgentContext";
 import { CharacterSprite } from "./CharacterSprite";
 import { SpeechLine } from "./SpeechLine";
+import {
+  FADE_OUT_MS,
+  SHOW_THEN_FADE,
+  VISIBLE,
+  onListenersUpdate,
+  spriteOpacityStyle,
+  visibilityFromSilenceClock,
+  type SpriteVisibility,
+} from "./spriteVisibility";
 
 const RISE_MS = 300;
 
 export function StreamerPanel() {
-  const { speechLines, silent } = useAgentContext();
+  const { speechLines, silent, streamState } = useAgentContext();
   const [displayLines, setDisplayLines] = useState<string[]>(speechLines);
   const [risePx, setRisePx] = useState(0);
   const firstRef = useRef<HTMLDivElement | null>(null);
   const displayRef = useRef(displayLines);
   displayRef.current = displayLines;
+
+  const lastListenersRef = useRef<number | undefined>(undefined);
+  const listenersChangedAtRef = useRef<number>(Date.now());
+  const [visibility, setVisibility] = useState<SpriteVisibility>(VISIBLE);
+
+  const listeners = streamState?.meta?.total?.listeners ?? undefined;
+
+  useEffect(() => {
+    const result = onListenersUpdate({
+      silent,
+      listeners,
+      prevListeners: lastListenersRef.current ?? undefined,
+      nowMs: Date.now(),
+    });
+    if (!result) return;
+
+    lastListenersRef.current = result.prevListeners;
+    listenersChangedAtRef.current = result.listenersChangedAtMs;
+
+    if (result.visibility === SHOW_THEN_FADE) {
+      setVisibility(VISIBLE);
+      requestAnimationFrame(() => {
+        setVisibility(SHOW_THEN_FADE);
+      });
+      return;
+    }
+
+    setVisibility(result.visibility);
+  }, [listeners, silent]);
+
+  useEffect(() => {
+    if (!silent) {
+      setVisibility(VISIBLE);
+      return;
+    }
+
+    const tick = () => {
+      setVisibility(
+        visibilityFromSilenceClock({
+          silent: true,
+          listenersChangedAtMs: listenersChangedAtRef.current ?? Date.now(),
+          nowMs: Date.now(),
+        }),
+      );
+    };
+
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [silent]);
 
   useEffect(() => {
     const prev = displayRef.current ?? [];
@@ -44,9 +103,14 @@ export function StreamerPanel() {
     });
   }, [speechLines]);
 
+  const opacityStyle = spriteOpacityStyle(visibility, FADE_OUT_MS);
+
   return (
     <div className="flex gap-2 h-full">
-      <div className="flex-none w-45 max-h-full -m-1 aspect-square">
+      <div
+        className="flex-none w-45 max-h-full -m-1 aspect-square"
+        style={opacityStyle}
+      >
         <CharacterSprite />
       </div>
       <div className="flex-auto h-full">
@@ -54,7 +118,7 @@ export function StreamerPanel() {
           <Container>
             <div className="w-full h-full text-3xl/9 break-all overflow-hidden">
               {silent ? (
-                "（コメントしてね）"
+                "\uFF08\u30B3\u30E1\u30F3\u30C8\u3057\u3066\u306D\uFF09"
               ) : (
                 <div
                   style={
