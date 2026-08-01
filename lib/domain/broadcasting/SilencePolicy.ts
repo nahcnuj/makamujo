@@ -14,22 +14,20 @@ export type SilenceClockInput = {
 };
 
 /**
- * Ordered algorithm (must stay identical to `get speechable`):
- * 1. If live and commentsStale && hasPrompted → false (listenersStale irrelevant)
- * 2. If live and listenersStale && commentsStale → false
- * 3. Else browserOk (missing browser state defaults to 'idle')
+ * Silence is driven by comments only while live.
+ * Listener activity is intentionally ignored here (sprite visibility is a frontend concern).
+ * Viewer-increase comment prompt still goes through StreamApplicationService.speech() directly.
+ *
+ * 1. If live and commentsStale → false
+ * 2. Else browserOk (missing browser state defaults to 'idle')
  */
 export const evaluateSpeechable = (input: SilenceClockInput): boolean => {
   if (input.streamLive) {
-    const listenersStale = input.listenersStaleSince !== undefined &&
-      (input.nowMs - input.listenersStaleSince.getTime()) >= input.thresholdMs;
-    const commentsStale = input.lastCommentAt === undefined ||
-      (input.nowMs - input.lastCommentAt.getTime()) >= input.thresholdMs;
+    const commentsStale =
+      input.lastCommentAt === undefined ||
+      input.nowMs - input.lastCommentAt.getTime() >= input.thresholdMs;
 
-    if (commentsStale && input.hasPromptedCommentForViewerIncrease) {
-      return false;
-    }
-    if (listenersStale && commentsStale) {
+    if (commentsStale) {
       return false;
     }
   }
