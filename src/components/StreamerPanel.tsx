@@ -27,13 +27,13 @@ export function StreamerPanel() {
   const listenersChangedAtRef = useRef<number>(Date.now());
   const [visibility, setVisibility] = useState<SpriteVisibility>(VISIBLE);
 
-  const listeners = streamState?.meta?.total?.listeners;
+  const listeners = streamState?.meta?.total?.listeners ?? undefined;
 
   useEffect(() => {
     const result = onListenersUpdate({
       silent,
       listeners,
-      prevListeners: lastListenersRef.current,
+      prevListeners: lastListenersRef.current ?? undefined,
       nowMs: Date.now(),
     });
     if (!result) return;
@@ -62,7 +62,7 @@ export function StreamerPanel() {
       setVisibility(
         visibilityFromSilenceClock({
           silent: true,
-          listenersChangedAtMs: listenersChangedAtRef.current,
+          listenersChangedAtMs: listenersChangedAtRef.current ?? Date.now(),
           nowMs: Date.now(),
         }),
       );
@@ -89,6 +89,7 @@ export function StreamerPanel() {
       return;
     }
 
+    // Rise first with three utterances, then drop the top one.
     setDisplayLines([prev[0]!, prev[1]!, next[1]!]);
     setRisePx(0);
 
@@ -117,7 +118,7 @@ export function StreamerPanel() {
           <Container>
             <div className="w-full h-full text-3xl/9 break-all overflow-hidden">
               {silent ? (
-                "（コメントしてね）"
+                "\uFF08\u30B3\u30E1\u30F3\u30C8\u3057\u3066\u306D\uFF09"
               ) : (
                 <div
                   style={
