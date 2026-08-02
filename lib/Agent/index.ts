@@ -6,6 +6,7 @@ import { SpeechQueue, type SpeechEvent } from "../application/SpeechQueue";
 import { StreamApplicationService } from "../application/StreamApplicationService";
 import type { TalkModelGenerateResult as AppTalkModelGenerateResult } from "../application/types";
 import { evaluateSpeechable } from "../domain/broadcasting/SilencePolicy";
+import { pickTopic } from "../domain/comments/TopicPicker";
 export const SILENCE_THRESHOLD_MS = 5 * 60 * 1_000; // 5 minutes
 
 /**
@@ -26,6 +27,10 @@ export class MakaMujo {
    * Empty → generate("") (legacy random seed).
    */
   #nextStart: string[] = [];
+  /** In-process set of news lines already learned (at most once). */
+  #learnedNewsLines = new Set<string>();
+  /** Latest news lines from sight (for spontaneous topic). */
+  #currentNewsLines: string[] = [];
 
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
@@ -47,7 +52,24 @@ export class MakaMujo {
       this.#session,
       () => this.speechable,
       () => this.#notifyGameStateChangeAsync(),
+      (sightState) => this.#onGameSight(sightState),
     );
+  }
+
+  #onGameSight(sightState: Record<string, unknown>): void {
+    const raw = sightState.newsLines;
+    const lines = Array.isArray(raw)
+      ? raw
+          .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+          .map((s) => s.normalize("NFC").trim())
+      : [];
+    this.#currentNewsLines = lines;
+
+    for (const line of lines) {
+      if (this.#learnedNewsLines.has(line)) continue;
+      this.#talkModel.learn(`${line}。`);
+      this.#learnedNewsLines.add(line);
+    }
   }
 
   play(name: Parameters<GameplayApplicationService["play"]>[0], data?: string) {
@@ -71,7 +93,11 @@ export class MakaMujo {
       // Spontaneous / continuation: AGT gen accepts a single bos token.
       const pending = this.#nextStart;
       this.#nextStart = [];
-      const start = pending.length > 0 ? pending[pending.length - 1]! : "";
+      let start = pending.length > 0 ? pending[pending.length - 1]! : "";
+      if (!start && this.#currentNewsLines.length > 0) {
+        const newsText = this.#currentNewsLines.join("");
+        start = pickTopic(newsText) ?? "";
+      }
       const ret = this.#talkModel.generate(start, session.currentNGramSize);
       if (typeof ret === "string") {
         const text =

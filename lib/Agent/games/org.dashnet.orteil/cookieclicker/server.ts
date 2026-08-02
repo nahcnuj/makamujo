@@ -94,6 +94,8 @@ export type SightRawData = {
   cpsIsWrinkled: boolean;
   ascendNumberText: string | undefined;
   commentsText: string | undefined;
+  commentsText1: string | undefined;
+  commentsText2: string | undefined;
   storeBulkModeSelectedId: string | undefined;
   statisticsGeneralListings: Array<{ key: string; innerText: string }> | undefined;
   url: string;
@@ -174,6 +176,27 @@ export function enrichSightState<T extends { statistics?: { general?: Record<str
     },
   };
 }
+
+/**
+ * Cookie Clicker news ticker lines.
+ * Prefer per-line elements; fall back to splitting parent commentsText.
+ */
+export const parseNewsLines = (
+  line1?: string,
+  line2?: string,
+  fallbackCommentsText?: string,
+): string[] => {
+  const fromChildren = [line1, line2]
+    .map((s) => s?.normalize("NFC").trim() ?? "")
+    .filter((s) => s.length > 0);
+  if (fromChildren.length > 0) return fromChildren;
+  if (!fallbackCommentsText) return [];
+  return fallbackCommentsText
+    .normalize("NFC")
+    .split(/\r?\n/u)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+};
 export const buildSightResult = (data: SightRawData) => {
   const parseNumber = (text?: string): number =>
     text ? Number.parseFloat(text.replaceAll(',', '')) : Number.NaN;
@@ -204,6 +227,11 @@ export const buildSightResult = (data: SightRawData) => {
     isWrinkled: data.cpsIsWrinkled,
     ascendNumber: parseNumber(data.ascendNumberText),
     commentsText: data.commentsText,
+    newsLines: parseNewsLines(
+      data.commentsText1,
+      data.commentsText2,
+      data.commentsText,
+    ),
     store: {
       products: {
         bulkMode: parseBulkMode(data.storeBulkModeSelectedId),
@@ -329,6 +357,17 @@ export const sight = () => {
     isWrinkled: cookiesPerSecond?.classList.contains('wrinkled') ?? false,
     ascendNumber: parseNumber(document.getElementById('ascendNumber')?.innerText.replaceAll(',', '')),
     commentsText: document.getElementById('commentsText')?.innerText,
+    newsLines: (() => {
+      const commentsText1 = document.getElementById('commentsText1')?.innerText;
+      const commentsText2 = document.getElementById('commentsText2')?.innerText;
+      const commentsText = document.getElementById('commentsText')?.innerText;
+      const fromChildren = [commentsText1, commentsText2]
+        .map((s) => (s ?? '').trim())
+        .filter((s) => s.length > 0);
+      if (fromChildren.length > 0) return fromChildren;
+      if (!commentsText) return [];
+      return commentsText.split(/\r?\n/).map((s) => s.trim()).filter((s) => s.length > 0);
+    })(),
     store: {
       products: {
         bulkMode: parseBulkMode(

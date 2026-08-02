@@ -66,6 +66,8 @@ export type State = {
   isWrinkled: boolean
   ascendNumber: number
   commentsText?: string
+  /** News ticker lines (#commentsText1 / #commentsText2). */
+  newsLines?: string[]
   store: {
     products: {
       bulkMode: 'buy' | 'sell'
