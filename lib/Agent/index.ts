@@ -78,39 +78,59 @@ export class MakaMujo {
 
   async speech(generated?: TalkModelGenerateResult) {
     const session = this.#session;
-    const event: SpeechEvent = (() => {
-      if (typeof generated === "string") {
-        return { text: generated };
-      }
-      if (generated !== undefined) {
-        return {
-          nGram: session.currentNGramSize,
-          nGramRaw: session.currentNGramSizeRaw,
-          ...generated,
-        };
-      }
 
-      // Spontaneous / continuation: AGT gen accepts a single bos token.
-      const pending = this.#nextStart;
-      this.#nextStart = [];
-      let start = pending.length > 0 ? pending[pending.length - 1]! : "";
-      if (!start && this.#currentNewsLines.length > 0) {
-        const newsText = this.#currentNewsLines.join("");
-        start = pickTopic(newsText) ?? "";
+    // Comment replies (and news via re-entry) pass a generated result — never strip.
+    if (typeof generated === "string") {
+      const event: SpeechEvent = { text: generated };
+      await this.#speechQueue.enqueue(event);
+      this.#maybeQueueContinuation(event);
+      return;
+    }
+    if (generated !== undefined) {
+      const event: SpeechEvent = {
+        nGram: session.currentNGramSize,
+        nGramRaw: session.currentNGramSizeRaw,
+        ...generated,
+      };
+      await this.#speechQueue.enqueue(event);
+      this.#maybeQueueContinuation(event);
+      return;
+    }
+
+    // Spontaneous
+    const pending = this.#nextStart;
+    this.#nextStart = [];
+
+    // News: same as comment — generate(topic) then speech(generated) (no strip).
+    if (pending.length === 0 && this.#currentNewsLines.length > 0) {
+      const topic = pickTopic(this.#currentNewsLines.join(""));
+      if (topic) {
+        await this.speech(
+          this.#talkModel.generate(topic, session.currentNGramSize),
+        );
+        return;
       }
-      const ret = this.#talkModel.generate(start, session.currentNGramSize);
+    }
+
+    // Continuation: strip seed. Empty start: random seed (strip no-op).
+    const fromContinuation = pending.length > 0;
+    const start = fromContinuation ? pending[pending.length - 1]! : "";
+    const ret = this.#talkModel.generate(start, session.currentNGramSize);
+    const shouldStripSeed = fromContinuation && Boolean(start);
+
+    const event: SpeechEvent = (() => {
       if (typeof ret === "string") {
         const text =
-          start && ret.startsWith(start) ? ret.slice(start.length) : ret;
+          shouldStripSeed && ret.startsWith(start) ? ret.slice(start.length) : ret;
         return { text };
       }
       const rawText = ret.text;
       const text =
-        start && rawText.startsWith(start)
+        shouldStripSeed && rawText.startsWith(start)
           ? rawText.slice(start.length)
           : rawText;
       const nodes = Array.isArray(ret.nodes)
-        ? start && ret.nodes[0] === start
+        ? shouldStripSeed && ret.nodes[0] === start
           ? ret.nodes.slice(1)
           : ret.nodes
         : undefined;
@@ -123,8 +143,6 @@ export class MakaMujo {
     })();
 
     await this.#speechQueue.enqueue(event);
-
-    // After TTS, queue continuation when the chunk does not end with "。".
     this.#maybeQueueContinuation(event);
   }
 
