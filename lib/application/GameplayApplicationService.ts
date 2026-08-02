@@ -11,15 +11,18 @@ export class GameplayApplicationService {
   #session: AgentSession;
   #isSpeechable: () => boolean;
   #notifyGameStateChange: () => void;
+  #onGameSight?: (sightState: Record<string, unknown>) => void;
 
   constructor(
     session: AgentSession,
     isSpeechable: () => boolean,
     notifyGameStateChange: () => void,
+    onGameSight?: (sightState: Record<string, unknown>) => void,
   ) {
     this.#session = session;
     this.#isSpeechable = isSpeechable;
     this.#notifyGameStateChange = notifyGameStateChange;
+    this.#onGameSight = onGameSight;
   }
 
   play(name: GameName, data?: string): void {
@@ -57,6 +60,7 @@ export class GameplayApplicationService {
               },
             };
             this.#notifyGameStateChange();
+            this.#onGameSight?.(nextState);
           }
         }
 

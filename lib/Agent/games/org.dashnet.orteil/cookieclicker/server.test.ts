@@ -3,6 +3,7 @@ import {
   buildSightResult,
   collectClickableElementIds,
   enrichStatisticsGeneral,
+  parseNewsLines,
 } from "./server";
 import type { ElementLike, SightRawData } from "./server";
 
@@ -197,6 +198,8 @@ const baseSightRawData: SightRawData = {
   cpsIsWrinkled: false,
   ascendNumberText: undefined,
   commentsText: undefined,
+  commentsText1: undefined,
+  commentsText2: undefined,
   storeBulkModeSelectedId: undefined,
   statisticsGeneralListings: undefined,
   url: 'https://example.com',
@@ -306,6 +309,36 @@ it('enriches Japanese statistics keys with parsed numbers', () => {
     });
   });
 
+
+  it("builds newsLines from child lines", () => {
+    const result = buildSightResult({
+      ...baseSightRawData,
+      commentsText1: "ニュース1",
+      commentsText2: "ニュース2",
+      commentsText: "親の全文",
+    });
+    expect(result.newsLines).toEqual(["ニュース1", "ニュース2"]);
+  });
+
+  it("builds newsLines from commentsText fallback when child lines are empty", () => {
+    const result = buildSightResult({
+      ...baseSightRawData,
+      commentsText1: undefined,
+      commentsText2: "  ",
+      commentsText: "一行目\n二行目\n",
+    });
+    expect(result.newsLines).toEqual(["一行目", "二行目"]);
+  });
+
+  it("builds empty newsLines when no news text is present", () => {
+    const result = buildSightResult({
+      ...baseSightRawData,
+      commentsText1: undefined,
+      commentsText2: undefined,
+      commentsText: undefined,
+    });
+    expect(result.newsLines).toEqual([]);
+  });
   it('sets statistics to undefined when no listings are provided', () => {
     const result = buildSightResult({ ...baseSightRawData, statisticsGeneralListings: undefined });
     expect(result.statistics).toBeUndefined();
@@ -391,5 +424,17 @@ describe('enrichStatisticsGeneral', () => {
       'Cookie clicks': { innerText: ' 42' },
       '所有建物：': { innerText: ' 457' },
     });
+  });
+});
+
+describe("parseNewsLines", () => {
+  it("prefers child lines over fallback", () => {
+    expect(parseNewsLines("行1", "行2", "無視\nされる")).toEqual(["行1", "行2"]);
+  });
+  it("falls back to splitting commentsText", () => {
+    expect(parseNewsLines(undefined, undefined, "a\nb\n")).toEqual(["a", "b"]);
+  });
+  it("drops empty lines", () => {
+    expect(parseNewsLines("  ", "本体", undefined)).toEqual(["本体"]);
   });
 });
