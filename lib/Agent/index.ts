@@ -6,7 +6,7 @@ import { SpeechQueue, type SpeechEvent } from "../application/SpeechQueue";
 import { StreamApplicationService } from "../application/StreamApplicationService";
 import type { TalkModelGenerateResult as AppTalkModelGenerateResult } from "../application/types";
 import { evaluateSpeechable } from "../domain/broadcasting/SilencePolicy";
-import { pickTopic } from "../domain/comments/TopicPicker";
+import { pickRandomFrom, segmentWords } from "../domain/comments/TopicPicker";
 export const SILENCE_THRESHOLD_MS = 5 * 60 * 1_000; // 5 minutes
 
 /**
@@ -103,7 +103,7 @@ export class MakaMujo {
 
     // News: same as comment — generate(topic) then speech(generated) (no strip).
     if (pending.length === 0 && this.#currentNewsLines.length > 0) {
-      const topic = pickTopic(this.#currentNewsLines.join(""));
+      const topic = pickRandomFrom(segmentWords(this.#currentNewsLines.join("")));
       if (topic) {
         await this.speech(
           this.#talkModel.generate(topic, session.currentNGramSize),
