@@ -1,0 +1,22 @@
+- name: Install OBS Studio via Flatpak
+  hosts: vps
+  become: true
+  tasks:
+    - name: Install flatpak
+      ansible.builtin.apt:
+        name: flatpak
+        state: present
+        update_cache: true
+
+    - name: Add Flathub remote
+      ansible.builtin.command:
+        cmd: flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+      register: flathub
+      changed_when: "'already exists' not in (flathub.stderr | default('')) and flathub.rc == 0"
+      failed_when: flathub.rc != 0 and 'already exists' not in (flathub.stderr | default(''))
+
+    - name: Install OBS Studio (Flathub)
+      ansible.builtin.command:
+        cmd: flatpak install -y flathub com.obsproject.Studio
+      register: obs_install
+      changed_when: "'is already installed' not in (obs_install.stdout | default(''))"
