@@ -28,15 +28,40 @@
           if test -r /etc/profile; then
             . /etc/profile
           fi
-          exec startxfce4
-    - name: Enable AllowRootLogin in sesman.ini
-      ansible.builtin.lineinfile:
-        path: /etc/xrdp/sesman.ini
-        regexp: '^#?AllowRootLogin='
-        line: 'AllowRootLogin=true'
-        backup: true
+          export XDG_SESSION_TYPE=x11
+          export XDG_CURRENT_DESKTOP=XFCE
+          unset DBUS_SESSION_BUS_ADDRESS
+          exec dbus-launch --exit-with-session startxfce4
 
-    - name: Restart xrdp
+    - name: Restart xrdp after session script change
       ansible.builtin.service:
         name: xrdp
         state: restarted
+
+    - name: Restart xrdp-sesman after session script change
+      ansible.builtin.service:
+        name: xrdp-sesman
+        state: restarted
+
+    - name: Install Japanese fonts
+      ansible.builtin.apt:
+        name:
+          - fonts-ipafont-gothic
+          - fonts-ipafont-mincho
+          - fonts-noto-cjk
+        state: present
+
+    - name: Install audio stack
+      ansible.builtin.apt:
+        name:
+          - pavucontrol
+          - pipewire
+          - pipewire-audio
+          - pipewire-pulse
+          - wireplumber
+        state: present
+
+    - name: Install Chromium
+      ansible.builtin.apt:
+        name: chromium
+        state: present
