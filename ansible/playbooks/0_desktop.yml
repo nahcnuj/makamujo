@@ -1,0 +1,42 @@
+- name: Install X11 desktop and RDP (root session)
+  hosts: vps
+  become: true
+  tasks:
+    - name: Install desktop and RDP packages
+      ansible.builtin.apt:
+        name:
+          - dbus-x11
+          - xfce4
+          - xfce4-goodies
+          - xorg
+          - xrdp
+        state: present
+        update_cache: true
+
+    - name: Enable and start xrdp
+      ansible.builtin.service:
+        name: xrdp
+        state: started
+        enabled: true
+
+    - name: Prefer XFCE session for xrdp
+      ansible.builtin.copy:
+        dest: /etc/xrdp/startwm.sh
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          if test -r /etc/profile; then
+            . /etc/profile
+          fi
+          exec startxfce4
+    - name: Enable AllowRootLogin in sesman.ini
+      ansible.builtin.lineinfile:
+        path: /etc/xrdp/sesman.ini
+        regexp: '^#?AllowRootLogin='
+        line: 'AllowRootLogin=true'
+        backup: true
+
+    - name: Restart xrdp
+      ansible.builtin.service:
+        name: xrdp
+        state: restarted
