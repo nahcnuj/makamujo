@@ -1,10 +1,11 @@
-- name: Deploy makamujo (clone and install deps)
+- name: Deploy makamujo (clone, deps, console TLS)
   hosts: vps
   become: true
   vars:
     makamujo_src: /opt/src/makamujo
+    tls_dir: /opt/src/makamujo/var/tls
   environment:
-    PATH: "/root/.bun/bin:{{ ansible_facts.env.PATH | default('/usr/local/bin:/usr/bin:/bin') }}"
+    PATH: "/root/.bun/bin:/usr/local/bin:/usr/bin:/bin"
   tasks:
     - name: Ensure parent directory exists
       ansible.builtin.file:
@@ -24,6 +25,37 @@
         cmd: bun install --production
         chdir: "{{ makamujo_src }}"
 
+    - name: Ensure TLS directory exists
+      ansible.builtin.file:
+        path: "{{ tls_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Generate self-signed certificate if missing
+      ansible.builtin.command:
+        cmd: >
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048
+          -keyout {{ tls_dir }}/privkey.pem
+          -out {{ tls_dir }}/fullchain.pem
+          -subj /CN=162.43.32.60
+      args:
+        creates: "{{ tls_dir }}/fullchain.pem"
+
+    - name: Restrict private key permissions
+      ansible.builtin.file:
+        path: "{{ tls_dir }}/privkey.pem"
+        mode: "0600"
+
+    - name: Write console TLS env file
+      ansible.builtin.copy:
+        dest: "{{ makamujo_src }}/var/console-tls.env"
+        mode: "0644"
+        content: |
+          CONSOLE_TLS_CERT={{ tls_dir }}/fullchain.pem
+          CONSOLE_TLS_KEY={{ tls_dir }}/privkey.pem
+
     - name: Show next step
       ansible.builtin.debug:
-        msg: "On RDP desktop: cd {{ makamujo_src }} && ./bin/start"
+        msg: >-
+          cd {{ makamujo_src }} && ./bin/stop;
+          set -a && . ./var/console-tls.env && set +a && ./bin/start

@@ -18,8 +18,10 @@ import {
 import { createDailyRotatingJsonLogger, formatUnknownError } from "../lib/consoleLogger";
 import * as consoleRoutes from "../routes/console/index";
 
-const consoleCertPath = process.env.CONSOLE_TLS_CERT ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/fullchain.pem';
-const consoleKeyPath = process.env.CONSOLE_TLS_KEY ?? '/etc/letsencrypt/live/x85-131-251-123.static.xvps.ne.jp/privkey.pem';
+const consoleCertPath =
+  process.env.CONSOLE_TLS_CERT ?? resolve(process.cwd(), "var/tls/fullchain.pem");
+const consoleKeyPath =
+  process.env.CONSOLE_TLS_KEY ?? resolve(process.cwd(), "var/tls/privkey.pem");
 const consoleRedirectURL = process.env.CONSOLE_REDIRECT_URL ?? 'https://live.nicovideo.jp/watch/user/14171889';
 const consoleAccessLogPath = resolve(process.cwd(), 'var/log/console/access.log');
 const consoleErrorLogPath = resolve(process.cwd(), 'var/log/console/error.log');
