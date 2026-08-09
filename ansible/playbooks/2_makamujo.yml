@@ -25,6 +25,16 @@
         cmd: bun install --production
         chdir: "{{ makamujo_src }}"
 
+    - name: Install Playwright Chromium browser
+      ansible.builtin.command:
+        cmd: bunx playwright install chromium
+        chdir: "{{ makamujo_src }}"
+
+    - name: Install Playwright system dependencies
+      ansible.builtin.command:
+        cmd: bunx playwright install-deps chromium
+        chdir: "{{ makamujo_src }}"
+
     - name: Ensure TLS directory exists
       ansible.builtin.file:
         path: "{{ tls_dir }}"
