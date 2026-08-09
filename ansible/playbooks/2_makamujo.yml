@@ -1,0 +1,29 @@
+- name: Deploy makamujo (clone and install deps)
+  hosts: vps
+  become: true
+  vars:
+    makamujo_src: /opt/src/makamujo
+  environment:
+    PATH: "/root/.bun/bin:{{ ansible_facts.env.PATH | default('/usr/local/bin:/usr/bin:/bin') }}"
+  tasks:
+    - name: Ensure parent directory exists
+      ansible.builtin.file:
+        path: /opt/src
+        state: directory
+        mode: "0755"
+
+    - name: Clone makamujo repository
+      ansible.builtin.git:
+        repo: https://github.com/nahcnuj/makamujo.git
+        dest: "{{ makamujo_src }}"
+        version: legacy
+        force: true
+
+    - name: Install production dependencies with Bun
+      ansible.builtin.command:
+        cmd: bun install --production
+        chdir: "{{ makamujo_src }}"
+
+    - name: Show next step
+      ansible.builtin.debug:
+        msg: "On RDP desktop: cd {{ makamujo_src }} && ./bin/start"
