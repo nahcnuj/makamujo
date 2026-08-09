@@ -29,7 +29,7 @@ done
 # When --display is not given, auto-detect the display from the first X11
 # socket found in /tmp/.X11-unix/ (e.g. xrdp uses :10, not :0).
 if [ -z "$_DISPLAY_EXPLICIT" ]; then
-  for _sock in /tmp/.X11-unix/X*; do
+  for _sock in $(ls -t /tmp/.X11-unix/X* 2>/dev/null); do
     if [ -S "$_sock" ]; then
       _num="${_sock##*/X}"
       export DISPLAY=":${_num}"
