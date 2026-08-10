@@ -32,15 +32,21 @@
           export XDG_SESSION_TYPE=x11
           export XDG_CURRENT_DESKTOP=XFCE
           unset DBUS_SESSION_BUS_ADDRESS
-          # Keep a single display; try to enlarge this RDP session only.
-          if command -v xrandr >/dev/null 2>&1; then
+
+          # Single display: enlarge this RDP session to 2560x1440 when possible.
+          if command -v xrandr >/dev/null 2>&1 && command -v cvt >/dev/null 2>&1; then
             OUT=$(xrandr 2>/dev/null | awk '/ connected/{print $1; exit}')
             if [ -n "$OUT" ]; then
-              xrandr --output "$OUT" --fb 2560x1440 2>/dev/null \
-                || xrandr --fb 2560x1440 2>/dev/null \
-                || true
+              MODELINE=$(cvt 2560 1440 60 2>/dev/null | awk '/Modeline/{$1=""; sub(/^ /,""); print}')
+              NAME=$(echo "$MODELINE" | awk '{print $1}' | tr -d '"')
+              if [ -n "$NAME" ] && [ -n "$MODELINE" ]; then
+                xrandr --newmode $MODELINE 2>/dev/null || true
+                xrandr --addmode "$OUT" "$NAME" 2>/dev/null || true
+                xrandr --output "$OUT" --mode "$NAME" 2>/dev/null || true
+              fi
             fi
           fi
+
           exec dbus-launch --exit-with-session startxfce4
 
     - name: Restart xrdp after session script change
