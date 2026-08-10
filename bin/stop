@@ -29,6 +29,25 @@ kill_tree() {
   wait_until_process_exits "$1"
 }
 
+# Best-effort cleanup for processes started outside pid files
+# (e.g. manual bin/x/obs, orphaned flatpak/bwrap). Patterns are
+# scoped to this project or the known OBS Flatpak app id.
+sweep_leftovers() {
+  pkill -TERM -f "${PROJECT_ROOT}/bin/x/obs" 2>/dev/null || true
+  pkill -TERM -f "${PROJECT_ROOT}/bin/obs-studio" 2>/dev/null || true
+  pkill -TERM -f "${PROJECT_ROOT}/obs-studio" 2>/dev/null || true
+  pkill -TERM -f "${PROJECT_ROOT}/bin/x/browser" 2>/dev/null || true
+  pkill -TERM -f "flatpak.*com\\.obsproject\\.Studio" 2>/dev/null || true
+  pkill -TERM -f "bwrap.*com\\.obsproject\\.Studio" 2>/dev/null || true
+  sleep 0.5
+  pkill -KILL -f "${PROJECT_ROOT}/bin/x/obs" 2>/dev/null || true
+  pkill -KILL -f "${PROJECT_ROOT}/bin/obs-studio" 2>/dev/null || true
+  pkill -KILL -f "${PROJECT_ROOT}/obs-studio" 2>/dev/null || true
+  pkill -KILL -f "${PROJECT_ROOT}/bin/x/browser" 2>/dev/null || true
+  pkill -KILL -f "flatpak.*com\\.obsproject\\.Studio" 2>/dev/null || true
+  pkill -KILL -f "bwrap.*com\\.obsproject\\.Studio" 2>/dev/null || true
+}
+
 for pid_file in "${PID_DIR}/obs" "${PID_DIR}/browser" "${PID_DIR}/screen"; do
   if [ -f "$pid_file" ]; then
     pid=$(cat "$pid_file")
@@ -38,3 +57,5 @@ for pid_file in "${PID_DIR}/obs" "${PID_DIR}/browser" "${PID_DIR}/screen"; do
     rm -f "$pid_file"
   fi
 done
+
+sweep_leftovers
