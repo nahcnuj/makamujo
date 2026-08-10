@@ -18,6 +18,15 @@ if [ ! -f "$OBS_CONFIG_DIR/basic/profiles/Makamujo/basic.ini" ]; then
   exit 1
 fi
 
+# Flatpak often ignores XDG_CONFIG_HOME and uses ~/.var/app/.../obs-studio.
+# Point that path at the repo config so scenes/profiles stay in git.
+FLATPAK_OBS_CONFIG="${HOME}/.var/app/com.obsproject.Studio/config"
+mkdir -p "$FLATPAK_OBS_CONFIG"
+if [ -e "$FLATPAK_OBS_CONFIG/obs-studio" ] && [ ! -L "$FLATPAK_OBS_CONFIG/obs-studio" ]; then
+  rm -rf "$FLATPAK_OBS_CONFIG/obs-studio"
+fi
+ln -sfn "$OBS_CONFIG_DIR" "$FLATPAK_OBS_CONFIG/obs-studio"
+
 mkdir -p "$OBS_CACHE_DIR"
 
 flatpak run -vv \
