@@ -9,6 +9,7 @@
           - xfce4
           - xfce4-goodies
           - xorg
+          - x11-xserver-utils
           - xrdp
         state: present
         update_cache: true
@@ -31,6 +32,15 @@
           export XDG_SESSION_TYPE=x11
           export XDG_CURRENT_DESKTOP=XFCE
           unset DBUS_SESSION_BUS_ADDRESS
+          # Keep a single display; try to enlarge this RDP session only.
+          if command -v xrandr >/dev/null 2>&1; then
+            OUT=$(xrandr 2>/dev/null | awk '/ connected/{print $1; exit}')
+            if [ -n "$OUT" ]; then
+              xrandr --output "$OUT" --fb 2560x1440 2>/dev/null \
+                || xrandr --fb 2560x1440 2>/dev/null \
+                || true
+            fi
+          fi
           exec dbus-launch --exit-with-session startxfce4
 
     - name: Restart xrdp after session script change
