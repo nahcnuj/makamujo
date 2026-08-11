@@ -36,8 +36,11 @@ flatpak run -vv \
     --env=XDG_DATA_HOME="$REPO_ROOT" \
     --env=XDG_CACHE_HOME="$OBS_CACHE_DIR" \
     --env=LIBGL_ALWAYS_SOFTWARE=1 \
+    --env=GALLIUM_DRIVER=llvmpipe \
+    --env=MESA_LOADER_DRIVER_OVERRIDE=llvmpipe \
     --env=OBS_BROWSER_HW_ACCEL=0 \
     --env=OBS_USE_EGL=0 \
+    --env=QT_QUICK_BACKEND=software \
     --nosocket=wayland \
     com.obsproject.Studio \
     "$@"
