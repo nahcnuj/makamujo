@@ -1,7 +1,8 @@
-import type { Browser } from "automated-gameplay-transmitter";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Browser } from "automated-gameplay-transmitter";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { setTimeout } from "node:timers/promises";
 import type { ViewportSize } from "playwright";
 import playwright from "playwright";
