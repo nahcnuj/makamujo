@@ -11,6 +11,7 @@
           - fonts-ipafont-mincho
           - fonts-noto-cjk
           - pavucontrol
+          - pulseaudio-utils
           - pipewire
           - pipewire-audio
           - pipewire-pulse
@@ -137,6 +138,37 @@
           export XDG_CURRENT_DESKTOP=XFCE
           unset DBUS_SESSION_BUS_ADDRESS
           exec dbus-launch --exit-with-session startxfce4
+
+
+    - name: Install makamujo PipeWire unit (root headless audio)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/makamujo-pipewire.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Makamujo PipeWire stack for headless streaming
+          After=network.target
+
+          [Service]
+          Type=simple
+          Environment=XDG_RUNTIME_DIR=/run/user/0
+          Environment=HOME=/root
+          RuntimeDirectory=user/0
+          RuntimeDirectoryMode=0700
+          ExecStartPre=/bin/mkdir -p /run/user/0
+          ExecStart=/bin/sh -c 'pipewire & pipewire-pulse & exec wireplumber'
+          Restart=on-failure
+          RestartSec=2
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Enable and start makamujo-pipewire
+      ansible.builtin.systemd:
+        name: makamujo-pipewire
+        enabled: true
+        state: started
+        daemon_reload: true
 
     - name: Enable and start xrdp
       ansible.builtin.service:
