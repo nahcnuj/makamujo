@@ -42,11 +42,13 @@ const { values: {
   },
 });
 
-// When --display is not given, auto-detect the display from the first X11
-// socket found in /tmp/.X11-unix/ (e.g. xrdp uses :10, not :0).
-const resolvedDisplay = display ?? (() => {
+// Prefer: CLI --display > existing DISPLAY env (from bin/start) > :10 if present > auto-detect
+const resolvedDisplay = display ?? process.env.DISPLAY ?? (() => {
   try {
     const x11UnixDir = '/tmp/.X11-unix';
+    if (existsSync(`${x11UnixDir}/X10`)) {
+      return ':10';
+    }
     const socketName = readdirSync(x11UnixDir).find(name => /^X\d+$/.test(name));
     if (socketName !== undefined) {
       return `:${socketName.slice(1)}`;
