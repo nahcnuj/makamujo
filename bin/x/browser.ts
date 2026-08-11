@@ -92,7 +92,7 @@ const executablePath = (browserArg?.toString() ?? "").trim() || undefined;
 
 const browser = await create(executablePath, {
   width: 1280,
-  height: 720 + 32 /* top bar */,
+  height: 1000, // tall: push bottom ads below stream crop
 });
 
 const send = await createRetrySender(async (action) => {

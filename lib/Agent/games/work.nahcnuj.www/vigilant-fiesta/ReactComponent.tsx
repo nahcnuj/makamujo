@@ -25,9 +25,9 @@ export default function ({ state }: { state: State }) {
         <img
           src="/vigilant-fiesta-qr.svg"
           alt={`QR: ${GAME_PUBLIC_URL}`}
-          width={120}
-          height={120}
-          className="bg-white rounded-sm p-1 w-[7.5rem] h-[7.5rem]"
+          width={180}
+          height={180}
+          className="bg-white rounded-sm p-1 w-[11.25rem] h-[11.25rem]"
         />
       </div>
     </div>

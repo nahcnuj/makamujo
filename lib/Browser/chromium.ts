@@ -146,9 +146,9 @@ export const create = async (
     // https://peter.sh/experiments/chromium-command-line-switches/
     args: [
       '--hide-scrollbars',
-      '--window-size=1280,720',
+      '--window-size=1280,1000',
       '--window-position=1280,40',
-      '--disable-features=Translate,TranslateUI,TranslateScript',
+      '--disable-features=Translate,TranslateUI,TranslateScript,OptimizationHints',
       '--disable-translate',
       '--lang=ja',
       // Hide address bar (right frame URL)
@@ -198,6 +198,8 @@ export const create = async (
 
   const ctx = await browser.newContext({
     viewport,
+    locale: 'ja-JP',
+    extraHTTPHeaders: { 'Accept-Language': 'ja' },
   });
   ctx.setDefaultTimeout(0);
 
