@@ -42,13 +42,15 @@ chmod 600 .vault_pass
 # ansible.cfg の vault_password_file を有効化してもよい
 ```
 
-`group_vars/all/vault.yml` は **暗号化済みなら commit してよい**。  
+`inventory/group_vars/all/vault.yml` は **暗号化済みなら commit してよい**。  
 `.vault_pass` と平文 `vault.yml` は commit しない。
+
+Ansible は inventory 隣の `group_vars` を読む（`inventory/hosts.yml` → `inventory/group_vars/`）。
 
 ### キー更新
 
 ```sh
-ansible-vault edit group_vars/all/vault.yml --ask-vault-pass
+ansible-vault edit inventory/group_vars/all/vault.yml --ask-vault-pass
 # または --vault-password-file .vault_pass
 
 ansible-playbook playbooks/0_secrets.yml --ask-vault-pass

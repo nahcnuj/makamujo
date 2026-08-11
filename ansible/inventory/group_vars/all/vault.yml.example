@@ -1,10 +1,10 @@
 ---
-# Copy to vault.yml and encrypt:
-#   cp group_vars/all/vault.yml.example group_vars/all/vault.yml
-#   ansible-vault encrypt group_vars/all/vault.yml
+# Copy to vault.yml and encrypt (from ansible/):
+#   cp inventory/group_vars/all/vault.yml.example inventory/group_vars/all/vault.yml
+#   ansible-vault encrypt inventory/group_vars/all/vault.yml
 #
 # Or create interactively:
-#   ansible-vault create group_vars/all/vault.yml
+#   ansible-vault create inventory/group_vars/all/vault.yml
 #
 # Do not commit a plaintext vault.yml.
 
