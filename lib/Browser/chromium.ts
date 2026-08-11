@@ -134,8 +134,8 @@ export async function launchPersistentContext(
 export const create = async (
   executablePath?: string,
   viewport: ViewportSize = {
-    width: 1536,
-    height: 864,
+    width: 1600,
+    height: 900,
   },
 ): Promise<Browser> => {
   const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '60000', 10);
