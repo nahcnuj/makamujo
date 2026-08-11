@@ -4,12 +4,17 @@
   tasks:
 
     - name: Ensure Debian contrib component is enabled (hts-voice)
-      ansible.builtin.command:
-        cmd: >
-          bash -lc 'grep -Rqs "contrib" /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null
-          || (test -f /etc/apt/sources.list.d/debian.sources
-              && sed -i "s/Components: main/Components: main contrib/" /etc/apt/sources.list.d/debian.sources)
-          || true'
+      ansible.builtin.shell: |
+        set -e
+        if grep -Rqs contrib /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then
+          exit 0
+        fi
+        if [ -f /etc/apt/sources.list.d/debian.sources ]; then
+          sed -i 's/Components: main$/Components: main contrib/' /etc/apt/sources.list.d/debian.sources
+          sed -i 's/Components: main /Components: main contrib /' /etc/apt/sources.list.d/debian.sources
+        fi
+      args:
+        executable: /bin/bash
       changed_when: false
 
     - name: Install desktop and display packages
