@@ -183,10 +183,10 @@
         "screen": 0,
         "show_cursor": false,
         "advanced": true,
-        "cut_top": 160,
+        "cut_top": 40,
         "cut_left": 1280,
         "cut_right": 0,
-        "cut_bot": 560
+        "cut_bot": 680
       },
       "mixers": 0,
       "sync": 0,

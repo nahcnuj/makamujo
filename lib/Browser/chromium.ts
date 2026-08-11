@@ -149,7 +149,7 @@ export const create = async (
     // https://peter.sh/experiments/chromium-command-line-switches/
     args: [
       '--hide-scrollbars',
-      '--window-size=1280,1000',
+      '--window-size=1536,864',
       '--window-position=1280,40',
       '--disable-features=Translate,TranslateUI,TranslateScript,OptimizationHints',
       '--disable-translate',
