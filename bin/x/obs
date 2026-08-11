@@ -63,4 +63,10 @@ fi
     --disable-missing-files-check \
     --disable-updater \
     --unfiltered_log \
-    --verbose
+    --verbose \
+    --disable-gpu \
+    --disable-gpu-compositing \
+    --in-process-gpu \
+    --disable-gpu-sandbox \
+    --no-sandbox \
+    --disable-dev-shm-usage
