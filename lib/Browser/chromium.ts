@@ -225,6 +225,7 @@ export const create = async (
     try {
       await page.evaluate(() => {
         document.documentElement.style.zoom = '1.25';
+        window.scrollTo(0, 0);
       });
     } catch { /* page may not be ready */ }
   };
