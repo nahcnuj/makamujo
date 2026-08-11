@@ -2,6 +2,16 @@
   hosts: vps
   become: true
   tasks:
+
+    - name: Ensure Debian contrib component is enabled (hts-voice)
+      ansible.builtin.command:
+        cmd: >
+          bash -lc 'grep -Rqs "contrib" /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null
+          || (test -f /etc/apt/sources.list.d/debian.sources
+              && sed -i "s/Components: main/Components: main contrib/" /etc/apt/sources.list.d/debian.sources)
+          || true'
+      changed_when: false
+
     - name: Install desktop and display packages
       ansible.builtin.apt:
         name:
@@ -24,6 +34,10 @@
           - xorg
           - xrdp
           - xvfb
+          - alsa-utils
+          - open-jtalk
+          - open-jtalk-mecab-naist-jdic
+          - hts-voice-nitech-jp-atr503-m001
         state: present
         update_cache: true
 
