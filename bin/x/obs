@@ -59,6 +59,7 @@ if [ -n "${DISPLAY:-}" ] && [ -z "$_XAUTHORITY_EXPLICIT" ]; then
 fi
 
 "${OBS_STUDIO}" \
+    --geometry 1280x640+0+780 \
     --startstreaming \
     --disable-shutdown-check \
     --disable-missing-files-check \
