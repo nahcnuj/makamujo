@@ -64,8 +64,18 @@
           CONSOLE_TLS_CERT={{ tls_dir }}/fullchain.pem
           CONSOLE_TLS_KEY={{ tls_dir }}/privkey.pem
 
+    # git force-reset restores empty service.json key; re-apply from vault when present.
+    - name: Re-apply Niconama stream key after deploy
+      ansible.builtin.include_tasks: tasks/write_obs_stream_key.yml
+      when:
+        - niconama_stream_key is defined
+        - (niconama_stream_key | length) > 0
+
     - name: Show next step
       ansible.builtin.debug:
         msg: >-
           cd {{ makamujo_src }} && ./bin/stop;
           set -a && . ./var/console-tls.env && set +a && ./bin/start
+          {% if niconama_stream_key is not defined or (niconama_stream_key | length) == 0 %}
+          ; also run playbooks/0_secrets.yml if the OBS stream key must be set
+          {% endif %}

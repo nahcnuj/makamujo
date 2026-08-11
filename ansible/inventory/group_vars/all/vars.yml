@@ -1,7 +1,4 @@
 ---
 # Non-secret defaults (safe to commit).
 makamujo_src: /opt/src/makamujo
-makamujo_secrets_dir: /etc/makamujo
-niconama_stream_key_path: "{{ makamujo_secrets_dir }}/niconama.stream.key"
-makamujo_stream_key_path: "{{ makamujo_src }}/var/niconama.stream.key"
 makamujo_obs_service_json: "{{ makamujo_src }}/obs-studio/basic/profiles/Makamujo/service.json"

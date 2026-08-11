@@ -7,9 +7,6 @@ REPO_ROOT=$(cd "$SCRIPT_PATH/.." && pwd)
 
 OBS_CONFIG_DIR="$REPO_ROOT/obs-studio"
 OBS_CACHE_DIR="$REPO_ROOT/.cache"
-SERVICE_JSON="$OBS_CONFIG_DIR/basic/profiles/Makamujo/service.json"
-# Ansible Vault playbook installs the key here (see ansible/playbooks/0_secrets.yml).
-NICONAMA_STREAM_KEY_FILE="${NICONAMA_STREAM_KEY_FILE:-/etc/makamujo/niconama.stream.key}"
 
 if [ ! -d "$OBS_CONFIG_DIR" ]; then
   echo "OBS config directory not found: $OBS_CONFIG_DIR" >&2
@@ -21,52 +18,7 @@ if [ ! -f "$OBS_CONFIG_DIR/basic/profiles/Makamujo/basic.ini" ]; then
   exit 1
 fi
 
-# Inject Niconama RTMP key into service.json without storing the key in git.
-# Prefer python3 (stdlib json); fall back to leaving the file unchanged.
-# Also try repo-local path (readable when /etc is root-only and OBS is not root).
-if [ ! -f "$NICONAMA_STREAM_KEY_FILE" ] && [ -f "$REPO_ROOT/var/niconama.stream.key" ]; then
-  NICONAMA_STREAM_KEY_FILE="$REPO_ROOT/var/niconama.stream.key"
-fi
-if [ -f "$NICONAMA_STREAM_KEY_FILE" ] && [ -f "$SERVICE_JSON" ]; then
-  if command -v python3 >/dev/null 2>&1; then
-    # Pass paths via env (more reliable than `python3 - arg` + heredoc on some hosts).
-    if ! NICONAMA_STREAM_KEY_FILE="$NICONAMA_STREAM_KEY_FILE" SERVICE_JSON="$SERVICE_JSON" python3 <<'PY'
-import json, os, pathlib, sys
-key_path = pathlib.Path(os.environ["NICONAMA_STREAM_KEY_FILE"])
-service_path = pathlib.Path(os.environ["SERVICE_JSON"])
-try:
-    key = key_path.read_text(encoding="utf-8").strip()
-except OSError as e:
-    print(f"[WARN] cannot read stream key file {key_path}: {e}", file=sys.stderr)
-    sys.exit(1)
-if not key:
-    print(f"[WARN] stream key file is empty: {key_path}", file=sys.stderr)
-    sys.exit(1)
-try:
-    data = json.loads(service_path.read_text(encoding="utf-8"))
-except (OSError, json.JSONDecodeError) as e:
-    print(f"[WARN] cannot read service.json {service_path}: {e}", file=sys.stderr)
-    sys.exit(1)
-settings = data.setdefault("settings", {})
-if settings.get("key") == key:
-    print(f"[INFO] stream key already set in service.json (len={len(key)})", file=sys.stderr)
-    sys.exit(0)
-settings["key"] = key
-service_path.write_text(
-    json.dumps(data, ensure_ascii=False, separators=(",", ":")),
-    encoding="utf-8",
-)
-print(f"[INFO] injected niconama stream key into service.json (len={len(key)})", file=sys.stderr)
-PY
-    then
-      echo "[WARN] failed to inject stream key into service.json" >&2
-    fi
-  else
-    echo "[WARN] python3 not found; cannot inject stream key from $NICONAMA_STREAM_KEY_FILE" >&2
-  fi
-else
-  echo "[WARN] stream key file missing ($NICONAMA_STREAM_KEY_FILE); OBS service.json key left empty" >&2
-fi
+# Stream key lives only in OBS service.json (written by ansible/playbooks/0_secrets.yml).
 
 FLATPAK_OBS_CONFIG="${HOME}/.var/app/com.obsproject.Studio/config"
 mkdir -p "$FLATPAK_OBS_CONFIG"
