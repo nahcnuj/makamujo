@@ -26,9 +26,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# When --display is not given, auto-detect the display from the first X11
-# socket found in /tmp/.X11-unix/ (e.g. xrdp uses :10, not :0).
-if [ -z "$_DISPLAY_EXPLICIT" ]; then
+# Prefer already-exported DISPLAY (from bin/start etc.).
+# Only auto-detect when DISPLAY is completely unset.
+if [ -z "${DISPLAY:-}" ] && [ -z "$_DISPLAY_EXPLICIT" ]; then
   for _sock in $(ls -t /tmp/.X11-unix/X* 2>/dev/null); do
     if [ -S "$_sock" ]; then
       _num="${_sock##*/X}"
@@ -38,10 +38,11 @@ if [ -z "$_DISPLAY_EXPLICIT" ]; then
   done
 fi
 
-# When --display is given (or auto-detected) without --xauthority, try to
-# auto-detect the Xauthority file from the owner of the X11 socket so that
-# connections from a different login session (e.g. serial console as root)
-# can authenticate.
+# Prefer :10 (makamujo-xvfb) when available and nothing was forced
+if [ -z "$_DISPLAY_EXPLICIT" ] && [ -S /tmp/.X11-unix/X10 ]; then
+  export DISPLAY=:10
+fi
+
 if [ -n "${DISPLAY:-}" ] && [ -z "$_XAUTHORITY_EXPLICIT" ]; then
   _display_num="${DISPLAY#:}"
   _display_num="${_display_num%%.*}"
