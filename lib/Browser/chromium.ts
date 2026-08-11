@@ -148,6 +148,8 @@ export const create = async (
       '--hide-scrollbars',
       '--window-size=1280,720',
       '--window-position=1280,40',
+      '--disable-features=Translate,TranslateUI',
+      '--lang=ja',
     ],
   });
 
