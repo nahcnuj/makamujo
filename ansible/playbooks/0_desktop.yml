@@ -17,6 +17,7 @@
           - wireplumber
           - x11-xserver-utils
           - x11vnc
+          - xdotool
           - xfce4
           - xfce4-goodies
           - xorg
@@ -76,12 +77,45 @@
         state: started
         daemon_reload: true
 
-    - name: Ensure xrdp VNC session for Makamujo display exists
-      ansible.builtin.blockinfile:
-        path: /etc/xrdp/xrdp.ini
-        marker: "; {mark} ANSIBLE MANAGED MAKAMUJO VNC SESSION"
-        insertafter: EOF
-        block: |
+    - name: Configure xrdp for Makamujo-only session (:10 via x11vnc)
+      ansible.builtin.copy:
+        dest: /etc/xrdp/xrdp.ini
+        mode: "0644"
+        content: |
+          [Globals]
+          ; ini_version=1
+          bitmap_cache=true
+          bitmap_compression=true
+          port=3389
+          crypt_level=low
+          channel_code=1
+          max_bpp=24
+          use_compression=yes
+          kill_disconnected=false
+          tcp_nodelay=true
+          tcp_keepalive=true
+          security_layer=negotiate
+          allow_channels=true
+          allow_multimon=true
+          author_pubkey=
+          enable_token_login=false
+          use_fastpath=both
+          ssl_protocols=TLSv1.2, TLSv1.3
+
+          [Logging]
+          LogFile=xrdp.log
+          LogLevel=INFO
+          EnableSyslog=true
+
+          [Channels]
+          rdpdr=true
+          rdpsnd=true
+          drdynvc=true
+          cliprdr=true
+          rail=true
+          xrdpvr=true
+
+          ; Only one session: the streaming desk (:10)
           [Makamujo]
           name=Makamujo
           lib=libvnc.so
