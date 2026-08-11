@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
- * Overlay browser for OBS "Comment" (Window Capture).
- * Left half of :10 — does not overlap the game window (right half).
+ * Overlay browser for OBS "Comment" (XSHM left crop).
+ * Geometry: 1280x720 at (0, 40) — game stays at (1280, 40).
  */
 import { chromium } from "playwright";
 
@@ -13,6 +13,7 @@ console.log("[INFO] overlay browser DISPLAY=", process.env.DISPLAY, "url=", url)
 
 const browser = await chromium.launch({
   headless: false,
+  ignoreDefaultArgs: ["--no-startup-window"],
   args: [
     "--no-sandbox",
     "--disable-dev-shm-usage",
@@ -20,10 +21,13 @@ const browser = await chromium.launch({
     "--window-size=1280,720",
     "--window-position=0,40",
     "--class=MakamujoComment",
-    `--app=${url}`,
   ],
 });
 
-// Keep process alive while the window is open
+const page = await browser.newPage();
+await page.setViewportSize({ width: 1280, height: 720 });
+await page.goto(url, { waitUntil: "domcontentloaded" });
+console.log("[INFO] overlay loaded", page.url());
+
 browser.on("disconnected", () => process.exit(0));
 await new Promise(() => {});
