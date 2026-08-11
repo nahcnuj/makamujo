@@ -65,8 +65,6 @@ fi
     --disable-updater \
     --unfiltered_log \
     --verbose \
-    --disable-gpu \
-    --disable-gpu-compositing \
     --in-process-gpu \
     --disable-gpu-sandbox \
     --no-sandbox \
