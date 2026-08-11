@@ -25,3 +25,16 @@ echo $! > "${PID_DIR}/browser"
 
 nohup ./bin/x/obs >"${PROJECT_ROOT}/var/obs.log" 2>&1 &
 echo $! > "${PID_DIR}/obs"
+
+# After OBS starts, raise main window on :10 for RDP monitoring
+(
+  sleep 8
+  export DISPLAY=:10
+  OBS_WIN=$(xwininfo -root -tree 2>/dev/null | grep -oE '0x[0-9a-f]+ "OBS 32[^"]*"' | head -1 | awk '{print $1}' || true)
+  if [ -n "$OBS_WIN" ]; then
+    xdotool windowactivate "$OBS_WIN" 2>/dev/null || true
+    xdotool windowraise "$OBS_WIN" 2>/dev/null || true
+    xdotool windowmove "$OBS_WIN" 40 40 2>/dev/null || true
+    xdotool windowsize "$OBS_WIN" 1400 900 2>/dev/null || true
+  fi
+) >/dev/null 2>&1 &
