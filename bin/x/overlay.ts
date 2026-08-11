@@ -21,6 +21,10 @@ const browser = await chromium.launch({
     "--window-size=1280,720",
     "--window-position=0,40",
     "--class=MakamujoComment",
+    "--disable-features=Translate,TranslateUI,TranslateScript",
+    "--disable-translate",
+    "--lang=ja",
+    `--app=${url}`,
   ],
 });
 

@@ -148,8 +148,11 @@ export const create = async (
       '--hide-scrollbars',
       '--window-size=1280,720',
       '--window-position=1280,40',
-      '--disable-features=Translate,TranslateUI',
+      '--disable-features=Translate,TranslateUI,TranslateScript',
+      '--disable-translate',
       '--lang=ja',
+      // Hide address bar (right frame URL)
+      `--app=${process.env.GAME_HOME_URL?.trim() || 'https://www.nahcnuj.work/vigilant-fiesta/'}`,
     ],
   });
 
@@ -206,6 +209,24 @@ export const create = async (
 
   // Close any new tabs (e.g. ad popups) that open in the browser context.
   ctx.on('page', createPopupPageHandler(page));
+
+  // Dismiss in-page ads / modals that expose a Japanese "閉じる" control.
+  const dismissCloseButtons = async () => {
+    try {
+      const buttons = page.getByText('閉じる', { exact: true });
+      const n = await buttons.count();
+      for (let i = 0; i < n; i++) {
+        const b = buttons.nth(i);
+        if (await b.isVisible().catch(() => false)) {
+          await b.click({ timeout: 500 }).catch(() => {});
+        }
+      }
+    } catch {
+      /* best-effort */
+    }
+  };
+  setInterval(() => { void dismissCloseButtons(); }, 3000);
+
 
   // If the main page navigates away from the current game home, redirect it back.
   page.on('framenavigated', createRedirectToHomeHandler(

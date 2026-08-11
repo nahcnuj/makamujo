@@ -29,9 +29,6 @@ export default function ({ state }: { state: State }) {
           height={120}
           className="bg-white rounded-sm p-1 w-[7.5rem] h-[7.5rem]"
         />
-        <div className="text-xs/4 font-normal opacity-80 text-center break-all max-w-[12rem]">
-          {GAME_PUBLIC_URL}
-        </div>
       </div>
     </div>
   );
