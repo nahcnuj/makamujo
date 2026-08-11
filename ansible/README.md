@@ -20,8 +20,13 @@ Inventory: `inventory/hosts.yml`（ホスト `vps` → `makamujo`）。
 ## Ansible Vault（Niconama stream key）
 
 git には平文キーを置かず、Vault で暗号化して管理します。  
-Playbook はキーを **`/etc/makamujo/niconama.stream.key`**（mode `0600`）に書き、  
-`bin/obs-studio` が起動時に `obs-studio/.../service.json` の `settings.key` へ注入します。
+Playbook `0_secrets.yml` は次を行います。
+
+1. **`/etc/makamujo/niconama.stream.key`**（mode `0600`）
+2. **`/opt/src/makamujo/var/niconama.stream.key`**（同上・アプリ側でも読める）
+3. リポジトリが既にあれば **`obs-studio/.../service.json` の `settings.key` をその場で書き換え**
+
+加えて `bin/obs-studio` も起動時にキーファイルから再注入します（git pull で `service.json` が空に戻っても復旧）。
 
 ### 初回
 
