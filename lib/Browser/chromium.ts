@@ -206,7 +206,14 @@ export const create = async (
   });
   ctx.setDefaultTimeout(0);
 
-  const page = await ctx.newPage();
+  // Prefer existing page from --app= window; avoid a second tabbed window
+  let page = ctx.pages()[0] ?? await ctx.newPage();
+  if (ctx.pages().length > 1) {
+    for (const extra of ctx.pages().slice(1)) {
+      await extra.close().catch(() => {});
+    }
+    page = ctx.pages()[0] ?? page;
+  }
 
   const gameHomeUrl =
     process.env.GAME_HOME_URL?.trim() ||
