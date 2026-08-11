@@ -13,6 +13,10 @@ cd "${PROJECT_ROOT}"
 # Streaming display (makamujo-xvfb)
 export DISPLAY=:10
 
+# Headless PipeWire (makamujo-pipewire.service / Ansible)
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/0}"
+export PULSE_SERVER="${PULSE_SERVER:-unix:/run/user/0/pulse/native}"
+
 # Soften OBS Browser Source (CEF) on GPU-less VPS
 export LIBGL_ALWAYS_SOFTWARE=1
 export OBS_BROWSER_HW_ACCEL=0
