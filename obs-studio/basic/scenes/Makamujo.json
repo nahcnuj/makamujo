@@ -46,7 +46,7 @@
             "id": "browser_source",
             "versioned_id": "browser_source",
             "settings": {
-                "url": "http://localhost:7777",
+                "url": "http://127.0.0.1:7777",
                 "width": 1280,
                 "height": 720,
                 "fps_custom": true,
@@ -94,7 +94,7 @@
                     "flags": 0,
                     "volume": 1.0,
                     "balance": 0.5,
-                    "enabled": true,
+                    "enabled": false,
                     "muted": false,
                     "push-to-mute": false,
                     "push-to-mute-delay": 0,
