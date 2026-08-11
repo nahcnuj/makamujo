@@ -91,8 +91,8 @@ const timeout = Number.parseInt(timeoutStr, 10);
 const executablePath = (browserArg?.toString() ?? "").trim() || undefined;
 
 const browser = await create(executablePath, {
-  width: 1600,
-  height: 900, // 16:9 * 1.25; T≈20 B≈160 // 16:9 scale; crop takes top-left 1280x720 // tall: push bottom ads below stream crop
+  width: 1280,
+  height: 720, // match stream crop; scale via page zoom // 16:9 * 1.25; T≈20 B≈160 // 16:9 scale; crop takes top-left 1280x720 // tall: push bottom ads below stream crop
 });
 
 const send = await createRetrySender(async (action) => {

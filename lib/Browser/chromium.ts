@@ -134,8 +134,8 @@ export async function launchPersistentContext(
 export const create = async (
   executablePath?: string,
   viewport: ViewportSize = {
-    width: 1600,
-    height: 900,
+    width: 1280,
+    height: 720,
   },
 ): Promise<Browser> => {
   const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '60000', 10);
@@ -220,6 +220,16 @@ export const create = async (
     } catch { /* best-effort */ }
   };
   setInterval(() => { void dismissCloseButtons(); }, 2000);
+
+  const applyZoom = async () => {
+    try {
+      await page.evaluate(() => {
+        document.documentElement.style.zoom = '1.25';
+      });
+    } catch { /* page may not be ready */ }
+  };
+  await applyZoom();
+  page.on('load', () => { void applyZoom(); });
 
   page.on('framenavigated', createRedirectToHomeHandler(
     page.mainFrame(),
