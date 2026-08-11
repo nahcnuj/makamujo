@@ -43,18 +43,16 @@
             "prev_ver": 520159234,
             "name": "Comment",
             "uuid": "4201aacd-a94c-4855-87c3-c10cd15e09d4",
-            "id": "browser_source",
-            "versioned_id": "browser_source",
+            "id": "xshm_input_v2",
+            "versioned_id": "xshm_input_v2",
             "settings": {
-                "url": "http://127.0.0.1:7777",
-                "width": 1280,
-                "height": 720,
-                "fps_custom": false,
-                "shutdown": false,
-                "restart_when_active": true,
-                "webpage_control_level": 0,
-                "css": "body { background-color: #1a3d2e; margin: 0px auto; overflow: hidden; color: #fff; }",
-                "reroute_audio": true
+                "screen": 0,
+                "show_cursor": false,
+                "advanced": true,
+                "cut_top": 40,
+                "cut_left": 0,
+                "cut_right": 1280,
+                "cut_bot": 680
             },
             "mixers": 255,
             "sync": 0,
@@ -78,35 +76,7 @@
             "deinterlace_field_order": 0,
             "monitoring_type": 0,
             "private_settings": {},
-            "filters": [
-                {
-                    "prev_ver": 520159234,
-                    "name": "Color Key",
-                    "uuid": "2c381af4-4400-41e8-91f3-025013416ba3",
-                    "id": "color_key_filter",
-                    "versioned_id": "color_key_filter_v2",
-                    "settings": {
-                        "key_color": 4278190080,
-                        "key_color_type": "custom"
-                    },
-                    "mixers": 0,
-                    "sync": 0,
-                    "flags": 0,
-                    "volume": 1.0,
-                    "balance": 0.5,
-                    "enabled": false,
-                    "muted": false,
-                    "push-to-mute": false,
-                    "push-to-mute-delay": 0,
-                    "push-to-talk": false,
-                    "push-to-talk-delay": 0,
-                    "hotkeys": {},
-                    "deinterlace_mode": 0,
-                    "deinterlace_field_order": 0,
-                    "monitoring_type": 0,
-                    "private_settings": {}
-                }
-            ]
+            "filters": []
         },
         {
             "prev_ver": 520159234,

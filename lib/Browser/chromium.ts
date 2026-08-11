@@ -146,8 +146,8 @@ export const create = async (
     // https://peter.sh/experiments/chromium-command-line-switches/
     args: [
       '--hide-scrollbars',
-      '--window-size=1024,576', // It may be required by `--window-position`.
-      '--window-position=1280,600',
+      '--window-size=1280,720',
+      '--window-position=1280,40',
     ],
   });
 

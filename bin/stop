@@ -34,12 +34,14 @@ kill_tree() {
 sweep_leftovers() {
   pkill -TERM -f "${PROJECT_ROOT}/bin/x/obs" 2>/dev/null || true
   pkill -TERM -f "${PROJECT_ROOT}/bin/x/browser" 2>/dev/null || true
+  pkill -TERM -f "${PROJECT_ROOT}/bin/x/overlay" 2>/dev/null || true
   pkill -TERM -f 'obs --startstreaming' 2>/dev/null || true
   pkill -TERM -f 'bwrap.*-- obs --startstreaming' 2>/dev/null || true
   pkill -TERM -f 'flatpak.*com\.obsproject\.Studio' 2>/dev/null || true
   sleep 0.5
   pkill -KILL -f "${PROJECT_ROOT}/bin/x/obs" 2>/dev/null || true
   pkill -KILL -f "${PROJECT_ROOT}/bin/x/browser" 2>/dev/null || true
+  pkill -KILL -f "${PROJECT_ROOT}/bin/x/overlay" 2>/dev/null || true
   pkill -KILL -f 'obs --startstreaming' 2>/dev/null || true
   pkill -KILL -f 'bwrap.*-- obs --startstreaming' 2>/dev/null || true
   pkill -KILL -f 'flatpak.*com\.obsproject\.Studio' 2>/dev/null || true
@@ -51,7 +53,7 @@ clear_obs_sentinel() {
   rm -rf "${PROJECT_ROOT}/obs-studio/.sentinel" 2>/dev/null || true
 }
 
-for pid_file in "${PID_DIR}/obs" "${PID_DIR}/browser" "${PID_DIR}/screen"; do
+for pid_file in "${PID_DIR}/obs" "${PID_DIR}/browser" "${PID_DIR}/overlay" "${PID_DIR}/screen"; do
   if [ -f "$pid_file" ]; then
     pid=$(cat "$pid_file")
     if [ -n "$pid" ]; then
