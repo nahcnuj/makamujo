@@ -133,114 +133,93 @@ export async function launchPersistentContext(
 export const create = async (
   executablePath?: string,
   viewport: ViewportSize = {
-    width: 1280,
-    height: 720,
+    width: 1536,
+    height: 864,
   },
 ): Promise<Browser> => {
   const launchTimeout = Number.parseInt(process.env.CHROMIUM_LAUNCH_TIMEOUT ?? '60000', 10);
-
-  const effectiveExecutablePath = resolveExecutablePath(executablePath);
-  const launchOpts = getChromiumLaunchOptions(executablePath, {
-    headless: process.env.CHROMIUM_HEADLESS === '1',
-    timeout: launchTimeout,
-    // Required for --app= to actually show the app window (otherwise Playwright
-    // opens a normal tabbed window).
-    ignoreDefaultArgs: ['--no-startup-window'],
-    // https://peter.sh/experiments/chromium-command-line-switches/
-    args: [
-      '--hide-scrollbars',
-      '--window-size=1536,864',
-      '--window-position=1280,40',
-      '--disable-features=Translate,TranslateUI,TranslateScript,OptimizationHints',
-      '--disable-translate',
-      '--lang=ja',
-      // Hide address bar (right frame URL)
-      `--app=${process.env.GAME_HOME_URL?.trim() || 'https://www.nahcnuj.work/vigilant-fiesta/'}`,
-    ],
-  });
-
-  console.log('[INFO] launching browser', effectiveExecutablePath
-    ? `with executablePath=${effectiveExecutablePath}`
-    : 'using Playwright bundled Chromium (no executablePath)');
-
-  const fallbackTimeout = 300000;
-
-  const cloneLaunchOpts = (base: typeof launchOpts) => ({
-    ...base,
-    args: [...base.args],
-  });
-
-  const launchWith = async (baseOpts: typeof launchOpts) => {
-    const firstTryOpts = cloneLaunchOpts(baseOpts);
-    const plainOpts = cloneLaunchOpts(baseOpts);
-    return await launchWithFallback(
-      () => chromium.launch(firstTryOpts),
-      () => playwright.chromium.launch(plainOpts)
-    );
-  };
-
-  let browser;
-  try {
-    browser = await launchWith(launchOpts);
-  } catch (err) {
-    if (launchTimeout < fallbackTimeout && err instanceof Error && /Timeout/.test(err.message)) {
-      console.warn('[WARN]', `launch timeout ${launchTimeout}ms exceeded, retrying with ${fallbackTimeout}ms`);
-      const fallbackOpts = { ...launchOpts, timeout: fallbackTimeout };
-      browser = await launchWith(fallbackOpts);
-    } else {
-      if (err instanceof Error) {
-        err.message = `Failed to launch Chromium. ` +
-          `Make sure you have run "bunx playwright install chromium" (or "playwright install chromium") ` +
-          `after updating Playwright. ` +
-          `If you want to force a system browser set CHROMIUM_EXECUTABLE_PATH.\n` +
-          `Original error: ${err.message}`;
-      }
-      throw err;
-    }
-  }
-
-  const ctx = await browser.newContext({
-    viewport,
-    locale: 'ja-JP',
-    extraHTTPHeaders: { 'Accept-Language': 'ja' },
-  });
-  ctx.setDefaultTimeout(0);
-
-  // Prefer existing page from --app= window; avoid a second tabbed window
-  let page = ctx.pages()[0] ?? await ctx.newPage();
-  if (ctx.pages().length > 1) {
-    for (const extra of ctx.pages().slice(1)) {
-      await extra.close().catch(() => {});
-    }
-    page = ctx.pages()[0] ?? page;
-  }
-
   const gameHomeUrl =
     process.env.GAME_HOME_URL?.trim() ||
     'https://www.nahcnuj.work/vigilant-fiesta/';
 
-  // Close any new tabs (e.g. ad popups) that open in the browser context.
+  const userDataDir = join(tmpdir(), `makamujo-game-${process.pid}`);
+  mkdirSync(join(userDataDir, 'Default'), { recursive: true });
+  writeFileSync(
+    join(userDataDir, 'Default', 'Preferences'),
+    JSON.stringify({
+      translate: { enabled: false },
+      browser: { translate: { enabled: false } },
+    }),
+  );
+
+  const effectiveExecutablePath = resolveExecutablePath(executablePath);
+  console.log('[INFO] launching browser (persistent --app)', effectiveExecutablePath
+    ? `with executablePath=${effectiveExecutablePath}`
+    : 'using Playwright bundled Chromium');
+
+  const launchOpts = {
+    headless: process.env.CHROMIUM_HEADLESS === '1',
+    timeout: launchTimeout,
+    ignoreDefaultArgs: ['--no-startup-window'] as string[],
+    locale: 'ja-JP',
+    viewport,
+    extraHTTPHeaders: { 'Accept-Language': 'ja' },
+    executablePath: effectiveExecutablePath,
+    args: [
+      '--hide-scrollbars',
+      `--window-size=${viewport.width},${viewport.height}`,
+      '--window-position=1280,40',
+      '--disable-features=Translate,TranslateUI,TranslateScript,OptimizationHints',
+      '--disable-translate',
+      '--lang=ja',
+      '--no-sandbox',
+      '--disable-dev-shm-usage',
+      `--app=${gameHomeUrl}`,
+    ],
+  };
+
+  // Drop undefined executablePath for Playwright
+  if (!launchOpts.executablePath) {
+    delete (launchOpts as { executablePath?: string }).executablePath;
+  }
+
+  const ctx = await chromium.launchPersistentContext(userDataDir, launchOpts);
+
+  // Reuse --app window only (do not open a second tabbed window)
+  let page = ctx.pages()[0];
+  if (!page) {
+    page = await ctx.newPage();
+  }
+  for (const extra of ctx.pages().slice(1)) {
+    await extra.close().catch(() => {});
+  }
+  page = ctx.pages()[0] ?? page;
+
+  if (!page.url().startsWith(gameHomeUrl) && page.url() !== 'about:blank') {
+    // keep
+  } else if (page.url() === 'about:blank' || !page.url().startsWith(gameHomeUrl)) {
+    await page.goto(gameHomeUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+  }
+
   ctx.on('page', createPopupPageHandler(page));
 
-  // Dismiss in-page ads / modals that expose a Japanese "閉じる" control.
   const dismissCloseButtons = async () => {
     try {
-      const buttons = page.getByText('閉じる', { exact: true });
-      const n = await buttons.count();
-      for (let i = 0; i < n; i++) {
-        const b = buttons.nth(i);
-        if (await b.isVisible().catch(() => false)) {
-          await b.click({ timeout: 500 }).catch(() => {});
+      const roots = [page, ...page.frames()];
+      for (const f of roots) {
+        const buttons = f.getByText('閉じる', { exact: true });
+        const n = await buttons.count().catch(() => 0);
+        for (let i = 0; i < n; i++) {
+          const b = buttons.nth(i);
+          if (await b.isVisible().catch(() => false)) {
+            await b.click({ timeout: 500 }).catch(() => {});
+          }
         }
       }
-    } catch {
-      /* best-effort */
-    }
+    } catch { /* best-effort */ }
   };
-  setInterval(() => { void dismissCloseButtons(); }, 3000);
+  setInterval(() => { void dismissCloseButtons(); }, 2000);
 
-
-  // If the main page navigates away from the current game home, redirect it back.
   page.on('framenavigated', createRedirectToHomeHandler(
     page.mainFrame(),
     gameHomeUrl,
@@ -253,7 +232,6 @@ export const create = async (
     },
     close: async () => {
       await ctx.close();
-      await browser.close();
     },
 
     clickByText: async (text) => {
@@ -309,12 +287,6 @@ export const create = async (
   } satisfies Browser;
 };
 
-type PageLike = { url(): string; close(): Promise<void> };
-
-/**
- * Returns an event handler for the BrowserContext `page` event that immediately
- * closes any page other than the designated main page (e.g. ad popup tabs).
- */
 export const createPopupPageHandler = (mainPage: PageLike) =>
   async (newPage: PageLike): Promise<void> => {
     if (newPage !== mainPage) {
