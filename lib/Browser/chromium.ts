@@ -143,6 +143,9 @@ export const create = async (
   const launchOpts = getChromiumLaunchOptions(executablePath, {
     headless: process.env.CHROMIUM_HEADLESS === '1',
     timeout: launchTimeout,
+    // Required for --app= to actually show the app window (otherwise Playwright
+    // opens a normal tabbed window).
+    ignoreDefaultArgs: ['--no-startup-window'],
     // https://peter.sh/experiments/chromium-command-line-switches/
     args: [
       '--hide-scrollbars',
