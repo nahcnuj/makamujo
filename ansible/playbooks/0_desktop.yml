@@ -1,26 +1,96 @@
-- name: Install X11 desktop and RDP (root session)
+- name: Install X11 desktop, streaming display :10, and RDP to same display
   hosts: vps
   become: true
   tasks:
-    - name: Install desktop and RDP packages
+    - name: Install desktop and display packages
       ansible.builtin.apt:
         name:
+          - chromium
           - dbus-x11
+          - fonts-ipafont-gothic
+          - fonts-ipafont-mincho
+          - fonts-noto-cjk
+          - pavucontrol
+          - pipewire
+          - pipewire-audio
+          - pipewire-pulse
+          - wireplumber
+          - x11-xserver-utils
+          - x11vnc
           - xfce4
           - xfce4-goodies
           - xorg
-          - x11-xserver-utils
           - xrdp
+          - xvfb
         state: present
         update_cache: true
 
-    - name: Enable and start xrdp
-      ansible.builtin.service:
-        name: xrdp
-        state: started
-        enabled: true
+    - name: Install makamujo Xvfb unit (:10 2560x1440)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/makamujo-xvfb.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Makamujo streaming display :10 (2560x1440)
+          After=network.target
 
-    - name: Prefer XFCE session for xrdp
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/Xvfb :10 -screen 0 2560x1440x24 -ac +extension GLX +render -noreset
+          Restart=on-failure
+          RestartSec=2
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Install makamujo x11vnc unit (share :10 on localhost:5900)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/makamujo-x11vnc.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Makamujo x11vnc on :10
+          After=makamujo-xvfb.service
+          Requires=makamujo-xvfb.service
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/x11vnc -display :10 -forever -shared -rfbport 5900 -localhost -nopw -xkb
+          Restart=on-failure
+          RestartSec=2
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Enable and start makamujo-xvfb
+      ansible.builtin.systemd:
+        name: makamujo-xvfb
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Enable and start makamujo-x11vnc
+      ansible.builtin.systemd:
+        name: makamujo-x11vnc
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Ensure xrdp VNC session for Makamujo display exists
+      ansible.builtin.blockinfile:
+        path: /etc/xrdp/xrdp.ini
+        marker: "; {mark} ANSIBLE MANAGED MAKAMUJO VNC SESSION"
+        insertafter: EOF
+        block: |
+          [Makamujo]
+          name=Makamujo
+          lib=libvnc.so
+          ip=127.0.0.1
+          port=5900
+          username=ask
+          password=ask
+
+    - name: Prefer XFCE when a local X session is used
       ansible.builtin.copy:
         dest: /etc/xrdp/startwm.sh
         mode: "0755"
@@ -32,52 +102,16 @@
           export XDG_SESSION_TYPE=x11
           export XDG_CURRENT_DESKTOP=XFCE
           unset DBUS_SESSION_BUS_ADDRESS
-
-          # Single display: enlarge this RDP session to 2560x1440 when possible.
-          if command -v xrandr >/dev/null 2>&1 && command -v cvt >/dev/null 2>&1; then
-            OUT=$(xrandr 2>/dev/null | awk '/ connected/{print $1; exit}')
-            if [ -n "$OUT" ]; then
-              MODELINE=$(cvt 2560 1440 60 2>/dev/null | awk '/Modeline/{$1=""; sub(/^ /,""); print}')
-              NAME=$(echo "$MODELINE" | awk '{print $1}' | tr -d '"')
-              if [ -n "$NAME" ] && [ -n "$MODELINE" ]; then
-                xrandr --newmode $MODELINE 2>/dev/null || true
-                xrandr --addmode "$OUT" "$NAME" 2>/dev/null || true
-                xrandr --output "$OUT" --mode "$NAME" 2>/dev/null || true
-              fi
-            fi
-          fi
-
           exec dbus-launch --exit-with-session startxfce4
 
-    - name: Restart xrdp after session script change
+    - name: Enable and start xrdp
       ansible.builtin.service:
         name: xrdp
         state: restarted
+        enabled: true
 
-    - name: Restart xrdp-sesman after session script change
+    - name: Enable and start xrdp-sesman
       ansible.builtin.service:
         name: xrdp-sesman
         state: restarted
-
-    - name: Install Japanese fonts
-      ansible.builtin.apt:
-        name:
-          - fonts-ipafont-gothic
-          - fonts-ipafont-mincho
-          - fonts-noto-cjk
-        state: present
-
-    - name: Install audio stack
-      ansible.builtin.apt:
-        name:
-          - pavucontrol
-          - pipewire
-          - pipewire-audio
-          - pipewire-pulse
-          - wireplumber
-        state: present
-
-    - name: Install Chromium
-      ansible.builtin.apt:
-        name: chromium
-        state: present
+        enabled: true
