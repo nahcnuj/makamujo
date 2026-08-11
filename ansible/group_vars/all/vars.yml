@@ -1,0 +1,4 @@
+---
+# Non-secret defaults (safe to commit).
+makamujo_secrets_dir: /etc/makamujo
+niconama_stream_key_path: "{{ makamujo_secrets_dir }}/niconama.stream.key"

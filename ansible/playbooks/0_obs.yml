@@ -20,3 +20,23 @@
         cmd: flatpak install -y flathub com.obsproject.Studio
       register: obs_install
       changed_when: "'is already installed' not in (obs_install.stdout | default(''))"
+
+    # Optional: only when vault provides niconama_stream_key
+    - name: Ensure secrets directory exists
+      ansible.builtin.file:
+        path: "{{ makamujo_secrets_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+      when: niconama_stream_key is defined and (niconama_stream_key | length) > 0
+
+    - name: Install niconama stream key file (from vault)
+      ansible.builtin.copy:
+        content: "{{ niconama_stream_key | trim }}\n"
+        dest: "{{ niconama_stream_key_path }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+      when: niconama_stream_key is defined and (niconama_stream_key | length) > 0

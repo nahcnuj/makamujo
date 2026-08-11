@@ -1,0 +1,12 @@
+---
+# Copy to vault.yml and encrypt:
+#   cp group_vars/all/vault.yml.example group_vars/all/vault.yml
+#   ansible-vault encrypt group_vars/all/vault.yml
+#
+# Or create interactively:
+#   ansible-vault create group_vars/all/vault.yml
+#
+# Do not commit a plaintext vault.yml.
+
+# Niconama RTMP stream key (番組ごとに変わる場合は edit して playbook 再実行)
+niconama_stream_key: "PASTE_STREAM_KEY_HERE"
