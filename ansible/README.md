@@ -30,11 +30,11 @@ cd ansible
 source .venv/bin/activate
 
 # 1) 平文テンプレから vault.yml を作る
-cp group_vars/all/vault.yml.example group_vars/all/vault.yml
+cp inventory/group_vars/all/vault.yml.example inventory/group_vars/all/vault.yml
 # エディタで niconama_stream_key を実キーに書き換え
 
 # 2) 暗号化（パスワードを決めて入力）
-ansible-vault encrypt group_vars/all/vault.yml
+ansible-vault encrypt inventory/group_vars/all/vault.yml
 
 # 3) （任意）パスワードをファイルに保存 — git に入れない
 echo 'your-vault-passphrase' > .vault_pass
