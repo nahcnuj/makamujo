@@ -38,7 +38,7 @@ echo $! > "${PID_DIR}/obs"
   if [ -n "$OBS_WIN" ]; then
     xdotool windowactivate "$OBS_WIN" 2>/dev/null || true
     xdotool windowraise "$OBS_WIN" 2>/dev/null || true
-    xdotool windowmove "$OBS_WIN" 40 40 2>/dev/null || true
-    xdotool windowsize "$OBS_WIN" 1400 900 2>/dev/null || true
+    xdotool windowmove "$OBS_WIN" 0 780 2>/dev/null || true
+    xdotool windowsize "$OBS_WIN" 1280 640 2>/dev/null || true
   fi
 ) >/dev/null 2>&1 &
