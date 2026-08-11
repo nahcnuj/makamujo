@@ -6,7 +6,7 @@ MAKA Mujo: an AI‑VTuber
 - AI speech and Markov‑chain talk model
 - Bun server, API routes, and persistence
 - Stream state management and comment parsing
-- Game‑playing solvers (currently cookie‑clicker) and agent logic
+- Game‑playing solvers (currently vigilant-fiesta / 落ち物パズル・蘇; cookie‑clicker still available) and agent logic
 - Front‑end UI that stitches together shared components and app‑specific panels
 
 ## Dependencies

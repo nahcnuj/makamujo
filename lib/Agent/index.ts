@@ -52,6 +52,8 @@ export class MakaMujo {
       this.#session,
       () => this.speechable,
       () => this.#notifyGameStateChangeAsync(),
+      speechPort,
+      talkModel,
       (sightState) => this.#onGameSight(sightState),
     );
   }

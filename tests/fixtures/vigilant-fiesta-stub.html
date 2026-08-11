@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>落ち物パズルゲーム・蘇 (stub)</title>
+</head>
+<body>
+  <section id="screen-title" class="screen" data-screen="title">
+    <button type="button" id="btn-start">スタート</button>
+  </section>
+  <section id="screen-playing" class="screen" data-screen="playing" hidden>
+    <span id="score">Score: 0</span>
+    <span id="level">Level: 1</span>
+    <div id="game-container" tabindex="0"></div>
+  </section>
+  <div id="result-overlay" class="result-overlay" hidden>
+    <p id="result-score">Score: 0</p>
+    <button type="button" id="btn-retry">もう一度</button>
+  </div>
+  <script>
+    (() => {
+      let score = 0;
+      let drops = 0;
+      const title = document.getElementById("screen-title");
+      const playing = document.getElementById("screen-playing");
+      const result = document.getElementById("result-overlay");
+      const scoreEl = document.getElementById("score");
+      const resultScore = document.getElementById("result-score");
+
+      const show = (el) => { el.hidden = false; el.removeAttribute("hidden"); };
+      const hide = (el) => { el.hidden = true; el.setAttribute("hidden", ""); };
+
+      document.getElementById("btn-start").addEventListener("click", () => {
+        hide(title);
+        hide(result);
+        show(playing);
+        score = 0;
+        drops = 0;
+        scoreEl.textContent = "Score: 0";
+        document.getElementById("game-container").focus();
+      });
+
+      document.getElementById("btn-retry").addEventListener("click", () => {
+        hide(result);
+        hide(title);
+        show(playing);
+        score = 0;
+        drops = 0;
+        scoreEl.textContent = "Score: 0";
+        document.getElementById("game-container").focus();
+      });
+
+      window.addEventListener("keydown", (e) => {
+        if (playing.hidden) return;
+        if (!["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp"].includes(e.key)) return;
+        e.preventDefault();
+        drops += 1;
+        score = drops * 10;
+        scoreEl.textContent = "Score: " + score;
+        // After a few drops, force game over (deterministic for agent harness).
+        if (drops >= 3) {
+          hide(playing);
+          show(result);
+          resultScore.textContent = "Score: " + score;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

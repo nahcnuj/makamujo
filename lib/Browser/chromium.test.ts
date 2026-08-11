@@ -9,7 +9,7 @@ import {
   createRedirectToHomeHandler,
 } from "./chromium";
 
-const HOME_URL = 'https://orteil.dashnet.org/cookieclicker/';
+const HOME_URL = 'https://www.nahcnuj.work/vigilant-fiesta/';
 
 describe('cleanupChromiumLockFiles', () => {
   it('removes SingletonLock and SingletonSocket when present', () => {

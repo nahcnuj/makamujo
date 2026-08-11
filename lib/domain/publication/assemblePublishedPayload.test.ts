@@ -7,7 +7,7 @@ import {
 
 const streamer = {
   canSpeak: true,
-  currentGame: { name: "CookieClicker" },
+  currentGame: { name: "VigilantFiesta" },
   currentNGramSize: 2,
   currentNGramSizeRaw: 2.1,
   commentCount: 99,

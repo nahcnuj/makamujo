@@ -200,15 +200,17 @@ export const create = async (
 
   const page = await ctx.newPage();
 
-  const cookieclickerUrl = 'https://orteil.dashnet.org/cookieclicker/';
+  const gameHomeUrl =
+    process.env.GAME_HOME_URL?.trim() ||
+    'https://www.nahcnuj.work/vigilant-fiesta/';
 
   // Close any new tabs (e.g. ad popups) that open in the browser context.
   ctx.on('page', createPopupPageHandler(page));
 
-  // If the main page navigates away from Cookie Clicker, redirect it back.
+  // If the main page navigates away from the current game home, redirect it back.
   page.on('framenavigated', createRedirectToHomeHandler(
     page.mainFrame(),
-    cookieclickerUrl,
+    gameHomeUrl,
     (url) => page.goto(url, { waitUntil: 'domcontentloaded' }),
   ));
 

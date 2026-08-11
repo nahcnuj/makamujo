@@ -459,6 +459,9 @@ const mainApp = new Hono()
   // Static assets from the public directory
   .get('/nc433974.png', () => new Response(Bun.file('./src/public/nc433974.png')))
   .get('/favicon-32x32.png', () => new Response(Bun.file('./src/public/favicon-32x32.png')))
+  .get('/vigilant-fiesta-qr.svg', () => new Response(Bun.file('./src/public/vigilant-fiesta-qr.svg'), {
+    headers: { 'Content-Type': 'image/svg+xml' },
+  }))
 
   // Root HTTP handlers (broadcast/comment ingestion)
   .post('/', (c) => index.POST(c.req.raw, getMainServer().requestIP(c.req.raw)))
@@ -561,7 +564,8 @@ try {
 // Start the stream playback after servers are listening so startup is
 // responsive for health checks used by tests and CI.
 try {
-  streamer.play('CookieClicker', readFileSync(dataFile, { encoding: 'utf-8' }));
+  // Default game: 落ち物パズルゲーム・蘇 (save data file is unused for this title).
+  streamer.play('VigilantFiesta');
 } catch (err) {
   console.warn('[WARN] streamer.play failed during startup:', err instanceof Error ? err.message : String(err));
 }

@@ -24,6 +24,16 @@ mock.module('./games/server', () => ({
       sight: () => ({}),
       Component: () => null,
     },
+    VigilantFiesta: {
+      solver: () => ({
+        next: () =>
+          mockSolverControl.done
+            ? { done: true as const, value: undefined }
+            : { done: false as const, value: { name: 'noop' } },
+      }),
+      sight: () => ({}),
+      Component: () => null,
+    },
   },
 }));
 
@@ -772,5 +782,60 @@ describe('onGameStateChange', () => {
 
     expect(failingListener).toHaveBeenCalledTimes(1);
     expect(succeedingListener).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('VigilantFiesta game commentary', () => {
+  beforeEach(() => {
+    mockCapturedIpcCallback = undefined;
+    mockSolverControl.done = false;
+  });
+
+  it('speaks scripted lines on start and game over, and learns them', async () => {
+    const learn = jest.fn();
+    const speech = jest.fn(async () => {});
+    const talkModel: TalkModel = {
+      generate: () => '',
+      learn,
+      toJSON: () => '{}',
+    };
+    const tts: TTS = {
+      speech: async (text: string) => {
+        await speech();
+      },
+    };
+    const agent = new MakaMujo(talkModel, tts);
+
+    const heard: string[] = [];
+    agent.onSpeech(async (event) => {
+      heard.push(event.text);
+    });
+
+    agent.play('VigilantFiesta');
+    mockCapturedIpcCallback!({
+      name: 'idle',
+      url: 'https://www.nahcnuj.work/vigilant-fiesta/',
+      state: { screen: 'title', score: Number.NaN, level: Number.NaN },
+    });
+    mockCapturedIpcCallback!({
+      name: 'idle',
+      url: 'https://www.nahcnuj.work/vigilant-fiesta/',
+      state: { screen: 'playing', score: 0, level: 1 },
+    });
+    mockCapturedIpcCallback!({
+      name: 'idle',
+      url: 'https://www.nahcnuj.work/vigilant-fiesta/',
+      state: { screen: 'result', score: 88, level: 2 },
+    });
+
+    // Serial SpeechQueue: drain a few turns of the promise chain.
+    for (let i = 0; i < 10; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    expect(heard).toContain('落ち物パズル、スタート！');
+    expect(heard.some((t) => t.includes('ゲームオーバー') && t.includes('88'))).toBe(true);
+    expect(heard).toContain('ちょっと雑談してから、またプレイしますね。');
+    expect(learn.mock.calls.length).toBeGreaterThanOrEqual(3);
   });
 });
