@@ -31,6 +31,13 @@ echo $! > "${PID_DIR}/browser"
 nohup bun ./bin/x/overlay.ts >"${PROJECT_ROOT}/var/overlay.log" 2>&1 &
 echo $! > "${PID_DIR}/overlay"
 
+# Headless portal stub (avoids ~100s D-Bus timeouts in Flatpak OBS)
+if ! pgrep -f "bin/x/portal-stub.py" >/dev/null 2>&1; then
+  nohup python3 "${SCRIPT_DIR}/x/portal-stub.py" >"${PROJECT_ROOT}/var/portal-stub.log" 2>&1 &
+  echo $! > "${PID_DIR}/portal-stub"
+  sleep 0.3
+fi
+
 nohup ./bin/x/obs >"${PROJECT_ROOT}/var/obs.log" 2>&1 &
 echo $! > "${PID_DIR}/obs"
 
