@@ -166,16 +166,19 @@
         content: |
           [Unit]
           Description=Makamujo PipeWire stack for headless streaming
-          After=network.target
+          After=network.target makamujo-xvfb.service
+          Wants=makamujo-xvfb.service
 
           [Service]
           Type=simple
           Environment=XDG_RUNTIME_DIR=/run/user/0
           Environment=HOME=/root
+          Environment=DISPLAY=:10
+          Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus
           RuntimeDirectory=user/0
           RuntimeDirectoryMode=0700
           ExecStartPre=/bin/mkdir -p /run/user/0
-          ExecStart=/bin/sh -c 'pipewire & pipewire-pulse & exec wireplumber'
+          ExecStart=/bin/sh -c 'pipewire & sleep 1; pipewire-pulse & sleep 1; exec wireplumber'
           Restart=on-failure
           RestartSec=2
 
