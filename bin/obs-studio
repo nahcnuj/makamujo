@@ -29,7 +29,7 @@ ln -sfn "$OBS_CONFIG_DIR" "$FLATPAK_OBS_CONFIG/obs-studio"
 
 mkdir -p "$OBS_CACHE_DIR"
 
-flatpak run -vv \
+flatpak run \
     --share=network \
     --filesystem="$REPO_ROOT" \
     --filesystem="$OBS_CONFIG_DIR" \
