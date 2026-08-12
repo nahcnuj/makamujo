@@ -64,8 +64,6 @@ fi
     --disable-shutdown-check \
     --disable-missing-files-check \
     --disable-updater \
-    --unfiltered_log \
-    --verbose \
     --disable-gpu \
     --disable-gpu-compositing \
     --in-process-gpu \
