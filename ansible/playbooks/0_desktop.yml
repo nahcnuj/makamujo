@@ -204,12 +204,9 @@
 
     - name: Configure environment variables for PulseAudio (pactl)
       ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../bin/makamujo-audio.sh"
         dest: /etc/profile.d/makamujo-audio.sh
         mode: "0644"
-        content: |
-          # Makamujo headless audio socket paths
-          export XDG_RUNTIME_DIR=/run/user/0
-          export PULSE_RUNTIME_PATH=/run/user/0/pulse
 
     - name: Enable and start xrdp
       ansible.builtin.service:
