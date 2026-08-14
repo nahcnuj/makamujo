@@ -158,6 +158,12 @@
           unset DBUS_SESSION_BUS_ADDRESS
           exec dbus-launch --exit-with-session startxfce4
 
+    - name: Install makamujo-pipewire start script
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../bin/makamujo-pipewire"
+        dest: /usr/local/bin/makamujo-pipewire
+        mode: "0755"
+      notify: Restart makamujo-pipewire
 
     - name: Install makamujo PipeWire unit (root headless audio)
       ansible.builtin.copy:
@@ -178,15 +184,18 @@
           RuntimeDirectory=user/0
           RuntimeDirectoryMode=0700
           ExecStartPre=/bin/mkdir -p /run/user/0
-          ExecStart=/bin/sh -c 'pipewire & sleep 1; pipewire-pulse & sleep 1; exec wireplumber'
+          ExecStart=/usr/local/bin/makamujo-pipewire
+          ExecStop=/bin/bash -c 'pkill -u root -f "pipewire|pipewire-pulse|wireplumber|dbus-daemon --session|/usr/local/bin/makamujo-pipewire" || true'
           Restart=on-failure
-          RestartSec=2
+          RestartSec=3
+          KillMode=control-group
+          TimeoutStopSec=10
 
           [Install]
           WantedBy=multi-user.target
+      notify: Restart makamujo-pipewire
 
-
-    - name: Enable and start makamujo-pipewire
+    - name: Enable and ensure makamujo-pipewire is started
       ansible.builtin.systemd:
         name: makamujo-pipewire
         enabled: true
@@ -204,3 +213,10 @@
         name: xrdp-sesman
         state: restarted
         enabled: true
+
+  handlers:
+    - name: Restart makamujo-pipewire
+      ansible.builtin.systemd:
+        name: makamujo-pipewire
+        state: restarted
+        daemon_reload: true
