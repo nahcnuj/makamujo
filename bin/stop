@@ -24,7 +24,7 @@ kill_tree() {
   for child_pid in $children; do
     kill_tree "$child_pid"
   done
-  kill -KILL -- "-$1" 2>/dev/null || true
+  kill -KILL -- "$1" 2>/dev/null || true
   kill -KILL "$1" 2>/dev/null || true
   wait_until_process_exits "$1"
 }
