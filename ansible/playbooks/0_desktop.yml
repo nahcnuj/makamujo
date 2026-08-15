@@ -17,34 +17,49 @@
         executable: /bin/bash
       changed_when: false
 
-    - name: Install desktop and display packages
+    - name: Install desktop packages (X11 / XFCE / RDP)
       ansible.builtin.apt:
         name:
-          - chromium
+          - xorg
+          - xfce4
+          - xfce4-goodies
+          - xrdp
+          - xvfb
+          - x11vnc
+          - xdotool
+          - x11-xserver-utils
           - dbus-x11
-          - fonts-ipafont-gothic
-          - fonts-ipafont-mincho
-          - fonts-noto-cjk
-          - pavucontrol
-          - pulseaudio-utils
+        state: present
+        update_cache: true
+
+    - name: Install audio packages (PipeWire)
+      ansible.builtin.apt:
+        name:
           - pipewire
           - pipewire-audio
           - pipewire-pulse
           - wireplumber
-          - x11-xserver-utils
-          - x11vnc
-          - xdotool
-          - xfce4
-          - xfce4-goodies
-          - xorg
-          - xrdp
-          - xvfb
+          - pulseaudio-utils
+          - pavucontrol
           - alsa-utils
+        state: present
+
+    - name: Install browser and fonts
+      ansible.builtin.apt:
+        name:
+          - chromium
+          - fonts-ipafont-gothic
+          - fonts-ipafont-mincho
+          - fonts-noto-cjk
+        state: present
+
+    - name: Install TTS packages
+      ansible.builtin.apt:
+        name:
           - open-jtalk
           - open-jtalk-mecab-naist-jdic
           - hts-voice-nitech-jp-atr503-m001
         state: present
-        update_cache: true
 
     - name: Install makamujo Xvfb unit (:10 2560x1440)
       ansible.builtin.copy:

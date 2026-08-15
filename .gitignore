@@ -152,4 +152,4 @@ ansible/.vault_pass
 **/.vault_pass
 # Accidental plaintext vault before encrypt
 ansible/group_vars/all/vault.yml.plain
-
+dist/

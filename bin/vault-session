@@ -1,133 +1,65 @@
 #!/bin/sh
-# vault-session — short-lived Ansible Vault password helper
-#
-# SYNOPSIS
-#   bin/vault-session login
-#   bin/vault-session run ansible-playbook ansible/playbooks/0_desktop.yml
-#   bin/vault-session logout
-#
-# Session is valid for SESSION_TTL seconds after login (even without logout).
-# Expired secrets are rejected (and deleted) on fetch.
-# Backends: secret-tool (preferred) | keyctl (fallback)
-#
-# Vault password must be a single line (no embedded newlines).
-
 set -eu
 
-SERVICE="vault-session"
-KEY="password"
-KEYCTL_DESC="vault-session:password"
 SESSION_TTL=900
 
-die() {
-    echo "$*" >&2
-    exit 1
+die() { echo "$*" >&2; exit 1; }
+
+root_dir() {
+    _bin=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+    CDPATH= cd -- "$_bin/.." && pwd
 }
 
 self_path() {
     CDPATH= cd -- "$(dirname "$0")" && printf '%s/%s' "$(pwd)" "$(basename "$0")"
 }
 
-now_unix() {
-    date +%s
-}
-
-# payload = "<expiry>\n<password>"  (password: single line)
-make_payload() {
-    password=$1
-    expiry=$(( $(now_unix) + SESSION_TTL ))
-    printf '%s\n%s' "$expiry" "$password"
-}
-
-# ----- secret-tool -----
-
-secret_available() {
-    command -v secret-tool >/dev/null 2>&1
-}
-
-secret_delete() {
-    secret-tool clear service "$SERVICE" key "$KEY" 2>/dev/null || true
-}
-
-secret_store() {
-    make_payload "$1" | secret-tool store \
-        --label='Ansible Vault (vault-session)' \
-        service "$SERVICE" \
-        key "$KEY"
-}
-
-secret_fetch() {
-    _raw=$(secret-tool lookup service "$SERVICE" key "$KEY" 2>/dev/null) || return 1
-    _expiry=$(printf '%s\n' "$_raw" | sed -n '1p' | tr -d '\r\n')
-    _password=$(printf '%s\n' "$_raw" | sed -n '2p' | tr -d '\r\n')
-
-    case "$_expiry" in
-    ''|*[!0-9]*)
-        secret_delete
-        return 1
-        ;;
-    esac
-
-    if [ "$(now_unix)" -ge "$_expiry" ]; then
-        secret_delete
-        return 1
+base_dir() {
+    if [ -d /dev/shm ] && [ -w /dev/shm ]; then
+        printf '%s' /dev/shm
+        return
     fi
-
-    [ -n "$_password" ] || return 1
-    printf '%s' "$_password"
-}
-
-# ----- keyctl -----
-
-keyctl_available() {
-    command -v keyctl >/dev/null 2>&1
-}
-
-keyctl_delete() {
-    keyctl purge user "$KEYCTL_DESC" 2>/dev/null || true
-}
-
-keyctl_store() {
-    password=$1
-    keyctl_delete
-    key_id=$(make_payload "$password" | keyctl padd user "$KEYCTL_DESC" @s) || return 1
-    keyctl timeout "$key_id" "$SESSION_TTL" >/dev/null || true
-}
-
-keyctl_fetch() {
-    key_id=$(keyctl request user "$KEYCTL_DESC" 2>/dev/null) || return 1
-    _raw=$(keyctl pipe "$key_id" 2>/dev/null) || return 1
-    _expiry=$(printf '%s\n' "$_raw" | sed -n '1p' | tr -d '\r\n')
-    _password=$(printf '%s\n' "$_raw" | sed -n '2p' | tr -d '\r\n')
-
-    case "$_expiry" in
-    ''|*[!0-9]*)
-        keyctl_delete
-        return 1
-        ;;
-    esac
-
-    if [ "$(now_unix)" -ge "$_expiry" ]; then
-        keyctl_delete
-        return 1
+    if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ]; then
+        printf '%s' "$XDG_RUNTIME_DIR"
+        return
     fi
-
-    [ -n "$_password" ] || return 1
-    printf '%s' "$_password"
+    printf '%s' "${TMPDIR:-/tmp}"
 }
 
-# ----- shared -----
+dek_path() { printf '%s/vault-session-dek' "$(base_dir)"; }
+ct_path()  { printf '%s/vault-session.ciphertext' "$(base_dir)"; }
 
-select_backend() {
-    if secret_available; then
-        printf '%s' secret
-        return 0
-    fi
-    if keyctl_available; then
-        printf '%s' keyctl
-        return 0
-    fi
-    return 1
+dek() {
+    export VAULT_SESSION_TTL="$SESSION_TTL"
+    "$(root_dir)/dist/bin/dek" "$@"
+}
+
+ct_store() {
+    umask 077
+    cat >"$1"
+    chmod 600 "$1" 2>/dev/null || true
+}
+
+ct_fetch() {
+    [ -f "$1" ] || return 1
+    cat "$1"
+}
+
+ct_delete() {
+    rm -f "$1"
+}
+
+need() {
+    command -v openssl >/dev/null 2>&1 || die "openssl is required"
+    [ -x "$(root_dir)/dist/bin/dek" ] || die "run: make -C scripts/vault"
+}
+
+encrypt() {
+    printf '%s' "$2" | openssl enc -aes-256-cbc -pbkdf2 -base64 -pass "pass:$1" 2>/dev/null
+}
+
+decrypt() {
+    printf '%s\n' "$2" | openssl enc -d -aes-256-cbc -pbkdf2 -base64 -pass "pass:$1" 2>/dev/null
 }
 
 read_password() {
@@ -144,41 +76,32 @@ read_password() {
     printf '%s' "$password"
 }
 
-fetch_password() {
-    if secret_available; then
-        if out=$(secret_fetch); then
-            printf '%s' "$out"
-            return 0
-        fi
-    fi
-    if keyctl_available; then
-        if out=$(keyctl_fetch); then
-            printf '%s' "$out"
-            return 0
-        fi
-    fi
-    die "not logged in or session expired; run: $0 login"
-}
-
 login() {
-    backend=$(select_backend) || die "no backend (install libsecret-tools or keyutils)"
+    need
     password=$(read_password)
-    case "$backend" in
-    secret) secret_store "$password" || die "secret-tool store failed" ;;
-    keyctl) keyctl_store "$password" || die "keyctl store failed" ;;
-    *) die "unknown backend: $backend" ;;
-    esac
-    echo "stored via $backend (${SESSION_TTL}s)" >&2
+    dek_hex=$(openssl rand -hex 32) || die "openssl rand failed"
+    ctext=$(encrypt "$dek_hex" "$password") || die "encrypt failed"
+    printf '%s' "$dek_hex" | dek store "$(dek_path)" || die "DEK store failed"
+    printf '%s' "$ctext" | ct_store "$(ct_path)" || {
+        dek delete "$(dek_path)"
+        die "ciphertext store failed"
+    }
+    echo "stored (ttl=${SESSION_TTL}s, dir=$(base_dir))" >&2
 }
 
 logout() {
-    if secret_available; then
-        secret_delete
-    fi
-    if keyctl_available; then
-        keyctl_delete
-    fi
+    dek delete "$(dek_path)" 2>/dev/null || true
+    ct_delete "$(ct_path)" 2>/dev/null || true
     echo "cleared" >&2
+}
+
+fetch_password() {
+    need
+    dek_hex=$(dek fetch "$(dek_path)" 2>/dev/null) || \
+        die "not logged in or session expired; run: $0 login"
+    ctext=$(ct_fetch "$(ct_path)" 2>/dev/null) || die "ciphertext missing"
+    password=$(decrypt "$dek_hex" "$ctext") || die "decrypt failed"
+    printf '%s' "$password"
 }
 
 run() {
@@ -186,24 +109,16 @@ run() {
     cmd=$1
     shift
     command -v "$cmd" >/dev/null 2>&1 || die "command not found: $cmd"
-    case "$cmd" in
-    ansible|ansible-playbook|ansible-inventory|ansible-console|ansible-pull) ;;
-    *)
-        echo "warning: $cmd may not accept --vault-password-file" >&2
-        ;;
-    esac
     fetch_password >/dev/null
     "$cmd" --vault-password-file="$(self_path)" "$@"
 }
 
 usage() {
     echo "SYNOPSIS" >&2
+    echo "  make -C scripts/vault" >&2
     echo "  bin/vault-session login" >&2
-    echo "  bin/vault-session run ansible-playbook ansible/playbooks/0_desktop.yml" >&2
+    echo "  bin/vault-session run ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/0_desktop.yml" >&2
     echo "  bin/vault-session logout" >&2
-    echo >&2
-    echo "Session lasts ${SESSION_TTL}s after login (even without logout)." >&2
-    echo "Expired material is rejected on use; still run logout when finished." >&2
 }
 
 case "${1-}" in
