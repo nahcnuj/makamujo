@@ -346,10 +346,13 @@ export const create = async (
       }, f.toString());
     },
 
+    reload: async () => {
+      await page.reload({ waitUntil: "domcontentloaded" });
+    },
     get url() {
       return page.url();
     },
-  } satisfies Browser;
+  } as Browser & { reload: () => Promise<void> };
 };
 
 type PageLike = { url(): string; close(): Promise<void> };
