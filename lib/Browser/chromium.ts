@@ -7,9 +7,7 @@ import { setTimeout } from "node:timers/promises";
 import type { ViewportSize } from "playwright";
 import playwright from "playwright";
 import { chromium as $_ } from "playwright-extra";
-import type { Page } from "playwright";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
-type PageLike = Page;
 
 export const chromium = $_.use(StealthPlugin());
 
@@ -300,6 +298,12 @@ export const create = async (
   } satisfies Browser;
 };
 
+type PageLike = { url(): string; close(): Promise<void> };
+
+/**
+ * Returns an event handler for the BrowserContext `page` event that immediately
+ * closes any page other than the designated main page (e.g. ad popup tabs).
+ */
 export const createPopupPageHandler = (mainPage: PageLike) =>
   async (newPage: PageLike): Promise<void> => {
     if (newPage !== mainPage) {

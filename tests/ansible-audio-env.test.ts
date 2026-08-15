@@ -1,6 +1,5 @@
 import { test, expect } from "bun:test";
 import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
 
 test("Ansible playbook configures makamujo-audio.sh with correct PulseAudio env vars", () => {
   const playbookPath = "ansible/playbooks/0_desktop.yml";
@@ -11,33 +10,42 @@ test("Ansible playbook configures makamujo-audio.sh with correct PulseAudio env 
 
   // 2. そのタスクの実装（content または src）から、実際のファイル中身を取得する
   const lines = playbookContent.split("\n");
-  const destLineIndex = lines.findIndex(l => l.includes("dest: /etc/profile.d/makamujo-audio.sh"));
-  
+  const destLineIndex = lines.findIndex((line) => line.includes("dest: /etc/profile.d/makamujo-audio.sh"));
+  expect(destLineIndex).toBeGreaterThanOrEqual(0);
+
   let deployedContent = "";
   let usesContent = false;
   let usesSrc = false;
 
   // タスクのブロック内を探索
-  for (let i = destLineIndex - 2; i < destLineIndex + 10; i++) {
-    if (!lines[i]) continue;
-    
+  const searchStart = Math.max(0, destLineIndex - 2);
+  const searchEnd = Math.min(lines.length, destLineIndex + 10);
+  for (let i = searchStart; i < searchEnd; i++) {
+    const line = lines[i];
+    if (line === undefined) continue;
+
     // content: が見つかった場合
-    if (lines[i].trim().startsWith("content: |")) {
+    if (line.trim().startsWith("content: |")) {
       usesContent = true;
       let j = i + 1;
-      while (lines[j] && lines[j].startsWith(" ".repeat(10))) {
-        deployedContent += lines[j].trimStart() + "\n";
+      while (j < lines.length) {
+        const contentLine = lines[j];
+        if (contentLine === undefined || !contentLine.startsWith(" ".repeat(10))) {
+          break;
+        }
+        deployedContent += contentLine.trimStart() + "\n";
         j++;
       }
       break;
     }
-    
+
     // src: が見つかった場合
-    if (lines[i].trim().startsWith("src: ")) {
+    if (line.trim().startsWith("src: ")) {
       usesSrc = true;
-      const srcMatch = lines[i].match(/src:\s*(.+)$/);
-      if (srcMatch) {
-        let srcPath = srcMatch[1].replace(/['"]/g, "").trim();
+      const srcMatch = line.match(/src:\s*(.+)$/);
+      const rawSrc = srcMatch?.[1];
+      if (rawSrc !== undefined) {
+        let srcPath = rawSrc.replace(/['"]/g, "").trim();
         // {{ playbook_dir }} を実際のパスに置換
         if (srcPath.includes("{{ playbook_dir }}")) {
           srcPath = srcPath.replace("{{ playbook_dir }}", "ansible/playbooks");

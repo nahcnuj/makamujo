@@ -19,12 +19,14 @@ export PULSE_SERVER="${PULSE_SERVER:-unix:/run/user/0/pulse/native}"
 
 # Wait for headless PipeWire (makamujo-pipewire.service)
 echo "Waiting for PipeWire pulse socket..."
-for i in $(seq 1 40); do
+_wait_count=0
+while [ "$_wait_count" -lt 40 ]; do
   if [ -S "${XDG_RUNTIME_DIR}/pulse/native" ]; then
     echo "PipeWire ready."
     break
   fi
   sleep 0.25
+  _wait_count=$((_wait_count + 1))
 done
 if [ ! -S "${XDG_RUNTIME_DIR}/pulse/native" ]; then
   echo "WARNING: pulse socket not found after wait. Voice may fail." >&2

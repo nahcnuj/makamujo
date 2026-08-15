@@ -29,13 +29,17 @@ done
 # Prefer already-exported DISPLAY (from bin/start etc.).
 # Only auto-detect when DISPLAY is completely unset.
 if [ -z "${DISPLAY:-}" ] && [ -z "$_DISPLAY_EXPLICIT" ]; then
-  for _sock in $(ls -t /tmp/.X11-unix/X* 2>/dev/null); do
-    if [ -S "$_sock" ]; then
-      _num="${_sock##*/X}"
-      export DISPLAY=":${_num}"
-      break
+  _newest_sock=
+  for _sock in /tmp/.X11-unix/X*; do
+    [ -S "$_sock" ] || continue
+    if [ -z "$_newest_sock" ] || [ "$_sock" -nt "$_newest_sock" ]; then
+      _newest_sock=$_sock
     fi
   done
+  if [ -n "$_newest_sock" ]; then
+    _num="${_newest_sock##*/X}"
+    export DISPLAY=":${_num}"
+  fi
 fi
 
 # Prefer :10 (makamujo-xvfb) when available and nothing was forced

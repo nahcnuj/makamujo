@@ -6,12 +6,12 @@ SESSION_TTL=900
 die() { echo "$*" >&2; exit 1; }
 
 root_dir() {
-    _bin=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
-    CDPATH= cd -- "$_bin/.." && pwd
+    _bin=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
+    CDPATH='' cd -- "$_bin/.." && pwd
 }
 
 self_path() {
-    CDPATH= cd -- "$(dirname "$0")" && printf '%s/%s' "$(pwd)" "$(basename "$0")"
+    CDPATH='' cd -- "$(dirname "$0")" && printf '%s/%s' "$(pwd)" "$(basename "$0")"
 }
 
 base_dir() {
