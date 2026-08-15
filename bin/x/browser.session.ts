@@ -17,9 +17,9 @@ async function isAwSnapPage(browser: Awaited<ReturnType<typeof create>>): Promis
       () => (document.body?.innerText || "").slice(0, 300),
     );
     return (
-      /aw,\s*snap/i.test(title) ||
-      /aw,\s*snap/i.test(text) ||
-      /something went wrong while displaying/i.test(text)
+      /aw,\s*snap/i.test(title ?? "") ||
+      /aw,\s*snap/i.test(text ?? "") ||
+      /something went wrong while displaying/i.test(text ?? "")
     );
   } catch {
     // evaluate failed → renderer likely dead
@@ -29,9 +29,9 @@ async function isAwSnapPage(browser: Awaited<ReturnType<typeof create>>): Promis
 
 const {
   values: {
-    file,
+    file: _file,
     browser: browserArg,
-    lang,
+    lang: _lang,
     timeout: timeoutStr,
     display,
     xauthority,
