@@ -1,13 +1,13 @@
 #!/usr/bin/env bun
+import { mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 /**
  * Overlay browser for OBS "Comment" (XSHM left crop).
  * Geometry: 1280x720 at (0, 40) — game stays at (1280, 40).
  * Uses --app= and reuses that window (no second tabbed window).
  */
 import { chromium } from "playwright";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 
 process.env.DISPLAY = process.env.DISPLAY || ":10";
 
@@ -22,7 +22,12 @@ writeFileSync(
   }),
 );
 
-console.log("[INFO] overlay browser DISPLAY=", process.env.DISPLAY, "url=", url);
+console.log(
+  "[INFO] overlay browser DISPLAY=",
+  process.env.DISPLAY,
+  "url=",
+  url,
+);
 
 const context = await chromium.launchPersistentContext(userDataDir, {
   headless: false,

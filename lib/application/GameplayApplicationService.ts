@@ -1,8 +1,8 @@
-import { Action, type State } from "automated-gameplay-transmitter";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { Action, type State } from "automated-gameplay-transmitter";
+import { type GameName, ServerGames as Games } from "../Agent/games/server";
 import { createReceiver } from "../Browser/socket";
-import { ServerGames as Games, type GameName } from "../Agent/games/server";
 import {
   buildSlotKey,
   emptyScoreRecords,
@@ -10,10 +10,10 @@ import {
   mergeRecordsIntoStored,
   parseStoredHighscores,
   recordsForSlot,
-  serializeStoredHighscores,
-  updateScoreRecords,
   type ScoreRecords,
   type StoredHighscores,
+  serializeStoredHighscores,
+  updateScoreRecords,
 } from "../domain/games/VigilantFiestaRecords";
 import { planVigilantFiestaSpeeches } from "../domain/games/VigilantFiestaSpeech";
 import type { AgentSession } from "./AgentSession";
@@ -56,19 +56,27 @@ export class GameplayApplicationService {
       this.#reloadVigilantRecordsFromDisk();
     }
 
-    const solver = Games[name].solver({
-      type: "initialize",
-      data,
-    }, {
-      onSave: name === "CookieClicker"
-        ? [(text) => writeFileSync("./var/cookieclicker.txt", text)]
-        : [],
-      isSilent: () => !this.#isSpeechable(),
-    });
+    const solver = Games[name].solver(
+      {
+        type: "initialize",
+        data,
+      },
+      {
+        onSave:
+          name === "CookieClicker"
+            ? [(text) => writeFileSync("./var/cookieclicker.txt", text)]
+            : [],
+        isSilent: () => !this.#isSpeechable(),
+      },
+    );
     try {
       createReceiver((state: State) => {
         this.#session.browserState = state;
-        console.debug("[DEBUG]", "receiver got state", JSON.stringify(state, null, 0));
+        console.debug(
+          "[DEBUG]",
+          "receiver got state",
+          JSON.stringify(state, null, 0),
+        );
 
         if (state.name === "closed") {
           this.#session.playing = undefined;
@@ -79,9 +87,10 @@ export class GameplayApplicationService {
         if (state.name === "idle") {
           if (state.state) {
             const previousState = this.#session.playing?.state ?? {};
-            const nextState = (state.state !== null && typeof state.state === "object")
-              ? state.state as Record<string, unknown>
-              : {};
+            const nextState =
+              state.state !== null && typeof state.state === "object"
+                ? (state.state as Record<string, unknown>)
+                : {};
             const enriched =
               name === "VigilantFiesta"
                 ? this.#enrichVigilantState(nextState)
@@ -106,7 +115,11 @@ export class GameplayApplicationService {
           return Action.noop;
         }
         console.debug("[DEBUG]", "next action", JSON.stringify(value, null, 0));
-        console.debug("[DEBUG]", "sending action", JSON.stringify(value, null, 0));
+        console.debug(
+          "[DEBUG]",
+          "sending action",
+          JSON.stringify(value, null, 0),
+        );
 
         return value;
       });
@@ -124,7 +137,9 @@ export class GameplayApplicationService {
       if (!existsSync(VIGILANT_FIESTA_HIGHSCORE_PATH)) {
         return emptyStoredHighscores();
       }
-      return parseStoredHighscores(readFileSync(VIGILANT_FIESTA_HIGHSCORE_PATH, "utf-8"));
+      return parseStoredHighscores(
+        readFileSync(VIGILANT_FIESTA_HIGHSCORE_PATH, "utf-8"),
+      );
     } catch {
       return emptyStoredHighscores();
     }
@@ -190,7 +205,9 @@ export class GameplayApplicationService {
     }
   }
 
-  #enrichVigilantState(nextState: Record<string, unknown>): Record<string, unknown> {
+  #enrichVigilantState(
+    nextState: Record<string, unknown>,
+  ): Record<string, unknown> {
     this.#syncVigilantSlotBinding();
     const current = this.#vigilantRecords ?? emptyScoreRecords();
     const updated = updateScoreRecords(current, nextState.score);

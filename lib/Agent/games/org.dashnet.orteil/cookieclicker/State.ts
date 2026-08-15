@@ -1,28 +1,28 @@
 type Product = {
-  name: string
-  mult: number
-  price: number
-  enabled: boolean
+  name: string;
+  mult: number;
+  price: number;
+  enabled: boolean;
 };
 
 type Upgrade = {
-  enabled: boolean
+  enabled: boolean;
 };
 
 type Tech = {
-  enabled: boolean
+  enabled: boolean;
 };
 
 type Switch = {
-  description?: string
-  enabled: boolean
+  description?: string;
+  enabled: boolean;
 };
 
 export type Statistics = {
   general: {
     [key in string]: {
-      innerText: string
-    }
+      innerText: string;
+    };
   } & {
     // cookiesInBank: {
     //   value: number
@@ -36,46 +36,46 @@ export type Statistics = {
     // cookiesForfeitedByAscending: {
     //   value: number
     // }
-    '遺産の始まり：'?: {
-      innerText: string
+    "遺産の始まり："?: {
+      innerText: string;
       /** 「昇天 N 回」（パースできれば） */
-      ascensions?: number
+      ascensions?: number;
       /** 「N 日前」（パースできれば） */
-      daysAgo?: number
-    }
+      daysAgo?: number;
+    };
     // buildingsOwned: {
     //   value: number
     // }
     // cookiesPerClick: {
     //   value: number
     // }
-    'クリック回数：'?: {
-      innerText: string
+    "クリック回数："?: {
+      innerText: string;
       /** パースできれば */
-      value?: number
-    }
+      value?: number;
+    };
     // handmadeCookies: {
     //   value: number
     // }
-  }
+  };
 };
 
 export type State = {
-  cookies: number
-  cps: number
-  isWrinkled: boolean
-  ascendNumber: number
-  commentsText?: string
+  cookies: number;
+  cps: number;
+  isWrinkled: boolean;
+  ascendNumber: number;
+  commentsText?: string;
   /** News ticker lines (#commentsText1 / #commentsText2). */
-  newsLines?: string[]
+  newsLines?: string[];
   store: {
     products: {
-      bulkMode: 'buy' | 'sell'
-      items: Product[]
-    }
-    upgrades: Upgrade[]
-    tech: Tech[]
-    switches: Switch[]
-  }
-  statistics?: Statistics
+      bulkMode: "buy" | "sell";
+      items: Product[];
+    };
+    upgrades: Upgrade[];
+    tech: Tech[];
+    switches: Switch[];
+  };
+  statistics?: Statistics;
 };

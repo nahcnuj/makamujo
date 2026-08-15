@@ -40,8 +40,12 @@ describe("VigilantFiestaRecords", () => {
   });
 
   it("builds slot key from program url only (lv…)", () => {
-    expect(buildSlotKey({ url: "https://live.nicovideo.jp/watch/lv123456789", start: 1_700_000_000_000 }))
-      .toBe("https://live.nicovideo.jp/watch/lv123456789");
+    expect(
+      buildSlotKey({
+        url: "https://live.nicovideo.jp/watch/lv123456789",
+        start: 1_700_000_000_000,
+      }),
+    ).toBe("https://live.nicovideo.jp/watch/lv123456789");
     expect(buildSlotKey({ url: "  ", start: 1 })).toBeUndefined();
     expect(buildSlotKey({ url: undefined })).toBeUndefined();
   });
@@ -56,7 +60,10 @@ describe("VigilantFiestaRecords", () => {
     );
     const raw = serializeStoredHighscores(stored, key);
     const loaded = parseStoredHighscores(raw);
-    expect(recordsForSlot(loaded, key)).toEqual({ sessionBest: 77, allTimeBest: 200 });
+    expect(recordsForSlot(loaded, key)).toEqual({
+      sessionBest: 77,
+      allTimeBest: 200,
+    });
     expect(recordsForSlot(loaded, "https://live.example/watch/lv2")).toEqual({
       sessionBest: 0,
       allTimeBest: 200,
@@ -64,7 +71,8 @@ describe("VigilantFiestaRecords", () => {
   });
 
   it("prunes old slots but keeps the active key", () => {
-    const slots: Record<string, { sessionBest: number; updatedAt: number }> = {};
+    const slots: Record<string, { sessionBest: number; updatedAt: number }> =
+      {};
     for (let i = 0; i < 40; i++) {
       slots[`u#${i}`] = { sessionBest: i, updatedAt: i };
     }

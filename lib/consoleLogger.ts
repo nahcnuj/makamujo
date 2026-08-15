@@ -1,4 +1,10 @@
-import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  renameSync,
+  statSync,
+} from "node:fs";
 import { appendFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
@@ -13,7 +19,10 @@ export type DailyRotatingJsonLogger = {
   flush(): Promise<void>;
 };
 
-export function createDailyRotatingJsonLogger(logFilePath: string, options: LoggerOptions = {}): DailyRotatingJsonLogger {
+export function createDailyRotatingJsonLogger(
+  logFilePath: string,
+  options: LoggerOptions = {},
+): DailyRotatingJsonLogger {
   const now = options.now ?? (() => new Date());
   const currentDate = formatLogDate(now());
 
@@ -28,7 +37,8 @@ export function createDailyRotatingJsonLogger(logFilePath: string, options: Logg
     write(record: JsonLogRecord): void {
       try {
         const currentTime = now();
-        const { timestamp: _ignoredTimestamp, ...recordWithoutTimestamp } = record;
+        const { timestamp: _ignoredTimestamp, ...recordWithoutTimestamp } =
+          record;
         const logLine = `${JSON.stringify({ timestamp: formatJstTimestamp(currentTime), ...recordWithoutTimestamp })}\n`;
         pendingWrite = pendingWrite
           .then(async () => {
@@ -40,14 +50,20 @@ export function createDailyRotatingJsonLogger(logFilePath: string, options: Logg
               }
               await appendFile(logFilePath, logLine);
             } catch (error) {
-              writeStderr(`Failed to write log entry to ${logFilePath}: ${formatUnknownError(error)}\n`);
+              writeStderr(
+                `Failed to write log entry to ${logFilePath}: ${formatUnknownError(error)}\n`,
+              );
             }
           })
           .catch((error) => {
-            writeStderr(`Unexpected log pipeline failure for ${logFilePath}: ${formatUnknownError(error)}\n`);
+            writeStderr(
+              `Unexpected log pipeline failure for ${logFilePath}: ${formatUnknownError(error)}\n`,
+            );
           });
       } catch (error) {
-        writeStderr(`Failed to write log entry to ${logFilePath}: ${formatUnknownError(error)}\n`);
+        writeStderr(
+          `Failed to write log entry to ${logFilePath}: ${formatUnknownError(error)}\n`,
+        );
       }
     },
     async flush(): Promise<void> {
@@ -76,7 +92,10 @@ function ensureLogWritable(logFilePath: string): void {
   appendFileSync(logFilePath, "");
 }
 
-function rotateExistingFileOnStartup(logFilePath: string, currentDate: string): void {
+function rotateExistingFileOnStartup(
+  logFilePath: string,
+  currentDate: string,
+): void {
   if (!existsSync(logFilePath)) {
     return;
   }

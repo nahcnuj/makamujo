@@ -5,10 +5,10 @@ import {
   DEFAULT_FREE_TALK_MS,
   FREE_TALK_MS,
   resolveFreeTalkMs,
+  States,
   solver,
   stepIdle,
   stepInitialize,
-  States,
 } from "./solver";
 
 afterEach(() => {
@@ -16,15 +16,17 @@ afterEach(() => {
   delete process.env.VIGILANT_FIESTA_FREE_TALK_MS;
 });
 
-const ok = (action: Action.Action) =>
-  ({ name: "result" as const, succeeded: true, action });
+const ok = (action: Action.Action) => ({
+  name: "result" as const,
+  succeeded: true,
+  action,
+});
 
-const idleAt = (screen: string, extra: Record<string, unknown> = {}) =>
-  ({
-    name: "idle" as const,
-    url: getGameHomeUrl(),
-    state: { screen, score: 0, level: 1, ...extra },
-  });
+const idleAt = (screen: string, extra: Record<string, unknown> = {}) => ({
+  name: "idle" as const,
+  url: getGameHomeUrl(),
+  state: { screen, score: 0, level: 1, ...extra },
+});
 
 describe("resolveFreeTalkMs / getGameHomeUrl", () => {
   it("defaults free-talk to 30s", () => {
@@ -61,10 +63,16 @@ describe("vigilant-fiesta stepInitialize", () => {
   });
 
   it("clicks start after open succeeds", () => {
-    const afterOpen = stepInitialize(States.initialize(), ok(Action.open(getGameHomeUrl())));
+    const afterOpen = stepInitialize(
+      States.initialize(),
+      ok(Action.open(getGameHomeUrl())),
+    );
     expect(afterOpen.state).toEqual({ type: "initialize", phase: "start" });
 
-    const startClick = stepInitialize({ type: "initialize", phase: "start" }, undefined);
+    const startClick = stepInitialize(
+      { type: "initialize", phase: "start" },
+      undefined,
+    );
     expect(startClick.action).toEqual(Action.clickByElementId("btn-start"));
   });
 
@@ -93,7 +101,10 @@ describe("vigilant-fiesta stepIdle", () => {
   });
 
   it("clicks start on title screen", () => {
-    const out = stepIdle({ type: "idle", phase: "sight" }, idleAt("title") as any);
+    const out = stepIdle(
+      { type: "idle", phase: "sight" },
+      idleAt("title") as any,
+    );
     expect(out.action).toEqual(Action.clickByElementId("btn-start"));
   });
 
@@ -146,7 +157,11 @@ describe("vigilant-fiesta stepIdle", () => {
       freeTalkUntil,
     );
     expect(out.action).toEqual(Action.clickByElementId("btn-retry"));
-    expect(out.state).toEqual({ type: "idle", phase: "act", freeTalkUntil: undefined });
+    expect(out.state).toEqual({
+      type: "idle",
+      phase: "act",
+      freeTalkUntil: undefined,
+    });
   });
 
   it("leaves freeTalk when result screen is gone", () => {
@@ -155,14 +170,23 @@ describe("vigilant-fiesta stepIdle", () => {
       idleAt("playing") as any,
       0,
     );
-    expect(out.state).toEqual({ type: "idle", phase: "sight", freeTalkUntil: undefined });
+    expect(out.state).toEqual({
+      type: "idle",
+      phase: "sight",
+      freeTalkUntil: undefined,
+    });
   });
 
   it("presses an arrow key while playing", () => {
-    const out = stepIdle({ type: "idle", phase: "sight" }, idleAt("playing") as any);
+    const out = stepIdle(
+      { type: "idle", phase: "sight" },
+      idleAt("playing") as any,
+    );
     expect(out.action?.name).toBe("press");
     if (out.action?.name === "press") {
-      expect(["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp"]).toContain(out.action.key);
+      expect(["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp"]).toContain(
+        out.action.key,
+      );
     }
   });
 
@@ -171,7 +195,11 @@ describe("vigilant-fiesta stepIdle", () => {
       { type: "idle", phase: "act" },
       ok({ name: "press", key: "ArrowUp" }),
     );
-    expect(out.state).toEqual({ type: "idle", phase: "sight", freeTalkUntil: undefined });
+    expect(out.state).toEqual({
+      type: "idle",
+      phase: "sight",
+      freeTalkUntil: undefined,
+    });
     expect(out.action).toBeUndefined();
   });
 });
@@ -224,7 +252,11 @@ describe("vigilant-fiesta solver generator — full play cycle", () => {
       expect(r.value).toEqual(Action.noop);
       r = step(idleAt("result", { score: 30, level: 1 }));
       expect(r.value).toEqual(Action.noop); // freeTalk
-      expect(actions.filter((a) => a.name === "click" && (a as any).target?.id === "btn-retry")).toHaveLength(0);
+      expect(
+        actions.filter(
+          (a) => a.name === "click" && (a as any).target?.id === "btn-retry",
+        ),
+      ).toHaveLength(0);
 
       // still free-talking
       r = step(idleAt("result", { score: 30, level: 1 }));
@@ -243,9 +275,17 @@ describe("vigilant-fiesta solver generator — full play cycle", () => {
 
       // Must have: open, start, at least one press, retry
       expect(actions.some((a) => a.name === "open")).toBe(true);
-      expect(actions.some((a) => a.name === "click" && (a as any).target?.id === "btn-start")).toBe(true);
+      expect(
+        actions.some(
+          (a) => a.name === "click" && (a as any).target?.id === "btn-start",
+        ),
+      ).toBe(true);
       expect(actions.some((a) => a.name === "press")).toBe(true);
-      expect(actions.some((a) => a.name === "click" && (a as any).target?.id === "btn-retry")).toBe(true);
+      expect(
+        actions.some(
+          (a) => a.name === "click" && (a as any).target?.id === "btn-retry",
+        ),
+      ).toBe(true);
     } finally {
       Date.now = realNow;
     }

@@ -17,7 +17,10 @@ const baseState = {
 async function renderHtml(state: State): Promise<string> {
   const node = Component({ state }) as unknown;
   if (typeof node === "string") return node;
-  if (node != null && typeof (node as { toString?: unknown }).toString === "function") {
+  if (
+    node != null &&
+    typeof (node as { toString?: unknown }).toString === "function"
+  ) {
     const s = (node as { toString: () => string | Promise<string> }).toString();
     return typeof s === "string" ? s : await s;
   }

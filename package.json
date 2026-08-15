@@ -24,7 +24,9 @@
     "browser": "node --import tsx ./bin/x/browser.ts",
     "generate-ogp": "bun run scripts/generate-ogp.ts",
     "screenshot:console-agent-status": "bun run scripts/capture-console-agent-status.ts",
-    "markov": "bun run tools/markov/cli.ts"
+    "markov": "bun run tools/markov/cli.ts",
+    "format": "biome check --write . || true",
+    "lint": "biome check --error-on-warnings ."
   },
   "dependencies": {
     "@playwright/browser-chromium": "^1.61.1",
@@ -38,6 +40,7 @@
     "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.2",
     "@playwright/test": "^1.61.1",
     "@types/bun": "latest",
     "@types/jsdom": "^28.0.1",

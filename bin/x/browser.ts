@@ -5,8 +5,14 @@
  */
 import { setTimeout as sleep } from "node:timers/promises";
 
-const RESTART_DELAY_MS = Number.parseInt(process.env.BROWSER_RESTART_DELAY_MS ?? "3000", 10);
-const MAX_RAPID = Number.parseInt(process.env.BROWSER_RESTART_MAX_RAPID ?? "10", 10);
+const RESTART_DELAY_MS = Number.parseInt(
+  process.env.BROWSER_RESTART_DELAY_MS ?? "3000",
+  10,
+);
+const MAX_RAPID = Number.parseInt(
+  process.env.BROWSER_RESTART_MAX_RAPID ?? "10",
+  10,
+);
 const RAPID_WINDOW_MS = 60_000;
 
 const recent: number[] = [];
@@ -29,7 +35,11 @@ async function main(): Promise<void> {
       console.log("[INFO] browser session starting");
       // Run original entry as a subprocess so its process.exit / crash is isolated
       const proc = Bun.spawn({
-        cmd: [process.execPath, `${import.meta.dir}/browser.session.ts`, ...process.argv.slice(2)],
+        cmd: [
+          process.execPath,
+          `${import.meta.dir}/browser.session.ts`,
+          ...process.argv.slice(2),
+        ],
         stdout: "inherit",
         stderr: "inherit",
         stdin: "inherit",

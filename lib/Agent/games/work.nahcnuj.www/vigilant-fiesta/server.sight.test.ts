@@ -2,10 +2,16 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { JSDOM } from "jsdom";
 import { sight } from "./server";
 
-const installDom = (bodyHtml: string, url = "https://www.nahcnuj.work/vigilant-fiesta/") => {
-  const dom = new JSDOM(`<!DOCTYPE html><html><head><title>落ち物パズルゲーム・蘇</title></head><body>${bodyHtml}</body></html>`, {
-    url,
-  });
+const installDom = (
+  bodyHtml: string,
+  url = "https://www.nahcnuj.work/vigilant-fiesta/",
+) => {
+  const dom = new JSDOM(
+    `<!DOCTYPE html><html><head><title>落ち物パズルゲーム・蘇</title></head><body>${bodyHtml}</body></html>`,
+    {
+      url,
+    },
+  );
   const { window } = dom;
   // Prefer attribute visibility over empty getClientRects in JSDOM.
   window.HTMLElement.prototype.checkVisibility = function checkVisibility() {

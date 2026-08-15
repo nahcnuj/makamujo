@@ -34,7 +34,9 @@ export function SpeechLine({
       <div aria-hidden="true">
         {graphemes.map((g, i) => (
           <span
-            key={i}
+            // Grapheme order is stable for a given string; index is intentional.
+            // biome-ignore lint/suspicious/noArrayIndexKey: per-character animation order
+            key={`${i}:${g}`}
             style={
               animate
                 ? {

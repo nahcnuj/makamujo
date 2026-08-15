@@ -2,23 +2,33 @@ import { cloneAgentStateResponseMockFixture } from "../../../tests/fixtures/agen
 import type { AgentStateResponse } from "./types";
 
 export const AGENT_STATE_REFRESH_INTERVAL_MS = 1_000;
-export const AGENT_STATE_MOCK_NOTICE_MESSAGE = "配信エージェント状態モックを表示中";
+export const AGENT_STATE_MOCK_NOTICE_MESSAGE =
+  "配信エージェント状態モックを表示中";
 const AGENT_STATE_MOCK_QUERY_KEY = "agentStateMock";
-export const INVALID_AGENT_STATE_RESPONSE_ERROR = "配信状態の応答形式が不正です。";
-const EVENT_SOURCE_CLOSED = typeof EventSource !== "undefined" ? EventSource.CLOSED : 2;
+export const INVALID_AGENT_STATE_RESPONSE_ERROR =
+  "配信状態の応答形式が不正です。";
+const EVENT_SOURCE_CLOSED =
+  typeof EventSource !== "undefined" ? EventSource.CLOSED : 2;
 
 const AGENT_STATE_MOCK_NO_GAME_QUERY_KEY = "agentStateMockNoGame";
 
 export const createMockAgentStateResponse = (): AgentStateResponse => {
-  const searchParams = typeof window === "undefined" ? "" : window.location.search;
-  if (new URLSearchParams(searchParams).get(AGENT_STATE_MOCK_NO_GAME_QUERY_KEY) === "1") {
+  const searchParams =
+    typeof window === "undefined" ? "" : window.location.search;
+  if (
+    new URLSearchParams(searchParams).get(
+      AGENT_STATE_MOCK_NO_GAME_QUERY_KEY,
+    ) === "1"
+  ) {
     return { ...cloneAgentStateResponseMockFixture(), currentGame: null };
   }
   return cloneAgentStateResponseMockFixture();
 };
 
 export const isAgentStateMockQueryEnabled = (searchParams: string): boolean => {
-  return new URLSearchParams(searchParams).get(AGENT_STATE_MOCK_QUERY_KEY) === "1";
+  return (
+    new URLSearchParams(searchParams).get(AGENT_STATE_MOCK_QUERY_KEY) === "1"
+  );
 };
 
 export const shouldUseMockAgentState = (): boolean => {
@@ -51,7 +61,9 @@ export const startAgentStateAutoRefresh = (
   };
 };
 
-export const parseAgentStateResponse = (responseText: string): AgentStateResponse => {
+export const parseAgentStateResponse = (
+  responseText: string,
+): AgentStateResponse => {
   try {
     return JSON.parse(responseText) as AgentStateResponse;
   } catch {
@@ -59,6 +71,8 @@ export const parseAgentStateResponse = (responseText: string): AgentStateRespons
   }
 };
 
-export function shouldShowAgentStatusErrorForEventSourceError(readyState: number): boolean {
+export function shouldShowAgentStatusErrorForEventSourceError(
+  readyState: number,
+): boolean {
   return readyState === EVENT_SOURCE_CLOSED;
 }

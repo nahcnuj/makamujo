@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { JSDOM } from "jsdom";
 import { jsx, render } from "hono/jsx/dom";
+import { JSDOM } from "jsdom";
+import { ScreenReaderOnly } from "./ScreenReaderOnly";
 import {
   animationDelayMs,
   graphemeList,
   SpeechLine,
   stripTrailingPeriod,
 } from "./SpeechLine";
-import { ScreenReaderOnly } from "./ScreenReaderOnly";
 
 describe("stripTrailingPeriod", () => {
   it("removes only a trailing 。", () => {
@@ -71,7 +71,9 @@ describe("render", () => {
     expect(root.textContent).toContain("ab");
     const visual = root.querySelector("[aria-hidden='true']");
     expect(visual?.textContent).toBe("ab");
-    const spans = [...visual!.querySelectorAll(":scope > span")] as HTMLElement[];
+    const spans = [
+      ...visual!.querySelectorAll(":scope > span"),
+    ] as HTMLElement[];
     expect(spans).toHaveLength(2);
     expect(spans[0]!.style.animationDelay).toBe(`${animationDelayMs(0)}ms`);
     expect(spans[1]!.style.animationDelay).toBe(`${animationDelayMs(1)}ms`);

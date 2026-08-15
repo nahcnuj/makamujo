@@ -11,7 +11,10 @@ export const segmentWords = (text: string): string[] =>
  * ties broken by random among candidates.
  * Default RNG is Math.random (behavior-preserving).
  */
-export const pickTopic = (text: string, random: () => number = Math.random): string | undefined => {
+export const pickTopic = (
+  text: string,
+  random: () => number = Math.random,
+): string | undefined => {
   const words = segmentWords(text);
   if (words.length === 0) return undefined;
 

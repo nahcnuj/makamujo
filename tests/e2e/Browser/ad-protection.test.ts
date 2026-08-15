@@ -1,8 +1,11 @@
-import { test, expect } from "@playwright/test";
-import { createServer } from "node:http";
 import type { Server } from "node:http";
+import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { createPopupPageHandler, createRedirectToHomeHandler } from "../../../lib/Browser/chromium";
+import { expect, test } from "@playwright/test";
+import {
+  createPopupPageHandler,
+  createRedirectToHomeHandler,
+} from "../../../lib/Browser/chromium";
 
 /** Starts a minimal HTTP server on a random port and returns the server and its base URL. */
 function startLocalServer(): Promise<{ server: Server; baseUrl: string }> {
@@ -20,11 +23,15 @@ function startLocalServer(): Promise<{ server: Server; baseUrl: string }> {
 
 /** Stops the given HTTP server, returning a promise that resolves when the server is closed. */
 function stopLocalServer(server: Server): Promise<void> {
-  return new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  return new Promise((resolve, reject) =>
+    server.close((err) => (err ? reject(err) : resolve())),
+  );
 }
 
 test.describe("Ad protection (real browser)", () => {
-  test("closes popup tabs opened in the browser context", async ({ browser }) => {
+  test("closes popup tabs opened in the browser context", async ({
+    browser,
+  }) => {
     const { server, baseUrl } = await startLocalServer();
     const homeUrl = `${baseUrl}/home`;
 
@@ -50,7 +57,9 @@ test.describe("Ad protection (real browser)", () => {
     await stopLocalServer(server);
   });
 
-  test("redirects main page back to home when it navigates away", async ({ browser }) => {
+  test("redirects main page back to home when it navigates away", async ({
+    browser,
+  }) => {
     const { server, baseUrl } = await startLocalServer();
     const homeUrl = `${baseUrl}/home`;
     const awayUrl = `${baseUrl}/away`;
@@ -62,19 +71,23 @@ test.describe("Ad protection (real browser)", () => {
 
     page.on(
       "framenavigated",
-      createRedirectToHomeHandler(
-        page.mainFrame(),
-        homeUrl,
-        (url) => page.goto(url, { waitUntil: "domcontentloaded" }),
+      createRedirectToHomeHandler(page.mainFrame(), homeUrl, (url) =>
+        page.goto(url, { waitUntil: "domcontentloaded" }),
       ),
     );
 
     // Trigger a JavaScript-driven navigation to simulate an ad redirect.
     // page.evaluate() will be aborted by the navigation itself, so catch silently.
-    page.evaluate((url) => { window.location.href = url; }, awayUrl).catch(() => undefined);
+    page
+      .evaluate((url) => {
+        window.location.href = url;
+      }, awayUrl)
+      .catch(() => undefined);
 
     // Wait until the redirect handler brings the page back to homeUrl.
-    await page.waitForURL((url) => url.toString().startsWith(homeUrl), { timeout: 10_000 });
+    await page.waitForURL((url) => url.toString().startsWith(homeUrl), {
+      timeout: 10_000,
+    });
 
     expect(page.url()).toMatch(new RegExp(`^${homeUrl}`));
 

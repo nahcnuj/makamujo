@@ -1,6 +1,12 @@
-import { test, expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { spawn } from "child_process";
-import { existsSync, writeFileSync, unlinkSync, mkdirSync, createWriteStream } from "fs";
+import {
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  unlinkSync,
+  writeFileSync,
+} from "fs";
 import { join } from "path";
 
 const PORT = 17779;
@@ -11,10 +17,12 @@ test.describe("Full IPC operation", () => {
   test("transitions from initialize state to idle state", async () => {
     test.setTimeout(120_000);
 
-    const randomId = Date.now().toString(36) + Math.random().toString(36).slice(2);
-    const ipcPath = process.platform === "win32"
-      ? `\\\\.\\pipe\\makamujo-ipc-full-${randomId}`
-      : join(process.cwd(), "var", `full-ipc-${randomId}.sock`);
+    const randomId =
+      Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const ipcPath =
+      process.platform === "win32"
+        ? `\\\\.\\pipe\\makamujo-ipc-full-${randomId}`
+        : join(process.cwd(), "var", `full-ipc-${randomId}.sock`);
 
     if (process.platform !== "win32" && existsSync(ipcPath)) {
       unlinkSync(ipcPath);
@@ -87,7 +95,9 @@ test.describe("Full IPC operation", () => {
       );
 
       // capture browser logs for debugging
-      try { mkdirSync('./var/test-logs', { recursive: true }); } catch {}
+      try {
+        mkdirSync("./var/test-logs", { recursive: true });
+      } catch {}
       const ts = Date.now();
       const browserOutPath = `./var/test-logs/full-ipc-browser-${ts}.log`;
       const browserErrPath = `./var/test-logs/full-ipc-browser-${ts}.err.log`;
@@ -126,7 +136,10 @@ test.describe("Full IPC operation", () => {
         });
       });
 
-      expect(idleReached, "solver should transition from initialize to idle state via IPC").toBe(true);
+      expect(
+        idleReached,
+        "solver should transition from initialize to idle state via IPC",
+      ).toBe(true);
     } finally {
       if (serverProcess && !serverProcess.killed) {
         serverProcess.kill();

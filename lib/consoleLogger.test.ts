@@ -1,5 +1,12 @@
-import { test, expect } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync, existsSync } from "node:fs";
+import { expect, test } from "bun:test";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDailyRotatingJsonLogger } from "./consoleLogger";
@@ -107,7 +114,11 @@ test("rotates stale startup log based on file mtime", async () => {
 
   try {
     writeFileSync(logFilePath, '{"event":"stale"}\n');
-    utimesSync(logFilePath, new Date("2026-04-17T12:00:00.000Z"), new Date("2026-04-17T12:00:00.000Z"));
+    utimesSync(
+      logFilePath,
+      new Date("2026-04-17T12:00:00.000Z"),
+      new Date("2026-04-17T12:00:00.000Z"),
+    );
 
     const logger = createDailyRotatingJsonLogger(logFilePath, {
       now: () => new Date("2026-04-18T12:00:00.000Z"),
@@ -155,7 +166,9 @@ test("rotates by JST date boundary", async () => {
 
     const rotatedLogPath = `${logFilePath}.2026-04-18`;
     expect(existsSync(rotatedLogPath)).toBe(true);
-    expect(readFileSync(logFilePath, "utf8")).toContain('"timestamp":"2026-04-19T00:00:00.000+09:00"');
+    expect(readFileSync(logFilePath, "utf8")).toContain(
+      '"timestamp":"2026-04-19T00:00:00.000+09:00"',
+    );
   } finally {
     rmSync(tempDirectoryPath, { recursive: true, force: true });
   }

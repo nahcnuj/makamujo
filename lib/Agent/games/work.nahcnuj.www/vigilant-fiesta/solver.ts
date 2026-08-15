@@ -1,7 +1,7 @@
 // Solver for 落ち物パズルゲーム・蘇 (vigilant-fiesta).
 import { Action, type State } from "automated-gameplay-transmitter";
-import { getGameHomeUrl } from "./server";
 import type { ScreenName } from "./State";
+import { getGameHomeUrl } from "./server";
 
 /** Default wait on the result screen for free talk before clicking retry. */
 export const DEFAULT_FREE_TALK_MS = 30_000;
@@ -22,15 +22,15 @@ export const FREE_TALK_MS = DEFAULT_FREE_TALK_MS;
 
 export type GameState =
   | {
-    type: "initialize";
-    phase?: "open" | "start";
-  }
+      type: "initialize";
+      phase?: "open" | "start";
+    }
   | {
-    type: "idle";
-    phase?: "sight" | "act" | "freeTalk";
-    /** Epoch ms when free-talk window ends (result screen). */
-    freeTalkUntil?: number;
-  }
+      type: "idle";
+      phase?: "sight" | "act" | "freeTalk";
+      /** Epoch ms when free-talk window ends (result screen). */
+      freeTalkUntil?: number;
+    }
   | { type: "closed" };
 
 type SolverEventListeners = {
@@ -65,7 +65,8 @@ export function hydrate(state: GameState | SolverStart): GameState {
       return {
         type: "idle",
         phase: "phase" in state && state.phase ? state.phase : "sight",
-        freeTalkUntil: "freeTalkUntil" in state ? state.freeTalkUntil : undefined,
+        freeTalkUntil:
+          "freeTalkUntil" in state ? state.freeTalkUntil : undefined,
       };
     case "closed":
       return { type: "closed" };
@@ -82,9 +83,12 @@ const pickPlayAction = (): Action.Action => {
   // Lightweight random policy: move / rotate / hard-drop.
   // Weights favor hard-drop so the board progresses for stream viewers.
   const roll = Math.random();
-  if (roll < 0.25) return { name: "press", key: "ArrowLeft", on: { selector: "body" } };
-  if (roll < 0.5) return { name: "press", key: "ArrowRight", on: { selector: "body" } };
-  if (roll < 0.7) return { name: "press", key: "ArrowDown", on: { selector: "body" } };
+  if (roll < 0.25)
+    return { name: "press", key: "ArrowLeft", on: { selector: "body" } };
+  if (roll < 0.5)
+    return { name: "press", key: "ArrowRight", on: { selector: "body" } };
+  if (roll < 0.7)
+    return { name: "press", key: "ArrowDown", on: { selector: "body" } };
   return { name: "press", key: "ArrowUp", on: { selector: "body" } };
 };
 
@@ -170,7 +174,9 @@ export function stepIdle(
         return { state: States.initialize() };
       }
 
-      const sightData = (event.name === "idle" ? event.state : undefined) as SightLike | undefined;
+      const sightData = (event.name === "idle" ? event.state : undefined) as
+        | SightLike
+        | undefined;
       const screen = sightData?.screen ?? "unknown";
 
       if (screen === "title") {
@@ -181,7 +187,8 @@ export function stepIdle(
       }
       if (screen === "result") {
         // Enter free-talk window once per result screen, then wait / retry.
-        const freeTalkUntil = state.freeTalkUntil ?? nowMs + resolveFreeTalkMs();
+        const freeTalkUntil =
+          state.freeTalkUntil ?? nowMs + resolveFreeTalkMs();
         if (nowMs < freeTalkUntil) {
           return {
             state: { type: "idle", phase: "freeTalk", freeTalkUntil },
@@ -208,12 +215,16 @@ export function stepIdle(
         return { state: States.initialize() };
       }
 
-      const sightData = (event.name === "idle" ? event.state : undefined) as SightLike | undefined;
+      const sightData = (event.name === "idle" ? event.state : undefined) as
+        | SightLike
+        | undefined;
       const screen = sightData?.screen ?? "unknown";
 
       // Left result unexpectedly — resume normal play loop.
       if (screen !== "result") {
-        return { state: { type: "idle", phase: "sight", freeTalkUntil: undefined } };
+        return {
+          state: { type: "idle", phase: "sight", freeTalkUntil: undefined },
+        };
       }
 
       const freeTalkUntil = state.freeTalkUntil ?? nowMs + resolveFreeTalkMs();
@@ -276,6 +287,8 @@ export function* handleIdle(
   }
 }
 
+/** Terminal state runner; signature matches other state handlers. */
+// biome-ignore lint/correctness/useYield: closed state emits no actions
 export function* handleClosed(
   state: Extract<GameState, { type: "closed" }>,
 ): Generator<Action.Action, GameState, State> {
@@ -290,8 +303,8 @@ const machine = {
   [K in GameState["type"]]: {
     run: (
       state: Extract<GameState, { type: K }>,
-    ) => Generator<Action.Action, GameState, State>
-  }
+    ) => Generator<Action.Action, GameState, State>;
+  };
 };
 
 export function* solver(

@@ -10,7 +10,9 @@ export type VigilantFiestaSight = {
 };
 
 /** Score thresholds that trigger a one-shot milestone line. */
-export const SCORE_MILESTONES = [100, 500, 1_000, 2_000, 5_000, 10_000] as const;
+export const SCORE_MILESTONES = [
+  100, 500, 1_000, 2_000, 5_000, 10_000,
+] as const;
 
 const asFiniteNumber = (value: unknown): number | undefined => {
   if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
@@ -44,7 +46,9 @@ export const planVigilantFiestaSpeeches = (
   const enteredPlaying =
     nextScreen === "playing" &&
     prevScreen !== "playing" &&
-    (prevScreen === "title" || prevScreen === "result" || prevScreen === undefined);
+    (prevScreen === "title" ||
+      prevScreen === "result" ||
+      prevScreen === undefined);
 
   if (enteredPlaying) {
     speeches.push(
@@ -74,7 +78,9 @@ export const planVigilantFiestaSpeeches = (
 
   if (nextScreen === "result" && prevScreen !== "result") {
     if (nextScore !== undefined && Number.isFinite(nextScore)) {
-      speeches.push(`ゲームオーバー！スコアは${formatScore(nextScore)}点でした。`);
+      speeches.push(
+        `ゲームオーバー！スコアは${formatScore(nextScore)}点でした。`,
+      );
     } else {
       speeches.push("ゲームオーバー！");
     }

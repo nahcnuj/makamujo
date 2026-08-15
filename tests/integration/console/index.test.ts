@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,13 +10,19 @@ import {
   isConsoleIPRestrictionEnabled,
 } from "../../../lib/domain/console/access";
 
-const consoleRedirectURL = process.env.CONSOLE_REDIRECT_URL ?? "https://live.nicovideo.jp/watch/user/14171889";
+const consoleRedirectURL =
+  process.env.CONSOLE_REDIRECT_URL ??
+  "https://live.nicovideo.jp/watch/user/14171889";
 
 test("throws when TLS certificate file is missing", () => {
   const tmpDir = mkdtempSync(join(tmpdir(), "console-test-"));
   try {
-    expect(() => startConsoleServer({ certPath: join(tmpDir, "nonexistent-cert.pem"), keyPath: join(tmpDir, "nonexistent-key.pem") }))
-      .toThrow("TLS certificate files not found");
+    expect(() =>
+      startConsoleServer({
+        certPath: join(tmpDir, "nonexistent-cert.pem"),
+        keyPath: join(tmpDir, "nonexistent-key.pem"),
+      }),
+    ).toThrow("TLS certificate files not found");
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -28,25 +34,35 @@ test("throws when TLS certificate file exists but key file is missing", () => {
   writeFileSync(certFilePath, "placeholder");
 
   try {
-    expect(() => startConsoleServer({ certPath: certFilePath, keyPath: join(tmpDir, "nonexistent-key.pem") }))
-      .toThrow("TLS certificate files not found");
+    expect(() =>
+      startConsoleServer({
+        certPath: certFilePath,
+        keyPath: join(tmpDir, "nonexistent-key.pem"),
+      }),
+    ).toThrow("TLS certificate files not found");
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
   }
 });
 
 test("returns 303 to watch page for denied /console/ access", () => {
-  const response = createAccessDeniedRedirectResponse(new URL("https://example.com/console/?q=1"), {
-    consoleRedirectURL,
-  });
+  const response = createAccessDeniedRedirectResponse(
+    new URL("https://example.com/console/?q=1"),
+    {
+      consoleRedirectURL,
+    },
+  );
   expect(response.status).toBe(303);
   expect(response.headers.get("location")).toBe(consoleRedirectURL);
 });
 
 test("returns 308 to /console/ for denied non-console access", () => {
-  const response = createAccessDeniedRedirectResponse(new URL("https://example.com/other/path"), {
-    consoleRedirectURL,
-  });
+  const response = createAccessDeniedRedirectResponse(
+    new URL("https://example.com/other/path"),
+    {
+      consoleRedirectURL,
+    },
+  );
   expect(response.status).toBe(308);
   expect(response.headers.get("location")).toBe(DEFAULT_CONSOLE_BASE_PATH);
 });

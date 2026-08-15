@@ -11,14 +11,14 @@ beforeEach(() => {
 
 const temporaryModelFilePaths: string[] = [];
 
-type MarkovChainModelGenerateResult = ReturnType<MarkovChainModel['generate']>;
+type MarkovChainModelGenerateResult = ReturnType<MarkovChainModel["generate"]>;
 const getResultText = (result: MarkovChainModelGenerateResult) =>
-  typeof result === 'string' ? result : result.text;
+  typeof result === "string" ? result : result.text;
 
 function assertTraceResult(
   result: MarkovChainModelGenerateResult,
 ): asserts result is Exclude<MarkovChainModelGenerateResult, string> {
-  expect(typeof result).not.toBe('string');
+  expect(typeof result).not.toBe("string");
 }
 
 afterEach(() => {
@@ -30,190 +30,190 @@ afterEach(() => {
   }
 });
 
-describe('an empty markov chain model', () => {
+describe("an empty markov chain model", () => {
   it('should generate just "。"', () => {
     const model = new MarkovChainModel();
-    expect(getResultText(model.generate())).toBe('。');
+    expect(getResultText(model.generate())).toBe("。");
   });
 
-  it('should return trace nodes when generating text', () => {
+  it("should return trace nodes when generating text", () => {
     const model = new MarkovChainModel({
-      '': { 'こん': 1 },
-      'こん': { 'にち': 1 },
-      'にち': { 'は': 1 },
-      'は': { '。': 1 },
+      "": { こん: 1 },
+      こん: { にち: 1 },
+      にち: { は: 1 },
+      は: { "。": 1 },
     });
 
     const result = model.generate();
     assertTraceResult(result);
-    expect(result.text).toBe('こんにちは。');
-    expect(result.nodes).toEqual(['こん', 'にち', 'は', '。']);
+    expect(result.text).toBe("こんにちは。");
+    expect(result.nodes).toEqual(["こん", "にち", "は", "。"]);
   });
 
-  it('should include the start token in trace nodes when a start string is provided', () => {
+  it("should include the start token in trace nodes when a start string is provided", () => {
     const model = new MarkovChainModel({
-      '': { 'こん': 1 },
-      'こん': { 'にち': 1 },
-      'にち': { 'は': 1 },
-      'は': { '。': 1 },
+      "": { こん: 1 },
+      こん: { にち: 1 },
+      にち: { は: 1 },
+      は: { "。": 1 },
     });
 
-    const result = model.generate('こん');
+    const result = model.generate("こん");
     assertTraceResult(result);
-    expect(result.text).toBe('こんにちは。');
-    expect(result.nodes).toEqual(['こん', 'にち', 'は', '。']);
+    expect(result.text).toBe("こんにちは。");
+    expect(result.nodes).toEqual(["こん", "にち", "は", "。"]);
   });
 });
 
-describe('a no-branch model', () => {
-  it('should generate always the same sentence', () => {
+describe("a no-branch model", () => {
+  it("should generate always the same sentence", () => {
     const model = new MarkovChainModel({
-      '': {
-        'こん': 1,
+      "": {
+        こん: 1,
       },
-      'こん': {
-        'にち': 1,
+      こん: {
+        にち: 1,
       },
-      'にち': {
-        'は': 1,
+      にち: {
+        は: 1,
       },
-      'は': {
-        '。': 1,
-      }
+      は: {
+        "。": 1,
+      },
     });
-    expect(getResultText(model.generate())).toBe('こんにちは。');
-    expect(getResultText(model.generate(''))).toBe('こんにちは。');
-    expect(getResultText(model.generate('こん'))).toBe('こんにちは。');
-    expect(getResultText(model.generate('にち'))).toBe('にちは。');
-    expect(getResultText(model.generate('は'))).toBe('は。');
-    expect(getResultText(model.generate('。'))).toBe('。');
+    expect(getResultText(model.generate())).toBe("こんにちは。");
+    expect(getResultText(model.generate(""))).toBe("こんにちは。");
+    expect(getResultText(model.generate("こん"))).toBe("こんにちは。");
+    expect(getResultText(model.generate("にち"))).toBe("にちは。");
+    expect(getResultText(model.generate("は"))).toBe("は。");
+    expect(getResultText(model.generate("。"))).toBe("。");
   });
 });
 
 describe('a distribution including candidates for "。"', () => {
   it('should stop after "。" reached', () => {
     const model = new MarkovChainModel({
-      '': { '。': 1 },
-      '。': { 'ん': 1 },
+      "": { "。": 1 },
+      "。": { ん: 1 },
     });
-    expect(getResultText(model.generate())).toBe('。');
+    expect(getResultText(model.generate())).toBe("。");
   });
 });
 
-describe('a distribution with two even branches', () => {
+describe("a distribution with two even branches", () => {
   const times = 100;
   const model = new MarkovChainModel({
-    '': { 'こん': 2 },
-    'こん': { 'にちは': 1, 'ばんは': 1 },
-    'にちは': { '。': 1 },
-    'ばんは': { '。': 1 },
+    "": { こん: 2 },
+    こん: { にちは: 1, ばんは: 1 },
+    にちは: { "。": 1 },
+    ばんは: { "。": 1 },
   });
   const counts = {
-    'こんにちは。': 0,
-    'こんばんは。': 0,
+    "こんにちは。": 0,
+    "こんばんは。": 0,
   };
 
-  it('should choose each branch evenly', () => {
-    const randomSpy = jest.spyOn(Math, 'random');
+  it("should choose each branch evenly", () => {
+    const randomSpy = jest.spyOn(Math, "random");
     for (const i in [...new Array(times)]) {
       randomSpy.mockReturnValue(Number.parseInt(i) / times);
-      const got = getResultText(model.generate()) as 'こんにちは。' | 'こんばんは。';
-      expect(got).toBeOneOf(['こんにちは。', 'こんばんは。']);
+      const got = getResultText(model.generate()) as
+        | "こんにちは。"
+        | "こんばんは。";
+      expect(got).toBeOneOf(["こんにちは。", "こんばんは。"]);
       counts[got]++;
     }
     expect(counts["こんにちは。"]).toStrictEqual(counts["こんばんは。"]);
   });
 });
 
-describe('toJSON', () => {
-  it('should include model and corpus', () => {
+describe("toJSON", () => {
+  it("should include model and corpus", () => {
     const model = new MarkovChainModel();
-    model.learn('こんにちは。');
+    model.learn("こんにちは。");
 
     const copied = JSON.parse(model.toJSON());
-    expect('model' in copied).toBeTrue();
-    expect('corpus' in copied).toBeTrue();
-    expect(copied.corpus).toContain('こんにちは。');
+    expect("model" in copied).toBeTrue();
+    expect("corpus" in copied).toBeTrue();
+    expect(copied.corpus).toContain("こんにちは。");
   });
 });
 
-describe('fromFile', () => {
-  it('restores saved model json', () => {
+describe("fromFile", () => {
+  it("restores saved model json", () => {
     const model = new MarkovChainModel({
-      '': { 'こん': 1 },
-      'こん': { 'にち': 1 },
-      'にち': { 'は': 1 },
-      'は': { '。': 1 },
+      "": { こん: 1 },
+      こん: { にち: 1 },
+      にち: { は: 1 },
+      は: { "。": 1 },
     });
     const path = join(tmpdir(), `markov-model-${Date.now()}.json`);
     temporaryModelFilePaths.push(path);
     writeFileSync(path, model.toJSON());
 
     const loaded = MarkovChainModel.fromFile(path);
-    expect(getResultText(loaded.generate())).toBe('こんにちは。');
-  });
-
-});
-
-describe('n-gram contexts', () => {
-  it('uses higher-order context when available', () => {
-    const model = new MarkovChainModel({
-      '': { 'A': 1 },
-      'A': { 'B': 1 },
-      'A\u0000B': { 'C': 1 },
-      'B\u0000C': { '。': 1 },
-    });
-
-    expect(getResultText(model.generate('', 2))).toBe('ABC。');
-  });
-
-  it('falls back to lower-order context when n is smaller', () => {
-    const model = new MarkovChainModel({
-      '': { 'A': 1 },
-      'A': { 'B': 1 },
-      'A\u0000B': { 'C': 1 },
-      'B': { '。': 1 },
-      'C': { '。': 1 },
-    });
-
-    expect(getResultText(model.generate('', 1))).toBe('AB。');
+    expect(getResultText(loaded.generate())).toBe("こんにちは。");
   });
 });
 
-describe('learn', () => {
-  it('accepts text without sentence terminator', () => {
-    const model = new MarkovChainModel();
-    model.learn('こんにちは');
-    const copied = JSON.parse(model.toJSON());
-    expect(copied.corpus).toContain('こんにちは。');
+describe("n-gram contexts", () => {
+  it("uses higher-order context when available", () => {
+    const model = new MarkovChainModel({
+      "": { A: 1 },
+      A: { B: 1 },
+      "A\u0000B": { C: 1 },
+      "B\u0000C": { "。": 1 },
+    });
+
+    expect(getResultText(model.generate("", 2))).toBe("ABC。");
   });
 
-  it('normalizes extra trailing sentence terminators', () => {
+  it("falls back to lower-order context when n is smaller", () => {
+    const model = new MarkovChainModel({
+      "": { A: 1 },
+      A: { B: 1 },
+      "A\u0000B": { C: 1 },
+      B: { "。": 1 },
+      C: { "。": 1 },
+    });
+
+    expect(getResultText(model.generate("", 1))).toBe("AB。");
+  });
+});
+
+describe("learn", () => {
+  it("accepts text without sentence terminator", () => {
     const model = new MarkovChainModel();
-    model.learn('こんにちは。。。');
+    model.learn("こんにちは");
     const copied = JSON.parse(model.toJSON());
-    expect(copied.corpus).toContain('こんにちは。');
+    expect(copied.corpus).toContain("こんにちは。");
   });
 
-  it('toLearned keeps learned corpus', () => {
+  it("normalizes extra trailing sentence terminators", () => {
     const model = new MarkovChainModel();
-    model.learn('こんにちは。');
-    const learned = model.toLearned('こんばんは');
+    model.learn("こんにちは。。。");
+    const copied = JSON.parse(model.toJSON());
+    expect(copied.corpus).toContain("こんにちは。");
+  });
+
+  it("toLearned keeps learned corpus", () => {
+    const model = new MarkovChainModel();
+    model.learn("こんにちは。");
+    const learned = model.toLearned("こんばんは");
     const copied = JSON.parse(learned.toJSON());
-    expect(copied.corpus).toContain('こんにちは。');
-    expect(copied.corpus).toContain('こんばんは。');
+    expect(copied.corpus).toContain("こんにちは。");
+    expect(copied.corpus).toContain("こんばんは。");
   });
 });
-
 
 describe("decrementPhrase", () => {
   it("decrements transition weights along the given token sequence", () => {
     const model = new MarkovChainModel({
-      "": { "あ": 3 },
-      "あ": { "んま": 2 },
-      "んま": { "り": 2 },
-      "あ\u0000んま": { "り": 1 },
-      "り": { "。": 1 },
+      "": { あ: 3 },
+      あ: { んま: 2 },
+      んま: { り: 2 },
+      "あ\u0000んま": { り: 1 },
+      り: { "。": 1 },
     });
     const updated = model.decrementPhrase(["あ", "んま", "り"], { delta: 1 });
     const json = JSON.parse(updated.toJSON()).model;
@@ -225,9 +225,9 @@ describe("decrementPhrase", () => {
 
   it("removes entries when weight reaches zero or below", () => {
     const model = new MarkovChainModel({
-      "": { "x": 1 },
-      "x": { "y": 1 },
-      "y": { "。": 1 },
+      "": { x: 1 },
+      x: { y: 1 },
+      y: { "。": 1 },
     });
     const updated = model.decrementPhrase(["x", "y"], { delta: 1 });
     const json = JSON.parse(updated.toJSON()).model;
@@ -245,7 +245,7 @@ describe("decrementPhrase", () => {
   });
 
   it("keeps a fallback start distribution when emptied", () => {
-    const model = new MarkovChainModel({ "": { "x": 1 } });
+    const model = new MarkovChainModel({ "": { x: 1 } });
     const updated = model.decrementPhrase(["x"], { delta: 1 });
     const json = JSON.parse(updated.toJSON()).model;
     expect(json[""]).toEqual({ "。": 1 });
@@ -256,14 +256,23 @@ describe("decrementPhrase", () => {
       "": { beige: 2 },
       beige: { panty: 3 },
       ["beige" + String.fromCharCode(0) + "panty"]: { end: 5, other: 2 },
-      ["pre" + String.fromCharCode(0) + "beige" + String.fromCharCode(0) + "panty"]: { end: 4 },
+      ["pre" +
+        String.fromCharCode(0) +
+        "beige" +
+        String.fromCharCode(0) +
+        "panty"]: { end: 4 },
       unrelated: { x: 9 },
     });
 
     const updated = model.decrementPhrase(["beige", "panty"], { delta: 1 });
     const m = JSON.parse(updated.toJSON()).model;
     const phraseKey = "beige" + String.fromCharCode(0) + "panty";
-    const longKey = "pre" + String.fromCharCode(0) + "beige" + String.fromCharCode(0) + "panty";
+    const longKey =
+      "pre" +
+      String.fromCharCode(0) +
+      "beige" +
+      String.fromCharCode(0) +
+      "panty";
 
     expect(m[""]?.beige).toBe(1);
     expect(m.beige?.panty).toBe(2);
@@ -283,7 +292,6 @@ describe("decrementPhrase", () => {
     const m = JSON.parse(updated.toJSON()).model;
     expect(m[phraseKey]).toBeUndefined();
   });
-
 
   it("multi-token purge subtracts min weight along phrase path", () => {
     const model = new MarkovChainModel({
@@ -311,7 +319,9 @@ describe("decrementPhrase", () => {
       "": { beige: 5, x: 1 },
       no: { beige: 3 },
     });
-    const b = JSON.parse(model.decrementPhrase(["beige"], { purge: true }).toJSON()).model;
+    const b = JSON.parse(
+      model.decrementPhrase(["beige"], { purge: true }).toJSON(),
+    ).model;
     expect(b[""]?.beige).toBeUndefined();
     expect(b.no?.beige).toBeUndefined();
     expect(b[""]?.x).toBe(1);
@@ -323,34 +333,36 @@ describe("decrementPhrase", () => {
       beige: { panty: 5 },
       no: { panty: 4 },
     });
-    const a = JSON.parse(model.decrementPhrase(["beige", "panty"], { delta: 1 }).toJSON()).model;
+    const a = JSON.parse(
+      model.decrementPhrase(["beige", "panty"], { delta: 1 }).toJSON(),
+    ).model;
     expect(a[""]?.beige).toBe(4);
     expect(a.beige?.panty).toBe(4);
     expect(a.no?.panty).toBe(4);
   });
 
-
   it("multi-token purge is no-op when any path edge is missing", () => {
     const model = new MarkovChainModel({
       "": { other: 1 },
       // 女→教師 only; スケベ→女 is missing
-      "女": { "教師": 119 },
+      女: { 教師: 119 },
     });
-    const updated = model.decrementPhrase(["スケベ", "女", "教師"], { purge: true });
+    const updated = model.decrementPhrase(["スケベ", "女", "教師"], {
+      purge: true,
+    });
     const m = JSON.parse(updated.toJSON()).model;
     expect(m["女"]?.["教師"]).toBe(119);
     expect(m[""]?.other).toBe(1);
   });
-
 });
 
 describe("tokenStats and transitionsOf", () => {
   const model = new MarkovChainModel({
-    "": { "こん": 2 },
-    "こん": { "にち": 1, "ばん": 1 },
-    "にち": { "は": 1 },
-    "ばん": { "は": 1 },
-    "は": { "。": 1 },
+    "": { こん: 2 },
+    こん: { にち: 1, ばん: 1 },
+    にち: { は: 1 },
+    ばん: { は: 1 },
+    は: { "。": 1 },
   });
 
   it("tokenStats returns frequency-like ranking", () => {
@@ -363,10 +375,14 @@ describe("tokenStats and transitionsOf", () => {
 
   it("transitionsOf returns asFrom and asTo", () => {
     const t = model.transitionsOf("こん");
-    expect(t.asFrom).toEqual({ "にち": 1, "ばん": 1 });
+    expect(t.asFrom).toEqual({ にち: 1, ばん: 1 });
     expect(t.asTo.some((x) => x.from === "" && x.weight === 2)).toBe(true);
-    expect(t.fromContexts.some((x) => x.context === "こん" && x.next === "にち")).toBe(true);
-    expect(t.fromContexts.some((x) => x.context === "こん" && x.next === "ばん")).toBe(true);
+    expect(
+      t.fromContexts.some((x) => x.context === "こん" && x.next === "にち"),
+    ).toBe(true);
+    expect(
+      t.fromContexts.some((x) => x.context === "こん" && x.next === "ばん"),
+    ).toBe(true);
   });
 
   it("search-like filtering works via tokenStats", () => {
@@ -377,13 +393,13 @@ describe("tokenStats and transitionsOf", () => {
 
 describe("transitionsOf n-gram contexts", () => {
   const model = new MarkovChainModel({
-    "": { "パンティー": 5 },
-    "パンティー": { "。": 10, "を": 3 },
-    "パンティー\u0000を": { "穿": 2 },
+    "": { パンティー: 5 },
+    パンティー: { "。": 10, を: 3 },
+    "パンティー\u0000を": { 穿: 2 },
     "の\u0000パンティー": { "。": 7 },
-    "あ\u0000の": { "パンティー": 1 },
-    "の": { "パンティー": 4 },
-    "無関係": { "語": 1 },
+    "あ\u0000の": { パンティー: 1 },
+    の: { パンティー: 4 },
+    無関係: { 語: 1 },
   });
 
   it("fromContexts includes keys that contain the token as a segment", () => {
@@ -413,7 +429,7 @@ describe("transitionsOf n-gram contexts", () => {
 
   it("normalizes space-separated phrase to null-separated key", () => {
     const t = model.transitionsOf("パンティー を");
-    expect(t.asFrom).toEqual({ "穿": 2 });
+    expect(t.asFrom).toEqual({ 穿: 2 });
     expect(t.fromContexts).toEqual(
       expect.arrayContaining([
         { context: "パンティー\u0000を", next: "穿", weight: 2 },

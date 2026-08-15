@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 describe("StreamerPanel keys", () => {

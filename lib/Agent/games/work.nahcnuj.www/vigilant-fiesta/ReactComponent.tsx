@@ -16,8 +16,12 @@ export default function ({ state }: { state: State }) {
   return (
     <div className="flex flex-col gap-2 items-stretch">
       <div className="flex flex-col gap-0.5">
-        {score !== undefined ? <div>{`Score ${formatNumber(score)}`}</div> : null}
-        {level !== undefined ? <div>{`Level ${formatNumber(level)}`}</div> : null}
+        {score !== undefined ? (
+          <div>{`Score ${formatNumber(score)}`}</div>
+        ) : null}
+        {level !== undefined ? (
+          <div>{`Level ${formatNumber(level)}`}</div>
+        ) : null}
         <div>{`最高(枠内) ${formatNumber(sessionBest)}`}</div>
         <div>{`最高(通算) ${formatNumber(allTimeBest)}`}</div>
       </div>

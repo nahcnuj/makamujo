@@ -50,7 +50,8 @@ export const buildSlotKey = (input: {
 };
 
 const asNonNegInt = (value: unknown): number | undefined => {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0)
+    return undefined;
   return Math.trunc(value);
 };
 
@@ -64,8 +65,14 @@ export const parseStoredHighscores = (raw: string): StoredHighscores => {
     };
     const allTimeBest = asNonNegInt(parsed.allTimeBest) ?? 0;
     const slots: Record<string, SlotScoreEntry> = {};
-    if (parsed.slots !== null && typeof parsed.slots === "object" && !Array.isArray(parsed.slots)) {
-      for (const [key, entry] of Object.entries(parsed.slots as Record<string, unknown>)) {
+    if (
+      parsed.slots !== null &&
+      typeof parsed.slots === "object" &&
+      !Array.isArray(parsed.slots)
+    ) {
+      for (const [key, entry] of Object.entries(
+        parsed.slots as Record<string, unknown>,
+      )) {
         if (!key || entry === null || typeof entry !== "object") continue;
         const e = entry as { sessionBest?: unknown; updatedAt?: unknown };
         const sessionBest = asNonNegInt(e.sessionBest);
@@ -99,14 +106,19 @@ export const pruneSlots = (
   }
   if (keepKey && slots[keepKey] && !next[keepKey]) {
     // Ensure the active slot is never dropped when pruning.
-    const dropKey = Object.entries(next).sort((a, b) => a[1].updatedAt - b[1].updatedAt)[0]?.[0];
+    const dropKey = Object.entries(next).sort(
+      (a, b) => a[1].updatedAt - b[1].updatedAt,
+    )[0]?.[0];
     if (dropKey) delete next[dropKey];
     next[keepKey] = slots[keepKey]!;
   }
   return next;
 };
 
-export const serializeStoredHighscores = (stored: StoredHighscores, keepKey?: string): string => {
+export const serializeStoredHighscores = (
+  stored: StoredHighscores,
+  keepKey?: string,
+): string => {
   const slots = pruneSlots(stored.slots, MAX_STORED_SLOTS, keepKey);
   return JSON.stringify({
     allTimeBest: Math.max(0, Math.trunc(stored.allTimeBest)),
@@ -132,7 +144,10 @@ export const updateScoreRecords = (
   const value = Math.trunc(score);
   const sessionBest = Math.max(records.sessionBest, value);
   const allTimeBest = Math.max(records.allTimeBest, value);
-  if (sessionBest === records.sessionBest && allTimeBest === records.allTimeBest) {
+  if (
+    sessionBest === records.sessionBest &&
+    allTimeBest === records.allTimeBest
+  ) {
     return records;
   }
   return { sessionBest, allTimeBest };

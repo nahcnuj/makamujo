@@ -5,10 +5,10 @@
  *   lib/Agent/games/work.nahcnuj.www/vigilant-fiesta/play-loop.harness.test.ts
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { createServer, type Server } from "node:http";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Action } from "automated-gameplay-transmitter";
 import { getGameHomeUrl } from "../../lib/Agent/games/work.nahcnuj.www/vigilant-fiesta/server";
@@ -16,7 +16,10 @@ import { solver } from "../../lib/Agent/games/work.nahcnuj.www/vigilant-fiesta/s
 
 process.env.VIGILANT_FIESTA_FREE_TALK_MS = "80";
 
-const fixturePath = resolve(import.meta.dir, "../fixtures/vigilant-fiesta-stub.html");
+const fixturePath = resolve(
+  import.meta.dir,
+  "../fixtures/vigilant-fiesta-stub.html",
+);
 const fixtureHtml = readFileSync(fixturePath, "utf-8");
 
 let server: Server | undefined;
@@ -91,40 +94,72 @@ describe("vigilant-fiesta agent play loop (chromium + stub)", () => {
         const action = next.value as Action.Action;
 
         if (action.name === "open") sawOpen = true;
-        if (action.name === "click" && (action as any).target?.id === "btn-start") sawStart = true;
+        if (
+          action.name === "click" &&
+          (action as any).target?.id === "btn-start"
+        )
+          sawStart = true;
         if (action.name === "press") sawPress = true;
-        if (action.name === "click" && (action as any).target?.id === "btn-retry") sawRetry = true;
+        if (
+          action.name === "click" &&
+          (action as any).target?.id === "btn-retry"
+        )
+          sawRetry = true;
 
         try {
           if (action.name === "noop") {
             await delay(25);
             const state = await page.evaluate(() => {
-              const isVisible = (el: HTMLElement | null) => !!el && !el.hasAttribute("hidden");
-              let screen: "title" | "playing" | "result" | "unknown" = "unknown";
-              if (isVisible(document.getElementById("screen-title"))) screen = "title";
-              else if (isVisible(document.getElementById("result-overlay"))) screen = "result";
-              else if (isVisible(document.getElementById("screen-playing"))) screen = "playing";
-              const textOf = (el: HTMLElement | null) => (el?.innerText || el?.textContent || "").trim();
-              const scoreText = screen === "result"
-                ? (textOf(document.getElementById("result-score")) || textOf(document.getElementById("score")))
-                : textOf(document.getElementById("score"));
+              const isVisible = (el: HTMLElement | null) =>
+                !!el && !el.hasAttribute("hidden");
+              let screen: "title" | "playing" | "result" | "unknown" =
+                "unknown";
+              if (isVisible(document.getElementById("screen-title")))
+                screen = "title";
+              else if (isVisible(document.getElementById("result-overlay")))
+                screen = "result";
+              else if (isVisible(document.getElementById("screen-playing")))
+                screen = "playing";
+              const textOf = (el: HTMLElement | null) =>
+                (el?.innerText || el?.textContent || "").trim();
+              const scoreText =
+                screen === "result"
+                  ? textOf(document.getElementById("result-score")) ||
+                    textOf(document.getElementById("score"))
+                  : textOf(document.getElementById("score"));
               return {
                 screen,
-                score: Number.parseInt((scoreText.match(/Score:\s*([\d,]+)/i)?.[1] ?? "NaN").replaceAll(",", ""), 10),
+                score: Number.parseInt(
+                  (
+                    scoreText.match(/Score:\s*([\d,]+)/i)?.[1] ?? "NaN"
+                  ).replaceAll(",", ""),
+                  10,
+                ),
                 level: 1,
                 url: location.href,
               };
             });
             if (state.screen === "result") sawResultScreen = true;
-            if (sawRetry && state.screen === "playing") returnedToPlayingAfterRetry = true;
-            event = { name: "idle", url: page.url().startsWith(baseUrl) ? page.url() : baseUrl, state };
-            if (sawRetry && returnedToPlayingAfterRetry && sawPress && sawStart) break;
+            if (sawRetry && state.screen === "playing")
+              returnedToPlayingAfterRetry = true;
+            event = {
+              name: "idle",
+              url: page.url().startsWith(baseUrl) ? page.url() : baseUrl,
+              state,
+            };
+            if (sawRetry && returnedToPlayingAfterRetry && sawPress && sawStart)
+              break;
             continue;
           }
 
           if (action.name === "open") {
-            await page.goto(action.url, { waitUntil: "domcontentloaded", timeout: 10_000 });
-            await page.locator("#btn-start").waitFor({ state: "attached", timeout: 5_000 });
+            await page.goto(action.url, {
+              waitUntil: "domcontentloaded",
+              timeout: 10_000,
+            });
+            await page
+              .locator("#btn-start")
+              .waitFor({ state: "attached", timeout: 5_000 });
           } else if (action.name === "click" && action.target.type === "id") {
             await page.evaluate((id) => {
               const el = document.getElementById(id) as HTMLElement | null;
@@ -133,7 +168,13 @@ describe("vigilant-fiesta agent play loop (chromium + stub)", () => {
             }, action.target.id);
           } else if (action.name === "press") {
             await page.evaluate((key) => {
-              window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+              window.dispatchEvent(
+                new KeyboardEvent("keydown", {
+                  key,
+                  bubbles: true,
+                  cancelable: true,
+                }),
+              );
             }, action.key);
           }
           event = { name: "result", succeeded: true, action };
@@ -147,10 +188,22 @@ describe("vigilant-fiesta agent play loop (chromium + stub)", () => {
       expect(sawStart).toBe(true);
 
       // Full browser loop is optional; harness covers play/retry deterministically.
-      if (!sawPress || !sawResultScreen || !sawRetry || !returnedToPlayingAfterRetry) {
+      if (
+        !sawPress ||
+        !sawResultScreen ||
+        !sawRetry ||
+        !returnedToPlayingAfterRetry
+      ) {
         console.warn(
           "[WARN] chromium play-loop incomplete; relying on play-loop.harness.test.ts",
-          { sawOpen, sawStart, sawPress, sawResultScreen, sawRetry, returnedToPlayingAfterRetry },
+          {
+            sawOpen,
+            sawStart,
+            sawPress,
+            sawResultScreen,
+            sawRetry,
+            returnedToPlayingAfterRetry,
+          },
         );
         expect(true).toBe(true);
         return;

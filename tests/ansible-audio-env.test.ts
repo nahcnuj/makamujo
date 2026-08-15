@@ -1,5 +1,5 @@
-import { test, expect } from "bun:test";
-import { readFileSync, existsSync } from "node:fs";
+import { expect, test } from "bun:test";
+import { existsSync, readFileSync } from "node:fs";
 
 test("Ansible playbook configures makamujo-audio.sh with correct PulseAudio env vars", () => {
   const playbookPath = "ansible/playbooks/0_desktop.yml";
@@ -10,7 +10,9 @@ test("Ansible playbook configures makamujo-audio.sh with correct PulseAudio env 
 
   // 2. そのタスクの実装（content または src）から、実際のファイル中身を取得する
   const lines = playbookContent.split("\n");
-  const destLineIndex = lines.findIndex((line) => line.includes("dest: /etc/profile.d/makamujo-audio.sh"));
+  const destLineIndex = lines.findIndex((line) =>
+    line.includes("dest: /etc/profile.d/makamujo-audio.sh"),
+  );
   expect(destLineIndex).toBeGreaterThanOrEqual(0);
 
   let deployedContent = "";
@@ -30,7 +32,10 @@ test("Ansible playbook configures makamujo-audio.sh with correct PulseAudio env 
       let j = i + 1;
       while (j < lines.length) {
         const contentLine = lines[j];
-        if (contentLine === undefined || !contentLine.startsWith(" ".repeat(10))) {
+        if (
+          contentLine === undefined ||
+          !contentLine.startsWith(" ".repeat(10))
+        ) {
           break;
         }
         deployedContent += contentLine.trimStart() + "\n";
@@ -61,5 +66,7 @@ test("Ansible playbook configures makamujo-audio.sh with correct PulseAudio env 
 
   // 3. 展開されるファイルの中身に、必要な2つの環境変数が含まれていること
   expect(deployedContent).toContain("export XDG_RUNTIME_DIR=/run/user/0");
-  expect(deployedContent).toContain("export PULSE_RUNTIME_PATH=/run/user/0/pulse");
+  expect(deployedContent).toContain(
+    "export PULSE_RUNTIME_PATH=/run/user/0/pulse",
+  );
 });

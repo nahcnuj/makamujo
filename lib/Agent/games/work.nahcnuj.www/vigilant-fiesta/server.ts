@@ -1,6 +1,7 @@
 import type { ScreenName, State } from "./State";
 
-export const DEFAULT_GAME_HOME_URL = "https://www.nahcnuj.work/vigilant-fiesta/";
+export const DEFAULT_GAME_HOME_URL =
+  "https://www.nahcnuj.work/vigilant-fiesta/";
 
 /**
  * Home URL for open / redirect / away detection.
@@ -70,17 +71,20 @@ export const sight = (): State => {
   // without layout (JSDOM) and for headless evaluation edge cases.
   const textOf = (el: HTMLElement | null): string => {
     if (!el) return "";
-    const raw = (typeof el.innerText === "string" && el.innerText.length > 0)
-      ? el.innerText
-      : (el.textContent ?? "");
+    const raw =
+      typeof el.innerText === "string" && el.innerText.length > 0
+        ? el.innerText
+        : (el.textContent ?? "");
     return raw.trim();
   };
 
   // On result, prefer #result-score; while playing/title use #score only
   // (hidden result overlay still has text in the DOM).
-  const scoreText = screen === "result"
-    ? (textOf(document.getElementById("result-score")) || textOf(document.getElementById("score")))
-    : textOf(document.getElementById("score"));
+  const scoreText =
+    screen === "result"
+      ? textOf(document.getElementById("result-score")) ||
+        textOf(document.getElementById("score"))
+      : textOf(document.getElementById("score"));
   const levelText = textOf(document.getElementById("level"));
 
   const parseHudNumber = (text: string, label: string): number => {

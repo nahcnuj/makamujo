@@ -43,7 +43,11 @@ export function onListenersUpdate(input: {
   listeners: number | undefined;
   prevListeners: number | undefined;
   nowMs: number;
-}): { prevListeners: number; listenersChangedAtMs: number; visibility: SpriteVisibility } | null {
+}): {
+  prevListeners: number;
+  listenersChangedAtMs: number;
+  visibility: SpriteVisibility;
+} | null {
   const { silent, listeners, prevListeners, nowMs } = input;
   if (listeners === undefined) return null;
   if (prevListeners === listeners) return null;

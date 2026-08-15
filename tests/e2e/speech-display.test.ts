@@ -1,4 +1,4 @@
-﻿import { expect, test, type Locator, type Page } from "@playwright/test";
+﻿import { expect, type Locator, type Page, test } from "@playwright/test";
 import { spawn } from "child_process";
 import { existsSync, writeFileSync } from "fs";
 import { join } from "path";
@@ -38,7 +38,8 @@ test.beforeAll(async () => {
   if (!existsSync("./var/cookieclicker.txt")) {
     writeFileSync("./var/cookieclicker.txt", "");
   }
-  const randomId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  const randomId =
+    Date.now().toString(36) + Math.random().toString(36).slice(2);
   const ipcPath =
     process.platform === "win32"
       ? `\\\\.\\pipe\\makamujo-ipc-speech-${randomId}`
@@ -102,26 +103,42 @@ test.describe("speech display", () => {
     let speech = "一行目";
     await mockApis(page, () => ({ speech, silent: false }));
 
-    await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 20_000 });
-    await expect(speechTextLocator(page, "一行目")).toBeAttached({ timeout: 5_000 });
+    await page.goto(BASE_URL, {
+      waitUntil: "domcontentloaded",
+      timeout: 20_000,
+    });
+    await expect(speechTextLocator(page, "一行目")).toBeAttached({
+      timeout: 5_000,
+    });
 
     speech = "二行目";
-    await expect(speechTextLocator(page, "二行目")).toBeAttached({ timeout: 5_000 });
+    await expect(speechTextLocator(page, "二行目")).toBeAttached({
+      timeout: 5_000,
+    });
     await expect(speechTextLocator(page, "一行目")).toBeAttached();
 
     speech = "三行目";
-    await expect(speechTextLocator(page, "三行目")).toBeAttached({ timeout: 5_000 });
+    await expect(speechTextLocator(page, "三行目")).toBeAttached({
+      timeout: 5_000,
+    });
     await expect(speechTextLocator(page, "二行目")).toBeAttached();
     // After rise animation, the first utterance should be gone.
-    await expect(speechTextLocator(page, "一行目")).toHaveCount(0, { timeout: 2_000 });
+    await expect(speechTextLocator(page, "一行目")).toHaveCount(0, {
+      timeout: 2_000,
+    });
   });
 
   test("replaces on ありがとうございます！ interrupt", async ({ page }) => {
     let speech = "途中の話";
     await mockApis(page, () => ({ speech, silent: false }));
 
-    await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 20_000 });
-    await expect(speechTextLocator(page, "途中の話")).toBeAttached({ timeout: 5_000 });
+    await page.goto(BASE_URL, {
+      waitUntil: "domcontentloaded",
+      timeout: 20_000,
+    });
+    await expect(speechTextLocator(page, "途中の話")).toBeAttached({
+      timeout: 5_000,
+    });
 
     speech = "太郎さん、広告ありがとうございます！";
     await expect(
@@ -134,11 +151,18 @@ test.describe("speech display", () => {
     let speech = "昨日の話。";
     await mockApis(page, () => ({ speech, silent: false }));
 
-    await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 20_000 });
-    await expect(speechTextLocator(page, "昨日の話")).toBeAttached({ timeout: 5_000 });
+    await page.goto(BASE_URL, {
+      waitUntil: "domcontentloaded",
+      timeout: 20_000,
+    });
+    await expect(speechTextLocator(page, "昨日の話")).toBeAttached({
+      timeout: 5_000,
+    });
 
     speech = "次の話題";
-    await expect(speechTextLocator(page, "次の話題")).toBeAttached({ timeout: 5_000 });
+    await expect(speechTextLocator(page, "次の話題")).toBeAttached({
+      timeout: 5_000,
+    });
     await expect(speechTextLocator(page, "昨日の話")).toHaveCount(0);
   });
 });

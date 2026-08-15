@@ -1,11 +1,11 @@
 /** @jsxImportSource hono/jsx */
 import { describe, expect, it } from "bun:test";
 import { renderToString } from "hono/jsx/dom/server";
-import type { AgentStateResponse } from "./types";
 import { createAgentStatusRows } from "./createAgentStatusRows";
 import { GameStatusSection } from "./GameStatusSection";
 import { LiveDeliveryStatusSection } from "./LiveDeliveryStatusSection";
 import { MarkovModelStatusSection } from "./MarkovModelStatusSection";
+import type { AgentStateResponse } from "./types";
 
 describe("AgentStatusSections", () => {
   it("renders live delivery section with title and link", () => {
@@ -21,7 +21,11 @@ describe("AgentStatusSections", () => {
               </div>
             ),
           },
-          { label: "配信URL", value: "https://example.com/live", href: "https://example.com/live" },
+          {
+            label: "配信URL",
+            value: "https://example.com/live",
+            href: "https://example.com/live",
+          },
         ]}
       />,
     );
@@ -53,7 +57,10 @@ describe("AgentStatusSections", () => {
     if (!liveDeliveryRow) {
       throw new Error("Expected live delivery row to be defined");
     }
-    expect(liveDeliveryRow).toMatchObject({ label: "配信指標", hideLabel: true });
+    expect(liveDeliveryRow).toMatchObject({
+      label: "配信指標",
+      hideLabel: true,
+    });
     const html = renderToString(<>{liveDeliveryRow.valueComponent}</>);
     expect(html).toContain("配信状況");
     expect(html).toContain("配信中");
@@ -76,7 +83,9 @@ describe("AgentStatusSections", () => {
                 <li>
                   <p>テスト発話</p>
                   <p>n=4</p>
-                  <button type="button" disabled aria-label="学習の取り消し">↩</button>
+                  <button type="button" disabled aria-label="学習の取り消し">
+                    ↩
+                  </button>
                 </li>
               </ul>
             ),
@@ -89,7 +98,7 @@ describe("AgentStatusSections", () => {
     expect(html).toContain("4-gram");
     expect(html).toContain("テスト発話");
     expect(html).toContain("これまでの発話");
-    expect(html).toContain("aria-label=\"学習の取り消し\"");
+    expect(html).toContain('aria-label="学習の取り消し"');
   });
 
   it("renders game section with structured rows", () => {
@@ -130,15 +139,15 @@ describe("AgentStatusSections", () => {
     if (!liveDeliveryRow) {
       throw new Error("Expected live delivery row to be defined");
     }
-    const liveDeliveryHtml = renderToString(<>{liveDeliveryRow.valueComponent}</>);
+    const liveDeliveryHtml = renderToString(
+      <>{liveDeliveryRow.valueComponent}</>,
+    );
     expect((liveDeliveryHtml.match(/<h3\b/g) || []).length).toBe(1);
     expect((liveDeliveryHtml.match(/配信状況/g) || []).length).toBe(1);
 
     const markovHtml = renderToString(
       <MarkovModelStatusSection
-        markovModelRows={[
-          { label: "生成N-gram", value: "4-gram" },
-        ]}
+        markovModelRows={[{ label: "生成N-gram", value: "4-gram" }]}
       />,
     );
     expect((markovHtml.match(/<h3\b/g) || []).length).toBe(1);
@@ -146,7 +155,13 @@ describe("AgentStatusSections", () => {
     const gameHtml = renderToString(
       <GameStatusSection
         title="『org.dashnet.orteil/cookieclicker』プレイ中"
-        gameRows={[{ label: "ゲーム情報", hideLabel: true, valueComponent: <span>status: idle</span> }]}
+        gameRows={[
+          {
+            label: "ゲーム情報",
+            hideLabel: true,
+            valueComponent: <span>status: idle</span>,
+          },
+        ]}
       />,
     );
     expect((gameHtml.match(/<h3\b/g) || []).length).toBe(1);

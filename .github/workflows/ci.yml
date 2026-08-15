@@ -51,8 +51,6 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
 
-  # Branch ruleset requires a check named "lint". This branch has no Biome
-  # setup (main does); keep a successful job so required checks can complete.
   lint:
     needs: setup
     runs-on: ubuntu-latest
@@ -66,8 +64,9 @@ jobs:
           path: node_modules
           key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           fail-on-cache-miss: true
-      - name: Lint placeholder
-        run: echo "No Biome linter on this branch; lint check satisfied."
+      - name: Run Biome linter
+        run: |
+          bunx biome check .
 
   typecheck:
     needs: setup

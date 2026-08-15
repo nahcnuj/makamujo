@@ -11,20 +11,22 @@ type SpeechPayload =
   | { text?: string; nodes?: readonly string[] }
   | { speech?: string; text?: string; nodes?: readonly string[] };
 
-const normalizeSpeechText = (speech: SpeechPayload | undefined): string | undefined => {
-  if (typeof speech === 'string') {
+const normalizeSpeechText = (
+  speech: SpeechPayload | undefined,
+): string | undefined => {
+  if (typeof speech === "string") {
     return speech;
   }
 
-  if (!speech || typeof speech !== 'object') {
+  if (!speech || typeof speech !== "object") {
     return undefined;
   }
 
-  if ('text' in speech && typeof speech.text === 'string') {
+  if ("text" in speech && typeof speech.text === "string") {
     return speech.text;
   }
 
-  if ('speech' in speech && typeof speech.speech === 'string') {
+  if ("speech" in speech && typeof speech.speech === "string") {
     return speech.speech;
   }
 
@@ -32,11 +34,11 @@ const normalizeSpeechText = (speech: SpeechPayload | undefined): string | undefi
 };
 
 const isThanksInterrupt = (text: string): boolean =>
-  text.trimEnd().endsWith('ありがとうございます！');
+  text.trimEnd().endsWith("ありがとうございます！");
 
 const isTopicEnd = (text: string): boolean =>
-  text.trimEnd().endsWith('。') ||
-  text.trimEnd().endsWith('ありがとうございます！');
+  text.trimEnd().endsWith("。") ||
+  text.trimEnd().endsWith("ありがとうございます！");
 
 export function updateSpeechState(
   res: { speech?: SpeechPayload; silent?: boolean },
@@ -56,9 +58,9 @@ export function updateSpeechState(
   }
 
   if (res.speech !== undefined) {
-    const newSpeech = normalizeSpeechText(res.speech) ?? '';
+    const newSpeech = normalizeSpeechText(res.speech) ?? "";
 
-    if (newSpeech === '') {
+    if (newSpeech === "") {
       if (currentLines.length > 0) {
         setSpeechLines([]);
       }

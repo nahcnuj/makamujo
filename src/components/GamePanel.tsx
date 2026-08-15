@@ -1,9 +1,9 @@
 import { Games } from "../../lib/Agent/games";
-import { useAgentContext } from "../contexts/AgentContext";
 import { HighlightOnChange } from "../agt-compat";
+import { useAgentContext } from "../contexts/AgentContext";
 
 const formatDuration = (d: Date) =>
-  `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
+  `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}:${d.getSeconds().toString().padStart(2, "0")}`;
 // // Not implemented on an OBS browser...
 // new Intl.DurationFormat('ja-JP', {
 //   style: 'digital',
@@ -17,13 +17,17 @@ const formatDuration = (d: Date) =>
 //   hours: d.getHours(),
 // });
 
-const formatNumber = new Intl.NumberFormat('ja-JP').format;
+const formatNumber = new Intl.NumberFormat("ja-JP").format;
 
 export function GamePanel() {
   const { playing, streamState } = useAgentContext();
 
   const now = new Date();
-  const duration = new Date(now.getTime() - (streamState?.meta?.start ?? 0) + now.getTimezoneOffset() * 60_000);
+  const duration = new Date(
+    now.getTime() -
+      (streamState?.meta?.start ?? 0) +
+      now.getTimezoneOffset() * 60_000,
+  );
 
   // console.log(playing);
   const Component = playing ? Games[playing.name].Component : () => null;
@@ -38,29 +42,36 @@ export function GamePanel() {
           <div className="text-right">
             {streamState.meta.total.listeners > 0 && (
               <div>
-                <HighlightOnChange timeout={5_000} classNameOnChanged="text-yellow-300">
+                <HighlightOnChange
+                  timeout={5_000}
+                  classNameOnChanged="text-yellow-300"
+                >
                   {`${formatNumber(streamState.meta.total.listeners)}🙎`}
                 </HighlightOnChange>
               </div>
             )}
             {streamState.meta.total.ad > 0 && (
               <div>
-                <HighlightOnChange timeout={60_000} classNameOnChanged="text-yellow-300">
+                <HighlightOnChange
+                  timeout={60_000}
+                  classNameOnChanged="text-yellow-300"
+                >
                   {`${formatNumber(streamState.meta.total.ad)}📣`}
                 </HighlightOnChange>
               </div>
             )}
             {streamState.meta.total.gift > 0 && (
               <div>
-                <HighlightOnChange timeout={30_000} classNameOnChanged="text-yellow-300">
+                <HighlightOnChange
+                  timeout={30_000}
+                  classNameOnChanged="text-yellow-300"
+                >
                   {`${formatNumber(streamState.meta.total.gift)}🎁`}
                 </HighlightOnChange>
               </div>
             )}
             {streamState.meta.start && (
-              <div>
-                {`${formatDuration(duration)}⏱️`}
-              </div>
+              <div>{`${formatDuration(duration)}⏱️`}</div>
             )}
           </div>
         )}

@@ -19,7 +19,12 @@ describe("assemblePublishedPayload", () => {
       lastPublished: null,
       agentStreamState: {
         type: "live",
-        meta: { title: "t", url: "u", start: 1, total: { listeners: 3, gift: 0, ad: 0, comments: 5 } },
+        meta: {
+          title: "t",
+          url: "u",
+          start: 1,
+          total: { listeners: 3, gift: 0, ad: 0, comments: 5 },
+        },
       },
       streamer,
       speechState: { speech: "hi", silent: false },
@@ -28,7 +33,12 @@ describe("assemblePublishedPayload", () => {
 
     expect(payload.niconama).toEqual({
       type: "live",
-      meta: { title: "t", url: "u", start: 1, total: { listeners: 3, gift: 0, ad: 0, comments: 5 } },
+      meta: {
+        title: "t",
+        url: "u",
+        start: 1,
+        total: { listeners: 3, gift: 0, ad: 0, comments: 5 },
+      },
     });
     expect(payload.canSpeak).toBe(true);
     expect(payload.nGram).toBe(2);
@@ -62,9 +72,16 @@ describe("assemblePublishedPayload", () => {
       history: [],
     });
 
-    expect((payload.niconama as { meta?: { title?: string } }).meta?.title).toBe("published-title");
-    expect((payload.niconama as { meta?: { title?: string } }).meta?.title).not.toBe("agent-only");
-    expect(payload.replyTargetComment).toEqual({ text: "返信", pickedTopic: "返" });
+    expect(
+      (payload.niconama as { meta?: { title?: string } }).meta?.title,
+    ).toBe("published-title");
+    expect(
+      (payload.niconama as { meta?: { title?: string } }).meta?.title,
+    ).not.toBe("agent-only");
+    expect(payload.replyTargetComment).toEqual({
+      text: "返信",
+      pickedTopic: "返",
+    });
   });
 
   it("prefers base replyTarget over agent when both exist", () => {
@@ -81,7 +98,10 @@ describe("assemblePublishedPayload", () => {
       speechState: {},
       history: [],
     });
-    expect(payload.replyTargetComment).toEqual({ text: "from-base", pickedTopic: "b" });
+    expect(payload.replyTargetComment).toEqual({
+      text: "from-base",
+      pickedTopic: "b",
+    });
   });
 
   it("slices speechHistory to SSE size", () => {
@@ -101,7 +121,10 @@ describe("assemblePublishedPayload", () => {
 describe("extractMetaPostBody", () => {
   it("unwraps data when type is absent", () => {
     const { published, replyTargetComment } = extractMetaPostBody({
-      data: { niconama: { type: "live" }, replyTargetComment: { text: "x", pickedTopic: "y" } },
+      data: {
+        niconama: { type: "live" },
+        replyTargetComment: { text: "x", pickedTopic: "y" },
+      },
     });
     expect(published).toEqual({
       niconama: { type: "live" },
@@ -122,7 +145,14 @@ describe("extractMetaPostBody", () => {
 
 describe("attachReplyTargetToPublished", () => {
   it("attaches onto object published", () => {
-    expect(attachReplyTargetToPublished({ niconama: {} }, { text: "a", pickedTopic: "b" }))
-      .toEqual({ niconama: {}, replyTargetComment: { text: "a", pickedTopic: "b" } });
+    expect(
+      attachReplyTargetToPublished(
+        { niconama: {} },
+        { text: "a", pickedTopic: "b" },
+      ),
+    ).toEqual({
+      niconama: {},
+      replyTargetComment: { text: "a", pickedTopic: "b" },
+    });
   });
 });

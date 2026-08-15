@@ -37,7 +37,11 @@ const sightOf = (game: StubGame, url: string) => ({
   timestamp: Date.now(),
 });
 
-const applyToStub = (game: StubGame, action: Action.Action, home: string): boolean => {
+const applyToStub = (
+  game: StubGame,
+  action: Action.Action,
+  home: string,
+): boolean => {
   switch (action.name) {
     case "noop":
       return true;
@@ -66,7 +70,11 @@ const applyToStub = (game: StubGame, action: Action.Action, home: string): boole
     }
     case "press": {
       if (game.screen !== "playing") return false;
-      if (!["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp"].includes(action.key)) {
+      if (
+        !["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp"].includes(
+          action.key,
+        )
+      ) {
         return false;
       }
       game.drops += 1;
@@ -115,14 +123,22 @@ describe("vigilant-fiesta play-loop harness (solver + stub game)", () => {
         const action = next.value as Action.Action;
 
         if (action.name === "open") sawOpen = true;
-        if (action.name === "click" && action.target.type === "id" && action.target.id === "btn-start") {
+        if (
+          action.name === "click" &&
+          action.target.type === "id" &&
+          action.target.id === "btn-start"
+        ) {
           sawStart = true;
         }
         if (action.name === "press") {
           sawPress = true;
           if (sawRetry) pressesAfterRetry += 1;
         }
-        if (action.name === "click" && action.target.type === "id" && action.target.id === "btn-retry") {
+        if (
+          action.name === "click" &&
+          action.target.type === "id" &&
+          action.target.id === "btn-retry"
+        ) {
           sawRetry = true;
         }
 

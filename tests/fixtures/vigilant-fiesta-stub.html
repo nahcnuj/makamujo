@@ -11,7 +11,7 @@
   <section id="screen-playing" class="screen" data-screen="playing" hidden>
     <span id="score">Score: 0</span>
     <span id="level">Level: 1</span>
-    <div id="game-container" tabindex="0"></div>
+    <div id="game-container" ></div>
   </section>
   <div id="result-overlay" class="result-overlay" hidden>
     <p id="result-score">Score: 0</p>
@@ -56,12 +56,12 @@
         e.preventDefault();
         drops += 1;
         score = drops * 10;
-        scoreEl.textContent = "Score: " + score;
+        scoreEl.textContent = `Score: ${score}`;
         // After a few drops, force game over (deterministic for agent harness).
         if (drops >= 3) {
           hide(playing);
           show(result);
-          resultScore.textContent = "Score: " + score;
+          resultScore.textContent = `Score: ${score}`;
         }
       });
     })();
