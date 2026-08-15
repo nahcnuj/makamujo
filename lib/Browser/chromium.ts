@@ -158,7 +158,7 @@ export const create = async (
     width: 1280,
     height: 720,
   },
-): Promise<Browser> => {
+): Promise<Browser & { reload: () => Promise<void> }> => {
   const launchTimeout = Number.parseInt(
     process.env.CHROMIUM_LAUNCH_TIMEOUT ?? "60000",
     10,
