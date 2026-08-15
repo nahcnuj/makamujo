@@ -1,6 +1,6 @@
 /**
  * Optional Chromium integration against the local stub fixture.
- * Uses `it.skip` when Chromium cannot launch (evaluated before registration).
+ * Uses `it.skip` when Chromium cannot launch (must be known at registration time).
  * Deterministic coverage lives in:
  *   lib/Agent/games/work.nahcnuj.www/vigilant-fiesta/play-loop.harness.test.ts
  */
@@ -27,7 +27,7 @@ let baseUrl = "";
 let browser: import("playwright").Browser | undefined;
 
 // Launch Chromium before registering tests so we can use the standard `it.skip`
-// API (condition must be known at registration time — `beforeAll` is too late).
+// API (`beforeAll` is too late — skipIf is evaluated at registration).
 try {
   const { chromium } = await import("playwright");
   browser = await Promise.race([
@@ -69,18 +69,19 @@ afterAll(async () => {
   delete process.env.VIGILANT_FIESTA_FREE_TALK_MS;
 });
 
-const readScreenState = async (
-  page: import("playwright").Page,
-): Promise<{
+type ScreenState = {
   screen: "title" | "playing" | "result" | "unknown";
   score: number;
   level: number;
-  url: string;
-}> =>
+};
+
+const readScreenState = (
+  page: import("playwright").Page,
+): Promise<ScreenState> =>
   page.evaluate(() => {
     const isVisible = (el: HTMLElement | null) =>
       !!el && !el.hasAttribute("hidden");
-    let screen: "title" | "playing" | "result" | "unknown" = "unknown";
+    let screen: ScreenState["screen"] = "unknown";
     if (isVisible(document.getElementById("screen-title"))) screen = "title";
     else if (isVisible(document.getElementById("result-overlay")))
       screen = "result";
@@ -103,9 +104,69 @@ const readScreenState = async (
         10,
       ),
       level: 1,
-      url: location.href,
     };
   });
+
+const applyAction = async (
+  page: import("playwright").Page,
+  action: Action.Action,
+): Promise<boolean> => {
+  try {
+    if (action.name === "noop") {
+      await delay(25);
+      return true;
+    }
+    if (action.name === "open") {
+      // Establish origin, then inject fixture so scripts always run.
+      await page.goto(baseUrl, {
+        waitUntil: "domcontentloaded",
+        timeout: 10_000,
+      });
+      await page.setContent(fixtureHtml, { waitUntil: "load" });
+      await page
+        .locator("#btn-start")
+        .waitFor({ state: "attached", timeout: 5_000 });
+      return true;
+    }
+    if (action.name === "click" && action.target.type === "id") {
+      const id = action.target.id;
+      await page.evaluate((elementId) => {
+        const el = document.getElementById(elementId);
+        if (!el) throw new Error(`missing #${elementId}`);
+        el.dispatchEvent(
+          new MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+          }),
+        );
+      }, id);
+      if (id === "btn-start" || id === "btn-retry") {
+        const playing = await page.evaluate(() => {
+          const el = document.getElementById("screen-playing");
+          return !!el && !el.hasAttribute("hidden");
+        });
+        if (!playing) return false;
+      }
+      return true;
+    }
+    if (action.name === "press") {
+      await page.evaluate((key) => {
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      }, action.key);
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+};
 
 describe("vigilant-fiesta agent play loop (chromium + stub)", () => {
   itWithChromium(
@@ -136,74 +197,40 @@ describe("vigilant-fiesta agent play loop (chromium + stub)", () => {
           if (action.name === "open") sawOpen = true;
           if (
             action.name === "click" &&
-            (action as any).target?.id === "btn-start"
-          )
+            (action as { target?: { id?: string } }).target?.id === "btn-start"
+          ) {
             sawStart = true;
+          }
           if (action.name === "press") sawPress = true;
           if (
             action.name === "click" &&
-            (action as any).target?.id === "btn-retry"
-          )
+            (action as { target?: { id?: string } }).target?.id === "btn-retry"
+          ) {
             sawRetry = true;
-
-          try {
-            if (action.name === "noop") {
-              await delay(25);
-              const state = await readScreenState(page);
-              if (state.screen === "result") sawResultScreen = true;
-              if (sawRetry && state.screen === "playing")
-                returnedToPlayingAfterRetry = true;
-              // Always report home URL so away-detection does not re-open forever
-              // when setContent leaves location as about:blank.
-              event = { name: "idle", url: baseUrl, state };
-              if (
-                sawRetry &&
-                returnedToPlayingAfterRetry &&
-                sawPress &&
-                sawStart
-              )
-                break;
-              continue;
-            }
-
-            if (action.name === "open") {
-              await page.goto(action.url, {
-                waitUntil: "domcontentloaded",
-                timeout: 10_000,
-              });
-              if ((await page.locator("#btn-start").count()) === 0) {
-                await page.setContent(fixtureHtml, { waitUntil: "load" });
-              }
-              await page
-                .locator("#btn-start")
-                .waitFor({ state: "attached", timeout: 5_000 });
-            } else if (action.name === "click" && action.target.type === "id") {
-              const selector = `#${CSS.escape(action.target.id)}`;
-              await page.locator(selector).click({ timeout: 5_000 });
-              if (
-                action.target.id === "btn-start" ||
-                action.target.id === "btn-retry"
-              ) {
-                await page.waitForFunction(
-                  () => {
-                    const playing = document.getElementById("screen-playing");
-                    return !!playing && !playing.hasAttribute("hidden");
-                  },
-                  undefined,
-                  { timeout: 5_000 },
-                );
-              }
-            } else if (action.name === "press") {
-              await page
-                .locator("#game-container")
-                .focus()
-                .catch(() => {});
-              await page.keyboard.press(action.key);
-            }
-            event = { name: "result", succeeded: true, action };
-          } catch {
-            event = { name: "result", succeeded: false, action };
           }
+
+          if (action.name === "noop") {
+            await applyAction(page, action);
+            const state = await readScreenState(page);
+            if (state.screen === "result") sawResultScreen = true;
+            if (sawRetry && state.screen === "playing") {
+              returnedToPlayingAfterRetry = true;
+            }
+            // Report home URL so away-detection does not re-open forever.
+            event = { name: "idle", url: baseUrl, state };
+            if (
+              sawRetry &&
+              returnedToPlayingAfterRetry &&
+              sawPress &&
+              sawStart
+            ) {
+              break;
+            }
+            continue;
+          }
+
+          const ok = await applyAction(page, action);
+          event = { name: "result", succeeded: ok, action };
         }
 
         expect(sawOpen).toBe(true);

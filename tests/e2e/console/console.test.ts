@@ -238,7 +238,9 @@ test.describe("console", () => {
 
   // Legacy REST endpoint was replaced by `/console/api/ws` (WebSocket stream).
   test.skip("responds to GET /console/api/agent-state", async ({ request }) => {
-    const res = await request.get(`${CONSOLE_BASE_URL}/console/api/agent-state`);
+    const res = await request.get(
+      `${CONSOLE_BASE_URL}/console/api/agent-state`,
+    );
     expect(res.ok()).toBeTruthy();
   });
 
