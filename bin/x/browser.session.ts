@@ -10,11 +10,13 @@ import { createRetrySender } from "../../lib/Browser/socket";
 
 const AW_SNAP_CHECK_MS = 5_000;
 
-async function isAwSnapPage(browser: Awaited<ReturnType<typeof create>>): Promise<boolean> {
+async function isAwSnapPage(
+  browser: Awaited<ReturnType<typeof create>>,
+): Promise<boolean> {
   try {
     const title = await browser.evaluate(() => document.title || "");
-    const text = await browser.evaluate(
-      () => (document.body?.innerText || "").slice(0, 300),
+    const text = await browser.evaluate(() =>
+      (document.body?.innerText || "").slice(0, 300),
     );
     return (
       /aw,\s*snap/i.test(title ?? "") ||
