@@ -1,0 +1,81 @@
+- name: Deploy makamujo (clone, deps, console TLS)
+  hosts: vps
+  become: true
+  vars:
+    makamujo_src: /opt/src/makamujo
+    tls_dir: /opt/src/makamujo/var/tls
+  environment:
+    PATH: "/root/.bun/bin:/usr/local/bin:/usr/bin:/bin"
+  tasks:
+    - name: Ensure parent directory exists
+      ansible.builtin.file:
+        path: /opt/src
+        state: directory
+        mode: "0755"
+
+    - name: Clone makamujo repository
+      ansible.builtin.git:
+        repo: https://github.com/nahcnuj/makamujo.git
+        dest: "{{ makamujo_src }}"
+        version: legacy
+        force: true
+
+    - name: Install production dependencies with Bun
+      ansible.builtin.command:
+        cmd: bun install --production
+        chdir: "{{ makamujo_src }}"
+
+    - name: Install Playwright Chromium browser
+      ansible.builtin.command:
+        cmd: bunx playwright install chromium
+        chdir: "{{ makamujo_src }}"
+
+    - name: Install Playwright system dependencies
+      ansible.builtin.command:
+        cmd: bunx playwright install-deps chromium
+        chdir: "{{ makamujo_src }}"
+
+    - name: Ensure TLS directory exists
+      ansible.builtin.file:
+        path: "{{ tls_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Generate self-signed certificate if missing
+      ansible.builtin.command:
+        cmd: >
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048
+          -keyout {{ tls_dir }}/privkey.pem
+          -out {{ tls_dir }}/fullchain.pem
+          -subj /CN=162.43.32.60
+      args:
+        creates: "{{ tls_dir }}/fullchain.pem"
+
+    - name: Restrict private key permissions
+      ansible.builtin.file:
+        path: "{{ tls_dir }}/privkey.pem"
+        mode: "0600"
+
+    - name: Write console TLS env file
+      ansible.builtin.copy:
+        dest: "{{ makamujo_src }}/var/console-tls.env"
+        mode: "0644"
+        content: |
+          CONSOLE_TLS_CERT={{ tls_dir }}/fullchain.pem
+          CONSOLE_TLS_KEY={{ tls_dir }}/privkey.pem
+
+    # git force-reset restores empty service.json key; re-apply from vault when present.
+    - name: Re-apply Niconama stream key after deploy
+      ansible.builtin.include_tasks: tasks/write_obs_stream_key.yml
+      when:
+        - niconama_stream_key is defined
+        - (niconama_stream_key | length) > 0
+
+    - name: Show next step
+      ansible.builtin.debug:
+        msg: >-
+          cd {{ makamujo_src }} && ./bin/stop;
+          set -a && . ./var/console-tls.env && set +a && ./bin/start
+          {% if niconama_stream_key is not defined or (niconama_stream_key | length) == 0 %}
+          ; also run playbooks/0_secrets.yml if the OBS stream key must be set
+          {% endif %}

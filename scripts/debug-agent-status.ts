@@ -1,4 +1,8 @@
-import { createMockAgentStateResponse, createAgentStatusRows, createAgentStatusSections } from "../console/src/AgentStatus";
+import {
+  createAgentStatusRows,
+  createAgentStatusSections,
+  createMockAgentStateResponse,
+} from "../console/src/AgentStatus";
 
 (async () => {
   try {

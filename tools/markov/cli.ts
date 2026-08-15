@@ -1,6 +1,6 @@
 ﻿#!/usr/bin/env bun
+import { copyFileSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { writeFileSync, copyFileSync } from "node:fs";
 
 function expandInPlaceArgs(argv: string[]): string[] {
   const out: string[] = [];
@@ -32,7 +32,6 @@ const printCsv = (header: string[], rows: (string | number)[][]) => {
     console.log(row.map(csvEscape).join(","));
   }
 };
-
 
 function splitPhrase(phrase: string, delimiter: string): string[] {
   const d = delimiter || " ";
@@ -90,26 +89,34 @@ switch (cmd) {
       console.error("phrase is empty");
       process.exit(1);
     }
-    
-    const deltaExplicit = Bun.argv.slice(2).some(
-      (a) => a === "--delta" || a.startsWith("--delta="),
-    );
+
+    const deltaExplicit = Bun.argv
+      .slice(2)
+      .some((a) => a === "--delta" || a.startsWith("--delta="));
     if (values.purge && deltaExplicit) {
       console.error("--purge and --delta cannot be used together");
       process.exit(1);
     }
     const delta = Math.max(1, parseInt(values.delta ?? "1", 10) || 1);
     const model = load(modelPath);
-    const before = JSON.parse(model.toJSON()).model as Record<string, Record<string, number>>;
+    const before = JSON.parse(model.toJSON()).model as Record<
+      string,
+      Record<string, number>
+    >;
     const updated = model.decrementPhrase(
       tokens,
       values.purge ? { purge: true } : { delta },
     );
-    const after = JSON.parse(updated.toJSON()).model as Record<string, Record<string, number>>;
+    const after = JSON.parse(updated.toJSON()).model as Record<
+      string,
+      Record<string, number>
+    >;
 
     const ctxLabel = (s: string) => vis(s) || "(BOS)";
     let changed = 0;
-    console.error(`decrement-phrase ${values.purge ? "purge" : `delta=${delta}`} tokens=${JSON.stringify(tokens)}`);
+    console.error(
+      `decrement-phrase ${values.purge ? "purge" : `delta=${delta}`} tokens=${JSON.stringify(tokens)}`,
+    );
     for (const k of new Set([...Object.keys(before), ...Object.keys(after)])) {
       const ka = before[k] ?? {};
       const kb = after[k] ?? {};
@@ -163,7 +170,9 @@ switch (cmd) {
   case "search": {
     const [modelPath, query] = rest;
     if (!modelPath || query == null) usage();
-    const hits = load(modelPath).tokenStats().filter((t) => t.token.includes(query));
+    const hits = load(modelPath)
+      .tokenStats()
+      .filter((t) => t.token.includes(query));
     printCsv(
       ["token", "asFrom", "asToWeight"],
       hits.map((s) => [vis(s.token), s.asFrom, s.asToWeight]),
@@ -173,8 +182,12 @@ switch (cmd) {
   case "transitions": {
     const [modelPath, word] = rest;
     if (!modelPath || word == null) usage();
-    const t = load(modelPath).transitionsOf(splitPhrase(word, values.delimiter ?? " ").join(" "));
-    const normalized = splitPhrase(word, values.delimiter ?? " ").join("\u0000");
+    const t = load(modelPath).transitionsOf(
+      splitPhrase(word, values.delimiter ?? " ").join(" "),
+    );
+    const normalized = splitPhrase(word, values.delimiter ?? " ").join(
+      "\u0000",
+    );
     printCsv(
       ["direction", "context", "other", "weight"],
       [

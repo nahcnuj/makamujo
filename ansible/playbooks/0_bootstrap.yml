@@ -1,0 +1,17 @@
+- name: Bootstrap new VPS for makamujo
+  hosts: vps
+  become: true
+  tasks:
+    - name: apt update and upgrade
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+        cache_valid_time: 3600
+
+    - name: Install base packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - git
+        state: present

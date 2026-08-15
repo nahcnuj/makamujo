@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const tmpDir = join(import.meta.dir, "../../var/tmp-markov-cli-test");
@@ -12,17 +12,24 @@ describe("markov cli transitions", () => {
       modelPath,
       JSON.stringify({
         model: {
-          "": { "パンティー": 5 },
-          "パンティー": { "。": 10 },
+          "": { パンティー: 5 },
+          パンティー: { "。": 10 },
           ["ベージュ" + String.fromCharCode(0) + "パンティー"]: { "。": 9 },
-          "の": { "パンティー": 4 },
+          の: { パンティー: 4 },
         },
         corpus: [],
       }),
     );
 
     const proc = Bun.spawn(
-      ["bun", "run", "tools/markov/cli.ts", "transitions", modelPath, "パンティー"],
+      [
+        "bun",
+        "run",
+        "tools/markov/cli.ts",
+        "transitions",
+        modelPath,
+        "パンティー",
+      ],
       { stdout: "pipe", stderr: "pipe" },
     );
     const stdout = await new Response(proc.stdout).text();
@@ -165,7 +172,9 @@ describe("markov cli decrement-phrase -iSUFFIX", () => {
     expect(stderr).toContain("backup:");
     expect(stderr).toContain("wrote:");
 
-    const backup = JSON.parse(require("fs").readFileSync(modelPath + ".bak", "utf8"));
+    const backup = JSON.parse(
+      require("fs").readFileSync(modelPath + ".bak", "utf8"),
+    );
     expect(backup.model[""].beige).toBe(2);
 
     const saved = JSON.parse(require("fs").readFileSync(modelPath, "utf8"));
@@ -182,7 +191,7 @@ describe("markov cli search visibility", () => {
       modelPath,
       JSON.stringify({
         model: {
-          "": { "パンティー": 1 },
+          "": { パンティー: 1 },
           ["ベージュ" + String.fromCharCode(0) + "パンティー"]: { "。": 2 },
         },
         corpus: [],
@@ -326,7 +335,11 @@ describe("markov cli tokens", () => {
       const stdout = await new Response(proc.stdout).text();
       const code = await proc.exited;
       expect(code).toBe(0);
-      return stdout.trim().split("\n").slice(1).map((l) => l.split(",")[0]);
+      return stdout
+        .trim()
+        .split("\n")
+        .slice(1)
+        .map((l) => l.split(",")[0]);
     };
 
     const byToken = await run(["--sort", "token"]);
@@ -348,7 +361,15 @@ describe("markov cli tokens", () => {
       JSON.stringify({ model: { "": { a: 1 } }, corpus: [] }),
     );
     const proc = Bun.spawn(
-      ["bun", "run", "tools/markov/cli.ts", "tokens", modelPath, "--sort", "nope"],
+      [
+        "bun",
+        "run",
+        "tools/markov/cli.ts",
+        "tokens",
+        modelPath,
+        "--sort",
+        "nope",
+      ],
       { stdout: "pipe", stderr: "pipe" },
     );
     const code = await proc.exited;

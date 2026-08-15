@@ -1,9 +1,14 @@
-import { test, expect } from "bun:test";
-import { Box, Container, Layout, CharacterSprite } from "./agt-compat";
+import { expect, test } from "bun:test";
+import { Box, CharacterSprite, Container, Layout } from "./agt-compat";
 
 test("Box returns a Hono JSX element wrapper", () => {
   const element = (
-    <Box borderColor="border-emerald-300" borderWidth="border-8" borderStyle="border-double" rounded="rounded-xl">
+    <Box
+      borderColor="border-emerald-300"
+      borderWidth="border-8"
+      borderStyle="border-double"
+      rounded="rounded-xl"
+    >
       test
     </Box>
   ) as any;
@@ -32,7 +37,11 @@ test("Layout returns a Hono JSX element wrapper with three children", () => {
 
 test("CharacterSprite returns a Hono JSX element wrapper", () => {
   const element = (
-    <CharacterSprite src="/nc433974.png" height="50" className="transform-[scale(-1,1)]" />
+    <CharacterSprite
+      src="/nc433974.png"
+      height="50"
+      className="transform-[scale(-1,1)]"
+    />
   ) as any;
 
   expect(element.tag).toBe(CharacterSprite);

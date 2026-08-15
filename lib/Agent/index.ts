@@ -2,7 +2,7 @@ import type { AgentComment } from "automated-gameplay-transmitter";
 import { AgentSession } from "../application/AgentSession";
 import { CommentApplicationService } from "../application/CommentApplicationService";
 import { GameplayApplicationService } from "../application/GameplayApplicationService";
-import { SpeechQueue, type SpeechEvent } from "../application/SpeechQueue";
+import { type SpeechEvent, SpeechQueue } from "../application/SpeechQueue";
 import { StreamApplicationService } from "../application/StreamApplicationService";
 import type { TalkModelGenerateResult as AppTalkModelGenerateResult } from "../application/types";
 import { evaluateSpeechable } from "../domain/broadcasting/SilencePolicy";
@@ -15,7 +15,6 @@ export const SILENCE_THRESHOLD_MS = 5 * 60 * 1_000; // 5 minutes
  */
 export class MakaMujo {
   #talkModel: TalkModel;
-  #tts: TTS;
   #session = new AgentSession();
   #speechQueue: SpeechQueue;
   #comments: CommentApplicationService;
@@ -34,14 +33,18 @@ export class MakaMujo {
 
   constructor(talkModel: TalkModel, tts: TTS) {
     this.#talkModel = talkModel;
-    this.#tts = tts;
     this.#speechQueue = new SpeechQueue(tts);
 
     const speechPort = {
-      speech: (generated?: AppTalkModelGenerateResult) => this.speech(generated),
+      speech: (generated?: AppTalkModelGenerateResult) =>
+        this.speech(generated),
     };
 
-    this.#comments = new CommentApplicationService(this.#session, talkModel, speechPort);
+    this.#comments = new CommentApplicationService(
+      this.#session,
+      talkModel,
+      speechPort,
+    );
     this.#stream = new StreamApplicationService(
       this.#session,
       speechPort,
@@ -52,6 +55,8 @@ export class MakaMujo {
       this.#session,
       () => this.speechable,
       () => this.#notifyGameStateChangeAsync(),
+      speechPort,
+      talkModel,
       (sightState) => this.#onGameSight(sightState),
     );
   }
@@ -60,7 +65,9 @@ export class MakaMujo {
     const raw = sightState.newsLines;
     const lines = Array.isArray(raw)
       ? raw
-          .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+          .filter(
+            (x): x is string => typeof x === "string" && x.trim().length > 0,
+          )
           .map((s) => s.normalize("NFC").trim())
       : [];
     this.#currentNewsLines = lines;
@@ -103,7 +110,9 @@ export class MakaMujo {
 
     // News: same as comment — generate(topic) then speech(generated) (no strip).
     if (pending.length === 0 && this.#currentNewsLines.length > 0) {
-      const topic = pickRandomFrom(segmentWords(this.#currentNewsLines.join("")));
+      const topic = pickRandomFrom(
+        segmentWords(this.#currentNewsLines.join("")),
+      );
       if (topic) {
         await this.speech(
           this.#talkModel.generate(topic, session.currentNGramSize),
@@ -121,7 +130,9 @@ export class MakaMujo {
     const event: SpeechEvent = (() => {
       if (typeof ret === "string") {
         const text =
-          shouldStripSeed && ret.startsWith(start) ? ret.slice(start.length) : ret;
+          shouldStripSeed && ret.startsWith(start)
+            ? ret.slice(start.length)
+            : ret;
         return { text };
       }
       const rawText = ret.text;
@@ -192,7 +203,11 @@ export class MakaMujo {
     const listenersSnapshot = [...this.#gameStateChangeListeners];
     queueMicrotask(() => {
       for (const listener of listenersSnapshot) {
-        try { listener(); } catch { /* ignore */ }
+        try {
+          listener();
+        } catch {
+          /* ignore */
+        }
       }
     });
   }
@@ -211,7 +226,8 @@ export class MakaMujo {
       streamLive: session.streamState !== undefined,
       lastCommentAt: session.lastCommentAt,
       listenersStaleSince: session.listenersStaleSince,
-      hasPromptedCommentForViewerIncrease: session.hasPromptedCommentForViewerIncrease,
+      hasPromptedCommentForViewerIncrease:
+        session.hasPromptedCommentForViewerIncrease,
       browserStateName: session.browserState?.name,
       nowMs: Date.now(),
       thresholdMs: SILENCE_THRESHOLD_MS,
@@ -251,7 +267,9 @@ export class MakaMujo {
   }
 }
 
-export type TalkModelGenerateResult = string | { text: string; nodes?: string[] };
+export type TalkModelGenerateResult =
+  | string
+  | { text: string; nodes?: string[] };
 
 export interface TalkModel {
   generate(start?: string, nGram?: number): TalkModelGenerateResult;

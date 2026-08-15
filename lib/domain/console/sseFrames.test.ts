@@ -10,7 +10,10 @@ describe("findSseBoundary", () => {
   it("finds LF and CRLF boundaries", () => {
     // "data: a" is 7 chars; boundary starts at index of first \n of \n\n
     expect(findSseBoundary("data: a\n\nrest")).toEqual({ end: 7, length: 2 });
-    expect(findSseBoundary("data: a\r\n\r\nrest")).toEqual({ end: 7, length: 4 });
+    expect(findSseBoundary("data: a\r\n\r\nrest")).toEqual({
+      end: 7,
+      length: 4,
+    });
   });
 
   it("prefers the earlier boundary when both exist", () => {
@@ -25,7 +28,9 @@ describe("findSseBoundary", () => {
 
 describe("extractCompleteSseFrames", () => {
   it("emits complete frames and keeps incomplete tail", () => {
-    const { frames, rest } = extractCompleteSseFrames("data: HELLO\n\ndata: PARTIAL");
+    const { frames, rest } = extractCompleteSseFrames(
+      "data: HELLO\n\ndata: PARTIAL",
+    );
     expect(frames).toEqual(["data: HELLO\n\n"]);
     expect(rest).toBe("data: PARTIAL");
   });
@@ -43,7 +48,9 @@ describe("extractSseDataPayload / drainSseDataPayloads", () => {
   });
 
   it("drains complete events for sink-style consumers", () => {
-    const { payloads, rest } = drainSseDataPayloads("data: HELLO\n\ndata: MORE");
+    const { payloads, rest } = drainSseDataPayloads(
+      "data: HELLO\n\ndata: MORE",
+    );
     expect(payloads).toEqual(["HELLO"]);
     expect(rest).toBe("data: MORE");
   });

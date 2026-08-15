@@ -43,8 +43,14 @@ export type CommentPromptInput = {
 };
 
 /** Pure decision for viewer-increase comment prompt (side effects stay in onAir). */
-export const shouldPromptCommentAfterViewerIncrease = (input: CommentPromptInput): boolean => {
-  return input.hadCommentBefore && input.commentsStale && !input.hasPromptedCommentForViewerIncrease;
+export const shouldPromptCommentAfterViewerIncrease = (
+  input: CommentPromptInput,
+): boolean => {
+  return (
+    input.hadCommentBefore &&
+    input.commentsStale &&
+    !input.hasPromptedCommentForViewerIncrease
+  );
 };
 
 export const isCommentsStale = (
@@ -52,5 +58,8 @@ export const isCommentsStale = (
   nowMs: number,
   thresholdMs: number,
 ): boolean => {
-  return lastCommentAt === undefined || (nowMs - lastCommentAt.getTime()) >= thresholdMs;
+  return (
+    lastCommentAt === undefined ||
+    nowMs - lastCommentAt.getTime() >= thresholdMs
+  );
 };

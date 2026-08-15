@@ -23,8 +23,12 @@ describe("SystemSpeechScripts", () => {
   });
 
   it("formats gift thanks with anonymity branch", () => {
-    expect(formatGiftThanks(undefined, true)).toBe("ギフトありがとうございます！");
-    expect(formatGiftThanks("花子", false)).toBe("花子さん、ギフトありがとうございます！");
+    expect(formatGiftThanks(undefined, true)).toBe(
+      "ギフトありがとうございます！",
+    );
+    expect(formatGiftThanks("花子", false)).toBe(
+      "花子さん、ギフトありがとうございます！",
+    );
   });
 
   it("exposes fixed-length cruise and end scripts", () => {

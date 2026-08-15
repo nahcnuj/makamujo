@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { inferNGramSize, inferNGramSizeRaw, INITIAL_COMMENT_NUMBER, initialNGramSize } from "./NGramPolicy";
+import {
+  INITIAL_COMMENT_NUMBER,
+  inferNGramSize,
+  inferNGramSizeRaw,
+  initialNGramSize,
+} from "./NGramPolicy";
 
 describe("NGramPolicy", () => {
   it("matches legacy boundaries for representative comment numbers", () => {

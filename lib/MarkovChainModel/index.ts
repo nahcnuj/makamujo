@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { MarkovModel } from "automated-gameplay-transmitter";
 import type { TalkModel } from "../Agent";
 
-const jaJP = new Intl.Locale('ja-JP');
+const _jaJP = new Intl.Locale("ja-JP");
 
 type WeightedCandidates = Record<string, number>;
 
@@ -10,35 +10,34 @@ export type DecrementPhraseOptions =
   | { readonly purge: true; readonly delta?: never }
   | { readonly purge?: false; readonly delta?: number };
 
-
 type Distribution = {
   /** initial word candidates */
-  '': WeightedCandidates
+  "": WeightedCandidates;
 
-  [k: string]: WeightedCandidates
+  [k: string]: WeightedCandidates;
 };
 const DEFAULT_MAX_LEARN_CONTEXT = 8;
 
-const normalizeNGram = (nGram: number): number => Math.max(1, Math.floor(nGram));
+const normalizeNGram = (nGram: number): number =>
+  Math.max(1, Math.floor(nGram));
 
 /** Ensures text passed to AGT learn API is always a single Japanese sentence terminator suffix. */
-const normalizeLearnText = (text: string): `${string}。` => (
-  `${text.replace(/。+$/u, '')}。` satisfies `${string}。`
-);
+const normalizeLearnText = (text: string): `${string}。` =>
+  `${text.replace(/。+$/u, "")}。` satisfies `${string}。`;
 
 /**
  * A word-level Markov chain model.
  * The model provides some helper methods to generate something to talk or replies and learn new sentences.
  * When learned a new sentence, the model is modified itself and writes the modified model out to the given file.
- * 
+ *
  * Splitting into words depends on `Intl.Segmenter`.
  *
  * @example
  * const model = new MarkovChainModel();
- * 
+ *
  * model.learn('こんにちは。');
  * console.log(JSON.stringify(model.json, null, 2));
- * 
+ *
  * const text = model.generate('', 2);
  * console.log(text);
  */
@@ -49,14 +48,16 @@ export class MarkovChainModel implements TalkModel {
   /** Rehydrates MarkovChainModel from AGT JSON snapshot with validated context limit. */
   static #fromJson(
     json: {
-      model?: Distribution
-      corpus?: string[]
+      model?: Distribution;
+      corpus?: string[];
     },
     maxLearnContext = DEFAULT_MAX_LEARN_CONTEXT,
   ): MarkovChainModel {
     const validatedMaxLearnContext = Math.max(1, Math.floor(maxLearnContext));
-    const dist = json.model ?? { '': { '。': 1 } };
-    const instance = new MarkovChainModel(dist, { maxLearnContext: validatedMaxLearnContext });
+    const dist = json.model ?? { "": { "。": 1 } };
+    const instance = new MarkovChainModel(dist, {
+      maxLearnContext: validatedMaxLearnContext,
+    });
     instance.#model = MarkovModel.create(
       dist,
       json.corpus ?? [],
@@ -66,19 +67,13 @@ export class MarkovChainModel implements TalkModel {
   }
 
   constructor(
-    dist: Distribution = { '': { '。': 1 } },
-    {
-      maxLearnContext,
-    } = {
+    dist: Distribution = { "": { "。": 1 } },
+    { maxLearnContext } = {
       maxLearnContext: DEFAULT_MAX_LEARN_CONTEXT,
     },
   ) {
     this.#maxLearnContext = Math.max(1, Math.floor(maxLearnContext));
-    this.#model = MarkovModel.create(
-      dist,
-      [],
-      this.#maxLearnContext,
-    );
+    this.#model = MarkovModel.create(dist, [], this.#maxLearnContext);
   }
 
   /**
@@ -90,15 +85,19 @@ export class MarkovChainModel implements TalkModel {
    *          underlying AGT model supports it.
    */
   generate(
-    start: string = '',
+    start: string = "",
     nGram = 1,
   ): string | { text: string; nodes?: string[] } {
-    const result = this.#model.gen(start, normalizeNGram(nGram), { trace: true });
-    if (typeof result === 'string') {
+    const result = this.#model.gen(start, normalizeNGram(nGram), {
+      trace: true,
+    });
+    if (typeof result === "string") {
       return result;
     }
 
-    const nodes = Array.isArray(result.nodes) ? result.nodes.map(String) : undefined;
+    const nodes = Array.isArray(result.nodes)
+      ? result.nodes.map(String)
+      : undefined;
     const startToken = start.trim();
     return {
       text: result.text,
@@ -116,11 +115,13 @@ export class MarkovChainModel implements TalkModel {
   }
 
   static fromFile(path: string): MarkovChainModel {
-    const {
-      model = { '': { '。': 1 } },
-      corpus = [],
-    } = JSON.parse(readFileSync(path, { encoding: 'utf-8' }));
-    return MarkovChainModel.#fromJson({ model, corpus }, DEFAULT_MAX_LEARN_CONTEXT);
+    const { model = { "": { "。": 1 } }, corpus = [] } = JSON.parse(
+      readFileSync(path, { encoding: "utf-8" }),
+    );
+    return MarkovChainModel.#fromJson(
+      { model, corpus },
+      DEFAULT_MAX_LEARN_CONTEXT,
+    );
   }
 
   toJSON(): string {
@@ -133,7 +134,10 @@ export class MarkovChainModel implements TalkModel {
   ): MarkovChainModel {
     if (tokens.length === 0) return this;
 
-    const current = this.#model.json as { model: Distribution; corpus: string[] };
+    const current = this.#model.json as {
+      model: Distribution;
+      corpus: string[];
+    };
     const model = current.model;
     const corpus = current.corpus;
     const next: Distribution = { "": {} };
@@ -239,11 +243,17 @@ export class MarkovChainModel implements TalkModel {
     }
 
     if (!next[""] || Object.keys(next[""]).length === 0) next[""] = { "。": 1 };
-    return MarkovChainModel.#fromJson({ model: next, corpus }, this.#maxLearnContext);
+    return MarkovChainModel.#fromJson(
+      { model: next, corpus },
+      this.#maxLearnContext,
+    );
   }
 
   tokenStats(): { token: string; asFrom: number; asToWeight: number }[] {
-    const { model } = this.#model.json as { model: Distribution; corpus: string[] };
+    const { model } = this.#model.json as {
+      model: Distribution;
+      corpus: string[];
+    };
     const map = new Map();
     for (const [from, cands] of Object.entries(model)) {
       if (from !== "") {
@@ -259,7 +269,7 @@ export class MarkovChainModel implements TalkModel {
     }
     return [...map.entries()]
       .map(([token, v]) => ({ token, ...v }))
-      .sort((a, b) => (b.asToWeight + b.asFrom) - (a.asToWeight + a.asFrom));
+      .sort((a, b) => b.asToWeight + b.asFrom - (a.asToWeight + a.asFrom));
   }
 
   transitionsOf(wordOrPhrase: string): {
@@ -267,12 +277,16 @@ export class MarkovChainModel implements TalkModel {
     asTo: { from: string; weight: number }[];
     fromContexts: { context: string; next: string; weight: number }[];
   } {
-    const { model } = this.#model.json as { model: Distribution; corpus: string[] };
+    const { model } = this.#model.json as {
+      model: Distribution;
+      corpus: string[];
+    };
     const key = wordOrPhrase.trim().split(/\s+/).filter(Boolean).join("\u0000");
     const needle = key.split("\u0000");
     const asFrom = { ...(model[key] ?? {}) };
     const asTo: { from: string; weight: number }[] = [];
-    const fromContexts: { context: string; next: string; weight: number }[] = [];
+    const fromContexts: { context: string; next: string; weight: number }[] =
+      [];
 
     const contextContains = (from: string): boolean => {
       if (from === key) return true;
@@ -287,7 +301,8 @@ export class MarkovChainModel implements TalkModel {
     };
 
     for (const [from, cands] of Object.entries(model)) {
-      const toWeight = cands[key] ?? (needle.length === 1 ? cands[needle[0]!] : undefined);
+      const toWeight =
+        cands[key] ?? (needle.length === 1 ? cands[needle[0]!] : undefined);
       if (toWeight != null) asTo.push({ from, weight: toWeight });
 
       if (contextContains(from)) {
@@ -300,5 +315,4 @@ export class MarkovChainModel implements TalkModel {
     asTo.sort((a, b) => b.weight - a.weight);
     return { asFrom, asTo, fromContexts };
   }
-
-};
+}

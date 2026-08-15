@@ -2,12 +2,12 @@ import { describe, expect, it } from "bun:test";
 import {
   FADE_OUT_MS,
   HIDDEN_FADING,
-  SHOW_THEN_FADE,
-  SPRITE_HIDE_THRESHOLD_MS,
-  VISIBLE,
   isListenersStale,
   onListenersUpdate,
+  SHOW_THEN_FADE,
+  SPRITE_HIDE_THRESHOLD_MS,
   spriteAwayStyle,
+  VISIBLE,
   visibilityFromSilenceClock,
 } from "./spriteVisibility";
 

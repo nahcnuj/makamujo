@@ -33,10 +33,13 @@
  * - w = 5.9  -> 'c' (5.9 < 6 = 1+2+3)
  * - w >= 6.0 -> 'c' ( w >= 6 = 1+2+3)
  */
-export const choose = (cands: [string, number][], w: number): string => cands.reduce(([current, acc], [next, weight]) => {
-  if (acc > w) {
-    return [current, acc];
-  }
-  return [next, acc + weight];
-}, ['', 0])[0];
-
+export const choose = (cands: [string, number][], w: number): string =>
+  cands.reduce(
+    ([current, acc], [next, weight]) => {
+      if (acc > w) {
+        return [current, acc];
+      }
+      return [next, acc + weight];
+    },
+    ["", 0],
+  )[0];

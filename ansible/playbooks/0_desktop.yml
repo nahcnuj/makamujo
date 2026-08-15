@@ -1,0 +1,243 @@
+- name: Install X11 desktop, streaming display :10, and RDP to same display
+  hosts: vps
+  become: true
+  tasks:
+
+    - name: Ensure Debian contrib component is enabled (hts-voice)
+      ansible.builtin.shell: |
+        set -e
+        if grep -Rqs contrib /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then
+          exit 0
+        fi
+        if [ -f /etc/apt/sources.list.d/debian.sources ]; then
+          sed -i 's/Components: main$/Components: main contrib/' /etc/apt/sources.list.d/debian.sources
+          sed -i 's/Components: main /Components: main contrib /' /etc/apt/sources.list.d/debian.sources
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Install desktop packages (X11 / XFCE / RDP)
+      ansible.builtin.apt:
+        name:
+          - xorg
+          - xfce4
+          - xfce4-goodies
+          - xrdp
+          - xvfb
+          - x11vnc
+          - xdotool
+          - x11-xserver-utils
+          - dbus-x11
+        state: present
+        update_cache: true
+
+    - name: Install audio packages (PipeWire)
+      ansible.builtin.apt:
+        name:
+          - pipewire
+          - pipewire-audio
+          - pipewire-pulse
+          - wireplumber
+          - pulseaudio-utils
+          - pavucontrol
+          - alsa-utils
+        state: present
+
+    - name: Install browser and fonts
+      ansible.builtin.apt:
+        name:
+          - chromium
+          - fonts-ipafont-gothic
+          - fonts-ipafont-mincho
+          - fonts-noto-cjk
+        state: present
+
+    - name: Install TTS packages
+      ansible.builtin.apt:
+        name:
+          - open-jtalk
+          - open-jtalk-mecab-naist-jdic
+          - hts-voice-nitech-jp-atr503-m001
+        state: present
+
+    - name: Install makamujo Xvfb unit (:10 2560x1440)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/makamujo-xvfb.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Makamujo streaming display :10 (2560x1440)
+          After=network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/Xvfb :10 -screen 0 2560x1440x24 -ac +extension GLX +render -noreset
+          Restart=on-failure
+          RestartSec=2
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Install makamujo x11vnc unit (share :10 on localhost:5900)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/makamujo-x11vnc.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Makamujo x11vnc on :10
+          After=makamujo-xvfb.service
+          Requires=makamujo-xvfb.service
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/x11vnc -display :10 -forever -shared -rfbport 5900 -localhost -nopw -xkb
+          Restart=on-failure
+          RestartSec=2
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Enable and start makamujo-xvfb
+      ansible.builtin.systemd:
+        name: makamujo-xvfb
+        enabled: true
+        state: restarted
+        daemon_reload: true
+
+    - name: Enable and start makamujo-x11vnc
+      ansible.builtin.systemd:
+        name: makamujo-x11vnc
+        enabled: true
+        state: restarted
+        daemon_reload: true
+
+    - name: Configure xrdp for Makamujo-only session (:10 via x11vnc)
+      ansible.builtin.copy:
+        dest: /etc/xrdp/xrdp.ini
+        mode: "0644"
+        content: |
+          [Globals]
+          ; ini_version=1
+          bitmap_cache=true
+          bitmap_compression=true
+          port=3389
+          crypt_level=low
+          channel_code=1
+          max_bpp=24
+          use_compression=yes
+          kill_disconnected=false
+          tcp_nodelay=true
+          tcp_keepalive=true
+          security_layer=negotiate
+          allow_channels=true
+          allow_multimon=true
+          author_pubkey=
+          enable_token_login=false
+          use_fastpath=both
+          ssl_protocols=TLSv1.2, TLSv1.3
+
+          [Logging]
+          LogFile=xrdp.log
+          LogLevel=INFO
+          EnableSyslog=true
+
+          [Channels]
+          rdpdr=true
+          rdpsnd=true
+          drdynvc=true
+          cliprdr=true
+          rail=true
+          xrdpvr=true
+
+          ; Only one session: the streaming desk (:10)
+          [Makamujo]
+          name=Makamujo
+          lib=libvnc.so
+          ip=127.0.0.1
+          port=5900
+          username=ask
+          password=ask
+
+    - name: Prefer XFCE when a local X session is used
+      ansible.builtin.copy:
+        dest: /etc/xrdp/startwm.sh
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          if test -r /etc/profile; then
+            . /etc/profile
+          fi
+          export XDG_SESSION_TYPE=x11
+          export XDG_CURRENT_DESKTOP=XFCE
+          unset DBUS_SESSION_BUS_ADDRESS
+          exec dbus-launch --exit-with-session startxfce4
+
+    - name: Install makamujo-pipewire start script
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../bin/makamujo-pipewire"
+        dest: /usr/local/bin/makamujo-pipewire
+        mode: "0755"
+      notify: Restart makamujo-pipewire
+
+    - name: Install makamujo PipeWire unit (root headless audio)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/makamujo-pipewire.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Makamujo PipeWire stack for headless streaming
+          After=network.target makamujo-xvfb.service
+          Wants=makamujo-xvfb.service
+
+          [Service]
+          Type=simple
+          Environment=XDG_RUNTIME_DIR=/run/user/0
+          Environment=HOME=/root
+          Environment=DISPLAY=:10
+          Environment=PULSE_RUNTIME_PATH=/run/user/0/pulse
+          Environment=PIPEWIRE_RUNTIME_DIR=/run/user/0
+          Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus
+          ExecStartPre=/bin/mkdir -p /run/user/0/pulse
+          ExecStartPre=/bin/chmod 700 /run/user/0
+          ExecStart=/usr/local/bin/makamujo-pipewire
+          Restart=on-failure
+          RestartSec=5
+          KillMode=control-group
+          TimeoutStopSec=20
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Restart makamujo-pipewire
+
+    - name: Enable and ensure makamujo-pipewire is started
+      ansible.builtin.systemd:
+        name: makamujo-pipewire
+        enabled: true
+        state: restarted
+        daemon_reload: true
+
+    - name: Configure environment variables for PulseAudio (pactl)
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../bin/makamujo-audio.sh"
+        dest: /etc/profile.d/makamujo-audio.sh
+        mode: "0644"
+
+    - name: Enable and start xrdp
+      ansible.builtin.service:
+        name: xrdp
+        state: restarted
+        enabled: true
+
+    - name: Enable and start xrdp-sesman
+      ansible.builtin.service:
+        name: xrdp-sesman
+        state: restarted
+        enabled: true
+
+  handlers:
+    - name: Restart makamujo-pipewire
+      ansible.builtin.systemd:
+        name: makamujo-pipewire
+        state: restarted
+        daemon_reload: true

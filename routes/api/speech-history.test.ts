@@ -28,10 +28,15 @@ describe("GET /api/speech-history", () => {
   });
 
   it("returns items before the given id", async () => {
-    const req = new Request("http://localhost/api/speech-history?before=speech-3&limit=10");
+    const req = new Request(
+      "http://localhost/api/speech-history?before=speech-3&limit=10",
+    );
     const res = GET(req);
     const data = await res.json();
-    expect(data.items.map((i: { id: string }) => i.id)).toEqual(["speech-2", "speech-1"]);
+    expect(data.items.map((i: { id: string }) => i.id)).toEqual([
+      "speech-2",
+      "speech-1",
+    ]);
     expect(data.hasMore).toBe(false);
   });
 
@@ -45,7 +50,9 @@ describe("GET /api/speech-history", () => {
   });
 
   it("returns empty items and hasMore false when before id is not found", async () => {
-    const req = new Request("http://localhost/api/speech-history?before=speech-999");
+    const req = new Request(
+      "http://localhost/api/speech-history?before=speech-999",
+    );
     const res = GET(req);
     const data = await res.json();
     expect(data.items).toHaveLength(0);

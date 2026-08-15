@@ -1,5 +1,5 @@
 export const normalizePublishedStreamState = (state: unknown): unknown => {
-  if (!state || typeof state !== 'object') {
+  if (!state || typeof state !== "object") {
     return state;
   }
 
@@ -8,16 +8,22 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
   // Preserve any top-level custom fields while normalizing legacy payloads.
   // This is important for values like replyTargetComment, commentCount, and
   // speechHistory that are not part of the legacy `type/data` structure.
-  if (rawState.type === 'niconama') {
+  if (rawState.type === "niconama") {
     const data = rawState.data as Record<string, unknown> | undefined;
     const total: Record<string, unknown> = {};
-    if (typeof data?.total === 'number') {
+    if (typeof data?.total === "number") {
       total.listeners = data.total;
     }
-    if (data?.points && typeof (data.points as Record<string, unknown>).gift !== 'undefined') {
+    if (
+      data?.points &&
+      typeof (data.points as Record<string, unknown>).gift !== "undefined"
+    ) {
       total.gift = (data.points as Record<string, unknown>).gift;
     }
-    if (data?.points && typeof (data.points as Record<string, unknown>).ad !== 'undefined') {
+    if (
+      data?.points &&
+      typeof (data.points as Record<string, unknown>).ad !== "undefined"
+    ) {
       total.ad = (data.points as Record<string, unknown>).ad;
     }
 
@@ -25,7 +31,7 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
     delete normalizedState.type;
     delete normalizedState.data;
     normalizedState.niconama = {
-      type: data?.isLive ? 'live' : 'offline',
+      type: data?.isLive ? "live" : "offline",
       meta: {
         title: data?.title ?? undefined,
         url: data?.url ?? undefined,
@@ -36,11 +42,15 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
     return normalizedState;
   }
 
-  if ('niconama' in rawState && rawState.niconama && typeof rawState.niconama === 'object') {
+  if (
+    "niconama" in rawState &&
+    rawState.niconama &&
+    typeof rawState.niconama === "object"
+  ) {
     return rawState;
   }
 
-  if (rawState.type === 'live' || rawState.type === 'offline') {
+  if (rawState.type === "live" || rawState.type === "offline") {
     const normalizedState: Record<string, unknown> = { ...rawState };
     delete normalizedState.type;
     normalizedState.niconama = rawState;

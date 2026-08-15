@@ -1,14 +1,18 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { createServer, createConnection } from "node:net";
 import { existsSync, unlinkSync, writeFileSync } from "node:fs";
+import { createConnection, createServer } from "node:net";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { createRetrySenderWithPath, createReceiverWithPath } from "./socket";
+import { createReceiverWithPath, createRetrySenderWithPath } from "./socket";
 
 const generateSocketPath = () =>
   process.platform === "win32"
     ? `\\\\.\\pipe\\makamujo-socket-test-${Date.now().toString(36) + Math.random().toString(36).slice(2)}`
-    : join(process.cwd(), "var", `socket-test-${Date.now().toString(36) + Math.random().toString(36).slice(2)}.sock`);
+    : join(
+        process.cwd(),
+        "var",
+        `socket-test-${Date.now().toString(36) + Math.random().toString(36).slice(2)}.sock`,
+      );
 
 const cleanupSocket = (path: string) => {
   if (!process.platform.startsWith("win") && existsSync(path)) {
@@ -42,9 +46,11 @@ describe("createRetrySenderWithPath", () => {
 
     try {
       const receivedActions: unknown[] = [];
-      const send = await createRetrySenderWithPath(socketPath)(async (action) => {
-        receivedActions.push(action);
-      });
+      const send = await createRetrySenderWithPath(socketPath)(
+        async (action) => {
+          receivedActions.push(action);
+        },
+      );
 
       send({ name: "initialized" });
 
@@ -140,12 +146,17 @@ describe("createReceiverWithPath", () => {
     const receive = createReceiverWithPath(socketPath);
 
     // Should not throw despite the stale file.
-    await expect(receive((_state) => ({ name: "noop" } as const))).resolves.toBeUndefined();
+    await expect(
+      receive((_state) => ({ name: "noop" }) as const),
+    ).resolves.toBeUndefined();
 
     // Verify the server is accepting connections.
     await new Promise<void>((resolve, reject) => {
       const conn = createConnection(socketPath);
-      conn.once("connect", () => { conn.destroy(); resolve(); });
+      conn.once("connect", () => {
+        conn.destroy();
+        resolve();
+      });
       conn.once("error", reject);
     });
   });

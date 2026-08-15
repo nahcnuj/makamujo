@@ -1,0 +1,44 @@
+#!/bin/bash
+set -euo pipefail
+
+export XDG_RUNTIME_DIR=/run/user/0
+export HOME=/root
+export DISPLAY=:10
+export PULSE_RUNTIME_PATH=/run/user/0/pulse
+export PIPEWIRE_RUNTIME_DIR=/run/user/0
+export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus
+
+mkdir -p "$XDG_RUNTIME_DIR" "$PULSE_RUNTIME_PATH"
+chmod 700 "$XDG_RUNTIME_DIR"
+
+# Leftovers only (do not race systemd stop)
+pkill -u root -x pipewire 2>/dev/null || true
+pkill -u root -x pipewire-pulse 2>/dev/null || true
+pkill -u root -x wireplumber 2>/dev/null || true
+pkill -u root -f 'dbus-daemon --session --address=unix:path=/run/user/0/bus' 2>/dev/null || true
+sleep 0.3
+
+dbus-daemon --session \
+  --address="unix:path=${XDG_RUNTIME_DIR}/bus" \
+  --nofork --nopidfile --syslog-only &
+sleep 1
+
+pipewire &
+sleep 1
+pipewire-pulse &
+sleep 1
+
+for _ in $(seq 1 80); do
+  if [ -S "${PULSE_RUNTIME_PATH}/native" ]; then
+    break
+  fi
+  sleep 0.25
+done
+
+if [ ! -S "${PULSE_RUNTIME_PATH}/native" ]; then
+  echo "ERROR: pulse socket not ready: ${PULSE_RUNTIME_PATH}/native" >&2
+  exit 1
+fi
+
+echo "Pulse socket ready: ${PULSE_RUNTIME_PATH}/native"
+exec wireplumber

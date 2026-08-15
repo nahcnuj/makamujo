@@ -35,11 +35,9 @@ describe("docs/index.html", () => {
 
     if (handlerCode) {
       try {
-        const injector = new (window as unknown as { Function: typeof Function }).Function(
-          "document",
-          "twq",
-          handlerCode,
-        );
+        const injector = new (
+          window as unknown as { Function: typeof Function }
+        ).Function("document", "twq", handlerCode);
         injector(window.document, recordTwq);
       } catch {
         // non-fatal for structural tests

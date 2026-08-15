@@ -51,6 +51,23 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
 
+  lint:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Restore node_modules from cache
+        uses: actions/cache/restore@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          fail-on-cache-miss: true
+      - name: Run Biome linter
+        run: |
+          bunx biome check .
+
   typecheck:
     needs: setup
     runs-on: ubuntu-latest
@@ -72,6 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     strategy:
+      fail-fast: false
       matrix:
         suite:
           - { script: test, label: unit }
@@ -93,6 +111,9 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+      - name: Install Playwright Chromium (integration / e2e)
+        if: matrix.suite.label == 'integration' || matrix.suite.label == 'e2e'
+        run: bunx playwright install chromium
       - name: Configure apt mirror (JAIST)
         if: matrix.suite.label == 'e2e'
         run: sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://ftp.jaist.ac.jp/pub/Linux/ubuntu|g' /etc/apt/sources.list
@@ -102,6 +123,7 @@ jobs:
       - name: Run ${{ matrix.suite.label }} tests
         run: bun run ${{ matrix.suite.script }}
       - name: Save Playwright browsers cache
+        if: matrix.suite.label == 'integration' || matrix.suite.label == 'e2e'
         uses: actions/cache/save@v5
         with:
           path: ~/.cache/ms-playwright

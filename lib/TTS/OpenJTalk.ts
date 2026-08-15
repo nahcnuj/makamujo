@@ -5,41 +5,55 @@ import { execFileSync } from "node:child_process";
  */
 export type OpenJTalkOptions = {
   /** `-m` */
-  htsvoiceFile: string
+  htsvoiceFile: string;
   /** `-x` */
-  dictionaryDir: string
+  dictionaryDir: string;
   /** `-fm` */
-  additionalHalfTone?: number
+  additionalHalfTone?: number;
   /** `-r` */
-  speakingRate?: number
+  speakingRate?: number;
 };
 
 /**
- * 
+ *
  * @param input text to speech
  * @param path a file path where output result. `-ow`
  * @param options {OpenJTalkOptions}
  */
-export const generateWavFile = async (input: string, path: `${string}.wav`, {
-  htsvoiceFile,
-  dictionaryDir,
-  additionalHalfTone = 0,
-  speakingRate = 1,
-}: OpenJTalkOptions) => new Promise((resolve, reject) => {
-  try {
-    // create tmp file and pass it
-    const res = execFileSync('open_jtalk', [
-      '-m', htsvoiceFile,
-      '-x', dictionaryDir,
-      '-fm', additionalHalfTone.toFixed(1),
-      '-r', speakingRate.toFixed(1),
-      '-ow', path,
-    ], {
-      input,
-      encoding: 'utf-8',
-    });
-    resolve(res);
-  } catch (err) {
-    reject(err);
-  }
-});
+export const generateWavFile = async (
+  input: string,
+  path: `${string}.wav`,
+  {
+    htsvoiceFile,
+    dictionaryDir,
+    additionalHalfTone = 0,
+    speakingRate = 1,
+  }: OpenJTalkOptions,
+) =>
+  new Promise((resolve, reject) => {
+    try {
+      // create tmp file and pass it
+      const res = execFileSync(
+        "open_jtalk",
+        [
+          "-m",
+          htsvoiceFile,
+          "-x",
+          dictionaryDir,
+          "-fm",
+          additionalHalfTone.toFixed(1),
+          "-r",
+          speakingRate.toFixed(1),
+          "-ow",
+          path,
+        ],
+        {
+          input,
+          encoding: "utf-8",
+        },
+      );
+      resolve(res);
+    } catch (err) {
+      reject(err);
+    }
+  });

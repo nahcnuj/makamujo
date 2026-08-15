@@ -1,13 +1,13 @@
-import { test, expect, beforeAll, afterAll } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
-import { existsSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import {
   allocateFreePort,
   killProcessTree,
   makamujoIpcPath,
   resolveBunExecutable,
-  waitForPortRelease,
   type SpawnedServer,
+  waitForPortRelease,
 } from "../helpers/integrationServer";
 
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
@@ -18,7 +18,11 @@ let mainServerPort = 0;
 
 beforeAll(async () => {
   if (!existsSync("./var/cookieclicker.txt")) {
-    try { mkdirSync("./var", { recursive: true }); } catch { /* ignore */ }
+    try {
+      mkdirSync("./var", { recursive: true });
+    } catch {
+      /* ignore */
+    }
     writeFileSync("./var/cookieclicker.txt", "");
   }
 
@@ -43,7 +47,9 @@ beforeAll(async () => {
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
       cleanupListeners();
-      reject(new Error(`Server startup timed out. Output:\n${buffer.slice(-2000)}`));
+      reject(
+        new Error(`Server startup timed out. Output:\n${buffer.slice(-2000)}`),
+      );
     }, SERVER_STARTUP_TIMEOUT_MS);
 
     let buffer = "";
@@ -62,15 +68,22 @@ beforeAll(async () => {
 
     function onData(chunk: Buffer | string) {
       buffer += String(chunk);
-      if (!serverRunning && (buffer.includes("Server running") || buffer.includes("🚀 Server running"))) {
+      if (
+        !serverRunning &&
+        (buffer.includes("Server running") ||
+          buffer.includes("🚀 Server running"))
+      ) {
         serverRunning = true;
       }
-      if (!agentReady && (
-        buffer.includes("[INFO] external agent API initialized") ||
-        buffer.includes("[WARN] createAgentApi threw") ||
-        buffer.includes("[WARN] automated-gameplay-transmitter did not export") ||
-        buffer.includes("[WARN] dynamic import failed")
-      )) {
+      if (
+        !agentReady &&
+        (buffer.includes("[INFO] external agent API initialized") ||
+          buffer.includes("[WARN] createAgentApi threw") ||
+          buffer.includes(
+            "[WARN] automated-gameplay-transmitter did not export",
+          ) ||
+          buffer.includes("[WARN] dynamic import failed"))
+      ) {
         agentReady = true;
       }
       checkReady();
@@ -79,13 +92,29 @@ beforeAll(async () => {
     function onExit(code: number | null) {
       clearTimeout(timeout);
       cleanupListeners();
-      reject(new Error(`Server exited early with code ${code}. Output:\n${buffer.slice(-2000)}`));
+      reject(
+        new Error(
+          `Server exited early with code ${code}. Output:\n${buffer.slice(-2000)}`,
+        ),
+      );
     }
 
     function cleanupListeners() {
-      try { stdout?.off("data", onData); } catch { /* ignore */ }
-      try { stderr?.off("data", onData); } catch { /* ignore */ }
-      try { server?.off("exit", onExit); } catch { /* ignore */ }
+      try {
+        stdout?.off("data", onData);
+      } catch {
+        /* ignore */
+      }
+      try {
+        stderr?.off("data", onData);
+      } catch {
+        /* ignore */
+      }
+      try {
+        server?.off("exit", onExit);
+      } catch {
+        /* ignore */
+      }
     }
 
     try {
@@ -137,17 +166,29 @@ test("proxy forwards WebSocket upgrades to broadcasting server", async () => {
   const firstMessage = await new Promise<any>((resolve, reject) => {
     const ws = new WebSocket(wsUrl);
     const timeout = setTimeout(() => {
-      try { ws.close(); } catch { /* ignore */ }
+      try {
+        ws.close();
+      } catch {
+        /* ignore */
+      }
       reject(new Error("timeout"));
     }, 5000);
     ws.onmessage = (ev: any) => {
       clearTimeout(timeout);
-      try { ws.close(); } catch { /* ignore */ }
+      try {
+        ws.close();
+      } catch {
+        /* ignore */
+      }
       resolve(ev.data);
     };
     ws.onerror = (e: any) => {
       clearTimeout(timeout);
-      try { ws.close(); } catch { /* ignore */ }
+      try {
+        ws.close();
+      } catch {
+        /* ignore */
+      }
       reject(e);
     };
   });
@@ -191,18 +232,40 @@ test("comment count in /api/meta reflects PUT comments after POST /api/meta stre
   await fetch(`${broadcastingBaseUrl}/`, {
     method: "PUT",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify([{ data: { comment: "こんにちは", no: 1, anonymity: false, hasGift: false } }]),
+    body: JSON.stringify([
+      {
+        data: {
+          comment: "こんにちは",
+          no: 1,
+          anonymity: false,
+          hasGift: false,
+        },
+      },
+    ]),
   });
 
-  let updatedMeta = await (await fetch(`${broadcastingBaseUrl}/api/meta`)).json() as any;
+  let updatedMeta = (await (
+    await fetch(`${broadcastingBaseUrl}/api/meta`)
+  ).json()) as any;
   expect(updatedMeta.commentCount).toBe(1);
 
   await fetch(`${broadcastingBaseUrl}/`, {
     method: "PUT",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify([{ data: { comment: "こんばんは", no: 3, anonymity: false, hasGift: false } }]),
+    body: JSON.stringify([
+      {
+        data: {
+          comment: "こんばんは",
+          no: 3,
+          anonymity: false,
+          hasGift: false,
+        },
+      },
+    ]),
   });
 
-  updatedMeta = await (await fetch(`${broadcastingBaseUrl}/api/meta`)).json() as any;
+  updatedMeta = (await (
+    await fetch(`${broadcastingBaseUrl}/api/meta`)
+  ).json()) as any;
   expect(updatedMeta.commentCount).toBe(3);
 });

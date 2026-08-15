@@ -1,0 +1,5 @@
+.venv/
+.vault_pass
+# Encrypted vault.yml is OK to commit; keep plaintext copies out:
+vault.yml.plain
+*.vault.plain

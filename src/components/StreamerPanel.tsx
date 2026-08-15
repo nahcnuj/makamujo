@@ -5,12 +5,12 @@ import { CharacterSprite } from "./CharacterSprite";
 import { SpeechLine } from "./SpeechLine";
 import {
   FADE_OUT_MS,
-  SHOW_THEN_FADE,
-  VISIBLE,
   onListenersUpdate,
-  spriteAwayStyle,
-  visibilityFromSilenceClock,
+  SHOW_THEN_FADE,
   type SpriteVisibility,
+  spriteAwayStyle,
+  VISIBLE,
+  visibilityFromSilenceClock,
 } from "./spriteVisibility";
 
 const RISE_MS = 300;
@@ -152,7 +152,12 @@ export function StreamerPanel() {
         <CharacterSprite />
       </div>
       <div className="flex-auto h-full">
-        <Box borderColor="border-emerald-300" borderWidth="border-8" borderStyle="border-double" rounded="rounded-xl">
+        <Box
+          borderColor="border-emerald-300"
+          borderWidth="border-8"
+          borderStyle="border-double"
+          rounded="rounded-xl"
+        >
           <Container>
             <div className="w-full h-full text-3xl/9 break-all overflow-hidden">
               {silent ? (

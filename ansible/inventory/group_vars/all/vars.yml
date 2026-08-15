@@ -1,0 +1,4 @@
+---
+# Non-secret defaults (safe to commit).
+makamujo_src: /opt/src/makamujo
+makamujo_obs_service_json: "{{ makamujo_src }}/obs-studio/basic/profiles/Makamujo/service.json"

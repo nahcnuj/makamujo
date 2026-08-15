@@ -1,7 +1,7 @@
 /** @jsxImportSource hono/jsx */
-import { describe, expect, it, beforeAll, afterAll } from "bun:test";
-import { renderToString } from "hono/jsx/dom/server";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { render } from "hono/jsx/dom";
+import { renderToString } from "hono/jsx/dom/server";
 import { JSDOM } from "jsdom";
 import { SpeechHistoryList, SpeechHistoryListItem } from "./SpeechHistoryList";
 
@@ -11,7 +11,8 @@ beforeAll(() => {
   dom = new JSDOM("<!doctype html><html><body></body></html>");
   globalThis.window = dom.window as any;
   globalThis.document = dom.window.document as any;
-  globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => setTimeout(callback, 0);
+  globalThis.requestAnimationFrame = (callback: FrameRequestCallback) =>
+    setTimeout(callback, 0);
   globalThis.cancelAnimationFrame = (handle: number) => clearTimeout(handle);
 });
 
@@ -22,11 +23,25 @@ afterAll(() => {
 });
 
 const SAMPLE_ITEMS = [
-  { id: "speech-3", speechText: "三番目の発話", displayLine: "三番目の発話 (n=4)", nGramLabel: "n=4" },
-  { id: "speech-2", speechText: "二番目の発話", displayLine: "二番目の発話 (n=3)", nGramLabel: "n=3" },
-  { id: "speech-1", speechText: "最初の発話", displayLine: "最初の発話 (n=4)", nGramLabel: "n=4" },
+  {
+    id: "speech-3",
+    speechText: "三番目の発話",
+    displayLine: "三番目の発話 (n=4)",
+    nGramLabel: "n=4",
+  },
+  {
+    id: "speech-2",
+    speechText: "二番目の発話",
+    displayLine: "二番目の発話 (n=3)",
+    nGramLabel: "n=3",
+  },
+  {
+    id: "speech-1",
+    speechText: "最初の発話",
+    displayLine: "最初の発話 (n=4)",
+    nGramLabel: "n=4",
+  },
 ];
-
 
 describe("SpeechHistoryList", () => {
   it("renders all initial items", () => {
@@ -57,7 +72,9 @@ describe("SpeechHistoryList", () => {
     );
 
     expect(html).toContain("border-b-emerald-300/80");
-    expect(html).toContain("border-bottom-width:var(--speech-history-border-bottom-width)");
+    expect(html).toContain(
+      "border-bottom-width:var(--speech-history-border-bottom-width)",
+    );
   });
 
   it("does not emphasize the first item when emphasizeLatest is false", () => {
@@ -66,7 +83,9 @@ describe("SpeechHistoryList", () => {
     );
 
     expect(html).not.toContain("border-b-emerald-300/80");
-    expect(html).not.toContain("border-bottom-width:var(--speech-history-border-bottom-width)");
+    expect(html).not.toContain(
+      "border-bottom-width:var(--speech-history-border-bottom-width)",
+    );
   });
 
   it("renders word chips for space-separated speech text", () => {
@@ -74,7 +93,9 @@ describe("SpeechHistoryList", () => {
       <SpeechHistoryList initialItems={SAMPLE_ITEMS} emphasizeLatest={true} />,
     );
 
-    expect((html.match(/speech-word-chip/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect(
+      (html.match(/speech-word-chip/g) ?? []).length,
+    ).toBeGreaterThanOrEqual(3);
   });
 
   it("renders trace nodes as word chips when nodes are present", () => {
@@ -88,7 +109,10 @@ describe("SpeechHistoryList", () => {
       },
     ];
     const html = renderToString(
-      <SpeechHistoryList initialItems={itemsWithNodes} emphasizeLatest={true} />,
+      <SpeechHistoryList
+        initialItems={itemsWithNodes}
+        emphasizeLatest={true}
+      />,
     );
 
     expect(html).toContain("alpha");
@@ -122,7 +146,10 @@ describe("SpeechHistoryList", () => {
           speechText: "三番目の発話",
           displayLine: "三番目の発話 (n=4)",
           nGramLabel: "n=4",
-          replyTargetComment: { text: "おめでとうございます", pickedTopic: "おめでとう" },
+          replyTargetComment: {
+            text: "おめでとうございます",
+            pickedTopic: "おめでとう",
+          },
         }}
         isFirst
         emphasizeLatest
@@ -135,7 +162,6 @@ describe("SpeechHistoryList", () => {
     expect(replySpan?.textContent).toContain("おめでとう");
     expect(replySpan?.textContent).toContain("ございます");
   });
-
 
   it("renders reply annotations for each speech history item when each item has its own replyTargetComment", () => {
     const items = Array.from({ length: 10 }, (_, index) => ({
@@ -163,20 +189,31 @@ describe("SpeechHistoryList", () => {
 
       const replySpan = localContainer.querySelector("span.text-xs");
       expect(replySpan).not.toBeNull();
-      expect(replySpan?.textContent).toContain(item.replyTargetComment?.text ?? "");
+      expect(replySpan?.textContent).toContain(
+        item.replyTargetComment?.text ?? "",
+      );
     });
   });
 
   it("does not render reply annotation when no speech history item contains replyTargetComment", () => {
     const items = [
-      { id: "speech-2", speechText: "secondSpeech", displayLine: "secondSpeech (n=4)", nGramLabel: "n=4", nodes: ["secondSpeech"] },
-      { id: "speech-1", speechText: "firstSpeech", displayLine: "firstSpeech (n=4)", nGramLabel: "n=4", nodes: ["firstSpeech"] },
+      {
+        id: "speech-2",
+        speechText: "secondSpeech",
+        displayLine: "secondSpeech (n=4)",
+        nGramLabel: "n=4",
+        nodes: ["secondSpeech"],
+      },
+      {
+        id: "speech-1",
+        speechText: "firstSpeech",
+        displayLine: "firstSpeech (n=4)",
+        nGramLabel: "n=4",
+        nodes: ["firstSpeech"],
+      },
     ];
     const html = renderToString(
-      <SpeechHistoryList
-        initialItems={items}
-        emphasizeLatest={true}
-      />,
+      <SpeechHistoryList initialItems={items} emphasizeLatest={true} />,
     );
 
     expect(html).not.toContain("replyComment");

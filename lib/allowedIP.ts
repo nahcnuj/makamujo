@@ -39,7 +39,7 @@ export class AllowedIP {
 
   /** Returns a string representation of the current allowed IP in the form `{family}/{address}`, or `(none)` if no IP has been set. */
   static toString(): string {
-    if (!allowedIP) return '(none)';
+    if (!allowedIP) return "(none)";
     return `${allowedIP.family}/${allowedIP.address}`;
   }
 }

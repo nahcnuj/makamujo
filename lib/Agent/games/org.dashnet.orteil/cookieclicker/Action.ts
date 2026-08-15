@@ -1,28 +1,28 @@
 export type Action =
   | {
-    action: 'click'
-  }
+      action: "click";
+    }
   | {
-    action: 'buyProduct'
-    name: string
-  }
+      action: "buyProduct";
+      name: string;
+    }
   | {
-    action: 'buyUpgrade'
-    name?: string
-  }
+      action: "buyUpgrade";
+      name?: string;
+    }
   | {
-    action: 'research'
-  }
+      action: "research";
+    }
   | {
-    action: 'toggleSwitch'
-    name: string
-  }
+      action: "toggleSwitch";
+      name: string;
+    }
   | {
-    action: 'ascend'
-  }
+      action: "ascend";
+    }
   | {
-    action: 'reincarnate'
-  }
+      action: "reincarnate";
+    }
   | {
-    action: undefined
-  }
+      action: undefined;
+    };

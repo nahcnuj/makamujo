@@ -13,7 +13,10 @@ afterEach(() => {
 
 describe("GET /console/api/agent-state", () => {
   it("returns the response from /api/meta", async () => {
-    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = (async (
+      _input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
       expect(init?.signal).toBeDefined();
       return Response.json({
         niconama: {
@@ -35,7 +38,11 @@ describe("GET /console/api/agent-state", () => {
   });
 
   it("returns 502 when /api/meta responds with non-ok status", async () => {
-    globalThis.fetch = (async () => new Response("internal error", { status: 500, statusText: "Internal Server Error" })) as unknown as typeof fetch;
+    globalThis.fetch = (async () =>
+      new Response("internal error", {
+        status: 500,
+        statusText: "Internal Server Error",
+      })) as unknown as typeof fetch;
 
     const res = await GET();
     expect(res.status).toBe(502);
@@ -60,17 +67,20 @@ describe("GET /console/api/agent-state", () => {
 
   it("returns 502 with timeout message when upstream request times out", async () => {
     globalThis.fetch = ((_input: RequestInfo | URL) => {
-      return Promise.reject(new DOMException("The operation was aborted.", "AbortError"));
+      return Promise.reject(
+        new DOMException("The operation was aborted.", "AbortError"),
+      );
     }) as unknown as typeof fetch;
 
-    globalThis.setTimeout = (((handler: TimerHandler) => {
+    globalThis.setTimeout = ((handler: TimerHandler) => {
       if (typeof handler === "function") {
         handler();
       }
       return 1;
-    }) as unknown) as typeof setTimeout;
+    }) as unknown as typeof setTimeout;
     const mockClearTimeout = mock((id: ReturnType<typeof setTimeout>) => id);
-    globalThis.clearTimeout = mockClearTimeout as unknown as typeof clearTimeout;
+    globalThis.clearTimeout =
+      mockClearTimeout as unknown as typeof clearTimeout;
 
     const res = await GET();
     expect(res.status).toBe(502);

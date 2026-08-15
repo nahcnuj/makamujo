@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { AllowedIP } from "./allowedIP";
 
 describe("AllowedIP", () => {
@@ -8,23 +8,31 @@ describe("AllowedIP", () => {
 
   describe("equals", () => {
     it("returns false when no IP has been set", () => {
-      expect(AllowedIP.equals({ family: "IPv4", address: "10.0.0.1" })).toBe(false);
+      expect(AllowedIP.equals({ family: "IPv4", address: "10.0.0.1" })).toBe(
+        false,
+      );
     });
 
     it("returns false after clear is called", () => {
       AllowedIP.set({ family: "IPv4", address: "10.0.0.1" });
       AllowedIP.clear();
-      expect(AllowedIP.equals({ family: "IPv4", address: "10.0.0.1" })).toBe(false);
+      expect(AllowedIP.equals({ family: "IPv4", address: "10.0.0.1" })).toBe(
+        false,
+      );
     });
 
     it("returns true when ip matches the allowed IP", () => {
       AllowedIP.set({ family: "IPv4", address: "10.0.0.1" });
-      expect(AllowedIP.equals({ family: "IPv4", address: "10.0.0.1" })).toBe(true);
+      expect(AllowedIP.equals({ family: "IPv4", address: "10.0.0.1" })).toBe(
+        true,
+      );
     });
 
     it("returns false when address differs", () => {
       AllowedIP.set({ family: "IPv4", address: "10.0.0.1" });
-      expect(AllowedIP.equals({ family: "IPv4", address: "10.0.0.2" })).toBe(false);
+      expect(AllowedIP.equals({ family: "IPv4", address: "10.0.0.2" })).toBe(
+        false,
+      );
     });
 
     it("returns false when family differs", () => {
@@ -40,20 +48,24 @@ describe("AllowedIP", () => {
     it("returns false for the old IP after set is called with a new IP", () => {
       AllowedIP.set({ family: "IPv4", address: "10.0.0.1" });
       AllowedIP.set({ family: "IPv4", address: "10.0.0.2" });
-      expect(AllowedIP.equals({ family: "IPv4", address: "10.0.0.1" })).toBe(false);
-      expect(AllowedIP.equals({ family: "IPv4", address: "10.0.0.2" })).toBe(true);
+      expect(AllowedIP.equals({ family: "IPv4", address: "10.0.0.1" })).toBe(
+        false,
+      );
+      expect(AllowedIP.equals({ family: "IPv4", address: "10.0.0.2" })).toBe(
+        true,
+      );
     });
   });
 
   describe("toString", () => {
     it("returns '(none)' when no IP has been set", () => {
-      expect(AllowedIP.toString()).toBe('(none)');
+      expect(AllowedIP.toString()).toBe("(none)");
     });
 
     it("returns '(none)' after clear is called", () => {
       AllowedIP.set({ family: "IPv4", address: "10.0.0.1" });
       AllowedIP.clear();
-      expect(AllowedIP.toString()).toBe('(none)');
+      expect(AllowedIP.toString()).toBe("(none)");
     });
 
     it("formats IPv4 address as family/address", () => {

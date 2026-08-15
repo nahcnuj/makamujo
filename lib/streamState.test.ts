@@ -19,9 +19,14 @@ describe("normalizePublishedStreamState", () => {
       },
     };
 
-    const normalized = normalizePublishedStreamState(legacyState) as Record<string, unknown>;
+    const normalized = normalizePublishedStreamState(legacyState) as Record<
+      string,
+      unknown
+    >;
 
-    expect(normalized.replyTargetComment).toEqual(legacyState.replyTargetComment);
+    expect(normalized.replyTargetComment).toEqual(
+      legacyState.replyTargetComment,
+    );
     expect(normalized).toHaveProperty("niconama");
     expect((normalized.niconama as Record<string, unknown>).type).toBe("live");
     expect((normalized.niconama as Record<string, unknown>).meta).toEqual({
@@ -43,12 +48,19 @@ describe("normalizePublishedStreamState", () => {
       },
     };
 
-    const normalized = normalizePublishedStreamState(legacyState) as Record<string, unknown>;
+    const normalized = normalizePublishedStreamState(legacyState) as Record<
+      string,
+      unknown
+    >;
 
-    expect(normalized.replyTargetComment).toEqual(legacyState.replyTargetComment);
+    expect(normalized.replyTargetComment).toEqual(
+      legacyState.replyTargetComment,
+    );
     expect(normalized).toHaveProperty("niconama");
     expect((normalized.niconama as Record<string, unknown>).type).toBe("live");
-    expect((normalized.niconama as Record<string, unknown>).title).toBe("live state");
+    expect((normalized.niconama as Record<string, unknown>).title).toBe(
+      "live state",
+    );
   });
 
   it("preserves additional top-level fields for legacy payloads", () => {
@@ -69,9 +81,14 @@ describe("normalizePublishedStreamState", () => {
       commentCount: 7,
     };
 
-    const normalized = normalizePublishedStreamState(legacyState) as Record<string, unknown>;
+    const normalized = normalizePublishedStreamState(legacyState) as Record<
+      string,
+      unknown
+    >;
 
-    expect(normalized.replyTargetComment).toEqual(legacyState.replyTargetComment);
+    expect(normalized.replyTargetComment).toEqual(
+      legacyState.replyTargetComment,
+    );
     expect(normalized.commentCount).toBe(7);
     expect(normalized).toHaveProperty("niconama");
   });
