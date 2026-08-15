@@ -256,13 +256,21 @@ export function* handleIdle(
   let event: State | undefined;
 
   for (;;) {
+    const prevPhase = s.phase;
     const out = stepIdle(s, event);
     if (out.state.type !== "idle") {
       return out.state;
     }
     s = out.state;
     if (!out.action) {
-      return s;
+      // Transition-only steps (e.g. act → sight) must continue with a fresh
+      // event, matching handleInitialize. Returning here would re-enter the
+      // outer solver loop without consuming a sight cycle.
+      if (event !== undefined && s.phase === prevPhase) {
+        return s;
+      }
+      event = undefined;
+      continue;
     }
     event = yield out.action;
   }

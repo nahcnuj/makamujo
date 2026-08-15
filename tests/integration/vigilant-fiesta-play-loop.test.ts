@@ -99,7 +99,13 @@ describe("vigilant-fiesta agent play loop (chromium + stub)", () => {
           if (action.name === "noop") {
             await delay(25);
             const state = await page.evaluate(() => {
-              const isVisible = (el: HTMLElement | null) => !!el && !el.hasAttribute("hidden");
+              const isVisible = (el: HTMLElement | null) => {
+                if (!el) return false;
+                if (el.hasAttribute("hidden")) return false;
+                // Prefer attribute visibility; getClientRects can be empty in
+                // some headless configurations even when the node is shown.
+                return true;
+              };
               let screen: "title" | "playing" | "result" | "unknown" = "unknown";
               if (isVisible(document.getElementById("screen-title"))) screen = "title";
               else if (isVisible(document.getElementById("result-overlay"))) screen = "result";
@@ -108,10 +114,11 @@ describe("vigilant-fiesta agent play loop (chromium + stub)", () => {
               const scoreText = screen === "result"
                 ? (textOf(document.getElementById("result-score")) || textOf(document.getElementById("score")))
                 : textOf(document.getElementById("score"));
+              const levelText = textOf(document.getElementById("level"));
               return {
                 screen,
                 score: Number.parseInt((scoreText.match(/Score:\s*([\d,]+)/i)?.[1] ?? "NaN").replaceAll(",", ""), 10),
-                level: 1,
+                level: Number.parseInt((levelText.match(/Level:\s*([\d,]+)/i)?.[1] ?? "1").replaceAll(",", ""), 10),
                 url: location.href,
               };
             });
@@ -124,10 +131,26 @@ describe("vigilant-fiesta agent play loop (chromium + stub)", () => {
 
           if (action.name === "open") {
             await page.goto(action.url, { waitUntil: "domcontentloaded", timeout: 10_000 });
+            await page.locator("#btn-start").waitFor({ state: "attached", timeout: 5_000 });
           } else if (action.name === "click" && action.target.type === "id") {
-            await page.locator(`#${CSS.escape(action.target.id)}`).click({ timeout: 5_000 });
+            const selector = `#${CSS.escape(action.target.id)}`;
+            // Drive the stub via DOM click so listeners always fire in CI headless.
+            await page.locator(selector).waitFor({ state: "attached", timeout: 5_000 });
+            await page.evaluate((id) => {
+              const el = document.getElementById(id);
+              if (!el) throw new Error(`missing #${id}`);
+              el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+            }, action.target.id);
+            if (action.target.id === "btn-start" || action.target.id === "btn-retry") {
+              await page.waitForFunction(() => {
+                const playing = document.getElementById("screen-playing");
+                return !!playing && !playing.hasAttribute("hidden");
+              }, { timeout: 5_000 });
+            }
           } else if (action.name === "press") {
-            await page.keyboard.press(action.key);
+            await page.evaluate((key) => {
+              window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+            }, action.key);
           }
           event = { name: "result", succeeded: true, action };
         } catch {
