@@ -17,7 +17,7 @@
       ansible.builtin.git:
         repo: https://github.com/nahcnuj/makamujo.git
         dest: "{{ makamujo_src }}"
-        version: ansible
+        version: legacy
         force: true
 
     - name: Install production dependencies with Bun
