@@ -122,21 +122,23 @@ const browser = await create(executablePath, {
 });
 
 // Aw, Snap! 監視
-const awSnapTimer = setInterval(async () => {
-  if (await isAwSnapPage(browser)) {
-    console.warn("[WARN] Aw, Snap! detected — attempting reload");
-    try {
-      await browser.reload();
-      console.log("[INFO] page reloaded after Aw, Snap!");
-    } catch (err) {
-      console.warn(
-        "[WARN] reload failed, exiting session for outer restart",
-        err,
-      );
-      clearInterval(awSnapTimer);
-      process.exit(1);
+const awSnapTimer = setInterval(() => {
+  void (async () => {
+    if (await isAwSnapPage(browser)) {
+      console.warn("[WARN] Aw, Snap! detected — attempting reload");
+      try {
+        await browser.reload();
+        console.log("[INFO] page reloaded after Aw, Snap!");
+      } catch (err) {
+        console.warn(
+          "[WARN] reload failed, exiting session for outer restart",
+          err,
+        );
+        clearInterval(awSnapTimer);
+        process.exit(1);
+      }
     }
-  }
+  })();
 }, AW_SNAP_CHECK_MS);
 
 const send = await createRetrySender(
