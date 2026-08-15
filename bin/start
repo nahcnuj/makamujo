@@ -43,8 +43,8 @@ nohup bun ./bin/x/browser.ts >"${PROJECT_ROOT}/var/browser.log" 2>&1 &
 echo $! > "${PID_DIR}/browser"
 
 # Comment overlay (left). Game browser stays on the right.
-nohup bun ./bin/x/overlay.ts >"${PROJECT_ROOT}/var/overlay.log" 2>&1 &
-echo $! > "${PID_DIR}/overlay"
+# nohup bun ./bin/x/overlay.ts >"${PROJECT_ROOT}/var/overlay.log" 2>&1 &
+# echo $! > "${PID_DIR}/overlay"
 
 # Headless portal stub (avoids ~100s D-Bus timeouts in Flatpak OBS)
 if ! pgrep -f "bin/x/portal-stub.py" >/dev/null 2>&1; then
