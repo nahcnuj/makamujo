@@ -10,20 +10,22 @@ import { createRetrySender } from "../../lib/Browser/socket";
 
 const AW_SNAP_CHECK_MS = 5_000;
 
-async function isAwSnapPage(browser: any): Promise<boolean> {
+async function isAwSnapPage(browser: Awaited<ReturnType<typeof create>>): Promise<boolean> {
   try {
     const title = await browser.evaluate(() => document.title || "");
-    const text = await browser.evaluate(() => (document.body?.innerText || "").slice(0, 300));
+    const text = await browser.evaluate(
+      () => (document.body?.innerText || "").slice(0, 300),
+    );
     return (
       /aw,\s*snap/i.test(title) ||
       /aw,\s*snap/i.test(text) ||
       /something went wrong while displaying/i.test(text)
     );
   } catch {
+    // evaluate failed → renderer likely dead
     return true;
   }
 }
-
 
 const {
   values: {
@@ -89,10 +91,6 @@ if (resolvedDisplay) {
 if (xauthority) {
   process.env.XAUTHORITY = xauthority;
 } else if (resolvedDisplay !== undefined) {
-  // When --display is given (or auto-detected) without --xauthority, try to
-  // auto-detect the Xauthority file from the owner of the X11 socket so that
-  // connections from a different login session (e.g. serial console as root)
-  // can authenticate.
   const displayNum = resolvedDisplay.replace(/^:/, "").replace(/\..*$/, "");
   const socketPath = `/tmp/.X11-unix/X${displayNum}`;
   try {
@@ -120,8 +118,10 @@ const executablePath = (browserArg?.toString() ?? "").trim() || undefined;
 
 const browser = await create(executablePath, {
   width: 1280,
-  height: 720, // match stream crop;
+  height: 720, // match stream crop; scale via page zoom
+});
 
+// Aw, Snap! 監視
 const awSnapTimer = setInterval(async () => {
   if (await isAwSnapPage(browser)) {
     console.warn("[WARN] Aw, Snap! detected — attempting reload");
@@ -129,19 +129,18 @@ const awSnapTimer = setInterval(async () => {
       await browser.reload();
       console.log("[INFO] page reloaded after Aw, Snap!");
     } catch (err) {
-      console.warn("[WARN] reload failed, exiting session for outer restart", err);
+      console.warn(
+        "[WARN] reload failed, exiting session for outer restart",
+        err,
+      );
       clearInterval(awSnapTimer);
       process.exit(1);
     }
   }
 }, AW_SNAP_CHECK_MS);
- scale via page zoom // 16:9 * 1.25; T≈20 B≈160 // 16:9 scale; crop takes top-left 1280x720 // tall: push bottom ads below stream crop
-});
 
 const send = await createRetrySender(
   async (action) => {
-    // console.log('[DEBUG]', 'runner got', action);
-
     try {
       switch (action.name) {
         case "noop": {
@@ -219,6 +218,7 @@ try {
   console.error(err);
   process.exitCode = 1;
 } finally {
+  clearInterval(awSnapTimer);
   await browser.close();
   send({ name: "closed" });
 }
