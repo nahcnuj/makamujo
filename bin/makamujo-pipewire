@@ -6,33 +6,29 @@ export HOME=/root
 export DISPLAY=:10
 export PULSE_RUNTIME_PATH=/run/user/0/pulse
 export PIPEWIRE_RUNTIME_DIR=/run/user/0
+export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus
 
 mkdir -p "$XDG_RUNTIME_DIR" "$PULSE_RUNTIME_PATH"
 chmod 700 "$XDG_RUNTIME_DIR"
 
-# Clean previous leftovers (safe after reboot / failed starts)
-pkill -u root -f 'dbus-daemon --session' 2>/dev/null || true
-pkill -u root -f 'pipewire$' 2>/dev/null || true
-pkill -u root -f 'pipewire-pulse' 2>/dev/null || true
-pkill -u root -f 'wireplumber' 2>/dev/null || true
-sleep 0.5
+# Leftovers only (do not race systemd stop)
+pkill -u root -x pipewire 2>/dev/null || true
+pkill -u root -x pipewire-pulse 2>/dev/null || true
+pkill -u root -x wireplumber 2>/dev/null || true
+pkill -u root -f 'dbus-daemon --session --address=unix:path=/run/user/0/bus' 2>/dev/null || true
+sleep 0.3
 
-# Start D-Bus session
 dbus-daemon --session \
   --address="unix:path=${XDG_RUNTIME_DIR}/bus" \
   --nofork --nopidfile --syslog-only &
-DBUS_PID=$!
-export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 sleep 1
 
-# Start PipeWire stack
 pipewire &
 sleep 1
 pipewire-pulse &
 sleep 1
 
-# Wait for Pulse socket
-for i in $(seq 1 60); do
+for _ in $(seq 1 80); do
   if [ -S "${PULSE_RUNTIME_PATH}/native" ]; then
     break
   fi
@@ -40,11 +36,9 @@ for i in $(seq 1 60); do
 done
 
 if [ ! -S "${PULSE_RUNTIME_PATH}/native" ]; then
-  echo "ERROR: pulse socket not ready after waiting" >&2
+  echo "ERROR: pulse socket not ready: ${PULSE_RUNTIME_PATH}/native" >&2
   exit 1
 fi
 
 echo "Pulse socket ready: ${PULSE_RUNTIME_PATH}/native"
-
-# wireplumber をフォアグラウンドで実行（これが死んだら unit が再起動する）
 exec wireplumber

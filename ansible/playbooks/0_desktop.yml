@@ -195,16 +195,16 @@
           Environment=XDG_RUNTIME_DIR=/run/user/0
           Environment=HOME=/root
           Environment=DISPLAY=:10
+          Environment=PULSE_RUNTIME_PATH=/run/user/0/pulse
+          Environment=PIPEWIRE_RUNTIME_DIR=/run/user/0
           Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus
-          RuntimeDirectory=user/0
-          RuntimeDirectoryMode=0700
-          ExecStartPre=/bin/mkdir -p /run/user/0
+          ExecStartPre=/bin/mkdir -p /run/user/0/pulse
+          ExecStartPre=/bin/chmod 700 /run/user/0
           ExecStart=/usr/local/bin/makamujo-pipewire
-          ExecStop=/bin/bash -c 'pkill -u root -f "pipewire|pipewire-pulse|wireplumber|dbus-daemon --session|/usr/local/bin/makamujo-pipewire" || true'
           Restart=on-failure
-          RestartSec=3
+          RestartSec=5
           KillMode=control-group
-          TimeoutStopSec=10
+          TimeoutStopSec=20
 
           [Install]
           WantedBy=multi-user.target
