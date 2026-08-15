@@ -236,12 +236,10 @@ test.describe("console", () => {
     expect(text).toContain("Disallow: /");
   });
 
-  test("responds to GET /console/api/agent-state", async ({ request }) => {
-    // The agent state endpoint has been replaced by a WebSocket stream
-    // (`/console/api/ws`). This legacy REST test is intentionally left
-    // as a no-op to avoid false failures in environments where the REST
-    // endpoint is no longer exposed.
-    expect(true).toBeTruthy();
+  // Legacy REST endpoint was replaced by `/console/api/ws` (WebSocket stream).
+  test.skip("responds to GET /console/api/agent-state", async ({ request }) => {
+    const res = await request.get(`${CONSOLE_BASE_URL}/console/api/agent-state`);
+    expect(res.ok()).toBeTruthy();
   });
 
   test("renders the console app in a browser", async ({ page }) => {
