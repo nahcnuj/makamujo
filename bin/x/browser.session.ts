@@ -8,6 +8,23 @@ import { ServerGames as Games } from "../../lib/Agent/games/server";
 import { create } from "../../lib/Browser/chromium";
 import { createRetrySender } from "../../lib/Browser/socket";
 
+const AW_SNAP_CHECK_MS = 5_000;
+
+async function isAwSnapPage(browser: any): Promise<boolean> {
+  try {
+    const title = await browser.evaluate(() => document.title || "");
+    const text = await browser.evaluate(() => (document.body?.innerText || "").slice(0, 300));
+    return (
+      /aw,\s*snap/i.test(title) ||
+      /aw,\s*snap/i.test(text) ||
+      /something went wrong while displaying/i.test(text)
+    );
+  } catch {
+    return true;
+  }
+}
+
+
 const {
   values: {
     file,
@@ -103,7 +120,22 @@ const executablePath = (browserArg?.toString() ?? "").trim() || undefined;
 
 const browser = await create(executablePath, {
   width: 1280,
-  height: 720, // match stream crop; scale via page zoom // 16:9 * 1.25; T≈20 B≈160 // 16:9 scale; crop takes top-left 1280x720 // tall: push bottom ads below stream crop
+  height: 720, // match stream crop;
+
+const awSnapTimer = setInterval(async () => {
+  if (await isAwSnapPage(browser)) {
+    console.warn("[WARN] Aw, Snap! detected — attempting reload");
+    try {
+      await browser.reload();
+      console.log("[INFO] page reloaded after Aw, Snap!");
+    } catch (err) {
+      console.warn("[WARN] reload failed, exiting session for outer restart", err);
+      clearInterval(awSnapTimer);
+      process.exit(1);
+    }
+  }
+}, AW_SNAP_CHECK_MS);
+ scale via page zoom // 16:9 * 1.25; T≈20 B≈160 // 16:9 scale; crop takes top-left 1280x720 // tall: push bottom ads below stream crop
 });
 
 const send = await createRetrySender(
