@@ -102,14 +102,14 @@
       ansible.builtin.systemd:
         name: makamujo-xvfb
         enabled: true
-        state: started
+        state: restarted
         daemon_reload: true
 
     - name: Enable and start makamujo-x11vnc
       ansible.builtin.systemd:
         name: makamujo-x11vnc
         enabled: true
-        state: started
+        state: restarted
         daemon_reload: true
 
     - name: Configure xrdp for Makamujo-only session (:10 via x11vnc)
@@ -214,7 +214,7 @@
       ansible.builtin.systemd:
         name: makamujo-pipewire
         enabled: true
-        state: started
+        state: restarted
         daemon_reload: true
 
     - name: Configure environment variables for PulseAudio (pactl)
