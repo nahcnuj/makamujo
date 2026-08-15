@@ -5,6 +5,9 @@
 ## Requirements
 
 - [uv](https://github.com/astral-sh/uv)
+- One of the following for `bin/vault-session` (short-lived Vault password):
+  - [`secret-tool`](https://wiki.gnome.org/Projects/Libsecret) (libsecret)
+  - [`keyctl`](https://git.kernel.org/pub/scm/linux/kernel/git/dhowells/keyutils.git) (keyutils)
 
 ## Setup
 
@@ -57,6 +60,14 @@ chmod 600 .vault_pass
 ansible-vault edit inventory/group_vars/all/vault.yml --ask-vault-pass
 ansible-playbook playbooks/0_secrets.yml --ask-vault-pass
 ```
+
+Vault パスワードを短時間だけ預ける場合（リポジトリルート）:
+
+    bin/vault-session login
+    bin/vault-session run ansible-playbook ansible/playbooks/0_secrets.yml
+    bin/vault-session logout
+
+`login` 後 900 秒で無効。終わったら `logout` を推奨。
 
 ### 確認（サーバ）
 
