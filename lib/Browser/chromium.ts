@@ -158,7 +158,7 @@ export const create = async (
     width: 1280,
     height: 720,
   },
-): Promise<Browser> => {
+): Promise<Browser & { reload: () => Promise<void> }> => {
   const launchTimeout = Number.parseInt(
     process.env.CHROMIUM_LAUNCH_TIMEOUT ?? "60000",
     10,
@@ -346,10 +346,13 @@ export const create = async (
       }, f.toString());
     },
 
+    reload: async () => {
+      await page.reload({ waitUntil: "domcontentloaded" });
+    },
     get url() {
       return page.url();
     },
-  } satisfies Browser;
+  } as Browser & { reload: () => Promise<void> };
 };
 
 type PageLike = { url(): string; close(): Promise<void> };
