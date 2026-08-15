@@ -53,7 +53,7 @@
         "fps_custom": true,
         "shutdown": false,
         "restart_when_active": false,
-        "css": "body { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }",
+        "css": "body { background-color: rgba(0,0,0,0) !important; margin: 0; overflow: hidden; }",
         "webpage_control_level": 1
       },
       "mixers": 255,
@@ -78,35 +78,7 @@
       "deinterlace_field_order": 0,
       "monitoring_type": 0,
       "private_settings": {},
-      "filters": [
-        {
-          "prev_ver": 520159234,
-          "name": "Color Key",
-          "uuid": "2c381af4-4400-41e8-91f3-025013416ba3",
-          "id": "color_key_filter",
-          "versioned_id": "color_key_filter_v2",
-          "settings": {
-            "key_color": 4278190080,
-            "key_color_type": "custom"
-          },
-          "mixers": 0,
-          "sync": 0,
-          "flags": 0,
-          "volume": 1.0,
-          "balance": 0.5,
-          "enabled": true,
-          "muted": false,
-          "push-to-mute": false,
-          "push-to-mute-delay": 0,
-          "push-to-talk": false,
-          "push-to-talk-delay": 0,
-          "hotkeys": {},
-          "deinterlace_mode": 0,
-          "deinterlace_field_order": 0,
-          "monitoring_type": 0,
-          "private_settings": {}
-        }
-      ]
+      "filters": []
     },
     {
       "prev_ver": 520159234,
