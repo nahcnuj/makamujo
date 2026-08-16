@@ -2,10 +2,10 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import {
+  type RecordedComment,
   recordComment,
   resolveCommentWho,
   sanitizeProgramKey,
-  type RecordedComment,
 } from "./CommentRecorder";
 
 const testBaseDir = join("var", "comments-test-tmp");
@@ -54,9 +54,9 @@ describe("resolveCommentWho", () => {
   });
 
   test("trims name", () => {
-    expect(
-      resolveCommentWho({ anonymity: false, name: "  hello  " }),
-    ).toBe("hello");
+    expect(resolveCommentWho({ anonymity: false, name: "  hello  " })).toBe(
+      "hello",
+    );
   });
 });
 
