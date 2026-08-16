@@ -93,3 +93,22 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 | 0 | `0_secrets.yml` | stream key → service.json |
 | 1 | `1_bun.yml` | Bun |
 | 2 | `2_makamujo.yml` | アプリ clone / 依存 / TLS / key 再適用 |
+
+## デプロイ後の再起動（ad-hoc）
+
+`2_makamujo.yml` はコードと依存の反映までで、プロセス再起動は行いません。
+
+inventory に Vault 変数があるため、復号付きで実行します（リポジトリルートから）:
+
+    bin/vault-session run ansible vps -i ansible/inventory/hosts.yml -b -m shell -a 'cd /opt/src/makamujo && ./bin/stop && ./bin/start'
+
+`ansible/` ディレクトリにいる場合:
+
+    source .venv/bin/activate
+    ../bin/vault-session run ansible vps -i inventory/hosts.yml -b -m shell -a 'cd /opt/src/makamujo && ./bin/stop && ./bin/start'
+
+VPS に SSH して直接実行してもよいです:
+
+    cd /opt/src/makamujo && ./bin/stop && ./bin/start
+
+コードがまだ古い場合は、先に `2_makamujo.yml` を流すか、VPS 上で `git fetch` と `git reset --hard origin/legacy` してから上記を実行します。
