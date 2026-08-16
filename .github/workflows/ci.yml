@@ -128,3 +128,26 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+
+  ansible-syntax:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ansible-core
+        run: pip install "ansible-core>=2.16,<2.19"
+      - name: Syntax-check playbooks
+        working-directory: ansible
+        # Avoid real inventory (vault). localhost inventory loads no group_vars vault.
+        run: |
+          set -e
+          for f in playbooks/*.yml; do
+            echo "==> $f"
+            ansible-playbook --syntax-check -i localhost, -c local "$f"
+          done
+
