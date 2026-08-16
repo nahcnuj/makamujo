@@ -25,7 +25,6 @@ const normalizeNGram = (nGram: number): number =>
 const normalizeLearnText = (text: string): `${string}。` =>
   `${text.replace(/。+$/u, "")}。` satisfies `${string}。`;
 
-
 const wordSegmenter = new Intl.Segmenter("ja", { granularity: "word" });
 
 /** Tokenize like learn-side Japanese word splits (non-whitespace segments). */
@@ -35,7 +34,6 @@ export const segmentLearnText = (text: string): string[] => {
     .map((s) => s.segment)
     .filter((s) => s.trim().length > 0);
 };
-
 
 /**
  * A word-level Markov chain model.
@@ -260,7 +258,6 @@ export class MarkovChainModel implements TalkModel {
       this.#maxLearnContext,
     );
   }
-
 
   /** corpus length (learned sentences, append order; end is newest). */
   corpusLength(): number {
