@@ -241,7 +241,8 @@ export class GameplayApplicationService {
 
     for (const text of speeches) {
       if (!text) continue;
-      this.#talkModel?.learn(`${text}`);
+      // Fixed scripts (milestones / game-over) — speak only; do not train Markov
+      // (same as ad / cruise / stream-end system speeches)
       void this.#speech.speech(text);
     }
   }
