@@ -878,7 +878,7 @@ describe("VigilantFiesta game commentary", () => {
     mockSolverControl.done = false;
   });
 
-  it("speaks scripted lines on start and game over, and learns them", async () => {
+  it("speaks scripted lines on start and game over, without learning them", async () => {
     const learn = jest.fn();
     const speech = jest.fn(async () => {});
     const talkModel: TalkModel = {
@@ -925,6 +925,7 @@ describe("VigilantFiesta game commentary", () => {
       heard.some((t) => t.includes("ゲームオーバー") && t.includes("88")),
     ).toBe(true);
     expect(heard).toContain("ちょっと雑談してから、またプレイしますね。");
-    expect(learn.mock.calls.length).toBeGreaterThanOrEqual(3);
+    // Fixed system scripts must not train Markov (same as ad/cruise)
+    expect(learn).not.toHaveBeenCalled();
   });
 });
