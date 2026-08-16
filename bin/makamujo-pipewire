@@ -1,4 +1,5 @@
 #!/bin/bash
+# Headless PipeWire stack for root. Exit if pulse socket is lost so systemd restarts us.
 set -euo pipefail
 
 export XDG_RUNTIME_DIR=/run/user/0
@@ -11,21 +12,36 @@ export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus
 mkdir -p "$XDG_RUNTIME_DIR" "$PULSE_RUNTIME_PATH"
 chmod 700 "$XDG_RUNTIME_DIR"
 
-# Leftovers only (do not race systemd stop)
+cleanup() {
+  for pid in ${WP_PID:-} ${PULSE_PID:-} ${PW_PID:-} ${DBUS_PID:-}; do
+    [ -n "${pid}" ] || continue
+    kill "$pid" 2>/dev/null || true
+  done
+  pkill -u root -x wireplumber 2>/dev/null || true
+  pkill -u root -x pipewire-pulse 2>/dev/null || true
+  pkill -u root -x pipewire 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+# Leftovers from previous runs
 pkill -u root -x pipewire 2>/dev/null || true
 pkill -u root -x pipewire-pulse 2>/dev/null || true
 pkill -u root -x wireplumber 2>/dev/null || true
 pkill -u root -f 'dbus-daemon --session --address=unix:path=/run/user/0/bus' 2>/dev/null || true
 sleep 0.3
+rm -f "${PULSE_RUNTIME_PATH}/native" "${PIPEWIRE_RUNTIME_DIR}/pipewire-0" 2>/dev/null || true
 
 dbus-daemon --session \
   --address="unix:path=${XDG_RUNTIME_DIR}/bus" \
   --nofork --nopidfile --syslog-only &
+DBUS_PID=$!
 sleep 1
 
 pipewire &
+PW_PID=$!
 sleep 1
 pipewire-pulse &
+PULSE_PID=$!
 sleep 1
 
 for _ in $(seq 1 80); do
@@ -41,4 +57,27 @@ if [ ! -S "${PULSE_RUNTIME_PATH}/native" ]; then
 fi
 
 echo "Pulse socket ready: ${PULSE_RUNTIME_PATH}/native"
-exec wireplumber
+
+wireplumber &
+WP_PID=$!
+
+# Stay up only while pulse socket and children live (systemd Restart=on-failure)
+while true; do
+  if ! kill -0 "$WP_PID" 2>/dev/null; then
+    echo "ERROR: wireplumber exited" >&2
+    exit 1
+  fi
+  if ! kill -0 "$PW_PID" 2>/dev/null; then
+    echo "ERROR: pipewire exited" >&2
+    exit 1
+  fi
+  if ! kill -0 "$PULSE_PID" 2>/dev/null; then
+    echo "ERROR: pipewire-pulse exited" >&2
+    exit 1
+  fi
+  if [ ! -S "${PULSE_RUNTIME_PATH}/native" ]; then
+    echo "ERROR: pulse socket lost: ${PULSE_RUNTIME_PATH}/native" >&2
+    exit 1
+  fi
+  sleep 2
+done
