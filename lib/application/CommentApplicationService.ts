@@ -47,12 +47,12 @@ export class CommentApplicationService {
       // Data collection: who / comment / when per program
       void recordComment(this.#session.currentProgramUrl, {
         comment,
-        anonymity: Boolean(data.anonymity),
-        name: data.name,
-        userId: data.userId,
-        no: typeof data.no === "number" ? data.no : undefined,
-        hasGift: data.hasGift,
-        isOwner: data.isOwner,
+        anonymity: Boolean(commentData.anonymity),
+        name: commentData.name,
+        userId: commentData.userId,
+        no: typeof commentData.no === "number" ? commentData.no : undefined,
+        hasGift: commentData.hasGift,
+        isOwner: commentData.isOwner,
       });
 
       // Step 2 — all comments refresh silence clock
