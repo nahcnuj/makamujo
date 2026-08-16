@@ -65,22 +65,12 @@
           CONSOLE_TLS_KEY={{ tls_dir }}/privkey.pem
 
     # git force-reset restores empty service.json key; re-apply from vault when present.
+
     - name: Re-apply Niconama stream key after deploy
       ansible.builtin.include_tasks: tasks/write_obs_stream_key.yml
       when:
         - niconama_stream_key is defined
         - (niconama_stream_key | length) > 0
-
-
-          From laptop (repo root, copy-paste one line):
-            bin/vault-session run ansible vps -i ansible/inventory/hosts.yml -b -m shell -a 'cd /opt/src/makamujo && ./bin/stop && ./bin/start'
-
-          Or on the VPS:
-            export PATH="/root/.bun/bin:$PATH"
-            cd /opt/src/makamujo && ./bin/stop && ./bin/start
-
-          If OBS stream key was wiped by git reset, also:
-            bin/vault-session run ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/0_secrets.yml
 
     - name: Ensure streaming infra is up
       ansible.builtin.systemd:
@@ -111,4 +101,4 @@
 
     - name: Deploy done
       ansible.builtin.debug:
-        msg: "Deployed and restarted."
+        msg: Deployed and restarted.
