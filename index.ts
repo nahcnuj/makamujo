@@ -316,11 +316,17 @@ if (!Number.isFinite(portNumber) || portNumber < 1 || portNumber > 65535) {
 const apiApp = new Hono()
   .get("/api/speech", () => {
     const speechState = agent.getSpeech();
+    // Overlay uses `silent` for 「（コメントしてね）」. Align with silence policy
+    // (canSpeak / speechable), not only an optional field on the speech object.
+    const canSpeak =
+      typeof streamer.canSpeak === "boolean"
+        ? streamer.canSpeak
+        : typeof (agent as { canSpeak?: boolean }).canSpeak === "boolean"
+          ? Boolean((agent as { canSpeak?: boolean }).canSpeak)
+          : true;
     return Response.json({
       speech: normalizeSpeechText(speechState) ?? "",
-      silent: !!(speechState && typeof speechState === "object"
-        ? (speechState as any).silent
-        : false),
+      silent: !canSpeak,
     });
   })
   .get("/api/speech-history", (c) => speechHistoryRoute.GET(c.req.raw))
