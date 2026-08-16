@@ -78,21 +78,39 @@
         dest: /usr/local/bin/makamujo-pipewire
         mode: "0755"
 
-    - name: Ensure streaming infra is up
+    - name: Restart streaming infra
       ansible.builtin.systemd:
         name: "{{ item }}"
         enabled: true
-        state: started
+        state: restarted
         daemon_reload: true
       loop:
         - makamujo-xvfb.service
         - makamujo-pipewire.service
         - makamujo-x11vnc.service
 
+    - name: Wait until PipeWire pulse socket is ready
+      ansible.builtin.wait_for:
+        path: /run/user/0/pulse/native
+        state: present
+        timeout: 60
+
+    - name: Verify pulse server responds
+      ansible.builtin.command:
+        cmd: pactl info
+      environment:
+        XDG_RUNTIME_DIR: /run/user/0
+        PULSE_SERVER: unix:/run/user/0/pulse/native
+      register: pactl_info
+      changed_when: false
+      failed_when: pactl_info.rc != 0
+
     - name: Restart makamujo processes
       ansible.builtin.shell: |
         set -e
         export PATH="/root/.bun/bin:${PATH}"
+        export XDG_RUNTIME_DIR=/run/user/0
+        export PULSE_SERVER=unix:/run/user/0/pulse/native
         cd {{ makamujo_src }}
         ./bin/stop || true
         sleep 2
@@ -102,9 +120,13 @@
           set +a
         fi
         ./bin/start
+        test -S /run/user/0/pulse/native
+        pgrep -f 'bun start' >/dev/null
+        pgrep -x obs >/dev/null || pgrep -f '/app/bin/obs' >/dev/null
       args:
         executable: /bin/bash
 
     - name: Deploy done
       ansible.builtin.debug:
-        msg: Deployed and restarted.
+        msg: Deployed; pulse socket up and processes started.
+
