@@ -25,6 +25,16 @@ const normalizeNGram = (nGram: number): number =>
 const normalizeLearnText = (text: string): `${string}。` =>
   `${text.replace(/。+$/u, "")}。` satisfies `${string}。`;
 
+const wordSegmenter = new Intl.Segmenter("ja", { granularity: "word" });
+
+/** Tokenize like learn-side Japanese word splits (non-whitespace segments). */
+export const segmentLearnText = (text: string): string[] => {
+  const normalized = normalizeLearnText(text);
+  return [...wordSegmenter.segment(normalized)]
+    .map((s) => s.segment)
+    .filter((s) => s.trim().length > 0);
+};
+
 /**
  * A word-level Markov chain model.
  * The model provides some helper methods to generate something to talk or replies and learn new sentences.
@@ -245,6 +255,83 @@ export class MarkovChainModel implements TalkModel {
     if (!next[""] || Object.keys(next[""]).length === 0) next[""] = { "。": 1 };
     return MarkovChainModel.#fromJson(
       { model: next, corpus },
+      this.#maxLearnContext,
+    );
+  }
+
+  /** corpus length (learned sentences, append order; end is newest). */
+  corpusLength(): number {
+    const { corpus = [] } = this.#model.json as { corpus?: string[] };
+    return corpus.length;
+  }
+
+  /**
+   * Sentence at 1-based index from the end (1 = newest).
+   * Returns undefined if out of range.
+   */
+  corpusFromEnd(n: number): string | undefined {
+    const nth = Math.floor(n);
+    if (nth < 1) return undefined;
+    const { corpus = [] } = this.#model.json as { corpus?: string[] };
+    const idx = corpus.length - nth;
+    if (idx < 0 || idx >= corpus.length) return undefined;
+    return corpus[idx];
+  }
+
+  /**
+   * Unlearn one corpus entry: transition weights -1 (same as one learn),
+   * then remove that single corpus string (by index from end).
+   * n is 1-based from the end (1 = newest).
+   */
+  unlearnFromEnd(n: number): MarkovChainModel {
+    const nth = Math.floor(n);
+    if (nth < 1) {
+      throw new RangeError(`n must be >= 1, got ${n}`);
+    }
+    const current = this.#model.json as {
+      model: Distribution;
+      corpus: string[];
+    };
+    const corpus = current.corpus ?? [];
+    const idx = corpus.length - nth;
+    if (idx < 0 || idx >= corpus.length) {
+      throw new RangeError(
+        `n=${nth} out of range (corpus length ${corpus.length})`,
+      );
+    }
+    const text = corpus[idx];
+    if (text == null) {
+      throw new RangeError(
+        `n=${nth} out of range (corpus length ${corpus.length})`,
+      );
+    }
+    const tokens = segmentLearnText(text);
+    const decremented = this.decrementPhrase(tokens, { delta: 1 });
+    const next = JSON.parse(decremented.toJSON()) as {
+      model: Distribution;
+      corpus: string[];
+    };
+    const nextCorpus = [...(next.corpus ?? [])];
+    // Same index: decrementPhrase does not change corpus order/length
+    if (nextCorpus[idx] !== text) {
+      // Fallback: remove first matching from end-side scan
+      let removed = false;
+      for (let i = nextCorpus.length - 1; i >= 0; i--) {
+        if (nextCorpus[i] === text) {
+          nextCorpus.splice(i, 1);
+          removed = true;
+          break;
+        }
+      }
+      if (!removed) {
+        // still drop by original idx if lengths match
+        if (idx < nextCorpus.length) nextCorpus.splice(idx, 1);
+      }
+    } else {
+      nextCorpus.splice(idx, 1);
+    }
+    return MarkovChainModel.#fromJson(
+      { model: next.model, corpus: nextCorpus },
       this.#maxLearnContext,
     );
   }

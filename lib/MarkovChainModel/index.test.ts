@@ -437,3 +437,34 @@ describe("transitionsOf n-gram contexts", () => {
     );
   });
 });
+
+describe("corpusFromEnd and unlearnFromEnd", () => {
+  it("corpusFromEnd(1) returns the newest learned sentence", () => {
+    const model = new MarkovChainModel();
+    model.learn("古い文");
+    model.learn("新しい文");
+    expect(model.corpusFromEnd(1)).toBe("新しい文。");
+    expect(model.corpusFromEnd(2)).toBe("古い文。");
+    expect(model.corpusFromEnd(3)).toBeUndefined();
+  });
+
+  it("unlearnFromEnd(1) removes newest corpus entry and decrements transitions", () => {
+    const model = new MarkovChainModel();
+    model.learn("あいう");
+    model.learn("えお");
+    const beforeLen = model.corpusLength();
+    const newest = model.corpusFromEnd(1);
+    expect(newest).toBe("えお。");
+    const updated = model.unlearnFromEnd(1);
+    expect(updated.corpusLength()).toBe(beforeLen - 1);
+    expect(JSON.parse(updated.toJSON()).corpus).not.toContain("えお。");
+    expect(JSON.parse(updated.toJSON()).corpus).toContain("あいう。");
+  });
+
+  it("unlearnFromEnd rejects out of range n", () => {
+    const model = new MarkovChainModel();
+    model.learn("のみ");
+    expect(() => model.unlearnFromEnd(2)).toThrow(RangeError);
+    expect(() => model.unlearnFromEnd(0)).toThrow(RangeError);
+  });
+});

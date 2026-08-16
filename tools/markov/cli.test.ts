@@ -377,3 +377,81 @@ describe("markov cli tokens", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 });
+
+describe("markov cli corpus", () => {
+  it("lists corpus with from-end index", async () => {
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(
+      modelPath,
+      JSON.stringify({
+        model: { "": { "。": 1 } },
+        corpus: ["古い。", "新しい。"],
+      }),
+    );
+
+    const proc = Bun.spawn(
+      ["bun", "run", "tools/markov/cli.ts", "corpus", modelPath],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const stdout = await new Response(proc.stdout).text();
+    const code = await proc.exited;
+    expect(code).toBe(0);
+    expect(stdout).toContain("2\t古い。");
+    expect(stdout).toContain("1\t新しい。");
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
+
+describe("markov cli unlearn", () => {
+  it("without -i writes JSON to stdout and does not change file", async () => {
+    mkdirSync(tmpDir, { recursive: true });
+    const model = {
+      model: {
+        "": { あ: 1 },
+        あ: { "。": 1 },
+      },
+      corpus: ["あ。"],
+    };
+    writeFileSync(modelPath, JSON.stringify(model));
+
+    const proc = Bun.spawn(
+      ["bun", "run", "tools/markov/cli.ts", "unlearn", modelPath, "1"],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    const code = await proc.exited;
+    expect(code).toBe(0);
+    expect(stderr).toContain("unlearn n=1");
+    const out = JSON.parse(stdout);
+    expect(out.corpus).toEqual([]);
+    const onDisk = JSON.parse(await Bun.file(modelPath).text());
+    expect(onDisk.corpus).toEqual(["あ。"]);
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("with -i overwrites model file", async () => {
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(
+      modelPath,
+      JSON.stringify({
+        model: { "": { あ: 1 }, あ: { "。": 1 } },
+        corpus: ["あ。"],
+      }),
+    );
+
+    const proc = Bun.spawn(
+      ["bun", "run", "tools/markov/cli.ts", "unlearn", modelPath, "1", "-i"],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    const code = await proc.exited;
+    expect(code).toBe(0);
+    expect(stdout.trim()).toBe("");
+    expect(stderr).toContain("wrote:");
+    const saved = JSON.parse(await Bun.file(modelPath).text());
+    expect(saved.corpus).toEqual([]);
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
