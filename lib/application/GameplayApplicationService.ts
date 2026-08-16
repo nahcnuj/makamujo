@@ -102,10 +102,19 @@ export class GameplayApplicationService {
                 ...enriched,
               },
             };
-            this.#reactToGameSight(name, previousState, nextState);
+            // SILENT/ACTIVE: eyes still update session above; mouth/hands only when active
+            const active = this.#isSpeechable();
+            if (active) {
+              this.#reactToGameSight(name, previousState, nextState);
+              this.#onGameSight?.(nextState);
+            }
             this.#notifyGameStateChange();
-            this.#onGameSight?.(nextState);
           }
+        }
+
+        // Hands: no solver actions while silent (UI shows コメントしてね)
+        if (!this.#isSpeechable()) {
+          return Action.noop;
         }
 
         const { done, value } = solver.next(state);
@@ -224,7 +233,7 @@ export class GameplayApplicationService {
   }
 
   /**
-   * Emit scripted commentary (and learn lines) from game sight diffs.
+   * Emit scripted commentary from game sight diffs (ACTIVE / speechable only).
    * Free-style Markov continues via idle speech timer during free-talk windows.
    */
   #reactToGameSight(
@@ -232,7 +241,7 @@ export class GameplayApplicationService {
     previousState: Record<string, unknown>,
     nextState: Record<string, unknown>,
   ): void {
-    if (!this.#speech) return;
+    if (!this.#speech || !this.#isSpeechable()) return;
 
     const speeches =
       name === "VigilantFiesta"
