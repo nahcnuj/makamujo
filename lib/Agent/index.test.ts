@@ -86,6 +86,52 @@ const viewerComment = {
   },
 };
 
+
+describe("anonymous comments are not learned (cruise-equivalent)", () => {
+  it("does not call learn for anonymous comments but still replies", () => {
+    const learn = jest.fn();
+    const generate = jest.fn(() => "返信テキスト");
+    const talkModel: TalkModel = {
+      generate,
+      learn,
+      toJSON: () => "{}",
+    };
+    const agent = new MakaMujo(talkModel, stubTts);
+    agent.onAir(niconamaLive(10));
+
+    agent.listen([
+      {
+        data: {
+          comment: "匿名のコメントです",
+          no: 42,
+          anonymity: true,
+          hasGift: false,
+        },
+      } as any,
+    ]);
+
+    expect(learn).not.toHaveBeenCalled();
+    expect(generate).toHaveBeenCalled();
+    const streamState = agent.streamState as any;
+    expect(streamState?.replyTargetComment?.text).toBe("匿名のコメントです");
+  });
+
+  it("still learns non-anonymous comments with no", () => {
+    const learn = jest.fn();
+    const talkModel: TalkModel = {
+      generate: () => "",
+      learn,
+      toJSON: () => "{}",
+    };
+    const agent = new MakaMujo(talkModel, stubTts);
+    agent.onAir(niconamaLive(10));
+
+    agent.listen([viewerComment]);
+
+    expect(learn).toHaveBeenCalledWith("こんにちは。");
+  });
+});
+
 describe("per-program comment tracking", () => {
   it("initializes comments to 0 and sets the latest comment number for user comments", () => {
     const agent = new MakaMujo(stubTalkModel, stubTts);
