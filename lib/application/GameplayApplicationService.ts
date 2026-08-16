@@ -102,7 +102,8 @@ export class GameplayApplicationService {
                 ...enriched,
               },
             };
-            // SILENT/ACTIVE: eyes still update session above; mouth/hands only when active
+            // SILENT/ACTIVE: eyes still update session above; mouth only when active
+            // (hands continue like Cookie Clicker)
             const active = this.#isSpeechable();
             if (active) {
               this.#reactToGameSight(name, previousState, nextState);
@@ -110,11 +111,6 @@ export class GameplayApplicationService {
             }
             this.#notifyGameStateChange();
           }
-        }
-
-        // Hands: no solver actions while silent (UI shows コメントしてね)
-        if (!this.#isSpeechable()) {
-          return Action.noop;
         }
 
         const { done, value } = solver.next(state);
