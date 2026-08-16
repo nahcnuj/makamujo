@@ -67,8 +67,8 @@ export class CommentApplicationService {
         this.#session.currentNGramSize = inferNGramSize(commentNumber);
       }
 
-      // Step 5 — truthy no or owner
-      if (data.no || data.isOwner) {
+      // Step 5 — truthy no or owner（匿名は学習しない。クルーズ相当）
+      if ((data.no || data.isOwner) && !commentData.anonymity) {
         this.#talkModel.learn(`${comment}。`);
       }
 
