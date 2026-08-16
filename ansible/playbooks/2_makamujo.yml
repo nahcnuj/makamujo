@@ -71,10 +71,6 @@
         - niconama_stream_key is defined
         - (niconama_stream_key | length) > 0
 
-    - name: Show next step
-      ansible.builtin.debug:
-        msg: |
-          Deploy finished (code/deps/TLS only). Restart processes next.
 
           From laptop (repo root, copy-paste one line):
             bin/vault-session run ansible vps -i ansible/inventory/hosts.yml -b -m shell -a 'cd /opt/src/makamujo && ./bin/stop && ./bin/start'
@@ -85,3 +81,34 @@
 
           If OBS stream key was wiped by git reset, also:
             bin/vault-session run ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/0_secrets.yml
+
+    - name: Ensure streaming infra is up
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+        daemon_reload: true
+      loop:
+        - makamujo-xvfb.service
+        - makamujo-pipewire.service
+        - makamujo-x11vnc.service
+
+    - name: Restart makamujo processes
+      ansible.builtin.shell: |
+        set -e
+        export PATH="/root/.bun/bin:${PATH}"
+        cd {{ makamujo_src }}
+        ./bin/stop || true
+        sleep 2
+        if [ -f ./var/console-tls.env ]; then
+          set -a
+          . ./var/console-tls.env
+          set +a
+        fi
+        ./bin/start
+      args:
+        executable: /bin/bash
+
+    - name: Deploy done
+      ansible.builtin.debug:
+        msg: "Deployed and restarted."
