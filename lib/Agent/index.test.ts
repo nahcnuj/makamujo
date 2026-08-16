@@ -86,7 +86,6 @@ const viewerComment = {
   },
 };
 
-
 describe("anonymous comments are not learned (cruise-equivalent)", () => {
   it("does not call learn for anonymous comments but still replies", () => {
     const learn = jest.fn();
