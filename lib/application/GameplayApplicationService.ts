@@ -112,10 +112,6 @@ export class GameplayApplicationService {
           }
         }
 
-        // Hands: no solver actions while silent (UI shows コメントしてね)
-        if (!this.#isSpeechable()) {
-          return Action.noop;
-        }
 
         const { done, value } = solver.next(state);
         if (done) {
