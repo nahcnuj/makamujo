@@ -10,6 +10,9 @@ mkdir -p "${PID_DIR}"
 
 cd "${PROJECT_ROOT}"
 
+# Bun is installed under ~/.bun/bin; non-login shells (ansible ad-hoc, nohup) often lack it
+export PATH="${HOME}/.bun/bin:/root/.bun/bin:${PATH}"
+
 # Streaming display (makamujo-xvfb)
 export DISPLAY=:10
 
