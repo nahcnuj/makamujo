@@ -378,8 +378,8 @@ describe("markov cli tokens", () => {
   });
 });
 
-describe("markov cli show", () => {
-  it("prints newest corpus entry for n=1", async () => {
+describe("markov cli corpus", () => {
+  it("lists corpus with from-end index", async () => {
     mkdirSync(tmpDir, { recursive: true });
     writeFileSync(
       modelPath,
@@ -390,13 +390,14 @@ describe("markov cli show", () => {
     );
 
     const proc = Bun.spawn(
-      ["bun", "run", "tools/markov/cli.ts", "show", modelPath, "1"],
+      ["bun", "run", "tools/markov/cli.ts", "corpus", modelPath],
       { stdout: "pipe", stderr: "pipe" },
     );
     const stdout = await new Response(proc.stdout).text();
     const code = await proc.exited;
     expect(code).toBe(0);
-    expect(stdout.trim()).toBe("新しい。");
+    expect(stdout).toContain("2\t古い。");
+    expect(stdout).toContain("1\t新しい。");
     rmSync(tmpDir, { recursive: true, force: true });
   });
 });

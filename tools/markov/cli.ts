@@ -50,6 +50,7 @@ const { values, positionals } = parseArgs({
     delimiter: { type: "string", short: "d", default: " " },
     purge: { type: "boolean", default: false },
     sort: { type: "string", default: "asToWeight" },
+    tail: { type: "string" },
     help: { type: "boolean", short: "h" },
   },
   allowPositionals: true,
@@ -68,14 +69,14 @@ function load(path: string): MarkovChainModel {
 
 function usage(): never {
   console.error(`Usage:
-  bun run tools/markov/cli.ts show <modelPath> <n>
+  bun run tools/markov/cli.ts corpus <modelPath> [--tail N]
   bun run tools/markov/cli.ts unlearn <modelPath> <n> [-i|-iSUFFIX]
   bun run tools/markov/cli.ts decrement-phrase <modelPath> <phrase> [--delta N | --purge] [-i|-iSUFFIX] [-d DELIM]
   bun run tools/markov/cli.ts tokens <modelPath> [--sort token|asFrom|asToWeight]
   bun run tools/markov/cli.ts search <modelPath> <query>
   bun run tools/markov/cli.ts transitions <modelPath> <word> [-d DELIM]
 
-  show / unlearn: n is 1-based from the end (1 = newest corpus entry).
+  corpus: list entries (1=newest). unlearn: n is 1-based from the end.
   unlearn: one learn worth of -1 on transitions, then drop that corpus entry.`);
   process.exit(values.help ? 0 : 1);
 }
@@ -83,26 +84,28 @@ function usage(): never {
 if (!cmd || values.help) usage();
 
 switch (cmd) {
-  case "show": {
-    const [modelPath, nStr] = rest;
-    if (!modelPath || nStr == null) {
-      console.error("modelPath and n are required");
+  case "corpus": {
+    const [modelPath] = rest;
+    if (!modelPath) {
+      console.error("modelPath is required");
       usage();
     }
-    const n = parseInt(nStr, 10);
-    if (!Number.isFinite(n) || n < 1) {
-      console.error(`n must be a positive integer, got ${nStr}`);
-      process.exit(1);
-    }
     const model = load(modelPath);
-    const text = model.corpusFromEnd(n);
-    if (text == null) {
-      console.error(
-        `n=${n} out of range (corpus length ${model.corpusLength()})`,
-      );
-      process.exit(1);
+    const { corpus = [] } = JSON.parse(model.toJSON()) as { corpus?: string[] };
+    let start = 0;
+    if (values.tail != null) {
+      const tail = parseInt(values.tail, 10);
+      if (!Number.isFinite(tail) || tail < 1) {
+        console.error(`--tail must be a positive integer, got ${values.tail}`);
+        process.exit(1);
+      }
+      start = Math.max(0, corpus.length - tail);
     }
-    console.log(text);
+    // print oldest-first among the slice; n is 1-based from end
+    for (let i = start; i < corpus.length; i++) {
+      const nFromEnd = corpus.length - i;
+      console.log(`${nFromEnd}\t${corpus[i]}`);
+    }
     break;
   }
   case "unlearn": {
