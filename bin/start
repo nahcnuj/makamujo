@@ -58,8 +58,7 @@ if ! pgrep -f "bin/x/portal-stub.py" >/dev/null 2>&1; then
   sleep 0.3
 fi
 
-nohup ./bin/x/obs >"${PROJECT_ROOT}/var/obs.log" 2>&1 &
-echo $! > "${PID_DIR}/obs"
+systemctl start makamujo-obs.service
 
 # After OBS starts, raise main window on :10 for RDP monitoring
 (

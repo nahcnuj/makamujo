@@ -105,6 +105,19 @@
       changed_when: false
       failed_when: pactl_info.rc != 0
 
+    - name: Install makamujo-obs unit from repo
+      ansible.builtin.copy:
+        src: "{{ makamujo_src }}/etc/systemd/makamujo-obs.service"
+        dest: /etc/systemd/system/makamujo-obs.service
+        remote_src: true
+        mode: "0644"
+
+    - name: Enable makamujo-obs unit
+      ansible.builtin.systemd:
+        name: makamujo-obs
+        enabled: true
+        daemon_reload: true
+
     - name: Restart makamujo processes
       ansible.builtin.shell: |
         set -e
