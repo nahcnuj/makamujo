@@ -299,7 +299,12 @@ export class MarkovChainModel implements TalkModel {
         `n=${nth} out of range (corpus length ${corpus.length})`,
       );
     }
-    const text = corpus[idx]!;
+    const text = corpus[idx];
+    if (text == null) {
+      throw new RangeError(
+        `n=${nth} out of range (corpus length ${corpus.length})`,
+      );
+    }
     const tokens = segmentLearnText(text);
     const decremented = this.decrementPhrase(tokens, { delta: 1 });
     const next = JSON.parse(decremented.toJSON()) as {

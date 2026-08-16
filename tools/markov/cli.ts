@@ -127,7 +127,7 @@ switch (cmd) {
       );
       process.exit(1);
     }
-    let updated;
+    let updated: ReturnType<MarkovChainModel["unlearnFromEnd"]>;
     try {
       updated = model.unlearnFromEnd(n);
     } catch (e) {
