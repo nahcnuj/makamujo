@@ -3,6 +3,7 @@ import {
   inferNGramSize,
   inferNGramSizeRaw,
 } from "../domain/broadcasting/NGramPolicy";
+import { recordComment } from "../domain/comments/CommentRecorder";
 import {
   CRUISE_WELCOME_SPEECHES,
   extractAdName,
@@ -42,6 +43,17 @@ export class CommentApplicationService {
       // Step 1 — NFC normalize for learning / topic; system match uses raw where noted
       const comment = commentData.comment.normalize("NFC").trim();
       console.debug("[DEBUG]", "comment", JSON.stringify(data, null, 0));
+
+      // Data collection: who / comment / when per program
+      void recordComment(this.#session.currentProgramUrl, {
+        comment,
+        anonymity: Boolean(data.anonymity),
+        name: data.name,
+        userId: data.userId,
+        no: typeof data.no === "number" ? data.no : undefined,
+        hasGift: data.hasGift,
+        isOwner: data.isOwner,
+      });
 
       // Step 2 — all comments refresh silence clock
       this.#session.lastCommentAt = new Date(Date.now());
