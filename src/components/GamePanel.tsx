@@ -22,13 +22,6 @@ const formatNumber = new Intl.NumberFormat("ja-JP").format;
 export function GamePanel() {
   const { playing, streamState } = useAgentContext();
 
-  const now = new Date();
-  const duration = new Date(
-    now.getTime() -
-      (streamState?.meta?.start ?? 0) +
-      now.getTimezoneOffset() * 60_000,
-  );
-
   // console.log(playing);
   const Component = playing ? Games[playing.name].Component : () => null;
 
@@ -69,9 +62,6 @@ export function GamePanel() {
                   {`${formatNumber(streamState.meta.total.gift)}🎁`}
                 </HighlightOnChange>
               </div>
-            )}
-            {streamState.meta.start && (
-              <div>{`${formatDuration(duration)}⏱️`}</div>
             )}
           </div>
         )}
