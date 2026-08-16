@@ -35,6 +35,8 @@ fi
 # Soften OBS Browser Source (CEF) on GPU-less VPS
 export LIBGL_ALWAYS_SOFTWARE=1
 export OBS_BROWSER_HW_ACCEL=0
+export OBS_USE_EGL=0
+export QT_OPENGL=software
 
 nohup bun start >"${PROJECT_ROOT}/var/screen.log" 2>&1 &
 echo $! > "${PID_DIR}/screen"
