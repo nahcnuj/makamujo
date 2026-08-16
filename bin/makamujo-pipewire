@@ -23,7 +23,6 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# Leftovers from previous runs
 pkill -u root -x pipewire 2>/dev/null || true
 pkill -u root -x pipewire-pulse 2>/dev/null || true
 pkill -u root -x wireplumber 2>/dev/null || true
@@ -61,7 +60,6 @@ echo "Pulse socket ready: ${PULSE_RUNTIME_PATH}/native"
 wireplumber &
 WP_PID=$!
 
-# Stay up only while pulse socket and children live (systemd Restart=on-failure)
 while true; do
   if ! kill -0 "$WP_PID" 2>/dev/null; then
     echo "ERROR: wireplumber exited" >&2
