@@ -12,6 +12,7 @@
       ansible.builtin.apt:
         name:
           - ca-certificates
+          - cron
           - curl
           - git
         state: present
