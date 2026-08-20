@@ -4,25 +4,17 @@ const HOLD_MS = 800;
 const MOVE_MS = 1200;
 const PAUSE_MS = 1500;
 
-type Mode = "translate" | "rotate" | "scale";
-
-function pickMode(): Mode {
-  const r = Math.random();
-  if (r < 1 / 3) return "translate";
-  if (r < 2 / 3) return "rotate";
-  return "scale";
-}
-
-function randomTranslate(el: HTMLElement, parent: HTMLElement) {
-  const er = el.getBoundingClientRect();
-  const pr = parent.getBoundingClientRect();
-  const maxX = Math.max(0, pr.width - er.width);
-  const maxY = Math.max(0, pr.height - er.height);
-  const curLeft = er.left - pr.left;
-  const curTop = er.top - pr.top;
-  const targetX = Math.random() * maxX;
-  const targetY = Math.random() * maxY;
-  return { x: targetX - curLeft, y: targetY - curTop };
+function randomTranslate() {
+  // horizontal: about ±25% of viewport width
+  const reachX = Math.max(80, window.innerWidth * 0.25);
+  // vertical: up limited to half screen; down keeps similar free range
+  const upMax = window.innerHeight * 0.5;
+  const downMax = Math.max(80, window.innerHeight * 0.25);
+  return {
+    x: (Math.random() * 2 - 1) * reachX,
+    // CSS: negative Y = up
+    y: -upMax + Math.random() * (upMax + downMax),
+  };
 }
 
 function randomScale() {
@@ -31,11 +23,18 @@ function randomScale() {
 }
 
 function randomRotateDeg() {
-  // any number of turns; CSS interpolates fine at 60fps over MOVE_MS
-  const turns = 1 + Math.floor(Math.random() * 8); // 1 .. 8 full turns
+  // multiple turns OK at 60fps over MOVE_MS
+  const turns = 1 + Math.floor(Math.random() * 8); // 1 .. 8
   const sign = Math.random() < 0.5 ? -1 : 1;
-  const extra = Math.random() * 360; // partial turn on top
+  const extra = Math.random() * 360;
   return sign * (turns * 360 + extra);
+}
+
+function randomOutboundTransform() {
+  const { x, y } = randomTranslate();
+  const deg = randomRotateDeg();
+  const s = randomScale();
+  return `translate(${x}px, ${y}px) rotate(${deg}deg) scale(${s})`;
 }
 
 function sleep(ms: number, signal: AbortSignal) {
@@ -127,26 +126,13 @@ export function SilentCaption({ text }: { text: string }) {
     window.addEventListener("resize", syncPos);
     window.addEventListener("scroll", syncPos, true);
 
-    const boundsParent = measure.parentElement ?? measure;
-
     const loop = async () => {
       try {
         el.style.transform = IDENTITY;
         await sleep(PAUSE_MS, signal);
         while (!signal.aborted) {
           syncPos();
-          const mode = pickMode();
-          let outbound = IDENTITY;
-          if (mode === "translate") {
-            const { x, y } = randomTranslate(el, boundsParent);
-            outbound = `translate(${x}px, ${y}px) rotate(0deg) scale(1)`;
-          } else if (mode === "rotate") {
-            const deg = randomRotateDeg();
-            outbound = `translate(0px, 0px) rotate(${deg}deg) scale(1)`;
-          } else {
-            const s = randomScale();
-            outbound = `translate(0px, 0px) rotate(0deg) scale(${s})`;
-          }
+          const outbound = randomOutboundTransform();
           await animateTo(el, outbound, MOVE_MS, signal);
           await sleep(HOLD_MS, signal);
           await animateTo(el, IDENTITY, MOVE_MS, signal);
