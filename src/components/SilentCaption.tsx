@@ -13,10 +13,6 @@ function pickMode(): Mode {
   return "scale";
 }
 
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
-}
-
 function randomTranslate(el: HTMLElement, parent: HTMLElement) {
   const er = el.getBoundingClientRect();
   const pr = parent.getBoundingClientRect();
@@ -29,25 +25,17 @@ function randomTranslate(el: HTMLElement, parent: HTMLElement) {
   return { x: targetX - curLeft, y: targetY - curTop };
 }
 
-function randomScale(el: HTMLElement, parent: HTMLElement) {
-  const er = el.getBoundingClientRect();
-  const pr = parent.getBoundingClientRect();
-  const maxByW = er.width > 0 ? pr.width / er.width : 1.2;
-  const maxByH = er.height > 0 ? pr.height / er.height : 1.2;
-  const maxScale = Math.max(1.05, Math.min(maxByW, maxByH, 1.8));
-  return 1 + Math.random() * (maxScale - 1);
+function randomScale() {
+  // scale up only (no shrink)
+  return 1 + Math.random() * 2; // 1.0 .. 3.0
 }
 
-function randomRotateDeg(el: HTMLElement, parent: HTMLElement) {
-  const er = el.getBoundingClientRect();
-  const pr = parent.getBoundingClientRect();
-  const slack = Math.min(
-    pr.width / Math.max(er.width, 1),
-    pr.height / Math.max(er.height, 1),
-  );
-  const maxDeg = clamp(slack * 25, 8, 35);
+function randomRotateDeg() {
+  // any number of turns; CSS interpolates fine at 60fps over MOVE_MS
+  const turns = 1 + Math.floor(Math.random() * 8); // 1 .. 8 full turns
   const sign = Math.random() < 0.5 ? -1 : 1;
-  return sign * (8 + Math.random() * (maxDeg - 8));
+  const extra = Math.random() * 360; // partial turn on top
+  return sign * (turns * 360 + extra);
 }
 
 function sleep(ms: number, signal: AbortSignal) {
@@ -153,10 +141,10 @@ export function SilentCaption({ text }: { text: string }) {
             const { x, y } = randomTranslate(el, boundsParent);
             outbound = `translate(${x}px, ${y}px) rotate(0deg) scale(1)`;
           } else if (mode === "rotate") {
-            const deg = randomRotateDeg(el, boundsParent);
+            const deg = randomRotateDeg();
             outbound = `translate(0px, 0px) rotate(${deg}deg) scale(1)`;
           } else {
-            const s = randomScale(el, boundsParent);
+            const s = randomScale();
             outbound = `translate(0px, 0px) rotate(0deg) scale(${s})`;
           }
           await animateTo(el, outbound, MOVE_MS, signal);
