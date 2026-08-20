@@ -30,11 +30,20 @@ function randomRotateDeg() {
   return sign * (turns * 360 + extra);
 }
 
+/** Max rotation speed for smooth 60fps (~3deg/frame). */
+const MAX_DEG_PER_SEC = 180;
+
 function randomOutboundTransform() {
   const { x, y } = randomTranslate();
   const deg = randomRotateDeg();
   const s = randomScale();
-  return `translate(${x}px, ${y}px) rotate(${deg}deg) scale(${s})`;
+  const transform = `translate(${x}px, ${y}px) rotate(${deg}deg) scale(${s})`;
+  // duration scales with angle so multi-turn stays smooth at 60fps
+  const ms = Math.max(
+    MOVE_MS,
+    Math.ceil((Math.abs(deg) / MAX_DEG_PER_SEC) * 1000),
+  );
+  return { transform, ms };
 }
 
 function sleep(ms: number, signal: AbortSignal) {
@@ -133,9 +142,9 @@ export function SilentCaption({ text }: { text: string }) {
         while (!signal.aborted) {
           syncPos();
           const outbound = randomOutboundTransform();
-          await animateTo(el, outbound, MOVE_MS, signal);
+          await animateTo(el, outbound.transform, outbound.ms, signal);
           await sleep(HOLD_MS, signal);
-          await animateTo(el, IDENTITY, MOVE_MS, signal);
+          await animateTo(el, IDENTITY, outbound.ms, signal);
           await sleep(PAUSE_MS, signal);
         }
       } catch {
