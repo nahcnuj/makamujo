@@ -183,8 +183,12 @@ export function SilentCaption({ text }: { text: string }) {
     <div className="relative w-full min-w-0">
       <div
         ref={measureRef}
-        className="inline-block max-w-full invisible"
+        className="inline-block max-w-full"
         aria-hidden="true"
+        style={{
+          visibility: "hidden",
+          pointerEvents: "none",
+        }}
       >
         {text}
       </div>
