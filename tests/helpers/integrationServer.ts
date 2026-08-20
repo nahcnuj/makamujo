@@ -8,7 +8,9 @@ export type SpawnedServer = {
   kill: (signal?: NodeJS.Signals | number) => boolean;
   stdout: NodeJS.ReadableStream;
   stderr: NodeJS.ReadableStream;
+  // biome-ignore lint/suspicious/noExplicitAny: ChildProcess EventEmitter-compatible
   on: (event: string, listener: (...args: any[]) => void) => any;
+  // biome-ignore lint/suspicious/noExplicitAny: ChildProcess EventEmitter-compatible
   off: (event: string, listener: (...args: any[]) => void) => any;
 };
 
