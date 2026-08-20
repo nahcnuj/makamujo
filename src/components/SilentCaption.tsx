@@ -78,11 +78,14 @@ async function animateTo(
 ) {
   if (signal.aborted) throw new DOMException("aborted", "AbortError");
   const from = getComputedStyle(el).transform;
-  const anim = el.animate([{ transform: from === "none" ? "none" : from }, { transform }], {
-    duration: ms,
-    easing: "linear",
-    fill: "forwards",
-  });
+  const anim = el.animate(
+    [{ transform: from === "none" ? "none" : from }, { transform }],
+    {
+      duration: ms,
+      easing: "linear",
+      fill: "forwards",
+    },
+  );
   const onAbort = () => anim.cancel();
   signal.addEventListener("abort", onAbort, { once: true });
   try {
