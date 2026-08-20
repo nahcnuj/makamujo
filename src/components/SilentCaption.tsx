@@ -20,7 +20,6 @@ function clamp(n: number, min: number, max: number) {
 function randomTranslate(el: HTMLElement, parent: HTMLElement) {
   const er = el.getBoundingClientRect();
   const pr = parent.getBoundingClientRect();
-  // レイアウト上の位置は変えず、描画だけ親内へ平行移動
   const maxX = Math.max(0, pr.width - er.width);
   const maxY = Math.max(0, pr.height - er.height);
   const curLeft = er.left - pr.left;
@@ -35,7 +34,6 @@ function randomScale(el: HTMLElement, parent: HTMLElement) {
   const pr = parent.getBoundingClientRect();
   const maxByW = er.width > 0 ? pr.width / er.width : 1.2;
   const maxByH = er.height > 0 ? pr.height / er.height : 1.2;
-  // 拡大後も親矩形に収まりやすい上限（はみ出しは transform のためレイアウト非影響）
   const maxScale = Math.max(1.05, Math.min(maxByW, maxByH, 1.8));
   return 1 + Math.random() * (maxScale - 1);
 }
@@ -100,65 +98,93 @@ async function animateTo(
 
 const IDENTITY = "translate(0px, 0px) rotate(0deg) scale(1)";
 
-/**
- * SILENT 字幕用。transform のみ動かすのでパネル（親）のレイアウトサイズは変わらない。
- * テキストのはみ出しは overflow 側の都合で許容。
- */
+/** SILENT caption: body portal + origin top-left (parent overflow-hidden safe). */
 export function SilentCaption({ text }: { text: string }) {
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-  const textRef = useRef<HTMLDivElement | null>(null);
+  const measureRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const wrap = wrapRef.current;
-    const el = textRef.current;
-    if (!wrap || !el) return;
+    const measure = measureRef.current;
+    if (!measure) return;
 
     const ac = new AbortController();
     const { signal } = ac;
+
+    const host = document.createElement("div");
+    host.setAttribute("data-silent-caption-portal", "");
+    host.style.cssText =
+      "position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:visible;";
+    document.body.appendChild(host);
+
+    const el = document.createElement("div");
+    el.textContent = text;
+    el.style.cssText =
+      "position:fixed;transform-origin:top left;will-change:transform;white-space:normal;pointer-events:none;";
+    const cs = getComputedStyle(measure);
+    el.style.font = cs.font;
+    el.style.fontSize = cs.fontSize;
+    el.style.lineHeight = cs.lineHeight;
+    el.style.color = cs.color;
+    el.style.fontWeight = cs.fontWeight;
+    el.style.letterSpacing = cs.letterSpacing;
+    host.appendChild(el);
+
+    const syncPos = () => {
+      const r = measure.getBoundingClientRect();
+      el.style.left = `${r.left}px`;
+      el.style.top = `${r.top}px`;
+      el.style.width = `${r.width}px`;
+      el.style.maxWidth = `${r.width}px`;
+    };
+    syncPos();
+    window.addEventListener("resize", syncPos);
+    window.addEventListener("scroll", syncPos, true);
+
+    const boundsParent = measure.parentElement ?? measure;
 
     const loop = async () => {
       try {
         el.style.transform = IDENTITY;
         await sleep(PAUSE_MS, signal);
-
         while (!signal.aborted) {
+          syncPos();
           const mode = pickMode();
           let outbound = IDENTITY;
-
           if (mode === "translate") {
-            const { x, y } = randomTranslate(el, wrap);
+            const { x, y } = randomTranslate(el, boundsParent);
             outbound = `translate(${x}px, ${y}px) rotate(0deg) scale(1)`;
           } else if (mode === "rotate") {
-            const deg = randomRotateDeg(el, wrap);
+            const deg = randomRotateDeg(el, boundsParent);
             outbound = `translate(0px, 0px) rotate(${deg}deg) scale(1)`;
           } else {
-            const s = randomScale(el, wrap);
+            const s = randomScale(el, boundsParent);
             outbound = `translate(0px, 0px) rotate(0deg) scale(${s})`;
           }
-
           await animateTo(el, outbound, MOVE_MS, signal);
           await sleep(HOLD_MS, signal);
           await animateTo(el, IDENTITY, MOVE_MS, signal);
           await sleep(PAUSE_MS, signal);
         }
       } catch {
-        // abort: SILENT 解除・字幕切替 → 戻し不要
+        // abort
       }
     };
 
     void loop();
+
     return () => {
       ac.abort();
+      window.removeEventListener("resize", syncPos);
+      window.removeEventListener("scroll", syncPos, true);
+      host.remove();
     };
   }, [text]);
 
   return (
-    // レイアウトサイズは中のテキストの通常サイズのみ。transform は描画だけ。
-    <div ref={wrapRef} className="relative w-full min-w-0">
+    <div className="relative w-full min-w-0">
       <div
-        ref={textRef}
-        className="inline-block max-w-full will-change-transform origin-center"
-        style={{ transform: IDENTITY }}
+        ref={measureRef}
+        className="inline-block max-w-full invisible"
+        aria-hidden="true"
       >
         {text}
       </div>
