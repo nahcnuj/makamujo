@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "hono/jsx/dom";
+﻿import { useEffect, useRef } from "hono/jsx/dom";
 
 const HOLD_MS = 800;
 const MOVE_MS = 1200;
@@ -19,7 +19,7 @@ function randomTranslate() {
 
 function randomScale() {
   // scale up only (no shrink)
-  return 1 + Math.random() * 2; // 1.0 .. 3.0
+  return 1 + Math.random() * 0.6; // 1.0 .. 1.6
 }
 
 function randomRotateDeg() {
@@ -92,7 +92,7 @@ async function animateTo(
   }
 }
 
-const IDENTITY = "translate(0px, 0px) rotate(0deg) scale(1)";
+const IDENTITY = "translate(0px, 0px) scale(1)";
 
 /** SILENT caption: body portal + origin top-left (parent overflow-hidden safe). */
 export function SilentCaption({ text }: { text: string }) {
@@ -101,6 +101,9 @@ export function SilentCaption({ text }: { text: string }) {
   useEffect(() => {
     const measure = measureRef.current;
     if (!measure) return;
+
+    // 古いポータルを確実に削除
+    document.querySelectorAll("[data-silent-caption-portal]").forEach((el) => el.remove());
 
     const ac = new AbortController();
     const { signal } = ac;
