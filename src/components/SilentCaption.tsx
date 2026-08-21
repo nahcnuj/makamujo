@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef } from "hono/jsx/dom";
+import { useEffect, useRef } from "hono/jsx/dom";
 
 const HOLD_MS = 800;
 const MOVE_MS = 1200;
