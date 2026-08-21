@@ -15,7 +15,7 @@ function randomTranslate() {
 }
 
 function randomScale() {
-  return 1 + Math.random() * 0.6; // 1.0 .. 1.6
+  return 1 + Math.random() * 0.6;
 }
 
 function randomRotateDeg() {
@@ -89,14 +89,10 @@ const IDENTITY = "translate(0px, 0px) rotate(0deg) scale(1)";
 
 export function SilentCaption({ text }: { text: string }) {
   const measureRef = useRef<HTMLDivElement | null>(null);
-  const hostRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const measure = measureRef.current;
     if (!measure) return;
-
-    // すでに存在する場合は何もしない（正しい1つだけを維持）
-    if (hostRef.current) return;
 
     const ac = new AbortController();
     const { signal } = ac;
@@ -106,7 +102,6 @@ export function SilentCaption({ text }: { text: string }) {
     host.style.cssText =
       "position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:visible;";
     document.body.appendChild(host);
-    hostRef.current = host;
 
     const el = document.createElement("div");
     el.textContent = text;
@@ -151,12 +146,12 @@ export function SilentCaption({ text }: { text: string }) {
 
     void loop();
 
+    // ★ アンマウント時に必ず消す
     return () => {
       ac.abort();
       window.removeEventListener("resize", syncPos);
       window.removeEventListener("scroll", syncPos, true);
       host.remove();
-      hostRef.current = null;
     };
   }, [text]);
 
