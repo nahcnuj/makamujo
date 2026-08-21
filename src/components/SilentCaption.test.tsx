@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { JSDOM } from "jsdom";
 import { render } from "hono/jsx/dom";
+import { JSDOM } from "jsdom";
 import { SilentCaption } from "./SilentCaption";
 
 const CAPTION_TEXT = "（コメントしてね）";
@@ -22,7 +22,10 @@ describe("SilentCaption portal lifecycle", () => {
     globalThis.Node = dom.window.Node;
     globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
     globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
-      return dom.window.setTimeout(() => cb(Date.now()), 0) as unknown as number;
+      return dom.window.setTimeout(
+        () => cb(Date.now()),
+        0,
+      ) as unknown as number;
     };
     globalThis.cancelAnimationFrame = (id: number) => {
       dom.window.clearTimeout(id);
@@ -68,7 +71,7 @@ describe("SilentCaption portal lifecycle", () => {
     render(null, container);
     await new Promise((r) => setTimeout(r, 50));
 
-    // ★ アンマウント後は「（コメントしてね）」がDOMに含まれない
+    // アンマウント後は「（コメントしてね）」がDOMに含まれない
     expect(document.body.textContent).not.toContain(CAPTION_TEXT);
   });
 
