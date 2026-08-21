@@ -18,16 +18,32 @@ function randomTranslate() {
 }
 
 function randomScale() {
-  // scale up only (no shrink), limited
+  // scale up only (no shrink)
   return 1 + Math.random() * 0.6; // 1.0 .. 1.6
 }
 
+function randomRotateDeg() {
+  // multiple turns OK at 60fps over MOVE_MS
+  const turns = 1 + Math.floor(Math.random() * 8); // 1 .. 8
+  const sign = Math.random() < 0.5 ? -1 : 1;
+  const extra = Math.random() * 360;
+  return sign * (turns * 360 + extra);
+}
+
+/** Max rotation speed for smooth 60fps (~3deg/frame). */
+const MAX_DEG_PER_SEC = 180;
+
 function randomOutboundTransform() {
   const { x, y } = randomTranslate();
+  const deg = randomRotateDeg();
   const s = randomScale();
-  // rotate を完全に削除
-  const transform = `translate(${x}px, ${y}px) scale(${s})`;
-  return { transform, ms: MOVE_MS };
+  const transform = `translate(${x}px, ${y}px) rotate(${deg}deg) scale(${s})`;
+  // duration scales with angle so multi-turn stays smooth at 60fps
+  const ms = Math.max(
+    MOVE_MS,
+    Math.ceil((Math.abs(deg) / MAX_DEG_PER_SEC) * 1000),
+  );
+  return { transform, ms };
 }
 
 function sleep(ms: number, signal: AbortSignal) {
@@ -76,7 +92,7 @@ async function animateTo(
   }
 }
 
-const IDENTITY = "translate(0px, 0px) scale(1)";
+const IDENTITY = "translate(0px, 0px) rotate(0deg) scale(1)";
 
 /** SILENT caption: body portal + origin top-left (parent overflow-hidden safe). */
 export function SilentCaption({ text }: { text: string }) {
@@ -86,7 +102,7 @@ export function SilentCaption({ text }: { text: string }) {
     const measure = measureRef.current;
     if (!measure) return;
 
-    // 古いポータルを確実に削除
+    // ★ 常にたかだか1つだけになるように、既存のポータルをすべて削除
     document
       .querySelectorAll("[data-silent-caption-portal]")
       .forEach((el) => el.remove());
