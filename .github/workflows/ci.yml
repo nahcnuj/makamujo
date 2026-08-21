@@ -66,7 +66,7 @@ jobs:
           fail-on-cache-miss: true
       - name: Run Biome linter
         run: |
-          bunx biome check .
+          bunx biome check . --diagnostic-level=warn --max-diagnostics=none
 
   typecheck:
     needs: [setup, lint]
