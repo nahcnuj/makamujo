@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { render } from "hono/jsx/dom";
+import { createRoot } from "hono/jsx/dom/client";
 import { JSDOM } from "jsdom";
 import { SilentCaption } from "./SilentCaption";
 
@@ -31,7 +31,6 @@ describe("SilentCaption portal lifecycle", () => {
       dom.window.clearTimeout(id);
     };
 
-    // Element.animate の簡易モック（jsdom には無い）
     if (!dom.window.Element.prototype.animate) {
       dom.window.Element.prototype.animate = function () {
         return {
@@ -55,44 +54,43 @@ describe("SilentCaption portal lifecycle", () => {
   });
 
   it("shows the caption text in the DOM while mounted", async () => {
-    render(<SilentCaption text={CAPTION_TEXT} />, container);
+    const root = createRoot(container);
+    root.render(<SilentCaption text={CAPTION_TEXT} />);
     await new Promise((r) => setTimeout(r, 50));
 
     expect(document.body.textContent).toContain(CAPTION_TEXT);
+    root.unmount();
   });
 
   it("removes the caption text from the DOM on unmount", async () => {
-    render(<SilentCaption text={CAPTION_TEXT} />, container);
+    const root = createRoot(container);
+    root.render(<SilentCaption text={CAPTION_TEXT} />);
     await new Promise((r) => setTimeout(r, 50));
 
     expect(document.body.textContent).toContain(CAPTION_TEXT);
 
-    // アンマウント
-    render(null, container);
+    root.unmount();
     await new Promise((r) => setTimeout(r, 50));
 
-    // アンマウント後は「（コメントしてね）」がDOMに含まれない
     expect(document.body.textContent).not.toContain(CAPTION_TEXT);
   });
 
   it("does not leave caption text after mount → unmount → mount → unmount", async () => {
-    // 1回目マウント
-    render(<SilentCaption text={CAPTION_TEXT} />, container);
+    const root1 = createRoot(container);
+    root1.render(<SilentCaption text={CAPTION_TEXT} />);
     await new Promise((r) => setTimeout(r, 50));
     expect(document.body.textContent).toContain(CAPTION_TEXT);
 
-    // アンマウント
-    render(null, container);
+    root1.unmount();
     await new Promise((r) => setTimeout(r, 50));
     expect(document.body.textContent).not.toContain(CAPTION_TEXT);
 
-    // 2回目マウント
-    render(<SilentCaption text={CAPTION_TEXT} />, container);
+    const root2 = createRoot(container);
+    root2.render(<SilentCaption text={CAPTION_TEXT} />);
     await new Promise((r) => setTimeout(r, 50));
     expect(document.body.textContent).toContain(CAPTION_TEXT);
 
-    // 最終アンマウント
-    render(null, container);
+    root2.unmount();
     await new Promise((r) => setTimeout(r, 50));
     expect(document.body.textContent).not.toContain(CAPTION_TEXT);
   });
