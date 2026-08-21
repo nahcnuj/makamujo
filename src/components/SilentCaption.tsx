@@ -5,32 +5,26 @@ const MOVE_MS = 1200;
 const PAUSE_MS = 1500;
 
 function randomTranslate() {
-  // horizontal: about ±25% of viewport width
   const reachX = Math.max(80, window.innerWidth * 0.25);
-  // vertical: up limited to half screen; down keeps similar free range
   const upMax = window.innerHeight * 0.5;
   const downMax = Math.max(80, window.innerHeight * 0.25);
   return {
     x: (Math.random() * 2 - 1) * reachX,
-    // CSS: negative Y = up
     y: -upMax + Math.random() * (upMax + downMax),
   };
 }
 
 function randomScale() {
-  // scale up only (no shrink)
-  return 1 + Math.random() * 2; // 1.0 .. 3.0
+  return 1 + Math.random() * 0.6; // 1.0 .. 1.6
 }
 
 function randomRotateDeg() {
-  // multiple turns OK at 60fps over MOVE_MS
-  const turns = 1 + Math.floor(Math.random() * 8); // 1 .. 8
+  const turns = 1 + Math.floor(Math.random() * 8);
   const sign = Math.random() < 0.5 ? -1 : 1;
   const extra = Math.random() * 360;
   return sign * (turns * 360 + extra);
 }
 
-/** Max rotation speed for smooth 60fps (~3deg/frame). */
 const MAX_DEG_PER_SEC = 180;
 
 function randomOutboundTransform() {
@@ -38,7 +32,6 @@ function randomOutboundTransform() {
   const deg = randomRotateDeg();
   const s = randomScale();
   const transform = `translate(${x}px, ${y}px) rotate(${deg}deg) scale(${s})`;
-  // duration scales with angle so multi-turn stays smooth at 60fps
   const ms = Math.max(
     MOVE_MS,
     Math.ceil((Math.abs(deg) / MAX_DEG_PER_SEC) * 1000),
@@ -94,13 +87,16 @@ async function animateTo(
 
 const IDENTITY = "translate(0px, 0px) rotate(0deg) scale(1)";
 
-/** SILENT caption: body portal + origin top-left (parent overflow-hidden safe). */
 export function SilentCaption({ text }: { text: string }) {
   const measureRef = useRef<HTMLDivElement | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const measure = measureRef.current;
     if (!measure) return;
+
+    // すでに存在する場合は何もしない（正しい1つだけを維持）
+    if (hostRef.current) return;
 
     const ac = new AbortController();
     const { signal } = ac;
@@ -110,11 +106,12 @@ export function SilentCaption({ text }: { text: string }) {
     host.style.cssText =
       "position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:visible;";
     document.body.appendChild(host);
+    hostRef.current = host;
 
     const el = document.createElement("div");
     el.textContent = text;
     el.style.cssText =
-      "position:fixed;transform-origin:top left;will-change:transform;white-space:normal;pointer-events:none;";
+      "position:fixed;transform-origin:top left;will-change:transform;white-space:nowrap;pointer-events:none;";
     const cs = getComputedStyle(measure);
     el.style.font = cs.font;
     el.style.fontSize = cs.fontSize;
@@ -159,6 +156,7 @@ export function SilentCaption({ text }: { text: string }) {
       window.removeEventListener("resize", syncPos);
       window.removeEventListener("scroll", syncPos, true);
       host.remove();
+      hostRef.current = null;
     };
   }, [text]);
 
