@@ -18,32 +18,16 @@ function randomTranslate() {
 }
 
 function randomScale() {
-  // scale up only (no shrink)
+  // scale up only (no shrink), limited
   return 1 + Math.random() * 0.6; // 1.0 .. 1.6
 }
 
-function randomRotateDeg() {
-  // multiple turns OK at 60fps over MOVE_MS
-  const turns = 1 + Math.floor(Math.random() * 8); // 1 .. 8
-  const sign = Math.random() < 0.5 ? -1 : 1;
-  const extra = Math.random() * 360;
-  return sign * (turns * 360 + extra);
-}
-
-/** Max rotation speed for smooth 60fps (~3deg/frame). */
-const MAX_DEG_PER_SEC = 180;
-
 function randomOutboundTransform() {
   const { x, y } = randomTranslate();
-  const deg = randomRotateDeg();
   const s = randomScale();
-  const transform = `translate(${x}px, ${y}px) rotate(${deg}deg) scale(${s})`;
-  // duration scales with angle so multi-turn stays smooth at 60fps
-  const ms = Math.max(
-    MOVE_MS,
-    Math.ceil((Math.abs(deg) / MAX_DEG_PER_SEC) * 1000),
-  );
-  return { transform, ms };
+  // rotate を完全に削除
+  const transform = `translate(${x}px, ${y}px) scale(${s})`;
+  return { transform, ms: MOVE_MS };
 }
 
 function sleep(ms: number, signal: AbortSignal) {
@@ -103,7 +87,9 @@ export function SilentCaption({ text }: { text: string }) {
     if (!measure) return;
 
     // 古いポータルを確実に削除
-    document.querySelectorAll("[data-silent-caption-portal]").forEach((el) => el.remove());
+    document
+      .querySelectorAll("[data-silent-caption-portal]")
+      .forEach((el) => el.remove());
 
     const ac = new AbortController();
     const { signal } = ac;
@@ -117,7 +103,7 @@ export function SilentCaption({ text }: { text: string }) {
     const el = document.createElement("div");
     el.textContent = text;
     el.style.cssText =
-      "position:fixed;transform-origin:top left;will-change:transform;white-space:normal;pointer-events:none;";
+      "position:fixed;transform-origin:top left;will-change:transform;white-space:nowrap;pointer-events:none;";
     const cs = getComputedStyle(measure);
     el.style.font = cs.font;
     el.style.fontSize = cs.fontSize;
