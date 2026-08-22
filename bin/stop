@@ -49,14 +49,18 @@ sweep_leftovers() {
   pkill -KILL -f 'flatpak.*com\.obsproject\.Studio' 2>/dev/null || true
 }
 
+systemctl stop makamujo-obs.service 2>/dev/null || true
+systemctl stop makamujo-browser.service 2>/dev/null || true
+systemctl stop makamujo-screen.service 2>/dev/null || true
+
 # Intentional stop should not look like a crash on next OBS launch.
 clear_obs_sentinel() {
   rm -rf "${HOME}/.var/app/com.obsproject.Studio/config/obs-studio/.sentinel" 2>/dev/null || true
   rm -rf "${PROJECT_ROOT}/obs-studio/.sentinel" 2>/dev/null || true
 }
 
-systemctl stop makamujo-obs.service 2>/dev/null || true
-systemctl stop makamujo-browser.service 2>/dev/null || true
+
+
 
 for pid_file in "${PID_DIR}/obs" "${PID_DIR}/browser" "${PID_DIR}/portal-stub" "${PID_DIR}/overlay" "${PID_DIR}/screen"; do
   if [ -f "$pid_file" ]; then

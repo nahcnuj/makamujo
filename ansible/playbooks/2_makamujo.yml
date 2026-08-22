@@ -130,6 +130,18 @@
         enabled: true
         daemon_reload: true
 
+    - name: Link makamujo-screen unit via systemctl
+      ansible.builtin.command:
+        cmd: systemctl link {{ makamujo_src }}/etc/systemd/makamujo-screen.service
+      args:
+        creates: /etc/systemd/system/makamujo-screen.service
+
+    - name: Enable makamujo-screen unit
+      ansible.builtin.systemd:
+        name: makamujo-screen
+        enabled: true
+        daemon_reload: true
+
     - name: Restart makamujo processes
       ansible.builtin.shell: |
         set -e
