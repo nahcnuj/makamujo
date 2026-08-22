@@ -1,18 +1,19 @@
 [Unit]
 Description=makamujo service
-After=graphical.target xorg10.service x11vnc-10.service
-Wants=graphical.target xorg10.service x11vnc-10.service makamujo-screen.service makamujo-browser.service makamujo-obs.service
+After=graphical.target makamujo-xvfb.service makamujo-pipewire.service
+Wants=graphical.target makamujo-xvfb.service makamujo-pipewire.service makamujo-screen.service makamujo-browser.service makamujo-obs.service
 PartOf=graphical.target
 
-# Parent unit coordinates child services (screen, browser, obs) via Wants=/After=.
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/opt/makamujo
+WorkingDirectory=/opt/src/makamujo
 User=root
 Environment=PATH=/root/.bun/bin:/usr/local/bin:/usr/bin:/bin
 Environment=NODE_ENV=production
 Environment=DISPLAY=:10
+Environment=XDG_RUNTIME_DIR=/run/user/0
+Environment=PULSE_SERVER=unix:/run/user/0/pulse/native
 ExecStart=/bin/true
 StandardOutput=journal
 StandardError=journal
