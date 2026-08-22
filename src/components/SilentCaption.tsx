@@ -88,9 +88,9 @@ async function animateTo(
 const IDENTITY = "translate(0px, 0px) rotate(0deg) scale(1)";
 
 function clearSilentCaptionPortals() {
-  document
-    .querySelectorAll("[data-silent-caption-portal]")
-    .forEach((el) => { el.remove(); });
+  document.querySelectorAll("[data-silent-caption-portal]").forEach((el) => {
+    el.remove();
+  });
 }
 
 export function SilentCaption({ text }: { text: string }) {
