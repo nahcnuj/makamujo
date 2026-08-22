@@ -118,6 +118,18 @@
         enabled: true
         daemon_reload: true
 
+    - name: Link makamujo-browser unit via systemctl
+      ansible.builtin.command:
+        cmd: systemctl link {{ makamujo_src }}/etc/systemd/makamujo-browser.service
+      args:
+        creates: /etc/systemd/system/makamujo-browser.service
+
+    - name: Enable makamujo-browser unit
+      ansible.builtin.systemd:
+        name: makamujo-browser
+        enabled: true
+        daemon_reload: true
+
     - name: Restart makamujo processes
       ansible.builtin.shell: |
         set -e
