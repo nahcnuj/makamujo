@@ -27,10 +27,7 @@ test("bin/start starts screen, browser and OBS via systemctl", async () => {
 
     const fakeBinDir = join(tmp, "fake-bin");
     mkdirSync(fakeBinDir, { recursive: true });
-    writeFileSync(
-      join(fakeBinDir, "bun"),
-      "#!/usr/bin/env sh\nsleep 60\n",
-    );
+    writeFileSync(join(fakeBinDir, "bun"), "#!/usr/bin/env sh\nsleep 60\n");
     chmodSync(join(fakeBinDir, "bun"), 0o755);
 
     const systemctlLog = join(tmp, "systemctl.log");
