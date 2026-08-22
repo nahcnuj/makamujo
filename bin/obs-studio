@@ -31,9 +31,14 @@ mkdir -p "$OBS_CACHE_DIR"
 
 flatpak run \
     --share=network \
+    --socket=pulseaudio \
+    --filesystem=/run/user/0/pulse \
     --filesystem="$REPO_ROOT" \
     --filesystem="$OBS_CONFIG_DIR" \
     --filesystem="$OBS_CACHE_DIR" \
+    --env=XDG_RUNTIME_DIR=/run/user/0 \
+    --env=PULSE_SERVER=unix:/run/user/0/pulse/native \
+    --env=PULSE_RUNTIME_PATH=/run/user/0/pulse \
     --env=XDG_CONFIG_HOME="$REPO_ROOT" \
     --env=XDG_DATA_HOME="$REPO_ROOT" \
     --env=XDG_CACHE_HOME="$OBS_CACHE_DIR" \
