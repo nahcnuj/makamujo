@@ -62,6 +62,11 @@ if [ -n "${DISPLAY:-}" ] && [ -z "$_XAUTHORITY_EXPLICIT" ]; then
   fi
 fi
 
+
+# OBS 32+: --disable-shutdown-check was removed; clear sentinel to skip Safe Mode dialog
+rm -rf \
+  "${HOME}/.var/app/com.obsproject.Studio/config/obs-studio/.sentinel" \
+  "${OBS_STUDIO}/.sentinel" 2>/dev/null || true
 "${OBS_STUDIO}" \
     --geometry 1280x560+0+900 \
     --startstreaming \
