@@ -1,7 +1,7 @@
 [Unit]
 Description=Makamujo OBS Studio (Flatpak)
 After=makamujo-xvfb.service makamujo-pipewire.service
-Wants=makamujo-xvfb.service makamujo-pipewire.service
+Requires=makamujo-xvfb.service makamujo-pipewire.service
 
 [Service]
 Type=simple
