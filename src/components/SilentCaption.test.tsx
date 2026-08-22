@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { createRoot } from "hono/jsx/dom/client";
+﻿import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { JSDOM } from "jsdom";
+import { mount } from "../mount";
 import { SilentCaption } from "./SilentCaption";
 
 const CAPTION_TEXT = "（コメントしてね）";
@@ -54,8 +54,7 @@ describe("SilentCaption portal lifecycle", () => {
   });
 
   it("shows the caption text in the DOM while mounted", async () => {
-    const root = createRoot(container);
-    root.render(<SilentCaption text={CAPTION_TEXT} />);
+    const root = mount(<SilentCaption text={CAPTION_TEXT} />, container);
     await new Promise((r) => setTimeout(r, 50));
 
     expect(document.body.textContent).toContain(CAPTION_TEXT);
@@ -63,8 +62,7 @@ describe("SilentCaption portal lifecycle", () => {
   });
 
   it("removes the caption text from the DOM on unmount", async () => {
-    const root = createRoot(container);
-    root.render(<SilentCaption text={CAPTION_TEXT} />);
+    const root = mount(<SilentCaption text={CAPTION_TEXT} />, container);
     await new Promise((r) => setTimeout(r, 50));
 
     expect(document.body.textContent).toContain(CAPTION_TEXT);
@@ -76,8 +74,7 @@ describe("SilentCaption portal lifecycle", () => {
   });
 
   it("does not leave caption text after mount → unmount → mount → unmount", async () => {
-    const root1 = createRoot(container);
-    root1.render(<SilentCaption text={CAPTION_TEXT} />);
+    const root1 = mount(<SilentCaption text={CAPTION_TEXT} />, container);
     await new Promise((r) => setTimeout(r, 50));
     expect(document.body.textContent).toContain(CAPTION_TEXT);
 
@@ -85,8 +82,7 @@ describe("SilentCaption portal lifecycle", () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(document.body.textContent).not.toContain(CAPTION_TEXT);
 
-    const root2 = createRoot(container);
-    root2.render(<SilentCaption text={CAPTION_TEXT} />);
+    const root2 = mount(<SilentCaption text={CAPTION_TEXT} />, container);
     await new Promise((r) => setTimeout(r, 50));
     expect(document.body.textContent).toContain(CAPTION_TEXT);
 
