@@ -15,7 +15,7 @@ function randomTranslate() {
 }
 
 function randomScale() {
-  return 1 + Math.random() * 0.6;
+  return 1 + Math.random() * 0.6; // 1.0 .. 1.6
 }
 
 function randomRotateDeg() {
@@ -87,12 +87,21 @@ async function animateTo(
 
 const IDENTITY = "translate(0px, 0px) rotate(0deg) scale(1)";
 
+function clearSilentCaptionPortals() {
+  document
+    .querySelectorAll("[data-silent-caption-portal]")
+    .forEach((el) => el.remove());
+}
+
 export function SilentCaption({ text }: { text: string }) {
   const measureRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const measure = measureRef.current;
     if (!measure) return;
+
+    // 増殖防止: 既存ポータルをすべて削除してから1つだけ作る
+    clearSilentCaptionPortals();
 
     const ac = new AbortController();
     const { signal } = ac;
@@ -146,12 +155,12 @@ export function SilentCaption({ text }: { text: string }) {
 
     void loop();
 
-    // ★ アンマウント時に必ず消す
     return () => {
       ac.abort();
       window.removeEventListener("resize", syncPos);
       window.removeEventListener("scroll", syncPos, true);
       host.remove();
+      clearSilentCaptionPortals();
     };
   }, [text]);
 
