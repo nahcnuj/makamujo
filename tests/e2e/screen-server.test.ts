@@ -13,7 +13,7 @@ import {
 import os from "os";
 import { join } from "path";
 
-test("bin/start starts browser and OBS via systemctl", async () => {
+test("bin/start starts screen, browser and OBS via systemctl", async () => {
   const tmp = mkdtempSync(join(os.tmpdir(), "makamujo-screen-"));
   try {
     const tmpBin = join(tmp, "bin");
@@ -29,7 +29,7 @@ test("bin/start starts browser and OBS via systemctl", async () => {
     mkdirSync(fakeBinDir, { recursive: true });
     writeFileSync(
       join(fakeBinDir, "bun"),
-      "#!/usr/bin/env sh\n# fake bun: ignore args and sleep\nsleep 60\n",
+      "#!/usr/bin/env sh\nsleep 60\n",
     );
     chmodSync(join(fakeBinDir, "bun"), 0o755);
 
@@ -58,6 +58,7 @@ exit 0
 
     expect(existsSync(systemctlLog)).toBeTruthy();
     const log = readFileSync(systemctlLog, "utf-8");
+    expect(log).toMatch(/start\s+makamujo-screen\.service/);
     expect(log).toMatch(/start\s+makamujo-browser\.service/);
     expect(log).toMatch(/start\s+makamujo-obs\.service/);
   } finally {
