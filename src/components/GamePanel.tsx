@@ -33,16 +33,24 @@ export function GamePanel() {
       <div className="flex-none">
         {streamState?.meta?.total && (
           <div className="text-right">
-            {streamState.meta.total.listeners > 0 && (
-              <div>
+            <div>
+              {streamState.meta.total.gift > 0 && (
+                <HighlightOnChange
+                  timeout={30_000}
+                  classNameOnChanged="text-yellow-300"
+                >
+                  {`${formatNumber(streamState.meta.total.gift)}🎁`}
+                </HighlightOnChange>
+              )}
+              {streamState.meta.total.listeners > 0 && (
                 <HighlightOnChange
                   timeout={5_000}
                   classNameOnChanged="text-yellow-300"
                 >
                   {`${formatNumber(streamState.meta.total.listeners)}🙎`}
                 </HighlightOnChange>
-              </div>
-            )}
+              )}
+            </div>
             {streamState.meta.total.ad > 0 && (
               <div>
                 <HighlightOnChange
@@ -50,16 +58,6 @@ export function GamePanel() {
                   classNameOnChanged="text-yellow-300"
                 >
                   {`${formatNumber(streamState.meta.total.ad)}📣`}
-                </HighlightOnChange>
-              </div>
-            )}
-            {streamState.meta.total.gift > 0 && (
-              <div>
-                <HighlightOnChange
-                  timeout={30_000}
-                  classNameOnChanged="text-yellow-300"
-                >
-                  {`${formatNumber(streamState.meta.total.gift)}🎁`}
                 </HighlightOnChange>
               </div>
             )}
