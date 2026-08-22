@@ -4,15 +4,13 @@
  *
  * It is included in `src/index.html`.
  */
-import { createRoot } from "hono/jsx/dom/client";
 import { App } from "./App";
+import { mount } from "./mount";
 
 function start() {
   const el = document.getElementById("root");
   if (!el) throw new Error("root element not found");
-
-  const root = createRoot(el);
-  root.render(<App />);
+  mount(<App />, el);
 }
 
 if (document.readyState === "loading") {
