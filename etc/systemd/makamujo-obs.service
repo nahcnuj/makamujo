@@ -4,6 +4,7 @@ After=makamujo-xvfb.service makamujo-pipewire.service
 Requires=makamujo-xvfb.service makamujo-pipewire.service
 
 [Service]
+Slice=makamujo.slice
 Type=simple
 WorkingDirectory=/opt/src/makamujo
 User=root
