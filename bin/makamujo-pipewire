@@ -53,15 +53,22 @@ if [ ! -S "${PULSE_RUNTIME_PATH}/native" ]; then
   exit 1
 fi
 
+# Wait until pulse actually accepts connections
+for _ in $(seq 1 40); do
+  if pactl info >/dev/null 2>&1; then
+    break
+  fi
+  sleep 0.25
+done
+if ! pactl info >/dev/null 2>&1; then
+  echo "ERROR: pulse not accepting connections" >&2
+  exit 1
+fi
+
 echo "Pulse socket ready: ${PULSE_RUNTIME_PATH}/native"
-# Stable default sink for OBS Desktop Audio (must survive long sessions)
-export PULSE_SERVER=unix:${PULSE_RUNTIME_PATH}/native
+
 pactl load-module module-null-sink sink_name=makamujo_out sink_properties=device.description=MakamujoOut 2>/dev/null || true
 pactl set-default-sink makamujo_out 2>/dev/null || true
-
-
-pactl load-module module-null-sink sink_name=makamujo_out sink_properties=device.description=MakamujoOut 2>/dev/null || true
-pactl set-default-sink makamujo_out
 pactl set-default-source makamujo_out.monitor 2>/dev/null || true
 
 wireplumber &
