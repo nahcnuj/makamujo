@@ -56,6 +56,11 @@ if [ ! -S "${PULSE_RUNTIME_PATH}/native" ]; then
 fi
 
 echo "Pulse socket ready: ${PULSE_RUNTIME_PATH}/native"
+# Stable default sink for OBS Desktop Audio (must survive long sessions)
+export PULSE_SERVER=unix:${PULSE_RUNTIME_PATH}/native
+pactl load-module module-null-sink sink_name=makamujo_out sink_properties=device.description=MakamujoOut 2>/dev/null || true
+pactl set-default-sink makamujo_out 2>/dev/null || true
+
 
 wireplumber &
 WP_PID=$!
