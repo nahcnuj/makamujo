@@ -13,6 +13,7 @@ Environment=NODE_ENV=production
 Environment=DISPLAY=:10
 Environment=XDG_RUNTIME_DIR=/run/user/0
 Environment=PULSE_SERVER=unix:/run/user/0/pulse/native
+Environment=PULSE_RUNTIME_PATH=/run/user/0/pulse
 ExecStart=/root/.bun/bin/bun start
 StandardOutput=journal
 StandardError=journal

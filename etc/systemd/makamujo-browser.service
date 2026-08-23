@@ -13,6 +13,7 @@ Environment=NODE_ENV=production
 Environment=DISPLAY=:10
 Environment=XDG_RUNTIME_DIR=/run/user/0
 Environment=PULSE_SERVER=unix:/run/user/0/pulse/native
+Environment=PULSE_RUNTIME_PATH=/run/user/0/pulse
 ExecStart=/bin/sh -lc "cd '/opt/src/makamujo' && NODE_ENV=production /root/.bun/bin/bun '/opt/src/makamujo/bin/x/browser.ts'"
 StandardOutput=journal
 StandardError=journal
