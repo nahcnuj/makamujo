@@ -137,6 +137,29 @@
         executable: /bin/bash
       changed_when: false
 
+
+    - name: Flatpak OBS uses host headless Pulse
+      ansible.builtin.command:
+        cmd: >
+          flatpak override com.obsproject.Studio
+          --system
+          --filesystem=/run/user/0/pulse
+          --env=PULSE_SERVER=unix:/run/user/0/pulse/native
+          --env=XDG_RUNTIME_DIR=/run/user/0
+          --env=PULSE_RUNTIME_PATH=/run/user/0/pulse
+      changed_when: true
+
+    - name: Route ALSA default to Pulse
+      ansible.builtin.copy:
+        dest: /etc/asound.conf
+        mode: "0644"
+        content: |
+          pcm.!default {
+              type pulse
+          }
+          ctl.!default {
+              type pulse
+          }
     - name: Install makamujo-obs unit from repo
       ansible.builtin.copy:
         src: "{{ makamujo_src }}/etc/systemd/makamujo-obs.service"
