@@ -1,6 +1,8 @@
 [Unit]
 Description=makamujo browser service
 After=makamujo-screen.service makamujo-pipewire.service
+Requires=makamujo-pipewire.service
+PartOf=makamujo-pipewire.service
 PartOf=makamujo.service
 
 [Service]
