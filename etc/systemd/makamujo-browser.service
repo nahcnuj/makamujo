@@ -4,6 +4,7 @@ After=makamujo-screen.service makamujo-pipewire.service
 PartOf=makamujo.service
 
 [Service]
+Slice=makamujo.slice
 Type=simple
 WorkingDirectory=/opt/src/makamujo
 User=root
