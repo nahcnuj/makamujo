@@ -6,10 +6,8 @@ const execFile = promisify($_);
 const pulseEnv: NodeJS.ProcessEnv = {
   ...process.env,
   XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR ?? "/run/user/0",
-  PULSE_SERVER:
-    process.env.PULSE_SERVER ?? "unix:/run/user/0/pulse/native",
-  PULSE_RUNTIME_PATH:
-    process.env.PULSE_RUNTIME_PATH ?? "/run/user/0/pulse",
+  PULSE_SERVER: process.env.PULSE_SERVER ?? "unix:/run/user/0/pulse/native",
+  PULSE_RUNTIME_PATH: process.env.PULSE_RUNTIME_PATH ?? "/run/user/0/pulse",
 };
 
 export const play = async (file: `${string}.wav`) => {
