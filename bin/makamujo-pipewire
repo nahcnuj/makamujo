@@ -1,5 +1,4 @@
 #!/bin/bash
-# Headless PipeWire stack for root. Exit if pulse socket is lost so systemd restarts us.
 set -euo pipefail
 
 export XDG_RUNTIME_DIR=/run/user/0
@@ -8,6 +7,7 @@ export DISPLAY=:10
 export PULSE_RUNTIME_PATH=/run/user/0/pulse
 export PIPEWIRE_RUNTIME_DIR=/run/user/0
 export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus
+export PULSE_SERVER=unix:/run/user/0/pulse/native
 
 mkdir -p "$XDG_RUNTIME_DIR" "$PULSE_RUNTIME_PATH"
 chmod 700 "$XDG_RUNTIME_DIR"
@@ -44,9 +44,7 @@ PULSE_PID=$!
 sleep 1
 
 for _ in $(seq 1 80); do
-  if [ -S "${PULSE_RUNTIME_PATH}/native" ]; then
-    break
-  fi
+  [ -S "${PULSE_RUNTIME_PATH}/native" ] && break
   sleep 0.25
 done
 
@@ -56,31 +54,18 @@ if [ ! -S "${PULSE_RUNTIME_PATH}/native" ]; then
 fi
 
 echo "Pulse socket ready: ${PULSE_RUNTIME_PATH}/native"
-# Stable default sink for OBS Desktop Audio (must survive long sessions)
-export PULSE_SERVER=unix:${PULSE_RUNTIME_PATH}/native
-pactl load-module module-null-sink sink_name=makamujo_out sink_properties=device.description=MakamujoOut 2>/dev/null || true
-pactl set-default-sink makamujo_out 2>/dev/null || true
 
+pactl load-module module-null-sink sink_name=makamujo_out sink_properties=device.description=MakamujoOut 2>/dev/null || true
+pactl set-default-sink makamujo_out
+pactl set-default-source makamujo_out.monitor 2>/dev/null || true
 
 wireplumber &
 WP_PID=$!
 
 while true; do
-  if ! kill -0 "$WP_PID" 2>/dev/null; then
-    echo "ERROR: wireplumber exited" >&2
-    exit 1
-  fi
-  if ! kill -0 "$PW_PID" 2>/dev/null; then
-    echo "ERROR: pipewire exited" >&2
-    exit 1
-  fi
-  if ! kill -0 "$PULSE_PID" 2>/dev/null; then
-    echo "ERROR: pipewire-pulse exited" >&2
-    exit 1
-  fi
-  if [ ! -S "${PULSE_RUNTIME_PATH}/native" ]; then
-    echo "ERROR: pulse socket lost: ${PULSE_RUNTIME_PATH}/native" >&2
-    exit 1
-  fi
+  kill -0 "$WP_PID" 2>/dev/null || { echo "ERROR: wireplumber exited" >&2; exit 1; }
+  kill -0 "$PW_PID" 2>/dev/null || { echo "ERROR: pipewire exited" >&2; exit 1; }
+  kill -0 "$PULSE_PID" 2>/dev/null || { echo "ERROR: pipewire-pulse exited" >&2; exit 1; }
+  [ -S "${PULSE_RUNTIME_PATH}/native" ] || { echo "ERROR: pulse socket lost" >&2; exit 1; }
   sleep 2
 done

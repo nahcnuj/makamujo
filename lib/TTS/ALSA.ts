@@ -15,12 +15,11 @@ export const play = async (file: `${string}.wav`) => {
     await execFile("paplay", [file], { env: pulseEnv });
     return;
   } catch {
-    // fallback
+    /* fallback */
   }
-
   try {
     await execFile("aplay", ["-q", file], { env: pulseEnv });
   } catch {
-    // silent
+    /* silent */
   }
 };

@@ -1,10 +1,8 @@
 #!/usr/bin/env sh
-
 set -eu
 
 SCRIPT_PATH=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_PATH/.." && pwd)
-
 OBS_CONFIG_DIR="$REPO_ROOT/obs-studio"
 OBS_CACHE_DIR="$REPO_ROOT/.cache"
 
@@ -12,13 +10,10 @@ if [ ! -d "$OBS_CONFIG_DIR" ]; then
   echo "OBS config directory not found: $OBS_CONFIG_DIR" >&2
   exit 1
 fi
-
 if [ ! -f "$OBS_CONFIG_DIR/basic/profiles/Makamujo/basic.ini" ]; then
-  echo "OBS basic.ini not found: $OBS_CONFIG_DIR/basic/profiles/Makamujo/basic.ini" >&2
+  echo "OBS basic.ini not found" >&2
   exit 1
 fi
-
-# Stream key lives only in OBS service.json (written by ansible/playbooks/0_secrets.yml).
 
 FLATPAK_OBS_CONFIG="${HOME}/.var/app/com.obsproject.Studio/config"
 mkdir -p "$FLATPAK_OBS_CONFIG"
@@ -26,11 +21,8 @@ if [ -e "$FLATPAK_OBS_CONFIG/obs-studio" ] && [ ! -L "$FLATPAK_OBS_CONFIG/obs-st
   rm -rf "$FLATPAK_OBS_CONFIG/obs-studio"
 fi
 ln -sfn "$OBS_CONFIG_DIR" "$FLATPAK_OBS_CONFIG/obs-studio"
-
 mkdir -p "$OBS_CACHE_DIR"
 
-# Headless Pulse: /run/user/0/pulse/native (makamujo-pipewire).
-# No --socket=pulseaudio (Flatpak bridge can override PULSE_SERVER).
 flatpak run \
     --share=network \
     --filesystem=/run/user/0/pulse \
