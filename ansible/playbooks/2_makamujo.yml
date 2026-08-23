@@ -164,6 +164,33 @@
       args:
         executable: /bin/bash
       changed_when: false
+
+    - name: Route ALSA default to Pulse (so aplay also hits OBS Desktop Audio)
+      ansible.builtin.copy:
+        dest: /etc/asound.conf
+        mode: "0644"
+        content: |
+          pcm.!default {
+              type pulse
+          }
+          ctl.!default {
+              type pulse
+          }
+
+    - name: Assert paplay reaches headless Pulse
+      ansible.builtin.shell: |
+        set -euo pipefail
+        export XDG_RUNTIME_DIR=/run/user/0
+        export PULSE_SERVER=unix:/run/user/0/pulse/native
+        export PULSE_RUNTIME_PATH=/run/user/0/pulse
+        test -S /run/user/0/pulse/native
+        # 1秒の無音 WAV を生成して paplay（失敗したらデプロイ失敗）
+        ffmpeg -f lavfi -i anullsrc=r=48000:cl=mono -t 1 -y /tmp/makamujo-audio-test.wav 2>/dev/null \
+          || sox -n -r 48000 -c 1 /tmp/makamujo-audio-test.wav trim 0.0 1.0 2>/dev/null \
+          || python3 -c "import wave,struct;f=wave.open('/tmp/makamujo-audio-test.wav','w');f.setnchannels(1);f.setsampwidth(2);f.setframerate(48000);f.writeframes(b'\x00\x00'*48000);f.close()"
+        paplay /tmp/makamujo-audio-test.wav
+      args:
+        executable: /bin/bash
     - name: Restart makamujo processes
       ansible.builtin.shell: |
         set -e
