@@ -3,18 +3,25 @@ import { promisify } from "node:util";
 
 const execFile = promisify($_);
 
+const pulseEnv: NodeJS.ProcessEnv = {
+  ...process.env,
+  XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR ?? "/run/user/0",
+  PULSE_SERVER:
+    process.env.PULSE_SERVER ?? "unix:/run/user/0/pulse/native",
+  PULSE_RUNTIME_PATH:
+    process.env.PULSE_RUNTIME_PATH ?? "/run/user/0/pulse",
+};
+
 export const play = async (file: `${string}.wav`) => {
-  // PipeWire (PULSE_SERVER) 優先
   try {
-    await execFile("paplay", [file]);
+    await execFile("paplay", [file], { env: pulseEnv });
     return;
   } catch {
     // fallback
   }
 
-  // ALSA fallback
   try {
-    await execFile("aplay", ["-q", file]);
+    await execFile("aplay", ["-q", file], { env: pulseEnv });
   } catch {
     // silent
   }
