@@ -13,6 +13,7 @@ Environment=PATH=/root/.bun/bin:/usr/local/bin:/usr/bin:/bin
 Environment=DISPLAY=:10
 Environment=XDG_RUNTIME_DIR=/run/user/0
 Environment=PULSE_SERVER=unix:/run/user/0/pulse/native
+Environment=PULSE_RUNTIME_PATH=/run/user/0/pulse
 Environment=XDG_CONFIG_HOME=/opt/src/makamujo
 Environment=XDG_DATA_HOME=/opt/src/makamujo
 Environment=XDG_CACHE_HOME=/opt/src/makamujo/.cache

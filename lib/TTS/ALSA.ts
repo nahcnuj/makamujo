@@ -14,12 +14,12 @@ export const play = async (file: `${string}.wav`) => {
   try {
     await execFile("paplay", [file], { env: pulseEnv });
     return;
-  } catch {
-    /* fallback */
+  } catch (err) {
+    console.error("[TTS] paplay failed:", err);
   }
   try {
     await execFile("aplay", ["-q", file], { env: pulseEnv });
-  } catch {
-    /* silent */
+  } catch (err) {
+    console.error("[TTS] aplay failed:", err);
   }
 };

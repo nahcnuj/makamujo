@@ -131,6 +131,9 @@
       register: pactl_info
       changed_when: false
       failed_when: pactl_info.rc != 0
+      retries: 10
+      delay: 2
+      until: pactl_info.rc == 0
 
     - name: Install makamujo units from repo
       ansible.builtin.copy:
@@ -156,4 +159,4 @@
 
     - name: Deploy done
       ansible.builtin.debug:
-        msg: Deployed; systemd path only; stable Pulse sink.
+        msg: Deployed; single Pulse path; systemd-only app restart.
