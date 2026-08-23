@@ -80,6 +80,13 @@
         - makamujo-screen.service
       failed_when: false
 
+
+    - name: Install makamujo-pipewire unit from repo
+      ansible.builtin.copy:
+        src: "{{ makamujo_src }}/etc/systemd/makamujo-pipewire.service"
+        dest: /etc/systemd/system/makamujo-pipewire.service
+        remote_src: true
+        mode: "0644"
     - name: Install makamujo-pipewire start script
       ansible.builtin.copy:
         src: "{{ playbook_dir }}/../../bin/makamujo-pipewire"

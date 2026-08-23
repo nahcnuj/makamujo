@@ -191,7 +191,9 @@
           Wants=makamujo-xvfb.service
 
           [Service]
-          Type=simple
+          Type=notify
+          NotifyAccess=all
+          TimeoutStartSec=90
           Environment=XDG_RUNTIME_DIR=/run/user/0
           Environment=HOME=/root
           Environment=DISPLAY=:10
