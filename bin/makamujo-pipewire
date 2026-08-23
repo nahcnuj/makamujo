@@ -61,11 +61,13 @@ if ! pactl info >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Pulse ready: ${PULSE_RUNTIME_PATH}/native"
-
 pactl load-module module-null-sink sink_name=makamujo_out sink_properties=device.description=MakamujoOut 2>/dev/null || true
 pactl set-default-sink makamujo_out 2>/dev/null || true
 pactl set-default-source makamujo_out.monitor 2>/dev/null || true
+
+echo "Pulse ready: ${PULSE_RUNTIME_PATH}/native"
+systemd-notify --ready
+echo "systemd-notify ready"
 
 wireplumber &
 WP_PID=$!
