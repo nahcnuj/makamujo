@@ -86,6 +86,25 @@
         dest: /usr/local/bin/makamujo-pipewire
         mode: "0755"
 
+    - name: Route ALSA default to Pulse
+      ansible.builtin.copy:
+        dest: /etc/asound.conf
+        mode: "0644"
+        content: |
+          pcm.!default { type pulse }
+          ctl.!default { type pulse }
+
+    - name: Flatpak OBS uses host headless Pulse
+      ansible.builtin.command:
+        cmd: >
+          flatpak override com.obsproject.Studio
+          --system
+          --filesystem=/run/user/0/pulse
+          --env=PULSE_SERVER=unix:/run/user/0/pulse/native
+          --env=XDG_RUNTIME_DIR=/run/user/0
+          --env=PULSE_RUNTIME_PATH=/run/user/0/pulse
+      changed_when: true
+
     - name: Restart streaming infra
       ansible.builtin.systemd:
         name: "{{ item }}"
@@ -120,9 +139,9 @@
         remote_src: true
         mode: "0644"
       loop:
-        - makamujo-obs.service
-        - makamujo-browser.service
         - makamujo-screen.service
+        - makamujo-browser.service
+        - makamujo-obs.service
 
     - name: Enable and start makamujo app units
       ansible.builtin.systemd:
@@ -137,4 +156,4 @@
 
     - name: Deploy done
       ansible.builtin.debug:
-        msg: Deployed; pulse socket up; app units restarted via systemd.
+        msg: Deployed; systemd path only; stable Pulse sink.
