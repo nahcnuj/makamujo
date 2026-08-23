@@ -64,8 +64,6 @@
           CONSOLE_TLS_CERT={{ tls_dir }}/fullchain.pem
           CONSOLE_TLS_KEY={{ tls_dir }}/privkey.pem
 
-    # git force-reset restores empty service.json key; re-apply from vault when present.
-
     - name: Re-apply Niconama stream key after deploy
       ansible.builtin.include_tasks: tasks/write_obs_stream_key.yml
       when:
@@ -105,6 +103,40 @@
       changed_when: false
       failed_when: pactl_info.rc != 0
 
+    - name: Flatpak OBS headless Pulse override
+      ansible.builtin.command:
+        cmd: >
+          flatpak override com.obsproject.Studio
+          --system
+          --socket=pulseaudio
+          --filesystem=/run/user/0/pulse
+          --env=PULSE_SERVER=unix:/run/user/0/pulse/native
+          --env=XDG_RUNTIME_DIR=/run/user/0
+          --env=PULSE_RUNTIME_PATH=/run/user/0/pulse
+      changed_when: true
+
+    - name: Route ALSA default to Pulse
+      ansible.builtin.copy:
+        dest: /etc/asound.conf
+        mode: "0644"
+        content: |
+          pcm.!default {
+              type pulse
+          }
+          ctl.!default {
+              type pulse
+          }
+
+    - name: Ensure null sink for monitoring
+      ansible.builtin.shell: |
+        export XDG_RUNTIME_DIR=/run/user/0
+        export PULSE_SERVER=unix:/run/user/0/pulse/native
+        pactl load-module module-null-sink sink_name=makamujo_null sink_properties=device.description=MakamujoNull 2>/dev/null || true
+        pactl set-default-sink makamujo_null 2>/dev/null || true
+      args:
+        executable: /bin/bash
+      changed_when: false
+
     - name: Install makamujo-obs unit from repo
       ansible.builtin.copy:
         src: "{{ makamujo_src }}/etc/systemd/makamujo-obs.service"
@@ -118,52 +150,6 @@
         enabled: true
         daemon_reload: true
 
-    - name: Link makamujo-browser unit via systemctl
-      ansible.builtin.command:
-        cmd: systemctl link {{ makamujo_src }}/etc/systemd/makamujo-browser.service
-      args:
-        creates: /etc/systemd/system/makamujo-browser.service
-
-    - name: Enable makamujo-browser unit
-      ansible.builtin.systemd:
-        name: makamujo-browser
-        enabled: true
-        daemon_reload: true
-
-    - name: Link makamujo-screen unit via systemctl
-      ansible.builtin.command:
-        cmd: systemctl link {{ makamujo_src }}/etc/systemd/makamujo-screen.service
-      args:
-        creates: /etc/systemd/system/makamujo-screen.service
-
-    - name: Enable makamujo-screen unit
-      ansible.builtin.systemd:
-        name: makamujo-screen
-        enabled: true
-        daemon_reload: true
-
-
-    - name: Flatpak OBS headless Pulse override
-      ansible.builtin.command:
-        cmd: >
-          flatpak override com.obsproject.Studio
-          --system
-          --socket=pulseaudio
-          --filesystem=/run/user/0/pulse
-          --env=PULSE_SERVER=unix:/run/user/0/pulse/native
-          --env=XDG_RUNTIME_DIR=/run/user/0
-          --env=PULSE_RUNTIME_PATH=/run/user/0/pulse
-      changed_when: true
-
-    - name: Ensure null sink for monitoring
-      ansible.builtin.shell: |
-        export XDG_RUNTIME_DIR=/run/user/0
-        export PULSE_SERVER=unix:/run/user/0/pulse/native
-        pactl load-module module-null-sink sink_name=makamujo_null sink_properties=device.description=MakamujoNull 2>/dev/null || true
-        pactl set-default-sink makamujo_null 2>/dev/null || true
-      args:
-        executable: /bin/bash
-      changed_when: false
     - name: Restart makamujo processes
       ansible.builtin.shell: |
         set -e
@@ -185,16 +171,17 @@
       args:
         executable: /bin/bash
 
-
     - name: Assert audio path healthy after start
       ansible.builtin.shell: |
         set -e
+        export XDG_RUNTIME_DIR=/run/user/0
+        export PULSE_SERVER=unix:/run/user/0/pulse/native
         test -S /run/user/0/pulse/native
-        XDG_RUNTIME_DIR=/run/user/0 PULSE_SERVER=unix:/run/user/0/pulse/native pactl info >/dev/null
+        pactl info >/dev/null
         pgrep -f 'com.obsproject.Studio|bin/x/obs|/app/bin/obs' >/dev/null
       args:
         executable: /bin/bash
+
     - name: Deploy done
       ansible.builtin.debug:
         msg: Deployed; pulse socket up and processes started.
-
