@@ -70,6 +70,16 @@
         - niconama_stream_key is defined
         - (niconama_stream_key | length) > 0
 
+    - name: Stop makamujo app units before infra restart
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - makamujo-obs.service
+        - makamujo-browser.service
+        - makamujo-screen.service
+      failed_when: false
+
     - name: Install makamujo-pipewire start script
       ansible.builtin.copy:
         src: "{{ playbook_dir }}/../../bin/makamujo-pipewire"
@@ -103,108 +113,28 @@
       changed_when: false
       failed_when: pactl_info.rc != 0
 
-    - name: Flatpak OBS headless Pulse override
-      ansible.builtin.command:
-        cmd: >
-          flatpak override com.obsproject.Studio
-          --system
-          --socket=pulseaudio
-          --filesystem=/run/user/0/pulse
-          --env=PULSE_SERVER=unix:/run/user/0/pulse/native
-          --env=XDG_RUNTIME_DIR=/run/user/0
-          --env=PULSE_RUNTIME_PATH=/run/user/0/pulse
-      changed_when: true
-
-    - name: Route ALSA default to Pulse
+    - name: Install makamujo units from repo
       ansible.builtin.copy:
-        dest: /etc/asound.conf
-        mode: "0644"
-        content: |
-          pcm.!default {
-              type pulse
-          }
-          ctl.!default {
-              type pulse
-          }
-
-    - name: Ensure null sink for monitoring
-      ansible.builtin.shell: |
-        export XDG_RUNTIME_DIR=/run/user/0
-        export PULSE_SERVER=unix:/run/user/0/pulse/native
-        pactl load-module module-null-sink sink_name=makamujo_null sink_properties=device.description=MakamujoNull 2>/dev/null || true
-        pactl set-default-sink makamujo_null 2>/dev/null || true
-      args:
-        executable: /bin/bash
-      changed_when: false
-
-
-    - name: Flatpak OBS uses host headless Pulse
-      ansible.builtin.command:
-        cmd: >
-          flatpak override com.obsproject.Studio
-          --system
-          --filesystem=/run/user/0/pulse
-          --env=PULSE_SERVER=unix:/run/user/0/pulse/native
-          --env=XDG_RUNTIME_DIR=/run/user/0
-          --env=PULSE_RUNTIME_PATH=/run/user/0/pulse
-      changed_when: true
-
-    - name: Route ALSA default to Pulse
-      ansible.builtin.copy:
-        dest: /etc/asound.conf
-        mode: "0644"
-        content: |
-          pcm.!default {
-              type pulse
-          }
-          ctl.!default {
-              type pulse
-          }
-    - name: Install makamujo-obs unit from repo
-      ansible.builtin.copy:
-        src: "{{ makamujo_src }}/etc/systemd/makamujo-obs.service"
-        dest: /etc/systemd/system/makamujo-obs.service
+        src: "{{ makamujo_src }}/etc/systemd/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
         remote_src: true
         mode: "0644"
+      loop:
+        - makamujo-obs.service
+        - makamujo-browser.service
+        - makamujo-screen.service
 
-    - name: Enable makamujo-obs unit
+    - name: Enable and start makamujo app units
       ansible.builtin.systemd:
-        name: makamujo-obs
+        name: "{{ item }}"
         enabled: true
+        state: restarted
         daemon_reload: true
-
-    - name: Restart makamujo processes
-      ansible.builtin.shell: |
-        set -e
-        export PATH="/root/.bun/bin:${PATH}"
-        export XDG_RUNTIME_DIR=/run/user/0
-        export PULSE_SERVER=unix:/run/user/0/pulse/native
-        cd {{ makamujo_src }}
-        ./bin/stop || true
-        sleep 2
-        if [ -f ./var/console-tls.env ]; then
-          set -a
-          . ./var/console-tls.env
-          set +a
-        fi
-        ./bin/start
-        test -S /run/user/0/pulse/native
-        pgrep -f 'bun start' >/dev/null
-        pgrep -x obs >/dev/null || pgrep -f '/app/bin/obs' >/dev/null
-      args:
-        executable: /bin/bash
-
-    - name: Assert audio path healthy after start
-      ansible.builtin.shell: |
-        set -e
-        export XDG_RUNTIME_DIR=/run/user/0
-        export PULSE_SERVER=unix:/run/user/0/pulse/native
-        test -S /run/user/0/pulse/native
-        pactl info >/dev/null
-        pgrep -f 'com.obsproject.Studio|bin/x/obs|/app/bin/obs' >/dev/null
-      args:
-        executable: /bin/bash
+      loop:
+        - makamujo-screen.service
+        - makamujo-browser.service
+        - makamujo-obs.service
 
     - name: Deploy done
       ansible.builtin.debug:
-        msg: Deployed; pulse socket up and processes started.
+        msg: Deployed; pulse socket up; app units restarted via systemd.
