@@ -1,4 +1,4 @@
-{
+﻿{
   "$schema": "https://biomejs.dev/schemas/2.5.2/schema.json",
   "formatter": {
     "enabled": true,
@@ -33,7 +33,10 @@
       "!var",
       "!playwright/.auth",
       "!test-results",
-      "!**/*.svg"
+      "!**/*.svg",
+      "!ansible/.venv",
+      "!ansible/.venv-wsl",
+      "!ansible/**/.venv*"
     ]
   },
   "overrides": [
