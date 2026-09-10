@@ -1,0 +1,122 @@
+name: CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: cd-vps
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  wait-for-ci:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Wait until CI succeeds for this commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 45 * 60))
+          while (( SECONDS < deadline )); do
+            payload="$(gh run list --workflow ci.yml --commit "$SHA" --json status,conclusion,event,databaseId --limit 50)"
+            echo "$payload" | jq -e 'type == "array"' >/dev/null
+
+            push_runs="$(echo "$payload" | jq '[.[] | select(.event == "push")]')"
+            count="$(echo "$push_runs" | jq 'length')"
+            if [ "$count" -eq 0 ]; then
+              echo "CI run for push $SHA is not listed yet"
+              sleep 20
+              continue
+            fi
+
+            pending="$(echo "$push_runs" | jq '[.[] | select(.status != "completed")] | length')"
+            success="$(echo "$push_runs" | jq '[.[] | select(.status == "completed" and .conclusion == "success")] | length')"
+
+            echo "CI runs for $SHA: pending=$pending success=$success"
+            echo "$push_runs" | jq -c '.[]'
+
+            if [ "$pending" -gt 0 ]; then
+              sleep 20
+              continue
+            fi
+
+            if [ "$success" -gt 0 ]; then
+              echo "CI passed for $SHA"
+              exit 0
+            fi
+
+            echo "CI did not pass for $SHA"
+            exit 1
+          done
+          echo "Timed out waiting for CI on $SHA"
+          exit 1
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: wait-for-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: vps
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ansible
+        run: pip install -r ansible/requirements.txt
+
+      - name: Prepare SSH and Vault credentials
+        env:
+          VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          VPS_SSH_HOST: ${{ secrets.VPS_SSH_HOST }}
+          VPS_SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
+          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${VPS_SSH_PRIVATE_KEY:?missing secret VPS_SSH_PRIVATE_KEY}"
+          : "${VPS_SSH_HOST:?missing secret VPS_SSH_HOST}"
+          : "${ANSIBLE_VAULT_PASSWORD:?missing secret ANSIBLE_VAULT_PASSWORD}"
+
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+
+          if [ -n "${VPS_SSH_KNOWN_HOSTS}" ]; then
+            printf '%s\n' "$VPS_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -H "$VPS_SSH_HOST" > ~/.ssh/known_hosts
+          fi
+          chmod 644 ~/.ssh/known_hosts
+
+          umask 077
+          printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > ansible/.vault_pass
+
+      - name: Deploy with Ansible
+        working-directory: ansible
+        env:
+          VPS_SSH_HOST: ${{ secrets.VPS_SSH_HOST }}
+          VPS_SSH_USER: ${{ secrets.VPS_SSH_USER }}
+          ANSIBLE_HOST_KEY_CHECKING: "True"
+        run: |
+          set -euo pipefail
+          ansible_user="${VPS_SSH_USER:-root}"
+          ansible-playbook playbooks/2_makamujo.yml \
+            --vault-password-file .vault_pass \
+            -e "ansible_host=${VPS_SSH_HOST}" \
+            -e "ansible_user=${ansible_user}" \
+            -e "ansible_ssh_private_key_file=${HOME}/.ssh/id_deploy" \
+            -e "ansible_ssh_common_args=-o IdentitiesOnly=yes" \
+            -e "makamujo_git_version=${GITHUB_SHA}"

@@ -83,6 +83,22 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 | `playbooks/2_makamujo.yml` | デプロイ後、vault があれば同じ書き込みを再実行 |
 | `playbooks/0_obs.yml` | OBS Flatpak のみ（キーは触らない） |
 
+## GitHub Actions CD
+
+`main` への push（または `main` 上の `workflow_dispatch`）で `.github/workflows/cd.yml` が走り、そのコミットの CI（`.github/workflows/ci.yml` の **push** run）が success になってから `playbooks/2_makamujo.yml` を VPS に適用します。デプロイ対象はブランチ名ではなく **そのコミット SHA** です。
+
+必要な GitHub Secrets（Environment `vps` またはリポジトリ Secrets）:
+
+| Secret | 必須 | 内容 |
+|--------|------|------|
+| `VPS_SSH_PRIVATE_KEY` | yes | VPS に入る SSH 秘密鍵 |
+| `VPS_SSH_HOST` | yes | SSH 先（IP またはホスト名）。inventory の `makamujo` エイリアスは runner では使わない |
+| `ANSIBLE_VAULT_PASSWORD` | yes | `inventory/group_vars/all/vault.yml` の復号パスワード |
+| `VPS_SSH_USER` | no | SSH ユーザー。省略時 `root` |
+| `VPS_SSH_KNOWN_HOSTS` | no | `ssh-keyscan` 形式の known_hosts。未設定時は実行時に `ssh-keyscan` |
+
+Environment `vps` に required reviewers を付けると、CI 通過後の実デプロイだけ承認待ちにできます。
+
 ## Playbooks（概要）
 
 | 順 | ファイル | 役割 |
