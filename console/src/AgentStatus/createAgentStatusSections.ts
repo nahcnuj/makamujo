@@ -7,7 +7,6 @@ const LIVE_DELIVERY_ROW_LABELS = [
   "配信URL",
   "開始時刻",
   "発話内容",
-  "最近のコメント",
 ] as const;
 const MARKOV_MODEL_ROW_LABELS = [
   "生成N-gram",
@@ -23,12 +22,8 @@ const GAME_ROW_LABEL_SET = createLabelSet(GAME_ROW_LABELS);
 
 export const createAgentStatusSections = (
   stateResponse: AgentStateResponse | null,
-  options?: {
-    showRecentComments?: boolean;
-    toggleRecentComments?: () => void;
-  },
 ): AgentStatusSection[] => {
-  const rows = createAgentStatusRows(stateResponse, options);
+  const rows = createAgentStatusRows(stateResponse);
   const liveDeliveryRows = rows.filter((row) =>
     LIVE_DELIVERY_ROW_LABEL_SET.has(row.label),
   );

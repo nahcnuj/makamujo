@@ -1,74 +1,47 @@
 # systemd units for makamujo
 
-This directory contains systemd service files that manage the makamujo application lifecycle.
+このディレクトリは makamujo の systemd サービス定義です（`main` から `legacy` 向けに移植）。
 
-## Architecture
+## 構成
 
-The makamujo service is structured as a parent unit (`makamujo.service`) that coordinates three child services:
+親 unit `makamujo.service` が次の子サービスを `Wants=` で束ねます。
 
-- `makamujo-screen.service`: Starts the screen/server component
-- `makamujo-browser.service`: Starts the browser automation (depends on screen)
-- `makamujo-obs.service`: Starts OBS (depends on browser)
+1. `makamujo-screen.service` — 配信サーバ（`bun start`）
+2. `makamujo-browser.service` — ゲームブラウザ自動化
+3. `makamujo-obs.service` — OBS（flatpak）
 
-The parent service uses systemd's `After=` and `Wants=` directives to ensure the correct startup order:
-1. screen → 2. browser → 3. obs
+補助:
 
-## Install (system-wide)
+- `xorg10.service` / `x11vnc-10.service` — 永続 DISPLAY `:10` と VNC
 
-Use the top-level make target to install all services and dependencies:
+ローカル開発では従来どおり `bin/start` / `bin/stop` も利用できます。
+
+## インストール
 
 ```sh
 sudo make install
 ```
 
-This copies all `etc/systemd/*.service` units to `/etc/systemd/system/`, installs Bun dependencies under `/opt/makamujo`, and enables `makamujo.service`.
+`/opt/makamujo` にアプリを配置し、unit を有効化します。`composition/` と `architecture/` もコピー対象です。
 
-## Manual installation
-
-If you prefer manual installation:
+## 操作
 
 ```sh
-sudo cp /workspaces/makamujo/etc/systemd/*.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now makamujo.service
-```
-
-## Managing the service
-
-Start/stop/restart the entire application stack:
-
-```sh
-# Start all services (screen → browser → obs)
 sudo systemctl start makamujo.service
-
-# Stop all services (obs → browser → screen, via PartOf=)
 sudo systemctl stop makamujo.service
-
-# Restart
-sudo systemctl restart makamujo.service
-
-# Check status of all units
 sudo systemctl status makamujo.service makamujo-screen.service makamujo-browser.service makamujo-obs.service
+sudo journalctl -u makamujo-screen.service -u makamujo-browser.service -u makamujo-obs.service -f
+# または
+sudo /opt/makamujo/bin/journal-makamujo
 ```
 
-## Viewing logs
-
-View logs for all makamujo components:
+管理コンソール Basic auth パスワード（自動生成時）:
 
 ```sh
-sudo journalctl -u makamujo.service -u makamujo-screen.service -u makamujo-browser.service -u makamujo-obs.service -f
+make console-password
 ```
 
-Or use the convenience script (after `make install`):
+## 注意
 
-```sh
-sudo /opt/makamujo/bin/journal-makamujo -f
-```
-
-## Notes
-
-- The services are configured to start after `graphical.target`, so they will wait for the graphical session to be ready.
-- All services run as `root` by default. To run as a different user, edit the service files and adjust `User=`, `Environment=DISPLAY`, and `Environment=XAUTHORITY` accordingly.
-- The persistent Xorg display is configured as `:10` to match `xorg10.service` and `x11vnc-10.service`.
-- Adjust `WorkingDirectory` and `ExecStart` paths in the service files if you install the application to a different location.
-
+- 既定は `User=root` と `DISPLAY=:10`。別ユーザにする場合は unit を編集する。
+- `WorkingDirectory` / `ExecStart` の `/opt/makamujo` は `PREFIX` 変更時に合わせて直す。

@@ -1,20 +1,40 @@
 [Unit]
-Description=makamujo OBS service
-After=makamujo-browser.service
-PartOf=makamujo.service
+Description=Makamujo OBS Studio (Flatpak)
+After=makamujo-xvfb.service makamujo-pipewire.service
+Requires=makamujo-pipewire.service
+Wants=makamujo-xvfb.service
+PartOf=makamujo-pipewire.service
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/makamujo
+WorkingDirectory=/opt/src/makamujo
 User=root
 Environment=PATH=/root/.bun/bin:/usr/local/bin:/usr/bin:/bin
 Environment=DISPLAY=:10
-# Ensure OBS config and cache directories are accessible
-Environment=XDG_CONFIG_HOME=/opt/makamujo
-Environment=XDG_DATA_HOME=/opt/makamujo
-Environment=XDG_CACHE_HOME=/opt/makamujo/.cache
-ExecStart=/bin/sh -lc "cd '/opt/makamujo' && '/opt/makamujo/bin/x/obs'"
+Environment=XDG_RUNTIME_DIR=/run/user/0
+Environment=PULSE_SERVER=unix:/run/user/0/pulse/native
+Environment=PULSE_RUNTIME_PATH=/run/user/0/pulse
+Environment=XDG_CONFIG_HOME=/opt/src/makamujo
+Environment=XDG_DATA_HOME=/opt/src/makamujo
+Environment=XDG_CACHE_HOME=/opt/src/makamujo/.cache
+Environment=LIBGL_ALWAYS_SOFTWARE=1
+Environment=OBS_BROWSER_HW_ACCEL=0
+Environment=OBS_USE_EGL=0
+Environment=QT_OPENGL=software
+ExecStart=/opt/src/makamujo/bin/x/obs
 StandardOutput=journal
 StandardError=journal
 Restart=on-failure
-RestartSec=5s
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=30
+MemoryAccounting=yes
+MemoryHigh=1.5G
+MemoryMax=2G
+CPUAccounting=yes
+CPUQuota=150%
+TasksMax=256
+OOMPolicy=stop
+
+[Install]
+WantedBy=multi-user.target

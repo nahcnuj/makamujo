@@ -11,7 +11,7 @@
     "mixers": 255,
     "sync": 0,
     "flags": 0,
-    "volume": 0.74814283847808838,
+    "volume": 0.7481428384780884,
     "balance": 0.5,
     "enabled": true,
     "muted": false,
@@ -46,15 +46,15 @@
       "id": "browser_source",
       "versioned_id": "browser_source",
       "settings": {
-        "url": "http://localhost:7777",
+        "url": "http://127.0.0.1:7777/",
         "width": 1280,
         "height": 720,
+        "fps": 30,
         "fps_custom": true,
-        "shutdown": true,
-        "restart_when_active": true,
-        "webpage_control_level": 0,
-        "css": "body { background-color: rgba(0 0 0 / 0); margin: 0px auto; overflow: hidden; }",
-        "reroute_audio": true
+        "shutdown": false,
+        "restart_when_active": false,
+        "css": "body { background-color: rgba(0,0,0,0) !important; margin: 0; overflow: hidden; }",
+        "webpage_control_level": 1
       },
       "mixers": 255,
       "sync": 0,
@@ -183,12 +183,12 @@
       "versioned_id": "xshm_input_v2",
       "settings": {
         "screen": 0,
-        "show_cursor": true,
-        "advanced": false,
-        "cut_top": 720,
-        "cut_left": 1265,
-        "cut_right": 15,
-        "cut_bot": 160
+        "show_cursor": false,
+        "advanced": true,
+        "cut_top": 40,
+        "cut_left": 1280,
+        "cut_right": 0,
+        "cut_bot": 680
       },
       "mixers": 0,
       "sync": 0,
@@ -247,11 +247,11 @@
             },
             "scale": {
               "x": 0.796875,
-              "y": 0.79722219705581665
+              "y": 0.7972221970558167
             },
             "scale_rel": {
               "x": 0.796875,
-              "y": 0.79722219705581665
+              "y": 0.7972221970558167
             },
             "bounds": {
               "x": 0.0,
@@ -408,7 +408,7 @@
             },
             "pos_rel": {
               "x": -1.4333332777023315,
-              "y": -0.57777774333953857
+              "y": -0.5777777433395386
             },
             "scale": {
               "x": 1.0,

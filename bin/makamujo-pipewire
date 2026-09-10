@@ -1,0 +1,81 @@
+#!/bin/bash
+set -euo pipefail
+
+export XDG_RUNTIME_DIR=/run/user/0
+export HOME=/root
+export DISPLAY=:10
+export PULSE_RUNTIME_PATH=/run/user/0/pulse
+export PIPEWIRE_RUNTIME_DIR=/run/user/0
+export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus
+export PULSE_SERVER=unix:/run/user/0/pulse/native
+
+mkdir -p "$XDG_RUNTIME_DIR" "$PULSE_RUNTIME_PATH"
+chmod 700 "$XDG_RUNTIME_DIR"
+
+cleanup() {
+  for pid in ${WP_PID:-} ${PULSE_PID:-} ${PW_PID:-} ${DBUS_PID:-}; do
+    [ -n "${pid}" ] || continue
+    kill "$pid" 2>/dev/null || true
+  done
+  pkill -u root -x wireplumber 2>/dev/null || true
+  pkill -u root -x pipewire-pulse 2>/dev/null || true
+  pkill -u root -x pipewire 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+pkill -u root -x pipewire 2>/dev/null || true
+pkill -u root -x pipewire-pulse 2>/dev/null || true
+pkill -u root -x wireplumber 2>/dev/null || true
+pkill -u root -f 'dbus-daemon --session --address=unix:path=/run/user/0/bus' 2>/dev/null || true
+sleep 0.3
+rm -f "${PULSE_RUNTIME_PATH}/native" "${PIPEWIRE_RUNTIME_DIR}/pipewire-0" 2>/dev/null || true
+
+dbus-daemon --session \
+  --address="unix:path=${XDG_RUNTIME_DIR}/bus" \
+  --nofork --nopidfile --syslog-only &
+DBUS_PID=$!
+sleep 1
+
+pipewire &
+PW_PID=$!
+sleep 1
+pipewire-pulse &
+PULSE_PID=$!
+sleep 1
+
+for _ in $(seq 1 80); do
+  [ -S "${PULSE_RUNTIME_PATH}/native" ] && break
+  sleep 0.25
+done
+if [ ! -S "${PULSE_RUNTIME_PATH}/native" ]; then
+  echo "ERROR: pulse socket not ready" >&2
+  exit 1
+fi
+
+for _ in $(seq 1 40); do
+  pactl info >/dev/null 2>&1 && break
+  sleep 0.25
+done
+if ! pactl info >/dev/null 2>&1; then
+  echo "ERROR: pulse not accepting connections" >&2
+  exit 1
+fi
+
+pactl load-module module-null-sink sink_name=makamujo_out sink_properties=device.description=MakamujoOut 2>/dev/null || true
+pactl set-default-sink makamujo_out 2>/dev/null || true
+pactl set-default-source makamujo_out.monitor 2>/dev/null || true
+
+echo "Pulse ready: ${PULSE_RUNTIME_PATH}/native"
+systemd-notify --ready
+echo "systemd-notify ready"
+
+wireplumber &
+WP_PID=$!
+
+while true; do
+  kill -0 "$WP_PID" 2>/dev/null || { echo "ERROR: wireplumber exited" >&2; exit 1; }
+  kill -0 "$PW_PID" 2>/dev/null || { echo "ERROR: pipewire exited" >&2; exit 1; }
+  kill -0 "$PULSE_PID" 2>/dev/null || { echo "ERROR: pipewire-pulse exited" >&2; exit 1; }
+  [ -S "${PULSE_RUNTIME_PATH}/native" ] || { echo "ERROR: pulse socket lost" >&2; exit 1; }
+  sleep 2
+done

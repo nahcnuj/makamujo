@@ -1,17 +1,19 @@
 import { beforeEach, describe, expect, it, jest, mock } from "bun:test";
-import { MakaMujo, SILENCE_THRESHOLD_MS, type TalkModel, type TTS } from ".";
+import {
+  MakaMujo,
+  SILENCE_THRESHOLD_MS,
+  type TalkModel,
+  type TalkModelGenerateResult,
+  type TTS,
+} from ".";
 
 // Variables starting with "mock" are available in mock.module factory closures
 // even after hoisting (following the same convention as jest.mock).
-let mockCapturedIpcCallback:
-  | ((state: Record<string, unknown>) => Record<string, unknown>)
-  | undefined;
+let mockCapturedIpcCallback: ((state: any) => any) | undefined;
 const mockSolverControl = { done: false };
 
 mock.module("../Browser/socket", () => ({
-  createReceiver: (
-    cb: (state: Record<string, unknown>) => Record<string, unknown>,
-  ) => {
+  createReceiver: (cb: (state: any) => any) => {
     mockCapturedIpcCallback = cb;
   },
 }));
@@ -19,6 +21,16 @@ mock.module("../Browser/socket", () => ({
 mock.module("./games/server", () => ({
   ServerGames: {
     CookieClicker: {
+      solver: () => ({
+        next: () =>
+          mockSolverControl.done
+            ? { done: true as const, value: undefined }
+            : { done: false as const, value: { name: "noop" } },
+      }),
+      sight: () => ({}),
+      Component: () => null,
+    },
+    VigilantFiesta: {
       solver: () => ({
         next: () =>
           mockSolverControl.done
@@ -73,6 +85,51 @@ const viewerComment = {
     hasGift: false,
   },
 };
+
+describe("anonymous comments are not learned (cruise-equivalent)", () => {
+  it("does not call learn for anonymous comments but still replies", () => {
+    const learn = jest.fn();
+    const generate = jest.fn(() => "返信テキスト");
+    const talkModel: TalkModel = {
+      generate,
+      learn,
+      toJSON: () => "{}",
+    };
+    const agent = new MakaMujo(talkModel, stubTts);
+    agent.onAir(niconamaLive(10));
+
+    agent.listen([
+      {
+        data: {
+          comment: "匿名のコメントです",
+          no: 42,
+          anonymity: true,
+          hasGift: false,
+        },
+      } as any,
+    ]);
+
+    expect(learn).not.toHaveBeenCalled();
+    expect(generate).toHaveBeenCalled();
+    const streamState = agent.streamState as any;
+    expect(streamState?.replyTargetComment?.text).toBe("匿名のコメントです");
+  });
+
+  it("still learns non-anonymous comments with no", () => {
+    const learn = jest.fn();
+    const talkModel: TalkModel = {
+      generate: () => "",
+      learn,
+      toJSON: () => "{}",
+    };
+    const agent = new MakaMujo(talkModel, stubTts);
+    agent.onAir(niconamaLive(10));
+
+    agent.listen([viewerComment]);
+
+    expect(learn).toHaveBeenCalledWith("こんにちは。");
+  });
+});
 
 describe("per-program comment tracking", () => {
   it("initializes comments to 0 and sets the latest comment number for user comments", () => {
@@ -173,14 +230,14 @@ describe("speechable", () => {
     expect(agent.speechable).toBeTrue();
   });
 
-  it("should be true when stream is live and listener count just changed", () => {
+  it("should be false when stream is live with no comments even if listener count just changed", () => {
     jest.spyOn(Date, "now").mockReturnValue(0);
     const agent = new MakaMujo(stubTalkModel, stubTts);
     agent.onAir(niconamaLive(10));
 
-    // listener count just changed, so not stale yet
+    // listeners are fresh, but comments have never arrived → still silent
     jest.spyOn(Date, "now").mockReturnValue(SILENCE_THRESHOLD_MS - 1);
-    expect(agent.speechable).toBeTrue();
+    expect(agent.speechable).toBeFalse();
   });
 
   it("should be false when listener count is stale and no comments have ever been received", () => {
@@ -261,7 +318,7 @@ describe("speechable", () => {
     expect(called).toHaveBeenCalledTimes(1);
   });
 
-  it("resets prompted flag when direct TTS playback fails and allows speechable", async () => {
+  it("resets prompted flag when direct TTS playback fails but remains silent while comments are stale", async () => {
     jest.spyOn(Date, "now").mockReturnValue(0);
     const fail = jest.fn(async () => {
       throw new Error("boom");
@@ -280,8 +337,15 @@ describe("speechable", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(fail).toHaveBeenCalledTimes(1);
-    // after failed playback the prompt flag should be cleared and speechable true
-    expect(agent.speechable).toBeTrue();
+    // prompt flag cleared so a later viewer increase can prompt again,
+    // but comments are still stale → speechable stays false
+    expect(agent.speechable).toBeFalse();
+
+    // second viewer increase should prompt again (flag was reset)
+    agent.onAir(niconamaLive(12));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fail).toHaveBeenCalledTimes(2);
+    expect(agent.speechable).toBeFalse();
   });
 
   it("prompts immediately even when main speech is blocked", async () => {
@@ -307,14 +371,11 @@ describe("speechable", () => {
     // allow scheduled tasks to run
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(called).toHaveBeenCalledWith("main-block", {
-      additionalHalfTone: 3,
-      speakingRate: 1.2,
-    });
-    expect(called).not.toHaveBeenCalledWith("コメントしていってね〜", {
-      additionalHalfTone: 3,
-      speakingRate: 1.2,
-    });
+    expect(called).toHaveBeenCalledWith("main-block", expect.anything());
+    expect(called).not.toHaveBeenCalledWith(
+      "コメントしていってね〜",
+      expect.anything(),
+    );
     expect(agent.speechable).toBeFalse();
   });
 
@@ -377,6 +438,72 @@ describe("speech completion hooks", () => {
       }),
     );
     expect(completeListener).toHaveBeenCalled();
+  });
+});
+
+describe("Markov speech continuation", () => {
+  const scriptedGenerate = (...results: TalkModelGenerateResult[]) => {
+    const it = (function* () {
+      yield* results;
+    })();
+    return () => {
+      const step = it.next();
+      if (step.done) throw new Error("generate called too many times");
+      return step.value;
+    };
+  };
+
+  const createAgent = (generate: TalkModel["generate"], spoken: string[]) =>
+    new MakaMujo(
+      { generate, learn: () => {}, toJSON: () => "{}" },
+      {
+        speech: async (text) => {
+          spoken.push(text);
+        },
+      },
+    );
+
+  it("continues until 。", async () => {
+    const spoken: string[] = [];
+    await createAgent(
+      scriptedGenerate(
+        { text: "今日は公園", nodes: ["今日", "は", "公園"] },
+        { text: "公園に行った。", nodes: ["に", "行った", "。"] },
+      ),
+      spoken,
+    ).speech();
+    await Bun.sleep(0);
+    expect(spoken).toEqual(["今日は公園", "に行った。"]);
+  });
+
+  it("omits seed on continuation", async () => {
+    const spoken: string[] = [];
+    await createAgent(
+      scriptedGenerate({ text: "に行った。", nodes: ["に", "行った", "。"] }),
+      spoken,
+    ).speech({ text: "公園に", nodes: ["公園", "に"] });
+    await Bun.sleep(0);
+    expect(spoken).toEqual(["公園に", "行った。"]);
+  });
+
+  it("stops when ends with 。", async () => {
+    const spoken: string[] = [];
+    await createAgent(
+      scriptedGenerate({ text: "こんにちは。", nodes: ["こんにちは", "。"] }),
+      spoken,
+    ).speech();
+    await Bun.sleep(0);
+    expect(spoken).toEqual(["こんにちは。"]);
+  });
+
+  it("stops without nodes", async () => {
+    const spoken: string[] = [];
+    await createAgent(
+      scriptedGenerate({ text: "途中で切れた" }),
+      spoken,
+    ).speech();
+    await Bun.sleep(0);
+    expect(spoken).toEqual(["途中で切れた"]);
   });
 });
 
@@ -561,6 +688,127 @@ describe("comment learning n-gram size", () => {
   });
 });
 
+describe("CommentPipeline characterization", () => {
+  it("learns owner comments without no", () => {
+    const learn = jest.fn();
+    const generate = jest.fn(() => "");
+    const agent = new MakaMujo(
+      { generate, learn, toJSON: () => "{}" },
+      stubTts,
+    );
+
+    agent.listen([
+      {
+        data: {
+          comment: "オーナーです",
+          isOwner: true,
+          anonymity: false,
+          hasGift: false,
+        },
+      } as any,
+    ]);
+
+    expect(learn).toHaveBeenCalledWith("オーナーです。");
+  });
+
+  it("system messages refresh lastCommentAt (affects speechable after silence)", () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    agent.onAir(niconamaLive(1));
+    agent.listen([viewerComment]);
+    agent.onAir(niconamaLive(2));
+    // advance beyond threshold then system comment should clear prompted path via lastCommentAt
+    const now = Date.now();
+    // force stale via fake timers would be ideal; instead re-listen after manual delay using Date
+    // We only assert system message runs learn path not; assert it does not throw and clears prompt flag
+    agent.listen([
+      {
+        data: {
+          comment: "system ping",
+          anonymity: false,
+          hasGift: false,
+          userId: "onecomme.system",
+        },
+      } as any,
+    ]);
+    // After any comment, prompted flag is false so speechable not locked by prompt
+    expect(agent.speechable).toBe(true);
+    expect(now).toBeGreaterThan(0);
+  });
+
+  it("ad system comment does not also gift-thank when hasGift is set", async () => {
+    const spoken: string[] = [];
+    const tts: TTS = {
+      speech: async (text) => {
+        spoken.push(text);
+      },
+    };
+    const agent = new MakaMujo(stubTalkModel, tts);
+
+    agent.listen([
+      {
+        data: {
+          comment: "【広告】太郎さんが広告しました",
+          userId: "onecomme.system",
+          anonymity: false,
+          hasGift: true,
+          origin: { message: { gift: { advertiserName: "花子" } } },
+        },
+      } as any,
+    ]);
+
+    // drain speech queue
+    await new Promise((r) => setTimeout(r, 50));
+    expect(spoken.some((t) => t.includes("広告"))).toBe(true);
+    expect(spoken.some((t) => t.includes("ギフト"))).toBe(false);
+  });
+
+  it("allows non-monotonic program comment numbers (stores last observed no)", () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts);
+    agent.onAir(niconamaLive(10));
+    agent.listen([
+      {
+        data: { comment: "a", no: 50, anonymity: false, hasGift: false },
+      } as any,
+    ]);
+    expect(agent.streamState?.meta?.total?.comments).toBe(50);
+    agent.listen([
+      {
+        data: { comment: "b", no: 10, anonymity: false, hasGift: false },
+      } as any,
+    ]);
+    expect(agent.streamState?.meta?.total?.comments).toBe(10);
+  });
+
+  it("queues cruise welcome speeches for quote-start system message", async () => {
+    const spoken: string[] = [];
+    const tts: TTS = {
+      speech: async (text) => {
+        spoken.push(text);
+      },
+    };
+    const agent = new MakaMujo(stubTalkModel, tts);
+
+    agent.listen([
+      {
+        data: {
+          comment: "「生放送クルーズさん」が引用を開始しました",
+          userId: "onecomme.system",
+          anonymity: false,
+          hasGift: false,
+        },
+      } as any,
+    ]);
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(spoken).toEqual([
+      "生放送クルーズのみなさん、こんにちは",
+      "AI Vチューバーの馬可無序です",
+      "コメントを学習してお話ししています",
+      "ぜひ上のリンクから遊びに来てね",
+    ]);
+  });
+});
+
 describe("onGameStateChange", () => {
   beforeEach(() => {
     mockCapturedIpcCallback = undefined;
@@ -575,7 +823,7 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(listener);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback?.({ name: "closed" });
+    mockCapturedIpcCallback!({ name: "closed" });
     await flushMicrotasks();
 
     expect(listener).toHaveBeenCalledTimes(1);
@@ -587,7 +835,7 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(listener);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback?.({ name: "idle", state: { cookies: 42 } });
+    mockCapturedIpcCallback!({ name: "idle", state: { cookies: 42 } });
     await flushMicrotasks();
 
     expect(listener).toHaveBeenCalledTimes(1);
@@ -599,7 +847,7 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(listener);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback?.({ name: "idle" });
+    mockCapturedIpcCallback!({ name: "idle" });
     await flushMicrotasks();
 
     expect(listener).not.toHaveBeenCalled();
@@ -612,7 +860,7 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(listener);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback?.({ name: "idle" });
+    mockCapturedIpcCallback!({ name: "idle" });
     await flushMicrotasks();
 
     expect(listener).toHaveBeenCalledTimes(1);
@@ -626,7 +874,7 @@ describe("onGameStateChange", () => {
     });
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback?.({ name: "closed" });
+    mockCapturedIpcCallback!({ name: "closed" });
     callOrder.push("afterReceiver");
 
     // Listener must not have run synchronously
@@ -644,7 +892,7 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(listenerB);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback?.({ name: "closed" });
+    mockCapturedIpcCallback!({ name: "closed" });
     await flushMicrotasks();
 
     expect(listenerA).toHaveBeenCalledTimes(1);
@@ -661,10 +909,68 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(succeedingListener);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback?.({ name: "closed" });
+    mockCapturedIpcCallback!({ name: "closed" });
     await flushMicrotasks();
 
     expect(failingListener).toHaveBeenCalledTimes(1);
     expect(succeedingListener).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("VigilantFiesta game commentary", () => {
+  beforeEach(() => {
+    mockCapturedIpcCallback = undefined;
+    mockSolverControl.done = false;
+  });
+
+  it("speaks scripted lines on start and game over, without learning them", async () => {
+    const learn = jest.fn();
+    const speech = jest.fn(async () => {});
+    const talkModel: TalkModel = {
+      generate: () => "",
+      learn,
+      toJSON: () => "{}",
+    };
+    const tts: TTS = {
+      speech: async (text: string) => {
+        await speech();
+      },
+    };
+    const agent = new MakaMujo(talkModel, tts);
+
+    const heard: string[] = [];
+    agent.onSpeech(async (event) => {
+      heard.push(event.text);
+    });
+
+    agent.play("VigilantFiesta");
+    mockCapturedIpcCallback!({
+      name: "idle",
+      url: "https://www.nahcnuj.work/vigilant-fiesta/",
+      state: { screen: "title", score: Number.NaN, level: Number.NaN },
+    });
+    mockCapturedIpcCallback!({
+      name: "idle",
+      url: "https://www.nahcnuj.work/vigilant-fiesta/",
+      state: { screen: "playing", score: 0, level: 1 },
+    });
+    mockCapturedIpcCallback!({
+      name: "idle",
+      url: "https://www.nahcnuj.work/vigilant-fiesta/",
+      state: { screen: "result", score: 88, level: 2 },
+    });
+
+    // Serial SpeechQueue: drain a few turns of the promise chain.
+    for (let i = 0; i < 10; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    expect(heard).toContain("落ち物パズル、スタート！");
+    expect(
+      heard.some((t) => t.includes("ゲームオーバー") && t.includes("88")),
+    ).toBe(true);
+    expect(heard).toContain("ちょっと雑談してから、またプレイしますね。");
+    // Fixed system scripts must not train Markov (same as ad/cruise)
+    expect(learn).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,5 @@
-{
-  "$schema": "https://biomejs.dev/schemas/2.4.16/schema.json",
+﻿{
+  "$schema": "https://biomejs.dev/schemas/2.5.2/schema.json",
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
@@ -32,7 +32,11 @@
       "!docs/index.html",
       "!var",
       "!playwright/.auth",
-      "!test-results"
+      "!test-results",
+      "!**/*.svg",
+      "!ansible/.venv",
+      "!ansible/.venv-wsl",
+      "!ansible/**/.venv*"
     ]
   },
   "overrides": [

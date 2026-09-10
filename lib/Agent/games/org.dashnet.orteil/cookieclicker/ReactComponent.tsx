@@ -1,8 +1,21 @@
 import type { State } from "./State";
+import { enrichSightState } from "./server";
 
-export default function ({ state }: { state: State }) {
-  console.log("CookieClickerComponent", state);
-  const { cookies } = state;
+const formatNumber = new Intl.NumberFormat("ja-JP").format;
 
-  return <div>{`🍪${cookies.toExponential(2)}枚`}</div>;
+export default function ({ state: rawState }: { state: State }) {
+  const state = enrichSightState(rawState as any);
+  const generation = state.statistics?.general?.["遺産の始まり："]?.ascensions;
+  const clickCount = state.statistics?.general?.["クリック回数："]?.value;
+
+  if (generation === undefined || clickCount === undefined) {
+    return null;
+  }
+
+  return (
+    <>
+      <div>{`${formatNumber(generation)}世代目`}</div>
+      <div>{`クリック ${formatNumber(clickCount)}回`}</div>
+    </>
+  );
 }

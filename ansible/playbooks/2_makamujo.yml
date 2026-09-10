@@ -1,0 +1,169 @@
+- name: Deploy makamujo (clone, deps, console TLS)
+  hosts: vps
+  become: true
+  vars:
+    makamujo_src: /opt/src/makamujo
+    tls_dir: /opt/src/makamujo/var/tls
+  environment:
+    PATH: "/root/.bun/bin:/usr/local/bin:/usr/bin:/bin"
+  tasks:
+    - name: Ensure parent directory exists
+      ansible.builtin.file:
+        path: /opt/src
+        state: directory
+        mode: "0755"
+
+    - name: Clone makamujo repository
+      ansible.builtin.git:
+        repo: https://github.com/nahcnuj/makamujo.git
+        dest: "{{ makamujo_src }}"
+        version: main
+        force: true
+
+    - name: Install production dependencies with Bun
+      ansible.builtin.command:
+        cmd: bun install --production
+        chdir: "{{ makamujo_src }}"
+
+    - name: Install Playwright Chromium browser
+      ansible.builtin.command:
+        cmd: bunx playwright install chromium
+        chdir: "{{ makamujo_src }}"
+
+    - name: Install Playwright system dependencies
+      ansible.builtin.command:
+        cmd: bunx playwright install-deps chromium
+        chdir: "{{ makamujo_src }}"
+
+    - name: Ensure TLS directory exists
+      ansible.builtin.file:
+        path: "{{ tls_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Generate self-signed certificate if missing
+      ansible.builtin.command:
+        cmd: >
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048
+          -keyout {{ tls_dir }}/privkey.pem
+          -out {{ tls_dir }}/fullchain.pem
+          -subj /CN=162.43.32.60
+      args:
+        creates: "{{ tls_dir }}/fullchain.pem"
+
+    - name: Restrict private key permissions
+      ansible.builtin.file:
+        path: "{{ tls_dir }}/privkey.pem"
+        mode: "0600"
+
+    - name: Write console TLS env file
+      ansible.builtin.copy:
+        dest: "{{ makamujo_src }}/var/console-tls.env"
+        mode: "0644"
+        content: |
+          CONSOLE_TLS_CERT={{ tls_dir }}/fullchain.pem
+          CONSOLE_TLS_KEY={{ tls_dir }}/privkey.pem
+
+    - name: Re-apply Niconama stream key after deploy
+      ansible.builtin.include_tasks: tasks/write_obs_stream_key.yml
+      when:
+        - niconama_stream_key is defined
+        - (niconama_stream_key | length) > 0
+
+    - name: Stop makamujo app units before infra restart
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - makamujo-obs.service
+        - makamujo-browser.service
+        - makamujo-screen.service
+      failed_when: false
+
+
+    - name: Install makamujo-pipewire unit from repo
+      ansible.builtin.copy:
+        src: "{{ makamujo_src }}/etc/systemd/makamujo-pipewire.service"
+        dest: /etc/systemd/system/makamujo-pipewire.service
+        remote_src: true
+        mode: "0644"
+    - name: Install makamujo-pipewire start script
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../bin/makamujo-pipewire"
+        dest: /usr/local/bin/makamujo-pipewire
+        mode: "0755"
+
+    - name: Route ALSA default to Pulse
+      ansible.builtin.copy:
+        dest: /etc/asound.conf
+        mode: "0644"
+        content: |
+          pcm.!default { type pulse }
+          ctl.!default { type pulse }
+
+    - name: Flatpak OBS uses host headless Pulse
+      ansible.builtin.command:
+        cmd: >
+          flatpak override com.obsproject.Studio
+          --system
+          --filesystem=/run/user/0/pulse
+          --env=PULSE_SERVER=unix:/run/user/0/pulse/native
+          --env=XDG_RUNTIME_DIR=/run/user/0
+          --env=PULSE_RUNTIME_PATH=/run/user/0/pulse
+      changed_when: true
+
+    - name: Restart streaming infra
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: restarted
+        daemon_reload: true
+      loop:
+        - makamujo-xvfb.service
+        - makamujo-pipewire.service
+        - makamujo-x11vnc.service
+
+    - name: Wait until PipeWire pulse socket is ready
+      ansible.builtin.wait_for:
+        path: /run/user/0/pulse/native
+        state: present
+        timeout: 60
+
+    - name: Verify pulse server responds
+      ansible.builtin.command:
+        cmd: pactl info
+      environment:
+        XDG_RUNTIME_DIR: /run/user/0
+        PULSE_SERVER: unix:/run/user/0/pulse/native
+      register: pactl_info
+      changed_when: false
+      failed_when: pactl_info.rc != 0
+      retries: 10
+      delay: 2
+      until: pactl_info.rc == 0
+
+    - name: Install makamujo units from repo
+      ansible.builtin.copy:
+        src: "{{ makamujo_src }}/etc/systemd/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
+        remote_src: true
+        mode: "0644"
+      loop:
+        - makamujo-screen.service
+        - makamujo-browser.service
+        - makamujo-obs.service
+
+    - name: Enable and start makamujo app units
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: restarted
+        daemon_reload: true
+      loop:
+        - makamujo-screen.service
+        - makamujo-browser.service
+        - makamujo-obs.service
+
+    - name: Deploy done
+      ansible.builtin.debug:
+        msg: Deployed; single Pulse path; systemd-only app restart.

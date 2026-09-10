@@ -9,134 +9,201 @@ import { updateSpeechState } from "./speechState";
 describe("updateSpeechState", () => {
   describe("silent", () => {
     it("calls setSilent(false) when response has no silent field", () => {
-      const setSpeech = mock((_: string) => {});
+      const setSpeechLines = mock((_: string[]) => {});
       const setSilent = mock((_: boolean) => {});
-      updateSpeechState({}, "", setSpeech, setSilent);
+      updateSpeechState({}, [], setSpeechLines, setSilent);
       expect(setSilent).toHaveBeenCalledWith(false);
     });
 
     it("calls setSilent(false) when API returns silent:false", () => {
-      const setSpeech = mock((_: string) => {});
+      const setSpeechLines = mock((_: string[]) => {});
       const setSilent = mock((_: boolean) => {});
-      updateSpeechState({ silent: false }, "", setSpeech, setSilent);
+      updateSpeechState({ silent: false }, [], setSpeechLines, setSilent);
       expect(setSilent).toHaveBeenCalledWith(false);
     });
 
     it("calls setSilent(true) when API returns silent:true", () => {
-      const setSpeech = mock((_: string) => {});
+      const setSpeechLines = mock((_: string[]) => {});
       const setSilent = mock((_: boolean) => {});
-      updateSpeechState({ silent: true }, "", setSpeech, setSilent);
+      updateSpeechState({ silent: true }, [], setSpeechLines, setSilent);
       expect(setSilent).toHaveBeenCalledWith(true);
     });
 
     it("calls setSilent(false) after previously being true", () => {
-      const setSpeech = mock((_: string) => {});
+      const setSpeechLines = mock((_: string[]) => {});
       const setSilent = mock((_: boolean) => {});
-      updateSpeechState({ silent: true }, "", setSpeech, setSilent);
+      updateSpeechState({ silent: true }, [], setSpeechLines, setSilent);
       expect(setSilent).toHaveBeenLastCalledWith(true);
-      updateSpeechState({ silent: false }, "", setSpeech, setSilent);
+      updateSpeechState({ silent: false }, [], setSpeechLines, setSilent);
       expect(setSilent).toHaveBeenLastCalledWith(false);
     });
   });
 
   describe("speech", () => {
-    it("calls setSpeech when API returns a non-empty string", () => {
-      const setSpeech = mock((_: string) => {});
+    it("starts a new line list when API returns a non-empty string", () => {
+      const setSpeechLines = mock((_: string[]) => {});
       const setSilent = mock((_: boolean) => {});
-      updateSpeechState({ speech: "hello" }, "", setSpeech, setSilent);
-      expect(setSpeech).toHaveBeenCalledWith("hello");
+      updateSpeechState({ speech: "hello" }, [], setSpeechLines, setSilent);
+      expect(setSpeechLines).toHaveBeenCalledWith(["hello"]);
     });
 
     it("normalizes speech objects with a text field", () => {
-      const setSpeech = mock((_: string) => {});
+      const setSpeechLines = mock((_: string[]) => {});
       const setSilent = mock((_: boolean) => {});
       updateSpeechState(
         { speech: { text: "こんにちは" } },
-        "",
-        setSpeech,
+        [],
+        setSpeechLines,
         setSilent,
       );
-      expect(setSpeech).toHaveBeenCalledWith("こんにちは");
+      expect(setSpeechLines).toHaveBeenCalledWith(["こんにちは"]);
     });
 
     it("normalizes speech objects with a speech field", () => {
-      const setSpeech = mock((_: string) => {});
+      const setSpeechLines = mock((_: string[]) => {});
       const setSilent = mock((_: boolean) => {});
       updateSpeechState(
         { speech: { speech: "こんばんは" } },
-        "",
-        setSpeech,
+        [],
+        setSpeechLines,
         setSilent,
       );
-      expect(setSpeech).toHaveBeenCalledWith("こんばんは");
+      expect(setSpeechLines).toHaveBeenCalledWith(["こんばんは"]);
     });
 
-    it("clears speech when API returns an empty string", () => {
-      const setSpeech = mock((_: string) => {});
+    it("clears lines when API returns an empty string", () => {
+      const setSpeechLines = mock((_: string[]) => {});
       const setSilent = mock((_: boolean) => {});
-      updateSpeechState({ speech: "" }, "old text", setSpeech, setSilent);
-      expect(setSpeech).toHaveBeenCalledWith("");
+      updateSpeechState(
+        { speech: "" },
+        ["old text"],
+        setSpeechLines,
+        setSilent,
+      );
+      expect(setSpeechLines).toHaveBeenCalledWith([]);
     });
 
-    it("does not call setSpeech when API response has no speech field", () => {
-      const setSpeech = mock((_: string) => {});
+    it("does not call setSpeechLines when API response has no speech field", () => {
+      const setSpeechLines = mock((_: string[]) => {});
       const setSilent = mock((_: boolean) => {});
-      updateSpeechState({}, "old text", setSpeech, setSilent);
-      expect(setSpeech).not.toHaveBeenCalled();
+      updateSpeechState({}, ["old text"], setSpeechLines, setSilent);
+      expect(setSpeechLines).not.toHaveBeenCalled();
     });
 
-    it("resets speech when agent is silent", () => {
-      const setSpeech = mock((_: string) => {});
+    it("clears lines when agent is silent", () => {
+      const setSpeechLines = mock((_: string[]) => {});
       const setSilent = mock((_: boolean) => {});
       updateSpeechState(
         { speech: "", silent: true },
-        "last spoken",
-        setSpeech,
+        ["last spoken"],
+        setSpeechLines,
         setSilent,
       );
       expect(setSilent).toHaveBeenCalledWith(true);
-      expect(setSpeech).toHaveBeenCalledWith("");
+      expect(setSpeechLines).toHaveBeenCalledWith([]);
     });
 
-    it("calls both setSpeech and setSilent when speech and silent change together", () => {
-      const setSpeech = mock((_: string) => {});
+    it("appends when previous line does not end with 。", () => {
+      const setSpeechLines = mock((_: string[]) => {});
       const setSilent = mock((_: boolean) => {});
       updateSpeechState(
-        { speech: "new line", silent: false },
-        "last spoken",
-        setSpeech,
+        { speech: "に行った。", silent: false },
+        ["今日は公園"],
+        setSpeechLines,
         setSilent,
       );
-      expect(setSpeech).toHaveBeenCalledWith("new line");
+      expect(setSpeechLines).toHaveBeenCalledWith(["今日は公園", "に行った。"]);
       expect(setSilent).toHaveBeenCalledWith(false);
+    });
+
+    it("keeps only the last 2 lines on continuation", () => {
+      const setSpeechLines = mock((_: string[]) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState(
+        { speech: "三行目" },
+        ["一行目", "二行目"],
+        setSpeechLines,
+        setSilent,
+      );
+      expect(setSpeechLines).toHaveBeenCalledWith(["二行目", "三行目"]);
+    });
+
+    it("replaces when previous line ends with 。", () => {
+      const setSpeechLines = mock((_: string[]) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState(
+        { speech: "次の話題です。" },
+        ["昨日の話。"],
+        setSpeechLines,
+        setSilent,
+      );
+      expect(setSpeechLines).toHaveBeenCalledWith(["次の話題です。"]);
+    });
+
+    it("replaces on ありがとうございます！ interrupt", () => {
+      const setSpeechLines = mock((_: string[]) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState(
+        { speech: "太郎さん、広告ありがとうございます！" },
+        ["今日は公園"],
+        setSpeechLines,
+        setSilent,
+      );
+      expect(setSpeechLines).toHaveBeenCalledWith([
+        "太郎さん、広告ありがとうございます！",
+      ]);
+    });
+
+    it("replaces after ありがとうございます！ as topic end", () => {
+      const setSpeechLines = mock((_: string[]) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState(
+        { speech: "次の話題" },
+        ["太郎さん、広告ありがとうございます！"],
+        setSpeechLines,
+        setSilent,
+      );
+      expect(setSpeechLines).toHaveBeenCalledWith(["次の話題"]);
+    });
+
+    it("does not update when speech text is unchanged", () => {
+      const setSpeechLines = mock((_: string[]) => {});
+      const setSilent = mock((_: boolean) => {});
+      updateSpeechState(
+        { speech: "同じ" },
+        ["同じ"],
+        setSpeechLines,
+        setSilent,
+      );
+      expect(setSpeechLines).not.toHaveBeenCalled();
     });
   });
 });
 
 describe("updateSpeechStateFromSpeechApiResponse", () => {
   it("does not update state when res is null (fetch error)", () => {
-    const setSpeech = mock((_: string) => {});
+    const setSpeechLines = mock((_: string[]) => {});
     const setSilent = mock((_: boolean) => {});
     updateSpeechStateFromSpeechApiResponse(
       null,
-      "currently displayed text",
-      setSpeech,
+      ["currently displayed text"],
+      setSpeechLines,
       setSilent,
     );
-    expect(setSpeech).not.toHaveBeenCalled();
+    expect(setSpeechLines).not.toHaveBeenCalled();
     expect(setSilent).not.toHaveBeenCalled();
   });
 
   it("updates speech state when res is a valid response", () => {
-    const setSpeech = mock((_: string) => {});
+    const setSpeechLines = mock((_: string[]) => {});
     const setSilent = mock((_: boolean) => {});
     updateSpeechStateFromSpeechApiResponse(
       { speech: "new speech", silent: false },
-      "",
-      setSpeech,
+      [],
+      setSpeechLines,
       setSilent,
     );
-    expect(setSpeech).toHaveBeenCalledWith("new speech");
+    expect(setSpeechLines).toHaveBeenCalledWith(["new speech"]);
     expect(setSilent).toHaveBeenCalledWith(false);
   });
 });

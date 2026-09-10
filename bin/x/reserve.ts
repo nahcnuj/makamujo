@@ -2,11 +2,7 @@
 
 import { statSync } from "node:fs";
 import { parseArgs } from "node:util";
-import {
-  DEFAULT_CHROMIUM_EXECUTABLE_PATH,
-  DEFAULT_PLAYWRIGHT_USER_DATA_DIR,
-  launchPersistentContext,
-} from "../../lib/Browser/chromium";
+import { launchPersistentContext } from "../../lib/Browser/chromium";
 
 const {
   values: {
@@ -18,11 +14,10 @@ const {
   options: {
     "user-data-dir": {
       type: "string",
-      default: DEFAULT_PLAYWRIGHT_USER_DATA_DIR,
+      default: "./playwright/.auth/",
     },
     "exec-path": {
       type: "string",
-      default: DEFAULT_CHROMIUM_EXECUTABLE_PATH,
     },
     headless: {
       short: "y",
@@ -37,8 +32,8 @@ if (!statSync(userDataDir).isDirectory()) {
 }
 
 const ctx = await launchPersistentContext(userDataDir, {
-  executablePath,
   headless,
+  ...(executablePath ? { executablePath } : {}),
 });
 
 const page = ctx.pages()[0] ?? (await ctx.newPage());
@@ -85,10 +80,10 @@ do {
 
   {
     const titleInput = page.getByLabel("番組タイトル", { exact: true });
-    const day = Math.ceil(
+    const _day = Math.ceil(
       (next.getTime() - firstDate.getTime()) / 1000 / 60 / 60 / 24,
     );
-    const title = `滅茶苦茶なクッキークリッカー実況 ${day}日目`;
+    const title = "滅茶苦茶な落ち物パズル実況"; //`滅茶苦茶なクッキークリッカー実況 ${day}日目`;
     await titleInput.fill(title);
     console.debug(`Filled title: "${title}"`);
   }

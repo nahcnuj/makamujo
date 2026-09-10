@@ -2,18 +2,8 @@
 
 set -eu
 
-SCRIPT_PATH=$(cd "$(dirname "$0")" && pwd)
+SCRIPT_PATH=$(dirname "$0")
 OBS_STUDIO="${SCRIPT_PATH}/../obs-studio"
-OBS_CONFIG_DIR="${SCRIPT_PATH}/../../obs-studio"
-
-if [ ! -d "$OBS_CONFIG_DIR" ]; then
-  echo "OBS config directory not found: $OBS_CONFIG_DIR" >&2
-  exit 1
-fi
-if [ ! -f "$OBS_CONFIG_DIR/basic/profiles/Makamujo/basic.ini" ]; then
-  echo "OBS basic.ini not found: $OBS_CONFIG_DIR/basic/profiles/Makamujo/basic.ini" >&2
-  exit 1
-fi
 
 _DISPLAY_EXPLICIT=''
 _XAUTHORITY_EXPLICIT=''
@@ -36,22 +26,27 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# When --display is not given, auto-detect the display from the first X11
-# socket found in /tmp/.X11-unix/ (e.g. xrdp uses :10, not :0).
-if [ -z "$_DISPLAY_EXPLICIT" ]; then
+# Prefer already-exported DISPLAY (from bin/start etc.).
+# Only auto-detect when DISPLAY is completely unset.
+if [ -z "${DISPLAY:-}" ] && [ -z "$_DISPLAY_EXPLICIT" ]; then
+  _newest_sock=
   for _sock in /tmp/.X11-unix/X*; do
-    if [ -S "$_sock" ]; then
-      _num="${_sock##*/X}"
-      export DISPLAY=":${_num}"
-      break
+    [ -S "$_sock" ] || continue
+    if [ -z "$_newest_sock" ] || [ "$_sock" -nt "$_newest_sock" ]; then
+      _newest_sock=$_sock
     fi
   done
+  if [ -n "$_newest_sock" ]; then
+    _num="${_newest_sock##*/X}"
+    export DISPLAY=":${_num}"
+  fi
 fi
 
-# When --display is given (or auto-detected) without --xauthority, try to
-# auto-detect the Xauthority file from the owner of the X11 socket so that
-# connections from a different login session (e.g. serial console as root)
-# can authenticate.
+# Prefer :10 (makamujo-xvfb) when available and nothing was forced
+if [ -z "$_DISPLAY_EXPLICIT" ] && [ -S /tmp/.X11-unix/X10 ]; then
+  export DISPLAY=:10
+fi
+
 if [ -n "${DISPLAY:-}" ] && [ -z "$_XAUTHORITY_EXPLICIT" ]; then
   _display_num="${DISPLAY#:}"
   _display_num="${_display_num%%.*}"
@@ -67,8 +62,20 @@ if [ -n "${DISPLAY:-}" ] && [ -z "$_XAUTHORITY_EXPLICIT" ]; then
   fi
 fi
 
+
+# OBS 32+: --disable-shutdown-check was removed; clear sentinel to skip Safe Mode dialog
+rm -rf \
+  "${HOME}/.var/app/com.obsproject.Studio/config/obs-studio/.sentinel" \
+  "${OBS_STUDIO}/.sentinel" 2>/dev/null || true
 "${OBS_STUDIO}" \
+    --geometry 1280x560+0+900 \
     --startstreaming \
     --disable-shutdown-check \
     --disable-missing-files-check \
-    --disable-updater
+    --disable-updater \
+    --disable-gpu \
+    --disable-gpu-compositing \
+    --in-process-gpu \
+    --disable-gpu-sandbox \
+    --no-sandbox \
+    --disable-dev-shm-usage

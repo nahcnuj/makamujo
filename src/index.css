@@ -9,3 +9,20 @@
     @apply grid place-items-center min-w-[320px] min-h-screen relative m-0;
   }
 }
+
+@keyframes speech-reveal-ltr {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes speech-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

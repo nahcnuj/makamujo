@@ -1,0 +1,8 @@
+[Unit]
+Description=Makamujo streaming resource slice
+
+[Slice]
+CPUAccounting=yes
+MemoryAccounting=yes
+MemoryMax=3G
+TasksMax=512

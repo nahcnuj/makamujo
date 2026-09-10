@@ -36,7 +36,6 @@ export const PUT = async (
     return Response.json(undefined, { status: 404 });
   }
 
-  // biome-ignore lint/suspicious/noExplicitAny: comments structure is determined by upstream API
   const comments: any[] = await req.json();
   return Response.json(comments);
 };

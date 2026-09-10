@@ -4,7 +4,10 @@ import {
   AGENT_STATE_REFRESH_INTERVAL_MS,
   createAgentStatusRows,
   createAgentStatusSections,
+  createMockAgentStateResponse,
+  isAgentStateMockQueryEnabled,
   parseAgentStateResponse,
+  shouldUseMockAgentState,
   startAgentStateAutoRefresh,
 } from "../../../console/src/AgentStatus";
 import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
@@ -445,9 +448,7 @@ describe("createAgentStatusRows", () => {
 
 describe("createAgentStatusSections", () => {
   it("categorizes rows into delivery, markov-model, and game sections", () => {
-    const sections = createAgentStatusSections(
-      cloneAgentStateResponseMockFixture(),
-    );
+    const sections = createAgentStatusSections(createMockAgentStateResponse());
 
     expect(sections).toHaveLength(3);
     const liveDeliverySection = sections.find(
@@ -547,11 +548,52 @@ describe("createAgentStatusSections", () => {
   });
 });
 
-describe("agent state fixture", () => {
-  it("provides deterministic mock state for screenshot capture", () => {
-    expect(cloneAgentStateResponseMockFixture().niconama?.meta?.title).toBe(
-      "配信エージェント状態モック",
+describe("createMockAgentStateResponse", () => {
+  it("returns deterministic mock state for screenshot capture", () => {
+    expect(createMockAgentStateResponse()).toEqual(
+      cloneAgentStateResponseMockFixture(),
     );
+  });
+});
+
+describe("isAgentStateMockQueryEnabled", () => {
+  it("returns true when the query includes agentStateMock=1", () => {
+    expect(isAgentStateMockQueryEnabled("?agentStateMock=1")).toBe(true);
+  });
+
+  it("returns false when the query omits or changes the flag value", () => {
+    expect(isAgentStateMockQueryEnabled("")).toBe(false);
+    expect(isAgentStateMockQueryEnabled("?agentStateMock=0")).toBe(false);
+  });
+});
+
+describe("shouldUseMockAgentState", () => {
+  const originalWindowDescriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "window",
+  );
+
+  afterEach(() => {
+    if (originalWindowDescriptor) {
+      Object.defineProperty(globalThis, "window", originalWindowDescriptor);
+      return;
+    }
+    // @ts-expect-error test cleanup for Node-like runtime
+    delete globalThis.window;
+  });
+
+  it("returns false when window is unavailable", () => {
+    // @ts-expect-error test setup for Node-like runtime
+    delete globalThis.window;
+    expect(shouldUseMockAgentState()).toBe(false);
+  });
+
+  it("returns true when browser query enables mock mode", () => {
+    Object.defineProperty(globalThis, "window", {
+      value: { location: { search: "?agentStateMock=1" } },
+      configurable: true,
+    });
+    expect(shouldUseMockAgentState()).toBe(true);
   });
 });
 

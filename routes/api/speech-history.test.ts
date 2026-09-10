@@ -59,7 +59,7 @@ describe("GET /api/speech-history", () => {
     expect(data.hasMore).toBe(false);
   });
 
-  it("does not cap the requested limit", async () => {
+  it("caps limit at 50", async () => {
     const largeHistory = Array.from({ length: 60 }, (_, i) => ({
       id: `speech-${60 - i}`,
       speech: `speech ${60 - i}`,
@@ -70,8 +70,8 @@ describe("GET /api/speech-history", () => {
     const req = new Request("http://localhost/api/speech-history?limit=100");
     const res = GET(req);
     const data = await res.json();
-    expect(data.items).toHaveLength(60);
-    expect(data.hasMore).toBe(false);
+    expect(data.items).toHaveLength(50);
+    expect(data.hasMore).toBe(true);
   });
 
   it("reflects live mutations to the bound array reference", async () => {

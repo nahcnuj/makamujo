@@ -1,0 +1,43 @@
+---
+# Expects: niconama_stream_key, makamujo_obs_service_json (or makamujo_src).
+- name: Resolve OBS service.json path
+  ansible.builtin.set_fact:
+    _obs_service_json: "{{ makamujo_obs_service_json | default(makamujo_src ~ '/obs-studio/basic/profiles/Makamujo/service.json') }}"
+
+- name: Check OBS service.json presence
+  ansible.builtin.stat:
+    path: "{{ _obs_service_json }}"
+  register: _obs_service_stat
+
+- name: Fail when OBS service.json is missing
+  ansible.builtin.assert:
+    that:
+      - _obs_service_stat.stat.exists | default(false)
+    fail_msg: >-
+      {{ _obs_service_json }} not found. Deploy makamujo first, then re-run secrets.
+
+- name: Write stream key into OBS service.json
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - |
+        import json, pathlib, sys
+        path = pathlib.Path(sys.argv[1])
+        key = sys.argv[2].strip()
+        data = json.loads(path.read_text(encoding="utf-8"))
+        settings = data.setdefault("settings", {})
+        if settings.get("key") == key:
+            print("unchanged")
+            sys.exit(0)
+        settings["key"] = key
+        path.write_text(
+            json.dumps(data, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        print("updated")
+      - "{{ _obs_service_json }}"
+      - "{{ niconama_stream_key | trim }}"
+  register: _obs_key_write
+  changed_when: "'updated' in (_obs_key_write.stdout | default(''))"
+  no_log: true

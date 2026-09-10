@@ -22,35 +22,35 @@ const formatNumber = new Intl.NumberFormat("ja-JP").format;
 export function GamePanel() {
   const { playing, streamState } = useAgentContext();
 
-  const now = new Date();
-  const duration = new Date(
-    now.getTime() -
-      (streamState?.meta?.start ?? 0) +
-      now.getTimezoneOffset() * 60_000,
-  );
-
   // console.log(playing);
   const Component = playing ? Games[playing.name].Component : () => null;
 
   return (
     <div className="h-full flex flex-col justify-between text-2xl/8">
       <div className="flex-none">
-        {/* biome-ignore lint/suspicious/noExplicitAny: Component is polymorphic across games */}
-        {playing && <Component state={playing.state as any} />}
+        {playing && <Component state={playing.state} />}
       </div>
       <div className="flex-none">
         {streamState?.meta?.total && (
           <div className="text-right">
-            {streamState.meta.total.listeners > 0 && (
-              <div>
+            <div>
+              {streamState.meta.total.gift > 0 && (
+                <HighlightOnChange
+                  timeout={30_000}
+                  classNameOnChanged="text-yellow-300"
+                >
+                  {`${formatNumber(streamState.meta.total.gift)}🎁`}
+                </HighlightOnChange>
+              )}
+              {streamState.meta.total.listeners > 0 && (
                 <HighlightOnChange
                   timeout={5_000}
                   classNameOnChanged="text-yellow-300"
                 >
                   {`${formatNumber(streamState.meta.total.listeners)}🙎`}
                 </HighlightOnChange>
-              </div>
-            )}
+              )}
+            </div>
             {streamState.meta.total.ad > 0 && (
               <div>
                 <HighlightOnChange
@@ -60,19 +60,6 @@ export function GamePanel() {
                   {`${formatNumber(streamState.meta.total.ad)}📣`}
                 </HighlightOnChange>
               </div>
-            )}
-            {streamState.meta.total.gift > 0 && (
-              <div>
-                <HighlightOnChange
-                  timeout={30_000}
-                  classNameOnChanged="text-yellow-300"
-                >
-                  {`${formatNumber(streamState.meta.total.gift)}🎁`}
-                </HighlightOnChange>
-              </div>
-            )}
-            {streamState.meta.start && (
-              <div>{`${formatDuration(duration)}⏱️`}</div>
             )}
           </div>
         )}

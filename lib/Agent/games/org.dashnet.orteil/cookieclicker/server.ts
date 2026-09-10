@@ -1,3 +1,5 @@
+import type { Statistics } from "./State";
+
 export type ElementLike = {
   readonly id: string;
   readonly parentElement: ElementLike | null;
@@ -105,6 +107,8 @@ export type SightRawData = {
   cpsIsWrinkled: boolean;
   ascendNumberText: string | undefined;
   commentsText: string | undefined;
+  commentsText1: string | undefined;
+  commentsText2: string | undefined;
   storeBulkModeSelectedId: string | undefined;
   statisticsGeneralListings:
     | Array<{ key: string; innerText: string }>
@@ -113,6 +117,53 @@ export type SightRawData = {
   title: string;
   selectedText: string;
   timestamp: number;
+};
+
+/**
+ * general の一部キーだけ、innerText から数値フィールドを付与する。
+ * - 1値の項目は value
+ * - 複数値の項目は意味のある名前（ascensions / daysAgo など）
+ *
+ * 未知キーやパース不能な行は { innerText } のまま残す。
+ */
+export const enrichStatisticsGeneral = (
+  general: Record<string, { innerText: string }>,
+): Statistics["general"] => {
+  const out: Statistics["general"] = { ...general };
+
+  const legacy = general["遺産の始まり："];
+  if (legacy) {
+    const ascensionsM = legacy.innerText.match(/昇天\s*([\d,]+)\s*回/);
+    const daysM = legacy.innerText.match(/([\d,]+)\s*日前/);
+    const ascensions =
+      ascensionsM?.[1] !== undefined
+        ? Number(ascensionsM[1].replaceAll(",", ""))
+        : Number.NaN;
+    if (Number.isFinite(ascensions)) {
+      const daysAgo =
+        daysM?.[1] !== undefined
+          ? Number(daysM[1].replaceAll(",", ""))
+          : Number.NaN;
+      out["遺産の始まり："] = {
+        innerText: legacy.innerText,
+        ascensions,
+        ...(Number.isFinite(daysAgo) ? { daysAgo } : {}),
+      };
+    }
+  }
+
+  const clicks = general["クリック回数："];
+  if (clicks) {
+    const value = Number(clicks.innerText.trim().replaceAll(",", ""));
+    if (Number.isFinite(value)) {
+      out["クリック回数："] = {
+        innerText: clicks.innerText,
+        value,
+      };
+    }
+  }
+
+  return out;
 };
 
 /**
@@ -125,6 +176,48 @@ export type SightRawData = {
  * module-level definitions. sight() therefore implements the same
  * transformation inline.
  */
+
+/** Host-side: parse numbers on statistics after browser sight(). */
+export function enrichSightState<
+  T extends {
+    statistics?: {
+      general?: Record<string, { innerText: string } & Record<string, unknown>>;
+    };
+  },
+>(state: T): T {
+  const general = state.statistics?.general;
+  if (!general) return state;
+  return {
+    ...state,
+    statistics: {
+      ...state.statistics,
+      general: enrichStatisticsGeneral(
+        general as Parameters<typeof enrichStatisticsGeneral>[0],
+      ),
+    },
+  };
+}
+
+/**
+ * Cookie Clicker news ticker lines.
+ * Prefer per-line elements; fall back to splitting parent commentsText.
+ */
+export const parseNewsLines = (
+  line1?: string,
+  line2?: string,
+  fallbackCommentsText?: string,
+): string[] => {
+  const fromChildren = [line1, line2]
+    .map((s) => s?.normalize("NFC").trim() ?? "")
+    .filter((s) => s.length > 0);
+  if (fromChildren.length > 0) return fromChildren;
+  if (!fallbackCommentsText) return [];
+  return fallbackCommentsText
+    .normalize("NFC")
+    .split(/\r?\n/u)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+};
 export const buildSightResult = (data: SightRawData) => {
   const parseNumber = (text?: string): number =>
     text ? Number.parseFloat(text.replaceAll(",", "")) : Number.NaN;
@@ -139,11 +232,13 @@ export const buildSightResult = (data: SightRawData) => {
   const statistics =
     data.statisticsGeneralListings !== undefined
       ? {
-          general: Object.fromEntries(
-            data.statisticsGeneralListings.map(({ key, innerText }) => [
-              key,
-              { innerText },
-            ]),
+          general: enrichStatisticsGeneral(
+            Object.fromEntries(
+              data.statisticsGeneralListings.map(({ key, innerText }) => [
+                key,
+                { innerText },
+              ]),
+            ),
           ),
         }
       : undefined;
@@ -155,6 +250,11 @@ export const buildSightResult = (data: SightRawData) => {
     isWrinkled: data.cpsIsWrinkled,
     ascendNumber: parseNumber(data.ascendNumberText),
     commentsText: data.commentsText,
+    newsLines: parseNewsLines(
+      data.commentsText1,
+      data.commentsText2,
+      data.commentsText,
+    ),
     store: {
       products: {
         bulkMode: parseBulkMode(data.storeBulkModeSelectedId),
@@ -301,6 +401,20 @@ export const sight = () => {
       document.getElementById("ascendNumber")?.innerText.replaceAll(",", ""),
     ),
     commentsText: document.getElementById("commentsText")?.innerText,
+    newsLines: (() => {
+      const commentsText1 = document.getElementById("commentsText1")?.innerText;
+      const commentsText2 = document.getElementById("commentsText2")?.innerText;
+      const commentsText = document.getElementById("commentsText")?.innerText;
+      const fromChildren = [commentsText1, commentsText2]
+        .map((s) => (s ?? "").trim())
+        .filter((s) => s.length > 0);
+      if (fromChildren.length > 0) return fromChildren;
+      if (!commentsText) return [];
+      return commentsText
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+    })(),
     store: {
       products: {
         bulkMode: parseBulkMode(

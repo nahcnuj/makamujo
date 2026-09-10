@@ -1,7 +1,10 @@
 /**
- * Update `speech` and `silent` state from a `/api/speech` response.
- * `speech` is only replaced when the response contains a non-empty string, so
- * the display never goes blank between speech generations.
+ * Update displayed speech lines and `silent` from a `/api/speech` response.
+ *
+ * - ends with 「ありがとうございます！」 → interrupt (replace with that line)
+ * - previous line ends with 「。」 → new topic (replace)
+ * - otherwise → continuation (append)
+ * - empty / silent → clear lines
  */
 type SpeechPayload =
   | string
@@ -30,10 +33,17 @@ const normalizeSpeechText = (
   return undefined;
 };
 
+const isThanksInterrupt = (text: string): boolean =>
+  text.trimEnd().endsWith("ありがとうございます！");
+
+const isTopicEnd = (text: string): boolean =>
+  text.trimEnd().endsWith("。") ||
+  text.trimEnd().endsWith("ありがとうございます！");
+
 export function updateSpeechState(
   res: { speech?: SpeechPayload; silent?: boolean },
-  currentSpeech: string,
-  setSpeech: (speech: string) => void,
+  currentLines: string[],
+  setSpeechLines: (lines: string[]) => void,
   setSilent: (silent: boolean) => void,
 ): void {
   const isSilent = !!res.silent;
@@ -41,17 +51,37 @@ export function updateSpeechState(
   setSilent(isSilent);
 
   if (isSilent) {
-    // When silent, hide prior speech so old text does not persist after silence ends.
-    if (currentSpeech !== "") {
-      setSpeech("");
+    if (currentLines.length > 0) {
+      setSpeechLines([]);
     }
     return;
   }
 
   if (res.speech !== undefined) {
     const newSpeech = normalizeSpeechText(res.speech) ?? "";
-    if (newSpeech !== currentSpeech) {
-      setSpeech(newSpeech);
+
+    if (newSpeech === "") {
+      if (currentLines.length > 0) {
+        setSpeechLines([]);
+      }
+      return;
     }
+
+    const last = currentLines.at(-1);
+    if (last === newSpeech) {
+      return;
+    }
+
+    if (isThanksInterrupt(newSpeech)) {
+      setSpeechLines([newSpeech]);
+      return;
+    }
+
+    if (last !== undefined && isTopicEnd(last)) {
+      setSpeechLines([newSpeech]);
+      return;
+    }
+
+    setSpeechLines([...currentLines, newSpeech].slice(-2));
   }
 }
