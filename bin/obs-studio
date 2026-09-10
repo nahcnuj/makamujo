@@ -1,11 +1,8 @@
 #!/usr/bin/env sh
-
 set -eu
 
 SCRIPT_PATH=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_PATH/.." && pwd)
-
-# OBS config and cache directories
 OBS_CONFIG_DIR="$REPO_ROOT/obs-studio"
 OBS_CACHE_DIR="$REPO_ROOT/.cache"
 
@@ -13,21 +10,39 @@ if [ ! -d "$OBS_CONFIG_DIR" ]; then
   echo "OBS config directory not found: $OBS_CONFIG_DIR" >&2
   exit 1
 fi
-
 if [ ! -f "$OBS_CONFIG_DIR/basic/profiles/Makamujo/basic.ini" ]; then
-  echo "OBS basic.ini not found: $OBS_CONFIG_DIR/basic/profiles/Makamujo/basic.ini" >&2
+  echo "OBS basic.ini not found" >&2
   exit 1
 fi
 
+FLATPAK_OBS_CONFIG="${HOME}/.var/app/com.obsproject.Studio/config"
+mkdir -p "$FLATPAK_OBS_CONFIG"
+if [ -e "$FLATPAK_OBS_CONFIG/obs-studio" ] && [ ! -L "$FLATPAK_OBS_CONFIG/obs-studio" ]; then
+  rm -rf "$FLATPAK_OBS_CONFIG/obs-studio"
+fi
+ln -sfn "$OBS_CONFIG_DIR" "$FLATPAK_OBS_CONFIG/obs-studio"
 mkdir -p "$OBS_CACHE_DIR"
 
-flatpak run -vv \
+flatpak run \
     --share=network \
+    --filesystem=/run/user/0/pulse \
     --filesystem="$REPO_ROOT" \
     --filesystem="$OBS_CONFIG_DIR" \
     --filesystem="$OBS_CACHE_DIR" \
+    --env=XDG_RUNTIME_DIR=/run/user/0 \
+    --env=PULSE_SERVER=unix:/run/user/0/pulse/native \
+    --env=PULSE_RUNTIME_PATH=/run/user/0/pulse \
     --env=XDG_CONFIG_HOME="$REPO_ROOT" \
     --env=XDG_DATA_HOME="$REPO_ROOT" \
     --env=XDG_CACHE_HOME="$OBS_CACHE_DIR" \
+    --env=LIBGL_ALWAYS_SOFTWARE=1 \
+    --env=GTK_USE_PORTAL=0 \
+    --env=OBS_DISABLE_PORTAL=1 \
+    --env=GALLIUM_DRIVER=llvmpipe \
+    --env=MESA_LOADER_DRIVER_OVERRIDE=llvmpipe \
+    --env=OBS_BROWSER_HW_ACCEL=0 \
+    --env=OBS_USE_EGL=0 \
+    --env=QT_QUICK_BACKEND=software \
+    --nosocket=wayland \
     com.obsproject.Studio \
     "$@"

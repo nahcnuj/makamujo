@@ -1,0 +1,131 @@
+#!/bin/sh
+set -eu
+
+SESSION_TTL=900
+
+die() { echo "$*" >&2; exit 1; }
+
+root_dir() {
+    _bin=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
+    CDPATH='' cd -- "$_bin/.." && pwd
+}
+
+self_path() {
+    CDPATH='' cd -- "$(dirname "$0")" && printf '%s/%s' "$(pwd)" "$(basename "$0")"
+}
+
+base_dir() {
+    if [ -d /dev/shm ] && [ -w /dev/shm ]; then
+        printf '%s' /dev/shm
+        return
+    fi
+    if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ]; then
+        printf '%s' "$XDG_RUNTIME_DIR"
+        return
+    fi
+    printf '%s' "${TMPDIR:-/tmp}"
+}
+
+dek_path() { printf '%s/vault-session-dek' "$(base_dir)"; }
+ct_path()  { printf '%s/vault-session.ciphertext' "$(base_dir)"; }
+
+dek() {
+    export VAULT_SESSION_TTL="$SESSION_TTL"
+    "$(root_dir)/dist/bin/dek" "$@"
+}
+
+ct_store() {
+    umask 077
+    cat >"$1"
+    chmod 600 "$1" 2>/dev/null || true
+}
+
+ct_fetch() {
+    [ -f "$1" ] || return 1
+    cat "$1"
+}
+
+ct_delete() {
+    rm -f "$1"
+}
+
+need() {
+    command -v openssl >/dev/null 2>&1 || die "openssl is required"
+    [ -x "$(root_dir)/dist/bin/dek" ] || die "run: make -C scripts/vault"
+}
+
+encrypt() {
+    printf '%s' "$2" | openssl enc -aes-256-cbc -pbkdf2 -base64 -pass "pass:$1" 2>/dev/null
+}
+
+decrypt() {
+    printf '%s\n' "$2" | openssl enc -d -aes-256-cbc -pbkdf2 -base64 -pass "pass:$1" 2>/dev/null
+}
+
+read_password() {
+    [ -t 0 ] || die "stdin is not a terminal"
+    printf 'Vault password: ' >&2
+    stty -echo 2>/dev/null || true
+    IFS= read -r password || {
+        stty echo 2>/dev/null || true
+        printf '\n' >&2
+        die "failed to read password"
+    }
+    stty echo 2>/dev/null || true
+    printf '\n' >&2
+    printf '%s' "$password"
+}
+
+login() {
+    need
+    password=$(read_password)
+    dek_hex=$(openssl rand -hex 32) || die "openssl rand failed"
+    ctext=$(encrypt "$dek_hex" "$password") || die "encrypt failed"
+    printf '%s' "$dek_hex" | dek store "$(dek_path)" || die "DEK store failed"
+    printf '%s' "$ctext" | ct_store "$(ct_path)" || {
+        dek delete "$(dek_path)"
+        die "ciphertext store failed"
+    }
+    echo "stored (ttl=${SESSION_TTL}s, dir=$(base_dir))" >&2
+}
+
+logout() {
+    dek delete "$(dek_path)" 2>/dev/null || true
+    ct_delete "$(ct_path)" 2>/dev/null || true
+    echo "cleared" >&2
+}
+
+fetch_password() {
+    need
+    dek_hex=$(dek fetch "$(dek_path)" 2>/dev/null) || \
+        die "not logged in or session expired; run: $0 login"
+    ctext=$(ct_fetch "$(ct_path)" 2>/dev/null) || die "ciphertext missing"
+    password=$(decrypt "$dek_hex" "$ctext") || die "decrypt failed"
+    printf '%s' "$password"
+}
+
+run() {
+    [ "$#" -gt 0 ] || die "Usage: $0 run <cmd> [args...]"
+    cmd=$1
+    shift
+    command -v "$cmd" >/dev/null 2>&1 || die "command not found: $cmd"
+    fetch_password >/dev/null
+    "$cmd" --vault-password-file="$(self_path)" "$@"
+}
+
+usage() {
+    echo "SYNOPSIS" >&2
+    echo "  make -C scripts/vault" >&2
+    echo "  bin/vault-session login" >&2
+    echo "  bin/vault-session run ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/0_desktop.yml" >&2
+    echo "  bin/vault-session logout" >&2
+}
+
+case "${1-}" in
+login) login ;;
+logout) logout ;;
+run) shift; run "$@" ;;
+'') fetch_password ;;
+-h|--help|help) usage ;;
+*) usage; exit 1 ;;
+esac

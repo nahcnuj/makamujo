@@ -36,18 +36,24 @@ export type Statistics = {
     // cookiesForfeitedByAscending: {
     //   value: number
     // }
-    // legacyStarted: {
-    //   ascensions: number
-    // }
+    "遺産の始まり："?: {
+      innerText: string;
+      /** 「昇天 N 回」（パースできれば） */
+      ascensions?: number;
+      /** 「N 日前」（パースできれば） */
+      daysAgo?: number;
+    };
     // buildingsOwned: {
     //   value: number
     // }
     // cookiesPerClick: {
     //   value: number
     // }
-    // cookieClicks: {
-    //   value: number
-    // }
+    "クリック回数："?: {
+      innerText: string;
+      /** パースできれば */
+      value?: number;
+    };
     // handmadeCookies: {
     //   value: number
     // }
@@ -60,6 +66,8 @@ export type State = {
   isWrinkled: boolean;
   ascendNumber: number;
   commentsText?: string;
+  /** News ticker lines (#commentsText1 / #commentsText2). */
+  newsLines?: string[];
   store: {
     products: {
       bulkMode: "buy" | "sell";

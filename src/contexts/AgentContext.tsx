@@ -2,8 +2,6 @@ import {
   createContext,
   type PropsWithChildren,
   useContext,
-  useEffect,
-  useRef,
   useState,
 } from "hono/jsx/dom";
 import type { Games } from "../../lib/Agent/games";
@@ -12,17 +10,17 @@ import { useInterval } from "../hooks/useInterval";
 import { updateSpeechState } from "./speechState";
 
 type Data = {
-  speech: string;
+  speechLines: string[];
   silent: boolean;
   playing?: {
     name: keyof typeof Games;
-    state: unknown;
+    state: any;
   };
   streamState?: AgentState;
 };
 
 const AgentContext = createContext<Data>({
-  speech: "",
+  speechLines: [],
   silent: false,
 });
 
@@ -35,14 +33,14 @@ export const useAgentContext = () => useContext(AgentContext);
  */
 export const updateSpeechStateFromSpeechApiResponse = (
   res: { speech?: string; silent?: boolean } | null,
-  currentSpeech: string,
-  setSpeech: (speech: string) => void,
+  currentLines: string[],
+  setSpeechLines: (lines: string[]) => void,
   setSilent: (silent: boolean) => void,
 ): void => {
   if (res === null) {
     return;
   }
-  updateSpeechState(res, currentSpeech, setSpeech, setSilent);
+  updateSpeechState(res, currentLines, setSpeechLines, setSilent);
 };
 
 /**
@@ -61,7 +59,7 @@ export const setStreamStateFromMetaApiResponse = (
 };
 
 export const AgentProvider = ({ children }: PropsWithChildren) => {
-  const [speech, setSpeech] = useState("");
+  const [speechLines, setSpeechLines] = useState<string[]>([]);
   const [silent, setSilent] = useState(false);
   const [playing, setPlaying] = useState<Data["playing"]>();
   const [streamState, setStreamState] = useState<AgentState>();
@@ -73,7 +71,12 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
         console.warn("[WARN]", err);
         return null;
       });
-    updateSpeechStateFromSpeechApiResponse(res, speech, setSpeech, setSilent);
+    updateSpeechStateFromSpeechApiResponse(
+      res,
+      speechLines,
+      setSpeechLines,
+      setSilent,
+    );
   });
 
   useInterval(100, async () => {
@@ -95,51 +98,10 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
     setStreamStateFromMetaApiResponse(res, setStreamState);
   });
 
-  const prevTypeRef = useRef<string | undefined>(undefined);
-  const prevTitleRef = useRef<string | undefined>(undefined);
-
-  useEffect(() => {
-    const currentType =
-      streamState && typeof streamState === "object"
-        ? streamState.type
-        : undefined;
-    const currentTitle =
-      streamState &&
-      typeof streamState === "object" &&
-      streamState.meta &&
-      typeof streamState.meta.title === "string"
-        ? streamState.meta.title
-        : undefined;
-
-    const prevType = prevTypeRef.current;
-    const prevTitle = prevTitleRef.current;
-
-    // Reload when the stream transitions from live -> offline, or when the
-    // same program URL becomes marked with the explicit "公開終了" marker
-    // for the first time (title transitions from non-ended to ended).
-    try {
-      if (currentType === undefined && prevType === "live") {
-        window.location.reload();
-        return;
-      }
-
-      if (
-        currentTitle?.includes("公開終了") &&
-        !prevTitle?.includes("公開終了")
-      ) {
-        window.location.reload();
-        return;
-      }
-    } catch {
-      // ignore reload errors in environments where window is unavailable
-    }
-
-    prevTypeRef.current = currentType;
-    prevTitleRef.current = currentTitle;
-  }, [streamState]);
-
   return (
-    <AgentContext.Provider value={{ speech, silent, streamState, playing }}>
+    <AgentContext.Provider
+      value={{ speechLines, silent, streamState, playing }}
+    >
       {children}
     </AgentContext.Provider>
   );

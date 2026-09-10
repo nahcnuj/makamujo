@@ -40,10 +40,7 @@ export const AgentStatusSectionCard = ({
         style={{ scrollbarWidth: "thin" }}
       >
         {rows.map((row) => (
-          <div
-            key={`${title}:${row.label}:${"value" in row ? row.value : "value-component"}:${row.href ?? "-"}`}
-            className="contents"
-          >
+          <div key={`${title ?? ""}:${row.label}`} className="contents">
             <dt
               className={
                 row.hideLabel ? "hidden" : "font-bold whitespace-nowrap"

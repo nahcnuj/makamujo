@@ -14,7 +14,6 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
-    "pretty": false,
 
     // Best practices
     "strict": true,
@@ -29,5 +28,5 @@
     "noPropertyAccessFromIndexSignature": false
   },
 
-  "exclude": ["dist", "node_modules", "var"]
+  "exclude": ["dist", "node_modules"]
 }

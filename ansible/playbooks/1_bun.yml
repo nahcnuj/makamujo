@@ -1,0 +1,41 @@
+- name: Install Bun on VPS
+  hosts: vps
+  become: true
+  tasks:
+    - name: Install unzip (required by Bun installer)
+      ansible.builtin.apt:
+        name: unzip
+        state: present
+        update_cache: true
+
+    - name: Check whether bun is already installed
+      ansible.builtin.command: bun --version
+      register: bun_version
+      changed_when: false
+      failed_when: false
+
+    - name: Install Bun via official installer
+      ansible.builtin.shell: |
+        set -euo pipefail
+        curl -fsSL https://bun.sh/install | bash
+      args:
+        executable: /bin/bash
+      when: bun_version.rc != 0
+
+    - name: Ensure Bun is on PATH for login shells
+      ansible.builtin.blockinfile:
+        path: /root/.bashrc
+        marker: "# {mark} ANSIBLE MANAGED BUN PATH"
+        block: |
+          export BUN_INSTALL="$HOME/.bun"
+          export PATH="$BUN_INSTALL/bin:$PATH"
+        create: true
+
+    - name: Verify bun works with explicit path
+      ansible.builtin.command: /root/.bun/bin/bun --version
+      register: bun_verify
+      changed_when: false
+
+    - name: Show bun version
+      ansible.builtin.debug:
+        var: bun_verify.stdout

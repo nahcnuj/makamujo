@@ -1,11 +1,10 @@
-# Makefile: install makamujo to /opt and manage systemd unit
+# Makefile: install makamujo to /opt and manage systemd units (ported from main, adapted for legacy layout)
 
 PREFIX ?= /opt/makamujo
 UNIT_DIR ?= /etc/systemd/system
-INSTALL_BIN = bin/x bin/xorg10 bin/x11vnc-10 bin/obs-studio
-INSTALL_DATA = package.json bunfig.toml tsconfig.json bootstrap.ts index.ts lib routes src console obs-studio
+INSTALL_BIN = bin/x bin/xorg10 bin/x11vnc-10 bin/obs-studio bin/journal-makamujo bin/start bin/stop
+INSTALL_DATA = package.json bunfig.toml tsconfig.json index.ts lib routes src console composition architecture obs-studio
 SERVICE = makamujo.service
-UNIT_FILES = $(shell ls etc/systemd/*.service 2>/dev/null)
 
 .PHONY: all install install-app install-systemd uninstall uninstall-app uninstall-systemd help console-password
 
@@ -27,7 +26,7 @@ install-app:
 	fi
 	@echo "Installing Bun dependencies in $(PREFIX)"
 	@cd "$(PREFIX)" && if command -v bun >/dev/null 2>&1; then bun install --production; else echo "Warning: bun not found in PATH, skipping dependency install"; fi
-	@chmod +x "$(PREFIX)/bin/"*
+	@chmod +x "$(PREFIX)/bin/"* "$(PREFIX)/bin/x/"* 2>/dev/null || chmod +x "$(PREFIX)/bin/"*
 
 install-systemd:
 	@echo "Installing systemd units to $(UNIT_DIR)"
@@ -35,16 +34,15 @@ install-systemd:
 	@pkill obs || :
 	@pkill bun || :
 	@pkill chromium || :
-	@pkill bun || :
-	@systemctl stop "$(SERVICE)"
+	@systemctl stop "$(SERVICE)" 2>/dev/null || true
 	@cp -a etc/systemd/*.service "$(UNIT_DIR)/"
 	@systemctl daemon-reload
-	@systemctl reset-failed "$(SERVICE)"
+	@systemctl reset-failed "$(SERVICE)" 2>/dev/null || true
 	@systemctl enable --now "$(SERVICE)"
 	@echo ""
 	@echo "================================================================="
 	@echo "管理コンソールパスワード:"
-	@bash -lc 'journalctl -u makamujo.service -n 20 --no-pager | grep "Console Basic auth password" | tail -n 1 | sed -E "s/^.*Console Basic auth password: //"'
+	@bash -lc 'journalctl -u makamujo-screen.service -u makamujo.service -n 40 --no-pager | grep "Console Basic auth password" | tail -n 1 | sed -E "s/^.*Console Basic auth password: //"'
 	@echo "================================================================="
 
 uninstall: uninstall-systemd uninstall-app
@@ -65,6 +63,7 @@ help:
 	@echo "  sudo make install          # install to $(PREFIX) and enable service"
 	@echo "  sudo make uninstall        # remove service and installed files"
 	@echo "  make install PREFIX=/some/path  # install to custom prefix (run as root)"
+	@echo "  make console-password      # print last generated console Basic auth password"
 
 console-password:
-	@bash -lc 'journalctl -u makamujo.service -n 20 --no-pager | grep "Console Basic auth password" | tail -n 1 | sed -E "s/^.*Console Basic auth password: //"'
+	@bash -lc 'journalctl -u makamujo-screen.service -u makamujo.service -n 40 --no-pager | grep "Console Basic auth password" | tail -n 1 | sed -E "s/^.*Console Basic auth password: //"'

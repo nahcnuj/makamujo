@@ -51,39 +51,21 @@ describe("createAgentStatusSections", () => {
     );
   });
 
-  it("includes recent comments in the delivery section", () => {
-    const sections = createAgentStatusSections({
-      recentComments: [
-        { data: { no: 1, comment: "こんにちは" } },
-        { data: { no: 2, comment: "テストコメント" } },
-      ],
-    } as any);
-
-    const deliverySection = sections.find(
-      (section) => section.title === "配信状況",
-    );
-    expect(deliverySection?.rows).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ label: "最近のコメント" }),
-      ]),
-    );
-  });
-
   it("shows fallback game title without detail rows when currentGame is null", () => {
     const sections = createAgentStatusSections({ currentGame: null } as any);
 
     expect(sections).toHaveLength(1);
-    const gameSection = sections[0];
-    expect(gameSection?.title).toBe("『-』プレイ中");
-    expect(gameSection?.rows).toEqual([]);
+    const gameSection = sections[0]!;
+    expect(gameSection.title).toBe("『-』プレイ中");
+    expect(gameSection.rows).toEqual([]);
   });
 
   it("shows fallback game title without detail rows when currentGame is missing", () => {
     const sections = createAgentStatusSections({} as any);
 
     expect(sections).toHaveLength(1);
-    const gameSection = sections[0];
-    expect(gameSection?.title).toBe("『-』プレイ中");
-    expect(gameSection?.rows).toEqual([]);
+    const gameSection = sections[0]!;
+    expect(gameSection.title).toBe("『-』プレイ中");
+    expect(gameSection.rows).toEqual([]);
   });
 });

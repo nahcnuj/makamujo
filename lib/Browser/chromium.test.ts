@@ -1,11 +1,38 @@
 import { describe, expect, it } from "bun:test";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
+  cleanupChromiumLockFiles,
   createClickByElementId,
   createPopupPageHandler,
   createRedirectToHomeHandler,
 } from "./chromium";
 
-const HOME_URL = "https://orteil.dashnet.org/cookieclicker/";
+const HOME_URL = "https://www.nahcnuj.work/vigilant-fiesta/";
+
+describe("cleanupChromiumLockFiles", () => {
+  it("removes SingletonLock and SingletonSocket when present", () => {
+    const dir = mkdtempSync(join(tmpdir(), "chromium-lock-"));
+    try {
+      writeFileSync(join(dir, "SingletonLock"), "x");
+      writeFileSync(join(dir, "SingletonSocket"), "y");
+      writeFileSync(join(dir, "keep-me"), "z");
+      cleanupChromiumLockFiles(dir);
+      expect(existsSync(join(dir, "SingletonLock"))).toBe(false);
+      expect(existsSync(join(dir, "SingletonSocket"))).toBe(false);
+      expect(existsSync(join(dir, "keep-me"))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("is a no-op when the directory does not exist", () => {
+    expect(() =>
+      cleanupChromiumLockFiles(join(tmpdir(), "missing-chromium-profile")),
+    ).not.toThrow();
+  });
+});
 
 describe("createPopupPageHandler", () => {
   const makePageLike = (url: string) => {
@@ -78,7 +105,7 @@ describe("createRedirectToHomeHandler", () => {
   });
 
   it("should not redirect when already at a sub-path of the home URL", () => {
-    const mainFrame = makeFrameLike(`${HOME_URL}?some=param`);
+    const mainFrame = makeFrameLike(HOME_URL + "?some=param");
     const redirectedUrls: string[] = [];
     const handler = createRedirectToHomeHandler(
       mainFrame,
@@ -188,7 +215,7 @@ describe("createRedirectToHomeHandler", () => {
     handler(mainFrame); // triggers redirect, sets isRedirecting = true
 
     // Simulate the main frame arriving at the home URL
-    const _arrivedFrame = makeFrameLike(HOME_URL);
+    const arrivedFrame = makeFrameLike(HOME_URL);
     // We need the handler to compare frame identity to mainFrame, so use mainFrame with a different url() impl
     const arrivedMainFrame = Object.assign(mainFrame, { url: () => HOME_URL });
     handler(arrivedMainFrame); // should reset isRedirecting = false
@@ -205,7 +232,6 @@ describe("createClickByElementId", () => {
   const makeLocatorLike = (onClick: () => void) => {
     const locator = {
       first: () => locator,
-      waitFor: async (_opts?: { state?: string; timeout?: number }) => {},
       click: async (_opts?: { timeout?: number }) => {
         onClick();
       },
@@ -246,40 +272,5 @@ describe("createClickByElementId", () => {
     await createClickByElementId(page)("promptOption0");
 
     expect(firstCalled).toBeTrue();
-  });
-});
-
-describe("launchPersistentContext", () => {
-  it("should recognize transient connection error patterns", () => {
-    // Test that the error pattern regex recognizes expected transient errors
-    const transientErrors = [
-      "Failed to connect",
-      "spawn ENOENT",
-      "ECONNREFUSED",
-      "pipe broken",
-      "Timeout waiting",
-    ];
-
-    const errorPattern = /Failed to connect|spawn|ECONNREFUSED|pipe|Timeout/i;
-
-    for (const errorMsg of transientErrors) {
-      expect(errorPattern.test(errorMsg)).toBeTrue();
-    }
-  });
-
-  it("should not retry on non-transient errors", () => {
-    // Test that non-transient errors are not retried
-    const nonTransientErrors = [
-      "ProcessSingleton",
-      "Permission denied",
-      "Unknown error",
-    ];
-
-    const transientPattern =
-      /Failed to connect|spawn|ECONNREFUSED|pipe|Timeout/i;
-
-    for (const errorMsg of nonTransientErrors) {
-      expect(transientPattern.test(errorMsg)).toBeFalse();
-    }
   });
 });

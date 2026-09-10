@@ -1,0 +1,25 @@
+[Unit]
+Description=Makamujo PipeWire stack for headless streaming
+After=network.target makamujo-xvfb.service
+Wants=makamujo-xvfb.service
+
+[Service]
+Type=notify
+NotifyAccess=all
+TimeoutStartSec=90
+Environment=XDG_RUNTIME_DIR=/run/user/0
+Environment=HOME=/root
+Environment=DISPLAY=:10
+Environment=PULSE_RUNTIME_PATH=/run/user/0/pulse
+Environment=PIPEWIRE_RUNTIME_DIR=/run/user/0
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus
+ExecStartPre=/bin/mkdir -p /run/user/0/pulse
+ExecStartPre=/bin/chmod 700 /run/user/0
+ExecStart=/usr/local/bin/makamujo-pipewire
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target
