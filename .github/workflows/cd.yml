@@ -21,12 +21,13 @@ jobs:
       - name: Wait until CI succeeds for this commit
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           deadline=$((SECONDS + 45 * 60))
           while (( SECONDS < deadline )); do
-            payload="$(gh run list --workflow ci.yml --commit "$SHA" --json status,conclusion,event,databaseId --limit 50)"
+            payload="$(gh run list --repo "$GH_REPO" --workflow ci.yml --commit "$SHA" --json status,conclusion,event,databaseId --limit 50)"
             echo "$payload" | jq -e 'type == "array"' >/dev/null
 
             push_runs="$(echo "$payload" | jq '[.[] | select(.event == "push")]')"
