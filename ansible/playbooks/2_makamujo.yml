@@ -15,11 +15,10 @@
 
     - name: Clone makamujo repository
       ansible.builtin.git:
-        repo: "{{ makamujo_git_repo }}"
+        repo: https://github.com/nahcnuj/makamujo.git
         dest: "{{ makamujo_src }}"
-        version: "{{ makamujo_git_version }}"
+        version: main
         force: true
-        update: true
 
     - name: Install production dependencies with Bun
       ansible.builtin.command:

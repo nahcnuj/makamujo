@@ -85,7 +85,7 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 
 ## GitHub Actions CD
 
-`main` への push（または `main` 上の `workflow_dispatch`）で `.github/workflows/cd.yml` が走り、そのコミットの CI（`.github/workflows/ci.yml` の **push** run）が success になってから `playbooks/2_makamujo.yml` を VPS に適用します。デプロイ対象はブランチ名ではなく **そのコミット SHA** です。
+`main` への push で `.github/workflows/cd.yml` が走り、そのコミットの CI（`.github/workflows/ci.yml` の **push** run）が success になってから `playbooks/2_makamujo.yml` を VPS に適用します。checkout 対象は playbook どおり `main` です。
 
 必要な GitHub Secrets（Environment `vps` またはリポジトリ Secrets）:
 

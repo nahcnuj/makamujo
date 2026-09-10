@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 concurrency:
   group: cd-vps
@@ -16,7 +15,6 @@ permissions:
 
 jobs:
   wait-for-ci:
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
@@ -62,7 +60,6 @@ jobs:
           exit 1
 
   deploy:
-    if: github.ref == 'refs/heads/main'
     needs: wait-for-ci
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -78,6 +75,19 @@ jobs:
       - name: Install Ansible
         run: pip install -r ansible/requirements.txt
 
+      - name: Require deploy secrets
+        env:
+          HAS_VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY != '' }}
+          HAS_VPS_SSH_HOST: ${{ secrets.VPS_SSH_HOST != '' }}
+          HAS_ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD != '' }}
+        run: |
+          set -euo pipefail
+          missing=0
+          [ "$HAS_VPS_SSH_PRIVATE_KEY" = true ] || { echo "missing secret VPS_SSH_PRIVATE_KEY"; missing=1; }
+          [ "$HAS_VPS_SSH_HOST" = true ] || { echo "missing secret VPS_SSH_HOST"; missing=1; }
+          [ "$HAS_ANSIBLE_VAULT_PASSWORD" = true ] || { echo "missing secret ANSIBLE_VAULT_PASSWORD"; missing=1; }
+          [ "$missing" -eq 0 ]
+
       - name: Prepare SSH and Vault credentials
         env:
           VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
@@ -86,10 +96,6 @@ jobs:
           ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
         run: |
           set -euo pipefail
-          : "${VPS_SSH_PRIVATE_KEY:?missing secret VPS_SSH_PRIVATE_KEY}"
-          : "${VPS_SSH_HOST:?missing secret VPS_SSH_HOST}"
-          : "${ANSIBLE_VAULT_PASSWORD:?missing secret ANSIBLE_VAULT_PASSWORD}"
-
           install -d -m 700 ~/.ssh
           printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
@@ -118,5 +124,4 @@ jobs:
             -e "ansible_host=${VPS_SSH_HOST}" \
             -e "ansible_user=${ansible_user}" \
             -e "ansible_ssh_private_key_file=${HOME}/.ssh/id_deploy" \
-            -e "ansible_ssh_common_args=-o IdentitiesOnly=yes" \
-            -e "makamujo_git_version=${GITHUB_SHA}"
+            -e "ansible_ssh_common_args=-o IdentitiesOnly=yes"

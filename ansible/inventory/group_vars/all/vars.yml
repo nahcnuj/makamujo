@@ -2,6 +2,3 @@
 # Non-secret defaults (safe to commit).
 makamujo_src: /opt/src/makamujo
 makamujo_obs_service_json: "{{ makamujo_src }}/obs-studio/basic/profiles/Makamujo/service.json"
-makamujo_git_repo: https://github.com/nahcnuj/makamujo.git
-# CD overrides this with the triggering commit SHA.
-makamujo_git_version: main
