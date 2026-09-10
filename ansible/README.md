@@ -87,7 +87,7 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 
 `main` への push で `.github/workflows/cd.yml` が走り、そのコミットの CI（`.github/workflows/ci.yml` の **push** run）が success になってから `playbooks/2_makamujo.yml` を VPS に適用します。checkout 対象は playbook どおり `main` です。
 
-必要な GitHub Secrets（Environment `vps` またはリポジトリ Secrets）:
+必要な GitHub Secrets（リポジトリ Secrets。`github-pages` や `copilot` は使わない）:
 
 | Secret | 必須 | 内容 |
 |--------|------|------|
@@ -96,8 +96,6 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 | `ANSIBLE_VAULT_PASSWORD` | yes | `inventory/group_vars/all/vault.yml` の復号パスワード |
 | `VPS_SSH_USER` | no | SSH ユーザー。省略時 `root` |
 | `VPS_SSH_KNOWN_HOSTS` | no | `ssh-keyscan` 形式の known_hosts。未設定時は実行時に `ssh-keyscan` |
-
-Environment `vps` に required reviewers を付けると、CI 通過後の実デプロイだけ承認待ちにできます。
 
 ## Playbooks（概要）
 
