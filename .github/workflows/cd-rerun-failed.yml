@@ -1,0 +1,68 @@
+name: Rerun failed CD jobs
+
+# Same as the Actions UI "Re-run failed jobs" button, until CD succeeds.
+# If a rerun is not possible, open an issue with the failed logs and fail.
+on:
+  workflow_run:
+    workflows: [CD]
+    types: [completed]
+
+permissions:
+  actions: write
+  issues: write
+
+jobs:
+  rerun:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Re-run failed jobs or open an issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          set -euo pipefail
+
+          jobs_json="$(gh run view "$RUN_ID" --json jobs)"
+          failed_jobs="$(echo "$jobs_json" | jq -r '[.jobs[] | select(.conclusion == "failure") | .name] | join(", ")')"
+          echo "failed jobs: ${failed_jobs:-none}"
+
+          deploy_failed="$(echo "$jobs_json" | jq '[.jobs[] | select(.conclusion == "failure" and .name == "deploy")] | length')"
+
+          if [ "$deploy_failed" -gt 0 ]; then
+            if gh run rerun "$RUN_ID" --failed; then
+              echo "queued re-run of failed jobs"
+              exit 0
+            fi
+            echo "could not re-run failed jobs; filing an issue"
+          else
+            echo "failure is not retryable; filing an issue"
+          fi
+
+          log_file="$(mktemp)"
+          body_file="$(mktemp)"
+          gh run view "$RUN_ID" --log-failed > "$log_file" || true
+
+          {
+            echo "CD did not succeed and automatic retry stopped."
+            echo
+            echo "- Run: $RUN_URL"
+            echo "- SHA: \`$SHA\`"
+            echo "- Attempt: $ATTEMPT"
+            echo "- Failed jobs: ${failed_jobs:-none}"
+            echo
+            echo '```'
+            tail -c 60000 "$log_file" || true
+            echo
+            echo '```'
+          } > "$body_file"
+
+          gh issue create \
+            --title "CD failed on ${SHA:0:7} (attempt ${ATTEMPT}): ${failed_jobs:-unknown}" \
+            --body-file "$body_file"
+          exit 1
