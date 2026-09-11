@@ -37,16 +37,16 @@
     "playwright": "^1.61.1",
     "playwright-extra": "^4.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "tailwindcss": "^4.3.0"
+    "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.2",
+    "@biomejs/biome": "2.5.12",
     "@playwright/test": "^1.61.1",
     "@types/bun": "latest",
     "@types/jsdom": "^28.0.1",
     "@types/node": "^24.12.3",
     "jsdom": "^29.1.1",
-    "react": "^19.2.6",
+    "react": "^19.2.8",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }
