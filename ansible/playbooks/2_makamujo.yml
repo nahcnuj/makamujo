@@ -25,6 +25,17 @@
         cmd: bun install --production
         chdir: "{{ makamujo_src }}"
 
+    - name: Finish interrupted dpkg transactions
+      ansible.builtin.command: dpkg --configure -a
+      changed_when: false
+
+    - name: Fix broken apt packages
+      ansible.builtin.apt:
+        state: fixed
+        update_cache: true
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+
     - name: Install Playwright Chromium browser
       ansible.builtin.command:
         cmd: bunx playwright install chromium
