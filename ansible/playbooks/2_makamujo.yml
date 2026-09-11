@@ -5,7 +5,7 @@
     makamujo_src: /opt/src/makamujo
     tls_dir: /opt/src/makamujo/var/tls
   environment:
-    PATH: "/root/.bun/bin:/usr/local/bin:/usr/bin:/bin"
+    PATH: "/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   tasks:
     - name: Ensure parent directory exists
       ansible.builtin.file:
