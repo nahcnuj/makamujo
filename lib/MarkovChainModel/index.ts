@@ -119,6 +119,30 @@ export class MarkovChainModel implements TalkModel {
     this.#model.learn(normalizeLearnText(text));
   }
 
+  unlearn(text: string): void {
+    const normalized = normalizeLearnText(text);
+    const current = this.#model.json as {
+      model: Distribution;
+      corpus: string[];
+    };
+    const corpus = current.corpus ?? [];
+    if (!corpus.includes(normalized)) return;
+    const tokens = segmentLearnText(normalized);
+    const decremented = this.decrementPhrase(tokens, { delta: 1 });
+    const next = JSON.parse(decremented.toJSON()) as {
+      model: Distribution;
+      corpus: string[];
+    };
+    const nextCorpus = [...(next.corpus ?? [])];
+    const idx = nextCorpus.lastIndexOf(normalized);
+    if (idx >= 0) nextCorpus.splice(idx, 1);
+    this.#model = MarkovModel.create(
+      next.model,
+      nextCorpus,
+      this.#maxLearnContext,
+    );
+  }
+
   toLearned(text: string): MarkovChainModel {
     const copied = this.#model.toLearned(normalizeLearnText(text)).json;
     return MarkovChainModel.#fromJson(copied, this.#maxLearnContext);

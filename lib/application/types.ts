@@ -32,6 +32,7 @@ export type TalkModelGenerateResult =
 export type TalkModelPort = {
   generate(start?: string, nGram?: number): TalkModelGenerateResult;
   learn(text: string): void;
+  unlearn(text: string): void;
 };
 
 export type SpeechPort = {

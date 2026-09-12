@@ -3,6 +3,7 @@ import {
   inferNGramSize,
   inferNGramSizeRaw,
 } from "../domain/broadcasting/NGramPolicy";
+import { AnonymousPresenceLearn } from "../domain/comments/AnonymousPresenceLearn";
 import { recordComment } from "../domain/comments/CommentRecorder";
 import {
   CRUISE_WELCOME_SPEECHES,
@@ -26,6 +27,7 @@ export class CommentApplicationService {
   #session: AgentSession;
   #talkModel: TalkModelPort;
   #speech: SpeechPort;
+  #anon: AnonymousPresenceLearn;
 
   constructor(
     session: AgentSession,
@@ -35,6 +37,7 @@ export class CommentApplicationService {
     this.#session = session;
     this.#talkModel = talkModel;
     this.#speech = speech;
+    this.#anon = new AnonymousPresenceLearn(talkModel);
   }
 
   listen(comments: AgentComment[]): void {
@@ -67,9 +70,16 @@ export class CommentApplicationService {
         this.#session.currentNGramSize = inferNGramSize(commentNumber);
       }
 
-      // Step 5 — truthy no or owner（匿名は学習しない。クルーズ相当）
-      if ((data.no || data.isOwner) && !commentData.anonymity) {
-        this.#talkModel.learn(`${comment}。`);
+      // Step 5 — numbered/owner comments are learned.
+      // Anonymous: display-name presence only (never onecomme userId); forget after idle.
+      this.#anon.noteProgram(this.#session.currentProgramUrl);
+      this.#anon.forgetExpired();
+      if (data.no || data.isOwner) {
+        if (commentData.anonymity) {
+          this.#anon.observe(commentData.name, comment);
+        } else {
+          this.#talkModel.learn(`${comment}。`);
+        }
       }
 
       // Step 6 — user no or cruise name

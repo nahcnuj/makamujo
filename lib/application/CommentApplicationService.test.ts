@@ -32,6 +32,7 @@ function createService(session = new AgentSession()) {
   const talkModel = {
     generate: () => "generated",
     learn: () => {},
+    unlearn: () => {},
   };
   const speech = {
     speech: jest.fn(async () => {}),
