@@ -47,6 +47,7 @@ const stubTalkModel: TalkModel = {
   generate: () => "",
   learn: () => {},
   unlearn: () => {},
+  unlearn: () => {},
   toJSON: () => "{}",
 };
 
@@ -164,6 +165,7 @@ describe("anonymous comments are learned only while present", () => {
     const talkModel: TalkModel = {
       generate: () => "",
       learn,
+      unlearn: () => {},
       unlearn: () => {},
       toJSON: () => "{}",
     };
@@ -570,6 +572,7 @@ describe("comment response speech", () => {
         start === "こんにちは" ? "こんにちは、ようこそ。" : "",
       ),
       learn: () => {},
+      unlearn: () => {},
       toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, spyTts);
@@ -593,6 +596,7 @@ describe("comment response speech", () => {
           : "",
       ),
       learn: () => {},
+      unlearn: () => {},
       toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, spyTts);
@@ -612,6 +616,7 @@ describe("comment response speech", () => {
     const talkModel: TalkModel = {
       generate: jest.fn(() => ""),
       learn: () => {},
+      unlearn: () => {},
       toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, spyTts);
@@ -632,6 +637,7 @@ describe("comment response speech", () => {
     const talkModel: TalkModel = {
       generate,
       learn: () => {},
+      unlearn: () => {},
       toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, spyTts);
@@ -672,6 +678,7 @@ describe("comment learning n-gram size", () => {
       generate,
       learn,
       unlearn: () => {},
+      unlearn: () => {},
       toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, stubTts);
@@ -687,6 +694,7 @@ describe("comment learning n-gram size", () => {
     const talkModel: TalkModel = {
       generate,
       learn: () => {},
+      unlearn: () => {},
       toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, stubTts);
@@ -723,6 +731,7 @@ describe("comment learning n-gram size", () => {
     const talkModel: TalkModel = {
       generate,
       learn,
+      unlearn: () => {},
       unlearn: () => {},
       toJSON: () => "{}",
     };
@@ -976,6 +985,7 @@ describe("VigilantFiesta game commentary", () => {
     const talkModel: TalkModel = {
       generate: () => "",
       learn,
+      unlearn: () => {},
       unlearn: () => {},
       toJSON: () => "{}",
     };
