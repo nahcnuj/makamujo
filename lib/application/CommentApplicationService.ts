@@ -159,8 +159,8 @@ export class CommentApplicationService {
       // Step 9 — gift
       if (data.hasGift && !isAd) {
         const name =
-          // biome-ignore lint/plugin/no-type-assertion: existing assertion
           (
+            // biome-ignore lint/plugin/no-type-assertion: existing assertion
             data as {
               origin?: { message?: { gift?: { advertiserName?: string } } };
             }

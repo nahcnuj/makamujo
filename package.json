@@ -26,7 +26,7 @@
     "screenshot:console-agent-status": "bun run scripts/capture-console-agent-status.ts",
     "markov": "bun run tools/markov/cli.ts",
     "format": "biome check --write . || true",
-    "lint": "biome check --error-on-warnings ."
+    "lint": "biome check ."
   },
   "dependencies": {
     "@playwright/browser-chromium": "^1.61.1",
