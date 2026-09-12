@@ -214,8 +214,8 @@ export const planAgentStatusRows = (
             // biome-ignore lint/plugin/no-type-assertion: existing assertion
             typeof (input.speechHistory[0] as { speech?: SpeechPayload })
               ?.speech === "string"
-            // biome-ignore lint/plugin/no-type-assertion: existing assertion
-            ? (input.speechHistory[0] as { speech?: SpeechPayload }).speech
+            ? // biome-ignore lint/plugin/no-type-assertion: existing assertion
+              (input.speechHistory[0] as { speech?: SpeechPayload }).speech
             : undefined,
         )
       : undefined;

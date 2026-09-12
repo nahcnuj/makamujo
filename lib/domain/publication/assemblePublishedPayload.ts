@@ -35,16 +35,16 @@ export const assemblePublishedPayload = (
     normalizePublishedStreamState(streamStateForBase);
   const base =
     normalizedStreamState && typeof normalizedStreamState === "object"
-      // biome-ignore lint/plugin/no-type-assertion: existing assertion
-      ? (normalizedStreamState as Record<string, unknown>)
+      ? // biome-ignore lint/plugin/no-type-assertion: existing assertion
+        (normalizedStreamState as Record<string, unknown>)
       : {};
   const normalizedAgentStreamState = normalizePublishedStreamState(
     input.agentStreamState,
   );
   const agentBase =
     normalizedAgentStreamState && typeof normalizedAgentStreamState === "object"
-      // biome-ignore lint/plugin/no-type-assertion: existing assertion
-      ? (normalizedAgentStreamState as Record<string, unknown>)
+      ? // biome-ignore lint/plugin/no-type-assertion: existing assertion
+        (normalizedAgentStreamState as Record<string, unknown>)
       : {};
 
   const replyTargetComment =
@@ -99,8 +99,8 @@ export const extractMetaPostBody = (
     }
     const nestedData =
       body && typeof body === "object" && "data" in body
-        // biome-ignore lint/plugin/no-type-assertion: existing assertion
-        ? (body as Record<string, unknown>).data
+        ? // biome-ignore lint/plugin/no-type-assertion: existing assertion
+          (body as Record<string, unknown>).data
         : undefined;
     if (
       nestedData &&

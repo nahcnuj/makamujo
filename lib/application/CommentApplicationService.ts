@@ -158,12 +158,13 @@ export class CommentApplicationService {
 
       // Step 9 — gift
       if (data.hasGift && !isAd) {
-        const name = (
+        const name =
           // biome-ignore lint/plugin/no-type-assertion: existing assertion
-          data as {
-            origin?: { message?: { gift?: { advertiserName?: string } } };
-          }
-        ).origin?.message?.gift?.advertiserName;
+          (
+            data as {
+              origin?: { message?: { gift?: { advertiserName?: string } } };
+            }
+          ).origin?.message?.gift?.advertiserName;
         console.log(`[GIFT] ${name}`);
         void this.#speech.speech(
           formatGiftThanks(name, Boolean(data.anonymity)),

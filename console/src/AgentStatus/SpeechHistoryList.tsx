@@ -52,8 +52,8 @@ export const SpeechHistoryListItem = ({
       }
       style={
         isFirst && emphasizeLatest
-          // biome-ignore lint/plugin/no-type-assertion: existing assertion
-          ? ({
+          ? // biome-ignore lint/plugin/no-type-assertion: existing assertion
+            ({
               "--speech-history-border-bottom-width":
                 EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH,
               borderBottomWidth: "var(--speech-history-border-bottom-width)",

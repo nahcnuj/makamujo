@@ -318,8 +318,8 @@ export function stepIdle(
         (sightData as { clickableElementIds?: string[] } | undefined)
           ?.clickableElementIds,
       )
-        // biome-ignore lint/plugin/no-type-assertion: existing assertion
-        ? (sightData as { clickableElementIds: string[] }).clickableElementIds
+        ? // biome-ignore lint/plugin/no-type-assertion: existing assertion
+          (sightData as { clickableElementIds: string[] }).clickableElementIds
         : ["bigCookie"];
       const candidateIds = ctx.listeners.isSilent()
         ? ["bigCookie"]

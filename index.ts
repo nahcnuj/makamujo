@@ -194,11 +194,21 @@ const normalizeSpeechText = (speech: unknown): string | undefined => {
     return undefined;
   }
 
-  if (typeof speech === "object" && speech !== null && "text" in speech && typeof speech.text === "string") {
+  if (
+    typeof speech === "object" &&
+    speech !== null &&
+    "text" in speech &&
+    typeof speech.text === "string"
+  ) {
     return speech.text;
   }
 
-  if (typeof speech === "object" && speech !== null && "speech" in speech && typeof speech.speech === "string") {
+  if (
+    typeof speech === "object" &&
+    speech !== null &&
+    "speech" in speech &&
+    typeof speech.speech === "string"
+  ) {
     return speech.speech;
   }
 
@@ -244,19 +254,22 @@ streamer.onSpeech(async (event) => {
   const traceNodes =
     typeof event === "object" &&
     event !== null &&
-    "nodes" in event && Array.isArray(event.nodes)
+    "nodes" in event &&
+    Array.isArray(event.nodes)
       ? event.nodes
       : undefined;
   const nGram =
     typeof event === "object" &&
     event !== null &&
-    "nGram" in event && typeof event.nGram === "number"
+    "nGram" in event &&
+    typeof event.nGram === "number"
       ? event.nGram
       : streamer.currentNGramSize;
   const nGramRaw =
     typeof event === "object" &&
     event !== null &&
-    "nGramRaw" in event && typeof event.nGramRaw === "number"
+    "nGramRaw" in event &&
+    typeof event.nGramRaw === "number"
       ? event.nGramRaw
       : streamer.currentNGramSizeRaw;
   generatedSpeechHistorySequence += 1;
@@ -322,10 +335,10 @@ const apiApp = new Hono()
     const canSpeak =
       typeof streamer.canSpeak === "boolean"
         ? streamer.canSpeak
-        // biome-ignore lint/plugin/no-type-assertion: existing assertion
-        : typeof (agent as { canSpeak?: boolean }).canSpeak === "boolean"
-          // biome-ignore lint/plugin/no-type-assertion: existing assertion
-          ? Boolean((agent as { canSpeak?: boolean }).canSpeak)
+        : // biome-ignore lint/plugin/no-type-assertion: existing assertion
+          typeof (agent as { canSpeak?: boolean }).canSpeak === "boolean"
+          ? // biome-ignore lint/plugin/no-type-assertion: existing assertion
+            Boolean((agent as { canSpeak?: boolean }).canSpeak)
           : true;
     return Response.json({
       speech: normalizeSpeechText(speechState) ?? "",
