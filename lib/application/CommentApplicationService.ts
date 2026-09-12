@@ -3,6 +3,7 @@ import {
   inferNGramSize,
   inferNGramSizeRaw,
 } from "../domain/broadcasting/NGramPolicy";
+import { AnonymousPresenceLearn } from "../domain/comments/AnonymousPresenceLearn";
 import { recordComment } from "../domain/comments/CommentRecorder";
 import {
   CRUISE_WELCOME_SPEECHES,
@@ -16,9 +17,6 @@ import {
 } from "../domain/comments/SystemSpeechScripts";
 import { pickTopic } from "../domain/comments/TopicPicker";
 import type { AgentSession } from "./AgentSession";
-import {
-  AnonymousPresenceLearn,
-} from "../domain/comments/AnonymousPresenceLearn";
 import type { CommentData, SpeechPort, TalkModelPort } from "./types";
 
 /**

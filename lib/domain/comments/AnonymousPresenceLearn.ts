@@ -11,7 +11,9 @@ type Bucket = {
 };
 
 const asSentence = (text: string): string =>
-  text.replace(/。+$/u, "").length === 0 ? "。" : `${text.replace(/。+$/u, "")}。`;
+  text.replace(/。+$/u, "").length === 0
+    ? "。"
+    : `${text.replace(/。+$/u, "")}。`;
 
 /** Display name only. Never userId (onecomme). */
 export const anonymousPresenceKey = (name?: string): string => {
