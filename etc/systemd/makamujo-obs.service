@@ -33,7 +33,7 @@ MemoryHigh=4M
 MemoryMax=16M
 CPUAccounting=yes
 CPUQuota=200%
-TasksMax=16
+TasksMax=256
 OOMPolicy=continue
 OOMScoreAdjust=-1000
 
