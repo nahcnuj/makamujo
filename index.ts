@@ -194,12 +194,12 @@ const normalizeSpeechText = (speech: unknown): string | undefined => {
     return undefined;
   }
 
-  if (typeof (speech as any).text === "string") {
-    return (speech as any).text;
+  if (typeof speech === "object" && speech !== null && "text" in speech && typeof speech.text === "string") {
+    return speech.text;
   }
 
-  if (typeof (speech as any).speech === "string") {
-    return (speech as any).speech;
+  if (typeof speech === "object" && speech !== null && "speech" in speech && typeof speech.speech === "string") {
+    return speech.speech;
   }
 
   return undefined;
@@ -243,20 +243,20 @@ streamer.onSpeech(async (event) => {
   const traceNodes =
     typeof event === "object" &&
     event !== null &&
-    Array.isArray((event as any).nodes)
-      ? (event as any).nodes
+    "nodes" in event && Array.isArray(event.nodes)
+      ? event.nodes
       : undefined;
   const nGram =
     typeof event === "object" &&
     event !== null &&
-    typeof (event as any).nGram === "number"
-      ? (event as any).nGram
+    "nGram" in event && typeof event.nGram === "number"
+      ? event.nGram
       : streamer.currentNGramSize;
   const nGramRaw =
     typeof event === "object" &&
     event !== null &&
-    typeof (event as any).nGramRaw === "number"
-      ? (event as any).nGramRaw
+    "nGramRaw" in event && typeof event.nGramRaw === "number"
+      ? event.nGramRaw
       : streamer.currentNGramSizeRaw;
   generatedSpeechHistorySequence += 1;
   generatedSpeechHistory.unshift({

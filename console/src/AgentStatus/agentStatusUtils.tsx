@@ -127,7 +127,7 @@ export const createSpeechHistoryDisplayItems = (
       return accumulatedItems;
     }
 
-    const traceNodes = (speechHistoryItem as any).nodes;
+    const traceNodes = speechHistoryItem.nodes;
     const hasTrace = Array.isArray(traceNodes) && traceNodes.length > 0;
     const hasValidNGram =
       speechHistoryItem.nGram !== undefined &&

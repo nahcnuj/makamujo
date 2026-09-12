@@ -45,6 +45,7 @@
     "@types/bun": "latest",
     "@types/jsdom": "^28.0.1",
     "@types/node": "^24.12.3",
+    "biome-plugin-no-type-assertion": "^1.1.1",
     "jsdom": "^29.1.1",
     "react": "^19.2.6",
     "tsx": "^4.21.0",
