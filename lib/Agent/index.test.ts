@@ -46,6 +46,7 @@ mock.module("./games/server", () => ({
 const stubTalkModel: TalkModel = {
   generate: () => "",
   learn: () => {},
+  unlearn: () => {},
   toJSON: () => "{}",
 };
 
@@ -86,13 +87,15 @@ const viewerComment = {
   },
 };
 
-describe("anonymous comments are not learned (cruise-equivalent)", () => {
-  it("does not call learn for anonymous comments but still replies", () => {
+describe("anonymous comments are learned only while present", () => {
+  it("learns anonymous comments and still replies", () => {
     const learn = jest.fn();
+    const unlearn = jest.fn();
     const generate = jest.fn(() => "返信テキスト");
     const talkModel: TalkModel = {
       generate,
       learn,
+      unlearn,
       toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, stubTts);
@@ -103,16 +106,57 @@ describe("anonymous comments are not learned (cruise-equivalent)", () => {
         data: {
           comment: "匿名のコメントです",
           no: 42,
+          name: "視聴者A",
+          anonymity: true,
+          hasGift: false,
+          userId: "must-not-be-used",
+        },
+      } as any,
+    ]);
+
+    expect(learn).toHaveBeenCalledWith("匿名のコメントです。");
+    expect(unlearn).not.toHaveBeenCalled();
+    expect(generate).toHaveBeenCalled();
+    const streamState = agent.streamState as any;
+    expect(streamState?.replyTargetComment?.text).toBe("匿名のコメントです");
+  });
+
+  it("unlearns after presence timeout", () => {
+    const learn = jest.fn();
+    const unlearn = jest.fn();
+    jest.spyOn(Date, "now").mockReturnValue(0);
+    const talkModel: TalkModel = {
+      generate: () => "",
+      learn,
+      unlearn,
+      toJSON: () => "{}",
+    };
+    const agent = new MakaMujo(talkModel, stubTts);
+    agent.onAir(niconamaLive(10));
+    agent.listen([
+      {
+        data: {
+          comment: "荒らし",
+          no: 1,
+          name: "視聴者A",
           anonymity: true,
           hasGift: false,
         },
       } as any,
     ]);
-
-    expect(learn).not.toHaveBeenCalled();
-    expect(generate).toHaveBeenCalled();
-    const streamState = agent.streamState as any;
-    expect(streamState?.replyTargetComment?.text).toBe("匿名のコメントです");
+    jest.spyOn(Date, "now").mockReturnValue(10 * 60 * 1_000);
+    agent.listen([
+      {
+        data: {
+          comment: "別の人",
+          no: 2,
+          name: "視聴者B",
+          anonymity: true,
+          hasGift: false,
+        },
+      } as any,
+    ]);
+    expect(unlearn).toHaveBeenCalledWith("荒らし。");
   });
 
   it("still learns non-anonymous comments with no", () => {
@@ -120,6 +164,7 @@ describe("anonymous comments are not learned (cruise-equivalent)", () => {
     const talkModel: TalkModel = {
       generate: () => "",
       learn,
+      unlearn: () => {},
       toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, stubTts);
@@ -626,6 +671,7 @@ describe("comment learning n-gram size", () => {
     const talkModel: TalkModel = {
       generate,
       learn,
+      unlearn: () => {},
       toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, stubTts);
@@ -677,6 +723,7 @@ describe("comment learning n-gram size", () => {
     const talkModel: TalkModel = {
       generate,
       learn,
+      unlearn: () => {},
       toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, stubTts);
@@ -929,6 +976,7 @@ describe("VigilantFiesta game commentary", () => {
     const talkModel: TalkModel = {
       generate: () => "",
       learn,
+      unlearn: () => {},
       toJSON: () => "{}",
     };
     const tts: TTS = {

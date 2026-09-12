@@ -274,6 +274,7 @@ export type TalkModelGenerateResult =
 export interface TalkModel {
   generate(start?: string, nGram?: number): TalkModelGenerateResult;
   learn(text: string): void;
+  unlearn(text: string): void;
   toJSON(): string;
 }
 
