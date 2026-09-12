@@ -47,7 +47,6 @@ const stubTalkModel: TalkModel = {
   generate: () => "",
   learn: () => {},
   unlearn: () => {},
-  unlearn: () => {},
   toJSON: () => "{}",
 };
 
@@ -165,7 +164,6 @@ describe("anonymous comments are learned only while present", () => {
     const talkModel: TalkModel = {
       generate: () => "",
       learn,
-      unlearn: () => {},
       unlearn: () => {},
       toJSON: () => "{}",
     };
@@ -502,7 +500,7 @@ describe("Markov speech continuation", () => {
 
   const createAgent = (generate: TalkModel["generate"], spoken: string[]) =>
     new MakaMujo(
-      { generate, learn: () => {}, toJSON: () => "{}" },
+      { generate, learn: () => {}, unlearn: () => {}, toJSON: () => "{}" },
       {
         speech: async (text) => {
           spoken.push(text);
@@ -678,7 +676,6 @@ describe("comment learning n-gram size", () => {
       generate,
       learn,
       unlearn: () => {},
-      unlearn: () => {},
       toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, stubTts);
@@ -732,7 +729,6 @@ describe("comment learning n-gram size", () => {
       generate,
       learn,
       unlearn: () => {},
-      unlearn: () => {},
       toJSON: () => "{}",
     };
     const agent = new MakaMujo(talkModel, stubTts);
@@ -749,7 +745,7 @@ describe("CommentPipeline characterization", () => {
     const learn = jest.fn();
     const generate = jest.fn(() => "");
     const agent = new MakaMujo(
-      { generate, learn, toJSON: () => "{}" },
+      { generate, learn, unlearn: () => {}, toJSON: () => "{}" },
       stubTts,
     );
 
@@ -985,7 +981,6 @@ describe("VigilantFiesta game commentary", () => {
     const talkModel: TalkModel = {
       generate: () => "",
       learn,
-      unlearn: () => {},
       unlearn: () => {},
       toJSON: () => "{}",
     };
