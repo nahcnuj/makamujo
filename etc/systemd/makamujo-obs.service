@@ -32,9 +32,10 @@ MemoryAccounting=yes
 MemoryHigh=4M
 MemoryMax=16M
 CPUAccounting=yes
-CPUQuota=150%
-TasksMax=256
-OOMPolicy=stop
+CPUQuota=200%
+TasksMax=16
+OOMPolicy=continue
+OOMScoreAdjust=-1000
 
 [Install]
 WantedBy=multi-user.target
