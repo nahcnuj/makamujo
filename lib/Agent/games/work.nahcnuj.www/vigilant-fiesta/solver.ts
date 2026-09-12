@@ -174,6 +174,7 @@ export function stepIdle(
         return { state: States.initialize() };
       }
 
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       const sightData = (event.name === "idle" ? event.state : undefined) as
         | SightLike
         | undefined;
@@ -215,6 +216,7 @@ export function stepIdle(
         return { state: States.initialize() };
       }
 
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       const sightData = (event.name === "idle" ? event.state : undefined) as
         | SightLike
         | undefined;
@@ -313,6 +315,7 @@ export function* solver(
 ): Generator<Action.Action, undefined, State> {
   let current = hydrate(state);
   while (current.type !== "closed") {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     current = yield* machine[current.type].run(current as never);
   }
 }

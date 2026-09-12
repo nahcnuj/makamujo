@@ -48,6 +48,7 @@ export const normalizeSpeechText = (
     return speech.trim() || undefined;
   }
   if (speech && typeof speech === "object") {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const record = speech as Record<string, unknown>;
     if (typeof record.text === "string") {
       return record.text.trim() || undefined;
@@ -56,6 +57,7 @@ export const normalizeSpeechText = (
       return record.speech.trim() || undefined;
     }
     if (record.speech && typeof record.speech === "object") {
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       const nested = record.speech as Record<string, unknown>;
       if (typeof nested.text === "string") {
         return nested.text.trim() || undefined;
@@ -137,6 +139,7 @@ export const hasDisplayableSpeechHistory = (
   if (!Array.isArray(speechHistory) || speechHistory.length === 0) return false;
   return speechHistory.some((item) => {
     if (!item || typeof item !== "object") return false;
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const row = item as {
       speech?: SpeechPayload;
       nGram?: number;
@@ -148,6 +151,7 @@ export const hasDisplayableSpeechHistory = (
     const hasValidNGram =
       row.nGram !== undefined &&
       Number.isFinite(row.nGram) &&
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       (row.nGram as number) >= 1;
     return hasTrace || hasValidNGram;
   });
@@ -188,6 +192,7 @@ export const planAgentStatusRows = (
   const isSpeechSilent =
     input.speech !== undefined &&
     typeof input.speech === "object" &&
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     (input.speech as { silent?: boolean }).silent === true;
 
   const historyPresent = hasDisplayableSpeechHistory(input.speechHistory);
@@ -203,10 +208,13 @@ export const planAgentStatusRows = (
   const firstHistorySpeechText =
     input.speechHistory && input.speechHistory.length > 0
       ? normalizeSpeechText(
+          // biome-ignore lint/plugin/no-type-assertion: existing assertion
           typeof (input.speechHistory[0] as { speech?: SpeechPayload })
             ?.speech === "object" ||
+            // biome-ignore lint/plugin/no-type-assertion: existing assertion
             typeof (input.speechHistory[0] as { speech?: SpeechPayload })
               ?.speech === "string"
+            // biome-ignore lint/plugin/no-type-assertion: existing assertion
             ? (input.speechHistory[0] as { speech?: SpeechPayload }).speech
             : undefined,
         )

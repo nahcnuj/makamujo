@@ -1,59 +1,59 @@
 {
-    "formatter":  {
-                      "enabled":  true,
-                      "indentStyle":  "space",
-                      "indentWidth":  2,
-                      "lineEnding":  "lf"
-                  },
-    "files":  {
-                  "includes":  [
-                                   "**",
-                                   "!docs/index.html",
-                                   "!var",
-                                   "!playwright/.auth",
-                                   "!test-results",
-                                   "!**/*.svg",
-                                   "!ansible/.venv",
-                                   "!ansible/.venv-wsl",
-                                   "!ansible/**/.venv*"
-                               ]
-              },
-    "overrides":  [
-                      {
-                          "includes":  [
-                                           "**/*.test.ts",
-                                           "**/*.test.tsx"
-                                       ],
-                          "formatter":  {
-                                            "enabled":  true
-                                        },
-                          "linter":  {
-                                         "enabled":  false
-                                     }
-                      }
-                  ],
-    "plugins":  [
-                    "node_modules/biome-plugin-no-type-assertion/no-type-assertion.grit"
-                ],
-    "linter":  {
-                   "enabled":  true,
-                   "rules":  {
-                                 "recommended":  true
-                             }
-               },
-    "css":  {
-                "parser":  {
-                               "tailwindDirectives":  true
-                           },
-                "formatter":  {
-                                  "enabled":  true
-                              }
-            },
-    "$schema":  "https://biomejs.dev/schemas/2.5.2/schema.json",
-    "javascript":  {
-                       "formatter":  {
-                                         "quoteStyle":  "double",
-                                         "jsxQuoteStyle":  "double"
-                                     }
-                   }
+  "$schema": "https://biomejs.dev/schemas/2.5.2/schema.json",
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "jsxQuoteStyle": "double"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    },
+    "formatter": {
+      "enabled": true
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true
+    }
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!docs/index.html",
+      "!var",
+      "!playwright/.auth",
+      "!test-results",
+      "!**/*.svg",
+      "!ansible/.venv",
+      "!ansible/.venv-wsl",
+      "!ansible/**/.venv*"
+    ]
+  },
+  "overrides": [
+    {
+      "includes": [
+        "**/*.test.ts",
+        "**/*.test.tsx"
+      ],
+      "formatter": {
+        "enabled": true
+      },
+      "linter": {
+        "enabled": false
+      }
+    }
+  ],
+  "plugins": [
+    "node_modules/biome-plugin-no-type-assertion/no-type-assertion.grit"
+  ]
 }

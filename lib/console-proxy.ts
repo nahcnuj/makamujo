@@ -208,6 +208,7 @@ export function createResilientSseProxy(
     upstream: Response,
     controller: ReadableStreamDefaultController<Uint8Array>,
   ): Promise<void> => {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const body = upstream.body as ReadableStream<Uint8Array> | null;
     if (!body || typeof body.getReader !== "function") return;
 

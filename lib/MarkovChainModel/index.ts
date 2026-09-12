@@ -121,6 +121,7 @@ export class MarkovChainModel implements TalkModel {
 
   unlearn(text: string): void {
     const normalized = normalizeLearnText(text);
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const current = this.#model.json as {
       model: Distribution;
       corpus: string[];
@@ -129,6 +130,7 @@ export class MarkovChainModel implements TalkModel {
     if (!corpus.includes(normalized)) return;
     const tokens = segmentLearnText(normalized);
     const decremented = this.decrementPhrase(tokens, { delta: 1 });
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const next = JSON.parse(decremented.toJSON()) as {
       model: Distribution;
       corpus: string[];
@@ -168,6 +170,7 @@ export class MarkovChainModel implements TalkModel {
   ): MarkovChainModel {
     if (tokens.length === 0) return this;
 
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const current = this.#model.json as {
       model: Distribution;
       corpus: string[];
@@ -285,6 +288,7 @@ export class MarkovChainModel implements TalkModel {
 
   /** corpus length (learned sentences, append order; end is newest). */
   corpusLength(): number {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const { corpus = [] } = this.#model.json as { corpus?: string[] };
     return corpus.length;
   }
@@ -296,6 +300,7 @@ export class MarkovChainModel implements TalkModel {
   corpusFromEnd(n: number): string | undefined {
     const nth = Math.floor(n);
     if (nth < 1) return undefined;
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const { corpus = [] } = this.#model.json as { corpus?: string[] };
     const idx = corpus.length - nth;
     if (idx < 0 || idx >= corpus.length) return undefined;
@@ -312,6 +317,7 @@ export class MarkovChainModel implements TalkModel {
     if (nth < 1) {
       throw new RangeError(`n must be >= 1, got ${n}`);
     }
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const current = this.#model.json as {
       model: Distribution;
       corpus: string[];
@@ -331,6 +337,7 @@ export class MarkovChainModel implements TalkModel {
     }
     const tokens = segmentLearnText(text);
     const decremented = this.decrementPhrase(tokens, { delta: 1 });
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const next = JSON.parse(decremented.toJSON()) as {
       model: Distribution;
       corpus: string[];
@@ -361,6 +368,7 @@ export class MarkovChainModel implements TalkModel {
   }
 
   tokenStats(): { token: string; asFrom: number; asToWeight: number }[] {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const { model } = this.#model.json as {
       model: Distribution;
       corpus: string[];
@@ -388,6 +396,7 @@ export class MarkovChainModel implements TalkModel {
     asTo: { from: string; weight: number }[];
     fromContexts: { context: string; next: string; weight: number }[];
   } {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const { model } = this.#model.json as {
       model: Distribution;
       corpus: string[];

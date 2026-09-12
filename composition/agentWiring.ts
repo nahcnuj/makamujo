@@ -42,6 +42,7 @@ export const loadCreateAgentApi = async (): Promise<
 > => {
   // Prefer side-effect-free entry (Phase C).
   try {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const agentMod = (await import(
       "automated-gameplay-transmitter/agent"
     )) as AgentApiModule;
@@ -53,6 +54,7 @@ export const loadCreateAgentApi = async (): Promise<
   }
 
   try {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const rootMod = (await import(
       "automated-gameplay-transmitter"
     )) as AgentApiModule;

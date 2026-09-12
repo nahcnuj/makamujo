@@ -146,6 +146,7 @@ export const createSpeechHistoryDisplayItems = (
         speechHistoryItem.nGram,
       ),
       nGramLabel: formatSpeechHistoryNGramLabel(speechHistoryItem.nGram),
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       nodes: hasTrace ? (traceNodes as string[]) : undefined,
       replyTargetComment: speechHistoryItem.replyTargetComment,
     });
@@ -197,6 +198,7 @@ export const createSpeechHistoryValueComponent = (
           }
           style={
             index === 0 && emphasizeLatest
+              // biome-ignore lint/plugin/no-type-assertion: existing assertion
               ? ({
                   "--speech-history-border-bottom-width":
                     EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH,
@@ -398,6 +400,7 @@ const renderCurrentGameStateValueComponent = (
       </ul>
     );
   } finally {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     visitedObjects.delete(currentGameStateValue as object);
   }
 };

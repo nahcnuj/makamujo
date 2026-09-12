@@ -53,6 +53,7 @@ const bottomClass = {
 
 function normalizeChildren(children: Child | Child[] | undefined): Child[] {
   if (children === undefined) return [];
+  // biome-ignore lint/plugin/no-type-assertion: existing assertion
   if (Array.isArray(children)) return children.flat(Infinity) as Child[];
   return [children];
 }

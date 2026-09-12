@@ -58,6 +58,7 @@ const asNonNegInt = (value: unknown): number | undefined => {
 export const parseStoredHighscores = (raw: string): StoredHighscores => {
   const empty = emptyStoredHighscores();
   try {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const parsed = JSON.parse(raw) as {
       allTimeBest?: unknown;
       slots?: unknown;
@@ -71,9 +72,11 @@ export const parseStoredHighscores = (raw: string): StoredHighscores => {
       !Array.isArray(parsed.slots)
     ) {
       for (const [key, entry] of Object.entries(
+        // biome-ignore lint/plugin/no-type-assertion: existing assertion
         parsed.slots as Record<string, unknown>,
       )) {
         if (!key || entry === null || typeof entry !== "object") continue;
+        // biome-ignore lint/plugin/no-type-assertion: existing assertion
         const e = entry as { sessionBest?: unknown; updatedAt?: unknown };
         const sessionBest = asNonNegInt(e.sessionBest);
         const updatedAt = asNonNegInt(e.updatedAt) ?? 0;

@@ -192,6 +192,7 @@ export function enrichSightState<
     statistics: {
       ...state.statistics,
       general: enrichStatisticsGeneral(
+        // biome-ignore lint/plugin/no-type-assertion: existing assertion
         general as Parameters<typeof enrichStatisticsGeneral>[0],
       ),
     },

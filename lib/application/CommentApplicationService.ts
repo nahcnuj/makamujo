@@ -42,6 +42,7 @@ export class CommentApplicationService {
 
   listen(comments: AgentComment[]): void {
     for (const { data } of comments) {
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       const commentData = data as CommentData;
       // Step 1 — NFC normalize for learning / topic; system match uses raw where noted
       const comment = commentData.comment.normalize("NFC").trim();
@@ -158,6 +159,7 @@ export class CommentApplicationService {
       // Step 9 — gift
       if (data.hasGift && !isAd) {
         const name = (
+          // biome-ignore lint/plugin/no-type-assertion: existing assertion
           data as {
             origin?: { message?: { gift?: { advertiserName?: string } } };
           }

@@ -127,6 +127,7 @@ export const createRetrySenderWithPath =
 
           conn.on("data", async (buf) => {
             if (running) return;
+            // biome-ignore lint/plugin/no-type-assertion: existing assertion
             const action = JSON.parse(buf.toString()) as Action.Action | null;
             if (!action) return;
             running = true;

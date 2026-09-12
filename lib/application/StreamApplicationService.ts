@@ -33,6 +33,7 @@ export class StreamApplicationService {
   }
 
   onAir(state: StreamData | unknown): void {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const streamData = state as StreamData | undefined;
     switch (streamData?.type) {
       case "niconama": {

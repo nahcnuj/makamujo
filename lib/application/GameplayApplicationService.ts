@@ -89,6 +89,7 @@ export class GameplayApplicationService {
             const previousState = this.#session.playing?.state ?? {};
             const nextState =
               state.state !== null && typeof state.state === "object"
+                // biome-ignore lint/plugin/no-type-assertion: existing assertion
                 ? (state.state as Record<string, unknown>)
                 : {};
             const enriched =
