@@ -19,6 +19,9 @@ StandardOutput=journal
 StandardError=journal
 Restart=on-failure
 RestartSec=5s
+MemoryAccounting=yes
+MemoryHigh=1G
+MemoryMax=1.5G
 
 [Install]
 WantedBy=multi-user.target
