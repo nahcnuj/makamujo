@@ -14,7 +14,7 @@ export ANSIBLE_SSH_COMMON_ARGS="${ANSIBLE_SSH_COMMON_ARGS:--o IdentitiesOnly=yes
 cd "$(dirname "$0")"
 
 exec ansible-playbook "${script_dir}/../ansible/playbooks/2_makamujo.yml" \
-  --vault-password-file .vault_pass \
+  --vault-password-file "${script_dir}/../ansible/.vault_pass" \
   -e "ansible_host=${VPS_SSH_HOST}" \
   -e "ansible_user=${ansible_user}" \
   -e "ansible_ssh_private_key_file=${key_file}" \
