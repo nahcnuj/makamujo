@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 : "${VPS_SSH_HOST:?VPS_SSH_HOST is required}"
 
 ansible_user="${VPS_SSH_USER:-root}"
@@ -11,7 +13,7 @@ export ANSIBLE_SSH_COMMON_ARGS="${ANSIBLE_SSH_COMMON_ARGS:--o IdentitiesOnly=yes
 
 cd "$(dirname "$0")"
 
-exec ansible-playbook playbooks/2_makamujo.yml \
+exec ansible-playbook "${script_dir}/../ansible/playbooks/2_makamujo.yml" \
   --vault-password-file .vault_pass \
   -e "ansible_host=${VPS_SSH_HOST}" \
   -e "ansible_user=${ansible_user}" \
