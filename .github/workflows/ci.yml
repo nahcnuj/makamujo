@@ -150,13 +150,4 @@ jobs:
             echo "==> $f"
             ansible-playbook --syntax-check -i localhost, -c local "$f"
           done
-      - name: Syntax-check CD deploy wrapper
-        working-directory: ansible
-        env:
-          VPS_SSH_HOST: localhost
-          ANSIBLE_HOST_KEY_CHECKING: "False"
-        run: |
-          set -euo pipefail
-          printf 'dummy\n' > .vault_pass
-          bash ./cd-deploy.sh --syntax-check -i localhost, -c local
 

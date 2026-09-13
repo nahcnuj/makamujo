@@ -29,7 +29,7 @@ export VPS_SSH_HOST=127.0.0.1
 unset VPS_SSH_USER || true
 unset ANSIBLE_SSH_COMMON_ARGS || true
 
-bash "${PROJECT_ROOT}/ansible/cd-deploy.sh"
+bash "${PROJECT_ROOT}/bin/deploy.sh"
 
 python3 - "${stub_dir}" <<'PY'
 import pathlib
