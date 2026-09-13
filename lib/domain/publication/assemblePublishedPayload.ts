@@ -35,14 +35,16 @@ export const assemblePublishedPayload = (
     normalizePublishedStreamState(streamStateForBase);
   const base =
     normalizedStreamState && typeof normalizedStreamState === "object"
-      ? (normalizedStreamState as Record<string, unknown>)
+      ? // biome-ignore lint/plugin/no-type-assertion: existing assertion
+        (normalizedStreamState as Record<string, unknown>)
       : {};
   const normalizedAgentStreamState = normalizePublishedStreamState(
     input.agentStreamState,
   );
   const agentBase =
     normalizedAgentStreamState && typeof normalizedAgentStreamState === "object"
-      ? (normalizedAgentStreamState as Record<string, unknown>)
+      ? // biome-ignore lint/plugin/no-type-assertion: existing assertion
+        (normalizedAgentStreamState as Record<string, unknown>)
       : {};
 
   const replyTargetComment =
@@ -59,18 +61,23 @@ export const assemblePublishedPayload = (
 
   return {
     niconama: base.niconama ?? {},
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     canSpeak: (base.canSpeak as boolean | undefined) ?? input.streamer.canSpeak,
     currentGame: base.currentGame ?? input.streamer.currentGame ?? null,
     nGram:
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       (base.nGram as number | undefined) ?? input.streamer.currentNGramSize,
     nGramRaw:
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       (base.nGramRaw as number | undefined) ??
       input.streamer.currentNGramSizeRaw,
     speech: base.speech ?? input.speechState,
     speechHistory: speechHistorySource.slice(0, historySseSize),
     replyTargetComment:
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       replyTargetComment as PublishedStreamPayload["replyTargetComment"],
     commentCount:
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       (base.commentCount as number | undefined) ?? input.streamer.commentCount,
   } as const;
 };
@@ -87,11 +94,13 @@ export const extractMetaPostBody = (
 } => {
   const replyTargetComment = (() => {
     if (body && typeof body === "object" && "replyTargetComment" in body) {
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       return (body as Record<string, unknown>).replyTargetComment;
     }
     const nestedData =
       body && typeof body === "object" && "data" in body
-        ? (body as Record<string, unknown>).data
+        ? // biome-ignore lint/plugin/no-type-assertion: existing assertion
+          (body as Record<string, unknown>).data
         : undefined;
     if (
       nestedData &&
@@ -99,6 +108,7 @@ export const extractMetaPostBody = (
       nestedData !== null &&
       "replyTargetComment" in nestedData
     ) {
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       return (nestedData as Record<string, unknown>).replyTargetComment;
     }
     return undefined;
@@ -111,6 +121,7 @@ export const extractMetaPostBody = (
     !("type" in published) &&
     "data" in published
   ) {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     published = (published as Record<string, unknown>).data;
   }
 
@@ -126,6 +137,7 @@ export const attachReplyTargetToPublished = (
     return published;
   }
   if (published && typeof published === "object") {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     return { ...(published as object), replyTargetComment };
   }
   return { replyTargetComment };

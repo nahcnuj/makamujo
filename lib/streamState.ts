@@ -3,12 +3,14 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
     return state;
   }
 
+  // biome-ignore lint/plugin/no-type-assertion: existing assertion
   const rawState = state as Record<string, unknown>;
 
   // Preserve any top-level custom fields while normalizing legacy payloads.
   // This is important for values like replyTargetComment, commentCount, and
   // speechHistory that are not part of the legacy `type/data` structure.
   if (rawState.type === "niconama") {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const data = rawState.data as Record<string, unknown> | undefined;
     const total: Record<string, unknown> = {};
     if (typeof data?.total === "number") {
@@ -16,14 +18,18 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
     }
     if (
       data?.points &&
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       typeof (data.points as Record<string, unknown>).gift !== "undefined"
     ) {
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       total.gift = (data.points as Record<string, unknown>).gift;
     }
     if (
       data?.points &&
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       typeof (data.points as Record<string, unknown>).ad !== "undefined"
     ) {
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       total.ad = (data.points as Record<string, unknown>).ad;
     }
 

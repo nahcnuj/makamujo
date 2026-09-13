@@ -91,6 +91,7 @@ switch (cmd) {
       usage();
     }
     const model = load(modelPath);
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const { corpus = [] } = JSON.parse(model.toJSON()) as { corpus?: string[] };
     let start = 0;
     if (values.tail != null) {
@@ -175,6 +176,7 @@ switch (cmd) {
     }
     const delta = Math.max(1, parseInt(values.delta ?? "1", 10) || 1);
     const model = load(modelPath);
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const before = JSON.parse(model.toJSON()).model as Record<
       string,
       Record<string, number>
@@ -183,6 +185,7 @@ switch (cmd) {
       tokens,
       values.purge ? { purge: true } : { delta },
     );
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const after = JSON.parse(updated.toJSON()).model as Record<
       string,
       Record<string, number>
@@ -269,10 +272,12 @@ switch (cmd) {
       [
         ...t.fromContexts.map(
           ({ context, next, weight }) =>
+            // biome-ignore lint/plugin/no-type-assertion: existing assertion
             ["from", vis(context), next, weight] as (string | number)[],
         ),
         ...t.asTo.map(
           ({ from, weight }) =>
+            // biome-ignore lint/plugin/no-type-assertion: existing assertion
             ["to", vis(from), vis(normalized), weight] as (string | number)[],
         ),
       ],

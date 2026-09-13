@@ -33,6 +33,7 @@ export const evaluateSpeechable = (input: SilenceClockInput): boolean => {
   }
 
   const browserName = input.browserStateName ?? "idle";
+  // biome-ignore lint/plugin/no-type-assertion: existing assertion
   return (SPEECHABLE_BROWSER_STATES as readonly string[]).includes(browserName);
 };
 

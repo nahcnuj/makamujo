@@ -52,7 +52,8 @@ export const SpeechHistoryListItem = ({
       }
       style={
         isFirst && emphasizeLatest
-          ? ({
+          ? // biome-ignore lint/plugin/no-type-assertion: existing assertion
+            ({
               "--speech-history-border-bottom-width":
                 EMPHASIZED_SPEECH_HISTORY_BORDER_BOTTOM_WIDTH,
               borderBottomWidth: "var(--speech-history-border-bottom-width)",
@@ -276,6 +277,7 @@ export const SpeechHistoryList = ({
       const response = await fetch(url.toString());
       if (!response.ok) return;
 
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       const data = (await response.json()) as {
         items: AgentStateResponse["speechHistory"];
         hasMore: boolean;

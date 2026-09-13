@@ -27,6 +27,7 @@ export const createOuterConsoleWebSocketHandler =
 
         target.onmessage = (ev) => {
           try {
+            // biome-ignore lint/plugin/no-type-assertion: existing assertion
             ws.send(ev.data as string | ArrayBuffer);
           } catch {
             /* ignore */
@@ -61,6 +62,7 @@ export const createOuterConsoleWebSocketHandler =
       const { target } = ws.data;
       if (target)
         try {
+          // biome-ignore lint/plugin/no-type-assertion: existing assertion
           target.send(data as string | ArrayBuffer);
         } catch {
           /* ignore */

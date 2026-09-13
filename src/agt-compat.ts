@@ -38,13 +38,17 @@ type HonoizeChildren<Props> = Omit<Props, "children"> & { children?: Child };
 // except React's `children` type is remapped to Hono's `Child`.
 type HonoComponent<Props> = (props: HonoizeChildren<Props>) => HonoReturn;
 
+// biome-ignore lint/plugin/no-type-assertion: existing assertion
 export const Box = _Box as unknown as HonoComponent<Parameters<typeof _Box>[0]>;
+// biome-ignore lint/plugin/no-type-assertion: existing assertion
 export const Container = _Container as unknown as HonoComponent<
   Parameters<typeof _Container>[0]
 >;
+// biome-ignore lint/plugin/no-type-assertion: existing assertion
 export const Layout = _Layout as unknown as HonoComponent<
   Parameters<typeof _Layout>[0]
 >;
+// biome-ignore lint/plugin/no-type-assertion: existing assertion
 export const CharacterSprite = _CharacterSprite as unknown as HonoComponent<
   Parameters<typeof _CharacterSprite>[0]
 >;
