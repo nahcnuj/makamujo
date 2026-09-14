@@ -167,7 +167,11 @@ export const create = async (
     process.env.GAME_HOME_URL?.trim() ||
     "https://www.nahcnuj.work/vigilant-fiesta/";
 
-  const userDataDir = join(tmpdir(), `makamujo-game-${process.pid}`);
+  const profileRoot =
+    process.env.MAKAMUJO_USER_DATA_ROOT?.trim() ||
+    process.env.XDG_CACHE_HOME?.trim() ||
+    "/var/tmp";
+  const userDataDir = join(profileRoot, `makamujo-game-${process.pid}`);
   mkdirSync(join(userDataDir, "Default"), { recursive: true });
   writeFileSync(
     join(userDataDir, "Default", "Preferences"),
