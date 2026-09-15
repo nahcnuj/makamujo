@@ -43,9 +43,9 @@
     "@biomejs/biome": "2.5.2",
     "@playwright/test": "^1.61.1",
     "@types/bun": "latest",
-    "@types/jsdom": "^28.0.1",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^24.12.3",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.1",
     "react": "^19.2.6",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
