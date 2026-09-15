@@ -1,5 +1,5 @@
 # See https://aka.ms/vscode-remote/devcontainer.json for format
-FROM mcr.microsoft.com/devcontainers/base:2.1-debian12
+FROM mcr.microsoft.com/devcontainers/base:2.2-debian12
 
 ARG USERNAME=vscode
 ENV BUN_INSTALL=/usr/local
