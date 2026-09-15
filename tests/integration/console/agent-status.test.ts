@@ -304,17 +304,18 @@ describe("createAgentStatusRows", () => {
   it.each([
     { label: "canSpeak が false のとき", canSpeak: false },
     { label: "canSpeak が true のとき", canSpeak: true },
-  ] as const)("does not show 発話内容 when speech.silent is true ($label)", ({
-    canSpeak,
-  }) => {
-    const rows = createAgentStatusRows({
-      canSpeak,
-      speech: { speech: "前回の発話", silent: true },
-    });
-    expect(rows).not.toContainEqual(
-      expect.objectContaining({ label: "発話内容" }),
-    );
-  });
+  ] as const)(
+    "does not show 発話内容 when speech.silent is true ($label)",
+    ({ canSpeak }) => {
+      const rows = createAgentStatusRows({
+        canSpeak,
+        speech: { speech: "前回の発話", silent: true },
+      });
+      expect(rows).not.toContainEqual(
+        expect.objectContaining({ label: "発話内容" }),
+      );
+    },
+  );
 
   it("does not emphasize latest speech history item when speech.silent is true", () => {
     const speechHistory = [
