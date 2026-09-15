@@ -44,7 +44,7 @@
     "@playwright/test": "^1.61.1",
     "@types/bun": "latest",
     "@types/jsdom": "^30.0.0",
-    "@types/node": "^24.12.3",
+    "@types/node": "^26.2.0",
     "jsdom": "^30.0.1",
     "react": "^19.2.8",
     "tsx": "^4.21.0",
