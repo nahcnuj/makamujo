@@ -29,6 +29,7 @@ export class GameplayApplicationService {
   #isSpeechable: () => boolean;
   #notifyGameStateChange: () => void;
   #speech: SpeechPort | undefined;
+  #talkModel: TalkModelPort | undefined;
   #vigilantRecords: ScoreRecords | undefined;
   #vigilantStored: StoredHighscores | undefined;
   #vigilantSlotKey: string | undefined;
