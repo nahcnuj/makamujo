@@ -2,7 +2,7 @@ import { Games } from "../../lib/Agent/games";
 import { HighlightOnChange } from "../agt-compat";
 import { useAgentContext } from "../contexts/AgentContext";
 
-const formatDuration = (d: Date) =>
+const _formatDuration = (d: Date) =>
   `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}:${d.getSeconds().toString().padStart(2, "0")}`;
 // // Not implemented on an OBS browser...
 // new Intl.DurationFormat('ja-JP', {
