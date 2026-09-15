@@ -19,11 +19,11 @@ describe.each<[[string, number][], [number, string][]]>([
       [6, "c"],
     ],
   ],
-])("choose a word from weighted candidates: %o", (cands: [
-  string,
-  number,
-][], cases) => {
-  test.each(cases)("w = %p -> %p", (w, want) => {
-    expect(choose(cands, w)).toBe(want);
-  });
-});
+])(
+  "choose a word from weighted candidates: %o",
+  (cands: [string, number][], cases) => {
+    test.each(cases)("w = %p -> %p", (w, want) => {
+      expect(choose(cands, w)).toBe(want);
+    });
+  },
+);
