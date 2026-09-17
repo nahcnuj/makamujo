@@ -41,7 +41,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13",
-    "@playwright/test": "^1.61.1",
+    "@playwright/test": "^1.63.0",
     "@types/bun": "latest",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^26.5.1",
