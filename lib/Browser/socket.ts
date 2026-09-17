@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import type { Socket } from "node:net";
-import { join, resolve, sep } from "node:path";
+import { basename, join, resolve, sep } from "node:path";
 import type { Action, State } from "automated-gameplay-transmitter";
 import {
   createReceiver as receiver,
@@ -12,28 +12,33 @@ if (!existsSync(unixSocketDir)) {
   mkdirSync(unixSocketDir, { recursive: true });
 }
 
+/** Socket file names allowed under `var/` (no separators / traversal). */
+const IPC_SOCKET_BASENAME = /^[\w.-]+\.sock$/;
+
 const isWindowsNamedPipe = (path: string): boolean =>
   process.platform === "win32" && /^\\\\\.\\pipe\\[A-Za-z0-9._-]+$/.test(path);
 
 /**
- * Resolve an IPC filesystem path under `var/`. Returns undefined when the path
- * would escape that directory. Uses resolve + startsWith (CodeQL barrier).
+ * Rebuild an IPC path as `var/<basename>` so FS APIs never see the raw
+ * user/env string. Returns undefined when the basename is not an allowlisted
+ * `*.sock` name.
  */
-const resolveIpcFilesystemPath = (path: string): string | undefined => {
+const rebuildIpcPathUnderVar = (path: string): string | undefined => {
   if (!path || path.includes("\0")) return undefined;
-  const resolvedVarDir = resolve(unixSocketDir);
-  const resolvedPath = resolve(path);
-  if (resolvedPath === resolvedVarDir) return resolvedPath;
-  const prefix = resolvedVarDir.endsWith(sep)
-    ? resolvedVarDir
-    : `${resolvedVarDir}${sep}`;
-  if (!resolvedPath.startsWith(prefix)) return undefined;
-  return resolvedPath;
+  const base = basename(path);
+  if (!IPC_SOCKET_BASENAME.test(base)) return undefined;
+  const rootPrefix = `${resolve(unixSocketDir)}${sep}`;
+  const filePath = resolve(unixSocketDir, base);
+  // Positive startsWith branch is the CodeQL containment barrier.
+  if (filePath.startsWith(rootPrefix)) {
+    return filePath;
+  }
+  return undefined;
 };
 
 const assertSafeIpcPath = (path: string): string => {
   if (isWindowsNamedPipe(path)) return path;
-  const safePath = resolveIpcFilesystemPath(path);
+  const safePath = rebuildIpcPathUnderVar(path);
   if (!safePath) {
     throw new Error(`Unsafe IPC path: ${path}`);
   }
@@ -44,7 +49,7 @@ const resolveDefaultSocketPath = (): string => {
   const fromEnv = process.env.MAKAMUJO_IPC_PATH;
   if (fromEnv) {
     if (isWindowsNamedPipe(fromEnv)) return fromEnv;
-    const safePath = resolveIpcFilesystemPath(fromEnv);
+    const safePath = rebuildIpcPathUnderVar(fromEnv);
     if (safePath) return safePath;
     console.warn(
       "[WARN] Ignoring MAKAMUJO_IPC_PATH outside project var/:",
@@ -67,23 +72,23 @@ export const createSenderWithPath = (path: string) =>
  * succeeds even when the previous process exited without cleaning up.
  * On Windows named pipes do not leave a file on disk, so this is a no-op.
  *
- * FS ops run only after resolve + startsWith against `var/` (CodeQL barrier).
+ * Rebuilds `var/<basename>` from a fixed root; FS ops run only inside a
+ * positive `startsWith(varPrefix)` branch (CodeQL path-injection barrier).
  */
-const removeStaleSocketFile = (path: string) => {
+export const removeStaleUnixIpcSocket = (path: string): void => {
   if (process.platform === "win32" || !path || path.includes("\0")) return;
-  const resolvedVarDir = resolve(unixSocketDir);
-  const resolvedPath = resolve(path);
-  const prefix = resolvedVarDir.endsWith(sep)
-    ? resolvedVarDir
-    : `${resolvedVarDir}${sep}`;
-  if (resolvedPath !== resolvedVarDir && !resolvedPath.startsWith(prefix)) {
-    return;
-  }
-  if (existsSync(resolvedPath)) {
-    try {
-      unlinkSync(resolvedPath);
-    } catch {
-      /* best-effort */
+  const base = basename(path);
+  if (!IPC_SOCKET_BASENAME.test(base)) return;
+
+  const rootPrefix = `${resolve(unixSocketDir)}${sep}`;
+  const filePath = resolve(unixSocketDir, base);
+  if (filePath.startsWith(rootPrefix)) {
+    if (existsSync(filePath)) {
+      try {
+        unlinkSync(filePath);
+      } catch {
+        /* best-effort */
+      }
     }
   }
 };
@@ -95,7 +100,7 @@ const rawCreateReceiver = receiver<State, Action.Action>(defaultSocketPath);
  * does not throw EADDRINUSE.
  */
 export const createReceiver = (solve: (state: State) => Action.Action) => {
-  removeStaleSocketFile(defaultSocketPath);
+  removeStaleUnixIpcSocket(defaultSocketPath);
   return rawCreateReceiver(solve);
 };
 
@@ -103,7 +108,7 @@ export const createReceiverWithPath = (path: string) => {
   const safePath = assertSafeIpcPath(path);
   const fn = receiver<State, Action.Action>(safePath);
   return (solve: (state: State) => Action.Action) => {
-    removeStaleSocketFile(safePath);
+    removeStaleUnixIpcSocket(safePath);
     return fn(solve);
   };
 };

@@ -46,8 +46,8 @@ const listAllowedExecutableRoots = (): string[] => {
  * Priority: provided arg > CHROMIUM_EXECUTABLE_PATH env
  * Returns undefined if no valid executable (Playwright will use bundled).
  *
- * Only absolute paths under an allowlisted root are accepted. FS access happens
- * only inside a resolve+startsWith success branch (CodeQL path-injection barrier).
+ * FS probes run only inside a positive `startsWith(rootPrefix)` branch — the
+ * containment shape CodeQL recognizes for js/path-injection.
  */
 export function resolveExecutablePath(provided?: string): string | undefined {
   const raw = provided || process.env.CHROMIUM_EXECUTABLE_PATH;
@@ -56,12 +56,12 @@ export function resolveExecutablePath(provided?: string): string | undefined {
   }
   const resolved = resolve(raw);
   for (const root of listAllowedExecutableRoots()) {
-    const resolvedRoot = resolve(root);
-    const prefix = resolvedRoot.endsWith(sep)
-      ? resolvedRoot
-      : `${resolvedRoot}${sep}`;
-    if (resolved === resolvedRoot || resolved.startsWith(prefix)) {
-      if (!existsSync(resolved)) return undefined;
+    const rootPrefix = `${resolve(root)}${sep}`;
+    // Positive startsWith only (no === / negated early-return): barrier for CodeQL.
+    if (resolved.startsWith(rootPrefix)) {
+      if (!existsSync(resolved)) {
+        return undefined;
+      }
       return resolved;
     }
   }
