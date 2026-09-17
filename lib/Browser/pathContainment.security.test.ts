@@ -18,10 +18,10 @@ describe("resolveExecutablePath containment", () => {
   });
 
   it("denies an existing path outside allowlisted roots", () => {
-    // System binaries sit outside our allowlist (homedir/tmpdir/exec dir/…).
+    // Literal system paths (not env-derived) sit outside our allowlist.
     const outside =
       process.platform === "win32"
-        ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "cmd.exe")
+        ? "C:\\Windows\\System32\\cmd.exe"
         : "/etc/passwd";
     expect(existsSync(outside)).toBe(true);
     expect(resolveExecutablePath(outside)).toBeUndefined();
