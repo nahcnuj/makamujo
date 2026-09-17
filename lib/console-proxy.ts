@@ -110,49 +110,55 @@ const sanitizeBroadcastingHost = (host: string): string => {
   if (LOOPBACK_HOSTS.has(normalized)) {
     return normalized === "::1" ? "127.0.0.1" : normalized;
   }
-  return "127.0.0.1";
+  throw new Error(
+    `Broadcasting host must be loopback (localhost/127.0.0.1), got: ${host}`,
+  );
 };
 
 const sanitizeBroadcastingPort = (port: string | number): string => {
   const parsed =
     typeof port === "number" ? port : Number.parseInt(String(port), 10);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
-    return "7777";
+    throw new Error(`Broadcasting port must be 1–65535, got: ${port}`);
   }
   return String(parsed);
 };
 
-let BROADCASTING_HOST = sanitizeBroadcastingHost(
-  process.env.BROADCASTING_HOST ?? "localhost",
-);
-let BROADCASTING_PORT = sanitizeBroadcastingPort(
-  process.env.BROADCASTING_PORT ?? "7777",
-);
+const readInitialBroadcastingHost = (): string => {
+  try {
+    return sanitizeBroadcastingHost(
+      process.env.BROADCASTING_HOST ?? "localhost",
+    );
+  } catch {
+    console.warn("[WARN] Invalid BROADCASTING_HOST; falling back to 127.0.0.1");
+    return "127.0.0.1";
+  }
+};
+
+const readInitialBroadcastingPort = (): string => {
+  try {
+    return sanitizeBroadcastingPort(process.env.BROADCASTING_PORT ?? "7777");
+  } catch {
+    console.warn("[WARN] Invalid BROADCASTING_PORT; falling back to 7777");
+    return "7777";
+  }
+};
+
+let BROADCASTING_HOST = readInitialBroadcastingHost();
+let BROADCASTING_PORT = readInitialBroadcastingPort();
 
 /**
- * Ensure an upstream proxy URL targets only the configured loopback broadcasting
- * server. Forces hostname/port after parsing so user-controlled path/query cannot
- * redirect the request (SSRF).
+ * Build an upstream URL from the validated loopback target only.
+ * Path/query may be caller-controlled; host/port never are (SSRF barrier).
  */
-export const toSafeLoopbackProxyUrl = (
-  urlString: string,
-  fallbackPath: string,
+export const buildBroadcastingUrl = (
+  pathname: string,
+  search: string = "",
 ): string => {
-  let parsed: URL;
-  try {
-    parsed = new URL(urlString);
-  } catch {
-    parsed = new URL(
-      fallbackPath,
-      `http://${BROADCASTING_HOST}:${BROADCASTING_PORT}`,
-    );
-  }
-  parsed.protocol = "http:";
-  parsed.hostname = BROADCASTING_HOST;
-  parsed.port = BROADCASTING_PORT;
-  parsed.username = "";
-  parsed.password = "";
-  return parsed.toString();
+  const url = new URL(`http://${BROADCASTING_HOST}:${BROADCASTING_PORT}`);
+  url.pathname = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  url.search = search.startsWith("?") ? search.slice(1) : search;
+  return url.toString();
 };
 
 export function setBroadcastingTarget(host: string, port: string | number) {
@@ -176,30 +182,23 @@ export function buildProxyHeaders(req: Request, proxyBase: string) {
 }
 
 /** Upstream base URL is always the validated loopback broadcasting target. */
-export function computeProxyBase(_req?: Request) {
+export function computeProxyBase() {
   return `http://${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
 }
 
-export function computeProxyUrl(req: Request, proxyBase: string) {
+export function computeProxyUrl(req: Request, _proxyBase?: string) {
   let search = "";
   try {
     search = new URL(req.url, "http://127.0.0.1").search;
   } catch {
     search = "";
   }
-  return toSafeLoopbackProxyUrl(
-    `${proxyBase}/console/api/ws${search}`,
-    "/console/api/ws",
-  );
+  return buildBroadcastingUrl("/console/api/ws", search);
 }
 
-export async function fetchMetaSnapshot(proxyBase: string): Promise<any> {
+export async function fetchMetaSnapshot(_proxyBase?: string): Promise<any> {
   try {
-    const metaUrl = toSafeLoopbackProxyUrl(
-      `${proxyBase}/api/meta`,
-      "/api/meta",
-    );
-    const res = await fetch(metaUrl);
+    const res = await fetch(buildBroadcastingUrl("/api/meta"));
     return await res.json().catch(() => ({}));
   } catch (err) {
     try {
@@ -365,7 +364,14 @@ export async function proxyConsoleApiWsRequest(
   proxyUrl: string,
   proxyHeaders: Headers,
 ): Promise<Response> {
-  const safeProxyUrl = toSafeLoopbackProxyUrl(proxyUrl, "/console/api/ws");
+  // Rebuild from validated host/port so a caller-supplied URL cannot redirect us.
+  let search = "";
+  try {
+    search = new URL(proxyUrl).search;
+  } catch {
+    search = "";
+  }
+  const safeProxyUrl = buildBroadcastingUrl("/console/api/ws", search);
 
   // HEAD handling: probe upstream with GET and return headers only
   if ((req.method || "GET").toUpperCase() === "HEAD") {

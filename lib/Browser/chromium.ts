@@ -5,8 +5,8 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import type { Browser } from "automated-gameplay-transmitter";
 import type { ViewportSize } from "playwright";
@@ -16,36 +16,54 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
 export const chromium = $_.use(StealthPlugin());
 
-/**
- * Allow only simple absolute filesystem paths for Chromium executables so
- * env/CLI input cannot inject unexpected path expressions.
- */
-const isSafeExecutablePath = (candidate: string): boolean => {
-  if (!candidate || candidate.includes("\0") || candidate.includes("..")) {
-    return false;
+/** Roots under which Chromium/browser binaries may be resolved. */
+const listAllowedExecutableRoots = (): string[] => {
+  const roots = [
+    dirname(process.execPath),
+    homedir(),
+    tmpdir(),
+    "/usr",
+    "/opt",
+    "/nix",
+    "/Applications",
+  ];
+  if (process.platform === "win32") {
+    for (const key of [
+      "ProgramFiles",
+      "ProgramFiles(x86)",
+      "ProgramW6432",
+      "LOCALAPPDATA",
+    ] as const) {
+      const value = process.env[key];
+      if (value) roots.push(value);
+    }
   }
-  // Absolute path on POSIX (/...) or Windows (C:\... / \\server\...)
-  if (
-    !(
-      candidate.startsWith("/") ||
-      /^[A-Za-z]:[\\/]/.test(candidate) ||
-      candidate.startsWith("\\\\")
-    )
-  ) {
-    return false;
-  }
-  return /^[A-Za-z0-9_./\\: +@%-]+$/.test(candidate);
+  return roots;
 };
 
 /**
  * Resolve which executable to use for Chromium.
  * Priority: provided arg > CHROMIUM_EXECUTABLE_PATH env
  * Returns undefined if no valid executable (Playwright will use bundled).
+ *
+ * Only absolute paths under an allowlisted root are accepted. FS access happens
+ * only inside a resolve+startsWith success branch (CodeQL path-injection barrier).
  */
 export function resolveExecutablePath(provided?: string): string | undefined {
-  const candidate = provided || process.env.CHROMIUM_EXECUTABLE_PATH;
-  if (candidate && isSafeExecutablePath(candidate) && existsSync(candidate)) {
-    return candidate;
+  const raw = provided || process.env.CHROMIUM_EXECUTABLE_PATH;
+  if (!raw || raw.includes("\0") || !isAbsolute(raw)) {
+    return undefined;
+  }
+  const resolved = resolve(raw);
+  for (const root of listAllowedExecutableRoots()) {
+    const resolvedRoot = resolve(root);
+    const prefix = resolvedRoot.endsWith(sep)
+      ? resolvedRoot
+      : `${resolvedRoot}${sep}`;
+    if (resolved === resolvedRoot || resolved.startsWith(prefix)) {
+      if (!existsSync(resolved)) return undefined;
+      return resolved;
+    }
   }
   return undefined;
 }

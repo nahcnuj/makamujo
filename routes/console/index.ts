@@ -1,16 +1,17 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { relative, resolve } from "node:path";
 import { Hono } from "hono";
 import { createBunWebSocket } from "hono/bun";
 import {
+  buildBroadcastingUrl,
   buildProxyHeaders,
   computeProxyBase,
   computeProxyUrl,
   fetchMetaSnapshot,
   forwardSSEEventsToSink,
   proxyConsoleApiWsRequest,
-  toSafeLoopbackProxyUrl,
 } from "../../lib/console-proxy";
+import { resolveInsideRoot } from "../../lib/security/paths";
 import { compileTailwindCss, createCssResponse } from "../../lib/tailwind";
 import * as agentState from "./api/agent-state";
 import * as speechHistory from "./api/speech-history";
@@ -21,25 +22,9 @@ export { setBroadcastingTarget } from "../../lib/console-proxy";
 const PROJECT_ROOT = resolve(process.cwd());
 const DEFAULT_CONSOLE_BUILD_PATH = resolve(PROJECT_ROOT, "var/console/build");
 
-/**
- * Resolve CONSOLE_BUILD_PATH only when it stays inside the project tree.
- */
-const resolveConsoleBuildPath = (envPath: string | undefined): string => {
-  if (!envPath) return DEFAULT_CONSOLE_BUILD_PATH;
-  if (envPath.includes("\0") || envPath.includes("..")) {
-    return DEFAULT_CONSOLE_BUILD_PATH;
-  }
-  const resolved = resolve(PROJECT_ROOT, envPath);
-  const rel = relative(PROJECT_ROOT, resolved);
-  if (rel.startsWith(`..${sep}`) || rel === ".." || isAbsolute(rel)) {
-    return DEFAULT_CONSOLE_BUILD_PATH;
-  }
-  return resolved;
-};
-
-const CONSOLE_BUILD_PATH = resolveConsoleBuildPath(
-  process.env.CONSOLE_BUILD_PATH,
-);
+const CONSOLE_BUILD_PATH =
+  resolveInsideRoot(PROJECT_ROOT, process.env.CONSOLE_BUILD_PATH ?? "") ??
+  DEFAULT_CONSOLE_BUILD_PATH;
 const CONSOLE_SOURCE_HTML_PATH = resolve(
   PROJECT_ROOT,
   "console/src/index.html",
@@ -167,8 +152,8 @@ export const app = new Hono()
         );
       } catch {}
       try {
-        const proxyBase = computeProxyBase(c.req.raw);
-        const proxyUrl = computeProxyUrl(c.req.raw, proxyBase);
+        const proxyBase = computeProxyBase();
+        const proxyUrl = computeProxyUrl(c.req.raw);
         try {
           console.log("[DEBUG] /console/api/ws proxy ->", {
             url: proxyUrl,
@@ -193,8 +178,7 @@ export const app = new Hono()
         return new Response("proxy failed", { status: 502 });
       }
     },
-    upgradeWebSocket((c) => {
-      const proxyBase = computeProxyBase(c.req.raw);
+    upgradeWebSocket((_c) => {
       let cancelForward: (() => void) | null = null;
 
       return {
@@ -206,10 +190,7 @@ export const app = new Hono()
                   "[DEBUG] websocket upgrade accepted; starting SSE->WS forwarder",
                 );
               } catch {}
-              const sseUrl = toSafeLoopbackProxyUrl(
-                `${proxyBase}/console/api/ws`,
-                "/console/api/ws",
-              );
+              const sseUrl = buildBroadcastingUrl("/console/api/ws");
               try {
                 console.log("[DEBUG] opening upstream SSE fetch ->", sseUrl);
               } catch {}
@@ -232,9 +213,7 @@ export const app = new Hono()
                   );
                 } catch {}
                 try {
-                  const metaJson = await fetchMetaSnapshot(proxyBase).catch(
-                    () => ({}),
-                  );
+                  const metaJson = await fetchMetaSnapshot().catch(() => ({}));
                   try {
                     ws.send(JSON.stringify(metaJson));
                   } catch {}
@@ -246,7 +225,7 @@ export const app = new Hono()
               }
 
               try {
-                const metaJson = await fetchMetaSnapshot(proxyBase);
+                const metaJson = await fetchMetaSnapshot();
                 try {
                   ws.send(JSON.stringify(metaJson));
                 } catch {}

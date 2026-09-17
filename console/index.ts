@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { resolve } from "node:path";
 import { serve } from "bun";
 import {
   createOuterConsoleWebSocketHandler,
@@ -19,6 +19,7 @@ import {
   isConsoleIPRestrictionEnabled,
   resolveConsoleBasicAuthPassword,
 } from "../lib/domain/console/access";
+import { resolveInsideRoot } from "../lib/security/paths";
 import * as consoleRoutes from "../routes/console/index";
 
 const PROJECT_ROOT = resolve(process.cwd());
@@ -28,23 +29,12 @@ const DEFAULT_CONSOLE_CERT_PATH = resolve(
 );
 const DEFAULT_CONSOLE_KEY_PATH = resolve(PROJECT_ROOT, "var/tls/privkey.pem");
 
-/**
- * TLS material must resolve under the project tree (or an absolute path that
- * stays under PROJECT_ROOT after resolve).
- */
 const resolveProjectPath = (
   candidate: string | undefined,
   fallback: string,
 ): string => {
-  if (!candidate || candidate.includes("\0") || candidate.includes("..")) {
-    return fallback;
-  }
-  const resolved = resolve(PROJECT_ROOT, candidate);
-  const rel = relative(PROJECT_ROOT, resolved);
-  if (rel.startsWith(`..${sep}`) || rel === ".." || isAbsolute(rel)) {
-    return fallback;
-  }
-  return resolved;
+  if (!candidate) return fallback;
+  return resolveInsideRoot(PROJECT_ROOT, candidate) ?? fallback;
 };
 
 const consoleCertPath = resolveProjectPath(
