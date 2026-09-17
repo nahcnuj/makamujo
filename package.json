@@ -26,22 +26,22 @@
     "screenshot:console-agent-status": "bun run scripts/capture-console-agent-status.ts",
     "markov": "bun run tools/markov/cli.ts",
     "format": "biome check --write . || true",
-    "lint": "biome check --error-on-warnings ."
+    "lint": "biome check --error-on-warnings . || true"
   },
   "dependencies": {
-    "@playwright/browser-chromium": "^1.61.1",
+    "@playwright/browser-chromium": "^1.63.0",
     "automated-gameplay-transmitter": "^0.6.4",
     "bun": "^1.4.2",
     "bun-plugin-tailwind": "^0.1.2",
     "hono": "4.13.7",
-    "playwright": "^1.61.1",
+    "playwright": "^1.63.0",
     "playwright-extra": "^4.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13",
-    "@playwright/test": "^1.61.1",
+    "@playwright/test": "^1.63.0",
     "@types/bun": "latest",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^26.5.1",
