@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 /**
@@ -12,7 +12,7 @@ import { chromium } from "playwright";
 process.env.DISPLAY = process.env.DISPLAY || ":10";
 
 const url = process.env.OVERLAY_URL || "http://127.0.0.1:7777/";
-const userDataDir = join(tmpdir(), `makamujo-overlay-${process.pid}`);
+const userDataDir = mkdtempSync(join(tmpdir(), "makamujo-overlay-"));
 mkdirSync(join(userDataDir, "Default"), { recursive: true });
 writeFileSync(
   join(userDataDir, "Default", "Preferences"),
@@ -20,6 +20,7 @@ writeFileSync(
     translate: { enabled: false },
     browser: { translate: { enabled: false } },
   }),
+  { mode: 0o600 },
 );
 
 console.log(

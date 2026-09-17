@@ -1,6 +1,9 @@
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { relative, resolve } from "node:path";
 import { Hono } from "hono";
 import { createBunWebSocket } from "hono/bun";
 import {
+  buildBroadcastingUrl,
   buildProxyHeaders,
   computeProxyBase,
   computeProxyUrl,
@@ -8,20 +11,22 @@ import {
   forwardSSEEventsToSink,
   proxyConsoleApiWsRequest,
 } from "../../lib/console-proxy";
-
-export { setBroadcastingTarget } from "../../lib/console-proxy";
-
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { relative, resolve } from "node:path";
+import { resolveInsideRoot } from "../../lib/security/paths";
 import { compileTailwindCss, createCssResponse } from "../../lib/tailwind";
 import * as agentState from "./api/agent-state";
 import * as speechHistory from "./api/speech-history";
 import robotsTxt from "./robots.txt";
 
+export { setBroadcastingTarget } from "../../lib/console-proxy";
+
+const PROJECT_ROOT = resolve(process.cwd());
+const DEFAULT_CONSOLE_BUILD_PATH = resolve(PROJECT_ROOT, "var/console/build");
+
 const CONSOLE_BUILD_PATH =
-  process.env.CONSOLE_BUILD_PATH ?? resolve(process.cwd(), "var/console/build");
+  resolveInsideRoot(PROJECT_ROOT, process.env.CONSOLE_BUILD_PATH ?? "") ??
+  DEFAULT_CONSOLE_BUILD_PATH;
 const CONSOLE_SOURCE_HTML_PATH = resolve(
-  process.cwd(),
+  PROJECT_ROOT,
   "console/src/index.html",
 );
 const CONSOLE_PUBLIC_PATH = "/console/";
@@ -147,8 +152,8 @@ export const app = new Hono()
         );
       } catch {}
       try {
-        const proxyBase = computeProxyBase(c.req.raw);
-        const proxyUrl = computeProxyUrl(c.req.raw, proxyBase);
+        const proxyBase = computeProxyBase();
+        const proxyUrl = computeProxyUrl(c.req.raw);
         try {
           console.log("[DEBUG] /console/api/ws proxy ->", {
             url: proxyUrl,
@@ -173,8 +178,7 @@ export const app = new Hono()
         return new Response("proxy failed", { status: 502 });
       }
     },
-    upgradeWebSocket((c) => {
-      const proxyBase = computeProxyBase(c.req.raw);
+    upgradeWebSocket((_c) => {
       let cancelForward: (() => void) | null = null;
 
       return {
@@ -186,7 +190,7 @@ export const app = new Hono()
                   "[DEBUG] websocket upgrade accepted; starting SSE->WS forwarder",
                 );
               } catch {}
-              const sseUrl = `${proxyBase}/console/api/ws`;
+              const sseUrl = buildBroadcastingUrl("/console/api/ws");
               try {
                 console.log("[DEBUG] opening upstream SSE fetch ->", sseUrl);
               } catch {}
@@ -209,9 +213,7 @@ export const app = new Hono()
                   );
                 } catch {}
                 try {
-                  const metaJson = await fetchMetaSnapshot(proxyBase).catch(
-                    () => ({}),
-                  );
+                  const metaJson = await fetchMetaSnapshot().catch(() => ({}));
                   try {
                     ws.send(JSON.stringify(metaJson));
                   } catch {}
@@ -223,7 +225,7 @@ export const app = new Hono()
               }
 
               try {
-                const metaJson = await fetchMetaSnapshot(proxyBase);
+                const metaJson = await fetchMetaSnapshot();
                 try {
                   ws.send(JSON.stringify(metaJson));
                 } catch {}

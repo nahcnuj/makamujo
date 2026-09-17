@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import type { Socket } from "node:net";
-import { join } from "node:path";
+import { basename, join, resolve, sep } from "node:path";
 import type { Action, State } from "automated-gameplay-transmitter";
 import {
   createReceiver as receiver,
@@ -12,27 +12,83 @@ if (!existsSync(unixSocketDir)) {
   mkdirSync(unixSocketDir, { recursive: true });
 }
 
-export const defaultSocketPath =
-  process.env.MAKAMUJO_IPC_PATH ??
-  (process.platform === "win32"
+/** Socket file names allowed under `var/` (no separators / traversal). */
+const IPC_SOCKET_BASENAME = /^[\w.-]+\.sock$/;
+
+const isWindowsNamedPipe = (path: string): boolean =>
+  process.platform === "win32" && /^\\\\\.\\pipe\\[A-Za-z0-9._-]+$/.test(path);
+
+/**
+ * Rebuild an IPC path as `var/<basename>` so FS APIs never see the raw
+ * user/env string. Returns undefined when the basename is not an allowlisted
+ * `*.sock` name.
+ */
+const rebuildIpcPathUnderVar = (path: string): string | undefined => {
+  if (!path || path.includes("\0")) return undefined;
+  const base = basename(path);
+  if (!IPC_SOCKET_BASENAME.test(base)) return undefined;
+  const rootPrefix = `${resolve(unixSocketDir)}${sep}`;
+  const filePath = resolve(unixSocketDir, base);
+  // Positive startsWith branch is the CodeQL containment barrier.
+  if (filePath.startsWith(rootPrefix)) {
+    return filePath;
+  }
+  return undefined;
+};
+
+const assertSafeIpcPath = (path: string): string => {
+  if (isWindowsNamedPipe(path)) return path;
+  const safePath = rebuildIpcPathUnderVar(path);
+  if (!safePath) {
+    throw new Error(`Unsafe IPC path: ${path}`);
+  }
+  return safePath;
+};
+
+const resolveDefaultSocketPath = (): string => {
+  const fromEnv = process.env.MAKAMUJO_IPC_PATH;
+  if (fromEnv) {
+    if (isWindowsNamedPipe(fromEnv)) return fromEnv;
+    const safePath = rebuildIpcPathUnderVar(fromEnv);
+    if (safePath) return safePath;
+    console.warn(
+      "[WARN] Ignoring MAKAMUJO_IPC_PATH outside project var/:",
+      fromEnv,
+    );
+  }
+  return process.platform === "win32"
     ? "\\\\.\\pipe\\makamujo-ipc"
-    : join(unixSocketDir, "unix.sock"));
+    : join(unixSocketDir, "unix.sock");
+};
+
+export const defaultSocketPath = resolveDefaultSocketPath();
 
 export const createSender = sender<State, Action.Action>(defaultSocketPath);
 export const createSenderWithPath = (path: string) =>
-  sender<State, Action.Action>(path);
+  sender<State, Action.Action>(assertSafeIpcPath(path));
 
 /**
  * Removes a stale Unix socket file so that the next `server.listen()` call
  * succeeds even when the previous process exited without cleaning up.
  * On Windows named pipes do not leave a file on disk, so this is a no-op.
+ *
+ * Rebuilds `var/<basename>` from a fixed root; FS ops run only inside a
+ * positive `startsWith(varPrefix)` branch (CodeQL path-injection barrier).
  */
-const removeStaleSocketFile = (path: string) => {
-  if (process.platform !== "win32" && existsSync(path)) {
-    try {
-      unlinkSync(path);
-    } catch {
-      /* best-effort */
+export const removeStaleUnixIpcSocket = (path: string): void => {
+  if (process.platform === "win32" || !path || path.includes("\0")) return;
+  const base = basename(path);
+  if (!IPC_SOCKET_BASENAME.test(base)) return;
+
+  const rootPrefix = `${resolve(unixSocketDir)}${sep}`;
+  const filePath = resolve(unixSocketDir, base);
+  if (filePath.startsWith(rootPrefix)) {
+    if (existsSync(filePath)) {
+      try {
+        unlinkSync(filePath);
+      } catch {
+        /* best-effort */
+      }
     }
   }
 };
@@ -44,14 +100,15 @@ const rawCreateReceiver = receiver<State, Action.Action>(defaultSocketPath);
  * does not throw EADDRINUSE.
  */
 export const createReceiver = (solve: (state: State) => Action.Action) => {
-  removeStaleSocketFile(defaultSocketPath);
+  removeStaleUnixIpcSocket(defaultSocketPath);
   return rawCreateReceiver(solve);
 };
 
 export const createReceiverWithPath = (path: string) => {
-  const fn = receiver<State, Action.Action>(path);
+  const safePath = assertSafeIpcPath(path);
+  const fn = receiver<State, Action.Action>(safePath);
   return (solve: (state: State) => Action.Action) => {
-    removeStaleSocketFile(path);
+    removeStaleUnixIpcSocket(safePath);
     return fn(solve);
   };
 };
@@ -74,6 +131,7 @@ export const createRetrySenderWithPath =
     run: (action: Action.Action) => Promise<void>,
     onConnect?: (send: (state: State) => void) => void,
   ): Promise<(state: State) => void> => {
+    const safePath = assertSafeIpcPath(path);
     const { createConnection } = await import("node:net");
 
     let currentConn: Socket | null = null;
@@ -84,14 +142,14 @@ export const createRetrySenderWithPath =
         try {
           currentConn.write(JSON.stringify(state, null, 0));
         } catch (err) {
-          console.warn("[WARN]", "socket write failed", path, err);
+          console.warn("[WARN]", "socket write failed", safePath, err);
         }
       }
     };
 
     const connect = async (): Promise<void> => {
       while (true) {
-        const conn = createConnection(path);
+        const conn = createConnection(safePath);
 
         const result = await new Promise<"connected" | "failed">((resolve) => {
           conn.once("connect", () => resolve("connected"));

@@ -55,6 +55,25 @@ const asNonNegInt = (value: unknown): number | undefined => {
   return Math.trunc(value);
 };
 
+/** Reject prototype-polluting keys from untrusted JSON slot maps. */
+const isSafeSlotKey = (key: string): boolean =>
+  key !== "__proto__" && key !== "constructor" && key !== "prototype";
+
+/**
+ * Build a plain slots object via Map so untrusted keys never write through
+ * Object.prototype (js/remote-property-injection).
+ */
+const slotsFromEntries = (
+  entries: Iterable<[string, SlotScoreEntry]>,
+): Record<string, SlotScoreEntry> => {
+  const slotMap = new Map<string, SlotScoreEntry>();
+  for (const [key, entry] of entries) {
+    if (!key || !isSafeSlotKey(key)) continue;
+    slotMap.set(key, entry);
+  }
+  return Object.fromEntries(slotMap);
+};
+
 export const parseStoredHighscores = (raw: string): StoredHighscores => {
   const empty = emptyStoredHighscores();
   try {
@@ -64,7 +83,7 @@ export const parseStoredHighscores = (raw: string): StoredHighscores => {
       // legacy single-field file from earlier version
     };
     const allTimeBest = asNonNegInt(parsed.allTimeBest) ?? 0;
-    const slots: Record<string, SlotScoreEntry> = {};
+    const slotEntries: Array<[string, SlotScoreEntry]> = [];
     if (
       parsed.slots !== null &&
       typeof parsed.slots === "object" &&
@@ -78,10 +97,10 @@ export const parseStoredHighscores = (raw: string): StoredHighscores => {
         const sessionBest = asNonNegInt(e.sessionBest);
         const updatedAt = asNonNegInt(e.updatedAt) ?? 0;
         if (sessionBest === undefined) continue;
-        slots[key] = { sessionBest, updatedAt };
+        slotEntries.push([key, { sessionBest, updatedAt }]);
       }
     }
-    return { allTimeBest, slots };
+    return { allTimeBest, slots: slotsFromEntries(slotEntries) };
   } catch {
     return empty;
   }
@@ -96,23 +115,22 @@ export const pruneSlots = (
   maxSlots: number = MAX_STORED_SLOTS,
   keepKey?: string,
 ): Record<string, SlotScoreEntry> => {
-  const entries = Object.entries(slots);
-  if (entries.length <= maxSlots) return slots;
+  const entries = Object.entries(slots).filter(([key]) => isSafeSlotKey(key));
+  if (entries.length <= maxSlots) {
+    return slotsFromEntries(entries);
+  }
 
   entries.sort((a, b) => b[1].updatedAt - a[1].updatedAt);
-  const next: Record<string, SlotScoreEntry> = {};
-  for (const [key, entry] of entries.slice(0, maxSlots)) {
-    next[key] = entry;
-  }
-  if (keepKey && slots[keepKey] && !next[keepKey]) {
+  const kept = entries.slice(0, maxSlots);
+  const keepEntry =
+    keepKey && isSafeSlotKey(keepKey) ? slots[keepKey] : undefined;
+  if (keepKey && keepEntry && !kept.some(([key]) => key === keepKey)) {
     // Ensure the active slot is never dropped when pruning.
-    const dropKey = Object.entries(next).sort(
-      (a, b) => a[1].updatedAt - b[1].updatedAt,
-    )[0]?.[0];
-    if (dropKey) delete next[dropKey];
-    next[keepKey] = slots[keepKey]!;
+    kept.sort((a, b) => a[1].updatedAt - b[1].updatedAt);
+    kept.shift();
+    kept.push([keepKey, keepEntry]);
   }
-  return next;
+  return slotsFromEntries(kept);
 };
 
 export const serializeStoredHighscores = (
@@ -165,6 +183,10 @@ export const mergeRecordsIntoStored = (
     if (allTimeBest === stored.allTimeBest) return stored;
     return { ...stored, allTimeBest };
   }
+  if (!isSafeSlotKey(slotKey)) {
+    if (allTimeBest === stored.allTimeBest) return stored;
+    return { ...stored, allTimeBest };
+  }
   const prev = stored.slots[slotKey];
   const sessionBest = Math.max(prev?.sessionBest ?? 0, records.sessionBest);
   const unchanged =
@@ -174,10 +196,10 @@ export const mergeRecordsIntoStored = (
   if (unchanged) return stored;
   return {
     allTimeBest,
-    slots: {
-      ...stored.slots,
-      [slotKey]: { sessionBest, updatedAt: nowMs },
-    },
+    slots: slotsFromEntries([
+      ...Object.entries(stored.slots),
+      [slotKey, { sessionBest, updatedAt: nowMs }],
+    ]),
   };
 };
 

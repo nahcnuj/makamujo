@@ -5,8 +5,8 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import type { Browser } from "automated-gameplay-transmitter";
 import type { ViewportSize } from "playwright";
@@ -16,15 +16,54 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
 export const chromium = $_.use(StealthPlugin());
 
+/** Roots under which Chromium/browser binaries may be resolved. */
+const listAllowedExecutableRoots = (): string[] => {
+  const roots = [
+    dirname(process.execPath),
+    homedir(),
+    tmpdir(),
+    "/usr",
+    "/opt",
+    "/nix",
+    "/Applications",
+  ];
+  if (process.platform === "win32") {
+    for (const key of [
+      "ProgramFiles",
+      "ProgramFiles(x86)",
+      "ProgramW6432",
+      "LOCALAPPDATA",
+    ] as const) {
+      const value = process.env[key];
+      if (value) roots.push(value);
+    }
+  }
+  return roots;
+};
+
 /**
  * Resolve which executable to use for Chromium.
  * Priority: provided arg > CHROMIUM_EXECUTABLE_PATH env
  * Returns undefined if no valid executable (Playwright will use bundled).
+ *
+ * FS probes run only inside a positive `startsWith(rootPrefix)` branch — the
+ * containment shape CodeQL recognizes for js/path-injection.
  */
 export function resolveExecutablePath(provided?: string): string | undefined {
-  const candidate = provided || process.env.CHROMIUM_EXECUTABLE_PATH;
-  if (candidate && existsSync(candidate)) {
-    return candidate;
+  const raw = provided || process.env.CHROMIUM_EXECUTABLE_PATH;
+  if (!raw || raw.includes("\0") || !isAbsolute(raw)) {
+    return undefined;
+  }
+  const resolved = resolve(raw);
+  for (const root of listAllowedExecutableRoots()) {
+    const rootPrefix = `${resolve(root)}${sep}`;
+    // Positive startsWith only (no === / negated early-return): barrier for CodeQL.
+    if (resolved.startsWith(rootPrefix)) {
+      if (!existsSync(resolved)) {
+        return undefined;
+      }
+      return resolved;
+    }
   }
   return undefined;
 }
@@ -167,7 +206,7 @@ export const create = async (
     process.env.GAME_HOME_URL?.trim() ||
     "https://www.nahcnuj.work/vigilant-fiesta/";
 
-  const userDataDir = join(tmpdir(), `makamujo-game-${process.pid}`);
+  const userDataDir = mkdtempSync(join(tmpdir(), "makamujo-game-"));
   mkdirSync(join(userDataDir, "Default"), { recursive: true });
   writeFileSync(
     join(userDataDir, "Default", "Preferences"),
@@ -175,6 +214,7 @@ export const create = async (
       translate: { enabled: false },
       browser: { translate: { enabled: false } },
     }),
+    { mode: 0o600 },
   );
 
   const effectiveExecutablePath = resolveExecutablePath(executablePath);
