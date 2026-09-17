@@ -89,6 +89,8 @@ static int cmd_store(const char *path)
 
 static int cmd_fetch(const char *path)
 {
+    if (!path_is_allowed(path))
+        return 1;
     int fd;
     uint64_t exp;
     unsigned char buf[MAX_DEK];
