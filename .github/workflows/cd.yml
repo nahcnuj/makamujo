@@ -64,7 +64,9 @@ jobs:
     needs: wait-for-ci
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    environment: prod
+    environment:
+      name: prod
+      url: https://live.nicovideo.jp/watch/user/14171889
     steps:
       - uses: actions/checkout@v7
 
