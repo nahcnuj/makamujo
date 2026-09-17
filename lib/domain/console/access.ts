@@ -33,8 +33,11 @@ export const isConsoleIPRestrictionEnabled = (
   nodeEnv: string | undefined = process.env.NODE_ENV,
 ): boolean => nodeEnv === "production";
 
+// Length is 64 (= 2^6). Index with a bit mask so the mapping stays unbiased
+// without a modulo on a non-literal length (js/biased-cryptographic-random).
 const BASIC_AUTH_PASSWORD_CHARS =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+const BASIC_AUTH_PASSWORD_INDEX_MASK = 63;
 
 /**
  * Generate a random console Basic-auth password (16 chars).
@@ -46,7 +49,7 @@ export const generateConsoleBasicAuthPassword = (
   Array.from(randomBytes)
     .map(
       (byte) =>
-        BASIC_AUTH_PASSWORD_CHARS[byte % BASIC_AUTH_PASSWORD_CHARS.length]!,
+        BASIC_AUTH_PASSWORD_CHARS[byte & BASIC_AUTH_PASSWORD_INDEX_MASK]!,
     )
     .join("");
 

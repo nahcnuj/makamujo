@@ -8,6 +8,7 @@
 #include <time.h>
 
 #define MAX_DEK 4096
+#define DEK_PATH_PREFIX "/dev/shm/"
 
 static int ttl(void)
 {
@@ -31,6 +32,25 @@ static void usage(const char *argv0)
     fprintf(stderr, "usage: %s available|store|fetch|delete|help [path]\n", argv0);
 }
 
+/**
+ * DEK files must live under /dev/shm/ with no path traversal.
+ * Rejects absolute escapes and ".." components (cpp/path-injection).
+ */
+static int path_is_allowed(const char *path)
+{
+    size_t prefix_len = sizeof(DEK_PATH_PREFIX) - 1;
+    const char *rest;
+
+    if (!path || !*path)
+        return 0;
+    if (strncmp(path, DEK_PATH_PREFIX, prefix_len) != 0)
+        return 0;
+    rest = path + prefix_len;
+    if (!*rest || strchr(rest, '/') != NULL || strstr(rest, "..") != NULL)
+        return 0;
+    return 1;
+}
+
 static int cmd_available(void)
 {
     return 0;
@@ -46,8 +66,8 @@ static int cmd_store(const char *path)
 
     if (n <= 0)
         die("empty DEK");
-    if (!path || !*path)
-        die("path required");
+    if (!path_is_allowed(path))
+        die("path required under /dev/shm/");
     unlink(path);
     fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
     if (fd < 0)
@@ -74,7 +94,7 @@ static int cmd_fetch(const char *path)
     unsigned char buf[MAX_DEK];
     ssize_t n;
 
-    if (!path || !*path)
+    if (!path_is_allowed(path))
         return 1;
     fd = open(path, O_RDONLY);
     if (fd < 0)
@@ -99,7 +119,7 @@ static int cmd_fetch(const char *path)
 
 static int cmd_delete(const char *path)
 {
-    if (path && *path)
+    if (path_is_allowed(path))
         unlink(path);
     return 0;
 }

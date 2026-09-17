@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { Hono } from "hono";
 import { createBunWebSocket } from "hono/bun";
 import {
@@ -7,21 +9,39 @@ import {
   fetchMetaSnapshot,
   forwardSSEEventsToSink,
   proxyConsoleApiWsRequest,
+  toSafeLoopbackProxyUrl,
 } from "../../lib/console-proxy";
-
-export { setBroadcastingTarget } from "../../lib/console-proxy";
-
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { relative, resolve } from "node:path";
 import { compileTailwindCss, createCssResponse } from "../../lib/tailwind";
 import * as agentState from "./api/agent-state";
 import * as speechHistory from "./api/speech-history";
 import robotsTxt from "./robots.txt";
 
-const CONSOLE_BUILD_PATH =
-  process.env.CONSOLE_BUILD_PATH ?? resolve(process.cwd(), "var/console/build");
+export { setBroadcastingTarget } from "../../lib/console-proxy";
+
+const PROJECT_ROOT = resolve(process.cwd());
+const DEFAULT_CONSOLE_BUILD_PATH = resolve(PROJECT_ROOT, "var/console/build");
+
+/**
+ * Resolve CONSOLE_BUILD_PATH only when it stays inside the project tree.
+ */
+const resolveConsoleBuildPath = (envPath: string | undefined): string => {
+  if (!envPath) return DEFAULT_CONSOLE_BUILD_PATH;
+  if (envPath.includes("\0") || envPath.includes("..")) {
+    return DEFAULT_CONSOLE_BUILD_PATH;
+  }
+  const resolved = resolve(PROJECT_ROOT, envPath);
+  const rel = relative(PROJECT_ROOT, resolved);
+  if (rel.startsWith(`..${sep}`) || rel === ".." || isAbsolute(rel)) {
+    return DEFAULT_CONSOLE_BUILD_PATH;
+  }
+  return resolved;
+};
+
+const CONSOLE_BUILD_PATH = resolveConsoleBuildPath(
+  process.env.CONSOLE_BUILD_PATH,
+);
 const CONSOLE_SOURCE_HTML_PATH = resolve(
-  process.cwd(),
+  PROJECT_ROOT,
   "console/src/index.html",
 );
 const CONSOLE_PUBLIC_PATH = "/console/";
@@ -186,7 +206,10 @@ export const app = new Hono()
                   "[DEBUG] websocket upgrade accepted; starting SSE->WS forwarder",
                 );
               } catch {}
-              const sseUrl = `${proxyBase}/console/api/ws`;
+              const sseUrl = toSafeLoopbackProxyUrl(
+                `${proxyBase}/console/api/ws`,
+                "/console/api/ws",
+              );
               try {
                 console.log("[DEBUG] opening upstream SSE fetch ->", sseUrl);
               } catch {}

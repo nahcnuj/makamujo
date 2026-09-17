@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { serve } from "bun";
 import {
   createOuterConsoleWebSocketHandler,
@@ -21,19 +21,48 @@ import {
 } from "../lib/domain/console/access";
 import * as consoleRoutes from "../routes/console/index";
 
-const consoleCertPath =
-  process.env.CONSOLE_TLS_CERT ??
-  resolve(process.cwd(), "var/tls/fullchain.pem");
-const consoleKeyPath =
-  process.env.CONSOLE_TLS_KEY ?? resolve(process.cwd(), "var/tls/privkey.pem");
+const PROJECT_ROOT = resolve(process.cwd());
+const DEFAULT_CONSOLE_CERT_PATH = resolve(
+  PROJECT_ROOT,
+  "var/tls/fullchain.pem",
+);
+const DEFAULT_CONSOLE_KEY_PATH = resolve(PROJECT_ROOT, "var/tls/privkey.pem");
+
+/**
+ * TLS material must resolve under the project tree (or an absolute path that
+ * stays under PROJECT_ROOT after resolve).
+ */
+const resolveProjectPath = (
+  candidate: string | undefined,
+  fallback: string,
+): string => {
+  if (!candidate || candidate.includes("\0") || candidate.includes("..")) {
+    return fallback;
+  }
+  const resolved = resolve(PROJECT_ROOT, candidate);
+  const rel = relative(PROJECT_ROOT, resolved);
+  if (rel.startsWith(`..${sep}`) || rel === ".." || isAbsolute(rel)) {
+    return fallback;
+  }
+  return resolved;
+};
+
+const consoleCertPath = resolveProjectPath(
+  process.env.CONSOLE_TLS_CERT,
+  DEFAULT_CONSOLE_CERT_PATH,
+);
+const consoleKeyPath = resolveProjectPath(
+  process.env.CONSOLE_TLS_KEY,
+  DEFAULT_CONSOLE_KEY_PATH,
+);
 const consoleRedirectURL =
   process.env.CONSOLE_REDIRECT_URL ??
   "https://live.nicovideo.jp/watch/user/14171889";
 const consoleAccessLogPath = resolve(
-  process.cwd(),
+  PROJECT_ROOT,
   "var/log/console/access.log",
 );
-const consoleErrorLogPath = resolve(process.cwd(), "var/log/console/error.log");
+const consoleErrorLogPath = resolve(PROJECT_ROOT, "var/log/console/error.log");
 const consoleBasePath = DEFAULT_CONSOLE_BASE_PATH;
 
 export type ConsoleServer = {
@@ -67,6 +96,8 @@ export function startConsoleServer({
   broadcastingHost = process.env.BROADCASTING_HOST ?? "localhost",
   broadcastingPort = process.env.BROADCASTING_PORT ?? "7777",
 }: StartConsoleServerOptions = {}): ConsoleServer {
+  const safeCertPath = resolveProjectPath(certPath, DEFAULT_CONSOLE_CERT_PATH);
+  const safeKeyPath = resolveProjectPath(keyPath, DEFAULT_CONSOLE_KEY_PATH);
   const accessLogger = createDailyRotatingJsonLogger(consoleAccessLogPath);
   const errorLogger = createDailyRotatingJsonLogger(consoleErrorLogPath);
 
@@ -111,11 +142,11 @@ export function startConsoleServer({
   }
 
   // Fail fast if TLS cert/key files are missing before starting the outer server.
-  if (!existsSync(certPath) || !existsSync(keyPath)) {
+  if (!existsSync(safeCertPath) || !existsSync(safeKeyPath)) {
     loopbackServer.stop(true);
     throw new Error(
       `TLS certificate files not found at the resolved paths. ` +
-        `certPath=${JSON.stringify(certPath)}, keyPath=${JSON.stringify(keyPath)}. ` +
+        `certPath=${JSON.stringify(safeCertPath)}, keyPath=${JSON.stringify(safeKeyPath)}. ` +
         `Provide valid certPath/keyPath arguments or set CONSOLE_TLS_CERT and CONSOLE_TLS_KEY env vars to the correct paths.`,
     );
   }
@@ -298,8 +329,8 @@ export function startConsoleServer({
       },
       websocket: outerWebSocket,
       tls: {
-        cert: Bun.file(certPath),
-        key: Bun.file(keyPath),
+        cert: Bun.file(safeCertPath),
+        key: Bun.file(safeKeyPath),
       },
     });
   } catch (err) {

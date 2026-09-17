@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import type { Socket } from "node:net";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { Action, State } from "automated-gameplay-transmitter";
 import {
   createReceiver as receiver,
@@ -12,15 +12,46 @@ if (!existsSync(unixSocketDir)) {
   mkdirSync(unixSocketDir, { recursive: true });
 }
 
-export const defaultSocketPath =
-  process.env.MAKAMUJO_IPC_PATH ??
-  (process.platform === "win32"
+/**
+ * IPC paths must be Windows named pipes or paths that resolve under the project
+ * `var/` directory (relative `./var/...sock` used by tests is allowed).
+ */
+const isSafeIpcPath = (path: string): boolean => {
+  if (!path || path.includes("\0") || path.includes("..")) return false;
+  if (process.platform === "win32" && path.startsWith("\\\\.\\pipe\\")) {
+    return /^\\\\\.\\pipe\\[A-Za-z0-9._-]+$/.test(path);
+  }
+  if (!/^[A-Za-z0-9_./\\:-]+$/.test(path)) return false;
+  const resolvedPath = resolve(path);
+  const resolvedVarDir = resolve(unixSocketDir);
+  const relativeToVar = relative(resolvedVarDir, resolvedPath);
+  return (
+    relativeToVar === "" ||
+    (!relativeToVar.startsWith(`..${sep}`) &&
+      relativeToVar !== ".." &&
+      !isAbsolute(relativeToVar))
+  );
+};
+
+const resolveDefaultSocketPath = (): string => {
+  const fromEnv = process.env.MAKAMUJO_IPC_PATH;
+  if (fromEnv && isSafeIpcPath(fromEnv)) {
+    return fromEnv;
+  }
+  return process.platform === "win32"
     ? "\\\\.\\pipe\\makamujo-ipc"
-    : join(unixSocketDir, "unix.sock"));
+    : join(unixSocketDir, "unix.sock");
+};
+
+export const defaultSocketPath = resolveDefaultSocketPath();
 
 export const createSender = sender<State, Action.Action>(defaultSocketPath);
-export const createSenderWithPath = (path: string) =>
-  sender<State, Action.Action>(path);
+export const createSenderWithPath = (path: string) => {
+  if (!isSafeIpcPath(path)) {
+    throw new Error(`Unsafe IPC path: ${path}`);
+  }
+  return sender<State, Action.Action>(path);
+};
 
 /**
  * Removes a stale Unix socket file so that the next `server.listen()` call
@@ -28,7 +59,10 @@ export const createSenderWithPath = (path: string) =>
  * On Windows named pipes do not leave a file on disk, so this is a no-op.
  */
 const removeStaleSocketFile = (path: string) => {
-  if (process.platform !== "win32" && existsSync(path)) {
+  if (process.platform === "win32" || !isSafeIpcPath(path)) {
+    return;
+  }
+  if (existsSync(path)) {
     try {
       unlinkSync(path);
     } catch {
@@ -49,6 +83,9 @@ export const createReceiver = (solve: (state: State) => Action.Action) => {
 };
 
 export const createReceiverWithPath = (path: string) => {
+  if (!isSafeIpcPath(path)) {
+    throw new Error(`Unsafe IPC path: ${path}`);
+  }
   const fn = receiver<State, Action.Action>(path);
   return (solve: (state: State) => Action.Action) => {
     removeStaleSocketFile(path);
@@ -74,6 +111,9 @@ export const createRetrySenderWithPath =
     run: (action: Action.Action) => Promise<void>,
     onConnect?: (send: (state: State) => void) => void,
   ): Promise<(state: State) => void> => {
+    if (!isSafeIpcPath(path)) {
+      throw new Error(`Unsafe IPC path: ${path}`);
+    }
     const { createConnection } = await import("node:net");
 
     let currentConn: Socket | null = null;

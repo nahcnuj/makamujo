@@ -103,12 +103,61 @@ export function forwardSSEEventsToSink(
   };
 }
 
-let BROADCASTING_HOST = process.env.BROADCASTING_HOST ?? "localhost";
-let BROADCASTING_PORT = process.env.BROADCASTING_PORT ?? "7777";
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+const sanitizeBroadcastingHost = (host: string): string => {
+  const normalized = host.trim().toLowerCase();
+  if (LOOPBACK_HOSTS.has(normalized)) {
+    return normalized === "::1" ? "127.0.0.1" : normalized;
+  }
+  return "127.0.0.1";
+};
+
+const sanitizeBroadcastingPort = (port: string | number): string => {
+  const parsed =
+    typeof port === "number" ? port : Number.parseInt(String(port), 10);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    return "7777";
+  }
+  return String(parsed);
+};
+
+let BROADCASTING_HOST = sanitizeBroadcastingHost(
+  process.env.BROADCASTING_HOST ?? "localhost",
+);
+let BROADCASTING_PORT = sanitizeBroadcastingPort(
+  process.env.BROADCASTING_PORT ?? "7777",
+);
+
+/**
+ * Ensure an upstream proxy URL targets only the configured loopback broadcasting
+ * server. Forces hostname/port after parsing so user-controlled path/query cannot
+ * redirect the request (SSRF).
+ */
+export const toSafeLoopbackProxyUrl = (
+  urlString: string,
+  fallbackPath: string,
+): string => {
+  let parsed: URL;
+  try {
+    parsed = new URL(urlString);
+  } catch {
+    parsed = new URL(
+      fallbackPath,
+      `http://${BROADCASTING_HOST}:${BROADCASTING_PORT}`,
+    );
+  }
+  parsed.protocol = "http:";
+  parsed.hostname = BROADCASTING_HOST;
+  parsed.port = BROADCASTING_PORT;
+  parsed.username = "";
+  parsed.password = "";
+  return parsed.toString();
+};
 
 export function setBroadcastingTarget(host: string, port: string | number) {
-  BROADCASTING_HOST = host;
-  BROADCASTING_PORT = String(port);
+  BROADCASTING_HOST = sanitizeBroadcastingHost(host);
+  BROADCASTING_PORT = sanitizeBroadcastingPort(port);
 }
 
 export function buildProxyHeaders(req: Request, proxyBase: string) {
@@ -126,38 +175,31 @@ export function buildProxyHeaders(req: Request, proxyBase: string) {
   return proxyHeaders;
 }
 
-export function computeProxyBase(req: Request) {
-  let proxyBase = `http://${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
-  try {
-    const incomingHost = req.headers.get("host") ?? "";
-    if (incomingHost && proxyBase.includes(incomingHost)) {
-      proxyBase = `http://127.0.0.1:${BROADCASTING_PORT}`;
-      try {
-        console.log(
-          "[WARN] Detected self-proxying; overriding proxyBase ->",
-          proxyBase,
-        );
-      } catch {}
-    }
-  } catch {}
-  return proxyBase;
+/** Upstream base URL is always the validated loopback broadcasting target. */
+export function computeProxyBase(_req?: Request) {
+  return `http://${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
 }
 
 export function computeProxyUrl(req: Request, proxyBase: string) {
-  let parsed: URL;
+  let search = "";
   try {
-    parsed = new URL(req.url);
-  } catch (_err) {
-    const hostForParse =
-      req.headers.get("host") ?? `${BROADCASTING_HOST}:${BROADCASTING_PORT}`;
-    parsed = new URL(req.url, `http://${hostForParse}`);
+    search = new URL(req.url, "http://127.0.0.1").search;
+  } catch {
+    search = "";
   }
-  return `${proxyBase}/console/api/ws${parsed.search ?? ""}`;
+  return toSafeLoopbackProxyUrl(
+    `${proxyBase}/console/api/ws${search}`,
+    "/console/api/ws",
+  );
 }
 
 export async function fetchMetaSnapshot(proxyBase: string): Promise<any> {
   try {
-    const res = await fetch(`${proxyBase}/api/meta`);
+    const metaUrl = toSafeLoopbackProxyUrl(
+      `${proxyBase}/api/meta`,
+      "/api/meta",
+    );
+    const res = await fetch(metaUrl);
     return await res.json().catch(() => ({}));
   } catch (err) {
     try {
@@ -323,9 +365,11 @@ export async function proxyConsoleApiWsRequest(
   proxyUrl: string,
   proxyHeaders: Headers,
 ): Promise<Response> {
+  const safeProxyUrl = toSafeLoopbackProxyUrl(proxyUrl, "/console/api/ws");
+
   // HEAD handling: probe upstream with GET and return headers only
   if ((req.method || "GET").toUpperCase() === "HEAD") {
-    const upstreamGet = await fetch(proxyUrl.toString(), {
+    const upstreamGet = await fetch(safeProxyUrl, {
       method: "GET",
       headers: proxyHeaders,
     });
@@ -349,7 +393,7 @@ export async function proxyConsoleApiWsRequest(
     (req.method || "GET").toUpperCase() === "GET" &&
     (req.headers.get("accept") ?? "").includes("text/event-stream")
   ) {
-    const probe = await fetch(proxyUrl.toString(), {
+    const probe = await fetch(safeProxyUrl, {
       method: "GET",
       headers: proxyHeaders,
     });
@@ -360,12 +404,12 @@ export async function proxyConsoleApiWsRequest(
     }
     const headers = proxyHeaders;
     return createResilientSseProxy(probe, (signal) =>
-      fetch(proxyUrl.toString(), { method: "GET", headers, signal }),
+      fetch(safeProxyUrl, { method: "GET", headers, signal }),
     );
   }
 
   // Non-SSE GET or non-GET: proxy via fetch and rewrap SSE bodies when needed
-  const proxied = await fetch(proxyUrl.toString(), {
+  const proxied = await fetch(safeProxyUrl, {
     method: req.method,
     headers: proxyHeaders,
     body: req.body,

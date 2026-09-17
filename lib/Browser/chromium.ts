@@ -17,13 +17,34 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 export const chromium = $_.use(StealthPlugin());
 
 /**
+ * Allow only simple absolute filesystem paths for Chromium executables so
+ * env/CLI input cannot inject unexpected path expressions.
+ */
+const isSafeExecutablePath = (candidate: string): boolean => {
+  if (!candidate || candidate.includes("\0") || candidate.includes("..")) {
+    return false;
+  }
+  // Absolute path on POSIX (/...) or Windows (C:\... / \\server\...)
+  if (
+    !(
+      candidate.startsWith("/") ||
+      /^[A-Za-z]:[\\/]/.test(candidate) ||
+      candidate.startsWith("\\\\")
+    )
+  ) {
+    return false;
+  }
+  return /^[A-Za-z0-9_./\\: +@%-]+$/.test(candidate);
+};
+
+/**
  * Resolve which executable to use for Chromium.
  * Priority: provided arg > CHROMIUM_EXECUTABLE_PATH env
  * Returns undefined if no valid executable (Playwright will use bundled).
  */
 export function resolveExecutablePath(provided?: string): string | undefined {
   const candidate = provided || process.env.CHROMIUM_EXECUTABLE_PATH;
-  if (candidate && existsSync(candidate)) {
+  if (candidate && isSafeExecutablePath(candidate) && existsSync(candidate)) {
     return candidate;
   }
   return undefined;
@@ -167,7 +188,7 @@ export const create = async (
     process.env.GAME_HOME_URL?.trim() ||
     "https://www.nahcnuj.work/vigilant-fiesta/";
 
-  const userDataDir = join(tmpdir(), `makamujo-game-${process.pid}`);
+  const userDataDir = mkdtempSync(join(tmpdir(), "makamujo-game-"));
   mkdirSync(join(userDataDir, "Default"), { recursive: true });
   writeFileSync(
     join(userDataDir, "Default", "Preferences"),
@@ -175,6 +196,7 @@ export const create = async (
       translate: { enabled: false },
       browser: { translate: { enabled: false } },
     }),
+    { mode: 0o600 },
   );
 
   const effectiveExecutablePath = resolveExecutablePath(executablePath);

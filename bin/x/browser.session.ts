@@ -91,27 +91,44 @@ if (resolvedDisplay) {
   process.env.DISPLAY = resolvedDisplay;
 }
 if (xauthority) {
-  process.env.XAUTHORITY = xauthority;
+  // Only accept absolute Xauthority paths without traversal.
+  if (
+    xauthority.startsWith("/") &&
+    !xauthority.includes("\0") &&
+    !xauthority.includes("..") &&
+    /^[A-Za-z0-9_./-]+$/.test(xauthority)
+  ) {
+    process.env.XAUTHORITY = xauthority;
+  }
 } else if (resolvedDisplay !== undefined) {
   const displayNum = resolvedDisplay.replace(/^:/, "").replace(/\..*$/, "");
-  const socketPath = `/tmp/.X11-unix/X${displayNum}`;
-  try {
-    const { uid } = statSync(socketPath);
-    const passwdEntry = readFileSync("/etc/passwd", "utf8")
-      .split("\n")
-      .find((line) => {
-        const fields = line.split(":");
-        return fields.length >= 4 && parseInt(fields[2] ?? "", 10) === uid;
-      });
-    if (passwdEntry !== undefined) {
-      const home = passwdEntry.split(":")[5];
-      const detectedXauth = `${home}/.Xauthority`;
-      if (existsSync(detectedXauth)) {
-        process.env.XAUTHORITY = detectedXauth;
+  // Display numbers must be decimal digits only (js/path-injection).
+  if (/^\d+$/.test(displayNum)) {
+    const socketPath = `/tmp/.X11-unix/X${displayNum}`;
+    try {
+      const { uid } = statSync(socketPath);
+      const passwdEntry = readFileSync("/etc/passwd", "utf8")
+        .split("\n")
+        .find((line) => {
+          const fields = line.split(":");
+          return fields.length >= 4 && parseInt(fields[2] ?? "", 10) === uid;
+        });
+      if (passwdEntry !== undefined) {
+        const home = passwdEntry.split(":")[5];
+        if (
+          home?.startsWith("/") &&
+          !home.includes("..") &&
+          /^[A-Za-z0-9_./-]+$/.test(home)
+        ) {
+          const detectedXauth = `${home}/.Xauthority`;
+          if (existsSync(detectedXauth)) {
+            process.env.XAUTHORITY = detectedXauth;
+          }
+        }
       }
+    } catch {
+      /* auto-detection is best-effort */
     }
-  } catch {
-    /* auto-detection is best-effort */
   }
 }
 
