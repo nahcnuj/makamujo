@@ -1,7 +1,11 @@
 ---
 # sshd keeps listening on TCP 22. Publickey is the only auth method.
-# Unauthenticated sessions are held (LoginGraceTime 0). IPs that fail
-# key auth are then DROP'd so further packets get no reply.
+# Unauthenticated sessions are held forever (LoginGraceTime 0) and sshd never
+# disconnects an attacker itself: MaxAuthTries is huge so no "Too many
+# authentication failures" cut, and MaxStartups is high enough that overload
+# belongs to nobody. Once a key fails, fail2ban DROPs the IP so all further
+# packets get no reply; the connection is trapped in a silent, never-answered
+# key-auth state instead of being cut.
 #
 #   ansible-playbook playbooks/0_ssh_honeypot.yml
 - name: Silence SSH clients that cannot complete publickey auth
@@ -50,9 +54,8 @@
           PermitEmptyPasswords no
           AuthenticationMethods publickey
           LoginGraceTime 0
-          PerSourceMaxStartups 1
-          MaxStartups 50:30:150
-          MaxAuthTries 1
+          MaxStartups 100000:50:100000
+          MaxAuthTries 100000
 
     - name: Validate sshd config
       ansible.builtin.command:
@@ -86,7 +89,7 @@
           # At [sshd] ban time, run honeypot-report to measure how long the
           # IP was served from the first received SSH request until this BAN,
           # then journal the record so `journalctl -u fail2ban` shows it.
-          actionban = journalctl -u fail2ban --no-pager --since=-24h | /usr/local/bin/honeypot-report --ip <ip> --now $(date +%s) | systemd-cat -t fail2ban-honeypot
+          actionban = journalctl -u fail2ban --no-pager --since=-24h | /usr/local/bin/honeypot-report --ip <ip> --now $(date +%%s) | systemd-cat -t fail2ban-honeypot
 
     - name: Write fail2ban jail that DROP's failed key auth sources
       ansible.builtin.copy:
