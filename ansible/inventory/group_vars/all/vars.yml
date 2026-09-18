@@ -2,3 +2,7 @@
 # Non-secret defaults (safe to commit).
 makamujo_src: /opt/src/makamujo
 makamujo_obs_service_json: "{{ makamujo_src }}/obs-studio/basic/profiles/Makamujo/service.json"
+
+# Real OpenSSH listens here. Port 22 is Endlessh (SSH tarpit).
+ssh_management_port: 22222
+ssh_tarpit_port: 22

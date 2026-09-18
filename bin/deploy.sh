@@ -2,20 +2,27 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "${script_dir}/.." && pwd)"
 
 : "${VPS_SSH_HOST:?VPS_SSH_HOST is required}"
 
 ansible_user="${VPS_SSH_USER:-root}"
 key_file="${ANSIBLE_SSH_PRIVATE_KEY_FILE:-${HOME}/.ssh/id_deploy}"
+ansible_port="$("${script_dir}/vps-ssh-port")"
+playbook="${DEPLOY_PLAYBOOK:-${repo_root}/ansible/playbooks/2_makamujo.yml}"
+if [ "${playbook}" = "${playbook#/}" ]; then
+  playbook="${repo_root}/${playbook}"
+fi
 
 export ANSIBLE_HOST_KEY_CHECKING="${ANSIBLE_HOST_KEY_CHECKING:-True}"
-export ANSIBLE_SSH_COMMON_ARGS="${ANSIBLE_SSH_COMMON_ARGS:--o IdentitiesOnly=yes}"
+export ANSIBLE_SSH_COMMON_ARGS="${ANSIBLE_SSH_COMMON_ARGS:--o IdentitiesOnly=yes -o ConnectTimeout=10}"
 
 cd "$(dirname "$0")"
 
-exec ansible-playbook "${script_dir}/../ansible/playbooks/2_makamujo.yml" \
+exec ansible-playbook "${playbook}" \
   --vault-password-file "${script_dir}/../ansible/.vault_pass" \
   -e "ansible_host=${VPS_SSH_HOST}" \
   -e "ansible_user=${ansible_user}" \
+  -e "ansible_port=${ansible_port}" \
   -e "ansible_ssh_private_key_file=${key_file}" \
   "$@"

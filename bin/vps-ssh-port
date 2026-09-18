@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Print the TCP port to use for real OpenSSH on the VPS.
+# After Endlessh owns port 22, sshd is on VPS_SSH_PORT (default 22222).
+# Probe that port with a short TCP connect so callers never fall into the tarpit.
+
+: "${VPS_SSH_HOST:?VPS_SSH_HOST is required}"
+
+management_port="${VPS_SSH_PORT:-22222}"
+probe_timeout="${VPS_SSH_PORT_PROBE_TIMEOUT:-3}"
+
+if [ "${management_port}" = "22" ]; then
+  printf '%s\n' 22
+  exit 0
+fi
+
+# Explicit VPS_SSH_PORT always wins (including a closed port: fail fast, do not
+# silently connect to Endlessh on 22).
+if [ -n "${VPS_SSH_PORT:-}" ]; then
+  printf '%s\n' "${management_port}"
+  exit 0
+fi
+
+if python3 - "$VPS_SSH_HOST" "${management_port}" "${probe_timeout}" <<'PY'
+import socket
+import sys
+
+host = sys.argv[1]
+port = int(sys.argv[2])
+timeout = float(sys.argv[3])
+try:
+    with socket.create_connection((host, port), timeout):
+        pass
+except OSError:
+    raise SystemExit(1)
+raise SystemExit(0)
+PY
+then
+  printf '%s\n' "${management_port}"
+else
+  printf '%s\n' 22
+fi
