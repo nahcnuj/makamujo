@@ -85,7 +85,7 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 
 ## GitHub Actions CD
 
-`main` への push で `.github/workflows/cd.yml` が走り、そのコミットの CI（`.github/workflows/ci.yml` の **push** run）が success になってから、先に `playbooks/0_ssh_honeypot.yml`（22 番の Endlessh タールピット）、続けて `playbooks/2_makamujo.yml` を VPS に適用します。checkout 対象は playbook どおり `main` です。
+`main` への push で `.github/workflows/cd.yml` が走り、そのコミットの CI（`.github/workflows/ci.yml` の **push** run）が success になってから、先に `playbooks/0_ssh_honeypot.yml`（22 番 sshd の公開鍵以外を沈黙）、続けて `playbooks/2_makamujo.yml` を VPS に適用します。checkout 対象は playbook どおり `main` です。
 
 必要な GitHub Secrets（Environment `prod` またはリポジトリ Secrets）:
 
@@ -95,7 +95,6 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 | `VPS_SSH_HOST` | yes | SSH 先（IP またはホスト名）。inventory の `makamujo` エイリアスは runner では使わない |
 | `ANSIBLE_VAULT_PASSWORD` | yes | `inventory/group_vars/all/vault.yml` の復号パスワード |
 | `VPS_SSH_USER` | no | SSH ユーザー。省略時 `root` |
-| `VPS_SSH_PORT` | no | 本番 OpenSSH のポート。省略時は `bin/vps-ssh-port` が 22222 をプローブし、閉じていれば 22 |
 | `VPS_SSH_KNOWN_HOSTS` | no | `ssh-keyscan` 形式の known_hosts。未設定時は実行時に `ssh-keyscan` |
 
 デプロイ job は Environment `prod` を使う（`main` のみ）。required reviewers を付けると、CI 通過後の実デプロイだけ承認待ちにできます。Environment URL は番組ページ（`https://live.nicovideo.jp/watch/user/14171889`）へのショートカットです。
@@ -105,32 +104,29 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 | 順 | ファイル | 役割 |
 |----|----------|------|
 | 0 | `0_bootstrap.yml` | ベース |
-| 0 | `0_ssh_honeypot.yml` | SSH スキャナーを 22 番で掴んで離さない Endlessh タールピット。本番 sshd は `ssh_management_port`（既定 22222） |
+| 0 | `0_ssh_honeypot.yml` | 22 番は sshd のまま。公開鍵認証できない相手は応答せず保持する |
 | 0 | `0_desktop.yml` | Xvfb / VNC / デスクトップ |
 | 0 | `0_obs.yml` | OBS Flatpak |
 | 0 | `0_secrets.yml` | stream key → service.json |
 | 1 | `1_bun.yml` | Bun |
 | 2 | `2_makamujo.yml` | アプリ clone / 依存 / TLS / key 再適用 |
 
-## SSH ハニーポット（Endlessh）
+## SSH ハニーポット
 
-スキャナーが来る 22 番では Endlessh がバナーを極端に遅く返し、接続を何時間も保持します。本番の OpenSSH は `inventory/group_vars/all/vars.yml` の `ssh_management_port`（既定 **22222**）です。パスワード認証は触りません。ホスティング側のファイアウォール / セキュリティグループで **TCP 22222** を開けてから適用してください（閉めたままだと CD が入れなくなります）。
+22 番はこれまでどおり OpenSSH が待ち受けます。公開鍵以外の認証は出さず、鍵が通らない接続は切らずに保持します（`LoginGraceTime 0`）。一度失敗した IP は fail2ban が **DROP** するので、以降は応答しません。パスワードでは入れません。CD と手元は鍵のまま 22 番へ入ります。
 
-初回はまだ 22 番が sshd でも適用できます。適用後の Ansible / 手元 SSH は管理ポートへ:
+誤って自分を DROP した場合:
 
 ```sh
-ssh -p 22222 root@HOST
-cd ansible
-ansible-playbook playbooks/0_ssh_honeypot.yml -e ansible_port=22222
+fail2ban-client set sshd unbanip A.B.C.D
 ```
 
-`bin/deploy.sh` は `bin/vps-ssh-port` で 22222 が開いていればそちらを使い、閉じていれば 22 に落とします。CD も同じプローブなので、初回 CD が 22 でタールピットを仕掛けたあと、同じ job のアプリ deploy は 22222 に入ります。22 番へ誤って繋いでも `ConnectTimeout=10` で切れます（Endlessh に長時間拘束されない）。
-
-捕まえた接続の確認:
+確認:
 
 ```sh
-journalctl -u endlessh -f
-ss -tnp | grep endlessh
+ss -tnp | grep sshd
+fail2ban-client status sshd
+journalctl -u ssh -u fail2ban -f
 ```
 
 ## デプロイ後の再起動（ad-hoc）
