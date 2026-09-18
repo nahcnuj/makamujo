@@ -1,98 +1,64 @@
 # AGENTS.md
 
-## 目的
-このファイルはAIエージェント専用の指示書です。
-あなたが作業を始める前に参照し、正確に作業できるようにプロジェクトのコンテキストやルールを提供します。
+このファイルはAIエージェント専用の指示書です。作業前に一読し、コマンドや契約に従ってください。
 
-## プロジェクト構造
-- `/bin` - 実行可能ファイル
-- `/console` - 配信管理コンソールアプリ（別プロジェクト）
-- `/lib` - アプリから利用するライブラリ
-- `/routes` - 配信画面アプリが持つAPIコントローラー
-- `/scripts` - 小物スクリプト
-- `/src` - 配信画面アプリのフロントエンド（React）
-- `/tests` - テストコード（単体テストを除く）
-- `/architecture` - ドメインモデル・契約・リファクタ計画（エージェントは変更容易性作業時に参照すること）。索引は `architecture/README.md`
-- `/composition` - 配信サーバ composition root 補助（broadcast / agent wiring / idle speech timer）
-- `/lib/domain` - 純関数ポリシー（broadcasting / comments / speech / publication）
-- `/lib/application` - アプリケーション層（例: SpeechQueue）
-- `/docs` - ランディング等の静的サイト資産（設計 Markdown は置かない）
+## 実行環境
+- Bun プロジェクト。作業開始時に `bun --version` で利用可否を確認する。使えない場合は実行を繰り返さず、原因（環境初期化不足）を解消してから進める。
+- 依存関係は lockfile 準拠の `bun ci` で導入する（`bun install` は lockfile を更新しうるため基本使わない）。
+- 環境初期化は `bun run setup`（`bun --version && bun ci && bun run typecheck`）でも可。
 
-その他のディレクトリは人間向けで、あなたが参照する必要はありません。
-ドメイン再設計・`MakaMujo` 分割・配信状態ペイロード変更では、先に `architecture/domain-model-redesign.md` の契約（CommentPipeline・沈黙ポリシー・PublishedStreamPayload）を確認し、振る舞いを変えないこと。
+## コマンド
+| コマンド | 内容 |
+|---|---|
+| `bun run dev` | 開発サーバー: `bun --hot index.ts --port=8777` |
+| `bun run start` | 本番: `NODE_ENV=production bun index.ts --port=7777`（POSIX シェル必需） |
+| `bun run typecheck` | `tsc --noEmit` |
+| `bun run lint` | Biome（`--error-on-warnings .`） |
+| `bun run format` | Biome 自動修正（`--write .`） |
+| `bun run test` | 単体テスト（lib/src/routes/console/src など）。単発は `bun test <path>` |
+| `bun run test:integration` | `bun test tests/integration/` |
+| `bun run test:bin` | `tests/bin/*.sh` のシェルテスト（bash 必需） |
+| `bun run test:e2e` | Playwright E2E（要 `pretest:e2e`、HTTPS 443） |
 
-## 利用できるコマンド
-このプロジェクトはBunを利用しています。
-- 依存関係のインストール: `bun install`
-- 開発サーバー起動: `bun run dev`
-- テスト実行: `bun run test`
-- E2Eテスト実行: `bun run test:e2e`
+その他スクリプト（`browser` / `generate-ogp` / `screenshot:console-agent-status` / `markov` 等）は `package.json` 参照。
 
-その他、package.jsonのscriptsに書かれているスクリプトが実行できます。
+### 動作確認の順序
+1. `bun run lint`
+2. `bun run typecheck`
+3. `bun run test`
+4. `bun run test:integration`
 
-## Agent実行時の注意点
-- `bun` 実行で詰まるケースが多いため、作業開始時に `bun --version` で利用可否を確認する
-  - `bun` が使えない場合は実行を繰り返さず、まず原因（環境初期化不足）を解消する
-- 依存関係未インストールで `bun run test` に進まないよう、最初に `bun ci`（lockfile準拠で更新せず、CIと同じ手順）を実行する
-- スクリーンショットを撮る前に日本語フォントをインストールする（例: `sudo apt-get update && sudo apt-get install -y fonts-noto-cjk`）
-- スクリプトを実行して得られた成果物（スクリーンショットなど）はリポジトリにコミットしない
-- スクリーンショットはGitHubにアップロードしてURLを取得し、PRのDescription（本文）にGFM画像記法（`![代替テキスト](URL)`）で埋め込む。変更する場合は古い画像を新しいURLで置き換える
-  - GitHubへのアップロードは、PRのDescription編集欄やコメント欄の添付ファイル機能（ドラッグ＆ドロップまたはファイル選択）を使う
-  - 作業完了前に、貼り付けた画像URLを必ず取得して開き、HTTPエラー（404/403/500 など）が出ないことと画像内容が想定どおり表示されることを確認する
-  - 貼り付けた画像URLをOCR確認する場合は、次を実行して想定文言が検出されることを確認する
-    1. `mkdir -p /tmp/makamujo`
-    2. `TIMESTAMP=$(date +%Y%m%d%H%M%S)` で実値を作り、同じ `TIMESTAMP` を後続手順で使い回す
-    3. `BASE_NAME="console-agent-status-from-url-${TIMESTAMP}"`
-    4. `curl -fsSL "https://github.com/user-attachments/files/{ATTACHMENT_ID}/{UPLOADED_FILENAME}" -o "/tmp/makamujo/${BASE_NAME}.png"`（`{ATTACHMENT_ID}` と `{UPLOADED_FILENAME}` は実際の値に置き換える）
-    5. `bun run screenshot:annotate-ocr --input "/tmp/makamujo/${BASE_NAME}.png" --output "/tmp/makamujo/${BASE_NAME}-annotated.png"`
-    6. OCR結果に `馬可無序` / `配信エージェント状態モックを表示中` / `配信エージェント状態モック` が含まれることを確認する
-- 配信状態を取得できない環境で管理コンソールのスクリーンショットを撮る場合は、`/console/?agentStateMock=1` を利用してモック表示する
-- OCRでスクリーンショット確認する場合は、次の順で再現する
-  1. `bun run screenshot:console-agent-status --output /tmp/makamujo/console-agent-status-mock.png`
-  2. `bun run screenshot:annotate-ocr --input /tmp/makamujo/console-agent-status-mock.png --output /tmp/makamujo/console-agent-status-mock-annotated.png`
-  3. OCR結果に `馬可無序` / `配信エージェント状態モックを表示中` / `配信エージェント状態モック` が含まれることを確認する
-  - `screenshot:annotate-ocr` 実行に `tesseract` と `convert`（ImageMagick）が必要。Debian/Ubuntu系では `sudo apt-get install -y tesseract-ocr tesseract-ocr-jpn imagemagick` でインストール可能
-- 動作確認は次の順に実行する
-  1. `bun run typecheck`
-  2. `bun run test`
-  3. `bun run test:integration`
-- 作業完了はすべての動作確認が正常終了したことによって判断する
-- シェルスクリプトの挙動確認が必要な変更では `bun run test:bin` も実行する
+シェルスクリプト変更は `bun run test:bin`、UI 変更は `bun run test:e2e` も追加する。作業完了はすべてこの確認が通った時点。
+
+### git hooks
+- `.githooks/` に pre-commit（`bun run format`）と pre-push（typecheck / unit / integration / e2e）がある。
+- ただし `core.hooksPath` は devcontainer 用のパス（`/workspaces/makamujo/.githooks`）に設定されており、手元の環境では hooks が走らないことがある。**チェックは明示的に手動実行する**こと。
+
+## 技術構成（変更前に把握すること）
+- サーバーは **Hono + Bun**。単一入口 `index.ts` が配信画面（`routes/`、`src/`）と管理コンソール（`console/`）の両方を serve し、`composition/` が broadcast / agent 配線 / idle speech timer を組み立てる。
+- **フロントエンドは React ではない**。`package.json` の `imports` が `react` → `hono/jsx/dom` に、`tsconfig.json` の `jsxImportSource` が `"hono/jsx"` にリマップされている。DOM JSX は関数コンポーネントで書く。
+- `automated-gameplay-transmitter` は **npm 依存**（`^0.6.4`）。ソースを改変するなら隣接リポジトリ `~/ghq/github.com/nahcnuj/automated-gameplay-transmitter` を見る。
+- ディレクトリ:
+  - `lib/domain/**` — 純関数ポリシー / `lib/application/` — アプリ層（例: SpeechQueue） / `lib/Agent/` — 配信エージェント
+  - `architecture/` — 設計・契約ドキュメント（索引: `architecture/README.md`）。`docs/` はランディング用静的資産専用で、設計 Markdown はここに置かない
+- ドメイン再設計・`MakaMujo` 分割・配信状態ペイロード変更では、先に `architecture/domain-model-redesign.md` の契約（CommentPipeline・沈黙ポリシー・PublishedStreamPayload）を確認し、観測可能な振る舞いを変えないこと。
+
+## テスト
+- 新規に作成する公開関数には必ず単体テストを作成する。
+- テストフレームワークは Bun（`bun:test`、Jest 互換）。`bunfig.toml` で coverage が常時有効（`bun test` はカバレッジ計測つきで若干遅い）。
+- 配置: 単体テストは実装と同階層 `*.test.{ts,tsx}` / 統合 `tests/integration/` / E2E `tests/e2e/` / シェル `tests/bin/`。
 
 ## コーディングスタイル
-- TypeScript strict モードを使用
-- 変数宣言は常に `const` を使用
-- React は関数コンポーネント優先
-- 識別子の名称は、それを見ただけで意味が十分に理解できるように、なるべく具体的に付けます
-- 識別子の最初の単語はその性質によって以下の品詞の単語で始めること
-  - 関数・メソッド: 動詞
-  - 変数: 名詞句
-- Use only `as const` or `satisfies T` for narrowing types
-  - OK: `{ x: 'y' } as const`
-  - OK: ` 'xyz' satisfies ``x${string}`` `
-  - NG: `JSON.parse(x) as any as { x: string }`
+- TypeScript strict モード、`noUncheckedIndexedAccess` 有効（配列・レコードの添字アクセスは `undefined` になり得る）。
+- 変数宣言は常に `const`。
+- 識別子は具体的に付ける。関数・メソッドは動詞始まり、変数は名詞句始まり。
+- 型の絞り込みは `as const` / `satisfies T` のみ。`as any as ...` のような二重キャストは禁止。
+- コミットメッセージは Conventional Commits。機能ブランチは `main` から、PR でレビュー。
+- Biome は `*.test.ts` の linter のみ無効（formatter は有効）。整形は `bun run format` に任せる。
 
-## バージョン管理
-- コミットメッセージは Conventional Commit 形式
-
-## テストガイドライン
-- 新規に作成する公開関数には必ず単体テストを作成する
-- テストフレームワークはBun（Jest互換）
-- コミット前に必ずテストを実行し、すべて成功すること
-- テストファイルの配置
-  - ユニットテスト: 実装ファイルと同階層に `.test.{ts,tsx}`
-  - 統合テスト: `/tests/integration`ディレクトリ
-  - E2Eテスト: `/tests/e2e`ディレクトリ
-
-## 開発ワークフロー
-- `main`ブランチから機能ブランチを作成
-- プルリクエストでコードレビュー
-- 新規機能にはドキュメント(JSDoc)を更新
-
-## 補足: マルチルートワークスペースとWindows環境
-- このリポジトリはマルチルートワークスペースで開かれている場合があります。主要なフォルダ:
-  - `makamujo/` — 配信管理アプリ（このファイルのプロジェクト）
-  - `automated-gameplay-transmitter/` — ライブラリ兼サブプロジェクト。エージェントは [automated-gameplay-transmitter/package.json](automated-gameplay-transmitter/package.json) を参照してビルド/公開スクリプト（`bun run build.ts` 等）を確認してください。
-- Windows上での注意:
-  - package.json の一部スクリプトは POSIX シェル構文（例: `NODE_ENV=production ...` や `bash` を直接呼ぶもの）を前提としています。PowerShell や cmd.exe では動作しないことがあるため、WSL もしくは Git Bash を使用するか、スクリプト実行前に互換性を確認してください。
-  - `test:bin` や `pretest:e2e` などはシェル依存です。Windowsで実行する必要がある場合は WSL/Git Bash を使うか、CI 環境での実行を検討してください。
+## 環境・運用手順の注意
+- Windows では POSIX 表記のスクリプト（`NODE_ENV=...`、bash 呼び出し）がそのまま動かない。WSL / Git Bash を使うか互換性を確認する。
+- E2E は HTTPS（ポート 443）を要求し、`pretest:e2e` で Chromium を導入する（CI では `scripts/setup-e2e-tls.sh` も実行）。Playwright 設定は `workers: 1`。
+- 生成物（`var/` のログ・TLS、`test-results/`、スクリーンショット）はコミットしない。
+- 配信状態を取得できない環境でコンソールのスクリーンショットを撮るには `/console/?agentStateMock=1`（モック表示）を使う。コンソール単体は `CONSOLE_LOOPBACK_ONLY=1 bun index.ts --port=7777` で起動できる。
+- スクリーンショットを PR に載せる場合は GitHub の添付機能でアップロードし、GFM 画像記法（`![代替テキスト](URL)`）で Description に埋め込む。貼る前に URL を開いて HTTP エラー（404/403/500）が出ないことと内容表示を確認する。
