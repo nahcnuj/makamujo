@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
+#include <limits.h>
 
 #define MAX_DEK 4096
 #define DEK_PATH_PREFIX "/dev/shm/"
@@ -33,21 +34,38 @@ static void usage(const char *argv0)
 }
 
 /**
- * DEK files must live under /dev/shm/ with no path traversal.
- * Rejects absolute escapes and ".." components (cpp/path-injection).
+ * Accept only /dev/shm/<name> where <name> is a single safe component.
+ * Copies the validated name into name_buf (of size buf_len) to sever
+ * any taint link to the original user-supplied path.
  */
-static int path_is_allowed(const char *path)
+static int extract_name(const char *path, char *name_buf, size_t buf_len)
 {
     size_t prefix_len = sizeof(DEK_PATH_PREFIX) - 1;
-    const char *rest;
+    const char *name;
+    const unsigned char *p;
+    size_t name_len;
 
-    if (!path || !*path)
+    if (!path || !*path || !name_buf || buf_len == 0)
         return 0;
     if (strncmp(path, DEK_PATH_PREFIX, prefix_len) != 0)
         return 0;
-    rest = path + prefix_len;
-    if (!*rest || strchr(rest, '/') != NULL || strstr(rest, "..") != NULL)
+    name = path + prefix_len;
+    if (!*name)
         return 0;
+    if (strchr(name, '/') != NULL || strchr(name, '\\') != NULL || strstr(name, "..") != NULL)
+        return 0;
+    for (p = (const unsigned char *)name; *p; ++p) {
+        if (!( (*p >= 'a' && *p <= 'z') ||
+               (*p >= 'A' && *p <= 'Z') ||
+               (*p >= '0' && *p <= '9') ||
+               *p == '_' || *p == '-' || *p == '.' ))
+            return 0;
+    }
+    name_len = (size_t)(p - (const unsigned char *)name);
+    if (name_len >= buf_len)
+        return 0;
+    memcpy(name_buf, name, name_len);
+    name_buf[name_len] = '\0';
     return 1;
 }
 
@@ -60,18 +78,26 @@ static int cmd_store(const char *path)
 {
     unsigned char buf[MAX_DEK];
     ssize_t n = read(STDIN_FILENO, buf, sizeof buf);
+    int dirfd;
     int fd;
     uint64_t exp;
     pid_t pid;
+    char name[256];
 
     if (n <= 0)
         die("empty DEK");
-    if (!path_is_allowed(path))
+    if (!extract_name(path, name, sizeof name))
         die("path required under /dev/shm/");
-    unlink(path);
-    fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
-    if (fd < 0)
+    dirfd = open(DEK_PATH_PREFIX, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+    if (dirfd < 0)
+        die("open /dev/shm");
+    unlinkat(dirfd, name, 0);
+    /* openat keeps the entry inside the /dev/shm dirfd; O_EXCL fails instead of writing into a pre-created file in the shared directory. */
+    fd = openat(dirfd, name, O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW, 0600);
+    if (fd < 0) {
+        close(dirfd);
         die("open failed");
+    }
     exp = (uint64_t)time(NULL) + (uint64_t)ttl();
     if (write(fd, &exp, sizeof exp) != (ssize_t)sizeof exp)
         die("write exp");
@@ -81,24 +107,21 @@ static int cmd_store(const char *path)
     pid = fork();
     if (pid == 0) {
         sleep((unsigned)ttl());
-        unlink(path);
+        unlinkat(dirfd, name, 0);
         _exit(0);
     }
+    close(dirfd);
     return 0;
 }
 
 static int cmd_fetch(const char *path)
 {
-    if (!path_is_allowed(path))
-        return 1;
     int fd;
     uint64_t exp;
     unsigned char buf[MAX_DEK];
     ssize_t n;
 
-    if (!path_is_allowed(path))
-        return 1;
-    fd = open(path, O_RDONLY);
+    fd = open(path, O_RDONLY | O_NOFOLLOW);
     if (fd < 0)
         return 1;
     if (read(fd, &exp, sizeof exp) != (ssize_t)sizeof exp) {
@@ -121,8 +144,16 @@ static int cmd_fetch(const char *path)
 
 static int cmd_delete(const char *path)
 {
-    if (path_is_allowed(path))
-        unlink(path);
+    char name[256];
+    int dirfd;
+
+    if (extract_name(path, name, sizeof name)) {
+        dirfd = open(DEK_PATH_PREFIX, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+        if (dirfd >= 0) {
+            unlinkat(dirfd, name, 0);
+            close(dirfd);
+        }
+    }
     return 0;
 }
 
@@ -147,9 +178,19 @@ int main(int argc, char **argv)
     if (!strcmp(cmd, "store"))
         return cmd_store(path);
     if (!strcmp(cmd, "fetch")) {
-        if (!path_is_allowed(path))
+        char name[256];
+        char fullpath[sizeof(DEK_PATH_PREFIX) + sizeof(name)];
+        char resolved[PATH_MAX];
+        size_t prefix_len = sizeof(DEK_PATH_PREFIX) - 1;
+        if (!extract_name(path, name, sizeof name))
             die("path required under /dev/shm/");
-        return cmd_fetch(path);
+        if (snprintf(fullpath, sizeof fullpath, "%s%s", DEK_PATH_PREFIX, name) >= (int)sizeof fullpath)
+            die("path too long");
+        if (!realpath(fullpath, resolved))
+            die("invalid path");
+        if (strncmp(resolved, DEK_PATH_PREFIX, prefix_len) != 0)
+            die("path required under /dev/shm/");
+        return cmd_fetch(resolved);
     }
     if (!strcmp(cmd, "delete"))
         return cmd_delete(path);
