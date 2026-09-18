@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
+#include <limits.h>
 
 #define MAX_DEK 4096
 #define DEK_PATH_PREFIX "/dev/shm/"
@@ -39,6 +40,7 @@ static int extract_name(const char *path, const char **name_out)
 {
     size_t prefix_len = sizeof(DEK_PATH_PREFIX) - 1;
     const char *name;
+    const unsigned char *p;
 
     if (!path || !*path || !name_out)
         return 0;
@@ -49,6 +51,13 @@ static int extract_name(const char *path, const char **name_out)
         return 0;
     if (strchr(name, '/') != NULL || strchr(name, '\\') != NULL || strstr(name, "..") != NULL)
         return 0;
+    for (p = (const unsigned char *)name; *p; ++p) {
+        if (!( (*p >= 'a' && *p <= 'z') ||
+               (*p >= 'A' && *p <= 'Z') ||
+               (*p >= '0' && *p <= '9') ||
+               *p == '_' || *p == '-' || *p == '.' ))
+            return 0;
+    }
     *name_out = name;
     return 1;
 }
@@ -160,11 +169,17 @@ int main(int argc, char **argv)
     if (!strcmp(cmd, "fetch")) {
         const char *name;
         char fullpath[sizeof(DEK_PATH_PREFIX) + 255];
+        char resolved[PATH_MAX];
+        size_t prefix_len = sizeof(DEK_PATH_PREFIX) - 1;
         if (!extract_name(path, &name))
             die("path required under /dev/shm/");
         if (snprintf(fullpath, sizeof fullpath, "%s%s", DEK_PATH_PREFIX, name) >= (int)sizeof fullpath)
             die("path too long");
-        return cmd_fetch(fullpath);
+        if (!realpath(fullpath, resolved))
+            die("invalid path");
+        if (strncmp(resolved, DEK_PATH_PREFIX, prefix_len) != 0)
+            die("path required under /dev/shm/");
+        return cmd_fetch(resolved);
     }
     if (!strcmp(cmd, "delete"))
         return cmd_delete(path);
