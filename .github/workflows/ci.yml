@@ -116,6 +116,9 @@ jobs:
       - name: Install Playwright Chromium (integration / e2e)
         if: matrix.suite.label == 'integration' || matrix.suite.label == 'e2e'
         run: bunx playwright install chromium
+      - name: Install openssh-server (bin) for honeypot-hold test
+        if: matrix.suite.label == 'bin'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends openssh-server
       - name: Configure apt mirror (JAIST)
         if: matrix.suite.label == 'e2e'
         run: sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://ftp.jaist.ac.jp/pub/Linux/ubuntu|g' /etc/apt/sources.list
