@@ -159,14 +159,20 @@ journalctl -u ssh -u fail2ban -f
 
 ### 捕まえられた時間の確認
 
-BAN 済み IP ごとに「SSH リクエストを受け取ってから BAN するまで」の秒数（`caught_s`）を出力します。`LoginGraceTime 0` で接続を保持している間も認証を続けると fail2ban のイベントが積み上がるため、`last_seen` が BAN 後も伸び続けていたら、DROP 後も叩き続けられていたことが分かります。
+`journalctl -u fail2ban` をそのまま実行するだけで、BAN した IP ごとに「SSH リクエストを受け取ってから BAN するまで」の秒数が実績として journal に残ります。fail2ban の BAN 時に `bin/honeypot-report` が計測し、`systemd-cat` で fail2ban の unit に書き込みます（pipe 不要）。
 
 ```sh
-journalctl -u fail2ban | bin/honeypot-report -
-# 単体テスト: bash tests/bin/honeypot-report.test.sh
+journalctl -u fail2ban
+# → [sshd] caught 203.0.113.5 for 1s since 2026-09-19 03:11:44
 ```
 
-/var/log/fail2ban.log がある場合は引数なしでも読めます。ログファイルを直接渡すか、`-` で標準入力から読めます。
+- リクエスト受信時刻 = その IP の**最初の** fail2ban `Found` イベントに埋め込まれた sshd ログ側のタイムスタンプ。`LoginGraceTime 0` で保持されている間も認証を続けるとイベントが積み上がるため、`Found` が BAN 後も増えていく様子も同じ出力で確認できます。
+- 設定: `ansible/playbooks/0_ssh_honeypot.yml` が `/etc/fail2ban/action.d/honeypot-report.conf` を書き、sshd jail の `action` に `honeypot-report` を追加します。
+- 手動再現:
+  ```sh
+  journalctl -u fail2ban --since=-24h | bin/honeypot-report --ip 203.0.113.5
+  ```
+- 単体テスト: `bash tests/bin/honeypot-report.test.sh`。
 
 ## デプロイ後の再起動（ad-hoc）
 

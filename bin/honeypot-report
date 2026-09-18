@@ -1,70 +1,79 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Report how long each IP caught by the ssh honeypot was served before the
-# fail2ban BAN cut it off, derived from the [sshd] jail log.
+# Journal the seconds an IP was caught by the ssh honeypot.
 #
-# "caught seconds" = BAN time - first received SSH request time. The request
-# time is the timestamp embedded in the earliest fail2ban "Found" event for
-# the IP (the sshd log line that tripped the filter); the BAN time is the
-# fail2ban log timestamp of the "Ban" event. When LoginGraceTime 0 holds a
-# session open, every further auth attempt keeps producing events, so the
-# last_seen column shows how long it kept knocking after being dropped.
+# This is the worker behind the fail2ban "honeypot-report" action: the
+# playbook (ansible/playbooks/0_ssh_honeypot.yml) installs
+# /etc/fail2ban/action.d/honeypot-report.conf, whose actionban feeds the
+# fail2ban [sshd] journal into this script at BAN time and then journals
+# its output with systemd-cat. That way `journalctl -u fail2ban` alone
+# shows the caught-seconds record for every banned IP.
 #
-# Usage:
-#   bin/honeypot-report [LOG_FILE | -]
+# "caught seconds" = BAN moment - when sshd received the request. The
+# request time is the timestamp embedded in the fail2ban "Found <ip>" log
+# line that carried it (the sshd log timestamp after '- '); the BAN moment
+# defaults to `date +%s` (the moment the action runs) and can be pinned
+# with --now for deterministic replay / tests.
 #
-# With no argument the script reads /var/log/fail2ban.log when present and
-# otherwise falls back to `journalctl -u fail2ban`. Pass '-' to read from
-# stdin, e.g.:
-#   journalctl -u fail2ban | bin/honeypot-report -
+# Usage (invoked by fail2ban's actionban and by tests):
+#   bin/honeypot-report --ip <ip> [--now <epoch>] [LOG_FILE | -]
+#
+# Reads the fail2ban [sshd] log from the file argument or stdin, e.g.:
+#   journalctl -u fail2ban --since=-24h | bin/honeypot-report --ip 1.2.3.4
 
 usage() {
-  sed -n '2,17p' "$0"
+  echo "usage: honeypot-report --ip <ip> [--now <epoch>] [LOG_FILE | -]" >&2
   exit 2
 }
 
-if [ $# -gt 1 ]; then
-  usage
-fi
-
-input="${1:-}"
+ip=""
+now=""
+input=""
 stdin_mode=0
-if [ -z "${input}" ]; then
-  if [ -r /var/log/fail2ban.log ]; then
-    input=/var/log/fail2ban.log
-  else
-    stdin_mode=1
-  fi
-fi
-if [ "${input}" = "-" ]; then
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --ip)
+      ip=${2:-}
+      shift 2
+      ;;
+    --now)
+      now=${2:-}
+      shift 2
+      ;;
+    -)
+      stdin_mode=1
+      shift
+      ;;
+    --*)
+      usage
+      ;;
+    *)
+      input=$1
+      shift
+      ;;
+  esac
+done
+
+[ -n "${ip}" ] || usage
+if [ -z "${input}" ] || [ "${input}" = "-" ]; then
   stdin_mode=1
 fi
-
-declare -A first_epoch ban_epoch last_epoch first_label ban_label last_label
-
-add_first() {
-  local ip=$1 epoch=$2 label=$3
-  if [ -z "${first_epoch[$ip]:-}" ] || [ "${epoch}" -lt "${first_epoch[$ip]}" ]; then
-    first_epoch[$ip]=${epoch}
-    first_label[$ip]=${label}
-  fi
-}
-
-add_last() {
-  local ip=$1 epoch=$2 label=$3
-  if [ -z "${last_epoch[$ip]:-}" ] || [ "${epoch}" -gt "${last_epoch[$ip]}" ]; then
-    last_epoch[$ip]=${epoch}
-    last_label[$ip]=${label}
-  fi
-}
+if [ -n "${now}" ] && ! [[ ${now} =~ ^[0-9]+$ ]]; then
+  echo "--now must be an epoch second" >&2
+  exit 2
+fi
 
 iso_ts='[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}:[0-9]{2}'
 syslog_ts='[A-Z][a-z]{2} [ 0-9][0-9] [0-9]{2}:[0-9]{2}:[0-9]{2}'
 ts_re="(${iso_ts}|${syslog_ts})"
+found_re='Found[ ]+([0-9a-fA-F.:]+)'
+trail_re="-[ ]+(${iso_ts})"
 
+request_label=""
+request_epoch=""
 process_log() {
-  local line line_ts
+  local line line_ts cand trace_ts epoch
   while IFS= read -r line || [ -n "${line}" ]; do
     line=${line%$'\r'}
     case ${line} in
@@ -78,42 +87,21 @@ process_log() {
     fi
     [ -n "${line_ts}" ] || continue
 
-    local event ip
-    event=""
-    ip=""
-    ban_re='Ban[ ]+([0-9a-fA-F.:]+)'
-    found_re='Found[ ]+([0-9a-fA-F.:]+)'
-    again_re='([0-9a-fA-F.:]+)[ ]+already[ ]+banned'
-    if [[ ${line} =~ ${ban_re} ]]; then
-      event=ban
-      ip=${BASH_REMATCH[1]}
-    elif [[ ${line} =~ ${found_re} ]]; then
-      event=found
-      ip=${BASH_REMATCH[1]}
-    elif [[ ${line} =~ ${again_re} ]]; then
-      event=again
-      ip=${BASH_REMATCH[1]}
-    else
-      continue
+    cand=""
+    if [[ ${line} =~ ${found_re} ]]; then
+      cand=${BASH_REMATCH[1]}
     fi
+    [ "${cand}" = "${ip}" ] || continue
 
-    local trace_ts
     trace_ts="${line_ts}"
-    trail_re="-[ ]+(${iso_ts})"
-    if [ "${event}" = found ] && [[ ${line} =~ ${trail_re} ]]; then
+    if [[ ${line} =~ ${trail_re} ]]; then
       trace_ts=${BASH_REMATCH[1]}
     fi
-
-    local epoch
-    if ! epoch=$(date -d "${trace_ts//T/ }" +%s 2>/dev/null); then
-      continue
-    fi
-
-    add_first "${ip}" "${epoch}" "${trace_ts}"
-    add_last "${ip}" "${epoch}" "${trace_ts}"
-    if [ "${event}" = ban ]; then
-      ban_epoch[$ip]=${epoch}
-      ban_label[$ip]=${line_ts}
+    if epoch=$(date -d "${trace_ts//T/ }" +%s 2>/dev/null); then
+      if [ -z "${request_epoch}" ]; then
+        request_label="${trace_ts}"
+        request_epoch="${epoch}"
+      fi
     fi
   done
 }
@@ -124,20 +112,12 @@ else
   process_log <"${input}"
 fi
 
-ips=$(printf '%s\n' "${!ban_epoch[@]}" | sort -V)
-if [ -z "${ips}" ]; then
-  echo "no banned IPs found in the fail2ban [sshd] log" >&2
-  exit 1
+if [ -n "${request_epoch}" ]; then
+  ban_epoch=${now:-$(date +%s)}
+  caught=$((ban_epoch - request_epoch))
+  [ "${caught}" -lt 0 ] && caught=0
+  printf '[sshd] caught %s for %ss since %s\n' \
+    "${ip}" "${caught}" "${request_label}"
+else
+  printf '[sshd] caught %s for 0s (no Found event in log)\n' "${ip}"
 fi
-
-printf '%-18s %-19s %-19s %-19s %s\n' \
-  IP first_seen last_seen banned_at caught_s
-for ip in ${ips}; do
-  caught=$((ban_epoch[$ip] - first_epoch[$ip]))
-  printf '%-18s %-19s %-19s %-19s %s\n' \
-    "${ip}" \
-    "${first_label[$ip]}" \
-    "${last_label[$ip]}" \
-    "${ban_label[$ip]}" \
-    "${caught}"
-done

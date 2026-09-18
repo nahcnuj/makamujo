@@ -20,50 +20,44 @@ Sep 19 06:10:03 vps fail2ban.actions[450]: NOTICE  [sshd] Ban 192.0.2.9
 2026-09-19 07:00:00,000 fail2ban.filter   [321]: INFO    [sshd] Found 10.0.0.99 - 2026-09-19 07:00:00
 EOF
 
-report_from_file=$(bash "${PROJECT_ROOT}/bin/honeypot-report" "${work_dir}/fail2ban.log")
+# request receive time is the first Found event; caught = BAN - request
+report=$(bash "${PROJECT_ROOT}/bin/honeypot-report" \
+  --ip 203.0.113.5 --now "$(date -d '2026-09-19 03:11:45' +%s)" \
+  "${work_dir}/fail2ban.log")
+[ "${report}" = '[sshd] caught 203.0.113.5 for 1s since 2026-09-19 03:11:44' ] || {
+  echo "203.0.113.5 record mismatch: ${report}" >&2
+  exit 1
+}
 
-report_from_stdin=$(bash "${PROJECT_ROOT}/bin/honeypot-report" - <"${work_dir}/fail2ban.log")
+# syslog-format log lines and stdin input are handled too
+report=$(bash "${PROJECT_ROOT}/bin/honeypot-report" \
+  --ip 192.0.2.9 --now "$(date -d 'Sep 19 06:10:03' +%s)" \
+  - <"${work_dir}/fail2ban.log")
+[ "${report}" = '[sshd] caught 192.0.2.9 for 2s since 2026-09-19 06:10:01' ] || {
+  echo "192.0.2.9 record mismatch: ${report}" >&2
+  exit 1
+}
 
-for report in "${report_from_file}" "${report_from_stdin}"; do
-  printf '%s\n' "${report}" | grep -q '^IP'
-  printf '%s\n' "${report}" | grep -q 'caught_s'
-  printf '%s\n' "${report}" | grep -Eq '^203\.0\.113\.5 ' || {
-    echo "missing 203.0.113.5 row" >&2
-    exit 1
-  }
-  printf '%s\n' "${report}" | grep -Eq '^198\.51\.100\.7 ' || {
-    echo "missing 198.51.100.7 row" >&2
-    exit 1
-  }
-  printf '%s\n' "${report}" | grep -Eq '^192\.0\.2\.9 ' || {
-    echo "missing 192.0.2.9 row" >&2
-    exit 1
-  }
-  printf '%s\n' "${report}" | grep -E '203\.0\.113\.5' | grep -qE ' 1$' || {
-    echo "203.0.113.5 caught_s is not 1: $(printf '%s\n' "${report}" | grep 203.0.113.5)" >&2
-    exit 1
-  }
-  printf '%s\n' "${report}" | grep -E '198\.51\.100\.7' | grep -qE ' 15$' || {
-    echo "198.51.100.7 caught_s is not 15: $(printf '%s\n' "${report}" | grep 198.51.100.7)" >&2
-    exit 1
-  }
-  printf '%s\n' "${report}" | grep -E '192\.0\.2\.9' | grep -qE ' 2$' || {
-    echo "192.0.2.9 caught_s is not 2: $(printf '%s\n' "${report}" | grep 192.0.2.9)" >&2
-    exit 1
-  }
-  if printf '%s\n' "${report}" | grep -q '10\.0\.0\.99'; then
-    echo "never-banned IP 10.0.0.99 must not be reported" >&2
-    exit 1
-  fi
-done
+report=$(bash "${PROJECT_ROOT}/bin/honeypot-report" \
+  --ip 198.51.100.7 --now "$(date -d '2026-09-19 06:00:15' +%s)" \
+  "${work_dir}/fail2ban.log")
+[ "${report}" = '[sshd] caught 198.51.100.7 for 15s since 2026-09-19 06:00:00' ] || {
+  echo "198.51.100.7 record mismatch: ${report}" >&2
+  exit 1
+}
 
-empty_report=$(bash "${PROJECT_ROOT}/bin/honeypot-report" - </dev/null 2>&1 || true)
-case "${empty_report}" in
-  *"no banned IPs"*) ;;
-  *)
-    echo "empty log should fail with 'no banned IPs', got: ${empty_report}" >&2
-    exit 1
-    ;;
-esac
+# an IP with no Found event falls back to 0s instead of failing
+report=$(bash "${PROJECT_ROOT}/bin/honeypot-report" \
+  --ip 198.51.100.254 --now 0 "${work_dir}/fail2ban.log")
+[ "${report}" = '[sshd] caught 198.51.100.254 for 0s (no Found event in log)' ] || {
+  echo "no-Found record mismatch: ${report}" >&2
+  exit 1
+}
+
+# --ip is required
+if bash "${PROJECT_ROOT}/bin/honeypot-report" - </dev/null >/dev/null 2>&1; then
+  echo "--ip is required" >&2
+  exit 1
+fi
 
 echo "honeypot-report output ok"
