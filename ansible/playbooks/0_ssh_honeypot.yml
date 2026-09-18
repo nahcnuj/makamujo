@@ -70,16 +70,23 @@
         port: 22
         timeout: 30
 
+    - name: Install the honeypot-report helper for fail2ban
+      ansible.builtin.copy:
+        src: ../../bin/honeypot-report
+        dest: /usr/local/bin/honeypot-report
+        mode: "0755"
+        validate: bash -n %s
+
     - name: Write fail2ban action that journals the caught seconds
       ansible.builtin.copy:
         dest: /etc/fail2ban/action.d/honeypot-report.conf
         mode: "0644"
         content: |
           [Definition]
-          # At [sshd] ban time, run bin/honeypot-report to measure how long
-          # the IP was served from the first received SSH request until this
-          # BAN, then journal the record so `journalctl -u fail2ban` shows it.
-          actionban = journalctl -u fail2ban --no-pager --since=-24h | /opt/src/makamujo/bin/honeypot-report --ip <ip> --now $(date +%s) | systemd-cat -t fail2ban-honeypot
+          # At [sshd] ban time, run honeypot-report to measure how long the
+          # IP was served from the first received SSH request until this BAN,
+          # then journal the record so `journalctl -u fail2ban` shows it.
+          actionban = journalctl -u fail2ban --no-pager --since=-24h | /usr/local/bin/honeypot-report --ip <ip> --now $(date +%s) | systemd-cat -t fail2ban-honeypot
 
     - name: Write fail2ban jail that DROP's failed key auth sources
       ansible.builtin.copy:
