@@ -1,0 +1,109 @@
+---
+# sshd keeps listening on TCP 22. Publickey is the only auth method.
+# Unauthenticated sessions are held (LoginGraceTime 0). IPs that fail
+# key auth are then DROP'd so further packets get no reply.
+#
+#   ansible-playbook playbooks/0_ssh_honeypot.yml
+- name: Silence SSH clients that cannot complete publickey auth
+  hosts: vps
+  become: true
+  tasks:
+    - name: Install OpenSSH and fail2ban
+      ansible.builtin.apt:
+        name:
+          - openssh-server
+          - fail2ban
+          - iptables
+        state: present
+        update_cache: true
+
+    - name: Stop Endlessh if a previous tarpit layout left it running
+      ansible.builtin.systemd:
+        name: endlessh
+        state: stopped
+        enabled: false
+      failed_when: false
+
+    - name: Remove Endlessh-on-22 sshd drop-in if present
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d/99-makamujo-management-port.conf
+        state: absent
+
+    - name: Ensure sshd includes drop-in directory
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^Include /etc/ssh/sshd_config.d/\*\.conf'
+        line: Include /etc/ssh/sshd_config.d/*.conf
+        insertbefore: BOF
+
+    - name: Write pubkey-only sshd drop-in
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/99-makamujo-honeypot.conf
+        mode: "0644"
+        content: |
+          Port 22
+          PubkeyAuthentication yes
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          ChallengeResponseAuthentication no
+          GSSAPIAuthentication no
+          PermitEmptyPasswords no
+          AuthenticationMethods publickey
+          LoginGraceTime 0
+          PerSourceMaxStartups 1
+          MaxStartups 50:30:150
+          MaxAuthTries 1
+
+    - name: Validate sshd config
+      ansible.builtin.command:
+        cmd: sshd -t
+      changed_when: false
+
+    - name: Reload sshd
+      ansible.builtin.systemd:
+        name: ssh
+        state: reloaded
+
+    - name: Confirm sshd listens on port 22
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 22
+        timeout: 30
+
+    - name: Write fail2ban jail that DROP's failed key auth sources
+      ansible.builtin.copy:
+        dest: /etc/fail2ban/jail.d/sshd-honeypot.conf
+        mode: "0644"
+        content: |
+          [sshd]
+          enabled = true
+          mode = aggressive
+          port = ssh
+          filter = sshd
+          logpath = %(sshd_log)s
+          backend = %(sshd_backend)s
+          maxretry = 1
+          findtime = 86400
+          bantime = -1
+          ignoreip = 127.0.0.1/8 ::1
+          action = iptables-multiport[name=sshd, port="ssh", protocol=tcp, blocktype=DROP]
+
+    - name: Enable and start fail2ban
+      ansible.builtin.systemd:
+        name: fail2ban
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Reload fail2ban jails
+      ansible.builtin.command:
+        cmd: fail2ban-client reload
+      changed_when: false
+
+    - name: Trap is armed
+      ansible.builtin.debug:
+        msg: >-
+          sshd is on TCP 22 with publickey only.
+          Clients that never complete key auth stay in preauth (LoginGraceTime 0).
+          IPs that fail key auth are DROP'd (fail2ban, permanent).
+          Unban with: fail2ban-client set sshd unbanip A.B.C.D

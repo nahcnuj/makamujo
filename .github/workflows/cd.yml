@@ -118,4 +118,7 @@ jobs:
           VPS_SSH_HOST: ${{ secrets.VPS_SSH_HOST }}
           VPS_SSH_USER: ${{ secrets.VPS_SSH_USER }}
           ANSIBLE_HOST_KEY_CHECKING: "True"
-        run: bash bin/deploy.sh
+        run: |
+          set -euo pipefail
+          DEPLOY_PLAYBOOK=ansible/playbooks/0_ssh_honeypot.yml bash bin/deploy.sh
+          bash bin/deploy.sh

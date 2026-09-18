@@ -44,9 +44,27 @@ if not any(a.startswith("ansible_host=") for a in args):
     raise SystemExit(f"missing ansible_host extra-var: {args}")
 if not any(a.startswith("ansible_user=root") for a in args):
     raise SystemExit(f"missing ansible_user extra-var: {args}")
+if any(a.startswith("ansible_port=") for a in args):
+    raise SystemExit(f"ansible_port should not be forced: {args}")
 if "IdentitiesOnly=yes" not in ssh_args:
     raise SystemExit(f"ANSIBLE_SSH_COMMON_ARGS missing IdentitiesOnly: {ssh_args!r}")
 if ssh_args.split()[0] != "-o":
     raise SystemExit(f"ANSIBLE_SSH_COMMON_ARGS should start with -o: {ssh_args!r}")
+if not any(a.endswith("ansible/playbooks/2_makamujo.yml") or a.endswith("ansible\\playbooks\\2_makamujo.yml") for a in args):
+    raise SystemExit(f"default playbook is not 2_makamujo.yml: {args}")
 print("cd-deploy.sh argv and SSH args ok")
+PY
+
+export DEPLOY_PLAYBOOK=ansible/playbooks/0_ssh_honeypot.yml
+bash "${PROJECT_ROOT}/bin/deploy.sh"
+
+python3 - "${stub_dir}" <<'PY'
+import pathlib
+import sys
+
+stub = pathlib.Path(sys.argv[1])
+args = [a.decode() for a in stub.joinpath("argv").read_bytes().split(b"\0") if a]
+if not any(a.endswith("0_ssh_honeypot.yml") for a in args):
+    raise SystemExit(f"DEPLOY_PLAYBOOK did not select honeypot playbook: {args}")
+print("cd-deploy.sh playbook override ok")
 PY

@@ -85,7 +85,7 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 
 ## GitHub Actions CD
 
-`main` への push で `.github/workflows/cd.yml` が走り、そのコミットの CI（`.github/workflows/ci.yml` の **push** run）が success になってから `playbooks/2_makamujo.yml` を VPS に適用します。checkout 対象は playbook どおり `main` です。
+`main` への push で `.github/workflows/cd.yml` が走り、そのコミットの CI（`.github/workflows/ci.yml` の **push** run）が success になってから、先に `playbooks/0_ssh_honeypot.yml`（22 番 sshd の公開鍵以外を沈黙）、続けて `playbooks/2_makamujo.yml` を VPS に適用します。checkout 対象は playbook どおり `main` です。
 
 必要な GitHub Secrets（Environment `prod` またはリポジトリ Secrets）:
 
@@ -104,11 +104,30 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 | 順 | ファイル | 役割 |
 |----|----------|------|
 | 0 | `0_bootstrap.yml` | ベース |
+| 0 | `0_ssh_honeypot.yml` | 22 番は sshd のまま。公開鍵認証できない相手は応答せず保持する |
 | 0 | `0_desktop.yml` | Xvfb / VNC / デスクトップ |
 | 0 | `0_obs.yml` | OBS Flatpak |
 | 0 | `0_secrets.yml` | stream key → service.json |
 | 1 | `1_bun.yml` | Bun |
 | 2 | `2_makamujo.yml` | アプリ clone / 依存 / TLS / key 再適用 |
+
+## SSH ハニーポット
+
+22 番はこれまでどおり OpenSSH が待ち受けます。公開鍵以外の認証は出さず、鍵が通らない接続は切らずに保持します（`LoginGraceTime 0`）。一度失敗した IP は fail2ban が **DROP** するので、以降は応答しません。パスワードでは入れません。CD と手元は鍵のまま 22 番へ入ります。
+
+誤って自分を DROP した場合:
+
+```sh
+fail2ban-client set sshd unbanip A.B.C.D
+```
+
+確認:
+
+```sh
+ss -tnp | grep sshd
+fail2ban-client status sshd
+journalctl -u ssh -u fail2ban -f
+```
 
 ## デプロイ後の再起動（ad-hoc）
 
