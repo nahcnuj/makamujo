@@ -146,8 +146,11 @@ int main(int argc, char **argv)
         return cmd_available();
     if (!strcmp(cmd, "store"))
         return cmd_store(path);
-    if (!strcmp(cmd, "fetch"))
+    if (!strcmp(cmd, "fetch")) {
+        if (!path_is_allowed(path))
+            die("path required under /dev/shm/");
         return cmd_fetch(path);
+    }
     if (!strcmp(cmd, "delete"))
         return cmd_delete(path);
 
