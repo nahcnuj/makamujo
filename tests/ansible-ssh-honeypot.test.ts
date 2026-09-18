@@ -2,7 +2,10 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
 const playbook = readFileSync("ansible/playbooks/0_ssh_honeypot.yml", "utf-8");
-const varsFile = readFileSync("ansible/inventory/group_vars/all/vars.yml", "utf-8");
+const varsFile = readFileSync(
+  "ansible/inventory/group_vars/all/vars.yml",
+  "utf-8",
+);
 const deploySh = readFileSync("bin/deploy.sh", "utf-8");
 const cdYml = readFileSync(".github/workflows/cd.yml", "utf-8");
 const ansibleReadme = readFileSync("ansible/README.md", "utf-8");
@@ -20,7 +23,9 @@ test("management SSH port is 22222 and tarpit stays on 22", () => {
 test("Endlessh can bind port 22 without editing the distro unit file", () => {
   expect(playbook).toContain("AmbientCapabilities=CAP_NET_BIND_SERVICE");
   expect(playbook).toContain("PrivateUsers=false");
-  expect(playbook).toContain("/etc/systemd/system/endlessh.service.d/override.conf");
+  expect(playbook).toContain(
+    "/etc/systemd/system/endlessh.service.d/override.conf",
+  );
 });
 
 test("sshd is reloaded not restarted so the applying SSH session survives", () => {
@@ -31,7 +36,9 @@ test("sshd is reloaded not restarted so the applying SSH session survives", () =
 });
 
 test("sshd leaves 22 only after the management port is confirmed on loopback", () => {
-  expect(playbook).toContain("Temporarily dual-listen sshd on tarpit and management ports");
+  expect(playbook).toContain(
+    "Temporarily dual-listen sshd on tarpit and management ports",
+  );
   expect(playbook).toContain("when: ssh_management_listen.rc != 0");
   expect(playbook).toContain("host: 127.0.0.1");
   expect(playbook).toContain("Wait until sshd listens on the management port");
@@ -41,7 +48,7 @@ test("sshd leaves 22 only after the management port is confirmed on loopback", (
 
 test("deploy.sh probes the management port and times out instead of sitting in the tarpit", () => {
   expect(deploySh).toContain('ansible_port="$("${script_dir}/vps-ssh-port")"');
-  expect(deploySh).toContain("-e \"ansible_port=${ansible_port}\"");
+  expect(deploySh).toContain('-e "ansible_port=${ansible_port}"');
   expect(deploySh).toContain("ConnectTimeout=10");
   expect(deploySh).toContain("DEPLOY_PLAYBOOK");
 });
