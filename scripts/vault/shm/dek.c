@@ -91,7 +91,8 @@ static int cmd_store(const char *path)
     if (snprintf(fullpath, sizeof fullpath, "%s%s", DEK_PATH_PREFIX, name) >= (int)sizeof fullpath)
         die("path too long");
     unlink(fullpath);
-    fd = open(fullpath, O_CREAT | O_WRONLY | O_TRUNC | O_NOFOLLOW, 0600);
+    /* O_EXCL: /dev/shm is shared; fail instead of writing into a file owned by another user (e.g. a pre-created name). */
+    fd = open(fullpath, O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW, 0600);
     if (fd < 0)
         die("open failed");
     exp = (uint64_t)time(NULL) + (uint64_t)ttl();
