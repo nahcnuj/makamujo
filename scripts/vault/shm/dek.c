@@ -78,23 +78,26 @@ static int cmd_store(const char *path)
 {
     unsigned char buf[MAX_DEK];
     ssize_t n = read(STDIN_FILENO, buf, sizeof buf);
+    int dirfd;
     int fd;
     uint64_t exp;
     pid_t pid;
     char name[256];
-    char fullpath[sizeof(DEK_PATH_PREFIX) + sizeof(name)];
 
     if (n <= 0)
         die("empty DEK");
     if (!extract_name(path, name, sizeof name))
         die("path required under /dev/shm/");
-    if (snprintf(fullpath, sizeof fullpath, "%s%s", DEK_PATH_PREFIX, name) >= (int)sizeof fullpath)
-        die("path too long");
-    unlink(fullpath);
-    /* O_EXCL: /dev/shm is shared; fail instead of writing into a file owned by another user (e.g. a pre-created name). */
-    fd = open(fullpath, O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW, 0600);
-    if (fd < 0)
+    dirfd = open(DEK_PATH_PREFIX, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+    if (dirfd < 0)
+        die("open /dev/shm");
+    unlinkat(dirfd, name, 0);
+    /* openat keeps the entry inside the /dev/shm dirfd; O_EXCL fails instead of writing into a pre-created file in the shared directory. */
+    fd = openat(dirfd, name, O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW, 0600);
+    if (fd < 0) {
+        close(dirfd);
         die("open failed");
+    }
     exp = (uint64_t)time(NULL) + (uint64_t)ttl();
     if (write(fd, &exp, sizeof exp) != (ssize_t)sizeof exp)
         die("write exp");
@@ -104,9 +107,10 @@ static int cmd_store(const char *path)
     pid = fork();
     if (pid == 0) {
         sleep((unsigned)ttl());
-        unlink(fullpath);
+        unlinkat(dirfd, name, 0);
         _exit(0);
     }
+    close(dirfd);
     return 0;
 }
 
@@ -141,11 +145,14 @@ static int cmd_fetch(const char *path)
 static int cmd_delete(const char *path)
 {
     char name[256];
-    char fullpath[sizeof(DEK_PATH_PREFIX) + sizeof(name)];
+    int dirfd;
 
     if (extract_name(path, name, sizeof name)) {
-        if (snprintf(fullpath, sizeof fullpath, "%s%s", DEK_PATH_PREFIX, name) < (int)sizeof fullpath)
-            unlink(fullpath);
+        dirfd = open(DEK_PATH_PREFIX, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+        if (dirfd >= 0) {
+            unlinkat(dirfd, name, 0);
+            close(dirfd);
+        }
     }
     return 0;
 }
