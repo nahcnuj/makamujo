@@ -167,12 +167,26 @@ journalctl -u fail2ban
 ```
 
 - リクエスト受信時刻 = その IP の**最初の** fail2ban `Found` イベントに埋め込まれた sshd ログ側のタイムスタンプ。`LoginGraceTime 0` で保持されている間も認証を続けるとイベントが積み上がるため、`Found` が BAN 後も増えていく様子も同じ出力で確認できます。
-- 設定: `ansible/playbooks/0_ssh_honeypot.yml` が `/etc/fail2ban/action.d/honeypot-report.conf` を書き、sshd jail の `action` に `honeypot-report` を追加します。
-- 手動再現:
+- 設定: `ansible/playbooks/0_ssh_honeypot.yml` が `bin/honeypot-report` を `/usr/local/bin/honeypot-report` に導入し（アプリのデプロイとは独立）、`/etc/fail2ban/action.d/honeypot-report.conf` を書いて sshd jail の `action` に `honeypot-report` を追加します。
+- 手動再現（コントローラ側・サーバ側とも可）:
   ```sh
   journalctl -u fail2ban --since=-24h | bin/honeypot-report --ip 203.0.113.5
+  journalctl -u fail2ban --since=-24h | /usr/local/bin/honeypot-report --ip 203.0.113.5
   ```
 - 単体テスト: `bash tests/bin/honeypot-report.test.sh`。
+
+### BAN が記録されないとき
+
+`journalctl -u ssh -u fail2ban -f` で `Found` が付くのに `Ban` が一向に出ない場合、jail の適用状況とフィルタの照合を確認します。
+
+```sh
+fail2ban-client status sshd      # jail が無ければ 0_ssh_honeypot.yml 未適用
+fail2ban-client get sshd banned count
+iptables -nL f2b-sshd            # DROP チェーンが空なら BAN 未実行
+journalctl -u fail2ban --no-pager | tail -50
+```
+
+`Found` は出るのに BAN されない・遅延する場合は `backend`（`%(sshd_backend)s` の解決値）と fail2ban ログの `WARNING` を確認してください。[sshd] jail の `bantime = -1` は一度 BAN した IP を自動解除しません。
 
 ## デプロイ後の再起動（ad-hoc）
 
