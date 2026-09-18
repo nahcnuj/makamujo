@@ -157,6 +157,17 @@ ss -tnp | grep sshd
 journalctl -u ssh -u fail2ban -f
 ```
 
+### 捕まえられた時間の確認
+
+BAN 済み IP ごとに「SSH リクエストを受け取ってから BAN するまで」の秒数（`caught_s`）を出力します。`LoginGraceTime 0` で接続を保持している間も認証を続けると fail2ban のイベントが積み上がるため、`last_seen` が BAN 後も伸び続けていたら、DROP 後も叩き続けられていたことが分かります。
+
+```sh
+journalctl -u fail2ban | bin/honeypot-report -
+# 単体テスト: bash tests/bin/honeypot-report.test.sh
+```
+
+/var/log/fail2ban.log がある場合は引数なしでも読めます。ログファイルを直接渡すか、`-` で標準入力から読めます。
+
 ## デプロイ後の再起動（ad-hoc）
 
 `2_makamujo.yml` はコードと依存の反映までで、プロセス再起動は行いません。
