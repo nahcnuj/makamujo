@@ -1,7 +1,9 @@
 ---
 # sshd keeps listening on TCP 22. Publickey is the only auth method.
-# Unauthenticated sessions are held (LoginGraceTime 0). IPs that fail
-# key auth are then DROP'd so further packets get no reply.
+# Unauthenticated sessions are held (LoginGraceTime 0) and never cut:
+# no per-source limit and a MaxStartups high enough that overload drops
+# do not happen, so IPs that fail key auth stay caught until fail2ban
+# DROP's them and silences further packets.
 #
 #   ansible-playbook playbooks/0_ssh_honeypot.yml
 - name: Silence SSH clients that cannot complete publickey auth
@@ -50,8 +52,7 @@
           PermitEmptyPasswords no
           AuthenticationMethods publickey
           LoginGraceTime 0
-          PerSourceMaxStartups 1
-          MaxStartups 50:30:150
+          MaxStartups 100000:50:100000
           MaxAuthTries 1
 
     - name: Validate sshd config
