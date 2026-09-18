@@ -174,7 +174,3 @@
         - makamujo-screen.service
         - makamujo-browser.service
         - makamujo-obs.service
-
-    - name: Deploy done
-      ansible.builtin.debug:
-        msg: Deployed; single Pulse path; systemd-only app restart.

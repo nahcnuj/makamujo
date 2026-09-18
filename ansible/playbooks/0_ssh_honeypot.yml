@@ -99,11 +99,3 @@
       ansible.builtin.command:
         cmd: fail2ban-client reload
       changed_when: false
-
-    - name: Trap is armed
-      ansible.builtin.debug:
-        msg: >-
-          sshd is on TCP 22 with publickey only.
-          Clients that never complete key auth stay in preauth (LoginGraceTime 0).
-          IPs that fail key auth are DROP'd (fail2ban, permanent).
-          Unban with: fail2ban-client set sshd unbanip A.B.C.D
