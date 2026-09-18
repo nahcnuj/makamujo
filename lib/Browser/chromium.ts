@@ -122,6 +122,23 @@ export function cleanupChromiumLockFiles(userDataDir: string): void {
   }
 }
 
+/**
+ * Best-effort removal of a temporary directory owned by this module (e.g. a
+ * Chromium profile dir created with `mkdtempSync` under the OS temp dir).
+ * Never throws, so cleanup failures cannot break the browser lifecycle.
+ */
+export function removeTemporaryDirectory(dir: string): void {
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch (err) {
+    console.warn(
+      "[WARN] failed to remove temporary directory",
+      dir,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+}
+
 const isTransientLaunchError = (message: string): boolean =>
   /Failed to connect|spawn|ECONNREFUSED|pipe|Timeout|ProcessSingleton|SingletonLock/i.test(
     message,
@@ -166,11 +183,15 @@ export async function launchPersistentContext(
             "[WARN] userDataDir locked, retrying with temp dir",
             tmpDir,
           );
-          return await launchWithFallback(
+          const fallbackContext = await launchWithFallback(
             () => chromium.launchPersistentContext(tmpDir, launchOpts),
             () =>
               playwright.chromium.launchPersistentContext(tmpDir, launchOpts),
           );
+          fallbackContext.on("close", () => {
+            removeTemporaryDirectory(tmpDir);
+          });
+          return fallbackContext;
         } catch {
           // fall through to retry / rethrow
         }
@@ -325,6 +346,7 @@ export const create = async (
     },
     close: async () => {
       await ctx.close();
+      removeTemporaryDirectory(userDataDir);
     },
 
     clickByText: async (text) => {

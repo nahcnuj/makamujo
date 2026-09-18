@@ -8,6 +8,7 @@ import { join } from "node:path";
  * Uses --app= and reuses that window (no second tabbed window).
  */
 import { chromium } from "playwright";
+import { removeTemporaryDirectory } from "../../lib/Browser/chromium";
 
 process.env.DISPLAY = process.env.DISPLAY || ":10";
 
@@ -59,5 +60,8 @@ if (!page) {
 }
 console.log("[INFO] overlay loaded", page.url());
 
+context.on("close", () => {
+  removeTemporaryDirectory(userDataDir);
+});
 context.on("close", () => process.exit(0));
 await new Promise(() => {});
