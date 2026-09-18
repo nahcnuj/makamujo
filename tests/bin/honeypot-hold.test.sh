@@ -17,6 +17,10 @@ if ! sudo -n true 2>/dev/null; then
   exit 0
 fi
 
+# A freshly installed openssh-server has no runtime privilege-separation
+# directory yet (nothing started the service); sshd refuses to run without it.
+sudo -n mkdir -p /run/sshd
+
 work_dir=$(mktemp -d)
 sshd_pid=""
 cleanup() {
