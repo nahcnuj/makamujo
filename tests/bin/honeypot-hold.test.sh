@@ -20,6 +20,7 @@ fi
 # A freshly installed openssh-server has no runtime privilege-separation
 # directory yet (nothing started the service); sshd refuses to run without it.
 sudo -n mkdir -p /run/sshd
+SSHD_BIN=$(command -v sshd)
 
 work_dir=$(mktemp -d)
 sshd_pid=""
@@ -59,8 +60,8 @@ MaxStartups 100000:50:100000
 MaxAuthTries 100000
 EOF
 
-sudo -n sshd -t -f "${work_dir}/sshd_config"
-sudo -n sshd -f "${work_dir}/sshd_config"
+sudo -n "${SSHD_BIN}" -t -f "${work_dir}/sshd_config"
+sudo -n "${SSHD_BIN}" -f "${work_dir}/sshd_config"
 sshd_pid=$(cat "${work_dir}/sshd.pid")
 
 # Wait until the port answers.
