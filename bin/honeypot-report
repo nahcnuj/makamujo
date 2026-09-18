@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Journal the seconds an IP was caught by the ssh honeypot.
+#
+# This is the worker behind the fail2ban "honeypot-report" action: the
+# playbook (ansible/playbooks/0_ssh_honeypot.yml) installs
+# /etc/fail2ban/action.d/honeypot-report.conf, whose actionban feeds the
+# fail2ban [sshd] journal into this script at BAN time and then journals
+# its output with systemd-cat. That way `journalctl -u fail2ban` alone
+# shows the caught-seconds record for every banned IP.
+#
+# "caught seconds" = BAN moment - when sshd received the request. The
+# request time is the timestamp embedded in the fail2ban "Found <ip>" log
+# line that carried it (the sshd log timestamp after '- '); the BAN moment
+# defaults to `date +%s` (the moment the action runs) and can be pinned
+# with --now for deterministic replay / tests.
+#
+# Usage (invoked by fail2ban's actionban and by tests):
+#   bin/honeypot-report --ip <ip> [--now <epoch>] [LOG_FILE | -]
+#
+# Reads the fail2ban [sshd] log from the file argument or stdin, e.g.:
+#   journalctl -u fail2ban --since=-24h | bin/honeypot-report --ip 1.2.3.4
+
+usage() {
+  echo "usage: honeypot-report --ip <ip> [--now <epoch>] [LOG_FILE | -]" >&2
+  exit 2
+}
+
+ip=""
+now=""
+input=""
+stdin_mode=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --ip)
+      ip=${2:-}
+      shift 2
+      ;;
+    --now)
+      now=${2:-}
+      shift 2
+      ;;
+    -)
+      stdin_mode=1
+      shift
+      ;;
+    --*)
+      usage
+      ;;
+    *)
+      input=$1
+      shift
+      ;;
+  esac
+done
+
+[ -n "${ip}" ] || usage
+if [ -z "${input}" ] || [ "${input}" = "-" ]; then
+  stdin_mode=1
+fi
+if [ -n "${now}" ] && ! [[ ${now} =~ ^[0-9]+$ ]]; then
+  echo "--now must be an epoch second" >&2
+  exit 2
+fi
+
+iso_ts='[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}:[0-9]{2}'
+syslog_ts='[A-Z][a-z]{2} [ 0-9][0-9] [0-9]{2}:[0-9]{2}:[0-9]{2}'
+ts_re="(${iso_ts}|${syslog_ts})"
+found_re='Found[ ]+([0-9a-fA-F.:]+)'
+trail_re="-[ ]+(${iso_ts})"
+
+request_label=""
+request_epoch=""
+process_log() {
+  local line line_ts cand trace_ts epoch
+  while IFS= read -r line || [ -n "${line}" ]; do
+    line=${line%$'\r'}
+    case ${line} in
+      *'[sshd]'*) ;;
+      *) continue ;;
+    esac
+
+    line_ts=""
+    if [[ ${line} =~ ${ts_re} ]]; then
+      line_ts=${BASH_REMATCH[1]}
+    fi
+    [ -n "${line_ts}" ] || continue
+
+    cand=""
+    if [[ ${line} =~ ${found_re} ]]; then
+      cand=${BASH_REMATCH[1]}
+    fi
+    [ "${cand}" = "${ip}" ] || continue
+
+    trace_ts="${line_ts}"
+    if [[ ${line} =~ ${trail_re} ]]; then
+      trace_ts=${BASH_REMATCH[1]}
+    fi
+    if epoch=$(date -d "${trace_ts//T/ }" +%s 2>/dev/null); then
+      if [ -z "${request_epoch}" ]; then
+        request_label="${trace_ts}"
+        request_epoch="${epoch}"
+      fi
+    fi
+  done
+}
+
+if [ "${stdin_mode}" = 1 ]; then
+  process_log
+else
+  process_log <"${input}"
+fi
+
+if [ -n "${request_epoch}" ]; then
+  ban_epoch=${now:-$(date +%s)}
+  caught=$((ban_epoch - request_epoch))
+  [ "${caught}" -lt 0 ] && caught=0
+  printf '[sshd] caught %s for %ss since %s\n' \
+    "${ip}" "${caught}" "${request_label}"
+else
+  printf '[sshd] caught %s for 0s (no Found event in log)\n' "${ip}"
+fi
