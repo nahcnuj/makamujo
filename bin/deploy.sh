@@ -13,13 +13,16 @@ if [ "${playbook}" = "${playbook#/}" ]; then
   playbook="${repo_root}/${playbook}"
 fi
 
+ansible_dir="${repo_root}/ansible"
+export ANSIBLE_CONFIG="${ANSIBLE_CONFIG:-${ansible_dir}/ansible.cfg}"
 export ANSIBLE_HOST_KEY_CHECKING="${ANSIBLE_HOST_KEY_CHECKING:-True}"
 export ANSIBLE_SSH_COMMON_ARGS="${ANSIBLE_SSH_COMMON_ARGS:--o IdentitiesOnly=yes}"
 
-cd "$(dirname "$0")"
+cd "${ansible_dir}"
 
 exec ansible-playbook "${playbook}" \
-  --vault-password-file "${script_dir}/../ansible/.vault_pass" \
+  -i "${ansible_dir}/inventory/hosts.yml" \
+  --vault-password-file "${ansible_dir}/.vault_pass" \
   -e "ansible_host=${VPS_SSH_HOST}" \
   -e "ansible_user=${ansible_user}" \
   -e "ansible_ssh_private_key_file=${key_file}" \

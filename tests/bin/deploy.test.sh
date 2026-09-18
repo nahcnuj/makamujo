@@ -52,6 +52,10 @@ if ssh_args.split()[0] != "-o":
     raise SystemExit(f"ANSIBLE_SSH_COMMON_ARGS should start with -o: {ssh_args!r}")
 if not any(a.endswith("ansible/playbooks/2_makamujo.yml") or a.endswith("ansible\\playbooks\\2_makamujo.yml") for a in args):
     raise SystemExit(f"default playbook is not 2_makamujo.yml: {args}")
+if "-i" not in args:
+    raise SystemExit(f"missing inventory -i: {args}")
+if not any(a.endswith("ansible/inventory/hosts.yml") or a.endswith("ansible\\inventory\\hosts.yml") for a in args):
+    raise SystemExit(f"inventory path is not ansible/inventory/hosts.yml: {args}")
 print("cd-deploy.sh argv and SSH args ok")
 PY
 

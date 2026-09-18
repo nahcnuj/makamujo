@@ -115,17 +115,45 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 
 22 番はこれまでどおり OpenSSH が待ち受けます。公開鍵以外の認証は出さず、鍵が通らない接続は切らずに保持します（`LoginGraceTime 0`）。一度失敗した IP は fail2ban が **DROP** するので、以降は応答しません。パスワードでは入れません。CD と手元は鍵のまま 22 番へ入ります。
 
-誤って自分を DROP した場合:
+手元から playbook だけ流す場合（リポジトリルート、Vault セッション利用）:
+
+```sh
+bin/vault-session run ansible-playbook ansible/playbooks/0_ssh_honeypot.yml
+```
+
+### 禁止 IP の確認
+
+1. 鍵で VPS の 22 番へ入る。
+
+```sh
+ssh root@HOST
+```
+
+2. fail2ban の sshd jail を見る。`Banned IP list` が禁止中の IP。
+
+```sh
+fail2ban-client status sshd
+```
+
+jail が無い（`Sorry but the jail 'sshd' does not exist`）場合は `0_ssh_honeypot.yml` がまだ当たっていません。一覧が空なら、まだ誰も BAN されていません。
+
+3. IP だけ欲しいとき、または iptables 側を見るとき。
+
+```sh
+fail2ban-client get sshd banip
+iptables -nL f2b-sshd
+```
+
+4. 誤って自分を DROP したら、VPS 上で解除する。
 
 ```sh
 fail2ban-client set sshd unbanip A.B.C.D
 ```
 
-確認:
+sshd / fail2ban のログ:
 
 ```sh
 ss -tnp | grep sshd
-fail2ban-client status sshd
 journalctl -u ssh -u fail2ban -f
 ```
 

@@ -36,6 +36,7 @@ test("deploy.sh can run the honeypot playbook without moving SSH off 22", () => 
   expect(deploySh).toContain("DEPLOY_PLAYBOOK");
   expect(deploySh).not.toContain("vps-ssh-port");
   expect(deploySh).not.toContain("ansible_port");
+  expect(deploySh).toContain(' -i "${ansible_dir}/inventory/hosts.yml" ');
 });
 
 test("CD arms the honeypot before app deploy and still key-scans port 22", () => {
@@ -54,6 +55,9 @@ test("ansible README documents pubkey-only silence on port 22", () => {
   expect(ansibleReadme).toContain("0_ssh_honeypot.yml");
   expect(ansibleReadme).toContain("LoginGraceTime 0");
   expect(ansibleReadme).toContain("DROP");
+  expect(ansibleReadme).toContain("fail2ban-client status sshd");
+  expect(ansibleReadme).toContain("fail2ban-client get sshd banip");
+  expect(ansibleReadme).toContain("fail2ban-client set sshd unbanip");
   expect(ansibleReadme).not.toContain("Endlessh");
   expect(ansibleReadme).not.toContain("22222");
   expect(ansibleReadme).not.toContain("VPS_SSH_PORT");
