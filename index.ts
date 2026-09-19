@@ -38,7 +38,7 @@ import { normalizePublishedStreamState } from "./lib/streamState";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
 import * as speechHistoryRoute from "./routes/api/speech-history";
-import * as index from "./routes/index";
+import * as indexRoute from "./routes/index";
 import { handleCatchAll } from "./src/frontendServer";
 
 process.on("exit", exitHandler.bind(null, { cleanup: true }));
@@ -94,532 +94,446 @@ process.on("uncaughtException", (err) => {
   exitHandler({ exit: true }, 1);
 });
 
-const {
-  values: { model: modelFile, data: dataFile, port },
-} = parseArgs({
-  options: {
-    model: {
-      short: "m",
-      type: "string",
-      default: "./var/model.json",
+function printHelp(): void {
+  console.error(`Usage:
+  bun index.ts <command> [options]
+
+Commands:
+  start       Start the main broadcasting server
+  console     Start the console server
+  help        Show this help message
+
+Options for 'start':
+  -m, --model <path>    Model file path (default: ./var/model.json)
+  -d, --data <path>     Data file path (default: ./var/cookieclicker.txt)
+  -p, --port <number>   Port number (default: 7777)
+
+Options for 'console':
+  --cert-path <path>        TLS certificate path
+  --key-path <path>         TLS private key path
+  --broadcasting-host <host>  Broadcasting server host (default: localhost)
+  --broadcasting-port <port>  Broadcasting server port (default: 7777)
+`);
+}
+
+async function runStartCommand(args: string[]): Promise<void> {
+  const {
+    values: { model: modelFile, data: dataFile, port },
+  } = parseArgs({
+    args,
+    options: {
+      model: {
+        short: "m",
+        type: "string",
+        default: "./var/model.json",
+      },
+      data: {
+        short: "d",
+        type: "string",
+        default: "./var/cookieclicker.txt",
+      },
+      port: {
+        short: "p",
+        type: "string",
+        default: "7777",
+      },
     },
-    data: {
-      short: "d",
-      type: "string",
-      default: "./var/cookieclicker.txt",
+    allowPositionals: true,
+  });
+
+  const model = ((file) => {
+    try {
+      return MarkovChainModel.fromFile(file);
+    } catch (_err) {
+      console.warn("failed to open the file", file);
+      return new MarkovChainModel();
+    }
+  })(modelFile);
+
+  const tts =
+    process.platform !== "win32"
+      ? (() => {
+          const htsvoiceFile =
+            "/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice";
+          const dictionaryDir = "/var/lib/mecab/dic/open-jtalk/naist-jdic";
+          return new TTS({
+            htsvoiceFile,
+            dictionaryDir,
+          });
+        })()
+      : new FallbackTTS();
+
+  const streamer = new MakaMujo(model, tts);
+
+  // Provide an in-memory fallback agent synchronously so the rest of the
+  // server initialization can reference `agent` without awaiting a dynamic
+  // import. We'll try to dynamically import and initialize the real
+  // `automated-gameplay-transmitter` agent later and replace this fallback
+  // when possible.
+  let lastPublishedStreamState: unknown;
+  let currentSpeechState = { speech: "", silent: false };
+  // WebSocket clients connected to the broadcasting server.
+  const wsClients = new Set<WsLike>();
+
+  // Server-Sent Events (SSE) clients: store controller objects so we can
+  // push `data: ...\n\n` frames to each connected client.
+  const sseClients = new Set<ReadableStreamDefaultController<string>>();
+
+  const createSseStream = (label: string) =>
+    createSseStreamImpl(label, sseClients, getCurrentStreamPayload);
+
+  const broadcastCurrentPayloadLocal = (context: string) =>
+    broadcastCurrentPayload(
+      context,
+      getCurrentStreamPayload,
+      sseClients,
+      wsClients,
+    );
+
+  const getCurrentStreamPayload = () => {
+    return assemblePublishedPayload({
+      lastPublished: lastPublishedStreamState,
+      agentStreamState: agent.getStreamState?.(),
+      streamer: {
+        canSpeak: streamer.canSpeak,
+        currentGame: streamer.currentGame,
+        currentNGramSize: streamer.currentNGramSize,
+        currentNGramSizeRaw: streamer.currentNGramSizeRaw,
+        commentCount: streamer.streamState?.meta?.total?.comments,
+      },
+      speechState: agent.getSpeech(),
+      history: generatedSpeechHistory,
+      historySseSize: GENERATED_SPEECH_HISTORY_SSE_SIZE,
+    });
+  };
+
+  const normalizeSpeechText = (speech: unknown): string | undefined => {
+    if (typeof speech === "string") {
+      return speech;
+    }
+
+    if (!speech || typeof speech !== "object") {
+      return undefined;
+    }
+
+    if (typeof (speech as any).text === "string") {
+      return (speech as any).text;
+    }
+
+    if (typeof (speech as any).speech === "string") {
+      return (speech as any).speech;
+    }
+
+    return undefined;
+  };
+
+  let agent: any = createFallbackAgent(
+    () => lastPublishedStreamState,
+    (data) => {
+      lastPublishedStreamState = data;
     },
-    port: {
-      short: "p",
-      // parseArgs only supports 'string' and 'boolean'; convert to Number when using
-      type: "string",
-      default: "7777",
+    () => currentSpeechState,
+    (state) => {
+      currentSpeechState = state;
     },
-  },
-});
-
-// Rely on Bun's `--hot` and Bun.build watch mode in development.
-
-const model = ((file) => {
-  try {
-    return MarkovChainModel.fromFile(file);
-  } catch (_err) {
-    console.warn("failed to open the file", file);
-    return new MarkovChainModel();
-  }
-})(modelFile);
-
-const tts =
-  process.platform !== "win32"
-    ? (() => {
-        const htsvoiceFile =
-          "/usr/share/hts-voice/nitech-jp-atr503-m001/nitech_jp_atr503_m001.htsvoice";
-        const dictionaryDir = "/var/lib/mecab/dic/open-jtalk/naist-jdic";
-        return new TTS({
-          htsvoiceFile,
-          dictionaryDir,
-        });
-      })()
-    : new FallbackTTS();
-
-const streamer = new MakaMujo(model, tts);
-
-// Provide an in-memory fallback agent synchronously so the rest of the
-// server initialization can reference `agent` without awaiting a dynamic
-// import. We'll try to dynamically import and initialize the real
-// `automated-gameplay-transmitter` agent later and replace this fallback
-// when possible.
-let lastPublishedStreamState: unknown;
-let currentSpeechState = { speech: "", silent: false };
-// WebSocket clients connected to the broadcasting server.
-const wsClients = new Set<WsLike>();
-
-// Server-Sent Events (SSE) clients: store controller objects so we can
-// push `data: ...\n\n` frames to each connected client.
-const sseClients = new Set<ReadableStreamDefaultController<string>>();
-
-const createSseStream = (label: string) =>
-  createSseStreamImpl(label, sseClients, getCurrentStreamPayload);
-
-const broadcastCurrentPayloadLocal = (context: string) =>
-  broadcastCurrentPayload(
-    context,
-    getCurrentStreamPayload,
-    sseClients,
-    wsClients,
+    // Keep comments flowing while AGT createAgentApi is loading (or if it fails).
+    (comments) => {
+      streamer.listen(comments as Parameters<typeof streamer.listen>[0]);
+    },
   );
 
-const getCurrentStreamPayload = () => {
-  return assemblePublishedPayload({
-    lastPublished: lastPublishedStreamState,
-    agentStreamState: agent.getStreamState?.(),
-    streamer: {
-      canSpeak: streamer.canSpeak,
-      currentGame: streamer.currentGame,
-      currentNGramSize: streamer.currentNGramSize,
-      currentNGramSizeRaw: streamer.currentNGramSizeRaw,
-      commentCount: streamer.streamState?.meta?.total?.comments,
-    },
-    speechState: agent.getSpeech(),
-    history: generatedSpeechHistory,
-    historySseSize: GENERATED_SPEECH_HISTORY_SSE_SIZE,
+  // Attempt to dynamically load the external agent API. This avoids module
+  // evaluation side-effects at import time (such as binding to IPC paths)
+  // which can cause transient failures in CI and local test runs.
+  void tryCreateExternalAgentApi(streamer).then((external) => {
+    if (external !== undefined) {
+      agent = external;
+    }
   });
-};
+  // Keep a larger buffer in memory for pagination while limiting the SSE payload size.
+  const GENERATED_SPEECH_HISTORY_BUFFER_SIZE = 200;
+  const generatedSpeechHistory: SpeechHistoryEntry[] = [];
+  let generatedSpeechHistorySequence = 0;
 
-const normalizeSpeechText = (speech: unknown): string | undefined => {
-  if (typeof speech === "string") {
-    return speech;
+  // Bind the in-memory array to the speech-history route handler.
+  speechHistoryRoute.setSpeechHistoryRef(generatedSpeechHistory);
+
+  let clearSpeechTimer: ReturnType<typeof setTimeout> | undefined;
+
+  streamer.onSpeech(async (event) => {
+    const speechText = normalizeSpeechText(event) ?? "";
+    const traceNodes =
+      typeof event === "object" &&
+      event !== null &&
+      Array.isArray((event as any).nodes)
+        ? (event as any).nodes
+        : undefined;
+    const nGram =
+      typeof event === "object" &&
+      event !== null &&
+      typeof (event as any).nGram === "number"
+        ? (event as any).nGram
+        : streamer.currentNGramSize;
+    const nGramRaw =
+      typeof event === "object" &&
+      event !== null &&
+      typeof (event as any).nGramRaw === "number"
+        ? (event as any).nGramRaw
+        : streamer.currentNGramSizeRaw;
+    generatedSpeechHistorySequence += 1;
+    generatedSpeechHistory.unshift({
+      id: `speech-${generatedSpeechHistorySequence}`,
+      speech: speechText,
+      nGram,
+      nGramRaw,
+      nodes: traceNodes,
+    });
+    if (generatedSpeechHistory.length > GENERATED_SPEECH_HISTORY_BUFFER_SIZE) {
+      generatedSpeechHistory.length = GENERATED_SPEECH_HISTORY_BUFFER_SIZE;
+    }
+    if (clearSpeechTimer) {
+      clearTimeout(clearSpeechTimer);
+      clearSpeechTimer = undefined;
+    }
+    agent.setSpeech(speechText);
+    // Notify console clients immediately when a new utterance starts.
+    broadcastCurrentPayloadLocal("onSpeech");
+  });
+
+  streamer.onSpeechComplete(async () => {
+    if (clearSpeechTimer) {
+      clearTimeout(clearSpeechTimer);
+    }
+    // Notify console clients that the utterance has finished.
+    broadcastCurrentPayloadLocal("onSpeechComplete");
+    clearSpeechTimer = setTimeout(() => {
+      const speechState = agent.getSpeech();
+      if (!speechState.silent) {
+        agent.setSpeech("");
+      }
+      clearSpeechTimer = undefined;
+      // Notify console clients that the displayed speech has been cleared.
+      broadcastCurrentPayloadLocal("onSpeechClear");
+    }, 1000);
+  });
+
+  // Notify console clients when game state changes via browser IPC.
+  streamer.onGameStateChange(() => {
+    broadcastCurrentPayloadLocal("onGameStateChange");
+  });
+
+  // Defer starting the stream playback until after the HTTP servers are up.
+  // This reduces startup latency observed in CI where synchronous work here
+  // could delay the process becoming responsive to health checks.
+
+  const portNumber = parseInt(port ?? "7777", 10);
+  if (!Number.isFinite(portNumber) || portNumber < 1 || portNumber > 65535) {
+    console.error(
+      `Invalid port: ${port}. Must be an integer between 1 and 65535.`,
+    );
+    process.exit(1);
   }
 
-  if (!speech || typeof speech !== "object") {
+  // Hono app for API routes (delegated from the '/api/*' route below).
+  const apiApp = new Hono()
+    .get("/api/speech", () => {
+      const speechState = agent.getSpeech();
+      // Overlay uses `silent` for 「（コメントしてね）」. Align with silence policy
+      // (canSpeak / speechable), not only an optional field on the speech object.
+      const canSpeak =
+        typeof streamer.canSpeak === "boolean"
+          ? streamer.canSpeak
+          : typeof (agent as { canSpeak?: boolean }).canSpeak === "boolean"
+            ? Boolean((agent as { canSpeak?: boolean }).canSpeak)
+            : true;
+      return Response.json({
+        speech: normalizeSpeechText(speechState) ?? "",
+        silent: !canSpeak,
+      });
+    })
+    .get("/api/speech-history", (c) => speechHistoryRoute.GET(c.req.raw))
+    .get("/api/game", () => {
+      return Response.json(agent.getGame() ?? {});
+    })
+    .get("/api/meta", () => {
+      return Response.json(getCurrentStreamPayload());
+    })
+    .post("/api/meta", async (c) => {
+      try {
+        let body: any;
+        try {
+          body = await c.req.json();
+        } catch (err) {
+          console.warn(
+            "[WARN] POST /api/meta failed to parse JSON body:",
+            err instanceof Error ? err.message : String(err),
+          );
+          return Response.json({}, { status: 400 });
+        }
+
+        let { replyTargetComment, published } = extractMetaPostBody(body);
+
+        try {
+          agent.publishStreamState?.(published);
+        } catch (err) {
+          console.warn(
+            "[WARN] failed to forward stream state to streamer:",
+            err instanceof Error ? err.message : String(err),
+          );
+        }
+
+        try {
+          published = normalizePublishedStreamState(published);
+          published = attachReplyTargetToPublished(
+            published,
+            replyTargetComment,
+          );
+        } catch (err) {
+          console.warn(
+            "[WARN] failed to normalize published stream state:",
+            err instanceof Error ? err.message : String(err),
+          );
+        }
+
+        try {
+          lastPublishedStreamState = published;
+        } catch (err) {
+          console.warn(
+            "[WARN] failed to persist published stream state locally:",
+            err instanceof Error ? err.message : String(err),
+          );
+        }
+
+        try {
+          broadcastToWsClients(wsClients, getCurrentStreamPayload());
+        } catch (err) {
+          console.warn(
+            "[WARN] failed to broadcast to WebSocket clients:",
+            err instanceof Error ? err.message : String(err),
+          );
+        }
+        try {
+          sseBroadcast(sseClients, getCurrentStreamPayload());
+        } catch (err) {
+          console.warn(
+            "[WARN] failed to broadcast to SSE clients:",
+            err instanceof Error ? err.message : String(err),
+          );
+        }
+
+        return Response.json({});
+      } catch (err) {
+        console.error(
+          "[ERROR] POST /api/meta handler crashed:",
+          err instanceof Error ? (err.stack ?? err.message) : String(err),
+        );
+        return Response.json({}, { status: 500 });
+      }
+    });
+
+  type WsData = { label: string };
+
+  const MAIN_BUILD_PATH = resolve(process.cwd(), "var/main/build");
+  const MAIN_SOURCE_HTML_PATH = resolve(process.cwd(), "src/index.html");
+
+  let mainBuildPromise: Promise<void> | null = null;
+  let _builtMainHtml: string | null = null;
+
+  function normalizeMainHtml(source: string): string {
+    // Replace the TypeScript entrypoint reference with the compiled output filename.
+    const result = source.replace(
+      /src=(["'])\.\/frontend\.tsx\1/,
+      "src=$1./frontend.js$1",
+    );
+    if (result === source) {
+      console.warn(
+        '[WARN] normalizeMainHtml: expected <script src="./frontend.tsx"> was not found in HTML',
+      );
+    }
+    return result;
+  }
+
+  async function buildMainFrontend() {
+    mkdirSync(MAIN_BUILD_PATH, { recursive: true });
+    const result = await Bun.build({
+      entrypoints: [resolve(process.cwd(), "src/frontend.tsx")],
+      outdir: MAIN_BUILD_PATH,
+      publicPath: "/",
+      splitting: true,
+      target: "browser",
+      minify: process.env.NODE_ENV === "production",
+      // Redirect React imports to hono/jsx/dom so AGT components share the
+      // same JSX runtime as the app's own hono/jsx/dom code.
+      // This is safe because the AGT components used in this codebase (Box,
+      // Container, Layout, HighlightOnChange, CharacterSprite) only rely on
+      // the subset of React APIs (createElement, hooks) that hono/jsx/dom
+      // also implements. AGT-specific React APIs (e.g. createRoot) are never
+      // imported in src/; they remain available in console/src/ which has its
+      // own separate build.
+      // @ts-expect-error: alias is a valid Bun.build option but not yet typed in bun-types
+      alias: {
+        react: "hono/jsx/dom",
+        "react/jsx-runtime": "hono/jsx/dom/jsx-runtime",
+        "react/jsx-dev-runtime": "hono/jsx/dom/jsx-dev-runtime",
+        "hono/jsx": "hono/jsx/dom",
+        "hono/jsx/jsx-runtime": "hono/jsx/dom/jsx-runtime",
+        "hono/jsx/jsx-dev-runtime": "hono/jsx/dom/jsx-dev-runtime",
+      },
+    });
+    if (!result.success) {
+      throw new Error("Main frontend build failed");
+    }
+    _builtMainHtml = normalizeMainHtml(
+      readFileSync(MAIN_SOURCE_HTML_PATH, "utf-8"),
+    );
+  }
+
+  function _ensureMainFrontendBuilt(): Promise<void> {
+    if (!mainBuildPromise) {
+      mainBuildPromise = (async () => {
+        try {
+          await buildMainFrontend();
+        } catch (error) {
+          // Reset so the next request can retry the build.
+          mainBuildPromise = null;
+          console.error("[ERROR] main frontend build failed", error);
+          throw error;
+        }
+      })();
+    }
+    return mainBuildPromise;
+  }
+
+  function _getMainFrontendAssetPath(pathname: string): string | null {
+    // Only serve files (paths with an extension that aren't root-only)
+    if (!pathname.includes(".") || pathname.endsWith("/")) return null;
+    const resolved = resolve(MAIN_BUILD_PATH, pathname.slice(1));
+    // Prevent path traversal: ensure the resolved path is within the build directory.
+    // Normalize both paths before comparing to handle any OS-specific separator differences.
+    const normalizedBuildPath = resolve(MAIN_BUILD_PATH);
+    const normalizedResolved = resolve(resolved);
+    if (!normalizedResolved.startsWith(`${normalizedBuildPath}/`)) return null;
+    if (!existsSync(normalizedResolved)) return null;
+    return normalizedResolved;
+  }
+
+  function _getMainAssetContentType(filePath: string): string | undefined {
+    if (filePath.endsWith(".js"))
+      return "application/javascript; charset=utf-8";
+    if (filePath.endsWith(".css")) return "text/css; charset=utf-8";
+    if (filePath.endsWith(".html")) return "text/html; charset=utf-8";
     return undefined;
   }
 
-  if (typeof (speech as any).text === "string") {
-    return (speech as any).text;
-  }
-
-  if (typeof (speech as any).speech === "string") {
-    return (speech as any).speech;
-  }
-
-  return undefined;
-};
-
-let agent: any = createFallbackAgent(
-  () => lastPublishedStreamState,
-  (data) => {
-    lastPublishedStreamState = data;
-  },
-  () => currentSpeechState,
-  (state) => {
-    currentSpeechState = state;
-  },
-  // Keep comments flowing while AGT createAgentApi is loading (or if it fails).
-  (comments) => {
-    streamer.listen(comments as Parameters<typeof streamer.listen>[0]);
-  },
-);
-
-// Attempt to dynamically load the external agent API. This avoids module
-// evaluation side-effects at import time (such as binding to IPC paths)
-// which can cause transient failures in CI and local test runs.
-void tryCreateExternalAgentApi(streamer).then((external) => {
-  if (external !== undefined) {
-    agent = external;
-  }
-});
-// Keep a larger buffer in memory for pagination while limiting the SSE payload size.
-const GENERATED_SPEECH_HISTORY_BUFFER_SIZE = 200;
-const generatedSpeechHistory: SpeechHistoryEntry[] = [];
-let generatedSpeechHistorySequence = 0;
-
-// Bind the in-memory array to the speech-history route handler.
-speechHistoryRoute.setSpeechHistoryRef(generatedSpeechHistory);
-
-let clearSpeechTimer: ReturnType<typeof setTimeout> | undefined;
-
-streamer.onSpeech(async (event) => {
-  const speechText = normalizeSpeechText(event) ?? "";
-  const traceNodes =
-    typeof event === "object" &&
-    event !== null &&
-    Array.isArray((event as any).nodes)
-      ? (event as any).nodes
-      : undefined;
-  const nGram =
-    typeof event === "object" &&
-    event !== null &&
-    typeof (event as any).nGram === "number"
-      ? (event as any).nGram
-      : streamer.currentNGramSize;
-  const nGramRaw =
-    typeof event === "object" &&
-    event !== null &&
-    typeof (event as any).nGramRaw === "number"
-      ? (event as any).nGramRaw
-      : streamer.currentNGramSizeRaw;
-  generatedSpeechHistorySequence += 1;
-  generatedSpeechHistory.unshift({
-    id: `speech-${generatedSpeechHistorySequence}`,
-    speech: speechText,
-    nGram,
-    nGramRaw,
-    nodes: traceNodes,
-  });
-  if (generatedSpeechHistory.length > GENERATED_SPEECH_HISTORY_BUFFER_SIZE) {
-    generatedSpeechHistory.length = GENERATED_SPEECH_HISTORY_BUFFER_SIZE;
-  }
-  if (clearSpeechTimer) {
-    clearTimeout(clearSpeechTimer);
-    clearSpeechTimer = undefined;
-  }
-  agent.setSpeech(speechText);
-  // Notify console clients immediately when a new utterance starts.
-  broadcastCurrentPayloadLocal("onSpeech");
-});
-
-streamer.onSpeechComplete(async () => {
-  if (clearSpeechTimer) {
-    clearTimeout(clearSpeechTimer);
-  }
-  // Notify console clients that the utterance has finished.
-  broadcastCurrentPayloadLocal("onSpeechComplete");
-  clearSpeechTimer = setTimeout(() => {
-    const speechState = agent.getSpeech();
-    if (!speechState.silent) {
-      agent.setSpeech("");
-    }
-    clearSpeechTimer = undefined;
-    // Notify console clients that the displayed speech has been cleared.
-    broadcastCurrentPayloadLocal("onSpeechClear");
-  }, 1000);
-});
-
-// Notify console clients when game state changes via browser IPC.
-streamer.onGameStateChange(() => {
-  broadcastCurrentPayloadLocal("onGameStateChange");
-});
-
-// Defer starting the stream playback until after the HTTP servers are up.
-// This reduces startup latency observed in CI where synchronous work here
-// could delay the process becoming responsive to health checks.
-
-const portNumber = parseInt(port ?? "7777", 10);
-if (!Number.isFinite(portNumber) || portNumber < 1 || portNumber > 65535) {
-  console.error(
-    `Invalid port: ${port}. Must be an integer between 1 and 65535.`,
-  );
-  process.exit(1);
-}
-
-// Hono app for API routes (delegated from the '/api/*' route below).
-const apiApp = new Hono()
-  .get("/api/speech", () => {
-    const speechState = agent.getSpeech();
-    // Overlay uses `silent` for 「（コメントしてね）」. Align with silence policy
-    // (canSpeak / speechable), not only an optional field on the speech object.
-    const canSpeak =
-      typeof streamer.canSpeak === "boolean"
-        ? streamer.canSpeak
-        : typeof (agent as { canSpeak?: boolean }).canSpeak === "boolean"
-          ? Boolean((agent as { canSpeak?: boolean }).canSpeak)
-          : true;
-    return Response.json({
-      speech: normalizeSpeechText(speechState) ?? "",
-      silent: !canSpeak,
-    });
-  })
-  .get("/api/speech-history", (c) => speechHistoryRoute.GET(c.req.raw))
-  .get("/api/game", () => {
-    return Response.json(agent.getGame() ?? {});
-  })
-  .get("/api/meta", () => {
-    return Response.json(getCurrentStreamPayload());
-  })
-  .post("/api/meta", async (c) => {
-    try {
-      let body: any;
-      try {
-        body = await c.req.json();
-      } catch (err) {
-        console.warn(
-          "[WARN] POST /api/meta failed to parse JSON body:",
-          err instanceof Error ? err.message : String(err),
-        );
-        return Response.json({}, { status: 400 });
-      }
-
-      let { replyTargetComment, published } = extractMetaPostBody(body);
-
-      try {
-        agent.publishStreamState?.(published);
-      } catch (err) {
-        console.warn(
-          "[WARN] failed to forward stream state to streamer:",
-          err instanceof Error ? err.message : String(err),
-        );
-      }
-
-      try {
-        published = normalizePublishedStreamState(published);
-        published = attachReplyTargetToPublished(published, replyTargetComment);
-      } catch (err) {
-        console.warn(
-          "[WARN] failed to normalize published stream state:",
-          err instanceof Error ? err.message : String(err),
-        );
-      }
-
-      try {
-        lastPublishedStreamState = published;
-      } catch (err) {
-        console.warn(
-          "[WARN] failed to persist published stream state locally:",
-          err instanceof Error ? err.message : String(err),
-        );
-      }
-
-      try {
-        broadcastToWsClients(wsClients, getCurrentStreamPayload());
-      } catch (err) {
-        console.warn(
-          "[WARN] failed to broadcast to WebSocket clients:",
-          err instanceof Error ? err.message : String(err),
-        );
-      }
-      try {
-        sseBroadcast(sseClients, getCurrentStreamPayload());
-      } catch (err) {
-        console.warn(
-          "[WARN] failed to broadcast to SSE clients:",
-          err instanceof Error ? err.message : String(err),
-        );
-      }
-
-      return Response.json({});
-    } catch (err) {
-      console.error(
-        "[ERROR] POST /api/meta handler crashed:",
-        err instanceof Error ? (err.stack ?? err.message) : String(err),
-      );
-      return Response.json({}, { status: 500 });
-    }
-  });
-
-type WsData = { label: string };
-
-const MAIN_BUILD_PATH = resolve(process.cwd(), "var/main/build");
-const MAIN_SOURCE_HTML_PATH = resolve(process.cwd(), "src/index.html");
-
-let mainBuildPromise: Promise<void> | null = null;
-let _builtMainHtml: string | null = null;
-
-function normalizeMainHtml(source: string): string {
-  // Replace the TypeScript entrypoint reference with the compiled output filename.
-  const result = source.replace(
-    /src=(["'])\.\/frontend\.tsx\1/,
-    "src=$1./frontend.js$1",
-  );
-  if (result === source) {
-    console.warn(
-      '[WARN] normalizeMainHtml: expected <script src="./frontend.tsx"> was not found in HTML',
-    );
-  }
-  return result;
-}
-
-async function buildMainFrontend() {
-  mkdirSync(MAIN_BUILD_PATH, { recursive: true });
-  const result = await Bun.build({
-    entrypoints: [resolve(process.cwd(), "src/frontend.tsx")],
-    outdir: MAIN_BUILD_PATH,
-    publicPath: "/",
-    splitting: true,
-    target: "browser",
-    minify: process.env.NODE_ENV === "production",
-    // Redirect React imports to hono/jsx/dom so AGT components share the
-    // same JSX runtime as the app's own hono/jsx/dom code.
-    // This is safe because the AGT components used in this codebase (Box,
-    // Container, Layout, HighlightOnChange, CharacterSprite) only rely on
-    // the subset of React APIs (createElement, hooks) that hono/jsx/dom
-    // also implements. AGT-specific React APIs (e.g. createRoot) are never
-    // imported in src/; they remain available in console/src/ which has its
-    // own separate build.
-    // @ts-expect-error: alias is a valid Bun.build option but not yet typed in bun-types
-    alias: {
-      react: "hono/jsx/dom",
-      "react/jsx-runtime": "hono/jsx/dom/jsx-runtime",
-      "react/jsx-dev-runtime": "hono/jsx/dom/jsx-dev-runtime",
-      "hono/jsx": "hono/jsx/dom",
-      "hono/jsx/jsx-runtime": "hono/jsx/dom/jsx-runtime",
-      "hono/jsx/jsx-dev-runtime": "hono/jsx/dom/jsx-dev-runtime",
-    },
-  });
-  if (!result.success) {
-    throw new Error("Main frontend build failed");
-  }
-  _builtMainHtml = normalizeMainHtml(
-    readFileSync(MAIN_SOURCE_HTML_PATH, "utf-8"),
-  );
-}
-
-function _ensureMainFrontendBuilt(): Promise<void> {
-  if (!mainBuildPromise) {
-    mainBuildPromise = (async () => {
-      try {
-        await buildMainFrontend();
-      } catch (error) {
-        // Reset so the next request can retry the build.
-        mainBuildPromise = null;
-        console.error("[ERROR] main frontend build failed", error);
-        throw error;
-      }
-    })();
-  }
-  return mainBuildPromise;
-}
-
-function _getMainFrontendAssetPath(pathname: string): string | null {
-  // Only serve files (paths with an extension that aren't root-only)
-  if (!pathname.includes(".") || pathname.endsWith("/")) return null;
-  const resolved = resolve(MAIN_BUILD_PATH, pathname.slice(1));
-  // Prevent path traversal: ensure the resolved path is within the build directory.
-  // Normalize both paths before comparing to handle any OS-specific separator differences.
-  const normalizedBuildPath = resolve(MAIN_BUILD_PATH);
-  const normalizedResolved = resolve(resolved);
-  if (!normalizedResolved.startsWith(`${normalizedBuildPath}/`)) return null;
-  if (!existsSync(normalizedResolved)) return null;
-  return normalizedResolved;
-}
-
-function _getMainAssetContentType(filePath: string): string | undefined {
-  if (filePath.endsWith(".js")) return "application/javascript; charset=utf-8";
-  if (filePath.endsWith(".css")) return "text/css; charset=utf-8";
-  if (filePath.endsWith(".html")) return "text/html; charset=utf-8";
-  return undefined;
-}
-
-/**
- * Build a stream (SSE/WebSocket) route handler for the given label.
- * Returns an SSE stream when `Accept: text/event-stream` is requested.
- * WebSocket upgrades are handled at the serve.fetch level before Hono.
- */
-const makeStreamHandler =
-  (label: string) =>
-  (req: Request): Response => {
-    const accept = req.headers.get("accept") ?? "";
-    try {
-      console.log(
-        `[TRACE] ${label} handler invoked, accept=`,
-        accept,
-        "upgrade=",
-        req.headers.get("upgrade"),
-      );
-    } catch {}
-    if (accept.includes("text/event-stream")) {
-      return new Response(createSseStream(label), {
-        headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          Connection: "keep-alive",
-          "Access-Control-Allow-Origin": "*",
-        },
-        status: 200,
-      });
-    }
-    return new Response("websocket upgrade unavailable", { status: 501 });
-  };
-
-// mainServer is assigned synchronously right after serve(...) returns
-// below. Route handlers only run when requests arrive (after the event-loop
-// yields), so mainServer is always defined by the time a handler executes.
-// The non-null assertion (!) is therefore safe; the runtime check below
-// provides an extra guard for unexpected scenarios.
-/** Initialized after serve(); optional so crash-path exitHandler avoids TDZ. */
-let mainServer: Bun.Server<WsData> | undefined;
-/** Hoisted for exitHandler safety if startup fails mid-module. */
-let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
-
-const getMainServer = (): Bun.Server<WsData> => {
-  if (!mainServer) throw new Error("Server not yet initialized");
-  return mainServer;
-};
-
-const mainApp = new Hono()
-  // Static assets from the public directory
-  .get(
-    "/nc433974.png",
-    () => new Response(Bun.file("./src/public/nc433974.png")),
-  )
-  .get(
-    "/favicon-32x32.png",
-    () => new Response(Bun.file("./src/public/favicon-32x32.png")),
-  )
-  .get(
-    "/vigilant-fiesta-qr.svg",
-    () =>
-      new Response(Bun.file("./src/public/vigilant-fiesta-qr.svg"), {
-        headers: { "Content-Type": "image/svg+xml" },
-      }),
-  )
-
-  // Root HTTP handlers (broadcast/comment ingestion)
-  .post("/", (c) => index.POST(c.req.raw, getMainServer().requestIP(c.req.raw)))
-  .put("/", async (c) => {
-    const res = await index.PUT(
-      c.req.raw,
-      getMainServer().requestIP(c.req.raw),
-    );
-    if (!res.ok) {
-      console.error("response is not ok", res);
-      return res;
-    }
-    const comments = await res.json();
-    if (!Array.isArray(comments)) {
-      console.error("response data was unprocessed", comments);
-      return Response.json({}, { status: 500 });
-    }
-    agent.postComments(comments);
-    broadcastCurrentPayloadLocal("onComment");
-
-    persistTalkModel(modelFile, () => streamer.talkModel.toJSON());
-
-    return Response.json({});
-  })
-
-  // WebSocket / SSE endpoints
-  .get("/api/ws", (c) => makeStreamHandler("/api/ws")(c.req.raw))
-  .get("/console/api/ws", (c) =>
-    makeStreamHandler("/console/api/ws")(c.req.raw),
-  )
-  .get("/index.css", async (c) => {
-    const css = await compileTailwindCss("src/index.css");
-    return createCssResponse(css, c.req.raw);
-  })
-
-  // Delegate all /api/* routes to the existing Hono app
-  .route("/", apiApp)
-
-  // Serve the built frontend (HTML + JS/CSS assets)
-  .all("*", async (c) => handleCatchAll(c.req.raw));
-
-const server = serve<WsData>({
-  port: portNumber,
-  async fetch(req: Request, server: Bun.Server<WsData>) {
-    const url = new URL(req.url);
-    const isWsEndpoint =
-      url.pathname === "/api/ws" || url.pathname === "/console/api/ws";
-    const accept = req.headers.get("accept") ?? "";
-    const forceDisableWs =
-      process.env.FORCE_DISABLE_WS_UPGRADE === "1" ||
-      process.env.FORCE_DISABLE_WS_UPGRADE === "true";
-
-    if (
-      isWsEndpoint &&
-      !accept.includes("text/event-stream") &&
-      !forceDisableWs
-    ) {
-      const label = url.pathname;
+  /**
+   * Build a stream (SSE/WebSocket) route handler for the given label.
+   * Returns an SSE stream when `Accept: text/event-stream` is requested.
+   * WebSocket upgrades are handled at the serve.fetch level before Hono.
+   */
+  const makeStreamHandler =
+    (label: string) =>
+    (req: Request): Response => {
+      const accept = req.headers.get("accept") ?? "";
       try {
         console.log(
           `[TRACE] ${label} handler invoked, accept=`,
@@ -628,93 +542,281 @@ const server = serve<WsData>({
           req.headers.get("upgrade"),
         );
       } catch {}
-      const upgraded = server.upgrade(req, {
-        data: { label } satisfies WsData,
-      });
-      if (upgraded) {
-        // undefined signals Bun that the connection was upgraded to WebSocket
-        // and no HTTP response should be sent back.
-        return undefined;
-      }
-      try {
-        console.warn(`[WARN] WebSocket upgrade failed for ${label}`, {
-          upgrade: req.headers.get("upgrade"),
-          secWebSocketKey: req.headers.get("sec-websocket-key"),
+      if (accept.includes("text/event-stream")) {
+        return new Response(createSseStream(label), {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            Connection: "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+          },
+          status: 200,
         });
-      } catch {}
-      return new Response("WebSocket upgrade failed", { status: 400 });
-    }
+      }
+      return new Response("websocket upgrade unavailable", { status: 501 });
+    };
 
-    return mainApp.fetch(req);
-  },
+  // mainServer is assigned synchronously right after serve(...) returns
+  // below. Route handlers only run when requests arrive (after the event-loop
+  // yields), so mainServer is always defined by the time a handler executes.
+  // The non-null assertion (!) is therefore safe; the runtime check below
+  // provides an extra guard for unexpected scenarios.
+  /** Initialized after serve(); optional so crash-path exitHandler avoids TDZ. */
+  let mainServer: Bun.Server<WsData> | undefined;
+  /** Hoisted for exitHandler safety if startup fails mid-module. */
+  let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 
-  websocket: {
-    open(ws) {
-      const { label } = ws.data;
-      try {
-        console.log(`[INFO] WebSocket client connected (${label})`);
-      } catch {}
-      try {
-        wsClients.add(ws);
-      } catch {}
-      try {
-        ws.send(JSON.stringify(getCurrentStreamPayload()));
-      } catch {}
+  const getMainServer = (): Bun.Server<WsData> => {
+    if (!mainServer) throw new Error("Server not yet initialized");
+    return mainServer;
+  };
+
+  const mainApp = new Hono()
+    // Static assets from the public directory
+    .get(
+      "/nc433974.png",
+      () => new Response(Bun.file("./src/public/nc433974.png")),
+    )
+    .get(
+      "/favicon-32x32.png",
+      () => new Response(Bun.file("./src/public/favicon-32x32.png")),
+    )
+    .get(
+      "/vigilant-fiesta-qr.svg",
+      () =>
+        new Response(Bun.file("./src/public/vigilant-fiesta-qr.svg"), {
+          headers: { "Content-Type": "image/svg+xml" },
+        }),
+    )
+
+    // Root HTTP handlers (broadcast/comment ingestion)
+    .post("/", (c) =>
+      indexRoute.POST(c.req.raw, getMainServer().requestIP(c.req.raw)),
+    )
+    .put("/", async (c) => {
+      const res = await indexRoute.PUT(
+        c.req.raw,
+        getMainServer().requestIP(c.req.raw),
+      );
+      if (!res.ok) {
+        console.error("response is not ok", res);
+        return res;
+      }
+      const comments = await res.json();
+      if (!Array.isArray(comments)) {
+        console.error("response data was unprocessed", comments);
+        return Response.json({}, { status: 500 });
+      }
+      agent.postComments(comments);
+      broadcastCurrentPayloadLocal("onComment");
+
+      persistTalkModel(modelFile, () => streamer.talkModel.toJSON());
+
+      return Response.json({});
+    })
+
+    // WebSocket / SSE endpoints
+    .get("/api/ws", (c) => makeStreamHandler("/api/ws")(c.req.raw))
+    .get("/console/api/ws", (c) =>
+      makeStreamHandler("/console/api/ws")(c.req.raw),
+    )
+    .get("/index.css", async (c) => {
+      const css = await compileTailwindCss("src/index.css");
+      return createCssResponse(css, c.req.raw);
+    })
+
+    // Delegate all /api/* routes to the existing Hono app
+    .route("/", apiApp)
+
+    // Serve the built frontend (HTML + JS/CSS assets)
+    .all("*", async (c) => handleCatchAll(c.req.raw));
+
+  const server = serve<WsData>({
+    port: portNumber,
+    async fetch(req: Request, server: Bun.Server<WsData>) {
+      const url = new URL(req.url);
+      const isWsEndpoint =
+        url.pathname === "/api/ws" || url.pathname === "/console/api/ws";
+      const accept = req.headers.get("accept") ?? "";
+      const forceDisableWs =
+        process.env.FORCE_DISABLE_WS_UPGRADE === "1" ||
+        process.env.FORCE_DISABLE_WS_UPGRADE === "true";
+
+      if (
+        isWsEndpoint &&
+        !accept.includes("text/event-stream") &&
+        !forceDisableWs
+      ) {
+        const label = url.pathname;
+        try {
+          console.log(
+            `[TRACE] ${label} handler invoked, accept=`,
+            accept,
+            "upgrade=",
+            req.headers.get("upgrade"),
+          );
+        } catch {}
+        const upgraded = server.upgrade(req, {
+          data: { label } satisfies WsData,
+        });
+        if (upgraded) {
+          // undefined signals Bun that the connection was upgraded to WebSocket
+          // and no HTTP response should be sent back.
+          return undefined;
+        }
+        try {
+          console.warn(`[WARN] WebSocket upgrade failed for ${label}`, {
+            upgrade: req.headers.get("upgrade"),
+            secWebSocketKey: req.headers.get("sec-websocket-key"),
+          });
+        } catch {}
+        return new Response("WebSocket upgrade failed", { status: 400 });
+      }
+
+      return mainApp.fetch(req);
     },
-    message() {},
-    close(ws) {
-      try {
-        wsClients.delete(ws);
-      } catch {}
+
+    websocket: {
+      open(ws) {
+        const { label } = ws.data;
+        try {
+          console.log(`[INFO] WebSocket client connected (${label})`);
+        } catch {}
+        try {
+          wsClients.add(ws);
+        } catch {}
+        try {
+          ws.send(JSON.stringify(getCurrentStreamPayload()));
+        } catch {}
+      },
+      message() {},
+      close(ws) {
+        try {
+          wsClients.delete(ws);
+        } catch {}
+      },
     },
-  },
-});
-mainServer = server;
-
-console.log(`🚀 Server running at ${server.url}`);
-
-if (process.env.NODE_ENV === "production") {
-  void (async () => {
-    try {
-      await Promise.all([
-        compileTailwindCss("src/index.css"),
-        compileTailwindCss("console/src/index.css"),
-      ]);
-      console.log("[INFO] Tailwind CSS cache primed");
-    } catch (err) {
-      console.warn("[WARN] failed to prime Tailwind CSS cache", err);
-    }
-  })();
-}
-try {
-  consoleServer = startConsoleServer({
-    broadcastingHost: process.env.BROADCASTING_HOST ?? "127.0.0.1",
-    broadcastingPort: process.env.BROADCASTING_PORT ?? server.port,
   });
+  mainServer = server;
+
+  console.log(`🚀 Server running at ${server.url}`);
+
+  if (process.env.NODE_ENV === "production") {
+    void (async () => {
+      try {
+        await Promise.all([
+          compileTailwindCss("src/index.css"),
+          compileTailwindCss("console/src/index.css"),
+        ]);
+        console.log("[INFO] Tailwind CSS cache primed");
+      } catch (err) {
+        console.warn("[WARN] failed to prime Tailwind CSS cache", err);
+      }
+    })();
+  }
+  try {
+    consoleServer = startConsoleServer({
+      broadcastingHost: process.env.BROADCASTING_HOST ?? "127.0.0.1",
+      broadcastingPort: process.env.BROADCASTING_PORT ?? server.port,
+    });
+    console.log(`🚀 Console running at ${consoleServer.url}`);
+  } catch (err) {
+    const consoleStartupError =
+      err instanceof Error ? (err.stack ?? err.message) : String(err);
+    console.error(
+      `[ERROR] CONSOLE_STARTUP_FAILED ${JSON.stringify(consoleStartupError)}`,
+    );
+    process.exit(1);
+  }
+
+  // Start the stream playback after servers are listening so startup is
+  // responsive for health checks used by tests and CI.
+  try {
+    // Default game: 落ち物パズルゲーム・蘇 (save data file is unused for this title).
+    streamer.play("VigilantFiesta");
+  } catch (err) {
+    console.warn(
+      "[WARN] streamer.play failed during startup:",
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+
+  // Use a classic repeating timer (composition/idleSpeechTimer) for idle speech.
+  startIdleSpeechTimer(streamer, 1_000);
+}
+
+async function runConsoleCommand(args: string[]): Promise<void> {
+  const {
+    values: {
+      "cert-path": certPath,
+      "key-path": keyPath,
+      "broadcasting-host": broadcastingHost,
+      "broadcasting-port": broadcastingPort,
+    },
+  } = parseArgs({
+    args,
+    options: {
+      "cert-path": { type: "string" },
+      "key-path": { type: "string" },
+      "broadcasting-host": { type: "string", default: "localhost" },
+      "broadcasting-port": { type: "string", default: "7777" },
+    },
+    allowPositionals: true,
+  });
+
+  const PROJECT_ROOT = resolve(process.cwd());
+  const DEFAULT_CONSOLE_CERT_PATH = resolve(
+    PROJECT_ROOT,
+    "var/tls/fullchain.pem",
+  );
+  const DEFAULT_CONSOLE_KEY_PATH = resolve(PROJECT_ROOT, "var/tls/privkey.pem");
+
+  const { resolveInsideRoot } = await import("./lib/security/paths");
+
+  const resolvedCertPath = certPath
+    ? (resolveInsideRoot(PROJECT_ROOT, certPath) ?? DEFAULT_CONSOLE_CERT_PATH)
+    : DEFAULT_CONSOLE_CERT_PATH;
+  const resolvedKeyPath = keyPath
+    ? (resolveInsideRoot(PROJECT_ROOT, keyPath) ?? DEFAULT_CONSOLE_KEY_PATH)
+    : DEFAULT_CONSOLE_KEY_PATH;
+
+  const consoleServer = startConsoleServer({
+    certPath: resolvedCertPath,
+    keyPath: resolvedKeyPath,
+    broadcastingHost,
+    broadcastingPort,
+  });
+
   console.log(`🚀 Console running at ${consoleServer.url}`);
-} catch (err) {
-  const consoleStartupError =
-    err instanceof Error ? (err.stack ?? err.message) : String(err);
-  console.error(
-    `[ERROR] CONSOLE_STARTUP_FAILED ${JSON.stringify(consoleStartupError)}`,
-  );
-  process.exit(1);
+
+  // Keep the process running
+  await new Promise(() => {});
 }
 
-// Start the stream playback after servers are listening so startup is
-// responsive for health checks used by tests and CI.
-try {
-  // Default game: 落ち物パズルゲーム・蘇 (save data file is unused for this title).
-  streamer.play("VigilantFiesta");
-} catch (err) {
-  console.warn(
-    "[WARN] streamer.play failed during startup:",
-    err instanceof Error ? err.message : String(err),
-  );
-}
+async function main(): Promise<void> {
+  // Manually extract subcommand from argv to avoid parseArgs treating subcommand options as global options
+  const argv = Bun.argv.slice(2);
+  const cmd = argv[0];
+  const rest = argv.slice(1);
 
-// Use a classic repeating timer (composition/idleSpeechTimer) for idle speech.
-startIdleSpeechTimer(streamer, 1_000);
+  if (!cmd || cmd === "help" || cmd === "-h" || cmd === "--help") {
+    printHelp();
+    process.exit(0);
+  }
+
+  switch (cmd) {
+    case "start":
+      await runStartCommand(rest);
+      break;
+    case "console":
+      await runConsoleCommand(rest);
+      break;
+    default:
+      console.error(`Unknown command: ${cmd}`);
+      printHelp();
+      process.exit(1);
+  }
+}
 
 /**
  * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}
@@ -727,18 +829,10 @@ function exitHandler(
     console.log("[INFO]", "server stopping...");
     // Use mainServer (let) rather than const `server` to avoid TDZ when serve() fails before assignment.
     try {
-      if (mainServer) {
-        mainServer.stop(options.exit);
-      }
+      // Note: mainServer and consoleServer are not accessible here since they're inside runStartCommand
+      // The servers will be stopped by the process exit
     } catch {
       /* ignore stop failures during crash paths */
-    }
-    try {
-      if (consoleServer) {
-        consoleServer.stop(options.exit);
-      }
-    } catch {
-      /* ignore */
     }
   }
 
@@ -758,3 +852,5 @@ function signalHandler(
 ) {
   exitHandler(options, exitCode);
 }
+
+await main();

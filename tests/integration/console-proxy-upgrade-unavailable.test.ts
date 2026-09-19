@@ -26,7 +26,7 @@ test("returns 501 when websocket upgrade unavailable", async () => {
 
   const server = spawn(
     resolveBunExecutable(),
-    ["index.ts", "--port", String(port)],
+    ["index.ts", "start", "--port", String(port)],
     {
       env: {
         ...process.env,
