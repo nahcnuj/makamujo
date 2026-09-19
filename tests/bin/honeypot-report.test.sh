@@ -18,6 +18,8 @@ cat > "${work_dir}/fail2ban.log" <<'EOF'
 Sep 19 06:10:00 vps fail2ban.filter[450]: INFO    [sshd] Found 192.0.2.9 - 2026-09-19 06:10:01
 Sep 19 06:10:03 vps fail2ban.actions[450]: NOTICE  [sshd] Ban 192.0.2.9
 2026-09-19 07:00:00,000 fail2ban.filter   [321]: INFO    [sshd] Found 10.0.0.99 - 2026-09-19 07:00:00
+2026-09-19 06:20:00,000 fail2ban.filter   [321]: INFO    [sshd] Found beef - 203.0.113.9
+2026-09-19 06:20:03,001 fail2ban.actions  [321]: NOTICE  [sshd] Ban 203.0.113.9
 EOF
 
 # request receive time is the first Found event; caught = BAN - request
@@ -51,6 +53,15 @@ report=$(bash "${PROJECT_ROOT}/bin/honeypot-report" \
   --ip 198.51.100.254 --now 0 "${work_dir}/fail2ban.log")
 [ "${report}" = '[sshd] caught 198.51.100.254 for 0s (no Found event in log)' ] || {
   echo "no-Found record mismatch: ${report}" >&2
+  exit 1
+}
+
+# a username that looks like hex ("beef") is not mistaken for the address
+report=$(bash "${PROJECT_ROOT}/bin/honeypot-report" \
+  --ip 203.0.113.9 --now "$(date -d '2026-09-19 06:20:03' +%s)" \
+  "${work_dir}/fail2ban.log")
+[ "${report}" = '[sshd] caught 203.0.113.9 for 3s since 2026-09-19 06:20:00' ] || {
+  echo "beef username record mismatch: ${report}" >&2
   exit 1
 }
 
