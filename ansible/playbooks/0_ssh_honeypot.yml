@@ -82,56 +82,21 @@
 
     - name: Write fail2ban action that journals the caught seconds
       ansible.builtin.copy:
+        src: ../../etc/fail2ban/action.d/honeypot-report.conf
         dest: /etc/fail2ban/action.d/honeypot-report.conf
         mode: "0644"
-        content: |
-          [Definition]
-          # At [sshd] ban time, run honeypot-report to measure how long the
-          # IP was served from the first received SSH request until this BAN,
-          # then journal the record so `journalctl -u fail2ban` shows it.
-          actionban = journalctl -u fail2ban --no-pager --since=-24h | /usr/local/bin/honeypot-report --ip <ip> --now $(date +%%s) | systemd-cat -t fail2ban-honeypot
 
     - name: Make fail2ban log into the systemd journal
       ansible.builtin.copy:
+        src: ../../etc/fail2ban/fail2ban.local
         dest: /etc/fail2ban/fail2ban.local
         mode: "0644"
-        content: |
-          [DEFAULT]
-          # fail2ban.service runs fail2ban-server in the foreground, so STDOUT
-          # lands in the journal under the fail2ban unit. Keeping the [sshd]
-          # Found/Ban lines visible via `journalctl -u fail2ban` is what the
-          # honeypot-report action pipelines back into its own records.
-          loglevel = INFO
-          logtarget = STDOUT
 
     - name: Write fail2ban jail that DROP's failed key auth sources
       ansible.builtin.copy:
+        src: ../../etc/fail2ban/jail.d/sshd-honeypot.conf
         dest: /etc/fail2ban/jail.d/sshd-honeypot.conf
         mode: "0644"
-        content: |
-          [sshd]
-          enabled = true
-          mode = aggressive
-          port = ssh
-          filter = sshd
-          # Ubuntu cloud images ship without rsyslog, so /var/log/auth.log
-          # never gets the sshd messages: they only exist in the journal under
-          # the ssh.service unit (`journalctl -u ssh`). Read that source and
-          # match both the sshd listener and the OpenSSH 9.8+ sshd-session
-          # workers that journal pre-auth failures.
-          backend = systemd
-          journalmatch = _SYSTEMD_UNIT=ssh.service + _COMM=sshd + _COMM=sshd-session
-          maxretry = 1
-          findtime = 86400
-          bantime = -1
-          ignoreip = 127.0.0.1/8 ::1
-          action = iptables-multiport[name=sshd, port="ssh", protocol=tcp, blocktype=DROP]
-                   honeypot-report
-
-    - name: Test the fail2ban configuration
-      ansible.builtin.command:
-        cmd: fail2ban-client -t
-      changed_when: false
 
     - name: Enable and start fail2ban
       ansible.builtin.systemd:
@@ -143,9 +108,4 @@
     - name: Reload fail2ban jails
       ansible.builtin.command:
         cmd: fail2ban-client reload
-      changed_when: false
-
-    - name: Verify the sshd jail reads the ssh journal
-      ansible.builtin.shell:
-        cmd: fail2ban-client status sshd | grep -qE '_SYSTEMD_UNIT=ssh\.service|_COMM=sshd(-session)?'
       changed_when: false

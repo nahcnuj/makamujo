@@ -167,7 +167,7 @@ journalctl -u fail2ban
 ```
 
 - リクエスト受信時刻 = その IP の**最初の** fail2ban `Found` イベントに埋め込まれた sshd ログ側のタイムスタンプ。`LoginGraceTime 0` で保持されている間も認証を続けるとイベントが積み上がるため、`Found` が BAN 後も増えていく様子も同じ出力で確認できます。
-- 設定: `ansible/playbooks/0_ssh_honeypot.yml` が `bin/honeypot-report` を `/usr/local/bin/honeypot-report` に導入し（アプリのデプロイとは独立）、`/etc/fail2ban/action.d/honeypot-report.conf` を書いて sshd jail の `action` に `honeypot-report` を追加します。/etc/fail2ban/fail2ban.local で fail2ban を journal にログ出力させ、jail は `backend = systemd` + `journalmatch = _SYSTEMD_UNIT=ssh.service + _COMM=sshd + _COMM=sshd-session` で直接 ssh journal を読むため、`/var/log/auth.log` が無い環境（rsyslog 未導入の Ubuntu cloud image など）でも動作します。
+- 設定: `ansible/playbooks/0_ssh_honeypot.yml` が `bin/honeypot-report` を `/usr/local/bin/honeypot-report` に導入し（アプリのデプロイとは独立）、`etc/fail2ban/`（action.d / fail2ban.local / jail.d）を `/etc/fail2ban/` に配置するため、sshd jail の `action` に `honeypot-report` が載り、fail2ban は journal にログ出力します。jail は `backend = systemd` + `journalmatch = _SYSTEMD_UNIT=ssh.service + _COMM=sshd + _COMM=sshd-session` で直接 ssh journal を読むため、`/var/log/auth.log` が無い環境（rsyslog 未導入の Ubuntu cloud image など）でも動作します。設定自体は CI の `fail2ban-config` ジョブで `fail2ban-client -t` と journal 読取設定の回帰チェックを行います。
 - 手動再現:
   ```sh
   journalctl -u fail2ban --since=-24h | bin/honeypot-report --ip 203.0.113.5

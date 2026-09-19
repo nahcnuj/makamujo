@@ -1,0 +1,7 @@
+[DEFAULT]
+# fail2ban.service runs fail2ban-server in the foreground, so STDOUT
+# lands in the journal under the fail2ban unit. Keeping the [sshd]
+# Found/Ban lines visible via `journalctl -u fail2ban` is what the
+# honeypot-report action pipelines back into its own records.
+loglevel = INFO
+logtarget = STDOUT

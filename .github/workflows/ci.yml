@@ -153,3 +153,23 @@ jobs:
             echo "==> $f"
             ansible-playbook --syntax-check -i localhost, -c local "$f"
           done
+
+  fail2ban-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install fail2ban
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fail2ban
+      - name: Install the fail2ban config from etc/
+        run: sudo cp -r etc/fail2ban/. /etc/fail2ban/
+      - name: Test the fail2ban configuration
+        run: sudo fail2ban-client -t
+      - name: Verify the sshd jail reads the ssh journal
+        # GitHub runners boot without systemd as PID 1, so the jail cannot be
+        # started against a live journal here; assert the systemd backend and
+        # journalmatch we rely on instead (a regression guard for reverting to
+        # /var/log/auth.log reading). The deploy playbook still fails loudly if
+        # the config is invalid, since fail2ban.service will not start.
+        run: |
+          grep -Eq '^backend = systemd$' /etc/fail2ban/jail.d/sshd-honeypot.conf
+          grep -Eq '^journalmatch = _SYSTEMD_UNIT=ssh\.service \+ _COMM=sshd \+ _COMM=sshd-session$' /etc/fail2ban/jail.d/sshd-honeypot.conf
