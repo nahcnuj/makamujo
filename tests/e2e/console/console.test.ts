@@ -143,7 +143,7 @@ test.beforeAll(async ({ request }) => {
 
   server = spawn(
     process.platform === "win32" ? "bun.exe" : "bun",
-    ["index.ts", "--port", String(port)],
+    ["index.ts", "start", "--port", String(port)],
     {
       env: {
         ...process.env,
