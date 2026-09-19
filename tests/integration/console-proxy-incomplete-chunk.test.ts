@@ -32,17 +32,23 @@ beforeAll(async () => {
     timeoutMs: 5_000,
   });
 
-  server = spawn(bunBin, ["index.ts", "--port", String(mainServerPort)], {
-    env: {
-      ...process.env,
-      NODE_ENV: "production",
-      CONSOLE_LOOPBACK_ONLY: "1",
-      BROADCASTING_HOST: "127.0.0.1",
-      BROADCASTING_PORT: String(upstreamPort),
-      MAKAMUJO_IPC_PATH: makamujoIpcPath(`incomplete-chunk-${mainServerPort}`),
+  server = spawn(
+    bunBin,
+    ["index.ts", "start", "--port", String(mainServerPort)],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: "production",
+        CONSOLE_LOOPBACK_ONLY: "1",
+        BROADCASTING_HOST: "127.0.0.1",
+        BROADCASTING_PORT: String(upstreamPort),
+        MAKAMUJO_IPC_PATH: makamujoIpcPath(
+          `incomplete-chunk-${mainServerPort}`,
+        ),
+      },
+      stdio: ["ignore", "pipe", "pipe"],
     },
-    stdio: ["ignore", "pipe", "pipe"],
-  }) as unknown as SpawnedServer;
+  ) as unknown as SpawnedServer;
 
   // Must wait for Console URL: this test hits the console proxy → mock upstream HELLO stream.
   const output = await waitForSpawnedReady(server, {
