@@ -168,11 +168,7 @@ jobs:
           cp -a etc/fail2ban/. "$stage/"
           fail2ban-client -c "$stage" -t
       - name: Verify the sshd jail reads the ssh journal
-        # GitHub runners boot without systemd as PID 1, so the jail cannot be
-        # started against a live journal here; assert the systemd backend and
-        # journalmatch we rely on instead (a regression guard for reverting to
-        # /var/log/auth.log reading). The deploy playbook still fails loudly if
-        # the config is invalid, since fail2ban.service will not start.
+        # systemd が PID 1 ではない runner では jail を起動できないため、backend と journalmatch の定義を直接検証する
         run: |
           grep -Eq '^backend = systemd$' etc/fail2ban/jail.d/sshd-honeypot.conf
           grep -Eq '^journalmatch = _SYSTEMD_UNIT=ssh\.service \+ _COMM=sshd \+ _COMM=sshd-session$' etc/fail2ban/jail.d/sshd-honeypot.conf
