@@ -163,7 +163,9 @@ jobs:
       - name: Install the fail2ban config from etc/
         run: sudo cp -r etc/fail2ban/. /etc/fail2ban/
       - name: Test the fail2ban configuration
-        run: sudo fail2ban-client -t
+        # Reads /etc/fail2ban only (copied above with sudo); the test itself
+        # needs no root, so run it as the normal runner user.
+        run: fail2ban-client -t
       - name: Verify the sshd jail reads the ssh journal
         # GitHub runners boot without systemd as PID 1, so the jail cannot be
         # started against a live journal here; assert the systemd backend and
