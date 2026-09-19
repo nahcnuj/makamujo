@@ -31,7 +31,7 @@ beforeAll(async () => {
 
   server = spawn(
     resolveBunExecutable(),
-    ["index.ts", "--port", String(mainServerPort)],
+    ["index.ts", "start", "--port", String(mainServerPort)],
     {
       env: {
         ...process.env,
