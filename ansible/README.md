@@ -159,7 +159,7 @@ journalctl -u ssh -u fail2ban -f
 
 ### 捕まえられた時間の確認
 
-`journalctl -u fail2ban` をそのまま実行するだけで、BAN した IP ごとに「SSH リクエストを受け取ってから BAN するまで」の秒数が実績として journal に残ります。fail2ban の BAN 時に `bin/honeypot-report` が計測し、`systemd-cat` で fail2ban の unit に書き込みます（pipe 不要）。
+`journalctl -u fail2ban` をそのまま実行するだけで、BAN した IP ごとに「SSH リクエストを受け取ってから BAN するまで」の秒数が実績として journal に残ります。fail2ban の BAN 時に `bin/honeypot-report` が計測し、`systemd-cat` で fail2ban の unit に書き込みます（pipe 不要）。fail2ban 自身のログも journal に出す構成（`logtarget = STDOUT`）なので、`[sshd] Found` / `[sshd] Ban` の行も同じ出力に並びます。
 
 ```sh
 journalctl -u fail2ban
@@ -167,7 +167,7 @@ journalctl -u fail2ban
 ```
 
 - リクエスト受信時刻 = その IP の**最初の** fail2ban `Found` イベントに埋め込まれた sshd ログ側のタイムスタンプ。`LoginGraceTime 0` で保持されている間も認証を続けるとイベントが積み上がるため、`Found` が BAN 後も増えていく様子も同じ出力で確認できます。
-- 設定: `ansible/playbooks/0_ssh_honeypot.yml` が `bin/honeypot-report` を `/usr/local/bin/honeypot-report` に導入し（アプリのデプロイとは独立）、`/etc/fail2ban/action.d/honeypot-report.conf` を書いて sshd jail の `action` に `honeypot-report` を追加します。
+- 設定: `ansible/playbooks/0_ssh_honeypot.yml` が `bin/honeypot-report` を `/usr/local/bin/honeypot-report` に導入し（アプリのデプロイとは独立）、`/etc/fail2ban/action.d/honeypot-report.conf` を書いて sshd jail の `action` に `honeypot-report` を追加します。/etc/fail2ban/fail2ban.local で fail2ban を journal にログ出力させ、jail は `backend = systemd` + `journalmatch = _SYSTEMD_UNIT=ssh.service + _COMM=sshd + _COMM=sshd-session` で直接 ssh journal を読むため、`/var/log/auth.log` が無い環境（rsyslog 未導入の Ubuntu cloud image など）でも動作します。
 - 手動再現:
   ```sh
   journalctl -u fail2ban --since=-24h | bin/honeypot-report --ip 203.0.113.5

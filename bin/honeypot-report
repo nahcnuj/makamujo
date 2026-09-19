@@ -67,7 +67,13 @@ fi
 iso_ts='[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}:[0-9]{2}'
 syslog_ts='[A-Z][a-z]{2} [ 0-9][0-9] [0-9]{2}:[0-9]{2}:[0-9]{2}'
 ts_re="(${iso_ts}|${syslog_ts})"
-found_re='Found[ ]+([0-9a-fA-F.:]+)'
+# fail2ban logs "[sshd] Found <ip> - <timestamp>"; when the sshd filter also
+# captured a username it may log "[sshd] Found <user> - <ip>". Try the plain
+# "<ip> right after Found" form first, then fall back to the user-qualified
+# form so a username that looks like hex ("beef") is never mistaken for the
+# address.
+found_user_ip_re='Found[ ]+[^ ]+[ ]+-[ ]+([0-9a-fA-F.:]+)'
+found_re='Found[ ]+([0-9a-fA-F.:]+)([ ]|$)'
 trail_re="-[ ]+(${iso_ts})"
 
 request_label=""
@@ -88,7 +94,9 @@ process_log() {
     [ -n "${line_ts}" ] || continue
 
     cand=""
-    if [[ ${line} =~ ${found_re} ]]; then
+    if [[ ${line} =~ ${found_re} ]] && [ "${BASH_REMATCH[1]}" = "${ip}" ]; then
+      cand=${BASH_REMATCH[1]}
+    elif [[ ${line} =~ ${found_user_ip_re} ]] && [ "${BASH_REMATCH[1]}" = "${ip}" ]; then
       cand=${BASH_REMATCH[1]}
     fi
     [ "${cand}" = "${ip}" ] || continue
