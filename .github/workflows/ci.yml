@@ -161,16 +161,10 @@ jobs:
       - name: Install fail2ban
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fail2ban
       - name: Install the fail2ban config from etc/
-        # fail2ban-client only reads the standard tree at /etc/fail2ban, and the
-        # repo checkout's etc/fail2ban/ is just an overlay (action.d/*, *.local,
-        # jail.d/*) that the apt base config turns into a runnable tree. Stage
-        # the overlay at the same path and mode the deploy playbook uses, so the
-        # test and grep below validate the config exactly as deployed. Writing
-        # to /etc is root-only, hence sudo.
+        # fail2banはシステム領域のファイル（/etc/fail2ban）しか読めないので sudo cp する
         run: sudo cp -r etc/fail2ban/. /etc/fail2ban/
       - name: Test the fail2ban configuration
-        # Reads the /etc/fail2ban tree installed above; the test itself needs no
-        # root, so it runs as the normal runner user.
+        # 上で /etc/fail2ban に配置した設定を検証する（sudo 不要）
         run: fail2ban-client -t
       - name: Verify the sshd jail reads the ssh journal
         # GitHub runners boot without systemd as PID 1, so the jail cannot be
