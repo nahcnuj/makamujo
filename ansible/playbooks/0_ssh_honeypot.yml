@@ -21,18 +21,6 @@
         state: present
         update_cache: true
 
-    - name: Stop Endlessh if a previous tarpit layout left it running
-      ansible.builtin.systemd:
-        name: endlessh
-        state: stopped
-        enabled: false
-      failed_when: false
-
-    - name: Remove Endlessh-on-22 sshd drop-in if present
-      ansible.builtin.file:
-        path: /etc/ssh/sshd_config.d/99-makamujo-management-port.conf
-        state: absent
-
     - name: Ensure sshd includes drop-in directory
       ansible.builtin.lineinfile:
         path: /etc/ssh/sshd_config
