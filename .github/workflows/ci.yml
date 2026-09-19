@@ -160,12 +160,14 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install fail2ban
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fail2ban
-      - name: Install the fail2ban config from etc/
-        # fail2banはシステム領域のファイル（/etc/fail2ban）しか読めないので sudo cp する
-        run: sudo cp -r etc/fail2ban/. /etc/fail2ban/
-      - name: Test the fail2ban configuration
-        # 上で /etc/fail2ban に配置した設定を検証する（sudo 不要）
-        run: fail2ban-client -t
+      - name: Test the fail2ban configuration in a temp dir
+        # -c で設定ディレクトリを差し替えれば /etc/fail2ban を書き換えずに検証できる。
+        # 本番と同じ構成にするため、パッケージ提供の base に etc/ の overlay を重ねる。
+        run: |
+          stage="$(mktemp -d)"
+          cp -a /etc/fail2ban/. "$stage/"
+          cp -a etc/fail2ban/. "$stage/"
+          fail2ban-client -c "$stage" -t
       - name: Verify the sshd jail reads the ssh journal
         # GitHub runners boot without systemd as PID 1, so the jail cannot be
         # started against a live journal here; assert the systemd backend and
@@ -173,5 +175,5 @@ jobs:
         # /var/log/auth.log reading). The deploy playbook still fails loudly if
         # the config is invalid, since fail2ban.service will not start.
         run: |
-          grep -Eq '^backend = systemd$' /etc/fail2ban/jail.d/sshd-honeypot.conf
-          grep -Eq '^journalmatch = _SYSTEMD_UNIT=ssh\.service \+ _COMM=sshd \+ _COMM=sshd-session$' /etc/fail2ban/jail.d/sshd-honeypot.conf
+          grep -Eq '^backend = systemd$' etc/fail2ban/jail.d/sshd-honeypot.conf
+          grep -Eq '^journalmatch = _SYSTEMD_UNIT=ssh\.service \+ _COMM=sshd \+ _COMM=sshd-session$' etc/fail2ban/jail.d/sshd-honeypot.conf
