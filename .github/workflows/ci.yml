@@ -161,8 +161,7 @@ jobs:
       - name: Install fail2ban
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fail2ban
       - name: Test the fail2ban configuration in a temp dir
-        # -c で設定ディレクトリを差し替えれば /etc/fail2ban を書き換えずに検証できる。
-        # 本番と同じ構成にするため、パッケージ提供の base に etc/ の overlay を重ねる。
+        # 本番と同じ base+overlay を /etc に触らず検証するため、-c で一時ディレクトリを指定する
         run: |
           stage="$(mktemp -d)"
           cp -a /etc/fail2ban/. "$stage/"
