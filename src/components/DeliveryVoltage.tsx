@@ -2,14 +2,14 @@ import { useEffect, useState } from "hono/jsx/dom";
 import { useAgentContext } from "../contexts/AgentContext";
 
 const VOLTAGE_BAR_HEIGHT = "0.5em";
-const BRAND_COLOR = "#6ee7b7";
 
 export const commonLog10 = (x: number): number => (x <= 0 ? 0 : Math.log10(x));
 
 /**
  * Bar fill ratio [0,100] of the delivery voltage gauge.
- * The full width (100%) equals the comment count `n + 1` at the end of the
- * previous stream, scaled by common log10 of the current comment count.
+ * The full width (100%) is reached at comment count `n + 1`, where `n` is the
+ * utterance count at the end of the previous stream. The current comment count
+ * is scaled by common log10 against that max.
  */
 export const computeVoltageWidthPercent = (
   currentComments: number,
@@ -82,12 +82,13 @@ export function DeliveryVoltage() {
       }}
     >
       <div
+        className="bg-emerald-300"
         style={{
           width: `${widthPercent}%`,
           height: "100%",
-          background: overVoltage
-            ? getRainbowGradient(rainbowOffset)
-            : BRAND_COLOR,
+          ...(overVoltage
+            ? { background: getRainbowGradient(rainbowOffset) }
+            : {}),
           transition: overVoltage ? "none" : "width 0.3s ease-out",
         }}
       />
