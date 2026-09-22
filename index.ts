@@ -28,17 +28,17 @@ import {
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
 import { startConsoleServer } from "./console/index";
 import {
+  loadStreamBaseline,
+  STREAM_BASELINE_BASENAME,
+  saveStreamBaseline,
+} from "./lib/application/streamBaselineStore";
+import {
   assemblePublishedPayload,
   attachReplyTargetToPublished,
   extractMetaPostBody,
   GENERATED_SPEECH_HISTORY_SSE_SIZE,
 } from "./lib/domain/publication/assemblePublishedPayload";
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
-import {
-  loadStreamBaseline,
-  saveStreamBaseline,
-  STREAM_BASELINE_BASENAME,
-} from "./lib/application/streamBaselineStore";
 import { normalizePublishedStreamState } from "./lib/streamState";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";

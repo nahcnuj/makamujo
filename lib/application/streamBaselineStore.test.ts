@@ -34,9 +34,7 @@ describe("parseStreamBaseline", () => {
       currentProgramUrl: undefined,
       currentProgramLatestCommentNo: 0,
     });
-    expect(parseStreamBaseline(null)).toEqual(
-      parseStreamBaseline(undefined),
-    );
+    expect(parseStreamBaseline(null)).toEqual(parseStreamBaseline(undefined));
   });
 
   it("parses a valid baseline", () => {

@@ -20,9 +20,7 @@ describe("AgentSession stream baseline", () => {
     });
 
     expect(session.previousStreamCommentCount).toBe(538);
-    expect(session.currentProgramUrl).toBe(
-      "https://live.example/watch/lv1",
-    );
+    expect(session.currentProgramUrl).toBe("https://live.example/watch/lv1");
     expect(session.currentProgramLatestCommentNo).toBe(540);
     expect(session.toStreamBaseline()).toEqual({
       previousStreamCommentCount: 538,

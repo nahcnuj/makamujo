@@ -1092,11 +1092,13 @@ describe("MakaMujo stream baseline persistence", () => {
       },
     });
 
-    const last = notifier.mock.calls.at(-1)?.[0] as {
-      previousStreamCommentCount: number;
-      currentProgramUrl: string;
-      currentProgramLatestCommentNo: number;
-    } | undefined;
+    const last = notifier.mock.calls.at(-1)?.[0] as
+      | {
+          previousStreamCommentCount: number;
+          currentProgramUrl: string;
+          currentProgramLatestCommentNo: number;
+        }
+      | undefined;
     expect(last).toEqual({
       previousStreamCommentCount: 0,
       currentProgramUrl: "https://live.example/watch/lv2",
