@@ -5,10 +5,12 @@ import {
 import { COMMENT_PROMPT_TEXT } from "../domain/comments/SystemSpeechScripts";
 import type { AgentSession } from "./AgentSession";
 import type { SpeechQueue } from "./SpeechQueue";
+import type { StreamBaseline } from "./streamBaselineStore";
 import type { SpeechPort, StreamData } from "./types";
 
 export type StreamApplicationServiceOptions = {
   silenceThresholdMs: number;
+  onBaselineChange?: (baseline: StreamBaseline) => void;
 };
 
 /**
@@ -19,6 +21,7 @@ export class StreamApplicationService {
   #speech: SpeechPort;
   #speechQueue: SpeechQueue;
   #silenceThresholdMs: number;
+  #onBaselineChange?: (baseline: StreamBaseline) => void;
 
   constructor(
     session: AgentSession,
@@ -30,6 +33,7 @@ export class StreamApplicationService {
     this.#speech = speech;
     this.#speechQueue = speechQueue;
     this.#silenceThresholdMs = options.silenceThresholdMs;
+    this.#onBaselineChange = options.onBaselineChange;
   }
 
   onAir(state: StreamData | unknown): void {
@@ -49,6 +53,7 @@ export class StreamApplicationService {
             this.#session.currentProgramUrl = url;
             this.#session.currentProgramLatestCommentNo = 0;
             this.#session.hasPromptedCommentForViewerIncrease = false;
+            this.#onBaselineChange?.(this.#session.toStreamBaseline());
           }
 
           if (this.#session.lastListenerCount !== listeners) {
@@ -90,6 +95,7 @@ export class StreamApplicationService {
           this.#session.listenersStaleSince = undefined;
           this.#session.currentProgramUrl = undefined;
           this.#session.currentProgramLatestCommentNo = 0;
+          this.#onBaselineChange?.(this.#session.toStreamBaseline());
         }
 
         this.#session.streamState = isLive

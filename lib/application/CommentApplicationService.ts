@@ -17,6 +17,7 @@ import {
 } from "../domain/comments/SystemSpeechScripts";
 import { pickTopic } from "../domain/comments/TopicPicker";
 import type { AgentSession } from "./AgentSession";
+import type { StreamBaseline } from "./streamBaselineStore";
 import type { CommentData, SpeechPort, TalkModelPort } from "./types";
 
 /**
@@ -28,16 +29,19 @@ export class CommentApplicationService {
   #talkModel: TalkModelPort;
   #speech: SpeechPort;
   #anon: AnonymousPresenceLearn;
+  #onBaselineChange?: (baseline: StreamBaseline) => void;
 
   constructor(
     session: AgentSession,
     talkModel: TalkModelPort,
     speech: SpeechPort,
+    onBaselineChange?: (baseline: StreamBaseline) => void,
   ) {
     this.#session = session;
     this.#talkModel = talkModel;
     this.#speech = speech;
     this.#anon = new AnonymousPresenceLearn(talkModel);
+    this.#onBaselineChange = onBaselineChange;
   }
 
   listen(comments: AgentComment[]): void {
@@ -153,6 +157,7 @@ export class CommentApplicationService {
             },
           };
         }
+        this.#onBaselineChange?.(this.#session.toStreamBaseline());
       }
 
       // Step 9 — gift

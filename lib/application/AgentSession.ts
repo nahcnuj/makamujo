@@ -5,6 +5,7 @@ import {
   initialNGramSize,
   initialNGramSizeRaw,
 } from "../domain/broadcasting/NGramPolicy";
+import type { StreamBaseline } from "./streamBaselineStore";
 
 export type PlayingGame = {
   name: GameName;
@@ -36,4 +37,18 @@ export class AgentSession {
   currentNGramSize = initialNGramSize();
   currentNGramSizeRaw = initialNGramSizeRaw();
   hasPromptedCommentForViewerIncrease = false;
+
+  toStreamBaseline(): StreamBaseline {
+    return {
+      previousStreamCommentCount: this.previousStreamCommentCount,
+      currentProgramUrl: this.currentProgramUrl,
+      currentProgramLatestCommentNo: this.currentProgramLatestCommentNo,
+    };
+  }
+
+  restoreStreamBaseline(baseline: StreamBaseline): void {
+    this.previousStreamCommentCount = baseline.previousStreamCommentCount;
+    this.currentProgramUrl = baseline.currentProgramUrl;
+    this.currentProgramLatestCommentNo = baseline.currentProgramLatestCommentNo;
+  }
 }
