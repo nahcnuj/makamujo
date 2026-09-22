@@ -1,6 +1,7 @@
 import { Games } from "../../lib/Agent/games";
 import { HighlightOnChange } from "../agt-compat";
 import { useAgentContext } from "../contexts/AgentContext";
+import { DeliveryVoltage } from "./DeliveryVoltage";
 
 const _formatDuration = (d: Date) =>
   `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}:${d.getSeconds().toString().padStart(2, "0")}`;
@@ -28,6 +29,7 @@ export function GamePanel() {
   return (
     <div className="h-full flex flex-col justify-between text-2xl/8">
       <div className="flex-none">
+        <DeliveryVoltage />
         {playing && <Component state={playing.state} />}
       </div>
       <div className="flex-none">

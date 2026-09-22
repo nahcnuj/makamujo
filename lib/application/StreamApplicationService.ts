@@ -84,6 +84,8 @@ export class StreamApplicationService {
             }
           }
         } else {
+          this.#session.previousStreamCommentCount =
+            this.#session.currentProgramLatestCommentNo;
           this.#session.lastListenerCount = undefined;
           this.#session.listenersStaleSince = undefined;
           this.#session.currentProgramUrl = undefined;

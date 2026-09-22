@@ -178,6 +178,7 @@ const getCurrentStreamPayload = () => {
       currentNGramSize: streamer.currentNGramSize,
       currentNGramSizeRaw: streamer.currentNGramSizeRaw,
       commentCount: streamer.streamState?.meta?.total?.comments,
+      previousStreamCommentCount: streamer.previousStreamCommentCount,
     },
     speechState: agent.getSpeech(),
     history: generatedSpeechHistory,

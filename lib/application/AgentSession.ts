@@ -30,6 +30,9 @@ export class AgentSession {
   /** Last observed comment number for current program (not monotonic). */
   currentProgramLatestCommentNo = 0;
 
+  /** Final comment count of the previous stream (for broadcast voltage). */
+  previousStreamCommentCount = 0;
+
   currentNGramSize = initialNGramSize();
   currentNGramSizeRaw = initialNGramSizeRaw();
   hasPromptedCommentForViewerIncrease = false;

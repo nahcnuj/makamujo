@@ -20,6 +20,7 @@ export type PublishedStreamPayload = {
   speechHistory: unknown[];
   replyTargetComment?: ReplyTargetComment;
   commentCount?: number;
+  previousStreamCommentCount?: number;
 };
 
 export type StreamerPublicationSnapshot = {
@@ -28,4 +29,5 @@ export type StreamerPublicationSnapshot = {
   currentNGramSize: number;
   currentNGramSizeRaw: number;
   commentCount?: number;
+  previousStreamCommentCount?: number;
 };

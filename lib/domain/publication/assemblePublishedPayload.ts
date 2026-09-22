@@ -72,6 +72,9 @@ export const assemblePublishedPayload = (
       replyTargetComment as PublishedStreamPayload["replyTargetComment"],
     commentCount:
       (base.commentCount as number | undefined) ?? input.streamer.commentCount,
+    previousStreamCommentCount:
+      (base.previousStreamCommentCount as number | undefined) ??
+      input.streamer.previousStreamCommentCount,
   } as const;
 };
 
