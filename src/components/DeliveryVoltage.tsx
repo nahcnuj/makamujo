@@ -2,14 +2,40 @@ import { useEffect, useState } from "hono/jsx/dom";
 import { useAgentContext } from "../contexts/AgentContext";
 
 const VOLTAGE_BAR_HEIGHT = "0.5em";
-const BRAND_COLOR = "#10b981";
+const BRAND_COLOR = "#6ee7b7";
 
-function commonLog10(x: number): number {
-  if (x <= 0) return 0;
-  return Math.log10(x);
-}
+export const commonLog10 = (x: number): number => (x <= 0 ? 0 : Math.log10(x));
 
-function getRainbowGradient(offset: number): string {
+/**
+ * Bar fill ratio [0,100] of the delivery voltage gauge.
+ * The full width (100%) equals the comment count `n + 1` at the end of the
+ * previous stream, scaled by common log10 of the current comment count.
+ */
+export const computeVoltageWidthPercent = (
+  currentComments: number,
+  previousStreamCommentCount: number,
+): number => {
+  const previousMax = previousStreamCommentCount + 1;
+  const maxLog = commonLog10(previousMax);
+  if (maxLog <= 0) {
+    return currentComments > 0 ? 100 : 0;
+  }
+  return Math.min(100, (commonLog10(currentComments) / maxLog) * 100);
+};
+
+/** True when current comments exceed the previous stream's max = `n + 1`. */
+export const isOverVoltage = (
+  currentComments: number,
+  previousStreamCommentCount: number,
+): boolean => currentComments > previousStreamCommentCount + 1;
+
+/** No prior stream and no comments yet: the gauge has nothing to show. */
+export const shouldRenderVoltage = (
+  currentComments: number,
+  previousStreamCommentCount: number,
+): boolean => previousStreamCommentCount > 0 || currentComments > 0;
+
+export function getRainbowGradient(offset: number): string {
   return `linear-gradient(90deg, 
     hsl(${(offset + 0) % 360}, 100%, 50%),
     hsl(${(offset + 60) % 360}, 100%, 50%),
@@ -22,29 +48,25 @@ function getRainbowGradient(offset: number): string {
 }
 
 export function DeliveryVoltage() {
-  const { streamState } = useAgentContext();
+  const { commentCount, previousStreamCommentCount } = useAgentContext();
 
-  const currentComments = streamState?.meta?.total?.comments ?? 0;
-  const previousMax = (streamState?.previousStreamCommentCount ?? 0) + 1;
+  const currentComments = commentCount ?? 0;
+  const previous = previousStreamCommentCount ?? 0;
 
-  const currentLog = commonLog10(currentComments);
-  const maxLog = commonLog10(previousMax);
-
-  const widthPercent =
-    maxLog > 0 ? Math.min(100, (currentLog / maxLog) * 100) : 0;
-  const isOverVoltage = currentComments > previousMax;
+  const widthPercent = computeVoltageWidthPercent(currentComments, previous);
+  const overVoltage = isOverVoltage(currentComments, previous);
 
   const [rainbowOffset, setRainbowOffset] = useState(0);
 
   useEffect(() => {
-    if (!isOverVoltage) return;
+    if (!overVoltage) return;
     const interval = setInterval(() => {
       setRainbowOffset((prev) => (prev + 2) % 360);
     }, 50);
     return () => clearInterval(interval);
-  }, [isOverVoltage]);
+  }, [overVoltage]);
 
-  if (previousMax <= 1 && currentComments === 0) {
+  if (!shouldRenderVoltage(currentComments, previous)) {
     return null;
   }
 
@@ -63,10 +85,10 @@ export function DeliveryVoltage() {
         style={{
           width: `${widthPercent}%`,
           height: "100%",
-          background: isOverVoltage
+          background: overVoltage
             ? getRainbowGradient(rainbowOffset)
             : BRAND_COLOR,
-          transition: isOverVoltage ? "none" : "width 0.3s ease-out",
+          transition: overVoltage ? "none" : "width 0.3s ease-out",
         }}
       />
     </div>

@@ -211,23 +211,65 @@ describe("updateSpeechStateFromSpeechApiResponse", () => {
 describe("setStreamStateFromMetaApiResponse", () => {
   it("does not update state when res is null (fetch error)", () => {
     const setStreamState = mock((_: AgentState | undefined) => {});
-    setStreamStateFromMetaApiResponse(null, setStreamState);
+    const setCommentCount = mock((_: number | undefined) => {});
+    const setPreviousStreamCommentCount = mock((_: number | undefined) => {});
+    setStreamStateFromMetaApiResponse(
+      null,
+      setStreamState,
+      setCommentCount,
+      setPreviousStreamCommentCount,
+    );
     expect(setStreamState).not.toHaveBeenCalled();
+    expect(setCommentCount).not.toHaveBeenCalled();
+    expect(setPreviousStreamCommentCount).not.toHaveBeenCalled();
   });
 
   it("updates stream state when res contains niconama", () => {
     const setStreamState = mock((_: AgentState | undefined) => {});
+    const setCommentCount = mock((_: number | undefined) => {});
+    const setPreviousStreamCommentCount = mock((_: number | undefined) => {});
     const niconama: AgentState = {
       type: "live",
       meta: { title: "test", url: "https://example.com", start: 0 },
     };
-    setStreamStateFromMetaApiResponse({ niconama }, setStreamState);
+    setStreamStateFromMetaApiResponse(
+      { niconama },
+      setStreamState,
+      setCommentCount,
+      setPreviousStreamCommentCount,
+    );
     expect(setStreamState).toHaveBeenCalledWith(niconama);
+    expect(setCommentCount).toHaveBeenCalledWith(undefined);
+    expect(setPreviousStreamCommentCount).toHaveBeenCalledWith(undefined);
   });
 
   it("updates stream state to undefined when niconama is absent in res", () => {
     const setStreamState = mock((_: AgentState | undefined) => {});
-    setStreamStateFromMetaApiResponse({}, setStreamState);
+    const setCommentCount = mock((_: number | undefined) => {});
+    const setPreviousStreamCommentCount = mock((_: number | undefined) => {});
+    setStreamStateFromMetaApiResponse(
+      {},
+      setStreamState,
+      setCommentCount,
+      setPreviousStreamCommentCount,
+    );
     expect(setStreamState).toHaveBeenCalledWith(undefined);
+    expect(setCommentCount).toHaveBeenCalledWith(undefined);
+    expect(setPreviousStreamCommentCount).toHaveBeenCalledWith(undefined);
+  });
+
+  it("carries top-level comment counts for the voltage gauge", () => {
+    const setStreamState = mock((_: AgentState | undefined) => {});
+    const setCommentCount = mock((_: number | undefined) => {});
+    const setPreviousStreamCommentCount = mock((_: number | undefined) => {});
+    setStreamStateFromMetaApiResponse(
+      { commentCount: 4321, previousStreamCommentCount: 89 },
+      setStreamState,
+      setCommentCount,
+      setPreviousStreamCommentCount,
+    );
+    expect(setStreamState).toHaveBeenCalledWith(undefined);
+    expect(setCommentCount).toHaveBeenCalledWith(4321);
+    expect(setPreviousStreamCommentCount).toHaveBeenCalledWith(89);
   });
 });
