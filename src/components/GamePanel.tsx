@@ -29,10 +29,10 @@ export function GamePanel() {
   return (
     <div className="h-full flex flex-col justify-between text-2xl/8">
       <div className="flex-none">
-        <DeliveryVoltage />
         {playing && <Component state={playing.state} />}
       </div>
       <div className="flex-none">
+        <DeliveryVoltage />
         {streamState?.meta?.total && (
           <div className="text-right">
             <div>
