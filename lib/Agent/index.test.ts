@@ -1027,3 +1027,82 @@ describe("VigilantFiesta game commentary", () => {
     expect(learn).not.toHaveBeenCalled();
   });
 });
+
+describe("MakaMujo stream baseline persistence", () => {
+  it("restores comment tracking from options.baseline", () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts, {
+      baseline: {
+        previousStreamCommentCount: 100,
+        currentProgramUrl: "https://example.com",
+        currentProgramLatestCommentNo: 50,
+      },
+    });
+
+    expect(agent.previousStreamCommentCount).toBe(100);
+
+    agent.onAir(niconamaLive(10));
+    const state = agent.streamState as {
+      meta?: { total?: { comments?: number } };
+    };
+    expect(state.meta?.total?.comments).toBe(50);
+  });
+
+  it("notifies baseline changes for comment no and stream end", () => {
+    const notifier = jest.fn();
+    const agent = new MakaMujo(stubTalkModel, stubTts, {
+      onBaselineChange: notifier,
+    });
+
+    agent.onAir(niconamaLive(10));
+    agent.listen([viewerComment]);
+
+    const afterComment = notifier.mock.calls.at(-1)?.[0] as
+      | { currentProgramLatestCommentNo: number }
+      | undefined;
+    expect(afterComment?.currentProgramLatestCommentNo).toBe(1);
+
+    agent.onAir(niconamaOffline);
+    const afterEnd = notifier.mock.calls.at(-1)?.[0] as
+      | {
+          previousStreamCommentCount: number;
+          currentProgramUrl?: string;
+          currentProgramLatestCommentNo: number;
+        }
+      | undefined;
+    expect(afterEnd).toEqual({
+      previousStreamCommentCount: 1,
+      currentProgramUrl: undefined,
+      currentProgramLatestCommentNo: 0,
+    });
+  });
+
+  it("resets the counter and notifies when the program url changes", () => {
+    const notifier = jest.fn();
+    const agent = new MakaMujo(stubTalkModel, stubTts, {
+      onBaselineChange: notifier,
+    });
+
+    agent.onAir(niconamaLive(10));
+    agent.listen([viewerComment]);
+    agent.onAir({
+      ...niconamaLive(10),
+      data: {
+        ...niconamaLive(10).data,
+        url: "https://live.example/watch/lv2",
+      },
+    });
+
+    const last = notifier.mock.calls.at(-1)?.[0] as
+      | {
+          previousStreamCommentCount: number;
+          currentProgramUrl: string;
+          currentProgramLatestCommentNo: number;
+        }
+      | undefined;
+    expect(last).toEqual({
+      previousStreamCommentCount: 0,
+      currentProgramUrl: "https://live.example/watch/lv2",
+      currentProgramLatestCommentNo: 0,
+    });
+  });
+});

@@ -28,6 +28,11 @@ import {
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
 import { startConsoleServer } from "./console/index";
 import {
+  loadStreamBaseline,
+  STREAM_BASELINE_BASENAME,
+  saveStreamBaseline,
+} from "./lib/application/streamBaselineStore";
+import {
   assemblePublishedPayload,
   attachReplyTargetToPublished,
   extractMetaPostBody,
@@ -141,7 +146,17 @@ const tts =
       })()
     : new FallbackTTS();
 
-const streamer = new MakaMujo(model, tts);
+const streamBaselinePath = resolve(
+  process.cwd(),
+  "var",
+  STREAM_BASELINE_BASENAME,
+);
+
+const streamer = new MakaMujo(model, tts, {
+  baseline: loadStreamBaseline(streamBaselinePath),
+  onBaselineChange: (baseline) =>
+    saveStreamBaseline(streamBaselinePath, baseline),
+});
 
 // Provide an in-memory fallback agent synchronously so the rest of the
 // server initialization can reference `agent` without awaiting a dynamic
