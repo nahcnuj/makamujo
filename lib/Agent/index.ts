@@ -4,10 +4,18 @@ import { CommentApplicationService } from "../application/CommentApplicationServ
 import { GameplayApplicationService } from "../application/GameplayApplicationService";
 import { type SpeechEvent, SpeechQueue } from "../application/SpeechQueue";
 import { StreamApplicationService } from "../application/StreamApplicationService";
+import type { StreamBaseline } from "../application/streamBaselineStore";
 import type { TalkModelGenerateResult as AppTalkModelGenerateResult } from "../application/types";
 import { evaluateSpeechable } from "../domain/broadcasting/SilencePolicy";
 import { pickRandomFrom, segmentWords } from "../domain/comments/TopicPicker";
 export const SILENCE_THRESHOLD_MS = 5 * 60 * 1_000; // 5 minutes
+
+export type MakaMujoOptions = {
+  /** Restored comment-tracking state (survives process restarts). */
+  baseline?: StreamBaseline;
+  /** Persist callback fired whenever the baseline changes. */
+  onBaselineChange?: (baseline: StreamBaseline) => void;
+};
 
 /**
  * Thin facade: owns AgentSession + SpeechQueue, exposes AgentLike surface.
@@ -31,9 +39,13 @@ export class MakaMujo {
   /** Latest news lines from sight (for spontaneous topic). */
   #currentNewsLines: string[] = [];
 
-  constructor(talkModel: TalkModel, tts: TTS) {
+  constructor(talkModel: TalkModel, tts: TTS, options: MakaMujoOptions = {}) {
     this.#talkModel = talkModel;
     this.#speechQueue = new SpeechQueue(tts);
+
+    if (options.baseline) {
+      this.#session.restoreStreamBaseline(options.baseline);
+    }
 
     const speechPort = {
       speech: (generated?: AppTalkModelGenerateResult) =>
@@ -44,12 +56,16 @@ export class MakaMujo {
       this.#session,
       talkModel,
       speechPort,
+      options.onBaselineChange,
     );
     this.#stream = new StreamApplicationService(
       this.#session,
       speechPort,
       this.#speechQueue,
-      { silenceThresholdMs: SILENCE_THRESHOLD_MS },
+      {
+        silenceThresholdMs: SILENCE_THRESHOLD_MS,
+        onBaselineChange: options.onBaselineChange,
+      },
     );
     this.#gameplay = new GameplayApplicationService(
       this.#session,

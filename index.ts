@@ -34,6 +34,11 @@ import {
   GENERATED_SPEECH_HISTORY_SSE_SIZE,
 } from "./lib/domain/publication/assemblePublishedPayload";
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
+import {
+  loadStreamBaseline,
+  saveStreamBaseline,
+  STREAM_BASELINE_BASENAME,
+} from "./lib/application/streamBaselineStore";
 import { normalizePublishedStreamState } from "./lib/streamState";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
 import type { SpeechHistoryEntry } from "./routes/api/speech-history";
@@ -141,7 +146,17 @@ const tts =
       })()
     : new FallbackTTS();
 
-const streamer = new MakaMujo(model, tts);
+const streamBaselinePath = resolve(
+  process.cwd(),
+  "var",
+  STREAM_BASELINE_BASENAME,
+);
+
+const streamer = new MakaMujo(model, tts, {
+  baseline: loadStreamBaseline(streamBaselinePath),
+  onBaselineChange: (baseline) =>
+    saveStreamBaseline(streamBaselinePath, baseline),
+});
 
 // Provide an in-memory fallback agent synchronously so the rest of the
 // server initialization can reference `agent` without awaiting a dynamic

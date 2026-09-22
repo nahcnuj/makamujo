@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import {
   allocateFreePort,
   killProcessTree,
@@ -24,6 +24,12 @@ beforeAll(async () => {
       /* ignore */
     }
     writeFileSync("./var/cookieclicker.txt", "");
+  }
+  // Clean up stream baseline file to ensure fresh state
+  try {
+    rmSync("./var/stream-baseline.json", { force: true });
+  } catch {
+    /* ignore */
   }
 
   mainServerPort = await allocateFreePort();
@@ -132,6 +138,12 @@ beforeAll(async () => {
 afterAll(async () => {
   killProcessTree(server);
   server = null;
+  // Clean up stream baseline file to avoid interference between test runs
+  try {
+    rmSync("./var/stream-baseline.json", { force: true });
+  } catch {
+    /* ignore */
+  }
   await waitForPortRelease(400);
 });
 
