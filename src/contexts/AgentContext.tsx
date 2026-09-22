@@ -17,6 +17,8 @@ type Data = {
     state: any;
   };
   streamState?: AgentState;
+  commentCount?: number;
+  previousStreamCommentCount?: number;
 };
 
 const AgentContext = createContext<Data>({
@@ -49,13 +51,21 @@ export const updateSpeechStateFromSpeechApiResponse = (
  * the last displayed stream state is preserved across transient API errors.
  */
 export const setStreamStateFromMetaApiResponse = (
-  res: { niconama?: AgentState } | null,
+  res: {
+    niconama?: AgentState;
+    commentCount?: number;
+    previousStreamCommentCount?: number;
+  } | null,
   setStreamState: (state: AgentState | undefined) => void,
+  setCommentCount: (count: number | undefined) => void,
+  setPreviousStreamCommentCount: (count: number | undefined) => void,
 ): void => {
   if (res === null) {
     return;
   }
   setStreamState(res.niconama);
+  setCommentCount(res.commentCount);
+  setPreviousStreamCommentCount(res.previousStreamCommentCount);
 };
 
 export const AgentProvider = ({ children }: PropsWithChildren) => {
@@ -63,6 +73,9 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
   const [silent, setSilent] = useState(false);
   const [playing, setPlaying] = useState<Data["playing"]>();
   const [streamState, setStreamState] = useState<AgentState>();
+  const [commentCount, setCommentCount] = useState<number>();
+  const [previousStreamCommentCount, setPreviousStreamCommentCount] =
+    useState<number>();
 
   useInterval(100, async () => {
     const res = await fetch("/api/speech", { unix: "./var/api-speech.sock" })
@@ -95,12 +108,24 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
         console.warn("[WARN]", error);
         return null;
       });
-    setStreamStateFromMetaApiResponse(res, setStreamState);
+    setStreamStateFromMetaApiResponse(
+      res,
+      setStreamState,
+      setCommentCount,
+      setPreviousStreamCommentCount,
+    );
   });
 
   return (
     <AgentContext.Provider
-      value={{ speechLines, silent, streamState, playing }}
+      value={{
+        speechLines,
+        silent,
+        streamState,
+        commentCount,
+        previousStreamCommentCount,
+        playing,
+      }}
     >
       {children}
     </AgentContext.Provider>

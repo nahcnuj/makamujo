@@ -1,6 +1,7 @@
 import { Games } from "../../lib/Agent/games";
 import { HighlightOnChange } from "../agt-compat";
 import { useAgentContext } from "../contexts/AgentContext";
+import { DeliveryVoltage } from "./DeliveryVoltage";
 
 const _formatDuration = (d: Date) =>
   `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}:${d.getSeconds().toString().padStart(2, "0")}`;
@@ -20,7 +21,8 @@ const _formatDuration = (d: Date) =>
 const formatNumber = new Intl.NumberFormat("ja-JP").format;
 
 export function GamePanel() {
-  const { playing, streamState } = useAgentContext();
+  const { playing, streamState, commentCount, previousStreamCommentCount } =
+    useAgentContext();
 
   // console.log(playing);
   const Component = playing ? Games[playing.name].Component : () => null;
@@ -31,6 +33,10 @@ export function GamePanel() {
         {playing && <Component state={playing.state} />}
       </div>
       <div className="flex-none">
+        <DeliveryVoltage
+          commentCount={commentCount ?? 0}
+          previousStreamCommentCount={previousStreamCommentCount ?? 0}
+        />
         {streamState?.meta?.total && (
           <div className="text-right">
             <div>

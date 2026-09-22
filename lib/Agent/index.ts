@@ -258,6 +258,10 @@ export class MakaMujo {
     return this.#session.streamState;
   }
 
+  get previousStreamCommentCount() {
+    return this.#session.previousStreamCommentCount;
+  }
+
   get Component() {
     return this.#gameplay.Component;
   }

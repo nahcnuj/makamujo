@@ -22,4 +22,5 @@ export type ReplyTargetComment = {
 export type AgentState = StreamState & {
   meta?: StreamMeta;
   replyTargetComment?: ReplyTargetComment;
+  previousStreamCommentCount?: number;
 };
