@@ -21,7 +21,8 @@ const _formatDuration = (d: Date) =>
 const formatNumber = new Intl.NumberFormat("ja-JP").format;
 
 export function GamePanel() {
-  const { playing, streamState } = useAgentContext();
+  const { playing, streamState, commentCount, previousStreamCommentCount } =
+    useAgentContext();
 
   // console.log(playing);
   const Component = playing ? Games[playing.name].Component : () => null;
@@ -32,7 +33,10 @@ export function GamePanel() {
         {playing && <Component state={playing.state} />}
       </div>
       <div className="flex-none">
-        <DeliveryVoltage />
+        <DeliveryVoltage
+          commentCount={commentCount ?? 0}
+          previousStreamCommentCount={previousStreamCommentCount ?? 0}
+        />
         {streamState?.meta?.total && (
           <div className="text-right">
             <div>

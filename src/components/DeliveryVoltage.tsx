@@ -1,5 +1,4 @@
 import { useEffect, useState } from "hono/jsx/dom";
-import { useAgentContext } from "../contexts/AgentContext";
 
 const VOLTAGE_BAR_HEIGHT = "0.5em";
 
@@ -47,11 +46,17 @@ export function getRainbowGradient(offset: number): string {
   )`;
 }
 
-export function DeliveryVoltage() {
-  const { commentCount, previousStreamCommentCount } = useAgentContext();
+type DeliveryVoltageProps = {
+  commentCount: number;
+  previousStreamCommentCount: number;
+};
 
-  const currentComments = commentCount ?? 0;
-  const previous = previousStreamCommentCount ?? 0;
+export function DeliveryVoltage({
+  commentCount,
+  previousStreamCommentCount,
+}: DeliveryVoltageProps) {
+  const currentComments = commentCount;
+  const previous = previousStreamCommentCount;
 
   const widthPercent = computeVoltageWidthPercent(currentComments, previous);
   const overVoltage = isOverVoltage(currentComments, previous);
