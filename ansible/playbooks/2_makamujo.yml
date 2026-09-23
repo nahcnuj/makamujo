@@ -117,6 +117,7 @@
         cmd: >
           flatpak override com.obsproject.Studio
           --system
+          --nosocket=pulseaudio
           --filesystem=/run/user/0/pulse
           --env=PULSE_SERVER=unix:/run/user/0/pulse/native
           --env=XDG_RUNTIME_DIR=/run/user/0
