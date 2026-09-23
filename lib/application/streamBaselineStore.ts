@@ -1,10 +1,12 @@
 import {
+  closeSync,
   type Dirent,
   existsSync,
+  fstatSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
@@ -107,11 +109,12 @@ const readRecordedProgramCounts = (
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
     const path = join(commentsDir, entry.name);
-    let maxCommentNo = 0;
-    let mtimeMs: number | undefined;
+    let fd: number | undefined;
     try {
-      mtimeMs = statSync(path).mtimeMs;
-      for (const line of readFileSync(path, "utf8").split("\n")) {
+      fd = openSync(path, "r");
+      const mtimeMs = fstatSync(fd).mtimeMs;
+      let maxCommentNo = 0;
+      for (const line of readFileSync(fd, "utf8").split("\n")) {
         const trimmed = line.trim();
         if (!trimmed) continue;
         const no = (JSON.parse(trimmed) as { no?: unknown }).no;
@@ -123,11 +126,18 @@ const readRecordedProgramCounts = (
           maxCommentNo = no;
         }
       }
+      if (maxCommentNo > 0) {
+        programs.push({ fileName: entry.name, maxCommentNo, mtimeMs });
+      }
     } catch {
-      continue;
-    }
-    if (mtimeMs !== undefined && maxCommentNo > 0) {
-      programs.push({ fileName: entry.name, maxCommentNo, mtimeMs });
+    } finally {
+      if (fd !== undefined) {
+        try {
+          closeSync(fd);
+        } catch {
+          // ignore close errors on a best-effort scan
+        }
+      }
     }
   }
   return programs;
