@@ -28,7 +28,7 @@ import {
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
 import { startConsoleServer } from "./console/index";
 import {
-  loadStreamBaseline,
+  loadStreamBaselineWithRecovery,
   STREAM_BASELINE_BASENAME,
   saveStreamBaseline,
 } from "./lib/application/streamBaselineStore";
@@ -151,9 +151,13 @@ const streamBaselinePath = resolve(
   "var",
   STREAM_BASELINE_BASENAME,
 );
+const streamCommentRecordsDir = resolve(process.cwd(), "var", "comments");
 
 const streamer = new MakaMujo(model, tts, {
-  baseline: loadStreamBaseline(streamBaselinePath),
+  baseline: loadStreamBaselineWithRecovery(
+    streamBaselinePath,
+    streamCommentRecordsDir,
+  ),
   onBaselineChange: (baseline) =>
     saveStreamBaseline(streamBaselinePath, baseline),
 });
