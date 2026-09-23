@@ -1076,7 +1076,7 @@ describe("MakaMujo stream baseline persistence", () => {
     });
   });
 
-  it("resets the counter and notifies when the program url changes", () => {
+  it("carries the previous program's comment count over on program url change", () => {
     const notifier = jest.fn();
     const agent = new MakaMujo(stubTalkModel, stubTts, {
       onBaselineChange: notifier,
@@ -1100,7 +1100,40 @@ describe("MakaMujo stream baseline persistence", () => {
         }
       | undefined;
     expect(last).toEqual({
-      previousStreamCommentCount: 0,
+      previousStreamCommentCount: 1,
+      currentProgramUrl: "https://live.example/watch/lv2",
+      currentProgramLatestCommentNo: 0,
+    });
+  });
+
+  it("keeps the existing baseline when a new program starts before any comment", () => {
+    const notifier = jest.fn();
+    const agent = new MakaMujo(stubTalkModel, stubTts, {
+      baseline: {
+        previousStreamCommentCount: 538,
+        currentProgramUrl: "https://example.com",
+        currentProgramLatestCommentNo: 0,
+      },
+      onBaselineChange: notifier,
+    });
+
+    agent.onAir({
+      ...niconamaLive(10),
+      data: {
+        ...niconamaLive(10).data,
+        url: "https://live.example/watch/lv2",
+      },
+    });
+
+    const last = notifier.mock.calls.at(-1)?.[0] as
+      | {
+          previousStreamCommentCount: number;
+          currentProgramUrl: string;
+          currentProgramLatestCommentNo: number;
+        }
+      | undefined;
+    expect(last).toEqual({
+      previousStreamCommentCount: 538,
       currentProgramUrl: "https://live.example/watch/lv2",
       currentProgramLatestCommentNo: 0,
     });
