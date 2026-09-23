@@ -50,6 +50,14 @@ export class StreamApplicationService {
         } = streamData.data;
         if (isLive) {
           if (this.#session.currentProgramUrl !== url) {
+            // The previous live program ended without an observed offline
+            // state (niconama switches between live URLs directly). Carry its
+            // final comment count over so `previousStreamCommentCount` keeps
+            // advancing instead of staying 0.
+            if (this.#session.currentProgramLatestCommentNo > 0) {
+              this.#session.previousStreamCommentCount =
+                this.#session.currentProgramLatestCommentNo;
+            }
             this.#session.currentProgramUrl = url;
             this.#session.currentProgramLatestCommentNo = 0;
             this.#session.hasPromptedCommentForViewerIncrease = false;
