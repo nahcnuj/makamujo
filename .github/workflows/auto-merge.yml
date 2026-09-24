@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   enable:
-    uses: nahcnuj/conahcnuj/.github/workflows/owner-approved-auto-merge.yml@feature/owner-approved-auto-merge-reusable
+    uses: nahcnuj/conahcnuj/.github/workflows/owner-approved-auto-merge.yml@1372b7725b786e9e8139c234f68a61f0b9edf27c
     with:
       repository: ${{ github.repository }}
       pr-number: ${{ github.event.pull_request.number }}
