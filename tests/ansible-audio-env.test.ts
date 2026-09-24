@@ -70,3 +70,30 @@ test("Ansible playbook configures makamujo-audio.sh with correct PulseAudio env 
     "export PULSE_RUNTIME_PATH=/run/user/0/pulse",
   );
 });
+
+test("Flatpak OBS uses the standard Pulse socket without conflicting binds", () => {
+  const playbookContent = readFileSync(
+    "ansible/playbooks/2_makamujo.yml",
+    "utf-8",
+  );
+  const wrapperContent = readFileSync("bin/obs-studio", "utf-8");
+  const resetIndex = playbookContent.indexOf(
+    "flatpak override com.obsproject.Studio --system --reset",
+  );
+  const configureIndex = playbookContent.indexOf(
+    "flatpak override com.obsproject.Studio\n          --system\n          --socket=pulseaudio",
+  );
+  const verifyIndex = playbookContent.indexOf(
+    'test -S "${PULSE_SERVER#unix:}"',
+  );
+
+  expect(resetIndex).toBeGreaterThanOrEqual(0);
+  expect(configureIndex).toBeGreaterThan(resetIndex);
+  expect(verifyIndex).toBeGreaterThan(configureIndex);
+  expect(playbookContent).not.toContain("--nosocket=pulseaudio");
+  expect(playbookContent).not.toContain("--filesystem=/run/user/0/pulse");
+  expect(wrapperContent).toContain("--socket=pulseaudio");
+  expect(wrapperContent).not.toContain("--filesystem=/run/user/0/pulse");
+  expect(wrapperContent).not.toContain("--env=PULSE_SERVER=");
+  expect(wrapperContent).not.toContain("--env=PULSE_RUNTIME_PATH=");
+});
