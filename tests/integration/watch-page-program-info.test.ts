@@ -126,6 +126,8 @@ let broadcastingBaseUrl = "";
 let mainServerPort = 0;
 /** 準備失敗時に原因を CI ログへ出すためのサーバー出力 Keepsake。 */
 let serverOutput = "";
+/** サーバーの起動完了を示すログが出たか。 */
+let startupMarkerSeen = false;
 
 const fetchMeta = async (): Promise<any> =>
   (await fetch(`${broadcastingBaseUrl}/api/meta`)).json();
@@ -229,63 +231,43 @@ beforeAll(async () => {
 
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
-      cleanupListeners();
-      reject(
-        new Error(`Server startup timed out. Output:\n${buffer.slice(-2000)}`),
-      );
+      reject(new Error(`Server startup timed out. Output:\n${serverOutput}`));
     }, SERVER_STARTUP_TIMEOUT_MS);
 
-    let buffer = "";
-    let serverRunning = false;
-
     function checkReady() {
-      if (serverRunning) {
+      if (startupMarkerSeen) {
         clearTimeout(timeout);
-        cleanupListeners();
         resolve();
       }
     }
 
+    // stdout / stderr はテストが終わるまで読み続ける。起動待ちが終わったのを
+    // 理由にリスナーを外すと、それ以降のログ（reader の起動ログなど）が
+    // 誰も読まずに落ちてしまい、原因を追えなくなる。
     function onData(chunk: Buffer | string) {
       const text = String(chunk);
-      buffer = text + buffer;
       serverOutput = (serverOutput + text).slice(-8000);
       if (
-        !serverRunning &&
-        (buffer.includes("Server running") ||
-          buffer.includes("🚀 Server running"))
+        !startupMarkerSeen &&
+        (text.includes("Server running") || text.includes("🚀 Server"))
       ) {
-        serverRunning = true;
+        startupMarkerSeen = true;
       }
       checkReady();
     }
 
     function onExit(code: number | null) {
       clearTimeout(timeout);
-      cleanupListeners();
-      reject(
-        new Error(
-          `Server exited early with code ${code}. Output:\n${buffer.slice(-2000)}`,
-        ),
-      );
-    }
-
-    function cleanupListeners() {
-      try {
-        server?.stdout?.off("data", onData);
-      } catch {
-        /* ignore */
-      }
-      try {
-        server?.stderr?.off("data", onData);
-      } catch {
-        /* ignore */
-      }
       try {
         server?.off("exit", onExit);
       } catch {
         /* ignore */
       }
+      reject(
+        new Error(
+          `Server exited early with code ${code}. Output:\n${serverOutput}`,
+        ),
+      );
     }
 
     try {
@@ -293,7 +275,6 @@ beforeAll(async () => {
       server?.stderr?.on("data", onData);
       server?.on("exit", onExit);
     } catch (error) {
-      cleanupListeners();
       reject(error);
     }
   });
