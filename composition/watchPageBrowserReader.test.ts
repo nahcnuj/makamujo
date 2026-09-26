@@ -25,6 +25,7 @@ const liveSnapshot: WatchPageSnapshot = {
     startTime: 1_700_000_000,
   },
   statistics: { viewers: 25, comments: 1055, nicoadPoints: 30, giftPoints: 40 },
+  pageLoaded: true,
 };
 
 const createFakeSession = (
@@ -101,6 +102,36 @@ describe("toWatchPageSnapshot", () => {
 
     expect(snapshot.program).toBeUndefined();
     expect(snapshot.statistics).toEqual({});
+    // 何も読めていないので、配信終了とは区別する。
+    expect(snapshot.pageLoaded).toBe(false);
+  });
+
+  it("marks a page that only shows placeholders as not loaded", () => {
+    const snapshot = toWatchPageSnapshot({
+      statistics: {
+        viewers: "-",
+        comments: " ",
+        nicoadPoints: "-",
+        giftPoints: "-",
+      },
+      embeddedData: null,
+    });
+
+    expect(snapshot.pageLoaded).toBe(false);
+  });
+
+  it("marks a page with any visible metric as loaded even without program data", () => {
+    const snapshot = toWatchPageSnapshot({
+      statistics: {
+        viewers: "-",
+        comments: "1,055",
+        nicoadPoints: "-",
+        giftPoints: "-",
+      },
+      embeddedData: null,
+    });
+
+    expect(snapshot.pageLoaded).toBe(true);
   });
 });
 

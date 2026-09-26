@@ -28,6 +28,11 @@ export type WatchPageSnapshot = {
   program: WatchPageProgram | undefined;
   /** 統計行の表示テキストを数値化したもの。値が無い項目はキーごと無い。 */
   statistics: DisplayedStatistics;
+  /**
+   * ページが読み込まれたか。`false` は navigation 失敗や about:blank など
+   * 配信ページを一切見ていない状態で、この場合は何も公開しない。
+   */
+  pageLoaded: boolean;
 };
 
 /** ブラウザ実体から切り離したセッション。差し替え・単体テストが可能。 */
@@ -49,13 +54,21 @@ export type WatchPageRawReading = {
 /** 生サンプル → ドメイン値。ブラウザ無しで単体テストできる。 */
 export const toWatchPageSnapshot = (
   raw: WatchPageRawReading,
-): WatchPageSnapshot => ({
-  program:
-    raw.embeddedData === null || raw.embeddedData === undefined
-      ? undefined
-      : parseWatchPageProgramProps(raw.embeddedData),
-  statistics: parseDisplayedStatistics(raw.statistics),
-});
+): WatchPageSnapshot => {
+  const hasProgramProps = Boolean(raw.embeddedData);
+  const hasAnyMetric = Object.values(raw.statistics).some(
+    (text) =>
+      typeof text === "string" && text.trim() !== "-" && text.trim() !== "",
+  );
+  return {
+    program: hasProgramProps
+      ? parseWatchPageProgramProps(raw.embeddedData ?? "")
+      : undefined,
+    statistics: parseDisplayedStatistics(raw.statistics),
+    // ページを見ていない（空 / エラーページ）なら、配信していないとは区別する。
+    pageLoaded: hasProgramProps || hasAnyMetric,
+  };
+};
 
 export type WatchPageBrowserReaderOptions = {
   watchPageUrl: string;

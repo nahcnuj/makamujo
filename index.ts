@@ -754,7 +754,7 @@ startIdleSpeechTimer(streamer, 1_000);
 // `NICONAMA_WATCH_PAGE_URL` が無い環境（テストなど）では起動せず、
 // 従来どおり `POST /api/meta` へフォールバックする。
 const watchPageUrl = process.env.NICONAMA_WATCH_PAGE_URL?.trim();
-let watchPageReadFailureCount = 0;
+let watchPageUnreadableCount = 0;
 if (watchPageUrl) {
   const readIntervalMs = Number.parseInt(
     process.env.NICONAMA_WATCH_PAGE_READ_INTERVAL_MS ??
@@ -763,7 +763,9 @@ if (watchPageUrl) {
   );
   void (async () => {
     try {
-      // Playwright は reader を有効にしたときだけロードする。
+      // Playwright は reader を有効にしたときだけロードする。どの段階まで
+      // 進んだかが分かるよう、段階ごとにログを出す（原因を CI ログで追えるように）。
+      console.log("[INFO] loading the niconama watch page reader module...");
       const [
         { startWatchPageBrowserReader },
         { createPlaywrightWatchPageSession },
@@ -771,6 +773,7 @@ if (watchPageUrl) {
         import("./composition/watchPageBrowserReader"),
         import("./composition/watchPageBrowserSession"),
       ]);
+      console.log("[INFO] niconama watch page reader module loaded");
       const reader = startWatchPageBrowserReader({
         watchPageUrl,
         intervalMs: Number.isFinite(readIntervalMs)
@@ -778,6 +781,18 @@ if (watchPageUrl) {
           : WATCH_PAGE_READ_INTERVAL_MS,
         createSession: createPlaywrightWatchPageSession,
         onSnapshot: (snapshot) => {
+          // ページが読めていない（空 / エラーページ）ときは、配信終了と区別して
+          // 直前の状態を保つ。空の読み取りで「オフライン」に倒さない。
+          if (!snapshot.pageLoaded) {
+            watchPageUnreadableCount += 1;
+            if (watchPageUnreadableCount % 10 === 1) {
+              console.warn(
+                `[WARN] the niconama watch page returned nothing readable (${watchPageUnreadableCount} times); keeping the previous program info`,
+              );
+            }
+            return;
+          }
+          watchPageUnreadableCount = 0;
           const streamData =
             snapshot.program === undefined
               ? toOfflineStreamData()
@@ -799,13 +814,13 @@ if (watchPageUrl) {
         },
         onError: (error) => {
           // 読み取りが失敗し続けてもログが氾濫しないよう、最初と 10 回ごとに出す。
-          watchPageReadFailureCount += 1;
+          watchPageUnreadableCount += 1;
           if (
-            watchPageReadFailureCount === 1 ||
-            watchPageReadFailureCount % 10 === 0
+            watchPageUnreadableCount === 1 ||
+            watchPageUnreadableCount % 10 === 0
           ) {
             console.warn(
-              `[WARN] failed to read the niconama watch page (${watchPageReadFailureCount} times):`,
+              `[WARN] failed to read the niconama watch page (${watchPageUnreadableCount} times):`,
               error instanceof Error ? error.message : String(error),
             );
           }
