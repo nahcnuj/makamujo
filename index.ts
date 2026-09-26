@@ -754,6 +754,7 @@ startIdleSpeechTimer(streamer, 1_000);
 // `NICONAMA_WATCH_PAGE_URL` が無い環境（テストなど）では起動せず、
 // 従来どおり `POST /api/meta` へフォールバックする。
 const watchPageUrl = process.env.NICONAMA_WATCH_PAGE_URL?.trim();
+let watchPageReadFailureCount = 0;
 if (watchPageUrl) {
   const readIntervalMs = Number.parseInt(
     process.env.NICONAMA_WATCH_PAGE_READ_INTERVAL_MS ??
@@ -797,10 +798,17 @@ if (watchPageUrl) {
           broadcastCurrentPayloadLocal("onWatchPageSnapshot");
         },
         onError: (error) => {
-          console.warn(
-            "[WARN] failed to read the niconama watch page:",
-            error instanceof Error ? error.message : String(error),
-          );
+          // 読み取りが失敗し続けてもログが氾濫しないよう、最初と 10 回ごとに出す。
+          watchPageReadFailureCount += 1;
+          if (
+            watchPageReadFailureCount === 1 ||
+            watchPageReadFailureCount % 10 === 0
+          ) {
+            console.warn(
+              `[WARN] failed to read the niconama watch page (${watchPageReadFailureCount} times):`,
+              error instanceof Error ? error.message : String(error),
+            );
+          }
         },
       });
       console.log(`[INFO] reading niconama program page: ${watchPageUrl}`);

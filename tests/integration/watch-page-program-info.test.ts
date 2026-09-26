@@ -17,14 +17,22 @@ import {
  *
  * 配信ページの代わりにローカル HTTP サーバを立て、統計行の表示を再現したページを返す。
  * ページは実際のニコニコ配信ページと同じく、JS が定期取得して値を描き換える
- * （acity `: '-'` の初期表示から数字に変わる様子も再現する）。実サーバの
+ * （初期表示の `-` から数字に変わる様子も再現する）。実サーバの
  * `/api/meta` まで届くことを確認する。
  *
  * Chromium が起動できない環境ではブラウザ依存の検証ができないため skip する。
+ *
+ * CI の `test` ジョブは `timeout-minutes: 3` のため、Chromium 導入と
+ * サーバー起動に時間を取られた後でも収まるよう、準備は 1 回だけ
+ * `beforeAll` で有界待ちし、各テストは準備済み状態を前提に短く断言する。
  */
 
 const SERVER_STARTUP_TIMEOUT_MS = 20_000;
-const READ_INTERVAL_MS = 200;
+const READ_INTERVAL_MS = 1_000;
+/** reader が最初の値を公開するまでの上限。超過したら准备的失敗として即エラーにする。 */
+const READER_READY_TIMEOUT_MS = 45_000;
+/** 準備後の各テストは状態だけ見るので短くてよい。 */
+const TEST_TIMEOUT_MS = 30_000;
 
 const embeddedDataJson = JSON.stringify({
   program: {
@@ -116,13 +124,15 @@ let watchPageBaseUrl = "";
 let server: SpawnedServer | null = null;
 let broadcastingBaseUrl = "";
 let mainServerPort = 0;
+/** 準備失敗時に原因を CI ログへ出すためのサーバー出力 Keepsake。 */
+let serverOutput = "";
 
 const fetchMeta = async (): Promise<any> =>
   (await fetch(`${broadcastingBaseUrl}/api/meta`)).json();
 
 const waitForMeta = async (
   predicate: (meta: any) => boolean,
-  timeoutMs = 90_000,
+  timeoutMs: number,
 ): Promise<any> => {
   const deadline = Date.now() + timeoutMs;
   let latest: any = undefined;
@@ -138,19 +148,10 @@ const waitForMeta = async (
   );
 };
 
-/**
- * Bun のテスト既定は 5000ms だが、Chromium の起動と配信ページの読み込みには
- * その倍数かかる。各テストに明示的に長い予算を渡す。
- */
-const TEST_TIMEOUT_MS = 180_000;
-
-/** 配信ページ由来の値が公開されるまで待つ（他テストの前提条件）。 */
-const waitForLiveProgramInfo = () =>
-  waitForMeta(
-    (m) =>
-      m?.niconama?.type === "live" &&
-      m?.niconama?.meta?.total?.listeners === 111,
-  );
+/** 配信ページ由来の値が公開されている状態か。 */
+const hasLiveProgramInfo = (meta: any): boolean =>
+  meta?.niconama?.type === "live" &&
+  meta?.niconama?.meta?.total?.listeners === 111;
 
 /** Chromium がこの環境で起動できるか（skip 判定）。 */
 const chromiumAvailable = await (async (): Promise<boolean> => {
@@ -246,7 +247,9 @@ beforeAll(async () => {
     }
 
     function onData(chunk: Buffer | string) {
-      buffer = String(chunk) + buffer;
+      const text = String(chunk);
+      buffer = text + buffer;
+      serverOutput = (serverOutput + text).slice(-8000);
       if (
         !serverRunning &&
         (buffer.includes("Server running") ||
@@ -294,6 +297,20 @@ beforeAll(async () => {
       reject(error);
     }
   });
+
+  // 準備は 1 回だけ有界待ちする。取れなかったらサーバーの出力を出して即失敗させる
+  // （各テストが同じ待ちで 3 分のジョブ予算を溶かすのを防ぐ）。
+  if (chromiumAvailable) {
+    try {
+      await waitForMeta(hasLiveProgramInfo, READER_READY_TIMEOUT_MS);
+    } catch (error) {
+      console.error(
+        "[TEST DIAG] the watch page reader never published the program info.",
+      );
+      console.error(`[TEST DIAG] server output tail:\n${serverOutput}`);
+      throw error;
+    }
+  }
 });
 
 afterAll(async () => {
@@ -307,7 +324,7 @@ afterAll(async () => {
 test.skipIf(!chromiumAvailable)(
   "publishes the numbers rendered on the watch page statistics row",
   async () => {
-    const meta = await waitForLiveProgramInfo();
+    const meta = await waitForMeta(hasLiveProgramInfo, TEST_TIMEOUT_MS);
 
     expect(meta.niconama.type).toBe("live");
     expect(meta.niconama.meta.title).toBe("ページから読んだ配信");
@@ -328,7 +345,6 @@ test.skipIf(!chromiumAvailable)(
 test.skipIf(!chromiumAvailable)(
   "wancole POST /api/meta no longer overrides the watch page numbers",
   async () => {
-    await waitForLiveProgramInfo();
     await fetch(`${broadcastingBaseUrl}/api/meta`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -345,7 +361,7 @@ test.skipIf(!chromiumAvailable)(
       }),
     });
 
-    const meta = await waitForLiveProgramInfo();
+    const meta = await waitForMeta(hasLiveProgramInfo, TEST_TIMEOUT_MS);
 
     expect(meta.niconama.meta.title).toBe("ページから読んだ配信");
     expect(meta.niconama.meta.total).toEqual({
@@ -361,7 +377,6 @@ test.skipIf(!chromiumAvailable)(
 test.skipIf(!chromiumAvailable)(
   "keeps replyTargetComment from POST /api/meta",
   async () => {
-    await waitForLiveProgramInfo();
     await fetch(`${broadcastingBaseUrl}/api/meta`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -374,6 +389,7 @@ test.skipIf(!chromiumAvailable)(
       (m) =>
         m?.replyTargetComment?.text === "返信対象のコメント" &&
         m?.niconama?.meta?.total?.listeners === 111,
+      TEST_TIMEOUT_MS,
     );
 
     expect(meta.replyTargetComment).toEqual({
@@ -388,7 +404,6 @@ test.skipIf(!chromiumAvailable)(
 test.skipIf(!chromiumAvailable)(
   "omits metrics the page shows as a placeholder",
   async () => {
-    await waitForLiveProgramInfo();
     statistics = {
       ...statistics,
       "nicoad-count-item": "-",
@@ -399,6 +414,7 @@ test.skipIf(!chromiumAvailable)(
       (m) =>
         m?.niconama?.meta?.total?.listeners === 111 &&
         !("ad" in (m?.niconama?.meta?.total ?? {})),
+      TEST_TIMEOUT_MS,
     );
 
     expect("ad" in meta.niconama.meta.total).toBe(false);
@@ -411,10 +427,12 @@ test.skipIf(!chromiumAvailable)(
 test.skipIf(!chromiumAvailable)(
   "reports the program as offline when the watch page has no program",
   async () => {
-    await waitForLiveProgramInfo();
     programVisible = false;
 
-    const meta = await waitForMeta((m) => m?.niconama?.type === "offline");
+    const meta = await waitForMeta(
+      (m) => m?.niconama?.type === "offline",
+      TEST_TIMEOUT_MS,
+    );
 
     // ページに番組が無いときは値を持つ指標が 1 つも無いので total ごと無い。
     expect(meta.niconama.meta.total).toBeUndefined();

@@ -112,7 +112,6 @@ export const startWatchPageBrowserReader = (
       running = false;
     }
   };
-
   timer = setInterval(() => {
     void readOnce();
   }, intervalMs);

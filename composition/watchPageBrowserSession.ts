@@ -15,7 +15,7 @@ import {
 
 const NAVIGATION_TIMEOUT_MS = 60_000;
 /** 統計行が `-` から値に埋まるまでの待ち。超過しても読取自体は続行する。 */
-const STATISTICS_READY_TIMEOUT_MS = 30_000;
+const STATISTICS_READY_TIMEOUT_MS = 20_000;
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
