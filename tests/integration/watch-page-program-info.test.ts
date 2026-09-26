@@ -122,7 +122,7 @@ const fetchMeta = async (): Promise<any> =>
 
 const waitForMeta = async (
   predicate: (meta: any) => boolean,
-  timeoutMs = 45_000,
+  timeoutMs = 90_000,
 ): Promise<any> => {
   const deadline = Date.now() + timeoutMs;
   let latest: any = undefined;
@@ -137,6 +137,20 @@ const waitForMeta = async (
     `timed out waiting for /api/meta; last payload: ${JSON.stringify(latest)}`,
   );
 };
+
+/**
+ * Bun のテスト既定は 5000ms だが、Chromium の起動と配信ページの読み込みには
+ * その倍数かかる。各テストに明示的に長い予算を渡す。
+ */
+const TEST_TIMEOUT_MS = 180_000;
+
+/** 配信ページ由来の値が公開されるまで待つ（他テストの前提条件）。 */
+const waitForLiveProgramInfo = () =>
+  waitForMeta(
+    (m) =>
+      m?.niconama?.type === "live" &&
+      m?.niconama?.meta?.total?.listeners === 111,
+  );
 
 /** Chromium がこの環境で起動できるか（skip 判定）。 */
 const chromiumAvailable = await (async (): Promise<boolean> => {
@@ -293,9 +307,7 @@ afterAll(async () => {
 test.skipIf(!chromiumAvailable)(
   "publishes the numbers rendered on the watch page statistics row",
   async () => {
-    const meta = await waitForMeta(
-      (m) => m?.niconama?.meta?.total?.listeners === 111,
-    );
+    const meta = await waitForLiveProgramInfo();
 
     expect(meta.niconama.type).toBe("live");
     expect(meta.niconama.meta.title).toBe("ページから読んだ配信");
@@ -310,11 +322,13 @@ test.skipIf(!chromiumAvailable)(
     });
     expect(meta.commentCount).toBe(222);
   },
+  TEST_TIMEOUT_MS,
 );
 
 test.skipIf(!chromiumAvailable)(
   "wancole POST /api/meta no longer overrides the watch page numbers",
   async () => {
+    await waitForLiveProgramInfo();
     await fetch(`${broadcastingBaseUrl}/api/meta`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -331,9 +345,7 @@ test.skipIf(!chromiumAvailable)(
       }),
     });
 
-    const meta = await waitForMeta(
-      (m) => m?.niconama?.meta?.total?.listeners === 111,
-    );
+    const meta = await waitForLiveProgramInfo();
 
     expect(meta.niconama.meta.title).toBe("ページから読んだ配信");
     expect(meta.niconama.meta.total).toEqual({
@@ -343,11 +355,13 @@ test.skipIf(!chromiumAvailable)(
       ad: 333,
     });
   },
+  TEST_TIMEOUT_MS,
 );
 
 test.skipIf(!chromiumAvailable)(
   "keeps replyTargetComment from POST /api/meta",
   async () => {
+    await waitForLiveProgramInfo();
     await fetch(`${broadcastingBaseUrl}/api/meta`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -357,16 +371,24 @@ test.skipIf(!chromiumAvailable)(
     });
 
     const meta = await waitForMeta(
-      (m) => m?.replyTargetComment?.text === "返信対象のコメント",
+      (m) =>
+        m?.replyTargetComment?.text === "返信対象のコメント" &&
+        m?.niconama?.meta?.total?.listeners === 111,
     );
 
+    expect(meta.replyTargetComment).toEqual({
+      text: "返信対象のコメント",
+      pickedTopic: "返信",
+    });
     expect(meta.niconama.meta.total.listeners).toBe(111);
   },
+  TEST_TIMEOUT_MS,
 );
 
 test.skipIf(!chromiumAvailable)(
   "omits metrics the page shows as a placeholder",
   async () => {
+    await waitForLiveProgramInfo();
     statistics = {
       ...statistics,
       "nicoad-count-item": "-",
@@ -383,15 +405,19 @@ test.skipIf(!chromiumAvailable)(
     expect("gift" in meta.niconama.meta.total).toBe(false);
     expect(meta.niconama.meta.total.listeners).toBe(111);
   },
+  TEST_TIMEOUT_MS,
 );
 
 test.skipIf(!chromiumAvailable)(
   "reports the program as offline when the watch page has no program",
   async () => {
+    await waitForLiveProgramInfo();
     programVisible = false;
 
     const meta = await waitForMeta((m) => m?.niconama?.type === "offline");
 
-    expect(meta.niconama.meta.total).toEqual({});
+    // ページに番組が無いときは値を持つ指標が 1 つも無いので total ごと無い。
+    expect(meta.niconama.meta.total).toBeUndefined();
   },
+  TEST_TIMEOUT_MS,
 );
