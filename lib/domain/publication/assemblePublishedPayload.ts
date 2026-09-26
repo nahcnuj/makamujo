@@ -1,5 +1,6 @@
 import { normalizePublishedStreamState } from "../../streamState";
 import type {
+  ProgramInfoOverride,
   PublishedStreamPayload,
   StreamerPublicationSnapshot,
 } from "./types";
@@ -9,6 +10,11 @@ export const GENERATED_SPEECH_HISTORY_SSE_SIZE = 20;
 export type AssemblePublishedPayloadInput = {
   lastPublished: unknown;
   agentStreamState: unknown;
+  /**
+   * 番組配信ページ由来の番組情報。与えられた場合 `niconama` と `commentCount` は
+   * ここを採る（`lastPublished` = わんcomme の POST /api/meta より優先）。
+   */
+  programInfo?: ProgramInfoOverride;
   streamer: StreamerPublicationSnapshot;
   speechState: unknown;
   history: unknown[];
@@ -58,7 +64,7 @@ export const assemblePublishedPayload = (
     : input.history;
 
   return {
-    niconama: base.niconama ?? {},
+    niconama: input.programInfo?.niconama ?? base.niconama ?? {},
     canSpeak: (base.canSpeak as boolean | undefined) ?? input.streamer.canSpeak,
     currentGame: base.currentGame ?? input.streamer.currentGame ?? null,
     nGram:
@@ -71,7 +77,9 @@ export const assemblePublishedPayload = (
     replyTargetComment:
       replyTargetComment as PublishedStreamPayload["replyTargetComment"],
     commentCount:
-      (base.commentCount as number | undefined) ?? input.streamer.commentCount,
+      input.programInfo?.commentCount ??
+      (base.commentCount as number | undefined) ??
+      input.streamer.commentCount,
     previousStreamCommentCount:
       (base.previousStreamCommentCount as number | undefined) ??
       input.streamer.previousStreamCommentCount,

@@ -42,6 +42,7 @@
   - `lib/domain/**` — 純関数ポリシー / `lib/application/` — アプリ層（例: SpeechQueue） / `lib/Agent/` — 配信エージェント
   - `architecture/` — 設計・契約ドキュメント（索引: `architecture/README.md`）。`docs/` はランディング用静的資産専用で、設計 Markdown はここに置かない
 - ドメイン再設計・`MakaMujo` 分割・配信状態ペイロード変更では、先に `architecture/domain-model-redesign.md` の契約（CommentPipeline・沈黙ポリシー・PublishedStreamPayload）を確認し、観測可能な振る舞いを変えないこと。
+- 番組情報（視聴者数 / コメント数 / ニコニ広告 / ギフト）は **わんコメではなく番組配信ページ**から読む。`NICONAMA_WATCH_PAGE_URL` が無ければ poller は起動せず、`POST /api/meta` の `niconama` へフォールバックする。
 
 ## テスト
 - 新規に作成する公開関数には必ず単体テストを作成する。

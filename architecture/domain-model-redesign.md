@@ -118,6 +118,11 @@ flowchart TB
 |----------------|------------|-------------------|
 | 配信 / 生放送 | Stream / Live | `onAir` の `isLive` |
 | 番組 | Program | URL で識別。URL 変更でコメント番号・prompt フラグをリセット |
+| 番組配信ページ | WatchPage | `https://live.nicovideo.jp/watch/{lv,user/ID}`。**番組情報の唯一の供給元** |
+| 視聴者数 | ViewerCount | 配信ページの `program.statistics.watchCount`（ページ表示そのまま） |
+| コメント数 | PageCommentCount | 配信ページの `program.statistics.commentCount`（ページ表示そのまま） |
+| 広告件数 | AdCount | 配信ページに件数は無い。**ページ上で視聴される広告システムコメントを数えた値** |
+| ギフト件数 | GiftCount | 同上。ギフトコメントを数えた値 |
 | コメント | Comment | 受信ペイロード。**全コメント**が沈黙時計を更新（システム含む） |
 | ユーザコメント番号 | CommentNumber | `typeof no === 'number' && no > 0` — n-gram 更新・番組カウント用 |
 | 学習対象コメント | LearnableComment | **`no` が truthy**（`no > 0` と同一ではない。`no === 0` は学習しない）**または** `isOwner` |
@@ -153,6 +158,9 @@ flowchart TB
 | **Console** | `/api/meta` プロキシ・AgentStatus UI | 5s timeout → 502 |
 | **ACL AGT** | AgentLike / AgentApi | getter 表面・fallback 置換 |
 | **ACL Niconama** | StreamData / Comment blob | 文字列 gift/ad → number |
+| **Program Info Reader** | 配信ページの `embedded-data` → `StreamData` | ポーリング 30s。`NICONAMA_WATCH_PAGE_URL` 未設定なら起動しない |
+
+**番組情報の唯一の供給元（確定）**: **Program Info Reader**（`composition/niconamaWatchPagePoller.ts` + `lib/domain/broadcasting/watchPageProgram.ts` + `lib/application/ProgramInfoAssembler.ts`）。`POST /api/meta` の `niconama` / `points` は **公開ペイロードの `niconama` と `commentCount` には効かない**（`replyTargetComment` などのみ従来どおり効く）。
 
 **NGram の所有者（確定）**: **Broadcasting**。`NGramPolicy` は `lib/domain/broadcasting/NGramPolicy.ts`。Talk はサイズを受け取って生成するだけ。
 
@@ -212,6 +220,7 @@ classDiagram
 | `hasPromptedCommentForViewerIncrease` | **Comment** (step 3 で false); **Broadcasting** (prompt 成功予約で true / TTS 失敗で false) | SilencePolicy, CommentPromptPolicy |
 | `lastListenerCount`, `listenersStaleSince` | **Broadcasting** (`onAir`) | SilencePolicy, CommentPromptPolicy |
 | `currentProgramUrl`, `currentProgramLatestCommentNo` | **Broadcasting** (URL 変更リセット); **Comment** (step 8 で no 代入) | streamState.meta.total.comments 更新 |
+| `currentProgramAdCount`, `currentProgramGiftCount` | **Broadcasting** (URL 変更 / 終了でリセット); **Comment** (step 7b / step 9 で +1) | ProgramInfoAssembler（`points.ad` / `points.gift` へ） |
 | `currentNGramSize`, `currentNGramSizeRaw` | **Broadcasting 指標として Comment pipeline step 4**（Session 上の n-gram フィールド） | Talk generate、Publication、speech イベント付与 |
 | `browserState`, `playing` | **Gameplay** (IPC callback) | SilencePolicy（browserOk）、Publication currentGame、Component |
 | SpeechRuntime 全体 | **Speech** のみ | host listeners |
@@ -241,10 +250,10 @@ classDiagram
 | 5 | `data.no \|\| data.isOwner` なら `learn(\`${comment}。\`)` | truthy `no`（`0` は学習しない）。**オーナーは no なしでも学習** |
 | 6 | `data.no \|\| (userId==='onecomme.system' && name==='生放送クルーズ')` なら topic 抽選 → `topic` truthy なら replyTarget 設定 + `speech(generate(topic,n))` | クルーズ通常コメントはここで返信しうる |
 | 7a | system かつ原文が `「生放送クルーズさん」が引用を開始しました` → 定型 4 発話 → **`continue`** | step 8–9 スキップ |
-| 7b | system かつ原文 `endsWith('広告しました')` → `isAd=true`、名前抽出、広告お礼 → **`continue`** | |
+| 7b | system かつ原文 `endsWith('広告しました')` → `isAd=true`、名前抽出、広告お礼、`currentProgramAdCount += 1` → **`continue`** | |
 | 7c | system かつ原文 `=== '配信終了1分前です'` → 定型 4 発話 → **`continue`** | |
 | 8 | `no > 0` かつ `currentProgramUrl` あり → `currentProgramLatestCommentNo = no`（**Math.max しない**）し meta.total.comments 更新 | 順序逆転で減少しうる |
-| 9 | `hasGift && !isAd` → ギフトお礼（匿名分岐）→ **`continue`** | 広告 continue 後は到達しない |
+| 9 | `hasGift && !isAd` → `currentProgramGiftCount += 1`、ギフトお礼（匿名分岐）→ **`continue`** | 広告 continue 後は到達しない |
 
 **クルーズの二重経路**: step 6 で name=生放送クルーズの一般文に返信し、step 7a の「引用開始」固定文は **continue 前に step 6 も実行済み**（固定文に `no` が無ければ step 6 の第一条件は false; name がクルーズなら step 6 第二条件で topic 発話した **後に** 7a の歓迎 4 発話が積み上がる）。characterization で固定文 + name の組み合わせを固定する。
 
@@ -301,12 +310,18 @@ export type PublishedStreamPayload = {
 
 ```mermaid
 flowchart LR
-  OnAir["onAir StreamData"] --> Internal["AgentInternalStreamState"]
+  Page["番組配信ページ HTML"] --> Parse["parseWatchPageProgram"]
+  Parse --> Map["toStreamDataFromWatchPage"]
+  Map --> OnAir["onAir StreamData"]
+  Counters["ProgramCounters (ad/gift)"] --> Map
+  OnAir --> Internal["AgentInternalStreamState"]
+  Map --> ProgInfo["programInfo override"]
   POST["POST /api/meta body"] --> Norm["normalizePublishedStreamState"]
   Legacy["legacy type/data"] --> Norm
   Norm --> LastPub["lastPublishedStreamState"]
   Internal --> GetSS["agent.getStreamState"]
   LastPub --> Assemble
+  ProgInfo --> Assemble
   GetSS --> Assemble["assemblePublishedPayload"]
   Streamer["streamer getters"] --> Assemble
   Speech["agent.getSpeech"] --> Assemble
@@ -322,6 +337,7 @@ flowchart LR
 |------|------|
 | `lastPublished` | host `lastPublishedStreamState` |
 | `agentStreamState` | `agent.getStreamState?.()` |
+| `programInfo` | host `watchPageProgramInfo`（番組配信ページ → `StreamData` → 正規化）。**未取得なら `undefined`** |
 | `streamer` | `canSpeak`, `currentGame`, `currentNGramSize(Raw)`, `streamState?.meta?.total?.comments` |
 | `speechState` | `agent.getSpeech()` |
 | `history` | `generatedSpeechHistory` |
@@ -343,14 +359,16 @@ agentBase = normalize(agentStreamState) as object | {}
 
 | 出力フィールド | 規則 |
 |----------------|------|
-| `niconama` | `base.niconama ?? {}` |
+| `niconama` | `programInfo?.niconama ?? base.niconama ?? {}` |
 | `canSpeak` | `base.canSpeak ?? streamer.canSpeak` |
 | `currentGame` | `base.currentGame ?? streamer.currentGame ?? null` |
 | `nGram` / `nGramRaw` | `base.* ?? streamer.currentNGram*` |
 | `speech` | `base.speech ?? speechState`（`{ speech, silent }`） |
 | `speechHistory` | base が配列ならそれ、否则 history。`.slice(0, 20)` |
 | `replyTargetComment` | base にあればそれ、**なければ agentBase**（streamer ではない） |
-| `commentCount` | `base.commentCount ?? streamer.streamState?.meta?.total?.comments` |
+| `commentCount` | `programInfo?.commentCount ?? base.commentCount ?? streamer.streamState?.meta?.total?.comments` |
+
+**重要**: `niconama` と `commentCount` は **番組配信ページ由来が最優先**。`POST /api/meta`（wancomme）の `niconama` / `points` は、ページ情報の取得前（`programInfo === undefined`）にだけフォールバックとして効く。
 
 **Characterization fixture（必須）**: `lastPublished` 非 null + 内部 state のみに `replyTargetComment` がある場合 → 公開の replyTarget は agent 経路から出る。`niconama` は lastPublished 側のまま。
 
@@ -367,6 +385,38 @@ agentBase = normalize(agentStreamState) as object | {}
 7. `lastPublishedStreamState = published`
 8. WS + SSE に `assemblePublishedPayload(...)` を送出
 9. `Response.json({})`（致命時 500）
+
+**注**: step 4 の `onAir` は **配信状態（視聴者時計・番組切り替え・コメント促し）を更新しうる**が、step 5–7 の `niconama` は `programInfo` の経路で上書きされる。
+
+### Program Info Reader（番組配信ページの読み取り）
+
+wancomme の `POST /api/meta` が送ってきた `total` / `points` に代えて、**配信ページで視聴者が見ている値をそのまま読む**。
+
+| 指標 | ページ上の出どころ | 備考 |
+|------|--------------------|------|
+| 視聴者数 | `program.statistics.watchCount` | そのまま |
+| コメント数 | `program.statistics.commentCount` | そのまま |
+| ニコニコ広告 | 件数の記載なし | `CommentApplicationService` step 7b で数えたシステムコメント件数 |
+| ギフト | 件数の記載なし | `CommentApplicationService` step 9 で数えたギフトコメント件数 |
+| タイトル / 開始時刻 / 放送状態 | `program.title` / `beginTime` / `status === 'ON_AIR'` | |
+| 番組 URL | `program.watchPageUrl`（無ければ `https://live.nicovideo.jp/watch/{nicoliveProgramId}`） | 番組同一性のキー |
+
+**モジュール**:
+
+| モジュール | 層 | 役割 |
+|------------|----|------|
+| `lib/domain/broadcasting/watchPageProgram.ts` | domain（純関数） | HTML → `WatchPageProgram` / `undefined` |
+| `lib/application/ProgramInfoAssembler.ts` | application（純関数） | `WatchPageProgram` + カウンター → `StreamData` |
+| `composition/niconamaWatchPagePoller.ts` | composition | 定期 fetch・タイムアウト・失敗時の状態保持 |
+
+**環境変数**:
+
+| 変数 | 既定 | 意味 |
+|------|------|------|
+| `NICONAMA_WATCH_PAGE_URL` | （未設定 = 無効） | 読む配信ページ。`etc/systemd/makamujo.service` で設定する |
+| `NICONAMA_WATCH_PAGE_POLL_INTERVAL_MS` | `30000` | ポーリング周期。ページ側の集計は 30〜60 秒単位なのでこれより短くしても無駄 |
+
+**失敗時の契約**: 通信例外・タイムアウトは `onError` に通知するだけで、`programInfo` は直前の値を保つ（状態が勝手には変わらない）。一方、取得には成功したがページに番組が無かった場合（404 等、`WatchPageProgram === undefined`）は **オフライン**として扱う。
 
 ---
 

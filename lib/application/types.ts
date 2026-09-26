@@ -7,6 +7,8 @@ export type StreamData = {
     isLive: boolean;
     startTime: number;
     total: number;
+    /** コメント数。番組配信ページから読む場合はここから来る（未指定なら 0 扱い）。 */
+    comments?: number;
     points: {
       gift: number | string;
       ad: number | string;

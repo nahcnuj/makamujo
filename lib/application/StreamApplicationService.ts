@@ -46,6 +46,7 @@ export class StreamApplicationService {
           startTime: start,
           url,
           total: listeners,
+          comments,
           points,
         } = streamData.data;
         if (isLive) {
@@ -60,6 +61,7 @@ export class StreamApplicationService {
             }
             this.#session.currentProgramUrl = url;
             this.#session.currentProgramLatestCommentNo = 0;
+            this.#session.resetProgramCounters();
             this.#session.hasPromptedCommentForViewerIncrease = false;
             this.#onBaselineChange?.(this.#session.toStreamBaseline());
           }
@@ -103,6 +105,7 @@ export class StreamApplicationService {
           this.#session.listenersStaleSince = undefined;
           this.#session.currentProgramUrl = undefined;
           this.#session.currentProgramLatestCommentNo = 0;
+          this.#session.resetProgramCounters();
           this.#onBaselineChange?.(this.#session.toStreamBaseline());
         }
 
@@ -123,7 +126,8 @@ export class StreamApplicationService {
                     typeof points?.ad === "string"
                       ? Number.parseFloat(points.ad)
                       : points?.ad,
-                  comments: this.#session.currentProgramLatestCommentNo,
+                  comments:
+                    comments ?? this.#session.currentProgramLatestCommentNo,
                 },
               },
             }

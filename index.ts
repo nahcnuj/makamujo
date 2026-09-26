@@ -26,7 +26,15 @@ import {
   type WsLike,
 } from "./composition/broadcast";
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
+import {
+  NICONAMA_WATCH_PAGE_POLL_INTERVAL_MS,
+  startNiconamaWatchPagePoller,
+} from "./composition/niconamaWatchPagePoller";
 import { startConsoleServer } from "./console/index";
+import {
+  toOfflineStreamData,
+  toStreamDataFromWatchPage,
+} from "./lib/application/ProgramInfoAssembler";
 import {
   loadStreamBaselineWithRecovery,
   STREAM_BASELINE_BASENAME,
@@ -38,6 +46,7 @@ import {
   extractMetaPostBody,
   GENERATED_SPEECH_HISTORY_SSE_SIZE,
 } from "./lib/domain/publication/assemblePublishedPayload";
+import type { ProgramInfoOverride } from "./lib/domain/publication/types";
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import { normalizePublishedStreamState } from "./lib/streamState";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
@@ -168,6 +177,12 @@ const streamer = new MakaMujo(model, tts, {
 // `automated-gameplay-transmitter` agent later and replace this fallback
 // when possible.
 let lastPublishedStreamState: unknown;
+/**
+ * 番組情報の出どころ。番組配信ページから読んだ値を保持し、公開ペイロードの
+ * `niconama` / `commentCount` をここでのみ決める（わんcomme からは来ない）。
+ * 未取得（ポーリング失敗・未設定）の間は undefined のまま过去の値を保つ。
+ */
+let watchPageProgramInfo: ProgramInfoOverride | undefined;
 let currentSpeechState = { speech: "", silent: false };
 // WebSocket clients connected to the broadcasting server.
 const wsClients = new Set<WsLike>();
@@ -191,6 +206,7 @@ const getCurrentStreamPayload = () => {
   return assemblePublishedPayload({
     lastPublished: lastPublishedStreamState,
     agentStreamState: agent.getStreamState?.(),
+    programInfo: watchPageProgramInfo,
     streamer: {
       canSpeak: streamer.canSpeak,
       currentGame: streamer.currentGame,
@@ -735,6 +751,54 @@ try {
 
 // Use a classic repeating timer (composition/idleSpeechTimer) for idle speech.
 startIdleSpeechTimer(streamer, 1_000);
+
+// 番組情報（視聴者数 / コメント数 / ニコニ広告 / ギフト）を番組配信ページから読む。
+// `NICONAMA_WATCH_PAGE_URL` が無い環境（テストなど）では起動しない。
+const watchPageUrl = process.env.NICONAMA_WATCH_PAGE_URL?.trim();
+if (watchPageUrl) {
+  const pollIntervalMs = Number.parseInt(
+    process.env.NICONAMA_WATCH_PAGE_POLL_INTERVAL_MS ??
+      String(NICONAMA_WATCH_PAGE_POLL_INTERVAL_MS),
+    10,
+  );
+  const poller = startNiconamaWatchPagePoller({
+    watchPageUrl,
+    intervalMs: Number.isFinite(pollIntervalMs)
+      ? pollIntervalMs
+      : NICONAMA_WATCH_PAGE_POLL_INTERVAL_MS,
+    onProgram: (program) => {
+      const streamData =
+        program === undefined
+          ? toOfflineStreamData(streamer.programCounters)
+          : toStreamDataFromWatchPage(program, streamer.programCounters);
+      // 番組情報の更新はセッション側の配信状態（視聴者増加時のコメント
+      // 促し、番組の切り替え、沈黙クロック）にも反映させる。
+      streamer.onAir(streamData);
+      // 公開ペイロードには、現在観測されている広告・ギフト件数を反映させる。
+      const normalized = normalizePublishedStreamState(streamData) as Record<
+        string,
+        unknown
+      >;
+      watchPageProgramInfo = {
+        niconama: normalized.niconama,
+        commentCount: streamData.data.comments,
+      };
+      broadcastCurrentPayloadLocal("onWatchPageProgram");
+    },
+    onError: (error) => {
+      console.warn(
+        "[WARN] failed to read the niconama watch page:",
+        error instanceof Error ? error.message : String(error),
+      );
+    },
+  });
+  console.log(`[INFO] watching niconama program page: ${watchPageUrl}`);
+  void poller.pollOnce();
+} else {
+  console.warn(
+    "[WARN] NICONAMA_WATCH_PAGE_URL is not set; program info falls back to POST /api/meta",
+  );
+}
 
 /**
  * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}

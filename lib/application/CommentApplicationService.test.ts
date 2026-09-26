@@ -227,6 +227,68 @@ describe("CommentApplicationService system speech paths", () => {
     );
     expect(speech.speech).toHaveBeenCalledWith("ギフトありがとうございます！");
   });
+
+  test("counts ad and gift system comments per program", async () => {
+    const { session, service } = createService();
+    session.streamState = {
+      type: "live",
+      meta: {
+        title: "t",
+        url: programUrl,
+        start: 0,
+        total: { listeners: 1, gift: 0, ad: 0, comments: 0 },
+      },
+    } as AgentSession["streamState"];
+
+    service.listen([
+      comment({
+        comment: "【ニコニコ広告】テスト主さんが広告しました",
+        no: 1,
+        anonymity: false,
+        hasGift: false,
+        userId: "onecomme.system",
+      }),
+      comment({
+        comment: "【ニコニコ広告】テスト主さんが広告しました",
+        no: 2,
+        anonymity: false,
+        hasGift: false,
+        userId: "onecomme.system",
+      }),
+      comment({
+        comment: "ordinary gift",
+        no: 3,
+        anonymity: false,
+        hasGift: true,
+        origin: { message: { gift: { advertiserName: "ギフト主" } } },
+      }),
+    ]);
+    await flushRecord();
+
+    expect(session.programCounters).toEqual({ ad: 2, gift: 1 });
+    expect(session.streamState?.meta?.total).toMatchObject({
+      gift: 1,
+      ad: 2,
+    });
+  });
+
+  test("does not count an ad system comment as a gift", async () => {
+    const { session, service } = createService();
+
+    service.listen([
+      comment({
+        comment: "【ニコニコ広告】テスト主さんが広告しました",
+        no: 1,
+        anonymity: false,
+        hasGift: true,
+        userId: "onecomme.system",
+        origin: { message: { gift: { advertiserName: "混在" } } },
+      }),
+    ]);
+    await flushRecord();
+
+    expect(session.programCounters).toEqual({ ad: 1, gift: 0 });
+  });
 });
 describe("AgentSession defaults", () => {
   test("initializes comment tracking and n-gram fields", () => {
