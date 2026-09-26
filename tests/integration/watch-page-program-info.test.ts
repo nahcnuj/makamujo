@@ -425,18 +425,20 @@ test.skipIf(!chromiumAvailable)(
 );
 
 test.skipIf(!chromiumAvailable)(
-  "reports the program as offline when the watch page has no program",
+  "keeps the previous program info when the watch page becomes unreadable",
   async () => {
     await ensureReaderReady();
     programVisible = false;
 
-    const meta = await waitForMeta(
-      (m) => m?.niconama?.type === "offline",
-      TEST_TIMEOUT_MS,
-    );
+    // 配信ページが 404 などで読めなくなったときは、配信終了とは区別して
+    // 直前の番組情報を保つ。空の読み取りでオフラインに倒さない。
+    // なお実際のニコニコ配信ページでは、配信していないユーザーでも 200 が
+    // 返り `status: "ENDED"` の番組が載るので、オフライン表示は従来どおり効く。
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    const meta = await waitForMeta(hasLiveProgramInfo, TEST_TIMEOUT_MS);
 
-    // ページに番組が無いときは値を持つ指標が 1 つも無いので total ごと無い。
-    expect(meta.niconama.meta.total).toBeUndefined();
+    expect(meta.niconama.type).toBe("live");
+    expect(meta.niconama.meta.total.listeners).toBe(111);
   },
   TEST_TIMEOUT_MS,
 );
