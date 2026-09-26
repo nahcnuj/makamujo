@@ -105,11 +105,58 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 |----|----------|------|
 | 0 | `0_bootstrap.yml` | ベース |
 | 0 | `0_ssh_honeypot.yml` | 22 番は sshd のまま。公開鍵認証できない相手は応答せず保持する |
-| 0 | `0_desktop.yml` | Xvfb / VNC / デスクトップ |
+| 0 | `0_desktop.yml` | Xvfb / VNC / noVNC / デスクトップ |
 | 0 | `0_obs.yml` | OBS Flatpak |
 | 0 | `0_secrets.yml` | stream key → service.json |
 | 1 | `1_bun.yml` | Bun |
 | 2 | `2_makamujo.yml` | アプリ clone / 依存 / TLS / key 再適用 |
+
+## 配信画面をブラウザで見る（noVNC）
+
+`0_desktop.yml` は `makamujo-novnc.service`（websockify）を導入し、`makamujo-x11vnc` が共有している Xvfb -display `:10` をブラウザから覗けるようにします。RDP クライアントや VNC クライアントが入っていない端末から、配信画面（OBS の映像を含む）を確認したいときに使います。
+
+**常時起動しません。** この unit は `enabled` にせず、`bin/x/reserve.ts` が実行中にだけ `systemctl start` し、終了時に `systemctl stop` します。理由:
+
+- 認証がない（`x11vnc` も `-nopw`）ため、`:10` を見られる人は OBS を含んだ画面を操作できてしまう
+- ニコロのログインが必要なのは `reserve.ts` の実行中だけで、それ以外の時間に 24 時間エンドポイントを残す理由がない
+
+| ポート | 中身 | 束縛 | 稼働 |
+|--------|------|------|------|
+| 5900 | `makamujo-x11vnc`（RFB） | `127.0.0.1` のみ | 常時 |
+| 6080 | `makamujo-novnc`（websockify、noVNC の静的ファイルも配信） | `127.0.0.1` のみ | `reserve.ts` 実行中のみ |
+
+**認証はありません。** 到達経路は SSH トンネルのみにしてください。セキュリティグループでも 6080 を開かないこと。リポジトリ内のどの playbook にも 6080 を開ける処理はありません。公開は VPS プロバイダのセキュリティグループ側の責務です。
+
+`reserve.ts` を走らせるとログに URL が出ます。ニコロのセッションが切れていると、ログに 15 分間ログインを待つので、トンネルを張ってブラウザでその URL を開き、Niconico にログインしてください（パスワード + Turnstile は人がやる必要があります）。
+
+手元からトンネルを張る:
+
+```sh
+ssh -N -L 6080:127.0.0.1:6080 root@HOST
+```
+
+ブラウザで次を開く（`path=websockify` は noVNC の既定 WebSocket パス）:
+
+```
+http://127.0.0.1:6080/vnc.html?path=websockify&autoconnect=true&resize=scale
+```
+
+`autoconnect=true` を付けると接続確認のダイアログを飛ばし、`resize=scale` はウィンドウに収まるようフレームバッファを縮めます。UI を省いた `vnc_lite.html` を使うなら `http://127.0.0.1:6080/vnc_lite.html?path=websockify&autoconnect=true` です。
+
+VPS 側の状態確認:
+
+```sh
+systemctl status makamujo-novnc
+ss -ltn | grep 6080   # 127.0.0.1:6080 だけであること。出ていなければ reserve.ts 未実行
+```
+
+CD は `0_desktop.yml` を流しません。`2_makamujo.yml` の "Restart streaming infra" にも `makamujo-novnc.service` は含めていないので、CD が意図せず立ち上げることはありません。パッケージと unit が入る machine は `0_desktop.yml` を手動で流したものです。初回は次で適用してください。
+
+```sh
+bin/vault-session run ansible-playbook ansible/playbooks/0_desktop.yml
+```
+
+回帰チェック: `bun test tests/ansible-novnc.test.ts`（`0_desktop.yml` に展開される unit が loopback 束縛であること、**`enabled` になっていないこと**、`2_makamujo.yml` が再起動対象に含まないこと、`reserve.ts` が起動・停止を持ち回すことを検証します）。ライフサイクル本体は `lib/Browser/niconicoSession.ts` で、`bun test lib/Browser/niconicoSession.test.ts` が単体で叩きます。
 
 ## SSH ハニーポット
 
