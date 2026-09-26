@@ -85,6 +85,7 @@ export const createPlaywrightWatchPageSession =
     });
     const page = await context.newPage();
     console.log("[INFO] chromium launched for the niconama watch page");
+    let lastReadLog: string | undefined;
 
     return {
       open: async (watchPageUrl) => {
@@ -101,9 +102,16 @@ export const createPlaywrightWatchPageSession =
       },
       read: async () => {
         const raw = await page.evaluate(readDisplayedValues);
-        console.log(
-          `[INFO] read the watch page (embeddedData=${raw.embeddedData === null ? "null" : `${String(raw.embeddedData).length} chars`}, statistics=${JSON.stringify(raw.statistics)})`,
-        );
+        // 採取は短い周期で回るので、同じ内容ならログを出さない。
+        const readLog = `embeddedData=${
+          raw.embeddedData === null
+            ? "null"
+            : `${raw.embeddedData.length} chars`
+        } statistics=${JSON.stringify(raw.statistics)}`;
+        if (readLog !== lastReadLog) {
+          lastReadLog = readLog;
+          console.log(`[INFO] read the watch page (${readLog})`);
+        }
         const snapshot = toWatchPageSnapshot(raw);
         if (!snapshot.pageLoaded) {
           // 配信ページを見ていない（空 / エラーページ / JS 実行前）。

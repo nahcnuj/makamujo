@@ -116,7 +116,11 @@ const encodedEmbeddedData = embeddedDataJson
 
 const statsPayload = () => ({
   ...statistics,
-  embeddedData: programVisible ? encodedEmbeddedData : null,
+  // ページ内 JS は `setAttribute` でこの値を書き戻す。`setAttribute` は HTML
+  // エンティティをデコードしないので、ここは**デコード済みの JSON** を返す
+  // （エスケープ版は HTML 初期描画時だけ使う）。エスケープ済みを返すと
+  // 属性に `&quot;` が残り JSON.parse が失敗して「番組なし」になる。
+  embeddedData: programVisible ? embeddedDataJson : null,
 });
 
 let watchPageServer: ReturnType<typeof createServer> | undefined;
