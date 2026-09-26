@@ -37,6 +37,7 @@ beforeAll(async () => {
       ...process.env,
       NODE_ENV: "production",
       CONSOLE_LOOPBACK_ONLY: "1",
+      NICONAMA_WATCH_PAGE_DISABLED: "1",
       BROADCASTING_HOST: "127.0.0.1",
       BROADCASTING_PORT: String(upstreamPort),
       MAKAMUJO_IPC_PATH: makamujoIpcPath(`incomplete-chunk-${mainServerPort}`),

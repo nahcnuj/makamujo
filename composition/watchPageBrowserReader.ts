@@ -1,0 +1,150 @@
+/**
+ * 番組配信ページの**描画済み画面**から番組情報を読むリーダー。
+ *
+ * 配信ページの統計行（視聴者数 / コメント数 / ニコニコ広告ポイント / ギフトポイント）は
+ * HTML には `-` プレースホルダしか無く、JS が unama WebSocket を受けたあとで埋まる。
+ * したがってブラウザでページを開いたまま統計行の**表示テキスト**を読む。
+ *
+ * Playwright には依存しない（`createSession` を差し替えられる）。実際のブラウザ実装は
+ * `composition/watchPageBrowserSession.ts` にあり、必要なときだけ動的 import する。
+ */
+
+import {
+  parseWatchPageProgramProps,
+  type WatchPageProgram,
+} from "../lib/domain/broadcasting/watchPageProgram";
+import {
+  type DisplayedStatistics,
+  type DisplayedStatisticsTexts,
+  parseDisplayedStatistics,
+} from "../lib/domain/broadcasting/watchPageStatistics";
+
+/** ページが更新する仕組みが 30〜60 秒粒度なので、デフォルトは 30 秒。 */
+export const WATCH_PAGE_READ_INTERVAL_MS = 30_000;
+
+/**
+ * 本番で読む配信ページ。**固定値**。ここを変える必要があるなら
+ * 環境変数 `NICONAMA_WATCH_PAGE_URL`（テスト専用の差し替え口）を使う。
+ */
+export const DEFAULT_NICONAMA_WATCH_PAGE_URL =
+  "https://live.nicovideo.jp/watch/user/14171889";
+
+/** 1 回の採取で得る値。 */
+export type WatchPageSnapshot = {
+  /** ページに番組が無い（=`undefined`）ときは配信していない扱い。 */
+  program: WatchPageProgram | undefined;
+  /** 統計行の表示テキストを数値化したもの。値が無い項目はキーごと無い。 */
+  statistics: DisplayedStatistics;
+  /**
+   * ページが読み込まれたか。`false` は navigation 失敗や about:blank など
+   * 配信ページを一切見ていない状態で、この場合は何も公開しない。
+   */
+  pageLoaded: boolean;
+};
+
+/** ブラウザ実体から切り離したセッション。差し替え・単体テストが可能。 */
+export type WatchPageSession = {
+  /** 配信ページを開き、統計行が描画されるまで待つ。 */
+  open: (watchPageUrl: string) => Promise<void>;
+  /** いま画面に表示されている値を採取する。 */
+  read: () => Promise<WatchPageSnapshot>;
+  close: () => Promise<void>;
+};
+
+/** `page.evaluate` が返す、生の表示テキスト一式。 */
+export type WatchPageRawReading = {
+  statistics: DisplayedStatisticsTexts;
+  /** `embedded-data` の `data-props`（ブラウザ内では既にデコード済み）。 */
+  embeddedData?: string | null;
+};
+
+/** 生サンプル → ドメイン値。ブラウザ無しで単体テストできる。 */
+export const toWatchPageSnapshot = (
+  raw: WatchPageRawReading,
+): WatchPageSnapshot => {
+  const hasProgramProps = Boolean(raw.embeddedData);
+  const hasAnyMetric = Object.values(raw.statistics).some(
+    (text) =>
+      typeof text === "string" && text.trim() !== "-" && text.trim() !== "",
+  );
+  return {
+    program: hasProgramProps
+      ? parseWatchPageProgramProps(raw.embeddedData ?? "")
+      : undefined,
+    statistics: parseDisplayedStatistics(raw.statistics),
+    // ページを見ていない（空 / エラーページ）なら、配信していないとは区別する。
+    pageLoaded: hasProgramProps || hasAnyMetric,
+  };
+};
+
+export type WatchPageBrowserReaderOptions = {
+  watchPageUrl: string;
+  intervalMs?: number;
+  createSession: () => Promise<WatchPageSession>;
+  onSnapshot: (snapshot: WatchPageSnapshot) => void;
+  onError?: (error: unknown) => void;
+};
+
+export type WatchPageBrowserReader = {
+  /** 1 回だけ採取する。 */
+  readOnce: () => Promise<void>;
+  stop: () => Promise<void>;
+};
+
+export const startWatchPageBrowserReader = (
+  options: WatchPageBrowserReaderOptions,
+): WatchPageBrowserReader => {
+  const intervalMs = options.intervalMs ?? WATCH_PAGE_READ_INTERVAL_MS;
+  let session: WatchPageSession | undefined;
+  let opened = false;
+  let running = false;
+  let stopped = false;
+  let timer: ReturnType<typeof setInterval> | undefined;
+
+  const discardSession = async () => {
+    const current = session;
+    session = undefined;
+    opened = false;
+    try {
+      await current?.close();
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const readOnce = async (): Promise<void> => {
+    if (running || stopped) {
+      return;
+    }
+    running = true;
+    try {
+      session ??= await options.createSession();
+      if (!opened) {
+        await session.open(options.watchPageUrl);
+        opened = true;
+      }
+      options.onSnapshot(await session.read());
+    } catch (error) {
+      // ブラウザが落ちた / ページが変わった等等。次の採取で作り直す。
+      options.onError?.(error);
+      await discardSession();
+    } finally {
+      running = false;
+    }
+  };
+  timer = setInterval(() => {
+    void readOnce();
+  }, intervalMs);
+
+  return {
+    readOnce,
+    stop: async () => {
+      stopped = true;
+      if (timer !== undefined) {
+        clearInterval(timer);
+        timer = undefined;
+      }
+      await discardSession();
+    },
+  };
+};

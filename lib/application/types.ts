@@ -6,10 +6,14 @@ export type StreamData = {
     title: string;
     isLive: boolean;
     startTime: number;
-    total: number;
-    points: {
-      gift: number | string;
-      ad: number | string;
+    /** 視聴者数。ページに値が無いときは undefined。 */
+    total?: number;
+    /** コメント数。ページに値が無いときは undefined。 */
+    comments?: number;
+    /** ニコニコ広告 / ギフトのポイント。ページに値が無いときは undefined。 */
+    points?: {
+      gift?: number;
+      ad?: number;
     };
     url: string;
   };

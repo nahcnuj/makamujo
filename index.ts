@@ -26,7 +26,15 @@ import {
   type WsLike,
 } from "./composition/broadcast";
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
+import {
+  DEFAULT_NICONAMA_WATCH_PAGE_URL,
+  WATCH_PAGE_READ_INTERVAL_MS,
+} from "./composition/watchPageBrowserReader";
 import { startConsoleServer } from "./console/index";
+import {
+  toOfflineStreamData,
+  toStreamDataFromWatchPage,
+} from "./lib/application/ProgramInfoAssembler";
 import {
   loadStreamBaselineWithRecovery,
   STREAM_BASELINE_BASENAME,
@@ -38,6 +46,7 @@ import {
   extractMetaPostBody,
   GENERATED_SPEECH_HISTORY_SSE_SIZE,
 } from "./lib/domain/publication/assemblePublishedPayload";
+import type { ProgramInfoOverride } from "./lib/domain/publication/types";
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import { normalizePublishedStreamState } from "./lib/streamState";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
@@ -168,6 +177,12 @@ const streamer = new MakaMujo(model, tts, {
 // `automated-gameplay-transmitter` agent later and replace this fallback
 // when possible.
 let lastPublishedStreamState: unknown;
+/**
+ * 番組情報の出どころ。番組配信ページから読んだ値を保持し、公開ペイロードの
+ * `niconama` / `commentCount` をここでのみ決める（わんcomme からは来ない）。
+ * 未取得（ポーリング失敗・未設定）の間は undefined のまま过去の値を保つ。
+ */
+let watchPageProgramInfo: ProgramInfoOverride | undefined;
 let currentSpeechState = { speech: "", silent: false };
 // WebSocket clients connected to the broadcasting server.
 const wsClients = new Set<WsLike>();
@@ -191,6 +206,7 @@ const getCurrentStreamPayload = () => {
   return assemblePublishedPayload({
     lastPublished: lastPublishedStreamState,
     agentStreamState: agent.getStreamState?.(),
+    programInfo: watchPageProgramInfo,
     streamer: {
       canSpeak: streamer.canSpeak,
       currentGame: streamer.currentGame,
@@ -735,6 +751,103 @@ try {
 
 // Use a classic repeating timer (composition/idleSpeechTimer) for idle speech.
 startIdleSpeechTimer(streamer, 1_000);
+
+// 番組情報（視聴者数 / コメント数 / ニコニコ広告ポイント / ギフトポイント）を
+// 番組配信ページの**描画された画面**から読む。
+// 読むページは本番では固定（DEFAULT_NICONAMA_WATCH_PAGE_URL）。
+// `NICONAMA_WATCH_PAGE_URL` は差し替え用、`NICONAMA_WATCH_PAGE_DISABLED=1` は
+// ブラウザ reader を使わないテスト向けの無効化スイッチ。
+// 無効なときは従来どおり `POST /api/meta` の `niconama` へフォールバックする。
+const watchPageDisabled = process.env.NICONAMA_WATCH_PAGE_DISABLED === "1";
+const watchPageUrl =
+  process.env.NICONAMA_WATCH_PAGE_URL?.trim() ||
+  DEFAULT_NICONAMA_WATCH_PAGE_URL;
+let watchPageUnreadableCount = 0;
+if (watchPageDisabled) {
+  console.log(
+    "[INFO] the niconama watch page reader is disabled; program info falls back to POST /api/meta",
+  );
+} else {
+  const readIntervalMs = Number.parseInt(
+    process.env.NICONAMA_WATCH_PAGE_READ_INTERVAL_MS ??
+      String(WATCH_PAGE_READ_INTERVAL_MS),
+    10,
+  );
+  void (async () => {
+    try {
+      // Playwright は reader を有効にしたときだけロードする。どの段階まで
+      // 進んだかが分かるよう、段階ごとにログを出す（原因を CI ログで追えるように）。
+      console.log("[INFO] loading the niconama watch page reader module...");
+      const [
+        { startWatchPageBrowserReader },
+        { createPlaywrightWatchPageSession },
+      ] = await Promise.all([
+        import("./composition/watchPageBrowserReader"),
+        import("./composition/watchPageBrowserSession"),
+      ]);
+      console.log("[INFO] niconama watch page reader module loaded");
+      const reader = startWatchPageBrowserReader({
+        watchPageUrl,
+        intervalMs: Number.isFinite(readIntervalMs)
+          ? readIntervalMs
+          : WATCH_PAGE_READ_INTERVAL_MS,
+        createSession: createPlaywrightWatchPageSession,
+        onSnapshot: (snapshot) => {
+          // ページが読めていない（空 / エラーページ）ときは、配信終了と区別して
+          // 直前の状態を保つ。空の読み取りで「オフライン」に倒さない。
+          if (!snapshot.pageLoaded) {
+            watchPageUnreadableCount += 1;
+            if (watchPageUnreadableCount % 10 === 1) {
+              console.warn(
+                `[WARN] the niconama watch page returned nothing readable (${watchPageUnreadableCount} times); keeping the previous program info`,
+              );
+            }
+            return;
+          }
+          watchPageUnreadableCount = 0;
+          const streamData =
+            snapshot.program === undefined
+              ? toOfflineStreamData()
+              : toStreamDataFromWatchPage(
+                  snapshot.program,
+                  snapshot.statistics,
+                );
+          // セッション側の配信状態（視聴者増加時のコメント促し、番組の切り替え、
+          // 沈黙クロック）にも反映させる。
+          streamer.onAir(streamData);
+          const normalized = normalizePublishedStreamState(
+            streamData,
+          ) as Record<string, unknown>;
+          watchPageProgramInfo = {
+            niconama: normalized.niconama,
+            commentCount: streamData.data.comments,
+          };
+          broadcastCurrentPayloadLocal("onWatchPageSnapshot");
+        },
+        onError: (error) => {
+          // 読み取りが失敗し続けてもログが氾濫しないよう、最初と 10 回ごとに出す。
+          watchPageUnreadableCount += 1;
+          if (
+            watchPageUnreadableCount === 1 ||
+            watchPageUnreadableCount % 10 === 0
+          ) {
+            console.warn(
+              `[WARN] failed to read the niconama watch page (${watchPageUnreadableCount} times):`,
+              error instanceof Error ? error.message : String(error),
+            );
+          }
+        },
+      });
+      console.log(`[INFO] reading niconama program page: ${watchPageUrl}`);
+      void reader.readOnce();
+    } catch (error) {
+      console.error(
+        "[ERROR] failed to start the niconama watch page reader:",
+        error instanceof Error ? (error.stack ?? error.message) : String(error),
+      );
+    }
+  })();
+}
 
 /**
  * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}

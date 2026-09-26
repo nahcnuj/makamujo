@@ -13,6 +13,14 @@ export type StreamApplicationServiceOptions = {
   onBaselineChange?: (baseline: StreamBaseline) => void;
 };
 
+/** 値が undefined のキーを落として、表示側が `-` を出せるようにする。 */
+const withDefinedKeys = <T extends Record<string, number | undefined>>(
+  value: T,
+) =>
+  Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined),
+  ) as { [K in keyof T]: Exclude<T[K], undefined> };
+
 /**
  * Broadcasting-side use cases: onAir, program URL, silence clocks, comment prompt.
  */
@@ -46,6 +54,7 @@ export class StreamApplicationService {
           startTime: start,
           url,
           total: listeners,
+          comments,
           points,
         } = streamData.data;
         if (isLive) {
@@ -113,18 +122,14 @@ export class StreamApplicationService {
                 title,
                 start,
                 url,
-                total: {
+                // ページに値が無い項目はキーを落とさない（表示側が `-` を出す）。
+                total: withDefinedKeys({
                   listeners,
-                  gift:
-                    typeof points?.gift === "string"
-                      ? Number.parseFloat(points.gift)
-                      : points?.gift,
-                  ad:
-                    typeof points?.ad === "string"
-                      ? Number.parseFloat(points.ad)
-                      : points?.ad,
-                  comments: this.#session.currentProgramLatestCommentNo,
-                },
+                  gift: points?.gift,
+                  ad: points?.ad,
+                  comments:
+                    comments ?? this.#session.currentProgramLatestCommentNo,
+                }),
               },
             }
           : undefined;

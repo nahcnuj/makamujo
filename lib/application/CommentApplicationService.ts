@@ -21,7 +21,7 @@ import type { StreamBaseline } from "./streamBaselineStore";
 import type { CommentData, SpeechPort, TalkModelPort } from "./types";
 
 /**
- * CommentPipeline steps 1–9 (architecture/domain-model-redesign.md).
+ * CommentPipeline steps 1–9 (the golden contract; see tests in this directory).
  * Mutates the shared AgentSession only from this service for comment-side fields.
  */
 export class CommentApplicationService {
