@@ -17,8 +17,10 @@ import {
 } from "./watchPageBrowserReader";
 
 const NAVIGATION_TIMEOUT_MS = 60_000;
+/** ブラウザ起動の応答が無いと気付けないため、必ず上限を効かせる。 */
+const LAUNCH_TIMEOUT_MS = 60_000;
 /** 統計行が `-` から値に埋まるまでの待ち。超過しても読取自体は続行する。 */
-const STATISTICS_READY_TIMEOUT_MS = 20_000;
+const STATISTICS_READY_TIMEOUT_MS = 10_000;
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
@@ -68,8 +70,12 @@ const waitForStatistics = (page: import("playwright").Page) =>
 
 export const createPlaywrightWatchPageSession =
   async (): Promise<WatchPageSession> => {
+    // 各段階をログに残す。ブラウザの起動や navigation が応答しないで
+    // 止まったときに、どこで止まったかが特定できるようにするため。
+    console.log("[INFO] launching chromium for the niconama watch page...");
     const browser = await chromium.launch({
       headless: true,
+      timeout: LAUNCH_TIMEOUT_MS,
       args: ["--no-sandbox", "--disable-dev-shm-usage"],
     });
     const context = await browser.newContext({
@@ -78,17 +84,26 @@ export const createPlaywrightWatchPageSession =
       viewport: { width: 1600, height: 900 },
     });
     const page = await context.newPage();
+    console.log("[INFO] chromium launched for the niconama watch page");
 
     return {
       open: async (watchPageUrl) => {
-        await page.goto(watchPageUrl, {
+        console.log(`[INFO] opening the watch page: ${watchPageUrl}`);
+        const response = await page.goto(watchPageUrl, {
           waitUntil: "domcontentloaded",
           timeout: NAVIGATION_TIMEOUT_MS,
         });
+        console.log(
+          `[INFO] watch page opened (status=${response?.status() ?? "unknown"}, url=${page.url()})`,
+        );
         await waitForStatistics(page);
+        console.log("[INFO] watch page statistics settled");
       },
       read: async () => {
         const raw = await page.evaluate(readDisplayedValues);
+        console.log(
+          `[INFO] read the watch page (embeddedData=${raw.embeddedData === null ? "null" : `${String(raw.embeddedData).length} chars`}, statistics=${JSON.stringify(raw.statistics)})`,
+        );
         const snapshot = toWatchPageSnapshot(raw);
         if (!snapshot.pageLoaded) {
           // 配信ページを見ていない（空 / エラーページ / JS 実行前）。
