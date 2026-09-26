@@ -5,7 +5,6 @@ import {
   initialNGramSize,
   initialNGramSizeRaw,
 } from "../domain/broadcasting/NGramPolicy";
-import type { ProgramCounters } from "./ProgramInfoAssembler";
 import type { StreamBaseline } from "./streamBaselineStore";
 
 export type PlayingGame = {
@@ -32,14 +31,6 @@ export class AgentSession {
   /** Last observed comment number for current program (not monotonic). */
   currentProgramLatestCommentNo = 0;
 
-  /**
-   * 視聴済みのニコニコ広告システムコメント件数（番組単位）。
-   * 配信ページには件数が出ないので、ページ上で視聴者が見るシステムコメントを数える。
-   */
-  currentProgramAdCount = 0;
-  /** 視聴済みのギフトコメント件数（番組単位）。 */
-  currentProgramGiftCount = 0;
-
   /** Final comment count of the previous stream (for broadcast voltage). */
   previousStreamCommentCount = 0;
 
@@ -59,18 +50,5 @@ export class AgentSession {
     this.previousStreamCommentCount = baseline.previousStreamCommentCount;
     this.currentProgramUrl = baseline.currentProgramUrl;
     this.currentProgramLatestCommentNo = baseline.currentProgramLatestCommentNo;
-  }
-
-  /** 番組が変わった（または配信終了）ときに広告・ギフトの件数だけ 0 に戻す。 */
-  resetProgramCounters(): void {
-    this.currentProgramAdCount = 0;
-    this.currentProgramGiftCount = 0;
-  }
-
-  get programCounters(): ProgramCounters {
-    return {
-      ad: this.currentProgramAdCount,
-      gift: this.currentProgramGiftCount,
-    };
   }
 }

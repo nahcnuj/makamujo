@@ -278,11 +278,6 @@ export class MakaMujo {
     return this.#session.previousStreamCommentCount;
   }
 
-  /** 番組単位で数えたニコニコ広告/ギフト件数（配信ページの表示相当）。 */
-  get programCounters() {
-    return this.#session.programCounters;
-  }
-
   get Component() {
     return this.#gameplay.Component;
   }

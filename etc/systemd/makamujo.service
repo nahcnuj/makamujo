@@ -14,9 +14,10 @@ Environment=NODE_ENV=production
 Environment=DISPLAY=:10
 Environment=XDG_RUNTIME_DIR=/run/user/0
 Environment=PULSE_SERVER=unix:/run/user/0/pulse/native
-# 番組情報（視聴者数 / コメント数 / ニコニ広告 / ギフト）を読む配信ページ。
+# 番組情報（視聴者数 / コメント数 / ニコニコ広告ポイント / ギフトポイント）を
+# ブラウザで描画して読む対象ページ。
 Environment=NICONAMA_WATCH_PAGE_URL=https://live.nicovideo.jp/watch/user/14171889
-Environment=NICONAMA_WATCH_PAGE_POLL_INTERVAL_MS=30000
+Environment=NICONAMA_WATCH_PAGE_READ_INTERVAL_MS=30000
 ExecStart=/bin/true
 StandardOutput=journal
 StandardError=journal

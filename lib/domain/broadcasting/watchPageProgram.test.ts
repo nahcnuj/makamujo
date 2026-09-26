@@ -36,7 +36,7 @@ describe("decodeHtmlEntities", () => {
 });
 
 describe("parseWatchPageProgram", () => {
-  it("reads the values a viewer sees on the watch page", () => {
+  it("reads the program identity from the embedded data", () => {
     const parsed = parseWatchPageProgram(
       propsToPage({ program: onAirProgram }),
     );
@@ -47,9 +47,16 @@ describe("parseWatchPageProgram", () => {
       url: "https://live.nicovideo.jp/watch/lv351439452",
       isLive: true,
       startTime: 1_700_000_000,
-      listeners: 123,
-      comments: 456,
     });
+  });
+
+  it("does not read viewer / comment counts (the page shows them only after JS runs)", () => {
+    const parsed = parseWatchPageProgram(
+      propsToPage({ program: onAirProgram }),
+    );
+
+    expect(parsed).not.toHaveProperty("listeners");
+    expect(parsed).not.toHaveProperty("comments");
   });
 
   it("marks an ended program as not live", () => {
@@ -67,35 +74,25 @@ describe("parseWatchPageProgram", () => {
     expect(parsed?.url).toBe("https://live.nicovideo.jp/watch/lv351439452");
   });
 
-  it("defaults missing statistics to zero", () => {
+  it("defaults a missing title and start time", () => {
     const parsed = parseWatchPageProgram(
       propsToPage({
-        program: {
-          nicoliveProgramId: "lv1",
-          status: "ON_AIR",
-          title: "no stats",
-        },
+        program: { nicoliveProgramId: "lv1", status: "ON_AIR" },
       }),
     );
 
-    expect(parsed?.listeners).toBe(0);
-    expect(parsed?.comments).toBe(0);
+    expect(parsed?.title).toBe("");
     expect(parsed?.startTime).toBe(0);
-    expect(parsed?.title).toBe("no stats");
   });
 
-  it("ignores negative and non-numeric statistics", () => {
+  it("ignores a non-numeric start time", () => {
     const parsed = parseWatchPageProgram(
       propsToPage({
-        program: {
-          ...onAirProgram,
-          statistics: { watchCount: -1, commentCount: "7" },
-        },
+        program: { ...onAirProgram, beginTime: "later" },
       }),
     );
 
-    expect(parsed?.listeners).toBe(0);
-    expect(parsed?.comments).toBe(0);
+    expect(parsed?.startTime).toBe(0);
   });
 
   it("returns undefined when the page has no embedded-data script", () => {

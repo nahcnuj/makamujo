@@ -26,10 +26,7 @@ import {
   type WsLike,
 } from "./composition/broadcast";
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
-import {
-  NICONAMA_WATCH_PAGE_POLL_INTERVAL_MS,
-  startNiconamaWatchPagePoller,
-} from "./composition/niconamaWatchPagePoller";
+import { WATCH_PAGE_READ_INTERVAL_MS } from "./composition/watchPageBrowserReader";
 import { startConsoleServer } from "./console/index";
 import {
   toOfflineStreamData,
@@ -752,48 +749,69 @@ try {
 // Use a classic repeating timer (composition/idleSpeechTimer) for idle speech.
 startIdleSpeechTimer(streamer, 1_000);
 
-// 番組情報（視聴者数 / コメント数 / ニコニ広告 / ギフト）を番組配信ページから読む。
-// `NICONAMA_WATCH_PAGE_URL` が無い環境（テストなど）では起動しない。
+// 番組情報（視聴者数 / コメント数 / ニコニコ広告ポイント / ギフトポイント）を
+// 番組配信ページの**描画された画面**から読む。
+// `NICONAMA_WATCH_PAGE_URL` が無い環境（テストなど）では起動せず、
+// 従来どおり `POST /api/meta` へフォールバックする。
 const watchPageUrl = process.env.NICONAMA_WATCH_PAGE_URL?.trim();
 if (watchPageUrl) {
-  const pollIntervalMs = Number.parseInt(
-    process.env.NICONAMA_WATCH_PAGE_POLL_INTERVAL_MS ??
-      String(NICONAMA_WATCH_PAGE_POLL_INTERVAL_MS),
+  const readIntervalMs = Number.parseInt(
+    process.env.NICONAMA_WATCH_PAGE_READ_INTERVAL_MS ??
+      String(WATCH_PAGE_READ_INTERVAL_MS),
     10,
   );
-  const poller = startNiconamaWatchPagePoller({
-    watchPageUrl,
-    intervalMs: Number.isFinite(pollIntervalMs)
-      ? pollIntervalMs
-      : NICONAMA_WATCH_PAGE_POLL_INTERVAL_MS,
-    onProgram: (program) => {
-      const streamData =
-        program === undefined
-          ? toOfflineStreamData(streamer.programCounters)
-          : toStreamDataFromWatchPage(program, streamer.programCounters);
-      // 番組情報の更新はセッション側の配信状態（視聴者増加時のコメント
-      // 促し、番組の切り替え、沈黙クロック）にも反映させる。
-      streamer.onAir(streamData);
-      // 公開ペイロードには、現在観測されている広告・ギフト件数を反映させる。
-      const normalized = normalizePublishedStreamState(streamData) as Record<
-        string,
-        unknown
-      >;
-      watchPageProgramInfo = {
-        niconama: normalized.niconama,
-        commentCount: streamData.data.comments,
-      };
-      broadcastCurrentPayloadLocal("onWatchPageProgram");
-    },
-    onError: (error) => {
-      console.warn(
-        "[WARN] failed to read the niconama watch page:",
-        error instanceof Error ? error.message : String(error),
+  void (async () => {
+    try {
+      // Playwright は reader を有効にしたときだけロードする。
+      const [
+        { startWatchPageBrowserReader },
+        { createPlaywrightWatchPageSession },
+      ] = await Promise.all([
+        import("./composition/watchPageBrowserReader"),
+        import("./composition/watchPageBrowserSession"),
+      ]);
+      const reader = startWatchPageBrowserReader({
+        watchPageUrl,
+        intervalMs: Number.isFinite(readIntervalMs)
+          ? readIntervalMs
+          : WATCH_PAGE_READ_INTERVAL_MS,
+        createSession: createPlaywrightWatchPageSession,
+        onSnapshot: (snapshot) => {
+          const streamData =
+            snapshot.program === undefined
+              ? toOfflineStreamData()
+              : toStreamDataFromWatchPage(
+                  snapshot.program,
+                  snapshot.statistics,
+                );
+          // セッション側の配信状態（視聴者増加時のコメント促し、番組の切り替え、
+          // 沈黙クロック）にも反映させる。
+          streamer.onAir(streamData);
+          const normalized = normalizePublishedStreamState(
+            streamData,
+          ) as Record<string, unknown>;
+          watchPageProgramInfo = {
+            niconama: normalized.niconama,
+            commentCount: streamData.data.comments,
+          };
+          broadcastCurrentPayloadLocal("onWatchPageSnapshot");
+        },
+        onError: (error) => {
+          console.warn(
+            "[WARN] failed to read the niconama watch page:",
+            error instanceof Error ? error.message : String(error),
+          );
+        },
+      });
+      console.log(`[INFO] reading niconama program page: ${watchPageUrl}`);
+      void reader.readOnce();
+    } catch (error) {
+      console.error(
+        "[ERROR] failed to start the niconama watch page reader:",
+        error instanceof Error ? (error.stack ?? error.message) : String(error),
       );
-    },
-  });
-  console.log(`[INFO] watching niconama program page: ${watchPageUrl}`);
-  void poller.pollOnce();
+    }
+  })();
 } else {
   console.warn(
     "[WARN] NICONAMA_WATCH_PAGE_URL is not set; program info falls back to POST /api/meta",

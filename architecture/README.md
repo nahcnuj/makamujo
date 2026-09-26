@@ -24,10 +24,10 @@
 | 領域 | パス | 状態 |
 |------|------|------|
 | NGram / Silence / Topic / Scripts | `lib/domain/*` | 済 |
-| 番組情報のページ読み取り | `lib/domain/broadcasting/watchPageProgram.ts` | 済 |
+| 番組情報のページ読み取り | `lib/domain/broadcasting/watchPage{Statistics,Program}.ts` | 済 |
 | Publication assemble | `lib/domain/publication/` | 済 |
 | AgentSession + services | `lib/application/` | 済 |
-| 番組情報 poller | `composition/niconamaWatchPagePoller.ts` | 済（`NICONAMA_WATCH_PAGE_URL` で有効化） |
+| 番組情報 reader（ブラウザ） | `composition/watchPageBrowser{Reader,Session}.ts` | 済（`NICONAMA_WATCH_PAGE_URL` で有効化） |
 | Console access / status plan / SSE frames | `lib/domain/console/` | 済（Basic auth 純関数含む） |
 | systemd / make install（main から port） | `Makefile`, `etc/systemd/` | 済 |
 | Outer console WS bridge | `composition/consoleOuterWebSocket.ts` | 済 |

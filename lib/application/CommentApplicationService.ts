@@ -122,10 +122,6 @@ export class CommentApplicationService {
           isAd = true;
           const name = extractAdName(commentData.comment);
 
-          // 配信ページに広告件数は出ないため、視聴者がページ上で見る
-          // システムコメントそのものを件数として数える。
-          this.#session.currentProgramAdCount += 1;
-          this.#publishProgramCounters();
           console.log("[INFO]", `AD ${name}`);
           void this.#speech.speech(formatAdThanks(name));
           continue;
@@ -171,25 +167,11 @@ export class CommentApplicationService {
             origin?: { message?: { gift?: { advertiserName?: string } } };
           }
         ).origin?.message?.gift?.advertiserName;
-        this.#session.currentProgramGiftCount += 1;
-        this.#publishProgramCounters();
         console.log(`[GIFT] ${name}`);
         void this.#speech.speech(
           formatGiftThanks(name, Boolean(data.anonymity)),
         );
       }
     }
-  }
-
-  /** 広告・ギフト件数の最新値を内部 stream state へ即時反映する。 */
-  #publishProgramCounters(): void {
-    const total = this.#session.streamState?.meta?.total;
-    if (!this.#session.streamState?.meta || total === undefined) {
-      return;
-    }
-    this.#session.streamState.meta = {
-      ...this.#session.streamState.meta,
-      total: { ...total, ...this.#session.programCounters },
-    };
   }
 }

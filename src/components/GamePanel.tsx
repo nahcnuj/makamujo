@@ -40,30 +40,30 @@ export function GamePanel() {
         {streamState?.meta?.total && (
           <div className="text-right">
             <div>
-              {streamState.meta.total.gift > 0 && (
+              {(streamState.meta.total.gift ?? 0) > 0 && (
                 <HighlightOnChange
                   timeout={30_000}
                   classNameOnChanged="text-yellow-300"
                 >
-                  {`${formatNumber(streamState.meta.total.gift)}🎁`}
+                  {`${formatNumber(streamState.meta.total.gift ?? 0)}🎁`}
                 </HighlightOnChange>
               )}
-              {streamState.meta.total.listeners > 0 && (
+              {(streamState.meta.total.listeners ?? 0) > 0 && (
                 <HighlightOnChange
                   timeout={5_000}
                   classNameOnChanged="text-yellow-300"
                 >
-                  {`${formatNumber(streamState.meta.total.listeners)}🙎`}
+                  {`${formatNumber(streamState.meta.total.listeners ?? 0)}🙎`}
                 </HighlightOnChange>
               )}
             </div>
-            {streamState.meta.total.ad > 0 && (
+            {(streamState.meta.total.ad ?? 0) > 0 && (
               <div>
                 <HighlightOnChange
                   timeout={60_000}
                   classNameOnChanged="text-yellow-300"
                 >
-                  {`${formatNumber(streamState.meta.total.ad)}📣`}
+                  {`${formatNumber(streamState.meta.total.ad ?? 0)}📣`}
                 </HighlightOnChange>
               </div>
             )}

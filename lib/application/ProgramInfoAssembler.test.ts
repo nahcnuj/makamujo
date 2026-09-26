@@ -10,13 +10,18 @@ const liveProgram = {
   url: "https://live.nicovideo.jp/watch/lv351439452",
   isLive: true,
   startTime: 1_700_000_000,
-  listeners: 321,
-  comments: 654,
 };
 
 describe("toStreamDataFromWatchPage", () => {
-  it("maps the page values onto the stream data contract", () => {
-    expect(toStreamDataFromWatchPage(liveProgram, { ad: 4, gift: 7 })).toEqual({
+  it("maps the values the statistics row shows", () => {
+    expect(
+      toStreamDataFromWatchPage(liveProgram, {
+        viewers: 321,
+        comments: 654,
+        nicoadPoints: 40,
+        giftPoints: 70,
+      }),
+    ).toEqual({
       type: "niconama",
       data: {
         title: "テスト配信",
@@ -24,16 +29,29 @@ describe("toStreamDataFromWatchPage", () => {
         startTime: 1_700_000_000,
         total: 321,
         comments: 654,
-        points: { gift: 7, ad: 4 },
+        points: { gift: 70, ad: 40 },
         url: "https://live.nicovideo.jp/watch/lv351439452",
       },
+    });
+  });
+
+  it("keeps missing metrics as undefined so the UI can show a placeholder", () => {
+    const streamData = toStreamDataFromWatchPage(liveProgram, {
+      viewers: 12,
+    });
+
+    expect(streamData.data.total).toBe(12);
+    expect(streamData.data.comments).toBeUndefined();
+    expect(streamData.data.points).toEqual({
+      gift: undefined,
+      ad: undefined,
     });
   });
 
   it("keeps the program identity for an ended program", () => {
     const streamData = toStreamDataFromWatchPage(
       { ...liveProgram, isLive: false },
-      { ad: 0, gift: 0 },
+      { viewers: 5, comments: 6 },
     );
 
     expect(streamData.data.isLive).toBe(false);
@@ -44,26 +62,18 @@ describe("toStreamDataFromWatchPage", () => {
 });
 
 describe("toOfflineStreamData", () => {
-  it("reports an offline program with zeroed metrics", () => {
-    expect(toOfflineStreamData({ ad: 0, gift: 0 })).toEqual({
+  it("reports an offline program with no metrics", () => {
+    expect(toOfflineStreamData()).toEqual({
       type: "niconama",
       data: {
         title: "",
         isLive: false,
         startTime: 0,
-        total: 0,
-        comments: 0,
-        points: { gift: 0, ad: 0 },
+        total: undefined,
+        comments: undefined,
+        points: {},
         url: "",
       },
     });
-  });
-
-  it("does not mutate the shared offline template", () => {
-    const first = toOfflineStreamData({ ad: 1, gift: 2 });
-    const second = toOfflineStreamData({ ad: 0, gift: 0 });
-
-    expect(first.data.points).toEqual({ gift: 2, ad: 1 });
-    expect(second.data.points).toEqual({ gift: 0, ad: 0 });
   });
 });

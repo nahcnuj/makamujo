@@ -1,9 +1,10 @@
 /**
  * 番組配信ページ (`https://live.nicovideo.jp/watch/...`) の `embedded-data` script から
- * 番組情報（視聴者数 / コメント数 / タイトル / 開始時刻 / 放送状態）を読み取る純関数群。
+ * 番組そのものの情報（タイトル / 開始時刻 / 放送状態 / 番組 URL）を読み取る純関数群。
  *
- * ページは番組情報を JSON として `data-props` 属性に HTML エスケープして埋め込む。
- * ここではそのエスケープを解除し、視聴者がページ上で見ている値だけを抜き出す。
+ * ページは JSON を `data-props` 属性に HTML エスケープして埋め込む。
+ * 視聴者数・コメント数・ニコニコ広告ポイント・ギフトポイントは HTML には
+ * プレースホルダしか無いため、この型には含めない（`watchPageStatistics.ts` が担当する）。
  */
 
 export type WatchPageProgram = {
@@ -15,10 +16,6 @@ export type WatchPageProgram = {
   isLive: boolean;
   /** 放送開始時刻（unix 秒）。 */
   startTime: number;
-  /** 視聴者数（`program.statistics.watchCount`）。 */
-  listeners: number;
-  /** コメント数（`program.statistics.commentCount`）。 */
-  comments: number;
 };
 
 const EMBEDDED_DATA_PATTERN = /<script id="embedded-data" data-props="([^"]*)"/;
@@ -67,10 +64,19 @@ export const parseWatchPageProgram = (
   if (rawProps === undefined) {
     return undefined;
   }
+  return parseWatchPageProgramProps(decodeHtmlEntities(rawProps));
+};
 
+/**
+ * `embedded-data` の `data-props` 値（JSON 文字列）から番組情報を読む。
+ * ブラウザ経由でページを開いているときは属性値が既にデコード済みなのでこちらを使う。
+ */
+export const parseWatchPageProgramProps = (
+  propsJson: string,
+): WatchPageProgram | undefined => {
   let props: unknown;
   try {
-    props = JSON.parse(decodeHtmlEntities(rawProps));
+    props = JSON.parse(propsJson);
   } catch {
     return undefined;
   }
@@ -85,7 +91,6 @@ export const parseWatchPageProgram = (
     return undefined;
   }
 
-  const statistics = asRecord(program.statistics);
   return {
     nicoliveProgramId,
     title: asString(program.title) ?? "",
@@ -94,7 +99,5 @@ export const parseWatchPageProgram = (
       `https://live.nicovideo.jp/watch/${nicoliveProgramId}`,
     isLive: program.status === "ON_AIR",
     startTime: asCount(program.beginTime),
-    listeners: asCount(statistics?.watchCount),
-    comments: asCount(statistics?.commentCount),
   };
 };
