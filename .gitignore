@@ -147,6 +147,9 @@ test-results
 var/e2e-tls/
 .venv/
 
+# Local scratch for noVNC sign-in verification (never commit)
+var/novnc-verify/
+
 # Ansible Vault password (never commit)
 ansible/.vault_pass
 **/.vault_pass
