@@ -2,6 +2,28 @@ import { describe, expect, it } from "bun:test";
 import { normalizePublishedStreamState } from "./streamState";
 
 describe("normalizePublishedStreamState", () => {
+  it("carries the watch-page comment count into meta.total.comments", () => {
+    const normalized = normalizePublishedStreamState({
+      type: "niconama",
+      data: {
+        title: "watch page",
+        isLive: true,
+        startTime: 1_700_000_000,
+        total: 42,
+        comments: 654,
+        points: { gift: 5, ad: 1 },
+        url: "https://live.nicovideo.jp/watch/lv1",
+      },
+    }) as Record<string, unknown>;
+
+    expect((normalized.niconama as Record<string, unknown>).meta).toEqual({
+      title: "watch page",
+      url: "https://live.nicovideo.jp/watch/lv1",
+      start: 1_700_000_000,
+      total: { listeners: 42, gift: 5, ad: 1, comments: 654 },
+    });
+  });
+
   it("preserves replyTargetComment for legacy niconama payloads", () => {
     const legacyState = {
       type: "niconama",

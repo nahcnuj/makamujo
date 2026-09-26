@@ -26,6 +26,9 @@ export const normalizePublishedStreamState = (state: unknown): unknown => {
     ) {
       total.ad = (data.points as Record<string, unknown>).ad;
     }
+    if (typeof data?.comments === "number") {
+      total.comments = data.comments;
+    }
 
     const normalizedState: Record<string, unknown> = { ...rawState };
     delete normalizedState.type;

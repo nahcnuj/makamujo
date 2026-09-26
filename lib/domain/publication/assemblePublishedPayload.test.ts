@@ -116,6 +116,67 @@ describe("assemblePublishedPayload", () => {
     });
     expect(payload.speechHistory).toHaveLength(20);
   });
+
+  it("lets watch-page program info win over POST /api/meta niconama", () => {
+    const payload = assemblePublishedPayload({
+      lastPublished: {
+        type: "niconama",
+        data: {
+          isLive: true,
+          title: "from-wancomme",
+          startTime: 1,
+          total: 1,
+          points: { gift: 0, ad: 0 },
+          url: "https://onecomme.example",
+        },
+      },
+      agentStreamState: { type: "live", meta: { title: "from-agent" } },
+      programInfo: {
+        niconama: {
+          type: "live",
+          meta: {
+            title: "from-watch-page",
+            total: { listeners: 42, gift: 3, ad: 2, comments: 99 },
+          },
+        },
+        commentCount: 99,
+      },
+      streamer,
+      speechState: {},
+      history: [],
+    });
+
+    expect((payload.niconama as { meta: { title: string } }).meta.title).toBe(
+      "from-watch-page",
+    );
+    expect(payload.commentCount).toBe(99);
+  });
+
+  it("falls back to POST /api/meta when no watch-page program info arrived", () => {
+    const payload = assemblePublishedPayload({
+      lastPublished: {
+        type: "niconama",
+        data: {
+          isLive: true,
+          title: "from-wancomme",
+          startTime: 1,
+          total: 1,
+          points: { gift: 0, ad: 0 },
+          url: "https://onecomme.example",
+        },
+      },
+      agentStreamState: null,
+      programInfo: undefined,
+      streamer,
+      speechState: {},
+      history: [],
+    });
+
+    expect((payload.niconama as { meta: { title: string } }).meta.title).toBe(
+      "from-wancomme",
+    );
+    expect(payload.commentCount).toBe(99);
+  });
 });
 
 describe("extractMetaPostBody", () => {
