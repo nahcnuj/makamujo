@@ -32,6 +32,13 @@
         state: present
         update_cache: true
 
+    - name: Install noVNC packages (browser VNC client for :10)
+      ansible.builtin.apt:
+        name:
+          - novnc
+          - websockify
+        state: present
+
     - name: Install audio packages (PipeWire)
       ansible.builtin.apt:
         name:
@@ -92,6 +99,25 @@
           [Service]
           Type=simple
           ExecStart=/usr/bin/x11vnc -display :10 -forever -shared -rfbport 5900 -localhost -nopw -xkb
+          Restart=on-failure
+          RestartSec=2
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Install makamujo noVNC unit (on-demand, started by bin/x/reserve.ts only)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/makamujo-novnc.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Makamujo noVNC on :10 (on-demand)
+          After=makamujo-xvfb.service makamujo-x11vnc.service
+          Requires=makamujo-xvfb.service makamujo-x11vnc.service
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/websockify --web /usr/share/novnc 127.0.0.1:6080 127.0.0.1:5900
           Restart=on-failure
           RestartSec=2
 
