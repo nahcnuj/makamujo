@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import {
@@ -180,13 +180,17 @@ const chromiumAvailable = await (async (): Promise<boolean> => {
 })();
 
 beforeAll(async () => {
-  if (!existsSync("./var/cookieclicker.txt")) {
-    try {
-      mkdirSync("./var", { recursive: true });
-    } catch {
-      /* ignore */
-    }
-    writeFileSync("./var/cookieclicker.txt", "");
+  // `existsSync` で存在確認してから書き込むのは TOCTOU（CodeQL js/file-system-race）になる。
+  // `appendFileSync` は無いときに作り、既にあるとき 내용을消さないので 1 発で足りる。
+  try {
+    mkdirSync("./var", { recursive: true });
+  } catch {
+    /* ignore */
+  }
+  try {
+    appendFileSync("./var/cookieclicker.txt", "");
+  } catch {
+    /* ignore */
   }
   try {
     rmSync("./var/stream-baseline.json", { force: true });
