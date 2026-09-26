@@ -32,6 +32,13 @@
         state: present
         update_cache: true
 
+    - name: Install noVNC packages (browser VNC client for the sign-in display :11)
+      ansible.builtin.apt:
+        name:
+          - novnc
+          - websockify
+        state: present
+
     - name: Install audio packages (PipeWire)
       ansible.builtin.apt:
         name:
@@ -92,6 +99,67 @@
           [Service]
           Type=simple
           ExecStart=/usr/bin/x11vnc -display :10 -forever -shared -rfbport 5900 -localhost -nopw -xkb
+          Restart=on-failure
+          RestartSec=2
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Install makamujo login Xvfb unit (:11 1280x1024, on-demand)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/makamujo-login-xvfb.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Makamujo Niconico sign-in display :11 (on-demand)
+          After=network.target
+          PartOf=makamujo-novnc.service
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/Xvfb :11 -screen 0 1280x1024x24 -ac +extension GLX +render -noreset
+          Restart=on-failure
+          RestartSec=2
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Install makamujo login x11vnc unit (share :11 on localhost:5901)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/makamujo-login-x11vnc.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Makamujo x11vnc on :11 (on-demand)
+          After=makamujo-login-xvfb.service
+          Requires=makamujo-login-xvfb.service
+          PartOf=makamujo-novnc.service
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/x11vnc -display :11 -forever -shared -rfbport 5901 -localhost -nopw -xkb
+          Restart=on-failure
+          RestartSec=2
+          # x11vnc exits 2 on SIGTERM, which would otherwise show as "failed"
+          # every time reserve.ts stops the sign-in display.
+          SuccessExitStatus=2 SIGTERM
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Install makamujo noVNC unit (on-demand, started by bin/x/reserve.ts only)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/makamujo-novnc.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Makamujo noVNC on :11 (on-demand)
+          After=makamujo-login-x11vnc.service
+          Requires=makamujo-login-x11vnc.service
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/websockify --web /usr/share/novnc 127.0.0.1:6080 127.0.0.1:5901
           Restart=on-failure
           RestartSec=2
 
