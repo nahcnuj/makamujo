@@ -12,8 +12,8 @@ export type StreamData = {
     comments?: number;
     /** ニコニコ広告 / ギフトのポイント。ページに値が無いときは undefined。 */
     points?: {
-      gift?: number | string;
-      ad?: number | string;
+      gift?: number;
+      ad?: number;
     };
     url: string;
   };

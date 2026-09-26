@@ -26,7 +26,10 @@ import {
   type WsLike,
 } from "./composition/broadcast";
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
-import { WATCH_PAGE_READ_INTERVAL_MS } from "./composition/watchPageBrowserReader";
+import {
+  DEFAULT_NICONAMA_WATCH_PAGE_URL,
+  WATCH_PAGE_READ_INTERVAL_MS,
+} from "./composition/watchPageBrowserReader";
 import { startConsoleServer } from "./console/index";
 import {
   toOfflineStreamData,
@@ -751,11 +754,20 @@ startIdleSpeechTimer(streamer, 1_000);
 
 // 番組情報（視聴者数 / コメント数 / ニコニコ広告ポイント / ギフトポイント）を
 // 番組配信ページの**描画された画面**から読む。
-// `NICONAMA_WATCH_PAGE_URL` が無い環境（テストなど）では起動せず、
-// 従来どおり `POST /api/meta` へフォールバックする。
-const watchPageUrl = process.env.NICONAMA_WATCH_PAGE_URL?.trim();
+// 読むページは本番では固定（DEFAULT_NICONAMA_WATCH_PAGE_URL）。
+// `NICONAMA_WATCH_PAGE_URL` は差し替え用、`NICONAMA_WATCH_PAGE_DISABLED=1` は
+// ブラウザ reader を使わないテスト向けの無効化スイッチ。
+// 無効なときは従来どおり `POST /api/meta` の `niconama` へフォールバックする。
+const watchPageDisabled = process.env.NICONAMA_WATCH_PAGE_DISABLED === "1";
+const watchPageUrl =
+  process.env.NICONAMA_WATCH_PAGE_URL?.trim() ||
+  DEFAULT_NICONAMA_WATCH_PAGE_URL;
 let watchPageUnreadableCount = 0;
-if (watchPageUrl) {
+if (watchPageDisabled) {
+  console.log(
+    "[INFO] the niconama watch page reader is disabled; program info falls back to POST /api/meta",
+  );
+} else {
   const readIntervalMs = Number.parseInt(
     process.env.NICONAMA_WATCH_PAGE_READ_INTERVAL_MS ??
       String(WATCH_PAGE_READ_INTERVAL_MS),
@@ -835,10 +847,6 @@ if (watchPageUrl) {
       );
     }
   })();
-} else {
-  console.warn(
-    "[WARN] NICONAMA_WATCH_PAGE_URL is not set; program info falls back to POST /api/meta",
-  );
 }
 
 /**

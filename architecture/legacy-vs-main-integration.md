@@ -84,11 +84,11 @@
 
 1. **ベースは常に `legacy`**
 2. main から欲しい変更は **パッチ単位で port**（cherry-pick は SHA 無関係のため不可に近い）
-3. niconama クライアントを戻す場合は、先に `architecture/domain-model-redesign.md` の契約に沿った差し込み設計を書く
+3. niconama クライアントを戻す場合は、先に `architecture/program-info-reader.md` の契約に沿った差し込み設計を書く
 4. 動作確認: `bun run typecheck` → `bun run test` → `bun run test:integration`
 5. 将来 `main` をレガシー履歴に戻すなら、orphan を捨てて `legacy` を `main` に fast-forward / force する運用を検討（要合意）
 
 ## 関連
 
-- [domain-model-redesign.md](./domain-model-redesign.md)
+- [program-info-reader.md](./program-info-reader.md)
 - [console-domain-model.md](./console-domain-model.md)

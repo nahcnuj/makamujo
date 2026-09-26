@@ -27,6 +27,11 @@ export function GamePanel() {
   // console.log(playing);
   const Component = playing ? Games[playing.name].Component : () => null;
 
+  // 配信ページに値が無い項目は undefined。`0` と同じ扱いで隠す。
+  const gift = streamState?.meta?.total?.gift ?? 0;
+  const ad = streamState?.meta?.total?.ad ?? 0;
+  const listeners = streamState?.meta?.total?.listeners ?? 0;
+
   return (
     <div className="h-full flex flex-col justify-between text-2xl/8">
       <div className="flex-none">
@@ -37,33 +42,33 @@ export function GamePanel() {
           commentCount={commentCount ?? 0}
           previousStreamCommentCount={previousStreamCommentCount ?? 0}
         />
-        {streamState?.meta?.total && (
+        {(gift > 0 || listeners > 0 || ad > 0) && (
           <div className="text-right">
             <div>
-              {(streamState.meta.total.gift ?? 0) > 0 && (
+              {gift > 0 && (
                 <HighlightOnChange
                   timeout={30_000}
                   classNameOnChanged="text-yellow-300"
                 >
-                  {`${formatNumber(streamState.meta.total.gift ?? 0)}🎁`}
+                  {`${formatNumber(gift)}🎁`}
                 </HighlightOnChange>
               )}
-              {(streamState.meta.total.listeners ?? 0) > 0 && (
+              {listeners > 0 && (
                 <HighlightOnChange
                   timeout={5_000}
                   classNameOnChanged="text-yellow-300"
                 >
-                  {`${formatNumber(streamState.meta.total.listeners ?? 0)}🙎`}
+                  {`${formatNumber(listeners)}🙎`}
                 </HighlightOnChange>
               )}
             </div>
-            {(streamState.meta.total.ad ?? 0) > 0 && (
+            {ad > 0 && (
               <div>
                 <HighlightOnChange
                   timeout={60_000}
                   classNameOnChanged="text-yellow-300"
                 >
-                  {`${formatNumber(streamState.meta.total.ad ?? 0)}📣`}
+                  {`${formatNumber(ad)}📣`}
                 </HighlightOnChange>
               </div>
             )}

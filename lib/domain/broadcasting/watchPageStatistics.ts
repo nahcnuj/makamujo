@@ -25,7 +25,11 @@ export type DisplayedStatistics = {
   timeshiftReservations?: number;
 };
 
-/** 日本語の桁表現。ページもこれを使う。 */
+/**
+ * 日本語の桁表現と、その分倍率。配信ページは 1 万以上になると
+ * `1.2万` / `1.5億` のように省略表示するので、読む側で元に戻してから数値にする。
+ * 長い方から並べて `.find` する（`万` を先に拾わないように）。
+ */
 const UNIT_MULTIPLIERS: ReadonlyArray<readonly [string, number]> = [
   ["兆", 1e12],
   ["億", 1e8],

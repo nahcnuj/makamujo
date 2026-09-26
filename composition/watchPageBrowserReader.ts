@@ -22,6 +22,13 @@ import {
 /** ページが更新する仕組みが 30〜60 秒粒度なので、デフォルトは 30 秒。 */
 export const WATCH_PAGE_READ_INTERVAL_MS = 30_000;
 
+/**
+ * 本番で読む配信ページ。**固定値**。ここを変える必要があるなら
+ * 環境変数 `NICONAMA_WATCH_PAGE_URL`（テスト専用の差し替え口）を使う。
+ */
+export const DEFAULT_NICONAMA_WATCH_PAGE_URL =
+  "https://live.nicovideo.jp/watch/user/14171889";
+
 /** 1 回の採取で得る値。 */
 export type WatchPageSnapshot = {
   /** ページに番組が無い（=`undefined`）ときは配信していない扱い。 */

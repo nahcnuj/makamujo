@@ -13,18 +13,6 @@ export type StreamApplicationServiceOptions = {
   onBaselineChange?: (baseline: StreamBaseline) => void;
 };
 
-/** ページが数値文字列で送ってきた値を数値へ（`undefined` はそのまま）。 */
-const toNumber = (value: number | string | undefined): number | undefined => {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (typeof value === "number") {
-    return value;
-  }
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
-};
-
 /** 値が undefined のキーを落として、表示側が `-` を出せるようにする。 */
 const withDefinedKeys = <T extends Record<string, number | undefined>>(
   value: T,
@@ -137,8 +125,8 @@ export class StreamApplicationService {
                 // ページに値が無い項目はキーを落とさない（表示側が `-` を出す）。
                 total: withDefinedKeys({
                   listeners,
-                  gift: toNumber(points?.gift),
-                  ad: toNumber(points?.ad),
+                  gift: points?.gift,
+                  ad: points?.ad,
                   comments:
                     comments ?? this.#session.currentProgramLatestCommentNo,
                 }),

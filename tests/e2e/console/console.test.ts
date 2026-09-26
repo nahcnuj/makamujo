@@ -151,6 +151,7 @@ test.beforeAll(async ({ request }) => {
         CONSOLE_TLS_CERT: process.env.CONSOLE_TLS_CERT,
         CONSOLE_TLS_KEY: process.env.CONSOLE_TLS_KEY,
         CONSOLE_LOOPBACK_ONLY: "1",
+        NICONAMA_WATCH_PAGE_DISABLED: "1",
         MAKAMUJO_IPC_PATH: ipcPath,
       },
       stdio: ["ignore", "pipe", "pipe"],
