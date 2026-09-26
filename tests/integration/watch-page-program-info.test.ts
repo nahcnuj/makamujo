@@ -297,33 +297,44 @@ beforeAll(async () => {
       reject(error);
     }
   });
+});
 
-  // 準備は 1 回だけ有界待ちする。取れなかったらサーバーの出力を出して即失敗させる
-  // （各テストが同じ待ちで 3 分のジョブ予算を溶かすのを防ぐ）。
-  if (chromiumAvailable) {
-    try {
-      await waitForMeta(hasLiveProgramInfo, READER_READY_TIMEOUT_MS);
-    } catch (error) {
+/**
+ * reader の準備待ちは hook ではなくテスト側で行う。
+ * Bun の 5 秒既定は `beforeAll` にも効くので、hook 内で待たせると
+ * 「(unnamed) timed out after 5000ms」になるだけ。
+ * 同じ Promise を共有するので、待ちは最初の 1 テストだけ負担し、
+ * 失敗時は残りが即座に同じ原因で落ちる。
+ */
+let readerReady: Promise<void> | undefined;
+const ensureReaderReady = (): Promise<void> => {
+  readerReady ??= waitForMeta(hasLiveProgramInfo, READER_READY_TIMEOUT_MS).then(
+    () => undefined,
+    (error: unknown) => {
       console.error(
         "[TEST DIAG] the watch page reader never published the program info.",
       );
       console.error(`[TEST DIAG] server output tail:\n${serverOutput}`);
       throw error;
-    }
-  }
-});
+    },
+  );
+  return readerReady;
+};
 
 afterAll(async () => {
   killProcessTree(server);
   server = null;
-  await waitForPortRelease();
+  // Chromium が keep-alive 接続を掴んだままなので、close() を待たせない。
+  watchPageServer?.closeAllConnections?.();
   watchPageServer?.close();
   watchPageServer = undefined;
-});
+  await waitForPortRelease();
+}, 30_000);
 
 test.skipIf(!chromiumAvailable)(
   "publishes the numbers rendered on the watch page statistics row",
   async () => {
+    await ensureReaderReady();
     const meta = await waitForMeta(hasLiveProgramInfo, TEST_TIMEOUT_MS);
 
     expect(meta.niconama.type).toBe("live");
@@ -339,12 +350,14 @@ test.skipIf(!chromiumAvailable)(
     });
     expect(meta.commentCount).toBe(222);
   },
-  TEST_TIMEOUT_MS,
+  // 他のテストは 30 秒予算。这里は reader の準備待ち（最大 45 秒）を含める。
+  READER_READY_TIMEOUT_MS + 20_000,
 );
 
 test.skipIf(!chromiumAvailable)(
   "wancole POST /api/meta no longer overrides the watch page numbers",
   async () => {
+    await ensureReaderReady();
     await fetch(`${broadcastingBaseUrl}/api/meta`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -377,6 +390,7 @@ test.skipIf(!chromiumAvailable)(
 test.skipIf(!chromiumAvailable)(
   "keeps replyTargetComment from POST /api/meta",
   async () => {
+    await ensureReaderReady();
     await fetch(`${broadcastingBaseUrl}/api/meta`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -404,6 +418,7 @@ test.skipIf(!chromiumAvailable)(
 test.skipIf(!chromiumAvailable)(
   "omits metrics the page shows as a placeholder",
   async () => {
+    await ensureReaderReady();
     statistics = {
       ...statistics,
       "nicoad-count-item": "-",
@@ -427,6 +442,7 @@ test.skipIf(!chromiumAvailable)(
 test.skipIf(!chromiumAvailable)(
   "reports the program as offline when the watch page has no program",
   async () => {
+    await ensureReaderReady();
     programVisible = false;
 
     const meta = await waitForMeta(
