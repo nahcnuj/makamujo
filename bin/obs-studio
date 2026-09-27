@@ -24,6 +24,7 @@ ln -sfn "$OBS_CONFIG_DIR" "$FLATPAK_OBS_CONFIG/obs-studio"
 mkdir -p "$OBS_CACHE_DIR"
 
 flatpak run \
+    --system \
     --share=network \
     --socket=pulseaudio \
     --filesystem="$REPO_ROOT" \
