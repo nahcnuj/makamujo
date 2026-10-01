@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+  # 手動での再デプロイ用。CI が pass 済みのコミットに対して発火させる。
+  workflow_dispatch:
 
 concurrency:
   group: cd-vps
@@ -26,6 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           deadline=$((SECONDS + 45 * 60))
+          missing_since=""
           while (( SECONDS < deadline )); do
             payload="$(gh run list --repo "$GH_REPO" --workflow ci.yml --commit "$SHA" --json status,conclusion,event,databaseId --limit 50)"
             echo "$payload" | jq -e 'type == "array"' >/dev/null
@@ -34,9 +37,16 @@ jobs:
             count="$(echo "$push_runs" | jq 'length')"
             if [ "$count" -eq 0 ]; then
               echo "CI run for push $SHA is not listed yet"
+              missing_since="${missing_since:-$SECONDS}"
+              if (( SECONDS - missing_since > 5 * 60 )); then
+                echo "No CI push run for $SHA after 5 minutes."
+                echo "A commit merged with GITHUB_TOKEN (auto-merge workflow) does not start on: push workflows; merge it without the token, or dispatch this workflow manually."
+                exit 1
+              fi
               sleep 20
               continue
             fi
+            missing_since=""
 
             pending="$(echo "$push_runs" | jq '[.[] | select(.status != "completed")] | length')"
             success="$(echo "$push_runs" | jq '[.[] | select(.status == "completed" and .conclusion == "success")] | length')"

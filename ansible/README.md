@@ -99,6 +99,16 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 
 デプロイ job は Environment `prod` を使う（`main` のみ）。required reviewers を付けると、CI 通過後の実デプロイだけ承認待ちにできます。Environment URL は番組ページ（`https://live.nicovideo.jp/watch/user/14171889`）へのショートカットです。
 
+### マージは GITHUB_TOKEN で行わないこと
+
+`main` の push で CD を起こすため、**GITHUB_TOKEN によるマージは禁止**です。GITHUB_TOKEN 由来の push イベントでは（再帰実行を防ぐ GitHub の仕様）新しい workflow run が起動せず、CI も Pages も一切走りません。`.github/workflows/auto-merge.yml` はこの制約のため `gh pr merge --auto` ではなく **GitHub ネイティブの auto-merge**（`enablePullRequestAutoMerge`）を使います。ネイティブ auto-merge は GitHub 自身がマージするため push イベントが通常どおり発生します。
+
+auto-merge 経由でマージしたのに CD が走らなかった場合は、次の順で確認します。
+
+1. `gh run list --workflow cd.yml` に該当コミットの run があるか（無ければ push イベント自体が生成されていない）
+2. `wait-for-ci` job が 「No CI push run for ...」 で失敗していないか（GITHUB_TOKEN マージの徴候）
+3. 復旧は `gh workflow run cd.yml`（`cd.yml` は `workflow_dispatch` 対応。CI が pass 済みのコミットに対して発火させる）
+
 ## Playbooks（概要）
 
 | 順 | ファイル | 役割 |
