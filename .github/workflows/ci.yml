@@ -119,24 +119,36 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends openssh-server
       - name: Configure apt mirror (JAIST)
         if: matrix.suite.label == 'e2e'
-        # runner image は Ubuntu 24.04 で apt の定義が deb822 形式
-        # (/etc/apt/sources.list.d/*.sources) にあり、sources.list だけ差し替えると
-        # pretest:e2e の `playwright install --with-deps` が azure.archive.ubuntu.com から
-        # 取りに行く。azure 宛てを含む apt 設定ファイルをすべて JAIST に差し替える。
+        # runner image は apt の取得先を mirrorlist ファイル (/etc/apt/apt-mirrors.txt) 経由で
+        # 決めているため、sources ファイルに azure.archive.ubuntu.com が書かれておらず sed では
+        # 差し替えられない。apt 全体の source を JAIST 固定に差し替え、
+        # `apt-get update --print-uris` で実際に取得する URI が JAIST だけであることを検証する。
+        # apt.conf.d は sudo 経由（含 `playwright install --with-deps` 内）の apt にも効く。
         run: |
           set -euo pipefail
-          echo '--- apt sources before ---'
-          sudo grep -RH 'azure.archive.ubuntu.com' /etc/apt --include='*.list' --include='*.sources' || true
-          mapfile -t files < <(sudo grep -Rl 'azure.archive.ubuntu.com' /etc/apt --include='*.list' --include='*.sources' || true)
-          printf 'rewriting: %s\n' "${files[*]:-(none)}"
-          [ "${#files[@]}" -gt 0 ] || { echo 'no azure apt source found'; exit 1; }
-          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://ftp.jaist.ac.jp/pub/Linux/ubuntu|g' "${files[@]}"
-          echo '--- apt sources after ---'
-          sudo grep -RH 'ftp.jaist.ac.jp' /etc/apt --include='*.list' --include='*.sources' || true
-          if sudo grep -Rq 'azure.archive.ubuntu.com' /etc/apt --include='*.list' --include='*.sources'; then
-            echo 'azure apt mirror is still referenced'
+          sudo mkdir -p /var/tmp/ci-apt/sourceparts
+          sudo tee /var/tmp/ci-apt/sources.list >/dev/null <<'EOF'
+          deb http://ftp.jaist.ac.jp/pub/Linux/ubuntu noble main restricted universe multiverse
+          deb http://ftp.jaist.ac.jp/pub/Linux/ubuntu noble-updates main restricted universe multiverse
+          deb http://ftp.jaist.ac.jp/pub/Linux/ubuntu noble-backports main restricted universe multiverse
+          deb http://ftp.jaist.ac.jp/pub/Linux/ubuntu noble-security main restricted universe multiverse
+          EOF
+          sudo tee /etc/apt/apt.conf.d/99-ci-mirror.conf >/dev/null <<'EOF'
+          Dir::Etc::sourcelist "/var/tmp/ci-apt/sources.list";
+          Dir::Etc::sourceparts "/var/tmp/ci-apt/sourceparts";
+          EOF
+          non_jaist="$(apt-get update --print-uris 2>&1 | tr -d "'" | awk '{print $1}' | grep '^http' | grep -v '^http://ftp\.jaist\.ac\.jp/' || true)"
+          if [ -n "$non_jaist" ]; then
+            echo 'apt would still fetch from a non-JAIST mirror:'
+            echo "$non_jaist"
             exit 1
           fi
+          jaist_uris="$(apt-get update --print-uris 2>&1 | tr -d "'" | awk '{print $1}' | grep -c '^http://ftp\.jaist\.ac\.jp/' || true)"
+          if [ "$jaist_uris" -eq 0 ]; then
+            echo 'no JAIST URI reported by apt-get update --print-uris'
+            exit 1
+          fi
+          echo "apt sources are pinned to JAIST ($jaist_uris URIs)"
       - name: Allow binding to port 443 without root
         if: matrix.suite.label == 'e2e'
         run: sudo sysctl -w net.ipv4.ip_unprivileged_port_start=443
