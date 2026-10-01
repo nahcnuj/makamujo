@@ -119,21 +119,24 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends openssh-server
       - name: Configure apt mirror (JAIST)
         if: matrix.suite.label == 'e2e'
-        # Ubuntu 24.04 の runner は apt の定義が deb822 形式
-        # (/etc/apt/sources.list.d/ubuntu.sources) にあり、sources.list だけ差し替えると
+        # runner image は Ubuntu 24.04 で apt の定義が deb822 形式
+        # (/etc/apt/sources.list.d/*.sources) にあり、sources.list だけ差し替えると
         # pretest:e2e の `playwright install --with-deps` が azure.archive.ubuntu.com から
-        # 取りに行く。両方のファイルを差し替えて取得先を JAIST に固定する。
+        # 取りに行く。azure 宛てを含む apt 設定ファイルをすべて JAIST に差し替える。
         run: |
           set -euo pipefail
-          mirrored=0
-          for sources in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
-            [ -f "$sources" ] || continue
-            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://ftp.jaist.ac.jp/pub/Linux/ubuntu|g' "$sources"
-            if grep -q 'ftp.jaist.ac.jp' "$sources"; then
-              mirrored=1
-            fi
-          done
-          [ "$mirrored" -eq 1 ] || { echo 'no JAIST mirror configured'; exit 1; }
+          echo '--- apt sources before ---'
+          sudo grep -RH 'azure.archive.ubuntu.com' /etc/apt --include='*.list' --include='*.sources' || true
+          mapfile -t files < <(sudo grep -Rl 'azure.archive.ubuntu.com' /etc/apt --include='*.list' --include='*.sources' || true)
+          printf 'rewriting: %s\n' "${files[*]:-(none)}"
+          [ "${#files[@]}" -gt 0 ] || { echo 'no azure apt source found'; exit 1; }
+          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://ftp.jaist.ac.jp/pub/Linux/ubuntu|g' "${files[@]}"
+          echo '--- apt sources after ---'
+          sudo grep -RH 'ftp.jaist.ac.jp' /etc/apt --include='*.list' --include='*.sources' || true
+          if sudo grep -Rq 'azure.archive.ubuntu.com' /etc/apt --include='*.list' --include='*.sources'; then
+            echo 'azure apt mirror is still referenced'
+            exit 1
+          fi
       - name: Allow binding to port 443 without root
         if: matrix.suite.label == 'e2e'
         run: sudo sysctl -w net.ipv4.ip_unprivileged_port_start=443
