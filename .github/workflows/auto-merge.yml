@@ -1,59 +1,18 @@
 name: Owner-approved auto-merge
 
-# GitHub ネイティブの auto-merge を有効化する（マージは GitHub 側が行う）。
-#
-# GITHUB_TOKEN で `gh pr merge --auto` すると、そのマージ由来の push イベントでは
-# 新しい workflow run が起動しない（recursive 実行を防ぐ GitHub の仕様）。その結果
-# `on: push` の CI / CD / Pages が一切走らず、CD が止まったままになる（#677）。
-# ネイティブ auto-merge は GITHUB_TOKEN ではなく GitHub が実行するため、
-# push イベントが通常どおり発生し CI / CD / Pages が起動する。
-#
-# main の ruleset は squash のみ許可し、CI の check 完了を要求するため、
-# auto-merge は CI が通った時点でマージされる。
 on:
   pull_request_review:
     types: [submitted]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
   enable:
-    if: >-
-      github.event.pull_request.state == 'open' &&
-      github.event.pull_request.draft == false &&
-      github.event.review.state == 'approved' &&
-      github.event.review.author_association == 'OWNER'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Enable auto-merge
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          REVIEWED_SHA: ${{ github.event.review.commit_id }}
-        run: |
-          set -euo pipefail
-
-          # 承認されたコミットが head でなければ、古い承認でマージさせない
-          if [ "$REVIEWED_SHA" != "$HEAD_SHA" ]; then
-            echo "approved commit $REVIEWED_SHA is not the current head $HEAD_SHA; skipping"
-            exit 0
-          fi
-
-          pull_request_id="$(gh api "repos/$GH_REPO/pulls/$PR_NUMBER" --jq .node_id)"
-
-          gh api graphql \
-            -f query='
-              mutation($pullRequest: ID!, $method: PullRequestMergeMethod!) {
-                enablePullRequestAutoMerge(
-                  input: { pullRequestId: $pullRequest, mergeMethod: $method }
-                ) {
-                  clientMutationId
-                }
-              }' \
-            -F pullRequest="$pull_request_id" \
-            -F method=SQUASH
+    uses: nahcnuj/conahcnuj/.github/workflows/owner-approved-auto-merge.yml@84d2fdc3f2cba0c488c128fa489f0d7dd830baf3
+    with:
+      repository: ${{ github.repository }}
+      pr-number: ${{ github.event.pull_request.number }}
+      head-sha: ${{ github.event.pull_request.head.sha }}
+      merge-method: squash
