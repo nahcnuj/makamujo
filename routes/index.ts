@@ -36,6 +36,7 @@ export const PUT = async (
     return Response.json(undefined, { status: 404 });
   }
 
-  const comments: any[] = await req.json();
+  // Echoed back verbatim to the caller, so it never needs element typing here.
+  const comments: unknown = await req.json();
   return Response.json(comments);
 };

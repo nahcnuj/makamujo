@@ -1,9 +1,66 @@
 import { describe, expect, it, mock } from "bun:test";
 import {
   createFallbackAgent,
+  isAgentLike,
   loadCreateAgentApi,
   tryCreateExternalAgentApi,
 } from "./agentWiring";
+
+const AGENT_METHODS = [
+  "setSpeech",
+  "getSpeech",
+  "getGame",
+  "getStreamState",
+  "publishStreamState",
+  "postComments",
+] as const;
+
+describe("isAgentLike", () => {
+  it("accepts the fallback agent", () => {
+    const agent = createFallbackAgent(
+      () => undefined,
+      () => {},
+      () => ({ speech: "", silent: false }),
+      () => {},
+    );
+    expect(isAgentLike(agent)).toBeTrue();
+  });
+
+  it("accepts any object exposing every method", () => {
+    const stub = Object.fromEntries(
+      AGENT_METHODS.map((name) => [name, () => undefined]),
+    );
+    expect(isAgentLike(stub)).toBeTrue();
+  });
+
+  it("rejects an object missing a method", () => {
+    for (const missing of AGENT_METHODS) {
+      const stub: Record<string, unknown> = Object.fromEntries(
+        AGENT_METHODS.filter((name) => name !== missing).map((name) => [
+          name,
+          () => undefined,
+        ]),
+      );
+      expect(isAgentLike(stub)).toBeFalse();
+    }
+  });
+
+  it("rejects non-functions in a method position", () => {
+    const stub: Record<string, unknown> = Object.fromEntries(
+      AGENT_METHODS.map((name) => [name, () => undefined]),
+    );
+    stub.getSpeech = "not a function";
+    expect(isAgentLike(stub)).toBeFalse();
+  });
+
+  it("rejects null, primitives and functions", () => {
+    expect(isAgentLike(null)).toBeFalse();
+    expect(isAgentLike(undefined)).toBeFalse();
+    expect(isAgentLike(42)).toBeFalse();
+    expect(isAgentLike("agent")).toBeFalse();
+    expect(isAgentLike(() => {})).toBeFalse();
+  });
+});
 
 describe("createFallbackAgent", () => {
   it("stores speech and published stream state", () => {

@@ -15,6 +15,7 @@ import { serve } from "bun";
 import { Hono } from "hono";
 import {
   createFallbackAgent,
+  type FallbackAgent,
   persistTalkModel,
   tryCreateExternalAgentApi,
 } from "./composition/agentWiring";
@@ -32,6 +33,11 @@ import {
   STREAM_BASELINE_BASENAME,
   saveStreamBaseline,
 } from "./lib/application/streamBaselineStore";
+import {
+  readNumberField,
+  readStringArrayField,
+  readStringField,
+} from "./lib/domain/json";
 import {
   assemblePublishedPayload,
   attachReplyTargetToPublished,
@@ -100,7 +106,7 @@ process.on("uncaughtException", (err) => {
 });
 
 const {
-  values: { model: modelFile, data: dataFile, port },
+  values: { model: modelFile, port },
 } = parseArgs({
   options: {
     model: {
@@ -108,6 +114,8 @@ const {
       type: "string",
       default: "./var/model.json",
     },
+    // Still accepted so existing invocations keep working, but nothing reads
+    // it: the data file moved into individual game modules.
     data: {
       short: "d",
       type: "string",
@@ -214,18 +222,15 @@ const normalizeSpeechText = (speech: unknown): string | undefined => {
     return undefined;
   }
 
-  if (typeof (speech as any).text === "string") {
-    return (speech as any).text;
+  const text = readStringField(speech, "text");
+  if (text !== undefined) {
+    return text;
   }
 
-  if (typeof (speech as any).speech === "string") {
-    return (speech as any).speech;
-  }
-
-  return undefined;
+  return readStringField(speech, "speech");
 };
 
-let agent: any = createFallbackAgent(
+let agent: FallbackAgent = createFallbackAgent(
   () => lastPublishedStreamState,
   (data) => {
     lastPublishedStreamState = data;
@@ -260,24 +265,10 @@ let clearSpeechTimer: ReturnType<typeof setTimeout> | undefined;
 
 streamer.onSpeech(async (event) => {
   const speechText = normalizeSpeechText(event) ?? "";
-  const traceNodes =
-    typeof event === "object" &&
-    event !== null &&
-    Array.isArray((event as any).nodes)
-      ? (event as any).nodes
-      : undefined;
-  const nGram =
-    typeof event === "object" &&
-    event !== null &&
-    typeof (event as any).nGram === "number"
-      ? (event as any).nGram
-      : streamer.currentNGramSize;
+  const traceNodes = readStringArrayField(event, "nodes");
+  const nGram = readNumberField(event, "nGram") ?? streamer.currentNGramSize;
   const nGramRaw =
-    typeof event === "object" &&
-    event !== null &&
-    typeof (event as any).nGramRaw === "number"
-      ? (event as any).nGramRaw
-      : streamer.currentNGramSizeRaw;
+    readNumberField(event, "nGramRaw") ?? streamer.currentNGramSizeRaw;
   generatedSpeechHistorySequence += 1;
   generatedSpeechHistory.unshift({
     id: `speech-${generatedSpeechHistorySequence}`,
@@ -358,7 +349,7 @@ const apiApp = new Hono()
   })
   .post("/api/meta", async (c) => {
     try {
-      let body: any;
+      let body: unknown;
       try {
         body = await c.req.json();
       } catch (err) {

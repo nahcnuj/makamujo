@@ -47,10 +47,13 @@ export const generateConsoleBasicAuthPassword = (
   randomBytes: Uint8Array = crypto.getRandomValues(new Uint8Array(16)),
 ): string =>
   Array.from(randomBytes)
-    .map(
-      (byte) =>
-        BASIC_AUTH_PASSWORD_CHARS[byte & BASIC_AUTH_PASSWORD_INDEX_MASK]!,
-    )
+    .map((byte) => {
+      const char =
+        BASIC_AUTH_PASSWORD_CHARS[byte & BASIC_AUTH_PASSWORD_INDEX_MASK];
+      // The mask keeps the index inside the table, but a shorter table must not
+      // yield `undefined` in the middle of a password.
+      return char ?? "";
+    })
     .join("");
 
 /**

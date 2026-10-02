@@ -13,11 +13,12 @@ export function streamUpstreamResponse(proxied: Response) {
   responseHeaders.set("cache-control", "no-cache");
   // Remove content-length to avoid mismatches when streaming/chunked.
   responseHeaders.delete("content-length");
-  const upstreamBody: any = proxied.body;
-  if (upstreamBody && typeof upstreamBody.getReader === "function") {
+  const upstreamBody = asReadableBody(proxied.body);
+  if (upstreamBody !== undefined) {
+    const body = upstreamBody;
     const wrapped = new ReadableStream({
       start(controller) {
-        const reader = upstreamBody.getReader();
+        const reader = body.getReader();
         (async () => {
           try {
             while (true) {
@@ -41,7 +42,7 @@ export function streamUpstreamResponse(proxied: Response) {
       },
       cancel() {
         try {
-          upstreamBody.cancel?.();
+          proxied.body?.cancel();
         } catch {}
       },
     });
@@ -58,14 +59,32 @@ export function streamUpstreamResponse(proxied: Response) {
   });
 }
 
+/**
+ * A `fetch` response body that can be streamed. `Response.body` is nullable and
+ * a stubbed/implemented `fetch` may hand back a non-`Response`, so the reader is
+ * proven at runtime rather than asserted.
+ */
+type ReadableBody = {
+  getReader: () => ReadableStreamDefaultReader<Uint8Array>;
+};
+
+const asReadableBody = (value: unknown): ReadableBody | undefined => {
+  if (typeof value !== "object" || value === null) return undefined;
+  const candidate = value as { getReader?: unknown };
+  return typeof candidate.getReader === "function"
+    ? (value as ReadableBody)
+    : undefined;
+};
+
 export function forwardSSEEventsToSink(
-  upstreamBody: any,
+  upstreamBody: unknown,
   sink: (data: string) => void,
 ) {
-  if (!upstreamBody || typeof upstreamBody.getReader !== "function") {
+  const body = asReadableBody(upstreamBody);
+  if (body === undefined) {
     return () => {};
   }
-  const reader = upstreamBody.getReader();
+  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let stopped = false;
@@ -196,7 +215,11 @@ export function computeProxyUrl(req: Request, _proxyBase?: string) {
   return buildBroadcastingUrl("/console/api/ws", search);
 }
 
-export async function fetchMetaSnapshot(_proxyBase?: string): Promise<any> {
+/**
+ * Snapshot of the broadcasting `/api/meta` payload. The consumer only forwards
+ * it verbatim over the console WebSocket, so the parsed JSON stays `unknown`.
+ */
+export async function fetchMetaSnapshot(_proxyBase?: string): Promise<unknown> {
   try {
     const res = await fetch(buildBroadcastingUrl("/api/meta"));
     return await res.json().catch(() => ({}));

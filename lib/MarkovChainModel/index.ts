@@ -191,16 +191,19 @@ export class MarkovChainModel implements TalkModel {
 
     const dec = (key: string, token: string, amount: number) => {
       const cands = next[key];
-      if (!cands || cands[token] == null) return;
-      cands[token]! -= amount;
-      if (cands[token]! <= 0) delete cands[token];
+      const current = cands?.[token];
+      if (!cands || current == null) return;
+      const updated = current - amount;
+      if (updated <= 0) delete cands[token];
+      else cands[token] = updated;
       if (Object.keys(cands).length === 0) delete next[key];
     };
 
     const pathEdges = (): { from: string; to: string }[] => {
       const edges: { from: string; to: string }[] = [];
       for (let i = 0; i < tokens.length; i++) {
-        const to = tokens[i]!;
+        const to = tokens[i];
+        if (to === undefined) continue;
         if (i === 0) {
           edges.push({ from: "", to });
         }
@@ -217,7 +220,8 @@ export class MarkovChainModel implements TalkModel {
 
     if (opts.purge === true) {
       if (tokens.length === 1) {
-        const tok = tokens[0]!;
+        const tok = tokens[0];
+        if (tok === undefined) return this;
         for (const from of Object.keys(next)) {
           if (from.split("\u0000").includes(tok)) {
             delete next[from];
@@ -257,7 +261,8 @@ export class MarkovChainModel implements TalkModel {
       if (delta === 0) return this;
 
       for (let i = 0; i < tokens.length; i++) {
-        const to = tokens[i]!;
+        const to = tokens[i];
+        if (to === undefined) continue;
         if (i === 0) dec("", to, delta);
         const maxN = Math.min(this.#maxLearnContext, i);
         for (let n = 1; n <= maxN; n++) {
@@ -402,8 +407,9 @@ export class MarkovChainModel implements TalkModel {
     const contextContains = (from: string): boolean => {
       if (from === key) return true;
       const segs = from.split("\u0000");
-      if (needle.length === 1) {
-        return segs.includes(needle[0]!);
+      const single = needle.length === 1 ? needle[0] : undefined;
+      if (single !== undefined) {
+        return segs.includes(single);
       }
       for (let i = 0; i <= segs.length - needle.length; i++) {
         if (needle.every((tok, j) => segs[i + j] === tok)) return true;
@@ -412,8 +418,9 @@ export class MarkovChainModel implements TalkModel {
     };
 
     for (const [from, cands] of Object.entries(model)) {
+      const single = needle.length === 1 ? needle[0] : undefined;
       const toWeight =
-        cands[key] ?? (needle.length === 1 ? cands[needle[0]!] : undefined);
+        cands[key] ?? (single !== undefined ? cands[single] : undefined);
       if (toWeight != null) asTo.push({ from, weight: toWeight });
 
       if (contextContains(from)) {

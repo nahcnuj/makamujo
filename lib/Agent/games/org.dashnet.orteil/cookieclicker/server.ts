@@ -1,3 +1,4 @@
+import { isRecord } from "../../../../domain/json";
 import type { Statistics } from "./State";
 
 export type ElementLike = {
@@ -178,19 +179,17 @@ export const enrichStatisticsGeneral = (
  */
 
 /** Host-side: parse numbers on statistics after browser sight(). */
-export function enrichSightState<
-  T extends {
-    statistics?: {
-      general?: Record<string, { innerText: string } & Record<string, unknown>>;
-    };
-  },
->(state: T): T {
-  const general = state.statistics?.general;
-  if (!general) return state;
+export function enrichSightState<T extends { statistics?: unknown }>(
+  state: T,
+): T {
+  const statistics = state.statistics;
+  if (!isRecord(statistics)) return state;
+  const general = statistics.general;
+  if (!isRecord(general)) return state;
   return {
     ...state,
     statistics: {
-      ...state.statistics,
+      ...statistics,
       general: enrichStatisticsGeneral(
         general as Parameters<typeof enrichStatisticsGeneral>[0],
       ),

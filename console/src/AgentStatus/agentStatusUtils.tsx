@@ -8,6 +8,7 @@ import {
   normalizeSpeechText,
   SPEECH_UNAVAILABLE_INDICATOR,
 } from "../../../lib/domain/console/agentStatusPlan";
+import { readStringArrayField } from "../../../lib/domain/json";
 import type { AgentStateResponse } from "./types";
 
 // Re-export pure presentation helpers from the console domain (single source of truth).
@@ -127,8 +128,8 @@ export const createSpeechHistoryDisplayItems = (
       return accumulatedItems;
     }
 
-    const traceNodes = (speechHistoryItem as any).nodes;
-    const hasTrace = Array.isArray(traceNodes) && traceNodes.length > 0;
+    const traceNodes = readStringArrayField(speechHistoryItem, "nodes");
+    const hasTrace = traceNodes !== undefined && traceNodes.length > 0;
     const hasValidNGram =
       speechHistoryItem.nGram !== undefined &&
       Number.isFinite(speechHistoryItem.nGram) &&
@@ -146,7 +147,7 @@ export const createSpeechHistoryDisplayItems = (
         speechHistoryItem.nGram,
       ),
       nGramLabel: formatSpeechHistoryNGramLabel(speechHistoryItem.nGram),
-      nodes: hasTrace ? (traceNodes as string[]) : undefined,
+      nodes: hasTrace ? traceNodes : undefined,
       replyTargetComment: speechHistoryItem.replyTargetComment,
     });
     return accumulatedItems;

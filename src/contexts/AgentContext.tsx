@@ -14,7 +14,7 @@ type Data = {
   silent: boolean;
   playing?: {
     name: keyof typeof Games;
-    state: any;
+    state: unknown;
   };
   streamState?: AgentState;
   commentCount?: number;

@@ -7,9 +7,9 @@ import {
 (async () => {
   try {
     const state = createMockAgentStateResponse();
-    const rows = createAgentStatusRows(state as any);
+    const rows = createAgentStatusRows(state);
     console.log("ROWS:\n", JSON.stringify(rows, null, 2));
-    const sections = createAgentStatusSections(state as any);
+    const sections = createAgentStatusSections(state);
     console.log("SECTIONS:\n", JSON.stringify(sections, null, 2));
   } catch (err) {
     console.error(err);

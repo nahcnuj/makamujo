@@ -17,7 +17,7 @@ import {
 } from "../domain/games/VigilantFiestaRecords";
 import { planVigilantFiestaSpeeches } from "../domain/games/VigilantFiestaSpeech";
 import type { AgentSession } from "./AgentSession";
-import type { SpeechPort, TalkModelPort } from "./types";
+import type { SpeechPort } from "./types";
 
 const VIGILANT_FIESTA_HIGHSCORE_PATH = "./var/vigilant-fiesta-highscore.json";
 
@@ -29,7 +29,6 @@ export class GameplayApplicationService {
   #isSpeechable: () => boolean;
   #notifyGameStateChange: () => void;
   #speech: SpeechPort | undefined;
-  #talkModel: TalkModelPort | undefined;
   #vigilantRecords: ScoreRecords | undefined;
   #vigilantStored: StoredHighscores | undefined;
   #vigilantSlotKey: string | undefined;
@@ -40,14 +39,12 @@ export class GameplayApplicationService {
     isSpeechable: () => boolean,
     notifyGameStateChange: () => void,
     speech?: SpeechPort,
-    talkModel?: TalkModelPort,
     onGameSight?: (sightState: Record<string, unknown>) => void,
   ) {
     this.#session = session;
     this.#isSpeechable = isSpeechable;
     this.#notifyGameStateChange = notifyGameStateChange;
     this.#speech = speech;
-    this.#talkModel = talkModel;
     this.#onGameSight = onGameSight;
   }
 
