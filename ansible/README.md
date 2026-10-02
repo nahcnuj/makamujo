@@ -87,6 +87,18 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 
 `main` への push で `.github/workflows/cd.yml` が走り、そのコミットの CI（`.github/workflows/ci.yml` の **push** run）が success になってから、先に `playbooks/0_ssh_honeypot.yml`（22 番 sshd の公開鍵以外を沈黙）、続けて `playbooks/2_makamujo.yml` を VPS に適用します。checkout 対象は playbook どおり `main` です。
 
+### 手動デプロイ
+
+`cd.yml` は `workflow_dispatch` 対応なので、次のコマンドで `main` を手動デプロイできます。
+
+```bash
+gh workflow run cd.yml --ref main
+```
+
+push イベント経由では CI の push run を待ちます。**その run が存在しない場合は `cd.yml` 自身が `ci.yml` を `workflow_dispatch` で起動し**、その結果（`push` / `workflow_dispatch` どちらの run でもよい）を待ってから deploy します。CI の push run が無い状態で deploy が止まらないようにするためです（`ci.yml` も `workflow_dispatch` 対応）。
+
+なお `main` への push イベントが起きないマージ（token 実行の merge、GITHUB_TOKEN 由来のイベント）は push 自体が発生しないため、`on: push` のワークフロー（CI / CD / Pages）は走りません。CD / CI / Pages が確実に起動し続けるには、マージを **GitHub ネイティブ auto-merge** 経由で行う必要があります（`.github/workflows/auto-merge.yml` 経由。`AUTO_MERGE_TOKEN` には user token を設定します）。
+
 必要な GitHub Secrets（Environment `prod` またはリポジトリ Secrets）:
 
 | Secret | 必須 | 内容 |
