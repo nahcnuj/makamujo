@@ -10,11 +10,11 @@ permissions:
 
 jobs:
   enable:
-    uses: nahcnuj/conahcnuj/.github/workflows/owner-approved-auto-merge.yml@78ee22c201a1de75d4f8d1de929c4b705c50845a
+    uses: nahcnuj/conahcnuj/.github/workflows/owner-approved-auto-merge.yml@45bb0bd5434849a300b78ee18251ddddcb5fa57b
     with:
       repository: ${{ github.repository }}
       pr-number: ${{ github.event.pull_request.number }}
       head-sha: ${{ github.event.pull_request.head.sha }}
       merge-method: squash
-    secrets:
-      auto-merge-token: ${{ secrets.AUTO_MERGE_TOKEN }}
+      # GITHUB_TOKEN のマージでは push イベントが起きないため、デプロイは明示的に起動する
+      post-merge-dispatch: cd.yml
