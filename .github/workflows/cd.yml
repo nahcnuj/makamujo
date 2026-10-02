@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+  # 手動デプロイ用。token 実行の merge や GITHUB_TOKEN 由来のイベントでは
+  # on: push が発火しないため、`gh workflow run cd.yml --ref main` で同じ経路を
+  # 走らせる。workflow_dispatch は GITHUB_TOKEN / App token でも発火する。
+  workflow_dispatch:
 
 concurrency:
   group: cd-vps
@@ -11,7 +15,7 @@ concurrency:
 
 permissions:
   contents: read
-  actions: read
+  actions: write
 
 jobs:
   wait-for-ci:
@@ -23,26 +27,35 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           deadline=$((SECONDS + 45 * 60))
+          dispatched=0
           while (( SECONDS < deadline )); do
             payload="$(gh run list --repo "$GH_REPO" --workflow ci.yml --commit "$SHA" --json status,conclusion,event,databaseId --limit 50)"
             echo "$payload" | jq -e 'type == "array"' >/dev/null
 
-            push_runs="$(echo "$payload" | jq '[.[] | select(.event == "push")]')"
-            count="$(echo "$push_runs" | jq 'length')"
+            # push で起動しない場合は、ここから手動起動した run も CI として扱う
+            runs="$(echo "$payload" | jq '[.[] | select(.event == "push" or .event == "workflow_dispatch")]')"
+            count="$(echo "$runs" | jq 'length')"
             if [ "$count" -eq 0 ]; then
-              echo "CI run for push $SHA is not listed yet"
+              if [ "$dispatched" -eq 0 ]; then
+                echo "no CI run for $SHA; starting ci.yml on $REF_NAME"
+                gh workflow run ci.yml --repo "$GH_REPO" --ref "$REF_NAME"
+                dispatched=1
+              else
+                echo "waiting for the dispatched CI run of $SHA to appear"
+              fi
               sleep 20
               continue
             fi
 
-            pending="$(echo "$push_runs" | jq '[.[] | select(.status != "completed")] | length')"
-            success="$(echo "$push_runs" | jq '[.[] | select(.status == "completed" and .conclusion == "success")] | length')"
+            pending="$(echo "$runs" | jq '[.[] | select(.status != "completed")] | length')"
+            success="$(echo "$runs" | jq '[.[] | select(.status == "completed" and .conclusion == "success")] | length')"
 
             echo "CI runs for $SHA: pending=$pending success=$success"
-            echo "$push_runs" | jq -c '.[]'
+            echo "$runs" | jq -c '.[]'
 
             if [ "$pending" -gt 0 ]; then
               sleep 20

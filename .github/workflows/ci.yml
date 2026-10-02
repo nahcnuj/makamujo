@@ -9,6 +9,10 @@ on:
     branches:
       - main
       - legacy
+  # CD（cd.yml）が CI の push run を待てなかったときにここから起動する。
+  # workflow_dispatch は GITHUB_TOKEN / App token でも発火するため、
+  # push イベントが起きないマージでも CI → CD の経路を構成できる。
+  workflow_dispatch:
 
 # Least-privilege default for GITHUB_TOKEN across all jobs.
 permissions:
