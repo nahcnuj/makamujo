@@ -10,9 +10,11 @@ permissions:
 
 jobs:
   enable:
-    uses: nahcnuj/conahcnuj/.github/workflows/owner-approved-auto-merge.yml@e0cb231855351409b698592c4dddb1d4b0e47076e0cb231
+    uses: nahcnuj/conahcnuj/.github/workflows/owner-approved-auto-merge.yml@b91e34df9b769dc0980c2990e341e7bfbcec858e
     with:
       repository: ${{ github.repository }}
       pr-number: ${{ github.event.pull_request.number }}
       head-sha: ${{ github.event.pull_request.head.sha }}
       merge-method: squash
+    secrets:
+      auto-merge-token: ${{ secrets.AUTO_MERGE_TOKEN }}
