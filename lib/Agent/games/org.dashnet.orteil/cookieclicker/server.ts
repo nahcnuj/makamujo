@@ -178,19 +178,23 @@ export const enrichStatisticsGeneral = (
  */
 
 /** Host-side: parse numbers on statistics after browser sight(). */
-export function enrichSightState<
-  T extends {
-    statistics?: {
-      general?: Record<string, { innerText: string } & Record<string, unknown>>;
-    };
-  },
->(state: T): T {
-  const general = state.statistics?.general;
-  if (!general) return state;
+export function enrichSightState<T extends { statistics?: unknown }>(
+  state: T,
+): T {
+  const statistics = state.statistics;
+  if (
+    typeof statistics !== "object" ||
+    statistics === null ||
+    !("general" in statistics)
+  ) {
+    return state;
+  }
+  const general = statistics.general;
+  if (typeof general !== "object" || general === null) return state;
   return {
     ...state,
     statistics: {
-      ...state.statistics,
+      ...statistics,
       general: enrichStatisticsGeneral(
         general as Parameters<typeof enrichStatisticsGeneral>[0],
       ),

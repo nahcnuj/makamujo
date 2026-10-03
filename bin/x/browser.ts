@@ -20,7 +20,11 @@ const recent: number[] = [];
 function noteRestart(): void {
   const now = Date.now();
   recent.push(now);
-  while (recent.length && now - recent[0]! > RAPID_WINDOW_MS) recent.shift();
+  while (recent.length > 0) {
+    const oldest = recent[0];
+    if (oldest === undefined || now - oldest <= RAPID_WINDOW_MS) break;
+    recent.shift();
+  }
   if (recent.length > MAX_RAPID) {
     console.error(
       `[ERROR] browser restarted ${recent.length} times in ${RAPID_WINDOW_MS}ms; giving up`,

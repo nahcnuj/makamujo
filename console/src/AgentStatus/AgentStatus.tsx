@@ -23,6 +23,23 @@ import type { AgentStateResponse, AgentStatusSection } from "./types";
 
 const AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS = "grid-rows-[auto_minmax(0,1fr)]";
 
+/**
+ * Publish the SSE endpoint on `window` so it can be read from the browser
+ * console while debugging. Declared on a local interface rather than asserted,
+ * so the write stays type-checked.
+ */
+type DebugWindow = typeof globalThis & {
+  __sseUrl?: string;
+};
+
+const debugRecordSseUrl = (sseUrl: string): void => {
+  try {
+    (globalThis as DebugWindow).__sseUrl = sseUrl;
+  } catch {
+    /* read-only global (some sandboxes); the trace below still logs it */
+  }
+};
+
 export const AgentStatus = () => {
   const [agentStateResponse, setAgentStateResponse] =
     useState<AgentStateResponse | null>(null);
@@ -75,7 +92,7 @@ export const AgentStatus = () => {
     (async () => {
       const sseUrl = "/console/api/ws";
       try {
-        (window as any).__sseUrl = sseUrl;
+        debugRecordSseUrl(sseUrl);
       } catch {}
       try {
         console.log("[TRACE] AgentStatus connecting EventSource ->", sseUrl);

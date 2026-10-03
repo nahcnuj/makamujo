@@ -1,3 +1,4 @@
+import type { FC } from "hono/jsx/dom";
 import { Games } from "../../lib/Agent/games";
 import { HighlightOnChange } from "../agt-compat";
 import { useAgentContext } from "../contexts/AgentContext";
@@ -20,17 +21,38 @@ const _formatDuration = (d: Date) =>
 
 const formatNumber = new Intl.NumberFormat("ja-JP").format;
 
+/**
+ * `Games[name].Component` is a union of per-game components, so handing it JSX
+ * would demand props satisfying *every* member (an intersection of the games'
+ * state shapes). The payload really is whichever game `playing.name` selects,
+ * and that pairing is a runtime fact, so the component is narrowed to one that
+ * accepts the union of state shapes. Each game's own `Component` remains what
+ * validates the payload.
+ */
+type SelectedGameState = Parameters<
+  (typeof Games)[keyof typeof Games]["Component"]
+>[0]["state"];
+
+/** Return type Hono's JSX accepts for a function component. */
+type HonoReturn = ReturnType<FC<Record<string, never>>>;
+
+type SelectedGameComponent = (props: {
+  state: SelectedGameState;
+}) => HonoReturn;
+
 export function GamePanel() {
   const { playing, streamState, commentCount, previousStreamCommentCount } =
     useAgentContext();
 
   // console.log(playing);
-  const Component = playing ? Games[playing.name].Component : () => null;
+  const Component: SelectedGameComponent = playing
+    ? (Games[playing.name].Component as SelectedGameComponent)
+    : () => null;
 
   return (
     <div className="h-full flex flex-col justify-between text-2xl/8">
       <div className="flex-none">
-        {playing && <Component state={playing.state} />}
+        {playing && <Component state={playing.state as SelectedGameState} />}
       </div>
       <div className="flex-none">
         <DeliveryVoltage

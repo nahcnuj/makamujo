@@ -5,10 +5,13 @@
  */
 
 import { writeFileSync } from "node:fs";
+import type { AgentComment } from "automated-gameplay-transmitter";
+
+export type SpeechState = { speech: string; silent: boolean };
 
 export type FallbackAgent = {
   setSpeech: (text: string) => void;
-  getSpeech: () => { speech: string; silent: boolean };
+  getSpeech: () => SpeechState;
   getGame: () => null;
   getStreamState: () => unknown;
   publishStreamState: (data: unknown) => void;
@@ -20,8 +23,27 @@ export type AgentLikeHost = {
   currentGame?: unknown;
   streamState?: unknown;
   onAir: (state: unknown) => void;
-  // Parameter type is contravariant; accept any array (AGT AgentComment[] at runtime).
-  listen: (comments: any[]) => void;
+  // `AgentComment[]` rather than `any[]`: AGT always passes that type at
+  // runtime, so naming it keeps the boundary checked (the parameter is
+  // contravariant, so `any[]` here would silently accept a non-array).
+  listen: (comments: AgentComment[]) => void;
+};
+
+/**
+ * Narrow an unknown value (an AGT agent, in practice) to the surface the server
+ * actually calls. Without this the caller has to fall back to `any`.
+ */
+export const isAgentLike = (value: unknown): value is FallbackAgent => {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return [
+    "setSpeech",
+    "getSpeech",
+    "getGame",
+    "getStreamState",
+    "publishStreamState",
+    "postComments",
+  ].every((method) => typeof candidate[method] === "function");
 };
 
 type CreateAgentApiFn = (
@@ -99,11 +121,16 @@ export const createFallbackAgent = (
 });
 
 /**
- * Attempt dynamic import of createAgentApi. Returns the external agent or undefined on failure.
+ * Attempt dynamic import of createAgentApi. Returns the external agent or
+ * undefined on failure.
+ *
+ * The result is validated against {@link isAgentLike}, so a package that
+ * returns something with a different surface falls back to the in-memory agent
+ * instead of being assigned to a typed variable and blowing up later.
  */
 export const tryCreateExternalAgentApi = async (
   streamer: AgentLikeHost,
-): Promise<unknown | undefined> => {
+): Promise<FallbackAgent | undefined> => {
   try {
     const createAgentApi = await loadCreateAgentApi();
     if (typeof createAgentApi !== "function") {
@@ -114,6 +141,12 @@ export const tryCreateExternalAgentApi = async (
     }
     try {
       const externalAgent = createAgentApi(streamer);
+      if (!isAgentLike(externalAgent)) {
+        console.warn(
+          "[WARN] createAgentApi returned an unexpected shape; using fallback agent",
+        );
+        return undefined;
+      }
       console.info("[INFO] external agent API initialized");
       return externalAgent;
     } catch (err) {

@@ -100,7 +100,7 @@ process.on("uncaughtException", (err) => {
 });
 
 const {
-  values: { model: modelFile, data: dataFile, port },
+  values: { model: modelFile, port },
 } = parseArgs({
   options: {
     model: {
@@ -214,18 +214,18 @@ const normalizeSpeechText = (speech: unknown): string | undefined => {
     return undefined;
   }
 
-  if (typeof (speech as any).text === "string") {
-    return (speech as any).text;
+  if ("text" in speech && typeof speech.text === "string") {
+    return speech.text;
   }
 
-  if (typeof (speech as any).speech === "string") {
-    return (speech as any).speech;
+  if ("speech" in speech && typeof speech.speech === "string") {
+    return speech.speech;
   }
 
   return undefined;
 };
 
-let agent: any = createFallbackAgent(
+let agent = createFallbackAgent(
   () => lastPublishedStreamState,
   (data) => {
     lastPublishedStreamState = data;
@@ -263,20 +263,23 @@ streamer.onSpeech(async (event) => {
   const traceNodes =
     typeof event === "object" &&
     event !== null &&
-    Array.isArray((event as any).nodes)
-      ? (event as any).nodes
+    "nodes" in event &&
+    Array.isArray(event.nodes)
+      ? event.nodes.filter((node): node is string => typeof node === "string")
       : undefined;
   const nGram =
     typeof event === "object" &&
     event !== null &&
-    typeof (event as any).nGram === "number"
-      ? (event as any).nGram
+    "nGram" in event &&
+    typeof event.nGram === "number"
+      ? event.nGram
       : streamer.currentNGramSize;
   const nGramRaw =
     typeof event === "object" &&
     event !== null &&
-    typeof (event as any).nGramRaw === "number"
-      ? (event as any).nGramRaw
+    "nGramRaw" in event &&
+    typeof event.nGramRaw === "number"
+      ? event.nGramRaw
       : streamer.currentNGramSizeRaw;
   generatedSpeechHistorySequence += 1;
   generatedSpeechHistory.unshift({
@@ -358,7 +361,7 @@ const apiApp = new Hono()
   })
   .post("/api/meta", async (c) => {
     try {
-      let body: any;
+      let body: unknown;
       try {
         body = await c.req.json();
       } catch (err) {

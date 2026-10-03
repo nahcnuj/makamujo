@@ -72,7 +72,6 @@ export class MakaMujo {
       () => this.speechable,
       () => this.#notifyGameStateChangeAsync(),
       speechPort,
-      talkModel,
       (sightState) => this.#onGameSight(sightState),
     );
   }
@@ -139,7 +138,9 @@ export class MakaMujo {
 
     // Continuation: strip seed. Empty start: random seed (strip no-op).
     const fromContinuation = pending.length > 0;
-    const start = fromContinuation ? pending[pending.length - 1]! : "";
+    const lastPending = pending[pending.length - 1];
+    const start =
+      fromContinuation && lastPending !== undefined ? lastPending : "";
     const ret = this.#talkModel.generate(start, session.currentNGramSize);
     const shouldStripSeed = fromContinuation && Boolean(start);
 

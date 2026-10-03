@@ -21,7 +21,11 @@ export const pickTopic = (
   const cands = words.reduce<string[]>((prev, s) => {
     const a = [...s].length;
     const b = [...(prev[0] ?? "")].length;
-    return a > b ? [s] : a === b ? [...prev, s] : prev;
+    if (a > b) return [s];
+    if (a === b) {
+      prev.push(s);
+    }
+    return prev;
   }, []);
 
   return pickRandomFrom(cands, random);

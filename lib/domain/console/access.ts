@@ -47,10 +47,16 @@ export const generateConsoleBasicAuthPassword = (
   randomBytes: Uint8Array = crypto.getRandomValues(new Uint8Array(16)),
 ): string =>
   Array.from(randomBytes)
-    .map(
-      (byte) =>
-        BASIC_AUTH_PASSWORD_CHARS[byte & BASIC_AUTH_PASSWORD_INDEX_MASK]!,
-    )
+    .map((byte) => {
+      const char =
+        BASIC_AUTH_PASSWORD_CHARS[byte & BASIC_AUTH_PASSWORD_INDEX_MASK];
+      if (char === undefined) {
+        throw new Error(
+          `BASIC_AUTH_PASSWORD_CHARS has no entry for ${byte & BASIC_AUTH_PASSWORD_INDEX_MASK}`,
+        );
+      }
+      return char;
+    })
     .join("");
 
 /**

@@ -127,8 +127,12 @@ export const createSpeechHistoryDisplayItems = (
       return accumulatedItems;
     }
 
-    const traceNodes = (speechHistoryItem as any).nodes;
-    const hasTrace = Array.isArray(traceNodes) && traceNodes.length > 0;
+    const traceNodes = Array.isArray(speechHistoryItem.nodes)
+      ? speechHistoryItem.nodes.filter(
+          (node): node is string => typeof node === "string",
+        )
+      : undefined;
+    const hasTrace = traceNodes !== undefined && traceNodes.length > 0;
     const hasValidNGram =
       speechHistoryItem.nGram !== undefined &&
       Number.isFinite(speechHistoryItem.nGram) &&
@@ -146,7 +150,7 @@ export const createSpeechHistoryDisplayItems = (
         speechHistoryItem.nGram,
       ),
       nGramLabel: formatSpeechHistoryNGramLabel(speechHistoryItem.nGram),
-      nodes: hasTrace ? (traceNodes as string[]) : undefined,
+      nodes: hasTrace ? traceNodes : undefined,
       replyTargetComment: speechHistoryItem.replyTargetComment,
     });
     return accumulatedItems;

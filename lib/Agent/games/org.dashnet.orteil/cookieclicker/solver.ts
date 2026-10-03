@@ -324,7 +324,8 @@ export function stepIdle(
           ? clickableElementIds
           : ["bigCookie"];
       const targetId =
-        candidateIds[Math.floor(Math.random() * candidateIds.length)]!;
+        candidateIds[Math.floor(Math.random() * candidateIds.length)] ??
+        "bigCookie";
 
       return {
         state: { type: "idle", phase: "click", count: state.count },

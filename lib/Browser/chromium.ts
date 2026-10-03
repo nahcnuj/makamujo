@@ -9,7 +9,7 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import type { Browser } from "automated-gameplay-transmitter";
-import type { ViewportSize } from "playwright";
+import type { Page, ViewportSize } from "playwright";
 import playwright from "playwright";
 import { chromium as $_ } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
@@ -84,10 +84,15 @@ async function launchWithFallback<T>(
   }
 }
 
+type ChromiumLaunchOptions = {
+  executablePath?: string;
+  [key: string]: unknown;
+};
+
 function getChromiumLaunchOptions(
   overrideExecutable: string | undefined,
-  base: any = {},
-) {
+  base: ChromiumLaunchOptions = {},
+): ChromiumLaunchOptions {
   const effective = resolveExecutablePath(overrideExecutable);
   const opts = { ...base };
   if (effective) {
@@ -393,7 +398,7 @@ export const create = async (
     fillByRole: async (value, role, selector) => {
       await page
         .locator(selector)
-        .getByRole(role as any)
+        .getByRole(role as Parameters<Page["getByRole"]>[0])
         .fill(value);
     },
 

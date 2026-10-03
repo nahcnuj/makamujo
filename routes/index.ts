@@ -36,6 +36,6 @@ export const PUT = async (
     return Response.json(undefined, { status: 404 });
   }
 
-  const comments: any[] = await req.json();
+  const comments: unknown = await req.json();
   return Response.json(comments);
 };

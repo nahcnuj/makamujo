@@ -21,7 +21,7 @@ export { useInterval } from "./hooks/useInterval";
 
 // Derive the valid hono component return type from FC so we stay aligned
 // with hono's own type definitions without importing internal hono types.
-type HonoReturn = ReturnType<FC<{}>>;
+type HonoReturn = ReturnType<FC<Record<string, never>>>;
 
 type HonoizeChildren<Props> = Omit<Props, "children"> & { children?: Child };
 
@@ -43,18 +43,31 @@ const gridTemplateClass = {
   16: "grid-cols-16 grid-rows-16",
 } as const;
 
-const sideClass = {
+// Keyed by `${count}_${span}`, which is computed at runtime and therefore cannot
+// be narrowed by the compiler.
+const sideClass: Readonly<Record<string, string>> = {
   "10_8": "col-span-2 row-span-8",
-} as const;
+};
 
-const bottomClass = {
+const bottomClass: Readonly<Record<string, string>> = {
   "10_8": "col-span-10 row-span-2",
-} as const;
+};
 
+/**
+ * Flatten `children` into a list.
+ *
+ * `Array#flat(Infinity)` on a union of Hono `Child` types makes the compiler
+ * give up ("Type instantiation is excessively deep"), so nesting is unwound
+ * explicitly instead.
+ */
 function normalizeChildren(children: Child | Child[] | undefined): Child[] {
   if (children === undefined) return [];
-  if (Array.isArray(children)) return children.flat(Infinity) as Child[];
-  return [children];
+  if (!Array.isArray(children)) return [children];
+  const flattened: Child[] = [];
+  for (const child of children) {
+    flattened.push(...normalizeChildren(child));
+  }
+  return flattened;
 }
 
 export function Box({
@@ -96,12 +109,14 @@ export function Layout({
   const [mainPanel, sidePanel, bottomPanel] = childArray;
   const countSpan = `${count}_${span}`;
 
-  if (!Object.hasOwn(sideClass, countSpan)) {
+  const sideClassName = sideClass[countSpan];
+  const bottomClassName = bottomClass[countSpan];
+  if (sideClassName === undefined) {
     throw new Error(
       `No side-panel class found for the pair of count:${count} and span:${span}.`,
     );
   }
-  if (!Object.hasOwn(bottomClass, countSpan)) {
+  if (bottomClassName === undefined) {
     throw new Error(
       `No bottom-panel class found for the pair of count:${count} and span:${span}.`,
     );
@@ -115,10 +130,10 @@ export function Layout({
         <div className={screenClass[span]}>
           <div className={`w-full h-full ${className}`}>{mainPanel}</div>
         </div>
-        <div className={sideClass[countSpan]}>
+        <div className={sideClassName}>
           <div className={`w-full h-full ${className}`}>{sidePanel}</div>
         </div>
-        <div className={bottomClass[countSpan]}>
+        <div className={bottomClassName}>
           <div className={`w-full h-full ${className}`}>{bottomPanel}</div>
         </div>
       </div>
