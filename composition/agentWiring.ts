@@ -10,6 +10,7 @@ import {
   type ModelFileStamp,
   readModelFileStamp,
 } from "../lib/application/modelHotReload";
+import { isRecord } from "../lib/domain/json";
 
 export type SpeechState = { speech: string; silent: boolean };
 
@@ -36,8 +37,7 @@ export type AgentLikeHost = {
  * actually calls. Without this the caller has to fall back to `any`.
  */
 export const isAgentLike = (value: unknown): value is FallbackAgent => {
-  if (typeof value !== "object" || value === null) return false;
-  const candidate = value as Record<string, unknown>;
+  if (!isRecord(value)) return false;
   return [
     "setSpeech",
     "getSpeech",
@@ -45,7 +45,7 @@ export const isAgentLike = (value: unknown): value is FallbackAgent => {
     "getStreamState",
     "publishStreamState",
     "postComments",
-  ].every((method) => typeof candidate[method] === "function");
+  ].every((method) => typeof value[method] === "function");
 };
 
 /**
@@ -96,6 +96,7 @@ export const loadCreateAgentApi = async (): Promise<
 > => {
   // Prefer side-effect-free entry (Phase C).
   try {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const agentMod = (await import(
       "automated-gameplay-transmitter/agent"
     )) as AgentApiModule;
@@ -107,6 +108,7 @@ export const loadCreateAgentApi = async (): Promise<
   }
 
   try {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const rootMod = (await import(
       "automated-gameplay-transmitter"
     )) as AgentApiModule;

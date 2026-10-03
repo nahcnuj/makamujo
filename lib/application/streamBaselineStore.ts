@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { sanitizeProgramKey } from "../domain/comments/CommentRecorder";
+import { isRecord, readNumberField } from "../domain/json";
 
 export const STREAM_BASELINE_BASENAME = "stream-baseline.json";
 
@@ -40,10 +41,7 @@ const toNonNegativeInteger = (value: unknown): number | undefined => {
  * crashes startup.
  */
 export const parseStreamBaseline = (raw: unknown): StreamBaseline => {
-  const record =
-    raw && typeof raw === "object"
-      ? (raw as Record<string, unknown>)
-      : undefined;
+  const record = isRecord(raw) ? raw : undefined;
   return {
     previousStreamCommentCount:
       toNonNegativeInteger(record?.previousStreamCommentCount) ?? 0,
@@ -102,7 +100,7 @@ const readMaxRecordedCommentNo = (path: string): number => {
     for (const line of readFileSync(fd, "utf8").split("\n")) {
       const trimmed = line.trim();
       if (!trimmed) continue;
-      const no = (JSON.parse(trimmed) as { no?: unknown }).no;
+      const no = readNumberField(JSON.parse(trimmed), "no");
       if (typeof no === "number" && Number.isInteger(no) && no > maxCommentNo) {
         maxCommentNo = no;
       }
