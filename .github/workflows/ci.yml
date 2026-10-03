@@ -1,4 +1,4 @@
-﻿name: CI
+name: CI
 
 on:
   push:
@@ -24,7 +24,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Run ShellCheck
-        run: find bin -type f -name '*.sh' -print0 | xargs -0 shellcheck
+        # bin/ holds the deployed wrappers; scripts/ holds the CI helper scripts
+        # (e.g. the CD backstop decision logic).
+        run: find bin scripts -type f -name '*.sh' -print0 | xargs -0 shellcheck
 
   setup:
     runs-on: ubuntu-latest

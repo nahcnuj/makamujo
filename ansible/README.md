@@ -97,7 +97,41 @@ gh workflow run cd.yml --ref main
 
 push イベント経由では CI の push run を待ちます。**その run が存在しない場合は `cd.yml` 自身が `ci.yml` を `workflow_dispatch` で起動し**、その結果（`push` / `workflow_dispatch` どちらの run でもよい）を待ってから deploy します。CI の push run が無い状態で deploy が止まらないようにするためです（`ci.yml` も `workflow_dispatch` 対応）。
 
-なお `main` への push イベントが起きないマージ（token 実行の merge、GITHUB_TOKEN 由来のイベント）は push 自体が発生しないため、`on: push` のワークフロー（CI / CD / Pages）は走りません。CD / CI / Pages が確実に起動し続けるには、マージを **GitHub ネイティブ auto-merge** 経由で行う必要があります（`.github/workflows/auto-merge.yml` 経由。`AUTO_MERGE_TOKEN` には user token を設定します）。
+### CD backstop（auto-merge 経路以外のマージの救済）
+
+`main` への push イベントが起きないマージ（token 実行の merge、GITHUB_TOKEN / GitHub App token 由来のイベント）は push 自体が発生しないため、`on: push` のワークフロー（CI / CD / Pages）は **起動しません**。
+
+auto-merge 経路は #685 で解決済みです。`.github/workflows/auto-merge.yml` の
+reusable action が `GITHUB_TOKEN` でマージした**直後に `cd.yml` を明示 dispatch** します
+（`post-merge-dispatch: cd.yml`）。`workflow_dispatch` は再帰実行ガードの例外なので
+token でも発火します。PAT は不要です。
+
+一方で **auto-merge を通さないマージ**（ブラウザの Merge ボタン、`gh pr merge`、
+Dependabot の squash merge など）は依然として `cd.yml` を起動しません。
+前節の「`cd.yml` が `ci.yml` を起動する」救済も、`cd.yml` 自体が始まらないため
+効きません。この取り残しのデプロイが #677 の原因です。
+
+そこで `.github/workflows/cd-backstop.yml` が 15 分ごとに起動し、
+`scripts/cd-backstop.sh` で次の判定をします。
+
+1. `main` の HEAD を解決する（解決できなければ何もしない）
+2. その HEAD に Environment `prod` の deployment が既にあれば何もしない
+3. その HEAD の CD run が queued / waiting / in_progress / pending なら何もしない（重複 dispatch 防止）
+4. それ以外なら `gh workflow run cd.yml --ref main` で CD を起動する
+
+`schedule` はマージに使った token に関係なく必ず発火するため、CD の起動が
+マージ方式に依存しなくなります。通常の `on: push` 経路・auto-merge 経路では
+(2) か (3) により何もしないので、**15 分の遅延は発生しません**。
+
+判定そのものは I/O を持たない `scripts/decide-cd-backstop.sh` に切り出してあり、
+`tests/bin/cd-backstop.test.sh` が stub 化した `gh` で全分岐を検証します。
+デプロイ済みの判定は `prod` の deployment レコードをそのまま使っているので、
+状態を另行保存する必要はありません。
+
+なお CI も `on: push` 経由でしか起動しないため、auto-merge を通さないマージでは
+**backstop 経由のデプロイは走っても CI は走りません**。CI も必要な場合は
+マージを auto-merge 経由にしてください。デプロイを任意の revision へ手動で
+合わせたい場合は `gh workflow run cd.yml --ref main` を使ってください。
 
 必要な GitHub Secrets（Environment `prod` またはリポジトリ Secrets）:
 

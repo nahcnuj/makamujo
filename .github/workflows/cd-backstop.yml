@@ -1,0 +1,44 @@
+name: CD backstop
+
+# #677 / #683: `on: push` never fires when a PR is merged with GITHUB_TOKEN or
+# a GitHub App installation token, because GitHub suppresses workflow runs
+# triggered by those tokens to prevent recursion. Those merges leave main
+# undeployed, and `cd.yml`'s CI-dispatch fallback cannot recover because
+# `cd.yml` itself never starts.
+#
+# `schedule` is one of the events that GitHub always dispatches, regardless of
+# which token made the merge, so it is the only hook that can close the gap. The
+# script dispatches `cd.yml` for main's HEAD only when that commit has neither a
+# `prod` deployment nor a CD run in flight, so the ordinary `on: push` path
+# stays untouched.
+on:
+  schedule:
+    # Off the hour on purpose: the top of the hour is the busiest slot on
+    # GitHub's scheduler and runs get delayed there.
+    - cron: "7,22,37,52 * * * *"
+  # Lets the same decision run be reproduced by hand.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+  deployments: read
+
+concurrency:
+  group: cd-backstop
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Decide and dispatch CD for an undeployed main HEAD
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          bash scripts/cd-backstop.sh
