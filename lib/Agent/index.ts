@@ -15,6 +15,16 @@ export type MakaMujoOptions = {
   baseline?: StreamBaseline;
   /** Persist callback fired whenever the baseline changes. */
   onBaselineChange?: (baseline: StreamBaseline) => void;
+  /**
+   * Resolve the final comment count of the program that just ended, beyond the
+   * in-memory counter. Wired to the recorded comment files so a restart during
+   * a program cannot leave `previousStreamCommentCount` at 0 (#671).
+   */
+  resolvePreviousCommentCount?: (
+    endedProgramUrl: string | undefined,
+    inMemoryCount: number,
+    incomingProgramUrl: string | undefined,
+  ) => number;
 };
 
 /**
@@ -65,6 +75,7 @@ export class MakaMujo {
       {
         silenceThresholdMs: SILENCE_THRESHOLD_MS,
         onBaselineChange: options.onBaselineChange,
+        resolvePreviousCommentCount: options.resolvePreviousCommentCount,
       },
     );
     this.#gameplay = new GameplayApplicationService(

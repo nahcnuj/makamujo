@@ -1138,4 +1138,87 @@ describe("MakaMujo stream baseline persistence", () => {
       currentProgramLatestCommentNo: 0,
     });
   });
+
+  it("asks the injected resolver for the ended program's count", () => {
+    const notifier = jest.fn();
+    const resolvePreviousCommentCount = jest.fn(
+      (
+        _endedProgramUrl: string | undefined,
+        _inMemoryCount: number,
+        _incomingProgramUrl: string | undefined,
+      ) => 538,
+    );
+    const agent = new MakaMujo(stubTalkModel, stubTts, {
+      baseline: {
+        previousStreamCommentCount: 0,
+        currentProgramUrl: "https://example.com",
+        currentProgramLatestCommentNo: 0,
+      },
+      onBaselineChange: notifier,
+      resolvePreviousCommentCount,
+    });
+
+    agent.onAir({
+      ...niconamaLive(10),
+      data: {
+        ...niconamaLive(10).data,
+        url: "https://live.example/watch/lv2",
+      },
+    });
+
+    expect(resolvePreviousCommentCount).toHaveBeenCalledWith(
+      "https://example.com",
+      0,
+      "https://live.example/watch/lv2",
+    );
+    expect(agent.previousStreamCommentCount).toBe(538);
+    const last = notifier.mock.calls.at(-1)?.[0] as
+      | { previousStreamCommentCount: number }
+      | undefined;
+    expect(last?.previousStreamCommentCount).toBe(538);
+  });
+
+  it("keeps the known baseline when the resolver finds nothing", () => {
+    const agent = new MakaMujo(stubTalkModel, stubTts, {
+      baseline: {
+        previousStreamCommentCount: 538,
+        currentProgramUrl: "https://example.com",
+        currentProgramLatestCommentNo: 0,
+      },
+      resolvePreviousCommentCount: () => 0,
+    });
+
+    agent.onAir({
+      ...niconamaLive(10),
+      data: {
+        ...niconamaLive(10).data,
+        url: "https://live.example/watch/lv2",
+      },
+    });
+
+    expect(agent.previousStreamCommentCount).toBe(538);
+  });
+
+  it("ignores a non-positive or non-finite resolved count", () => {
+    for (const resolved of [-1, Number.NaN]) {
+      const agent = new MakaMujo(stubTalkModel, stubTts, {
+        baseline: {
+          previousStreamCommentCount: 538,
+          currentProgramUrl: "https://example.com",
+          currentProgramLatestCommentNo: 0,
+        },
+        resolvePreviousCommentCount: () => resolved,
+      });
+
+      agent.onAir({
+        ...niconamaLive(10),
+        data: {
+          ...niconamaLive(10).data,
+          url: "https://live.example/watch/lv2",
+        },
+      });
+
+      expect(agent.previousStreamCommentCount).toBe(538);
+    }
+  });
 });

@@ -14,7 +14,9 @@ import {
   loadStreamBaseline,
   loadStreamBaselineWithRecovery,
   parseStreamBaseline,
+  recordedCommentCount,
   recoverPreviousStreamCommentCount,
+  resolvePreviousStreamCommentCount,
   saveStreamBaseline,
 } from "./streamBaselineStore";
 
@@ -30,6 +32,31 @@ afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+const commentsDir = () => {
+  const dir = join(makeTempDir(), "comments");
+  mkdirSync(dir, { recursive: true });
+  return dir;
+};
+
+const programFileName = (programUrl: string) => {
+  // Mirrors sanitizeProgramKey in CommentRecorder.
+  return `${programUrl.replace(/[^a-zA-Z0-9._-]/g, "_")}.jsonl`;
+};
+
+const writeRecorded = (
+  dir: string,
+  fileName: string,
+  commentNos: number[],
+  mtimeMs: number,
+) => {
+  const lines = commentNos.map((no) =>
+    JSON.stringify({ who: "viewer", comment: "hello", at: "x", no }),
+  );
+  const path = join(dir, fileName);
+  writeFileSync(path, `${lines.join("\n")}\n`, "utf8");
+  utimesSync(path, new Date(mtimeMs), new Date(mtimeMs));
+};
 
 describe("parseStreamBaseline", () => {
   it("defaults to a fresh session with no active program", () => {
@@ -102,31 +129,6 @@ describe("loadStreamBaseline", () => {
 });
 
 describe("recoverPreviousStreamCommentCount", () => {
-  const commentsDir = () => {
-    const dir = join(makeTempDir(), "comments");
-    mkdirSync(dir, { recursive: true });
-    return dir;
-  };
-
-  const programFileName = (programUrl: string) => {
-    // Mirrors sanitizeProgramKey in CommentRecorder.
-    return `${programUrl.replace(/[^a-zA-Z0-9._-]/g, "_")}.jsonl`;
-  };
-
-  const writeRecorded = (
-    dir: string,
-    fileName: string,
-    commentNos: number[],
-    mtimeMs: number,
-  ) => {
-    const lines = commentNos.map((no) =>
-      JSON.stringify({ who: "viewer", comment: "hello", at: "x", no }),
-    );
-    const path = join(dir, fileName);
-    writeFileSync(path, `${lines.join("\n")}\n`, "utf8");
-    utimesSync(path, new Date(mtimeMs), new Date(mtimeMs));
-  };
-
   it("returns 0 when there is no comment record directory", () => {
     const dir = makeTempDir();
     expect(
@@ -237,5 +239,94 @@ describe("loadStreamBaselineWithRecovery", () => {
       currentProgramUrl: "https://live.example/watch/lv300",
       currentProgramLatestCommentNo: 5,
     });
+  });
+});
+
+describe("recordedCommentCount", () => {
+  it("returns 0 without a program URL", () => {
+    expect(recordedCommentCount(commentsDir(), undefined)).toBe(0);
+  });
+
+  it("returns 0 when the program left no recording", () => {
+    const dir = commentsDir();
+    expect(recordedCommentCount(dir, "https://live.example/watch/lv300")).toBe(
+      0,
+    );
+  });
+
+  it("returns the largest recorded comment no of that program", () => {
+    const dir = commentsDir();
+    const url = "https://live.example/watch/lv300";
+    writeRecorded(dir, programFileName(url), [1, 720, 5, 538], 1_000);
+    expect(recordedCommentCount(dir, url)).toBe(720);
+  });
+
+  it("returns 0 for a corrupt recording instead of throwing", () => {
+    const dir = commentsDir();
+    const url = "https://live.example/watch/lv300";
+    writeFileSync(join(dir, programFileName(url)), "{corrupt\n", "utf8");
+    expect(recordedCommentCount(dir, url)).toBe(0);
+  });
+
+  it("ignores non-integer and negative comment numbers", () => {
+    const dir = commentsDir();
+    const url = "https://live.example/watch/lv300";
+    writeFileSync(
+      join(dir, programFileName(url)),
+      `${JSON.stringify({ no: 1.5 })}\n${JSON.stringify({ no: -3 })}\n${JSON.stringify({ no: 9 })}\n`,
+      "utf8",
+    );
+    expect(recordedCommentCount(dir, url)).toBe(9);
+  });
+});
+
+describe("resolvePreviousStreamCommentCount", () => {
+  const ended = "https://live.example/watch/lv200";
+  const incoming = "https://live.example/watch/lv300";
+
+  it("recovers the ended program's count from disk when memory is empty", () => {
+    // The #671 case: a restart during the program left the in-memory counter
+    // at 0 even though the program was heavily commented.
+    const dir = commentsDir();
+    writeRecorded(dir, programFileName(ended), [1, 538], 2_000);
+    writeRecorded(dir, programFileName(incoming), [1, 1], 3_000);
+
+    expect(resolvePreviousStreamCommentCount(dir, ended, 0, incoming)).toBe(
+      538,
+    );
+  });
+
+  it("prefers the larger of memory and disk when the recording lags", () => {
+    const dir = commentsDir();
+    writeRecorded(dir, programFileName(ended), [1, 100], 2_000);
+
+    expect(resolvePreviousStreamCommentCount(dir, ended, 250, incoming)).toBe(
+      250,
+    );
+  });
+
+  it("falls back to the newest other program when the ended one is unknown", () => {
+    const dir = commentsDir();
+    writeRecorded(dir, programFileName(ended), [1, 720], 1_000);
+    writeRecorded(dir, programFileName(incoming), [1, 1], 3_000);
+
+    expect(resolvePreviousStreamCommentCount(dir, undefined, 0, incoming)).toBe(
+      720,
+    );
+  });
+
+  it("returns 0 when nothing at all is recorded", () => {
+    expect(
+      resolvePreviousStreamCommentCount(commentsDir(), undefined, 0, incoming),
+    ).toBe(0);
+  });
+
+  it("uses memory alone when the ended program recorded nothing", () => {
+    const dir = commentsDir();
+    writeRecorded(dir, programFileName(incoming), [1, 7], 3_000);
+
+    expect(resolvePreviousStreamCommentCount(dir, ended, 12, incoming)).toBe(
+      12,
+    );
   });
 });

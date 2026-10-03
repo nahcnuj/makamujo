@@ -30,6 +30,7 @@ import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
 import { startConsoleServer } from "./console/index";
 import {
   loadStreamBaselineWithRecovery,
+  resolvePreviousStreamCommentCount,
   STREAM_BASELINE_BASENAME,
   saveStreamBaseline,
 } from "./lib/application/streamBaselineStore";
@@ -167,6 +168,20 @@ const streamer = new MakaMujo(model, tts, {
   ),
   onBaselineChange: (baseline) =>
     saveStreamBaseline(streamBaselinePath, baseline),
+  // niconama switches straight from one live URL to the next, so the previous
+  // program's final count has to come from the recorded comments whenever the
+  // in-memory counter never saw them (restart mid-program). #671
+  resolvePreviousCommentCount: (
+    endedProgramUrl,
+    inMemoryCount,
+    incomingProgramUrl,
+  ) =>
+    resolvePreviousStreamCommentCount(
+      streamCommentRecordsDir,
+      endedProgramUrl,
+      inMemoryCount,
+      incomingProgramUrl,
+    ),
 });
 
 // Provide an in-memory fallback agent synchronously so the rest of the

@@ -11,6 +11,16 @@ import type { SpeechPort, StreamData } from "./types";
 export type StreamApplicationServiceOptions = {
   silenceThresholdMs: number;
   onBaselineChange?: (baseline: StreamBaseline) => void;
+  /**
+   * Resolve the final comment count of the program that just ended. Defaults
+   * to the in-memory counter alone; `MakaMujo` injects a resolver that also
+   * reads the recorded comments so a restart cannot lose the count (#671).
+   */
+  resolvePreviousCommentCount?: (
+    endedProgramUrl: string | undefined,
+    inMemoryCount: number,
+    incomingProgramUrl: string | undefined,
+  ) => number;
 };
 
 /**
@@ -22,6 +32,11 @@ export class StreamApplicationService {
   #speechQueue: SpeechQueue;
   #silenceThresholdMs: number;
   #onBaselineChange?: (baseline: StreamBaseline) => void;
+  #resolvePreviousCommentCount: (
+    endedProgramUrl: string | undefined,
+    inMemoryCount: number,
+    incomingProgramUrl: string | undefined,
+  ) => number;
 
   constructor(
     session: AgentSession,
@@ -34,6 +49,22 @@ export class StreamApplicationService {
     this.#speechQueue = speechQueue;
     this.#silenceThresholdMs = options.silenceThresholdMs;
     this.#onBaselineChange = options.onBaselineChange;
+    this.#resolvePreviousCommentCount =
+      options.resolvePreviousCommentCount ??
+      ((_endedProgramUrl, inMemoryCount) => inMemoryCount);
+  }
+
+  /**
+   * Final comment count of the program that just ended, resolved through the
+   * injected resolver (see {@link StreamApplicationServiceOptions}).
+   */
+  #resolveEndedProgramCommentCount(incomingProgramUrl: string): number {
+    const resolved = this.#resolvePreviousCommentCount(
+      this.#session.currentProgramUrl,
+      this.#session.currentProgramLatestCommentNo,
+      incomingProgramUrl,
+    );
+    return Number.isFinite(resolved) && resolved > 0 ? resolved : 0;
   }
 
   onAir(state: StreamData | unknown): void {
@@ -53,10 +84,13 @@ export class StreamApplicationService {
             // The previous live program ended without an observed offline
             // state (niconama switches between live URLs directly). Carry its
             // final comment count over so `previousStreamCommentCount` keeps
-            // advancing instead of staying 0.
-            if (this.#session.currentProgramLatestCommentNo > 0) {
-              this.#session.previousStreamCommentCount =
-                this.#session.currentProgramLatestCommentNo;
+            // advancing instead of staying 0. When nothing at all is known
+            // about the ended program, keep the count we already had rather
+            // than resetting the gauge to 0.
+            const endedCommentCount =
+              this.#resolveEndedProgramCommentCount(url);
+            if (endedCommentCount > 0) {
+              this.#session.previousStreamCommentCount = endedCommentCount;
             }
             this.#session.currentProgramUrl = url;
             this.#session.currentProgramLatestCommentNo = 0;

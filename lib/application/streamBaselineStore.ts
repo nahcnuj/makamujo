@@ -2,11 +2,11 @@ import {
   closeSync,
   type Dirent,
   existsSync,
-  fstatSync,
   mkdirSync,
   openSync,
   readdirSync,
   readFileSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
@@ -90,6 +90,51 @@ export const saveStreamBaseline = (
 const recordedProgramFileName = (programUrl: string): string =>
   `${sanitizeProgramKey(programUrl)}.jsonl`;
 
+/**
+ * Largest comment `no` in a JSONL recording, or 0 when the file is missing,
+ * unreadable or holds nothing usable.
+ */
+const readMaxRecordedCommentNo = (path: string): number => {
+  let fd: number | undefined;
+  try {
+    fd = openSync(path, "r");
+    let maxCommentNo = 0;
+    for (const line of readFileSync(fd, "utf8").split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const no = (JSON.parse(trimmed) as { no?: unknown }).no;
+      if (typeof no === "number" && Number.isInteger(no) && no > maxCommentNo) {
+        maxCommentNo = no;
+      }
+    }
+    return maxCommentNo;
+  } catch {
+    return 0;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd);
+      } catch {
+        // ignore close errors on a best-effort scan
+      }
+    }
+  }
+};
+
+/**
+ * Largest comment `no` recorded for one specific program, or 0 when that
+ * program left no recording behind.
+ */
+export const recordedCommentCount = (
+  commentsDir: string,
+  programUrl: string | undefined,
+): number => {
+  if (!programUrl) return 0;
+  return readMaxRecordedCommentNo(
+    join(commentsDir, recordedProgramFileName(programUrl)),
+  );
+};
+
 type RecordedProgramCount = {
   fileName: string;
   maxCommentNo: number;
@@ -109,35 +154,15 @@ const readRecordedProgramCounts = (
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
     const path = join(commentsDir, entry.name);
-    let fd: number | undefined;
+    let mtimeMs: number;
     try {
-      fd = openSync(path, "r");
-      const mtimeMs = fstatSync(fd).mtimeMs;
-      let maxCommentNo = 0;
-      for (const line of readFileSync(fd, "utf8").split("\n")) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        const no = (JSON.parse(trimmed) as { no?: unknown }).no;
-        if (
-          typeof no === "number" &&
-          Number.isInteger(no) &&
-          no > maxCommentNo
-        ) {
-          maxCommentNo = no;
-        }
-      }
-      if (maxCommentNo > 0) {
-        programs.push({ fileName: entry.name, maxCommentNo, mtimeMs });
-      }
+      mtimeMs = statSync(path).mtimeMs;
     } catch {
-    } finally {
-      if (fd !== undefined) {
-        try {
-          closeSync(fd);
-        } catch {
-          // ignore close errors on a best-effort scan
-        }
-      }
+      continue;
+    }
+    const maxCommentNo = readMaxRecordedCommentNo(path);
+    if (maxCommentNo > 0) {
+      programs.push({ fileName: entry.name, maxCommentNo, mtimeMs });
     }
   }
   return programs;
@@ -185,4 +210,33 @@ export const loadStreamBaselineWithRecovery = (
     return { ...baseline, previousStreamCommentCount: recovered };
   }
   return baseline;
+};
+
+/**
+ * Resolve the final comment count of the program that just ended, so that
+ * `previousStreamCommentCount` never persists as a half-filled 0 while a
+ * recording of the ended program is sitting right there (#671).
+ *
+ * The in-memory counter is only an optimisation: it is empty whenever the
+ * process restarted during the program, and the recording of that program
+ * outlives the process. So the recording is consulted too, and the larger of
+ * the two wins (the recording can lag behind the in-memory counter because
+ * writes are buffered).
+ *
+ * When neither source knows anything — a restart that also lost the URL — fall
+ * back to the most recently written program other than the incoming one, which
+ * is what {@link loadStreamBaselineWithRecovery} does at start-up.
+ */
+export const resolvePreviousStreamCommentCount = (
+  commentsDir: string,
+  endedProgramUrl: string | undefined,
+  inMemoryCount: number,
+  incomingProgramUrl: string | undefined,
+): number => {
+  const fromEndedProgram = Math.max(
+    inMemoryCount,
+    recordedCommentCount(commentsDir, endedProgramUrl),
+  );
+  if (fromEndedProgram > 0) return fromEndedProgram;
+  return recoverPreviousStreamCommentCount(commentsDir, incomingProgramUrl);
 };
