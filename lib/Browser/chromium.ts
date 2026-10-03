@@ -398,9 +398,7 @@ export const create = async (
     fillByRole: async (value, role, selector) => {
       await page
         .locator(selector)
-        // AGT types `role` as `string` while Playwright narrows it to its ARIA
-        // role union. The union is taken from Playwright's own signature so it
-        // cannot drift, and Playwright rejects an unknown role at runtime.
+        // AGT types `role` as `string` while Playwright narrows it to its ARIA role union; the union is taken from Playwright's own signature so it cannot drift, and Playwright rejects an unknown role at runtime.
         .getByRole(role as Parameters<Page["getByRole"]>[0])
         .fill(value);
     },
