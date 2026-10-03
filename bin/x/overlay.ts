@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 /**
  * Overlay browser for OBS "Comment" (XSHM left crop).
@@ -8,12 +7,15 @@ import { join } from "node:path";
  * Uses --app= and reuses that window (no second tabbed window).
  */
 import { chromium } from "playwright";
-import { removeTemporaryDirectory } from "../../lib/Browser/chromium";
+import {
+  createSweptTemporaryProfileDir,
+  releaseTemporaryProfileDir,
+} from "../../lib/Browser/tempProfile";
 
 process.env.DISPLAY = process.env.DISPLAY || ":10";
 
 const url = process.env.OVERLAY_URL || "http://127.0.0.1:7777/";
-const userDataDir = mkdtempSync(join(tmpdir(), "makamujo-overlay-"));
+const userDataDir = createSweptTemporaryProfileDir("makamujo-overlay-");
 mkdirSync(join(userDataDir, "Default"), { recursive: true });
 writeFileSync(
   join(userDataDir, "Default", "Preferences"),
@@ -31,24 +33,38 @@ console.log(
   url,
 );
 
-const context = await chromium.launchPersistentContext(userDataDir, {
-  headless: false,
-  ignoreDefaultArgs: ["--no-startup-window"],
-  locale: "ja-JP",
-  viewport: { width: 1280, height: 720 },
-  args: [
-    "--no-sandbox",
-    "--disable-dev-shm-usage",
-    "--disable-gpu",
-    "--window-size=1280,720",
-    "--window-position=0,40",
-    "--class=MakamujoComment",
-    "--disable-features=Translate,TranslateUI,TranslateScript,OptimizationHints",
-    "--disable-translate",
-    "--lang=ja",
-    `--app=${url}`,
-  ],
-});
+// A launch that never gets this far would strand the profile, and a crash
+// that skips these handlers is swept by the next start (#658).
+let released = false;
+const releaseProfileDir = () => {
+  if (released) return;
+  released = true;
+  releaseTemporaryProfileDir(userDataDir);
+};
+
+const context = await chromium
+  .launchPersistentContext(userDataDir, {
+    headless: false,
+    ignoreDefaultArgs: ["--no-startup-window"],
+    locale: "ja-JP",
+    viewport: { width: 1280, height: 720 },
+    args: [
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--window-size=1280,720",
+      "--window-position=0,40",
+      "--class=MakamujoComment",
+      "--disable-features=Translate,TranslateUI,TranslateScript,OptimizationHints",
+      "--disable-translate",
+      "--lang=ja",
+      `--app=${url}`,
+    ],
+  })
+  .catch((err) => {
+    releaseProfileDir();
+    throw err;
+  });
 
 // Reuse the app window; do NOT open a second tabbed page.
 let page = context.pages()[0];
@@ -60,8 +76,12 @@ if (!page) {
 }
 console.log("[INFO] overlay loaded", page.url());
 
-context.on("close", () => {
-  removeTemporaryDirectory(userDataDir);
-});
+context.on("close", releaseProfileDir);
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+  process.on(signal, () => {
+    releaseProfileDir();
+    process.exit(0);
+  });
+}
 context.on("close", () => process.exit(0));
 await new Promise(() => {});
