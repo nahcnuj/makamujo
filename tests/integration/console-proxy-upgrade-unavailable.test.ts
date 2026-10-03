@@ -32,6 +32,7 @@ test("returns 501 when websocket upgrade unavailable", async () => {
         ...process.env,
         NODE_ENV: "production",
         CONSOLE_LOOPBACK_ONLY: "1",
+        NICONAMA_WATCH_PAGE_DISABLED: "1",
         FORCE_DISABLE_WS_UPGRADE: "1",
         MAKAMUJO_IPC_PATH: makamujoIpcPath(`upgrade-unavailable-${port}`),
       },

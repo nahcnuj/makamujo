@@ -26,12 +26,14 @@ import {
   type WsLike,
 } from "./composition/broadcast";
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
+import { startWatchPageStatisticsSource } from "./composition/watchPageStatisticsSource";
 import { startConsoleServer } from "./console/index";
 import {
   loadStreamBaselineWithRecovery,
   STREAM_BASELINE_BASENAME,
   saveStreamBaseline,
 } from "./lib/application/streamBaselineStore";
+import type { DisplayedStatistics } from "./lib/domain/broadcasting/watchPageStatistics";
 import {
   assemblePublishedPayload,
   attachReplyTargetToPublished,
@@ -168,6 +170,8 @@ const streamer = new MakaMujo(model, tts, {
 // `automated-gameplay-transmitter` agent later and replace this fallback
 // when possible.
 let lastPublishedStreamState: unknown;
+// 未取得なら undefined のまま。`POST /api/meta` へフォールバックする。
+let watchPageDisplayedStatistics: DisplayedStatistics | undefined;
 let currentSpeechState = { speech: "", silent: false };
 // WebSocket clients connected to the broadcasting server.
 const wsClients = new Set<WsLike>();
@@ -191,6 +195,7 @@ const getCurrentStreamPayload = () => {
   return assemblePublishedPayload({
     lastPublished: lastPublishedStreamState,
     agentStreamState: agent.getStreamState?.(),
+    displayedStatistics: watchPageDisplayedStatistics,
     streamer: {
       canSpeak: streamer.canSpeak,
       currentGame: streamer.currentGame,
@@ -738,6 +743,16 @@ try {
 
 // Use a classic repeating timer (composition/idleSpeechTimer) for idle speech.
 startIdleSpeechTimer(streamer, 1_000);
+
+// 統計（視聴者数 / コメント数 / ニコニコ広告ポイント / ギフトポイント）を配信ページの
+// 描画済み画面から読む。配線は composition/watchPageStatisticsSource.ts にあり、
+// `NICONAMA_WATCH_PAGE_DISABLED=1` のときだけ `POST /api/meta` へフォールバックする。
+void startWatchPageStatisticsSource({
+  onStatistics: (statistics) => {
+    watchPageDisplayedStatistics = statistics;
+    broadcastCurrentPayloadLocal("onWatchPageStatistics");
+  },
+});
 
 /**
  * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}

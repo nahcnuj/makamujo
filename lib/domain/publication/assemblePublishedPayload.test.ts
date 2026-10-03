@@ -116,6 +116,114 @@ describe("assemblePublishedPayload", () => {
     });
     expect(payload.speechHistory).toHaveLength(20);
   });
+
+  it("lets watch-page statistics win over POST /api/meta niconama", () => {
+    const payload = assemblePublishedPayload({
+      lastPublished: {
+        type: "niconama",
+        data: {
+          isLive: true,
+          title: "from-wancomme",
+          startTime: 1,
+          total: 1,
+          points: { gift: 0, ad: 0 },
+          url: "https://onecomme.example",
+        },
+      },
+      agentStreamState: null,
+      displayedStatistics: {
+        viewers: 42,
+        comments: 99,
+        nicoadPoints: 2,
+        giftPoints: 3,
+      },
+      streamer,
+      speechState: {},
+      history: [],
+    });
+
+    // ページから取らない項目（タイトル / URL / 開始時刻 / 放送状態）は
+    // 従来どおり POST /api/meta の値が残る。
+    expect(payload.niconama).toEqual({
+      type: "live",
+      meta: {
+        title: "from-wancomme",
+        url: "https://onecomme.example",
+        start: 1,
+        total: { listeners: 42, gift: 3, ad: 2 },
+      },
+    });
+    expect(payload.commentCount).toBe(99);
+  });
+
+  it("publishes no value for watch-page metrics the page shows as a placeholder", () => {
+    const payload = assemblePublishedPayload({
+      lastPublished: {
+        type: "niconama",
+        data: {
+          isLive: true,
+          title: "from-wancomme",
+          startTime: 1,
+          total: 1,
+          points: { gift: 7, ad: 8 },
+          url: "https://onecomme.example",
+        },
+      },
+      agentStreamState: null,
+      displayedStatistics: {
+        viewers: 42,
+        comments: undefined,
+        nicoadPoints: undefined,
+        giftPoints: undefined,
+      },
+      streamer,
+      speechState: {},
+      history: [],
+    });
+
+    expect(payload.niconama).toEqual({
+      type: "live",
+      meta: {
+        title: "from-wancomme",
+        url: "https://onecomme.example",
+        start: 1,
+        total: { listeners: 42, gift: undefined, ad: undefined },
+      },
+    });
+    expect(payload.commentCount).toBeUndefined();
+  });
+
+  it("falls back to POST /api/meta when no watch-page statistics arrived", () => {
+    const payload = assemblePublishedPayload({
+      lastPublished: {
+        type: "niconama",
+        data: {
+          isLive: true,
+          title: "from-wancomme",
+          startTime: 1,
+          total: 1,
+          points: { gift: 0, ad: 0 },
+          url: "https://onecomme.example",
+        },
+      },
+      agentStreamState: null,
+      displayedStatistics: undefined,
+      streamer,
+      speechState: {},
+      history: [],
+    });
+
+    expect(payload.niconama).toEqual({
+      type: "live",
+      meta: {
+        title: "from-wancomme",
+        url: "https://onecomme.example",
+        start: 1,
+        total: { listeners: 1, gift: 0, ad: 0 },
+      },
+    });
+    expect(payload.commentCount).toBe(99);
+  });
 });
 
 describe("extractMetaPostBody", () => {

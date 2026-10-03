@@ -1,4 +1,5 @@
 import { normalizePublishedStreamState } from "../../streamState";
+import type { DisplayedStatistics } from "../broadcasting/watchPageStatistics";
 import type {
   PublishedStreamPayload,
   StreamerPublicationSnapshot,
@@ -9,10 +10,49 @@ export const GENERATED_SPEECH_HISTORY_SSE_SIZE = 20;
 export type AssemblePublishedPayloadInput = {
   lastPublished: unknown;
   agentStreamState: unknown;
+  /**
+   * 配信ページの統計行から読んだ値。与えられた場合 `niconama` の
+   * 視聴者数・ニコニコ広告ポイント・ギフトポイントと `commentCount` は
+   * ここを採る（`lastPublished` = わんcommeの POST /api/meta より優先）。
+   * ページに値が無い項目は `undefined` のままになる。
+   */
+  displayedStatistics?: DisplayedStatistics;
   streamer: StreamerPublicationSnapshot;
   speechState: unknown;
   history: unknown[];
   historySseSize?: number;
+};
+
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value !== null && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : undefined;
+
+/**
+ * 配信ページの統計行の値を公開ペイロードの `niconama` へ上書きする。
+ * タイトル / URL / 開始時刻 / 放送状態はページから取らないので触らない。
+ */
+export const applyDisplayedStatistics = (
+  niconama: unknown,
+  statistics: DisplayedStatistics,
+): unknown => {
+  const base = asRecord(niconama);
+  if (base === undefined) {
+    return niconama;
+  }
+  const meta = asRecord(base.meta);
+  return {
+    ...base,
+    meta: {
+      ...meta,
+      total: {
+        ...asRecord(meta?.total),
+        listeners: statistics.viewers,
+        gift: statistics.giftPoints,
+        ad: statistics.nicoadPoints,
+      },
+    },
+  };
 };
 
 /**
@@ -58,7 +98,13 @@ export const assemblePublishedPayload = (
     : input.history;
 
   return {
-    niconama: base.niconama ?? {},
+    niconama:
+      input.displayedStatistics === undefined
+        ? (base.niconama ?? {})
+        : applyDisplayedStatistics(
+            base.niconama ?? {},
+            input.displayedStatistics,
+          ),
     canSpeak: (base.canSpeak as boolean | undefined) ?? input.streamer.canSpeak,
     currentGame: base.currentGame ?? input.streamer.currentGame ?? null,
     nGram:
@@ -71,7 +117,10 @@ export const assemblePublishedPayload = (
     replyTargetComment:
       replyTargetComment as PublishedStreamPayload["replyTargetComment"],
     commentCount:
-      (base.commentCount as number | undefined) ?? input.streamer.commentCount,
+      input.displayedStatistics === undefined
+        ? ((base.commentCount as number | undefined) ??
+          input.streamer.commentCount)
+        : input.displayedStatistics.comments,
     previousStreamCommentCount:
       (base.previousStreamCommentCount as number | undefined) ??
       input.streamer.previousStreamCommentCount,
