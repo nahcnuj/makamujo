@@ -14,6 +14,7 @@ import { parseArgs } from "node:util";
 import { serve } from "bun";
 import { Hono } from "hono";
 import {
+  createAgentHostView,
   createFallbackAgent,
   type FallbackAgent,
   persistTalkModel,
@@ -28,6 +29,7 @@ import {
 } from "./composition/broadcast";
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
 import { startConsoleServer } from "./console/index";
+import { startModelHotReload } from "./lib/application/modelHotReload";
 import {
   loadStreamBaselineWithRecovery,
   resolvePreviousStreamCommentCount,
@@ -132,14 +134,16 @@ const {
 
 // Rely on Bun's `--hot` and Bun.build watch mode in development.
 
-const model = ((file) => {
+const loadModelFromFile = (file: string): MarkovChainModel => {
   try {
     return MarkovChainModel.fromFile(file);
   } catch (_err) {
     console.warn("failed to open the file", file);
     return new MarkovChainModel();
   }
-})(modelFile);
+};
+
+const model = loadModelFromFile(modelFile);
 
 const tts =
   process.platform !== "win32"
@@ -161,28 +165,36 @@ const streamBaselinePath = resolve(
 );
 const streamCommentRecordsDir = resolve(process.cwd(), "var", "comments");
 
-const streamer = new MakaMujo(model, tts, {
-  baseline: loadStreamBaselineWithRecovery(
-    streamBaselinePath,
-    streamCommentRecordsDir,
-  ),
-  onBaselineChange: (baseline) =>
-    saveStreamBaseline(streamBaselinePath, baseline),
-  // niconama switches straight from one live URL to the next, so the previous
-  // program's final count has to come from the recorded comments whenever the
-  // in-memory counter never saw them (restart mid-program). #671
-  resolvePreviousCommentCount: (
-    endedProgramUrl,
-    inMemoryCount,
-    incomingProgramUrl,
-  ) =>
-    resolvePreviousStreamCommentCount(
+const createStreamer = (talkModel: MarkovChainModel): MakaMujo =>
+  new MakaMujo(talkModel, tts, {
+    baseline: loadStreamBaselineWithRecovery(
+      streamBaselinePath,
       streamCommentRecordsDir,
+    ),
+    onBaselineChange: (baseline) =>
+      saveStreamBaseline(streamBaselinePath, baseline),
+    // niconama switches straight from one live URL to the next, so the previous
+    // program's final count has to come from the recorded comments whenever the
+    // in-memory counter never saw them (restart mid-program). #671
+    resolvePreviousCommentCount: (
       endedProgramUrl,
       inMemoryCount,
       incomingProgramUrl,
-    ),
-});
+    ) =>
+      resolvePreviousStreamCommentCount(
+        streamCommentRecordsDir,
+        endedProgramUrl,
+        inMemoryCount,
+        incomingProgramUrl,
+      ),
+  });
+
+/**
+ * The live streamer. Reassigned when the model file is rewritten externally
+ * (#639); every consumer below therefore reads it through this binding, and
+ * long-lived consumers get {@link streamerHostView} instead of the instance.
+ */
+let streamer: MakaMujo = createStreamer(model);
 
 // Provide an in-memory fallback agent synchronously so the rest of the
 // server initialization can reference `agent` without awaiting a dynamic
@@ -259,10 +271,15 @@ let agent: FallbackAgent = createFallbackAgent(
   },
 );
 
+// A stable view of the streamer for long-lived consumers. Rebuilding the
+// streamer must not recreate the AGT agent, because that would tear down the OBS
+// overlay window; the view resolves the live instance on every access instead.
+const streamerHostView = createAgentHostView(() => streamer);
+
 // Attempt to dynamically load the external agent API. This avoids module
 // evaluation side-effects at import time (such as binding to IPC paths)
 // which can cause transient failures in CI and local test runs.
-void tryCreateExternalAgentApi(streamer).then((external) => {
+void tryCreateExternalAgentApi(streamerHostView).then((external) => {
   if (external !== undefined) {
     agent = external;
   }
@@ -277,52 +294,78 @@ speechHistoryRoute.setSpeechHistoryRef(generatedSpeechHistory);
 
 let clearSpeechTimer: ReturnType<typeof setTimeout> | undefined;
 
-streamer.onSpeech(async (event) => {
-  const speechText = normalizeSpeechText(event) ?? "";
-  const traceNodes = readStringArrayField(event, "nodes");
-  const nGram = readNumberField(event, "nGram") ?? streamer.currentNGramSize;
-  const nGramRaw =
-    readNumberField(event, "nGramRaw") ?? streamer.currentNGramSizeRaw;
-  generatedSpeechHistorySequence += 1;
-  generatedSpeechHistory.unshift({
-    id: `speech-${generatedSpeechHistorySequence}`,
-    speech: speechText,
-    nGram,
-    nGramRaw,
-    nodes: traceNodes,
-  });
-  if (generatedSpeechHistory.length > GENERATED_SPEECH_HISTORY_BUFFER_SIZE) {
-    generatedSpeechHistory.length = GENERATED_SPEECH_HISTORY_BUFFER_SIZE;
-  }
-  if (clearSpeechTimer) {
-    clearTimeout(clearSpeechTimer);
-    clearSpeechTimer = undefined;
-  }
-  agent.setSpeech(speechText);
-  // Notify console clients immediately when a new utterance starts.
-  broadcastCurrentPayloadLocal("onSpeech");
-});
-
-streamer.onSpeechComplete(async () => {
-  if (clearSpeechTimer) {
-    clearTimeout(clearSpeechTimer);
-  }
-  // Notify console clients that the utterance has finished.
-  broadcastCurrentPayloadLocal("onSpeechComplete");
-  clearSpeechTimer = setTimeout(() => {
-    const speechState = agent.getSpeech();
-    if (!speechState.silent) {
-      agent.setSpeech("");
+/**
+ * Re-attach the speech/state listeners to `target`.
+ *
+ * Listeners live on the streamer instance, so a rebuild (#639) drops them; this
+ * function is the single place that knows the wiring and is re-run for the new
+ * instance.
+ */
+const attachStreamerListeners = (target: MakaMujo): void => {
+  target.onSpeech(async (event) => {
+    const speechText = normalizeSpeechText(event) ?? "";
+    const traceNodes = readStringArrayField(event, "nodes");
+    const nGram = readNumberField(event, "nGram") ?? streamer.currentNGramSize;
+    const nGramRaw =
+      readNumberField(event, "nGramRaw") ?? streamer.currentNGramSizeRaw;
+    generatedSpeechHistorySequence += 1;
+    generatedSpeechHistory.unshift({
+      id: `speech-${generatedSpeechHistorySequence}`,
+      speech: speechText,
+      nGram,
+      nGramRaw,
+      nodes: traceNodes,
+    });
+    if (generatedSpeechHistory.length > GENERATED_SPEECH_HISTORY_BUFFER_SIZE) {
+      generatedSpeechHistory.length = GENERATED_SPEECH_HISTORY_BUFFER_SIZE;
     }
-    clearSpeechTimer = undefined;
-    // Notify console clients that the displayed speech has been cleared.
-    broadcastCurrentPayloadLocal("onSpeechClear");
-  }, 1000);
-});
+    if (clearSpeechTimer) {
+      clearTimeout(clearSpeechTimer);
+      clearSpeechTimer = undefined;
+    }
+    agent.setSpeech(speechText);
+    // Notify console clients immediately when a new utterance starts.
+    broadcastCurrentPayloadLocal("onSpeech");
+  });
 
-// Notify console clients when game state changes via browser IPC.
-streamer.onGameStateChange(() => {
-  broadcastCurrentPayloadLocal("onGameStateChange");
+  target.onSpeechComplete(async () => {
+    if (clearSpeechTimer) {
+      clearTimeout(clearSpeechTimer);
+    }
+    // Notify console clients that the utterance has finished.
+    broadcastCurrentPayloadLocal("onSpeechComplete");
+    clearSpeechTimer = setTimeout(() => {
+      const speechState = agent.getSpeech();
+      if (!speechState.silent) {
+        agent.setSpeech("");
+      }
+      clearSpeechTimer = undefined;
+      // Notify console clients that the displayed speech has been cleared.
+      broadcastCurrentPayloadLocal("onSpeechClear");
+    }, 1000);
+  });
+
+  // Notify console clients when game state changes via browser IPC.
+  target.onGameStateChange(() => {
+    broadcastCurrentPayloadLocal("onGameStateChange");
+  });
+};
+
+attachStreamerListeners(streamer);
+
+// Reload the model file when it is rewritten outside this process (#639).
+//
+// The server persists the model after every comment batch, so its own writes
+// have to be reported to the watcher (see the PUT / handler) or the agent would
+// be rebuilt on every single comment.
+const modelWatcher = startModelHotReload({
+  modelPath: resolve(process.cwd(), modelFile),
+  onReload: () => {
+    const reloaded = loadModelFromFile(modelFile);
+    streamer = createStreamer(reloaded);
+    attachStreamerListeners(streamer);
+    console.info("[INFO] agent rebuilt with the reloaded model");
+  },
 });
 
 // Defer starting the stream playback until after the HTTP servers are up.
@@ -607,7 +650,9 @@ const mainApp = new Hono()
     agent.postComments(comments);
     broadcastCurrentPayloadLocal("onComment");
 
-    persistTalkModel(modelFile, () => streamer.talkModel.toJSON());
+    modelWatcher.noteSelfWrite(
+      persistTalkModel(modelFile, () => streamer.talkModel.toJSON()),
+    );
 
     return Response.json({});
   })
@@ -739,7 +784,17 @@ try {
 }
 
 // Use a classic repeating timer (composition/idleSpeechTimer) for idle speech.
-startIdleSpeechTimer(streamer, 1_000);
+// The view is passed rather than the instance so the timer survives a rebuild
+// without having to be torn down and restarted mid-broadcast (#639).
+startIdleSpeechTimer(
+  {
+    get speechable() {
+      return streamer.speechable;
+    },
+    speech: () => streamer.speech(),
+  },
+  1_000,
+);
 
 /**
  * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}
@@ -762,6 +817,12 @@ function exitHandler(
       if (consoleServer) {
         consoleServer.stop(options.exit);
       }
+    } catch {
+      /* ignore */
+    }
+    // Stop the model watcher so a shutdown is not held open by its interval.
+    try {
+      modelWatcher.stop();
     } catch {
       /* ignore */
     }
