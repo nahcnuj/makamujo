@@ -140,6 +140,25 @@ const browser = await create(executablePath, {
   height: 720, // match stream crop; scale via page zoom
 });
 
+// `exit` does not fire on SIGINT/SIGTERM, and the Aw, Snap! watchdog below
+// exits without closing the browser, so drop the throwaway profile on those
+// paths too. Whatever survives SIGKILL is swept on the next start (#658).
+const closeBrowserGracefully = async () => {
+  try {
+    await browser.close();
+  } catch (err) {
+    console.warn(
+      "[WARN] failed to close browser before exit:",
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+};
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+  process.on(signal, () => {
+    void closeBrowserGracefully().finally(() => process.exit(0));
+  });
+}
+
 // Aw, Snap! 監視
 const awSnapTimer = setInterval(() => {
   void (async () => {
@@ -154,6 +173,7 @@ const awSnapTimer = setInterval(() => {
           err,
         );
         clearInterval(awSnapTimer);
+        await closeBrowserGracefully();
         process.exit(1);
       }
     }
@@ -240,7 +260,7 @@ try {
   process.exitCode = 1;
 } finally {
   clearInterval(awSnapTimer);
-  await browser.close();
+  await closeBrowserGracefully();
   send({ name: "closed" });
 }
 
