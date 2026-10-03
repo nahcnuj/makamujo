@@ -2,10 +2,10 @@ import { describe, expect, it } from "bun:test";
 import {
   isRecord,
   readNestedString,
-  readNumberField,
-  readStringArrayField,
-  readStringField,
-} from "./json";
+  readNumber,
+  readString,
+  readStrings,
+} from "./untrusted";
 
 describe("isRecord", () => {
   it("accepts objects and arrays", () => {
@@ -22,68 +22,64 @@ describe("isRecord", () => {
   });
 });
 
-describe("readNumberField", () => {
+describe("readNumber", () => {
   it("returns the field when it is a number", () => {
-    expect(readNumberField({ no: 42 }, "no")).toBe(42);
-    expect(readNumberField({ no: 0 }, "no")).toBe(0);
-    expect(readNumberField({ no: -1 }, "no")).toBe(-1);
+    expect(readNumber({ no: 42 }, "no")).toBe(42);
+    expect(readNumber({ no: 0 }, "no")).toBe(0);
+    expect(readNumber({ no: -1 }, "no")).toBe(-1);
   });
 
   it("returns undefined for a missing or non-numeric field", () => {
-    expect(readNumberField({}, "no")).toBeUndefined();
-    expect(readNumberField({ no: "42" }, "no")).toBeUndefined();
-    expect(readNumberField({ no: null }, "no")).toBeUndefined();
+    expect(readNumber({}, "no")).toBeUndefined();
+    expect(readNumber({ no: "42" }, "no")).toBeUndefined();
+    expect(readNumber({ no: null }, "no")).toBeUndefined();
   });
 
   it("returns undefined when the value is not a record", () => {
-    expect(readNumberField(null, "no")).toBeUndefined();
-    expect(readNumberField("x", "no")).toBeUndefined();
+    expect(readNumber(null, "no")).toBeUndefined();
+    expect(readNumber("x", "no")).toBeUndefined();
   });
 
   it("tolerates a prototype-less object", () => {
-    expect(readNumberField(Object.create(null), "no")).toBeUndefined();
+    expect(readNumber(Object.create(null), "no")).toBeUndefined();
   });
 });
 
-describe("readStringField", () => {
+describe("readString", () => {
   it("returns the field when it is a string", () => {
-    expect(readStringField({ text: "hi" }, "text")).toBe("hi");
-    expect(readStringField({ text: "" }, "text")).toBe("");
+    expect(readString({ text: "hi" }, "text")).toBe("hi");
+    expect(readString({ text: "" }, "text")).toBe("");
   });
 
   it("returns undefined for a missing or non-string field", () => {
-    expect(readStringField({}, "text")).toBeUndefined();
-    expect(readStringField({ text: 1 }, "text")).toBeUndefined();
-    expect(readStringField({ text: null }, "text")).toBeUndefined();
+    expect(readString({}, "text")).toBeUndefined();
+    expect(readString({ text: 1 }, "text")).toBeUndefined();
+    expect(readString({ text: null }, "text")).toBeUndefined();
   });
 
   it("returns undefined when the value is not a record", () => {
-    expect(readStringField(null, "text")).toBeUndefined();
+    expect(readString(null, "text")).toBeUndefined();
   });
 });
 
-describe("readStringArrayField", () => {
+describe("readStrings", () => {
   it("returns the field when it is an array of strings", () => {
-    expect(readStringArrayField({ nodes: ["a", "b"] }, "nodes")).toEqual([
-      "a",
-      "b",
-    ]);
-    expect(readStringArrayField({ nodes: [] }, "nodes")).toEqual([]);
+    expect(readStrings({ nodes: ["a", "b"] }, "nodes")).toEqual(["a", "b"]);
+    expect(readStrings({ nodes: [] }, "nodes")).toEqual([]);
   });
 
   it("drops entries that are not strings", () => {
-    expect(
-      readStringArrayField({ nodes: ["a", 1, null, "b"] }, "nodes"),
-    ).toEqual(["a", "b"]);
+    expect(readStrings({ nodes: ["a", 1, null, "b"] }, "nodes")).toEqual([
+      "a",
+      "b",
+    ]);
   });
 
   it("returns undefined for a missing or non-array field", () => {
-    expect(readStringArrayField({}, "nodes")).toBeUndefined();
-    expect(readStringArrayField({ nodes: "x" }, "nodes")).toBeUndefined();
-    expect(
-      readStringArrayField({ nodes: { length: 0 } }, "nodes"),
-    ).toBeUndefined();
-    expect(readStringArrayField(null, "nodes")).toBeUndefined();
+    expect(readStrings({}, "nodes")).toBeUndefined();
+    expect(readStrings({ nodes: "x" }, "nodes")).toBeUndefined();
+    expect(readStrings({ nodes: { length: 0 } }, "nodes")).toBeUndefined();
+    expect(readStrings(null, "nodes")).toBeUndefined();
   });
 });
 

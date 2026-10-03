@@ -34,16 +34,12 @@ import {
   saveStreamBaseline,
 } from "./lib/application/streamBaselineStore";
 import {
-  readNumberField,
-  readStringArrayField,
-  readStringField,
-} from "./lib/domain/json";
-import {
   assemblePublishedPayload,
   attachReplyTargetToPublished,
   extractMetaPostBody,
   GENERATED_SPEECH_HISTORY_SSE_SIZE,
 } from "./lib/domain/publication/assemblePublishedPayload";
+import { readNumber, readString, readStrings } from "./lib/domain/untrusted";
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import { normalizePublishedStreamState } from "./lib/streamState";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
@@ -221,12 +217,12 @@ const normalizeSpeechText = (speech: unknown): string | undefined => {
     return undefined;
   }
 
-  const text = readStringField(speech, "text");
+  const text = readString(speech, "text");
   if (text !== undefined) {
     return text;
   }
 
-  return readStringField(speech, "speech");
+  return readString(speech, "speech");
 };
 
 let agent: FallbackAgent = createFallbackAgent(
@@ -264,10 +260,10 @@ let clearSpeechTimer: ReturnType<typeof setTimeout> | undefined;
 
 streamer.onSpeech(async (event) => {
   const speechText = normalizeSpeechText(event) ?? "";
-  const traceNodes = readStringArrayField(event, "nodes");
-  const nGram = readNumberField(event, "nGram") ?? streamer.currentNGramSize;
+  const traceNodes = readStrings(event, "nodes");
+  const nGram = readNumber(event, "nGram") ?? streamer.currentNGramSize;
   const nGramRaw =
-    readNumberField(event, "nGramRaw") ?? streamer.currentNGramSizeRaw;
+    readNumber(event, "nGramRaw") ?? streamer.currentNGramSizeRaw;
   generatedSpeechHistorySequence += 1;
   generatedSpeechHistory.unshift({
     id: `speech-${generatedSpeechHistorySequence}`,

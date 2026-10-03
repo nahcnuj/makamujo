@@ -1,4 +1,4 @@
-import { isRecord } from "../../../../domain/json";
+import { isRecord } from "../../../../domain/untrusted";
 import type { Statistics } from "./State";
 
 export type ElementLike = {
