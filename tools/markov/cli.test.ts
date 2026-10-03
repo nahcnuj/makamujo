@@ -455,3 +455,94 @@ describe("markov cli unlearn", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 });
+
+describe("markov cli per-command options", () => {
+  const runCli = async (args: string[]) => {
+    const proc = Bun.spawn(["bun", "run", "tools/markov/cli.ts", ...args], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    const code = await proc.exited;
+    return { stdout, stderr, code };
+  };
+
+  it("rejects options that belong to a different command", async () => {
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(modelPath, JSON.stringify({ model: {}, corpus: [] }));
+
+    const { stderr, code } = await runCli([
+      "transitions",
+      modelPath,
+      "word",
+      "--tail",
+      "3",
+    ]);
+    expect(code).toBe(1);
+    expect(stderr).toContain("--tail");
+    expect(stderr).toContain(
+      "bun run tools/markov/cli.ts transitions <modelPath> <word> [-d DELIM]",
+    );
+
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("rejects --sort for a command other than tokens", async () => {
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(modelPath, JSON.stringify({ model: {}, corpus: [] }));
+
+    const { stderr, code } = await runCli([
+      "search",
+      modelPath,
+      "query",
+      "--sort",
+      "token",
+    ]);
+    expect(code).toBe(1);
+    expect(stderr).toContain("--sort");
+
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("still accepts --tail for corpus", async () => {
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(
+      modelPath,
+      JSON.stringify({ model: {}, corpus: ["古い。", "新しい。"] }),
+    );
+
+    const { stdout, code } = await runCli(["corpus", modelPath, "--tail", "1"]);
+    expect(code).toBe(0);
+    expect(stdout.trim()).toBe("1\t新しい。");
+
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("--help exits 0 and lists every command", async () => {
+    const { stderr, code } = await runCli(["--help"]);
+    expect(code).toBe(0);
+    for (const command of [
+      "corpus",
+      "unlearn",
+      "decrement-phrase",
+      "tokens",
+      "search",
+      "transitions",
+    ]) {
+      expect(stderr).toContain(`bun run tools/markov/cli.ts ${command}`);
+    }
+  });
+
+  it("no command exits 1", async () => {
+    const { stderr, code } = await runCli([]);
+    expect(code).toBe(1);
+    expect(stderr).toContain("Usage:");
+  });
+
+  it("unknown command exits 1", async () => {
+    const { stderr, code } = await runCli(["bogus"]);
+    expect(code).toBe(1);
+    expect(stderr).toContain("unknown command: bogus");
+  });
+});
