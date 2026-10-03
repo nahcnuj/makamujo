@@ -6,6 +6,10 @@
 
 import { writeFileSync } from "node:fs";
 import type { AgentComment } from "automated-gameplay-transmitter";
+import {
+  type ModelFileStamp,
+  readModelFileStamp,
+} from "../lib/application/modelHotReload";
 
 export type SpeechState = { speech: string; silent: boolean };
 
@@ -43,6 +47,36 @@ export const isAgentLike = (value: unknown): value is FallbackAgent => {
     "postComments",
   ].every((method) => typeof candidate[method] === "function");
 };
+
+/**
+ * A stable `AgentLikeHost` that resolves the live streamer on every access.
+ *
+ * The AGT agent (and anything else holding a long-lived reference, such as the
+ * idle-speech timer) must survive the streamer being rebuilt when the model file
+ * changes (#639): recreating the AGT agent would tear down the OBS overlay
+ * window, so instead the reference is kept and pointed at the new instance.
+ */
+export const createAgentHostView = <T extends AgentLikeHost>(
+  resolve: () => T,
+): AgentLikeHost => ({
+  get canSpeak() {
+    return resolve().canSpeak;
+  },
+  get currentGame() {
+    return resolve().currentGame;
+  },
+  get streamState() {
+    return resolve().streamState;
+  },
+  onAir: (state: unknown) => {
+    resolve().onAir(state);
+  },
+  // Derived rather than spelled out: AgentLikeHost.listen is contravariant, so
+  // restating the parameter here would need `any` (a lint error).
+  listen: (...args: Parameters<AgentLikeHost["listen"]>) => {
+    resolve().listen(...args);
+  },
+});
 
 type CreateAgentApiFn = (
   agent: AgentLikeHost,
@@ -163,15 +197,22 @@ export const tryCreateExternalAgentApi = async (
   }
 };
 
-/** Persist talk model JSON (PUT / model save). */
+/**
+ * Persist talk model JSON (PUT / model save).
+ *
+ * Returns the stamp of the written file so the model hot-reload watcher can
+ * recognise this write as its own and not rebuild the agent (#639).
+ */
 export const persistTalkModel = (
   modelFile: string | undefined,
   toJSON: () => string,
-): void => {
-  if (!modelFile) return;
+): ModelFileStamp | undefined => {
+  if (!modelFile) return undefined;
   try {
     writeFileSync(modelFile, toJSON());
   } catch (err) {
     console.warn("[WARN]", "failed to write model", modelFile, err);
+    return undefined;
   }
+  return readModelFileStamp(modelFile);
 };
