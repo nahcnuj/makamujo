@@ -1,10 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { setTimeout } from "node:timers/promises";
@@ -13,6 +7,11 @@ import type { Page, ViewportSize } from "playwright";
 import playwright from "playwright";
 import { chromium as $_ } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import {
+  createSweptTemporaryProfileDir,
+  createTemporaryProfileDir,
+  releaseTemporaryProfileDir,
+} from "./tempProfile";
 
 export const chromium = $_.use(StealthPlugin());
 
@@ -133,15 +132,7 @@ export function cleanupChromiumLockFiles(userDataDir: string): void {
  * Never throws, so cleanup failures cannot break the browser lifecycle.
  */
 export function removeTemporaryDirectory(dir: string): void {
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch (err) {
-    console.warn(
-      "[WARN] failed to remove temporary directory",
-      dir,
-      err instanceof Error ? err.message : String(err),
-    );
-  }
+  releaseTemporaryProfileDir(dir);
 }
 
 const isTransientLaunchError = (message: string): boolean =>
@@ -182,7 +173,7 @@ export async function launchPersistentContext(
 
       if (/ProcessSingleton|SingletonLock/i.test(message)) {
         try {
-          const tmpDir = mkdtempSync(join(tmpdir(), "playwright-"));
+          const tmpDir = createTemporaryProfileDir("makamujo-browser-");
           cleanupChromiumLockFiles(tmpDir);
           console.warn(
             "[WARN] userDataDir locked, retrying with temp dir",
@@ -232,7 +223,10 @@ export const create = async (
     process.env.GAME_HOME_URL?.trim() ||
     "https://www.nahcnuj.work/vigilant-fiesta/";
 
-  const userDataDir = mkdtempSync(join(tmpdir(), "makamujo-game-"));
+  // Sweep profiles abandoned by earlier runs before creating a new one: the
+  // temp dir on the streaming host is small and `bin/x/browser.ts` restarts
+  // this session in a loop (#658).
+  const userDataDir = createSweptTemporaryProfileDir("makamujo-game-");
   mkdirSync(join(userDataDir, "Default"), { recursive: true });
   writeFileSync(
     join(userDataDir, "Default", "Preferences"),
@@ -277,7 +271,13 @@ export const create = async (
     delete (launchOpts as { executablePath?: string }).executablePath;
   }
 
-  const ctx = await chromium.launchPersistentContext(userDataDir, launchOpts);
+  // A failed launch would otherwise strand the whole profile dir in tmp.
+  const ctx = await chromium
+    .launchPersistentContext(userDataDir, launchOpts)
+    .catch((err) => {
+      removeTemporaryDirectory(userDataDir);
+      throw err;
+    });
 
   // Reuse --app window only (do not open a second tabbed window)
   let page = ctx.pages()[0];
