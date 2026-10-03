@@ -1,5 +1,6 @@
 import type { FC } from "hono/jsx/dom";
 import { Games } from "../../lib/Agent/games";
+import { isRecord } from "../../lib/domain/json";
 import { HighlightOnChange } from "../agt-compat";
 import { useAgentContext } from "../contexts/AgentContext";
 import { DeliveryVoltage } from "./DeliveryVoltage";
@@ -40,21 +41,36 @@ type SelectedGameComponent = (props: {
   state: SelectedGameState;
 }) => HonoReturn;
 
+/**
+ * `Games[name].Component` and `playing.state` are unions whose members are not
+ * mutually assignable, but the pairing is a runtime fact established by
+ * `playing.name`. These guards carry that fact across the boundary instead of
+ * asserting past it.
+ */
+const isSelectedGameComponent = (
+  component: unknown,
+): component is SelectedGameComponent => typeof component === "function";
+
+const isSelectedGameState = (state: unknown): state is SelectedGameState =>
+  isRecord(state);
+
 export function GamePanel() {
   const { playing, streamState, commentCount, previousStreamCommentCount } =
     useAgentContext();
 
   // console.log(playing);
-  const Component: SelectedGameComponent = playing
-    ? (Games[playing.name].Component as SelectedGameComponent)
+  const selectedComponent = playing ? Games[playing.name].Component : undefined;
+  const Component: SelectedGameComponent = isSelectedGameComponent(
+    selectedComponent,
+  )
+    ? selectedComponent
     : () => null;
 
   return (
     <div className="h-full flex flex-col justify-between text-2xl/8">
       <div className="flex-none">
-        {playing && (
-          // Narrowed from `unknown` at this single boundary: the payload comes from `/api/game` as untrusted JSON, and which game it belongs to is only known at runtime.
-          <Component state={playing.state as SelectedGameState} />
+        {playing && isSelectedGameState(playing.state) && (
+          <Component state={playing.state} />
         )}
       </div>
       <div className="flex-none">

@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useState } from "hono/jsx";
+import { isRecord } from "../../../lib/domain/json";
 import { Container } from "../agt-compat";
 import { AgentStatusHeader } from "./AgentStatusHeader";
 import {
@@ -25,16 +26,18 @@ const AGENT_STATUS_GRID_ROW_TEMPLATE_CLASS = "grid-rows-[auto_minmax(0,1fr)]";
 
 /**
  * Publish the SSE endpoint on `window` so it can be read from the browser
- * console while debugging. Declared on a local interface rather than asserted,
- * so the write stays type-checked.
+ * console while debugging. The global is reached through a guard that takes
+ * `unknown`, so the write needs neither an assertion nor an index signature.
  */
-type DebugWindow = typeof globalThis & {
-  __sseUrl?: string;
+const setDebugString = (target: unknown, key: string, field: string): void => {
+  if (isRecord(target)) {
+    target[key] = field;
+  }
 };
 
 const debugRecordSseUrl = (sseUrl: string): void => {
   try {
-    (globalThis as DebugWindow).__sseUrl = sseUrl;
+    setDebugString(globalThis, "__sseUrl", sseUrl);
   } catch {
     /* read-only global (some sandboxes); the trace below still logs it */
   }

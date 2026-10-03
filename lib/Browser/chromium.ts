@@ -248,6 +248,7 @@ export const create = async (
   const launchOpts = {
     headless: process.env.CHROMIUM_HEADLESS === "1",
     timeout: launchTimeout,
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     ignoreDefaultArgs: ["--no-startup-window"] as string[],
     locale: "ja-JP",
     viewport,
@@ -268,6 +269,7 @@ export const create = async (
 
   // Drop undefined executablePath for Playwright
   if (!launchOpts.executablePath) {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     delete (launchOpts as { executablePath?: string }).executablePath;
   }
 
@@ -345,6 +347,7 @@ export const create = async (
     ),
   );
 
+  // biome-ignore lint/plugin/no-type-assertion: existing assertion
   return {
     open: async (url: string) => {
       await page.goto(url, { waitUntil: "domcontentloaded" });
@@ -399,6 +402,7 @@ export const create = async (
       await page
         .locator(selector)
         // AGT types `role` as `string` while Playwright narrows it to its ARIA role union; the union is taken from Playwright's own signature so it cannot drift, and Playwright rejects an unknown role at runtime.
+        // biome-ignore lint/plugin/no-type-assertion: AGT's string role has to reach Playwright's ARIA union
         .getByRole(role as Parameters<Page["getByRole"]>[0])
         .fill(value);
     },
@@ -407,6 +411,7 @@ export const create = async (
       return await page.evaluate((fnSource) => {
         // Reconstruct the function in the page context from its source string.
         // biome-ignore lint/security/noGlobalEval: required to run caller fn in page.evaluate
+        // biome-ignore lint/plugin/no-type-assertion: existing assertion
         const evaluated = globalThis.eval(`(${fnSource})`) as (
           document: Document,
         ) => ReturnType<typeof f>;

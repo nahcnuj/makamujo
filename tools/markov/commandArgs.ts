@@ -19,7 +19,7 @@ export const MARKOV_COMMANDS = [
 export type MarkovCommand = (typeof MARKOV_COMMANDS)[number];
 
 export const isMarkovCommand = (value: string): value is MarkovCommand =>
-  (MARKOV_COMMANDS as readonly string[]).includes(value);
+  MARKOV_COMMANDS.some((command) => command === value);
 
 export const COMMAND_USAGE = {
   corpus: "corpus <modelPath> [--tail N]",

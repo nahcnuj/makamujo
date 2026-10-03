@@ -2,6 +2,7 @@ import {
   drainSseDataPayloads,
   extractCompleteSseFrames,
 } from "./domain/console/sseFrames";
+import { isRecord } from "./domain/json";
 
 export {
   extractCompleteSseFrames,
@@ -13,8 +14,8 @@ export function streamUpstreamResponse(proxied: Response) {
   responseHeaders.set("cache-control", "no-cache");
   // Remove content-length to avoid mismatches when streaming/chunked.
   responseHeaders.delete("content-length");
-  const upstreamBody = asReadableBody(proxied.body);
-  if (upstreamBody !== undefined) {
+  const upstreamBody = proxied.body;
+  if (isReadableBody(upstreamBody)) {
     const body = upstreamBody;
     const wrapped = new ReadableStream({
       start(controller) {
@@ -68,20 +69,15 @@ type ReadableBody = {
   getReader: () => ReadableStreamDefaultReader<Uint8Array>;
 };
 
-const asReadableBody = (value: unknown): ReadableBody | undefined => {
-  if (typeof value !== "object" || value === null) return undefined;
-  const candidate = value as { getReader?: unknown };
-  return typeof candidate.getReader === "function"
-    ? (value as ReadableBody)
-    : undefined;
-};
+const isReadableBody = (value: unknown): value is ReadableBody =>
+  isRecord(value) && typeof value.getReader === "function";
 
 export function forwardSSEEventsToSink(
   upstreamBody: unknown,
   sink: (data: string) => void,
 ) {
-  const body = asReadableBody(upstreamBody);
-  if (body === undefined) {
+  const body = upstreamBody;
+  if (!isReadableBody(body)) {
     return () => {};
   }
   const reader = body.getReader();
@@ -272,6 +268,7 @@ export function createResilientSseProxy(
     upstream: Response,
     controller: ReadableStreamDefaultController<Uint8Array>,
   ): Promise<void> => {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     const body = upstream.body as ReadableStream<Uint8Array> | null;
     if (!body || typeof body.getReader !== "function") return;
 

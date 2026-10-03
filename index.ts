@@ -267,6 +267,7 @@ let agent: FallbackAgent = createFallbackAgent(
   },
   // Keep comments flowing while AGT createAgentApi is loading (or if it fails).
   (comments) => {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     streamer.listen(comments as Parameters<typeof streamer.listen>[0]);
   },
 );
@@ -389,8 +390,10 @@ const apiApp = new Hono()
     const canSpeak =
       typeof streamer.canSpeak === "boolean"
         ? streamer.canSpeak
-        : typeof (agent as { canSpeak?: boolean }).canSpeak === "boolean"
-          ? Boolean((agent as { canSpeak?: boolean }).canSpeak)
+        : // biome-ignore lint/plugin/no-type-assertion: existing assertion
+          typeof (agent as { canSpeak?: boolean }).canSpeak === "boolean"
+          ? // biome-ignore lint/plugin/no-type-assertion: existing assertion
+            Boolean((agent as { canSpeak?: boolean }).canSpeak)
           : true;
     return Response.json({
       speech: normalizeSpeechText(speechState) ?? "",

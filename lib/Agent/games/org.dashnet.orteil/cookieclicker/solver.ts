@@ -301,6 +301,7 @@ export function stepIdle(
       if (!ctx.listeners.isSilent()) {
         ctx.setHasReloadedForShoten(false);
       } else if (
+        // biome-ignore lint/plugin/no-type-assertion: existing assertion
         (sightData as { title?: string } | undefined)?.title?.includes(
           "昇天中",
         ) &&
@@ -313,10 +314,12 @@ export function stepIdle(
       }
 
       const clickableElementIds = Array.isArray(
+        // biome-ignore lint/plugin/no-type-assertion: existing assertion
         (sightData as { clickableElementIds?: string[] } | undefined)
           ?.clickableElementIds,
       )
-        ? (sightData as { clickableElementIds: string[] }).clickableElementIds
+        ? // biome-ignore lint/plugin/no-type-assertion: existing assertion
+          (sightData as { clickableElementIds: string[] }).clickableElementIds
         : ["bigCookie"];
       const candidateIds = ctx.listeners.isSilent()
         ? ["bigCookie"]
@@ -390,12 +393,14 @@ export function stepSave(
       phase: "options" as const,
       failureCount: state.failureCount,
     });
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     if ((next as GameState).type === "idle") {
       return { type: "idle", phase: "sight", count: 0 };
     }
     return {
       type: "save",
       phase: "options",
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       failureCount: (next as { failureCount: number }).failureCount,
     };
   };
@@ -521,6 +526,7 @@ export function stepSeeStats(
         phase: "open" as const,
         failureCount: state.failureCount,
       });
+      // biome-ignore lint/plugin/no-type-assertion: existing assertion
       if ((next as GameState).type === "idle") {
         return { state: { type: "idle", phase: "sight", count: 0 } };
       }
@@ -528,6 +534,7 @@ export function stepSeeStats(
         state: {
           type: "seeStats",
           phase: "open",
+          // biome-ignore lint/plugin/no-type-assertion: existing assertion
           failureCount: (next as { failureCount: number }).failureCount,
         },
       };
@@ -670,6 +677,7 @@ export function* solver(
 
   while (state.type !== "closed") {
     _closed = false;
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     state = yield* machine[state.type].run(state as never, ctx);
   }
 }

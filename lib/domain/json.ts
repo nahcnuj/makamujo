@@ -5,7 +5,8 @@
  * These exist so that reading a field out of such a value does not need an `as`
  * assertion or an `any`. A type predicate narrows through the compiler's
  * control-flow analysis instead of asserting past it, which is what lets #686
- * clear the `noExplicitAny` warnings without hiding anything from the checker.
+ * clear the `noExplicitAny` warnings without hiding anything from the checker,
+ * and what lets the `biome-plugin-no-type-assertion` plugin (#435) pass.
  */
 
 /** Narrow an unknown value to an indexable record without asserting. */

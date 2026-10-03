@@ -65,6 +65,7 @@ export const parseAgentStateResponse = (
   responseText: string,
 ): AgentStateResponse => {
   try {
+    // biome-ignore lint/plugin/no-type-assertion: existing assertion
     return JSON.parse(responseText) as AgentStateResponse;
   } catch {
     throw new SyntaxError(INVALID_AGENT_STATE_RESPONSE_ERROR);
