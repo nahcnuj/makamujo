@@ -1,4 +1,3 @@
-import { isRecord } from "../../../../domain/untrusted";
 import type { Statistics } from "./State";
 
 export type ElementLike = {
@@ -183,9 +182,15 @@ export function enrichSightState<T extends { statistics?: unknown }>(
   state: T,
 ): T {
   const statistics = state.statistics;
-  if (!isRecord(statistics)) return state;
+  if (
+    typeof statistics !== "object" ||
+    statistics === null ||
+    !("general" in statistics)
+  ) {
+    return state;
+  }
   const general = statistics.general;
-  if (!isRecord(general)) return state;
+  if (typeof general !== "object" || general === null) return state;
   return {
     ...state,
     statistics: {

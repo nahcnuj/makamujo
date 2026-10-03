@@ -8,7 +8,6 @@ import {
   normalizeSpeechText,
   SPEECH_UNAVAILABLE_INDICATOR,
 } from "../../../lib/domain/console/agentStatusPlan";
-import { readStrings } from "../../../lib/domain/untrusted";
 import type { AgentStateResponse } from "./types";
 
 // Re-export pure presentation helpers from the console domain (single source of truth).
@@ -128,7 +127,11 @@ export const createSpeechHistoryDisplayItems = (
       return accumulatedItems;
     }
 
-    const traceNodes = readStrings(speechHistoryItem, "nodes");
+    const traceNodes = Array.isArray(speechHistoryItem.nodes)
+      ? speechHistoryItem.nodes.filter(
+          (node): node is string => typeof node === "string",
+        )
+      : undefined;
     const hasTrace = traceNodes !== undefined && traceNodes.length > 0;
     const hasValidNGram =
       speechHistoryItem.nGram !== undefined &&

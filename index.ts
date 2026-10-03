@@ -39,7 +39,6 @@ import {
   extractMetaPostBody,
   GENERATED_SPEECH_HISTORY_SSE_SIZE,
 } from "./lib/domain/publication/assemblePublishedPayload";
-import { readNumber, readString, readStrings } from "./lib/domain/untrusted";
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import { normalizePublishedStreamState } from "./lib/streamState";
 import { compileTailwindCss, createCssResponse } from "./lib/tailwind";
@@ -217,12 +216,15 @@ const normalizeSpeechText = (speech: unknown): string | undefined => {
     return undefined;
   }
 
-  const text = readString(speech, "text");
-  if (text !== undefined) {
-    return text;
+  if ("text" in speech && typeof speech.text === "string") {
+    return speech.text;
   }
 
-  return readString(speech, "speech");
+  if ("speech" in speech && typeof speech.speech === "string") {
+    return speech.speech;
+  }
+
+  return undefined;
 };
 
 let agent: FallbackAgent = createFallbackAgent(
@@ -260,10 +262,27 @@ let clearSpeechTimer: ReturnType<typeof setTimeout> | undefined;
 
 streamer.onSpeech(async (event) => {
   const speechText = normalizeSpeechText(event) ?? "";
-  const traceNodes = readStrings(event, "nodes");
-  const nGram = readNumber(event, "nGram") ?? streamer.currentNGramSize;
+  const traceNodes =
+    typeof event === "object" &&
+    event !== null &&
+    "nodes" in event &&
+    Array.isArray(event.nodes)
+      ? event.nodes.filter((node): node is string => typeof node === "string")
+      : undefined;
+  const nGram =
+    typeof event === "object" &&
+    event !== null &&
+    "nGram" in event &&
+    typeof event.nGram === "number"
+      ? event.nGram
+      : streamer.currentNGramSize;
   const nGramRaw =
-    readNumber(event, "nGramRaw") ?? streamer.currentNGramSizeRaw;
+    typeof event === "object" &&
+    event !== null &&
+    "nGramRaw" in event &&
+    typeof event.nGramRaw === "number"
+      ? event.nGramRaw
+      : streamer.currentNGramSizeRaw;
   generatedSpeechHistorySequence += 1;
   generatedSpeechHistory.unshift({
     id: `speech-${generatedSpeechHistorySequence}`,
