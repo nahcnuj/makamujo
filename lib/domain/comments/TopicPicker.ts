@@ -23,9 +23,7 @@ export const pickTopic = (
     const b = [...(prev[0] ?? "")].length;
     if (a > b) return [s];
     if (a === b) {
-      // Push instead of rebuilding: spreading `prev` per word is quadratic.
       prev.push(s);
-      return prev;
     }
     return prev;
   }, []);

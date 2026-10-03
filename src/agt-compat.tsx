@@ -21,7 +21,6 @@ export { useInterval } from "./hooks/useInterval";
 
 // Derive the valid hono component return type from FC so we stay aligned
 // with hono's own type definitions without importing internal hono types.
-// `Record<string, never>` stands in for "no props" (`{}` is a banned type).
 type HonoReturn = ReturnType<FC<Record<string, never>>>;
 
 type HonoizeChildren<Props> = Omit<Props, "children"> & { children?: Child };

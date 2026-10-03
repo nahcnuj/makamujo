@@ -50,9 +50,12 @@ export const generateConsoleBasicAuthPassword = (
     .map((byte) => {
       const char =
         BASIC_AUTH_PASSWORD_CHARS[byte & BASIC_AUTH_PASSWORD_INDEX_MASK];
-      // The mask keeps the index inside the table, but a shorter table must not
-      // yield `undefined` in the middle of a password.
-      return char ?? "";
+      if (char === undefined) {
+        throw new Error(
+          `BASIC_AUTH_PASSWORD_CHARS has no entry for ${byte & BASIC_AUTH_PASSWORD_INDEX_MASK}`,
+        );
+      }
+      return char;
     })
     .join("");
 

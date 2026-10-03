@@ -15,7 +15,6 @@ import { serve } from "bun";
 import { Hono } from "hono";
 import {
   createFallbackAgent,
-  type FallbackAgent,
   persistTalkModel,
   tryCreateExternalAgentApi,
 } from "./composition/agentWiring";
@@ -109,8 +108,6 @@ const {
       type: "string",
       default: "./var/model.json",
     },
-    // Still accepted so existing invocations keep working, but nothing reads
-    // it: the data file moved into individual game modules.
     data: {
       short: "d",
       type: "string",
@@ -228,7 +225,7 @@ const normalizeSpeechText = (speech: unknown): string | undefined => {
   return undefined;
 };
 
-let agent: FallbackAgent = createFallbackAgent(
+let agent = createFallbackAgent(
   () => lastPublishedStreamState,
   (data) => {
     lastPublishedStreamState = data;
