@@ -1,19 +1,19 @@
 /**
- * `composition/watchPageBrowserReader.ts` の Playwright 実装。
+ * `composition/watchPageBrowser.ts` の Playwright（Chromium）実装。
  *
  * このリポジトリで Chromium を動かして通っている統合テスト
  * (`tests/integration/vigilant-fiesta-play-loop.test.ts`) と同じく、素の
- * `playwright` を使う。`index.ts` からは必要なときだけ動的 import するので、
- * reader を無効にした環境では Playwright を一切ロードしない。
+ * `playwright` を使う。`watchPageStatisticsSource` からは必要なときだけ
+ * 動的 import するので、reader を無効にした環境では Playwright をロードしない。
  */
 
 import { chromium } from "playwright";
 import {
   isWatchPageReadable,
   toDisplayedStatistics,
+  type WatchPageBrowser,
   type WatchPageRawReading,
-  type WatchPageSession,
-} from "./watchPageBrowserReader";
+} from "./watchPageBrowser";
 
 const NAVIGATION_TIMEOUT_MS = 60_000;
 /** ブラウザ起動の応答が無いと気付けないため、必ず上限を効かせる。 */
@@ -64,8 +64,8 @@ const waitForStatistics = (page: import("playwright").Page) =>
       // 値が埋まらないまま（`-`）でも採取自体は続行する。次の採取で最新になる。
     });
 
-export const createPlaywrightWatchPageSession =
-  async (): Promise<WatchPageSession> => {
+export const createChromiumWatchPageBrowser =
+  async (): Promise<WatchPageBrowser> => {
     // 各段階をログに残す。ブラウザの起動や navigation が応答しないで
     // 止まったときに、どこで止まったかが特定できるようにするため。
     console.log("[INFO] launching chromium for the niconama watch page...");
@@ -106,7 +106,7 @@ export const createPlaywrightWatchPageSession =
         }
         if (!isWatchPageReadable(raw)) {
           // 配信ページを見ていない（空 / エラーページ / JS 実行前）。
-          // ここを throw にしておくと reader 側が直前の値を保持し、
+          // ここを throw にしておくと source 側が直前の値を保持し、
           // CI ログに原因が出る。黙って値を消さない。
           throw new Error(
             `the niconama watch page has no statistics row (url=${page.url()}, title=${JSON.stringify(

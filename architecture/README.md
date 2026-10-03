@@ -58,9 +58,11 @@ UI 側の責務であり、domain / application では決めない（コンソ�
 |------------|----|------|
 | `lib/domain/broadcasting/watchPageStatistics.ts` | domain（純関数） | 統計行の表示テキスト → 数値（`-` / `,` / `万` / `億` 対応） |
 | `lib/domain/publication/assemblePublishedPayload.ts` | domain（純関数） | `displayedStatistics` 入力で `niconama` の統計と `commentCount` を上書き |
-| `composition/watchPageBrowserReader.ts` | composition | 採取ループ。Playwright 非依存（`createSession` で reader 自体を差し替え可） |
-| `composition/watchPageBrowserSession.ts` | composition | Playwright 実装。**必要なときだけ動的 import** |
-| `composition/watchPageStatisticsSource.ts` | composition | 環境変数と reader 配線をまとめる。`index.ts` はこれを 1 回呼ぶだけ |
+| `composition/watchPageBrowser.ts` | composition | ブラウザ実体の契約（`open` / `read` / `close`）と生読み取りの変換。Playwright 非依存 |
+| `composition/chromiumWatchPageBrowser.ts` | composition | Playwright（Chromium）実装。**必要なときだけ動的 import** |
+| `composition/watchPageStatisticsSource.ts` | composition | 環境変数・採取周期・ブラウザの作り直し・失敗ログ。`index.ts` はこれを 1 回呼ぶだけ |
+
+差し替え口は URL ではなく `createBrowser`（ブラウザ実体そのもの）。
 
 ### 環境変数
 
@@ -68,21 +70,21 @@ UI 側の責務であり、domain / application では決めない（コンソ�
 |------|------|------|
 | `NICONAMA_WATCH_PAGE_READ_INTERVAL_MS` | `30000` | 採取周期。ページは 30〜60 秒粒度なのでこれより短くしても無駄 |
 | `NICONAMA_WATCH_PAGE_URL` | `DEFAULT_NICONAMA_WATCH_PAGE_URL` | **テスト専用の差し替え口**。本番で読むページはコードに固定している |
-| `NICONAMA_WATCH_PAGE_DISABLED` | （未設定 = 有効） | `1` で reader を起動しない。ブラウザ reader を使わないテストが設定する（無効時は `POST /api/meta` へフォールバック） |
+| `NICONAMA_WATCH_PAGE_DISABLED` | （未設定 = 有効） | `1` でブラウザ経路を起動しない。ブラウザを使わないテストが設定する（無効時は `POST /api/meta` へフォールバック） |
 
 ### ブラウザ操作の契約
 
 - ページは**一度だけ開き、以降は開いたまま**統計行の表示テキストを読み直す
   （ページ自身が WebSocket で更新するため）。採取周期ごとに再読み込みはしない。
-- 読み取りに失敗したら `onError` に通知してセッションを破棄するが、公開中の値は
-  直前のものを保つ。次の採取で作り直す。
+- 読み取りに失敗したら失敗をログに出してブラウザを破棄するが、公開中の値は直前の
+  ものを保つ。次の採取で作り直す。
 - 統計行そのものが無いページ（空 / エラーページ / JS 実行前）では `read()` が
-  throw し、値を出さない。空の読み取りで「配信終了」と誤解させないため。
-- 失敗ログは reader 側でスロットルする（1 回目の直後と、その後は 10 回ごと）。
+  throw し、値を出さない。空の読み取りを「配信終了」と誤解させないため。
+- 失敗ログは source 側でスロットルする（1 回目の直後と、その後は 10 回ごと）。
 
 ### 検証
 
-- 純関数と reader のループは単体テストで覆う（ブラウザ不要）。
+- 純関数と採取ループは単体テストで覆う（ブラウザ不要）。
 - 配信ページの描画経路は `tests/integration/watch-page-statistics.test.ts`。
   配信ページの代わりにローカル HTTP サーバを立て、JS が値を描き換える実際の
   ページと同じ挙動を再現する。Chromium が起動できない環境では skip する
@@ -96,7 +98,7 @@ UI 側の責務であり、domain / application では決めない（コンソ�
 | 統計のページ読み取り | `lib/domain/broadcasting/watchPageStatistics.ts` | 済 |
 | Publication assemble | `lib/domain/publication/` | 済 |
 | AgentSession + services | `lib/application/` | 済 |
-| 統計 reader（ブラウザ） | `composition/watchPageBrowser{Reader,Session}.ts`, `composition/watchPageStatisticsSource.ts` | 済 |
+| 統計のブラウザ読み取り | `composition/watchPageBrowser.ts`, `composition/chromiumWatchPageBrowser.ts`, `composition/watchPageStatisticsSource.ts` | 済 |
 | Console access / status plan / SSE frames | `lib/domain/console/` | 済（Basic auth 純関数含む） |
 | systemd / make install（main から port） | `Makefile`, `etc/systemd/` | 済 |
 | Outer console WS bridge | `composition/consoleOuterWebSocket.ts` | 済 |

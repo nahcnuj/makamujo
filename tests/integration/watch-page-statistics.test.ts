@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+﻿import { afterAll, beforeAll, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
 import { appendFileSync, mkdirSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
@@ -29,8 +29,8 @@ import {
 
 const SERVER_STARTUP_TIMEOUT_MS = 20_000;
 const READ_INTERVAL_MS = 1_000;
-/** reader が最初の値を公開するまでの上限。超過したら准备的失敗として即エラーにする。 */
-const READER_READY_TIMEOUT_MS = 45_000;
+/** ブラウザが最初の値を公開するまでの上限。超過したら准备的失敗として即エラーにする。 */
+const FIRST_SAMPLE_TIMEOUT_MS = 45_000;
 /** 準備後の各テストは状態だけ見るので短くてよい。 */
 const TEST_TIMEOUT_MS = 30_000;
 
@@ -212,7 +212,7 @@ beforeAll(async () => {
     }
 
     // stdout / stderr はテストが終わるまで読み続ける。起動待ちが終わったのを
-    // 理由にリスナーを外すと、それ以降のログ（reader の起動ログなど）が
+    // 理由にリスナーを外すと、それ以降のログ（統計 source の起動ログなど）が
     // 誰も読まずに落ちてしまい、原因を追えなくなる。
     function onData(chunk: Buffer | string) {
       const text = String(chunk);
@@ -269,25 +269,25 @@ beforeAll(async () => {
 });
 
 /**
- * reader の準備待ちは hook ではなくテスト側で行う。
+ * 最初の値が公開されるまでの待ちは hook ではなくテスト側で行う。
  * Bun の 5 秒既定は `beforeAll` にも効くので、hook 内で待たせると
  * 「(unnamed) timed out after 5000ms」になるだけ。
  * 同じ Promise を共有するので、待ちは最初の 1 テストだけ負担し、
  * 失敗時は残りが即座に同じ原因で落ちる。
  */
-let readerReady: Promise<void> | undefined;
-const ensureReaderReady = (): Promise<void> => {
-  readerReady ??= waitForMeta(hasPageStatistics, READER_READY_TIMEOUT_MS).then(
+let firstSample: Promise<void> | undefined;
+const ensureFirstSample = (): Promise<void> => {
+  firstSample ??= waitForMeta(hasPageStatistics, FIRST_SAMPLE_TIMEOUT_MS).then(
     () => undefined,
     (error: unknown) => {
       console.error(
-        "[TEST DIAG] the watch page reader never published the statistics.",
+        "[TEST DIAG] the watch page statistics source never published the statistics.",
       );
       console.error(`[TEST DIAG] server output tail:\n${serverOutput}`);
       throw error;
     },
   );
-  return readerReady;
+  return firstSample;
 };
 
 afterAll(async () => {
@@ -303,7 +303,7 @@ afterAll(async () => {
 test.skipIf(!chromiumAvailable)(
   "publishes the numbers rendered on the watch page statistics row",
   async () => {
-    await ensureReaderReady();
+    await ensureFirstSample();
     const meta = await waitForMeta(hasPageStatistics, TEST_TIMEOUT_MS);
 
     expect(meta.niconama.meta.total).toEqual({
@@ -313,14 +313,14 @@ test.skipIf(!chromiumAvailable)(
     });
     expect(meta.commentCount).toBe(222);
   },
-  // 他のテストは 30 秒予算。这里は reader の準備待ち（最大 45 秒）を含める。
-  READER_READY_TIMEOUT_MS + 20_000,
+  // 他のテストは 30 秒予算。ここは最初の値の待ち（最大 45 秒）を含める。
+  FIRST_SAMPLE_TIMEOUT_MS + 20_000,
 );
 
 test.skipIf(!chromiumAvailable)(
   "wancole POST /api/meta no longer overrides the watch page numbers",
   async () => {
-    await ensureReaderReady();
+    await ensureFirstSample();
     await fetch(`${broadcastingBaseUrl}/api/meta`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -357,7 +357,7 @@ test.skipIf(!chromiumAvailable)(
 test.skipIf(!chromiumAvailable)(
   "keeps replyTargetComment from POST /api/meta",
   async () => {
-    await ensureReaderReady();
+    await ensureFirstSample();
     await fetch(`${broadcastingBaseUrl}/api/meta`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -385,7 +385,7 @@ test.skipIf(!chromiumAvailable)(
 test.skipIf(!chromiumAvailable)(
   "omits metrics the page shows as a placeholder",
   async () => {
-    await ensureReaderReady();
+    await ensureFirstSample();
     statistics = {
       ...statistics,
       "nicoad-count-item": "-",
