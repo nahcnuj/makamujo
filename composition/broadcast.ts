@@ -105,8 +105,12 @@ export const broadcastToWsClients = (
   }
 };
 
+/**
+ * 現在のペイロードを配信する。`logContext` は失敗時のログに載せるだけの文脈で、
+ * 配信の動作には影響しない。
+ */
 export const broadcastCurrentPayload = (
-  context: string,
+  logContext: string,
   getPayload: () => unknown,
   sseClients: Set<SseController>,
   wsClients: Set<WsLike>,
@@ -117,7 +121,7 @@ export const broadcastCurrentPayload = (
     broadcastToWsClients(wsClients, payload);
   } catch (err) {
     console.warn(
-      `[WARN] failed to broadcast to clients (${context}):`,
+      `[WARN] failed to broadcast to clients (${logContext}):`,
       err instanceof Error ? err.message : String(err),
     );
   }

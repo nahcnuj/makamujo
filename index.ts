@@ -183,9 +183,9 @@ const sseClients = new Set<ReadableStreamDefaultController<string>>();
 const createSseStream = (label: string) =>
   createSseStreamImpl(label, sseClients, getCurrentStreamPayload);
 
-const broadcastCurrentPayloadLocal = (context: string) =>
+const broadcastCurrentPayloadLocal = (logContext: string) =>
   broadcastCurrentPayload(
-    context,
+    logContext,
     getCurrentStreamPayload,
     sseClients,
     wsClients,
