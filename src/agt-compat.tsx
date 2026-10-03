@@ -44,7 +44,8 @@ const gridTemplateClass = {
   16: "grid-cols-16 grid-rows-16",
 } as const;
 
-// Keyed by `${count}_${span}`, which is computed at runtime and therefore cannot be narrowed by the compiler.
+// Keyed by `${count}_${span}`, which is computed at runtime and therefore cannot
+// be narrowed by the compiler.
 const sideClass: Readonly<Record<string, string>> = {
   "10_8": "col-span-2 row-span-8",
 };

@@ -109,7 +109,8 @@ const {
       type: "string",
       default: "./var/model.json",
     },
-    // Still accepted so existing invocations keep working, but nothing reads it: the data file moved into individual game modules.
+    // Still accepted so existing invocations keep working, but nothing reads
+    // it: the data file moved into individual game modules.
     data: {
       short: "d",
       type: "string",

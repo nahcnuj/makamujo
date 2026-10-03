@@ -325,7 +325,8 @@ export function stepIdle(
           : ["bigCookie"];
       const targetId =
         candidateIds[Math.floor(Math.random() * candidateIds.length)] ??
-        // candidateIds is never empty, but falling back keeps the click target a string instead of asserting the index.
+        // candidateIds is never empty, but falling back keeps the click target
+        // a string instead of asserting the index.
         "bigCookie";
 
       return {

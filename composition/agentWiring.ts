@@ -23,7 +23,9 @@ export type AgentLikeHost = {
   currentGame?: unknown;
   streamState?: unknown;
   onAir: (state: unknown) => void;
-  // `AgentComment[]` rather than `any[]`: AGT always passes that type at runtime, so naming it keeps the boundary checked (the parameter is contravariant, so `any[]` here would silently accept a non-array).
+  // `AgentComment[]` rather than `any[]`: AGT always passes that type at
+  // runtime, so naming it keeps the boundary checked (the parameter is
+  // contravariant, so `any[]` here would silently accept a non-array).
   listen: (comments: AgentComment[]) => void;
 };
 

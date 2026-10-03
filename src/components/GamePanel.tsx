@@ -53,7 +53,9 @@ export function GamePanel() {
     <div className="h-full flex flex-col justify-between text-2xl/8">
       <div className="flex-none">
         {playing && (
-          // Narrowed from `unknown` at this single boundary: the payload comes from `/api/game` as untrusted JSON, and which game it belongs to is only known at runtime.
+          // Narrowed from `unknown` at this single boundary: the payload comes
+          // from `/api/game` as untrusted JSON, and which game it belongs to is
+          // only known at runtime.
           <Component state={playing.state as SelectedGameState} />
         )}
       </div>
