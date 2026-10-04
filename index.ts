@@ -763,6 +763,14 @@ function exitHandler(
     } catch {
       /* ignore */
     }
+    // The TTS engine owns a scratch directory under the OS temp dir; the server
+    // never reaches the end of a stream on its own, so this is the only place
+    // it gets released. `tts` is in TDZ if startup failed before it was built.
+    try {
+      tts.close?.();
+    } catch {
+      /* ignore cleanup failures during crash paths */
+    }
   }
 
   if (typeof exitCode === "number") {

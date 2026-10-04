@@ -1,10 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { setTimeout } from "node:timers/promises";
@@ -13,6 +7,12 @@ import type { Page, ViewportSize } from "playwright";
 import playwright from "playwright";
 import { chromium as $_ } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import {
+  createTemporaryDirectory,
+  GAME_BROWSER_TEMPORARY_DIRECTORY_PREFIX,
+  PLAYWRIGHT_FALLBACK_TEMPORARY_DIRECTORY_PREFIX,
+  removeTemporaryDirectory,
+} from "../temporaryDirectory";
 
 export const chromium = $_.use(StealthPlugin());
 
@@ -86,6 +86,7 @@ async function launchWithFallback<T>(
 
 type ChromiumLaunchOptions = {
   executablePath?: string;
+  userDataDir?: string;
   [key: string]: unknown;
 };
 
@@ -101,6 +102,23 @@ function getChromiumLaunchOptions(
     delete opts.executablePath;
   }
   return opts;
+}
+
+/**
+ * Tell `puppeteer-extra-plugin-stealth` which profile to write into.
+ *
+ * Without `userDataDir` the plugin's bundled `user-data-dir` plugin mkdtemps a
+ * `puppeteer_dev_profile-*` directory on every launch and only deletes it when
+ * the browser disconnects gracefully — which never happens for a service that
+ * is `SIGKILL`ed, so the directories pile up. Playwright itself ignores the
+ * key (the profile comes from the positional argument), so passing it only
+ * redirects the plugin's writes to the profile we already own.
+ */
+function withOwnedUserDataDir<T extends ChromiumLaunchOptions>(
+  launchOpts: T,
+  userDataDir: string,
+): T & { userDataDir: string } {
+  return { ...launchOpts, userDataDir };
 }
 
 /**
@@ -124,23 +142,6 @@ export function cleanupChromiumLockFiles(userDataDir: string): void {
         err instanceof Error ? err.message : String(err),
       );
     }
-  }
-}
-
-/**
- * Best-effort removal of a temporary directory owned by this module (e.g. a
- * Chromium profile dir created with `mkdtempSync` under the OS temp dir).
- * Never throws, so cleanup failures cannot break the browser lifecycle.
- */
-export function removeTemporaryDirectory(dir: string): void {
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch (err) {
-    console.warn(
-      "[WARN] failed to remove temporary directory",
-      dir,
-      err instanceof Error ? err.message : String(err),
-    );
   }
 }
 
@@ -172,7 +173,11 @@ export async function launchPersistentContext(
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       return await launchWithFallback(
-        () => chromium.launchPersistentContext(userDataDir, launchOpts),
+        () =>
+          chromium.launchPersistentContext(
+            userDataDir,
+            withOwnedUserDataDir(launchOpts, userDataDir),
+          ),
         () =>
           playwright.chromium.launchPersistentContext(userDataDir, launchOpts),
       );
@@ -181,15 +186,21 @@ export async function launchPersistentContext(
       lastError = err instanceof Error ? err : new Error(message);
 
       if (/ProcessSingleton|SingletonLock/i.test(message)) {
+        const tmpDir = createTemporaryDirectory(
+          PLAYWRIGHT_FALLBACK_TEMPORARY_DIRECTORY_PREFIX,
+        );
         try {
-          const tmpDir = mkdtempSync(join(tmpdir(), "playwright-"));
           cleanupChromiumLockFiles(tmpDir);
           console.warn(
             "[WARN] userDataDir locked, retrying with temp dir",
             tmpDir,
           );
           const fallbackContext = await launchWithFallback(
-            () => chromium.launchPersistentContext(tmpDir, launchOpts),
+            () =>
+              chromium.launchPersistentContext(
+                tmpDir,
+                withOwnedUserDataDir(launchOpts, tmpDir),
+              ),
             () =>
               playwright.chromium.launchPersistentContext(tmpDir, launchOpts),
           );
@@ -198,7 +209,8 @@ export async function launchPersistentContext(
           });
           return fallbackContext;
         } catch {
-          // fall through to retry / rethrow
+          // Never leave the fallback profile behind when the launch fails.
+          removeTemporaryDirectory(tmpDir);
         }
       }
 
@@ -232,7 +244,9 @@ export const create = async (
     process.env.GAME_HOME_URL?.trim() ||
     "https://www.nahcnuj.work/vigilant-fiesta/";
 
-  const userDataDir = mkdtempSync(join(tmpdir(), "makamujo-game-"));
+  const userDataDir = createTemporaryDirectory(
+    GAME_BROWSER_TEMPORARY_DIRECTORY_PREFIX,
+  );
   mkdirSync(join(userDataDir, "Default"), { recursive: true });
   writeFileSync(
     join(userDataDir, "Default", "Preferences"),
@@ -277,7 +291,17 @@ export const create = async (
     delete (launchOpts as { executablePath?: string }).executablePath;
   }
 
-  const ctx = await chromium.launchPersistentContext(userDataDir, launchOpts);
+  const ctx = await chromium
+    .launchPersistentContext(
+      userDataDir,
+      withOwnedUserDataDir(launchOpts, userDataDir),
+    )
+    .catch((err: unknown) => {
+      // A failed launch must not leave the profile behind: the supervisor
+      // relaunches this session in a loop, and each attempt would add one.
+      removeTemporaryDirectory(userDataDir);
+      throw err;
+    });
 
   // Reuse --app window only (do not open a second tabbed window)
   let page = ctx.pages()[0];
@@ -319,7 +343,7 @@ export const create = async (
       /* best-effort */
     }
   };
-  setInterval(() => {
+  const dismissCloseButtonsInterval = setInterval(() => {
     void dismissCloseButtons();
   }, 2000);
 
@@ -345,11 +369,18 @@ export const create = async (
     ),
   );
 
+  let closed = false;
+
   return {
     open: async (url: string) => {
       await page.goto(url, { waitUntil: "domcontentloaded" });
     },
     close: async () => {
+      // Idempotent: the session closes the browser from both its normal exit
+      // path and its signal handler, and a second `ctx.close()` would throw.
+      if (closed) return;
+      closed = true;
+      clearInterval(dismissCloseButtonsInterval);
       await ctx.close();
       removeTemporaryDirectory(userDataDir);
     },

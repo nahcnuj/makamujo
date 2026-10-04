@@ -7,6 +7,9 @@ PROJECT_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
 
 PID_DIR="${PROJECT_ROOT}/var/pid"
 
+# Bun lives outside the default PATH of non-login shells (ansible ad-hoc, nohup).
+export PATH="${HOME}/.bun/bin:/root/.bun/bin:${PATH}"
+
 wait_until_process_exits() {
   pid=$1
   retries=0
@@ -59,6 +62,18 @@ clear_obs_sentinel() {
   rm -rf "${PROJECT_ROOT}/obs-studio/.sentinel" 2>/dev/null || true
 }
 
+# A SIGKILLed Chromium never removes its profile, and the OS temp dir is only
+# 2 GB on the VPS. Now that every browser process is gone, drop the scratch
+# directories they left behind. bin/cleanup-temp only touches the browser-owned
+# prefixes, so the running server's own scratch dir is kept.
+sweep_temporary_directories() {
+  if ! command -v bun >/dev/null 2>&1; then
+    echo "WARNING: bun not found; stale temp directories were left behind" >&2
+    return 0
+  fi
+  bun "${PROJECT_ROOT}/bin/cleanup-temp.ts" "${TMPDIR:-/tmp}" || true
+}
+
 
 
 
@@ -74,3 +89,4 @@ done
 
 sweep_leftovers
 clear_obs_sentinel
+sweep_temporary_directories
