@@ -1,18 +1,48 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  COMMAND_OPTIONS,
   COMMAND_USAGE,
   commandUsageLine,
   expandInPlaceArgs,
   isMarkovCommand,
   MARKOV_COMMANDS,
+  type MarkovCommand,
   parseMarkovCommandArgs,
 } from "./commandArgs";
 
-/**
- * Parse `argv` for one command and narrow the union to that command's fields.
- * The guards are unreachable: `parseMarkovCommandArgs` echoes its command.
- */
+/** コマンドごとに受け付けるオプション。`-h` / `--help` は全コマンド共通なので除く。 */
+const ACCEPTED_OPTIONS: Record<MarkovCommand, readonly string[]> = {
+  corpus: ["--tail"],
+  unlearn: ["-i", "--in-place", "--suffix"],
+  "decrement-phrase": [
+    "-i",
+    "--in-place",
+    "--suffix",
+    "--delta",
+    "--purge",
+    "-d",
+    "--delimiter",
+  ],
+  tokens: ["--sort"],
+  search: [],
+  transitions: ["-d", "--delimiter"],
+};
+
+/** 全コマンドのオプションを並べたもの。コマンドをまたぐ渡しは拒否されること。 */
+const ALL_OPTIONS = [
+  "-d",
+  "-i",
+  "--delta",
+  "--delimiter",
+  "--in-place",
+  "--purge",
+  "--sort",
+  "--suffix",
+  "--tail",
+] as const;
+
+/** 解析結果をコマンドの型に絞る。`parseMarkovCommandArgs` は渡された command を返す。 */
 const parseCorpus = (argv: string[]) => {
   const parsed = parseMarkovCommandArgs("corpus", argv);
   if (parsed.command !== "corpus") throw new Error(parsed.command);
@@ -31,16 +61,6 @@ const parseDecrementPhrase = (argv: string[]) => {
 const parseTokens = (argv: string[]) => {
   const parsed = parseMarkovCommandArgs("tokens", argv);
   if (parsed.command !== "tokens") throw new Error(parsed.command);
-  return parsed;
-};
-const parseSearch = (argv: string[]) => {
-  const parsed = parseMarkovCommandArgs("search", argv);
-  if (parsed.command !== "search") throw new Error(parsed.command);
-  return parsed;
-};
-const parseTransitions = (argv: string[]) => {
-  const parsed = parseMarkovCommandArgs("transitions", argv);
-  if (parsed.command !== "transitions") throw new Error(parsed.command);
   return parsed;
 };
 
@@ -83,81 +103,42 @@ describe("isMarkovCommand", () => {
 });
 
 describe("COMMAND_USAGE", () => {
-  it("documents every command", () => {
+  it("documents every command with the invocation prefix", () => {
     for (const command of MARKOV_COMMANDS) {
-      expect(commandUsageLine(command)).toStartWith(
+      expect(commandUsageLine(command)).toBe(
         `  bun run tools/markov/cli.ts ${COMMAND_USAGE[command]}`,
       );
     }
   });
 });
 
-describe("parseMarkovCommandArgs per-command options", () => {
-  it("corpus accepts --tail", () => {
-    expect(parseCorpus(["m.json", "--tail", "3"])).toEqual({
-      command: "corpus",
-      help: false,
-      positionals: ["m.json"],
-      tail: "3",
-    });
+describe("COMMAND_OPTIONS", () => {
+  it("declares an option set for every command", () => {
+    expect(Object.keys(COMMAND_OPTIONS)).toEqual([...MARKOV_COMMANDS]);
   });
 
-  it("corpus leaves tail undefined when omitted", () => {
-    expect(parseCorpus(["m.json"]).tail).toBeUndefined();
-  });
-
-  it("tokens defaults sort to asToWeight", () => {
-    expect(parseTokens(["m.json"]).sort).toBe("asToWeight");
-  });
-
-  it("search has no options beyond help", () => {
-    expect(parseSearch(["m.json", "word"])).toEqual({
-      command: "search",
-      help: false,
-      positionals: ["m.json", "word"],
-    });
-  });
-
-  it("transitions defaults the delimiter to a space", () => {
-    expect(parseTransitions(["m.json", "word"]).delimiter).toBe(" ");
-  });
-
-  it("decrement-phrase keeps delta distinguishable from the default", () => {
-    const parsed = parseDecrementPhrase(["m.json", "a"]);
-    expect(parsed.delta).toBeUndefined();
-    expect(parsed.purge).toBe(false);
-    expect(parsed.inPlace).toBe(false);
-    expect(parsed.suffix).toBe("");
-    expect(parsed.delimiter).toBe(" ");
-  });
-
-  it("decrement-phrase reports an explicit --delta", () => {
-    expect(parseDecrementPhrase(["m.json", "a", "--delta=4"]).delta).toBe("4");
-  });
-
-  it("unlearn expands -iSUFFIX into inPlace/suffix", () => {
-    const parsed = parseUnlearn(["m.json", "1", "-i.bak"]);
-    expect(parsed.inPlace).toBe(true);
-    expect(parsed.suffix).toBe(".bak");
+  it("accepts --help everywhere", () => {
+    for (const command of MARKOV_COMMANDS) {
+      expect(Object.keys(COMMAND_OPTIONS[command])).toContain("help");
+    }
   });
 });
 
-describe("parseMarkovCommandArgs rejects options of other commands", () => {
-  const cases: { command: (typeof MARKOV_COMMANDS)[number]; args: string[] }[] =
-    [
-      { command: "transitions", args: ["m.json", "word", "--tail", "3"] },
-      { command: "transitions", args: ["m.json", "word", "--sort", "token"] },
-      { command: "tokens", args: ["m.json", "--tail", "3"] },
-      { command: "tokens", args: ["m.json", "-i"] },
-      { command: "corpus", args: ["m.json", "--sort", "token"] },
-      { command: "corpus", args: ["m.json", "-i"] },
-      { command: "search", args: ["m.json", "q", "-d", "/"] },
-      { command: "unlearn", args: ["m.json", "1", "--purge"] },
-    ];
+describe("parseMarkovCommandArgs accepts only its own options", () => {
+  for (const command of MARKOV_COMMANDS) {
+    it(`${command} は自分のオプションだけを受け付ける`, () => {
+      const accepted = [...ACCEPTED_OPTIONS[command], "-h", "--help"];
 
-  for (const { command, args } of cases) {
-    it(`${command} rejects ${args.slice(2).join(" ")}`, () => {
-      expect(() => parseMarkovCommandArgs(command, args)).toThrow();
+      for (const option of [...ALL_OPTIONS, "-h", "--help"] as const) {
+        // boolean オプションの値は positionals に落ちるだけなので一律 3 引数で試す。
+        const parse = () =>
+          parseMarkovCommandArgs(command, ["m.json", option, "value"]);
+        if (accepted.includes(option)) {
+          expect(parse).not.toThrow();
+        } else {
+          expect(parse).toThrow();
+        }
+      }
     });
   }
 
@@ -175,5 +156,47 @@ describe("parseMarkovCommandArgs help", () => {
       expect(parseMarkovCommandArgs(command, ["--help"]).help).toBe(true);
       expect(parseMarkovCommandArgs(command, []).help).toBe(false);
     }
+  });
+});
+
+describe("parseMarkovCommandArgs values", () => {
+  it("corpus keeps tail undefined when omitted", () => {
+    expect(parseCorpus(["m.json"]).tail).toBeUndefined();
+  });
+
+  it("corpus reads --tail", () => {
+    expect(parseCorpus(["m.json", "--tail", "3"]).tail).toBe("3");
+  });
+
+  it("tokens defaults sort to asToWeight", () => {
+    expect(parseTokens(["m.json"]).sort).toBe("asToWeight");
+  });
+
+  it("decrement-phrase keeps delta distinguishable from the default", () => {
+    const parsed = parseDecrementPhrase(["m.json", "a"]);
+    expect(parsed.delta).toBeUndefined();
+    expect(parsed.purge).toBe(false);
+    expect(parsed.inPlace).toBe(false);
+    expect(parsed.suffix).toBe("");
+    expect(parsed.delimiter).toBe(" ");
+  });
+
+  it("decrement-phrase reports an explicit --delta", () => {
+    expect(parseDecrementPhrase(["m.json", "a", "--delta=4"]).delta).toBe("4");
+  });
+
+  it("transitions only reads the delimiter", () => {
+    expect(parseMarkovCommandArgs("transitions", ["m.json", "word"])).toEqual({
+      command: "transitions",
+      help: false,
+      positionals: ["m.json", "word"],
+      delimiter: " ",
+    });
+  });
+
+  it("unlearn expands -iSUFFIX into inPlace/suffix", () => {
+    const parsed = parseUnlearn(["m.json", "1", "-i.bak"]);
+    expect(parsed.inPlace).toBe(true);
+    expect(parsed.suffix).toBe(".bak");
   });
 });

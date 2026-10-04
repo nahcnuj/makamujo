@@ -1,11 +1,12 @@
 /**
- * Per-command argument parsing for `tools/markov/cli.ts`.
+ * `tools/markov/cli.ts` のサブコマンドごとのオプション定義。
  *
- * Each subcommand declares only the options it actually understands, so
- * passing e.g. `--tail` to `transitions` fails loudly instead of being
- * silently ignored.
+ * 以前は全コマンドで 1 つのオプション集合を `parseArgs` に渡していたため、
+ * 別コマンドのオプション（`transitions --tail 3` など）が黙って無視されていた。
+ * ここでは `COMMAND_OPTIONS` に宣言したオプションだけを `strict: true` で解析するので、
+ * 知らないオプションはエラーになり、`cli.ts` がそのコマンドの usage を添えて終了する。
  */
-import { parseArgs } from "node:util";
+import { type ParseArgsOptionsConfig, parseArgs } from "node:util";
 
 export const MARKOV_COMMANDS = [
   "corpus",
@@ -21,6 +22,40 @@ export type MarkovCommand = (typeof MARKOV_COMMANDS)[number];
 export const isMarkovCommand = (value: string): value is MarkovCommand =>
   (MARKOV_COMMANDS as readonly string[]).includes(value);
 
+/** `--help` は全コマンドで共通。 */
+const HELP_OPTION = {
+  help: { type: "boolean", short: "h", default: false },
+} as const;
+
+/** `-i` / `-iSUFFIX`: 結果をファイルへ書き戻す（`-i.bak` は `suffix: ".bak"`）。 */
+const IN_PLACE_OPTIONS = {
+  "in-place": { type: "boolean", short: "i", default: false },
+  suffix: { type: "string", default: "" },
+} as const;
+
+/** `-d DELIM`: フレーズを分割する区切り（既定は空白）。 */
+const DELIMITER_OPTION = {
+  delimiter: { type: "string", short: "d", default: " " },
+} as const;
+
+/** サブコマンドごとに受け付けるオプション。`cli.ts` の `switch` と 1:1 に対応する。 */
+export const COMMAND_OPTIONS = {
+  corpus: { tail: { type: "string" }, ...HELP_OPTION },
+  unlearn: { ...IN_PLACE_OPTIONS, ...HELP_OPTION },
+  "decrement-phrase": {
+    // 既定値を置かない。`--purge` との併用可否を「明示されたか」で判定するため。
+    delta: { type: "string" },
+    purge: { type: "boolean", default: false },
+    ...IN_PLACE_OPTIONS,
+    ...DELIMITER_OPTION,
+    ...HELP_OPTION,
+  },
+  tokens: { sort: { type: "string", default: "asToWeight" }, ...HELP_OPTION },
+  search: { ...HELP_OPTION },
+  transitions: { ...DELIMITER_OPTION, ...HELP_OPTION },
+} as const satisfies Record<MarkovCommand, ParseArgsOptionsConfig>;
+
+/** サブコマンドごとの usage 行。`bun run tools/markov/cli.ts` を前に足した完全な 1 行を返す。 */
 export const COMMAND_USAGE = {
   corpus: "corpus <modelPath> [--tail N]",
   unlearn: "unlearn <modelPath> <n> [-i|-iSUFFIX]",
@@ -31,13 +66,12 @@ export const COMMAND_USAGE = {
   transitions: "transitions <modelPath> <word> [-d DELIM]",
 } as const satisfies Record<MarkovCommand, string>;
 
-/** Usage line shown per command, including the `bun run` invocation prefix. */
 export const commandUsageLine = (command: MarkovCommand): string =>
   `  bun run tools/markov/cli.ts ${COMMAND_USAGE[command]}`;
 
 /**
- * Expand the `-iSUFFIX` shorthand into `-i --suffix SUFFIX` so every command
- * only ever sees the long form.
+ * `-iSUFFIX` を `-i --suffix SUFFIX` に展開する。
+ * 以降は長い形式だけ扱えばよいので、解析前に一度だけ変換する。
  */
 export const expandInPlaceArgs = (argv: readonly string[]): string[] => {
   const expanded: string[] = [];
@@ -51,18 +85,23 @@ export const expandInPlaceArgs = (argv: readonly string[]): string[] => {
   return expanded;
 };
 
+/** 全コマンドに共通する解析結果。 */
 type ParsedCommandBase = {
   help: boolean;
   positionals: string[];
 };
 
+/**
+ * コマンドごとの解析結果。`command` で判別できるので、`cli.ts` の
+ * `switch (args.command)` ではそのコマンドのフィールドだけが型に出る。
+ */
 export type MarkovCommandArgs = ParsedCommandBase &
   (
     | { command: "corpus"; tail: string | undefined }
     | { command: "unlearn"; inPlace: boolean; suffix: string }
     | {
         command: "decrement-phrase";
-        /** `undefined` unless `--delta` was passed explicitly. */
+        /** `--delta` が明示されたときだけ値を持つ。 */
         delta: string | undefined;
         purge: boolean;
         inPlace: boolean;
@@ -74,23 +113,15 @@ export type MarkovCommandArgs = ParsedCommandBase &
     | { command: "transitions"; delimiter: string }
   );
 
-const HELP_OPTION = {
-  help: { type: "boolean", short: "h", default: false },
-} as const;
-
-const IN_PLACE_OPTIONS = {
-  "in-place": { type: "boolean", short: "i", default: false },
-  suffix: { type: "string", default: "" },
-} as const;
-
-const DELIMITER_OPTION = {
-  delimiter: { type: "string", short: "d", default: " " },
-} as const;
+/** 未知のオプションで失敗させる解析。値だけ引数として残す。 */
+const parseStrict = <Options extends ParseArgsOptionsConfig>(
+  argv: readonly string[],
+  options: Options,
+) => parseArgs({ args: argv, options, strict: true, allowPositionals: true });
 
 /**
- * Parse `argv` (already stripped of the command name) for `command`.
- * Throws the underlying `parseArgs` error on unknown options or a missing
- * option value.
+ * `argv`（コマンド名を除いた引数）を `command` のオプションだけで解析する。
+ * 未知のオプションや値の欠落は `parseArgs` の例外として伝播する。
  */
 export const parseMarkovCommandArgs = (
   command: MarkovCommand,
@@ -100,26 +131,14 @@ export const parseMarkovCommandArgs = (
 
   switch (command) {
     case "corpus": {
-      const { values, positionals } = parseArgs({
-        args,
-        options: { tail: { type: "string" }, ...HELP_OPTION },
-        strict: true,
-        allowPositionals: true,
-      });
-      return {
-        command,
-        help: values.help,
-        positionals,
-        tail: values.tail,
-      };
+      const { values, positionals } = parseStrict(args, COMMAND_OPTIONS.corpus);
+      return { command, help: values.help, positionals, tail: values.tail };
     }
     case "unlearn": {
-      const { values, positionals } = parseArgs({
+      const { values, positionals } = parseStrict(
         args,
-        options: { ...IN_PLACE_OPTIONS, ...HELP_OPTION },
-        strict: true,
-        allowPositionals: true,
-      });
+        COMMAND_OPTIONS.unlearn,
+      );
       return {
         command,
         help: values.help,
@@ -129,18 +148,10 @@ export const parseMarkovCommandArgs = (
       };
     }
     case "decrement-phrase": {
-      const { values, positionals } = parseArgs({
+      const { values, positionals } = parseStrict(
         args,
-        options: {
-          delta: { type: "string" },
-          purge: { type: "boolean", default: false },
-          ...IN_PLACE_OPTIONS,
-          ...DELIMITER_OPTION,
-          ...HELP_OPTION,
-        },
-        strict: true,
-        allowPositionals: true,
-      });
+        COMMAND_OPTIONS["decrement-phrase"],
+      );
       return {
         command,
         help: values.help,
@@ -153,38 +164,18 @@ export const parseMarkovCommandArgs = (
       };
     }
     case "tokens": {
-      const { values, positionals } = parseArgs({
-        args,
-        options: {
-          sort: { type: "string", default: "asToWeight" },
-          ...HELP_OPTION,
-        },
-        strict: true,
-        allowPositionals: true,
-      });
-      return {
-        command,
-        help: values.help,
-        positionals,
-        sort: values.sort,
-      };
+      const { values, positionals } = parseStrict(args, COMMAND_OPTIONS.tokens);
+      return { command, help: values.help, positionals, sort: values.sort };
     }
     case "search": {
-      const { values, positionals } = parseArgs({
-        args,
-        options: { ...HELP_OPTION },
-        strict: true,
-        allowPositionals: true,
-      });
+      const { values, positionals } = parseStrict(args, COMMAND_OPTIONS.search);
       return { command, help: values.help, positionals };
     }
     case "transitions": {
-      const { values, positionals } = parseArgs({
+      const { values, positionals } = parseStrict(
         args,
-        options: { ...DELIMITER_OPTION, ...HELP_OPTION },
-        strict: true,
-        allowPositionals: true,
-      });
+        COMMAND_OPTIONS.transitions,
+      );
       return {
         command,
         help: values.help,

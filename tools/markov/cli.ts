@@ -4,7 +4,6 @@ import { copyFileSync, writeFileSync } from "node:fs";
 import { MarkovChainModel } from "../../lib/MarkovChainModel";
 import {
   commandUsageLine,
-  expandInPlaceArgs,
   isMarkovCommand,
   MARKOV_COMMANDS,
   type MarkovCommandArgs,
@@ -54,20 +53,14 @@ ${MARKOV_COMMANDS.map((command) => commandUsageLine(command)).join("\n")}
   process.exit(exitCode);
 }
 
-// The command name is the first argument that is not an option; everything
-// after it is parsed by that command's own option set.
-const expandedArgv = expandInPlaceArgs(Bun.argv.slice(2));
-const commandIndex = expandedArgv.findIndex((arg) => !arg.startsWith("-"));
-const commandName =
-  commandIndex === -1 ? undefined : expandedArgv[commandIndex];
-const helpRequested =
-  expandedArgv.includes("-h") || expandedArgv.includes("--help");
-const commandArgs =
-  commandIndex === -1
-    ? []
-    : expandedArgv.filter((_, index) => index !== commandIndex);
+// コマンドは「`-` で始まらない最初の引数」。以降の引数はそのコマンドの分だけ。
+const argv = Bun.argv.slice(2);
+const commandAt = argv.findIndex((arg) => !arg.startsWith("-"));
+const commandName = commandAt === -1 ? undefined : argv[commandAt];
+const commandArgv = argv.filter((_, index) => index !== commandAt);
 
 if (commandName === undefined) {
+  const helpRequested = argv.includes("-h") || argv.includes("--help");
   usage(helpRequested ? 0 : 1);
 }
 
@@ -76,13 +69,15 @@ if (!isMarkovCommand(commandName)) {
   usage(1);
 }
 
+// このコマンドが知らないオプションは parseArgs がエラーにする。
 let args: MarkovCommandArgs;
 try {
-  args = parseMarkovCommandArgs(commandName, commandArgs);
+  args = parseMarkovCommandArgs(commandName, commandArgv);
 } catch (err) {
-  console.error(`error: ${err instanceof Error ? err.message : String(err)}`);
-  console.error(`\nValid usage for \`${commandName}\`:`);
-  console.error(commandUsageLine(commandName));
+  const reason = err instanceof Error ? err.message : String(err);
+  console.error(
+    `error: ${reason}\n\nValid usage for \`${commandName}\`:\n${commandUsageLine(commandName)}`,
+  );
   process.exit(1);
 }
 
