@@ -2,6 +2,9 @@ import { describe, expect, it } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { helpText } from "./command";
+import { decrementPhraseCommand, markovCommands } from "./commands";
+
 const tmpDir = join(import.meta.dir, "../../var/tmp-markov-cli-test");
 const modelPath = join(tmpDir, "model.json");
 
@@ -519,19 +522,18 @@ describe("markov cli per-command options", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("--help exits 0 and lists every command", async () => {
+  it("--help exits 0 and prints the whole table", async () => {
     const { stderr, code } = await runCli(["--help"]);
     expect(code).toBe(0);
-    for (const command of [
-      "corpus",
-      "unlearn",
-      "decrement-phrase",
-      "tokens",
-      "search",
-      "transitions",
-    ]) {
-      expect(stderr).toContain(`bun run tools/markov/cli.ts ${command}`);
-    }
+    expect(stderr.trim()).toBe(helpText(markovCommands));
+  });
+
+  it("<command> --help exits 0 and prints only that command", async () => {
+    const { stderr, code } = await runCli(["decrement-phrase", "--help"]);
+    expect(code).toBe(0);
+    expect(stderr.trim()).toBe(decrementPhraseCommand.help);
+    expect(stderr).toContain("--purge");
+    expect(stderr).not.toContain("--tail");
   });
 
   it("no command exits 1", async () => {
