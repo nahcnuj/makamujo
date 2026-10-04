@@ -1,30 +1,45 @@
+/**
+ * `bun run markov transitions <modelPath> <word> [-d]`
+ * 単語の周辺の遷移を CSV で出す（`-d` でフレーズの区切りを指定できる）。
+ */
+import { MarkovChainModel } from "../../../lib/MarkovChainModel";
 import { defineCommand } from "../command";
-import { loadModel, printCsv, splitPhrase, visible } from "../shared";
-import { DELIMITER_OPTION } from "./options";
+import { printCsv, visibleNGram } from "../output";
 
-export const transitionsCommand = defineCommand({
+export const transitions = defineCommand({
   name: "transitions",
   summary: "transitions around a word as CSV",
-  positionals: {
-    modelPath: "path of the model file",
-    word: "word or phrase to look up",
+  args: {
+    modelPath: { help: "path of the model file" },
+    word: { help: "word or phrase to look up" },
   },
-  options: DELIMITER_OPTION,
+  options: {
+    delimiter: {
+      type: "string",
+      short: "d",
+      default: " ",
+      help: "delimiter inside the phrase",
+    },
+  },
   run: ({ modelPath, word, delimiter }) => {
-    const model = loadModel(modelPath);
-    const phrase = splitPhrase(word, delimiter);
-    const transitions = model.transitionsOf(phrase.join(" "));
-    const normalized = phrase.join("\u0000");
+    const tokens = word
+      .split(delimiter || " ")
+      .map((token) => token.trim())
+      .filter(Boolean);
+    // モデルはフレーズを `\0` 区切りの n-gram キーとして持つ。
+    const key = tokens.join("\u0000");
+    const { asTo, fromContexts } =
+      MarkovChainModel.fromFile(modelPath).transitionsOf(key);
     printCsv(
       ["direction", "context", "other", "weight"],
       [
-        ...transitions.fromContexts.map(
+        ...fromContexts.map(
           ({ context, next, weight }) =>
-            ["from", visible(context), next, weight] as const,
+            ["from", visibleNGram(context), next, weight] as const,
         ),
-        ...transitions.asTo.map(
+        ...asTo.map(
           ({ from, weight }) =>
-            ["to", visible(from), visible(normalized), weight] as const,
+            ["to", visibleNGram(from), visibleNGram(key), weight] as const,
         ),
       ],
     );

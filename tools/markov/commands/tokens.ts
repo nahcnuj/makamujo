@@ -1,22 +1,27 @@
+/**
+ * `bun run markov tokens <modelPath> [--sort]`
+ * トークンごとの統計を CSV で出す。
+ */
+import { MarkovChainModel } from "../../../lib/MarkovChainModel";
 import { defineCommand } from "../command";
-import { loadModel, printCsv, visible } from "../shared";
+import { printCsv, visibleNGram } from "../output";
 
-export const tokensCommand = defineCommand({
+export const tokens = defineCommand({
   name: "tokens",
   summary: "per-token statistics as CSV",
-  positionals: {
-    modelPath: "path of the model file",
+  args: {
+    modelPath: { help: "path of the model file" },
   },
   options: {
     sort: {
       type: "string",
       default: "asToWeight",
       choices: ["token", "asFrom", "asToWeight"],
-      description: "column to sort by",
+      help: "column to sort by",
     },
   },
   run: ({ modelPath, sort }) => {
-    const stats = [...loadModel(modelPath).tokenStats()];
+    const stats = [...MarkovChainModel.fromFile(modelPath).tokenStats()];
     if (sort === "token") {
       stats.sort((a, b) => a.token.localeCompare(b.token, "ja"));
     } else if (sort === "asFrom") {
@@ -26,7 +31,11 @@ export const tokensCommand = defineCommand({
     }
     printCsv(
       ["token", "asFrom", "asToWeight"],
-      stats.map((stat) => [visible(stat.token), stat.asFrom, stat.asToWeight]),
+      stats.map((stat) => [
+        visibleNGram(stat.token),
+        stat.asFrom,
+        stat.asToWeight,
+      ]),
     );
   },
 });

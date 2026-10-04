@@ -1,42 +1,51 @@
 /**
- * サブコマンドの「宣言」から解析・usage・ヘルプ・終了まで。
+ * サブコマンドの「宣言」から、解析・usage・ヘルプ・終了まで。
  *
- * お手本は **git**（`builtin/<cmd>.c` の `struct option[]` と
- * `parse-options.c` の `parse_options()`）。git もコマンドごとに
- * `struct option[]` を置き、宣言に無いオプションはそのコマンドを解析するときに
- * 弾き、`<command> --help` にはそのコマンドの usage だけを出す。
+ * お手本は **git**。git も 1 コマンド 1 ファイル（`builtin/<cmd>.c`）で、その
+ * コマンドが受理するオプションだけを `struct option[]` に書いて
+ * `parse_options()` に渡している。`parse_options()` は表に無い名前を受け付けず、
+ * `git <command> --help` にはその表から作った usage だけが出る。
  * ここでは同じことを宣言で表す。
  *
- * - `options` … git の `struct option[]`（ここが「どのコマンドが何を認めるか」の正）
- * - `positionals` … git の usage 文字列に書く `<modelPath>`
- * - `usage` / `help` … 宣言から作る（git の `usage_with_options()` に相当）
- * - `dispatch` … git の `run_argv()`（コマンドを選んでパサへ渡す）
+ * | git | このファイル |
+ * |---|---|
+ * | `builtin/<cmd>.c` の `struct option[]` | `options`（コマンドごとの宣言） |
+ * | usage 文字列に書く `<modelPath>` | `args`（宣言順が位置引数の順） |
+ * | `parse_options()` | `parseArgs`（`strict: true`） |
+ * | `usage_with_options()` | `usage` と `help`（宣言から作る） |
+ * | `run_argv()`（コマンドを選んでパサへ渡す） | `dispatch` |
  *
- * 宣言は 1 コマンド 1 ファイル（`commands/<name>.ts`）、表の並び順は `commands.ts`。
- * 設計は `architecture/markov-cli.md`。
+ * 契約は `architecture/markov-cli.md`。
  */
 import { parseArgs } from "node:util";
 
-/** 呼び出し方。usage 行の先頭に付く。 */
-export const INVOCATION = "bun run tools/markov/cli.ts";
+/** usage の先頭に付ける呼び出し方。 */
+export const INVOCATION = "bun run markov";
 
-/** 全コマンド共通のヘルプ指定。宣言ごとに書かなくてよい。 */
+/** 全コマンド共通のヘルプ指定。宣言には書かない。 */
 const HELP_FLAGS = ["-h", "--help"] as const;
 
 /** 引数が間違っているとき。`dispatch` が usage を添えて終了する。 */
 export class UsageError extends Error {}
 
-/** 処理の失敗（モデルを読めない等）。usage は添えない。 */
-export class CliError extends Error {}
-
 /** 例外を人が読む 1 行にする。 */
 export const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
-/** 位置引数の宣言（名前 → 説明）。usage では `<名前>` と出る。 */
-export type PositionalDeclarations = Readonly<Record<string, string>>;
+/** 位置引数 1 個の宣言。 */
+export type ArgumentDeclaration = {
+  /** ヘルプに出す説明。 */
+  readonly help: string;
+  /** 1 以上の整数であることを検証する。検証後も文字列のまま `run` に渡す。 */
+  readonly integer?: true;
+};
 
-/** オプション 1 個の宣言。`parseArgs` の指定に usage 用の情報と説明を足す。 */
+/** 位置引数の宣言（名前 → 宣言）。usage では `<名前>` と出る。 */
+export type ArgumentDeclarations = Readonly<
+  Record<string, ArgumentDeclaration>
+>;
+
+/** オプション 1 個の宣言。`parseArgs` の指定に説明と検証を加えたもの。 */
 export type OptionDeclaration = {
   /** `"string"` なら次の引数を値に取る。`"boolean"` なら値を持たないフラグ。 */
   readonly type: "string" | "boolean";
@@ -44,34 +53,31 @@ export type OptionDeclaration = {
   readonly short?: string;
   /** 既定値。string で省略すると `undefined` になるので「未指定」と区別できる。 */
   readonly default?: string | boolean;
-  /** usage に書く値の名前（`--tail N` の `N`）。省略時は大文字の名前。 */
-  readonly value?: string;
-  /** 許される値。宣言すると検証し、usage には `a|b|c` と書く。 */
+  /** 許される値。宣言すると検証し、ヘルプには `a|b|c` と書く。 */
   readonly choices?: readonly string[];
-  /**
-   * ヘルプに出す説明。書かないオプションは内部用で、usage にもヘルプにも出ない
-   * （git の `OPT__HIDDEN` と同じ意味。`--suffix` がこれ）。
-   */
-  readonly description?: string;
+  /** 1 以上の整数であることを検証する。検証後も文字列のまま `run` に渡す。 */
+  readonly integer?: true;
+  /** ヘルプに出す説明。 */
+  readonly help: string;
 };
 
 /** オプションの宣言（名前 → 宣言）。ここに無いものは弾かれる。 */
 export type OptionDeclarations = Readonly<Record<string, OptionDeclaration>>;
 
 /** `parseArgs` に渡す設定。`strict: true` なので宣言に無いオプションはエラー。 */
-type ParseConfig<Options extends OptionDeclarations> = {
+type ParseConfig<Declared extends OptionDeclarations> = {
   args: string[];
-  options: Options;
+  options: Declared;
   strict: true;
   allowPositionals: true;
 };
 
 /** `run` が受け取る引数。位置引数もオプションも宣言どおりの名前で入る。 */
 export type CommandArgs<
-  Positionals extends PositionalDeclarations,
-  Options extends OptionDeclarations,
-> = ReturnType<typeof parseArgs<ParseConfig<Options>>>["values"] & {
-  readonly [Name in keyof Positionals]: string;
+  Arguments extends ArgumentDeclarations,
+  Declared extends OptionDeclarations,
+> = ReturnType<typeof parseArgs<ParseConfig<Declared>>>["values"] & {
+  readonly [Name in keyof Arguments]: string;
 };
 
 /** 宣言そのもの（型を消した形）。usage・ヘルプの生成に使う。 */
@@ -79,13 +85,13 @@ export type CommandDeclaration = {
   readonly name: string;
   /** `--help` に並べる 1 行の説明。 */
   readonly summary: string;
-  readonly positionals: PositionalDeclarations;
+  readonly args: ArgumentDeclarations;
   readonly options: OptionDeclarations;
 };
 
 /** サブコマンドの表に並べる形。宣言ごとに違う型を同じ型にそろえる。 */
 export type Command = CommandDeclaration & {
-  /** 使い方の部分（`corpus <modelPath> [--tail N]`）。`INVOCATION` は含まない。 */
+  /** 使い方の部分（`corpus <modelPath> [--tail]`）。`INVOCATION` は含まない。 */
   readonly usage: string;
   /** このコマンドだけのヘルプ。 */
   readonly help: string;
@@ -95,99 +101,64 @@ export type Command = CommandDeclaration & {
 
 /** `defineCommand` の戻り値。`parse` と `run` は宣言の型付きなのでテストからも呼べる。 */
 export type DefinedCommand<
-  Positionals extends PositionalDeclarations,
-  Options extends OptionDeclarations,
+  Arguments extends ArgumentDeclarations,
+  Declared extends OptionDeclarations,
 > = Command & {
-  readonly parse: (
-    argv: readonly string[],
-  ) => CommandArgs<Positionals, Options>;
-  readonly run: (args: CommandArgs<Positionals, Options>) => void;
+  readonly parse: (argv: readonly string[]) => CommandArgs<Arguments, Declared>;
+  readonly run: (args: CommandArgs<Arguments, Declared>) => void;
 };
 
 /** 説明の列を揃えた 2 列の表。 */
-const table = (rows: readonly { left: string; right: string }[]): string => {
-  const width = Math.max(...rows.map((row) => row.left.length));
-  return rows
-    .map((row) => `  ${row.left.padEnd(width)}  ${row.right}`.trimEnd())
+const table = (
+  cells: readonly (readonly [left: string, right: string])[],
+): string => {
+  const width = Math.max(...cells.map(([left]) => left.length));
+  return cells
+    .map(([left, right]) => `  ${left.padEnd(width)}  ${right}`.trimEnd())
     .join("\n");
 };
 
-/** usage に書く値の名前。`choices` があれば `a|b|c`、なければ `value`、なければ大文字の名前。 */
+/** オプションが値を取るときに書く名前。`choices` は `a|b|c`、なければ大文字の名前。 */
 const valueNameOf = (name: string, option: OptionDeclaration): string =>
-  option.choices?.join("|") ?? option.value ?? name.toUpperCase();
-
-/**
- * `-i.bak` を許すか。`--in-place` と `--suffix` の組だけ。
- * 展開（`expandInPlace`）と usage の `[-i|-iSUFFIX]` の両方がこれを見る。
- */
-const hasInlineSuffix = (options: OptionDeclarations): boolean =>
-  options["in-place"]?.short === "i" && options.suffix?.type === "string";
-
-/** usage のオプション部分（`[--tail N]` / `[--purge]`）。説明が無い内部用は出さない。 */
-const usageOptionsOf = (options: OptionDeclarations): string[] => {
-  const inlineSuffix = hasInlineSuffix(options);
-  return Object.entries(options).flatMap(([name, option]) => {
-    if (option.description === undefined) {
-      return [];
-    }
-    const flag = option.short ? `-${option.short}` : `--${name}`;
-    if (option.type !== "boolean") {
-      return [`[${flag} ${valueNameOf(name, option)}]`];
-    }
-    return [
-      inlineSuffix && name === "in-place"
-        ? `[${flag}|${flag}SUFFIX]`
-        : `[${flag}]`,
-    ];
-  });
-};
+  option.choices?.join("|") ?? name.toUpperCase();
 
 /** 1 個のオプションがヘルプの Options でどう見えるか（`-d, --delimiter DELIM`）。 */
 const labelOf = (name: string, option: OptionDeclaration): string => {
-  const short = option.short ? `-${option.short}, ` : "";
+  const short = option.short ? `-${option.short}, ` : "  ";
   const value =
     option.type === "boolean" ? "" : ` ${valueNameOf(name, option)}`;
   return `${short}--${name}${value}`;
 };
 
-/** `corpus <modelPath> [--tail N]` のような、使い方だけの部分。 */
-const usageOf = (declaration: CommandDeclaration): string => {
-  const positionals = Object.keys(declaration.positionals).map(
-    (name) => `<${name}>`,
-  );
-  return [
+/** `corpus <modelPath> [--tail]` のような、使い方だけの部分。 */
+const usageOf = (declaration: CommandDeclaration): string =>
+  [
     declaration.name,
-    ...positionals,
-    ...usageOptionsOf(declaration.options),
+    ...Object.keys(declaration.args).map((name) => `<${name}>`),
+    ...Object.entries(declaration.options).map(([name, option]) =>
+      option.short === undefined ? `[--${name}]` : `[-${option.short}]`,
+    ),
   ].join(" ");
-};
 
 /** このコマンドだけのヘルプ（使い方・位置引数・オプション）。 */
 const helpOf = (declaration: CommandDeclaration, usage: string): string => {
   const sections = [
     `Usage:\n  ${INVOCATION} ${usage}\n  ${declaration.summary}`,
   ];
-  const positionals = Object.entries(declaration.positionals);
-  if (positionals.length > 0) {
+  const args = Object.entries(declaration.args);
+  if (args.length > 0) {
     sections.push(
       `Arguments:\n${table(
-        positionals.map(([name, description]) => ({
-          left: `<${name}>`,
-          right: description,
-        })),
+        args.map(([name, { help }]) => [`<${name}>`, help]),
       )}`,
     );
   }
-  const options = Object.entries(declaration.options).flatMap(
-    ([name, option]) =>
-      option.description === undefined
-        ? []
-        : [{ left: labelOf(name, option), right: option.description }],
-  );
   sections.push(
     `Options:\n${table([
-      ...options,
-      { left: HELP_FLAGS.join(", "), right: "show this help" },
+      ...Object.entries(declaration.options).map(
+        ([name, option]) => [labelOf(name, option), option.help] as const,
+      ),
+      [HELP_FLAGS.join(", "), "show this help"],
     ])}`,
   );
   return sections.join("\n\n");
@@ -198,10 +169,7 @@ export const helpText = (commands: readonly Command[]): string =>
   [
     `Usage:\n  ${INVOCATION} <command> [options]\n  ${INVOCATION} <command> --help`,
     `Commands:\n${table(
-      commands.map((command) => ({
-        left: command.usage,
-        right: command.summary,
-      })),
+      commands.map((command) => [command.usage, command.summary] as const),
     )}`,
   ].join("\n\n");
 
@@ -217,50 +185,39 @@ const takeHelpFlags = (
   args: argv.filter((arg) => !isHelpFlag(arg)),
 });
 
-/**
- * `-i.bak` を `-i --suffix .bak` に展開する。
- * `-d/` のように短縮形の直後に値を書くのは `parseArgs` がそのまま扱う。
- */
-const expandInPlace = (
-  options: OptionDeclarations,
-  argv: readonly string[],
-): string[] =>
-  hasInlineSuffix(options)
-    ? argv.flatMap((arg) =>
-        /^-i.+/.test(arg) ? ["-i", "--suffix", arg.slice(2)] : [arg],
-      )
-    : [...argv];
-
-/** `choices` を宣言したオプションの値を確認する。 */
-const assertChoices = (
-  options: OptionDeclarations,
-  values: Readonly<Record<string, unknown>>,
+/** 宣言した検証（`integer` と `choices`）を通す。 */
+const assertDeclaredValue = (
+  label: string,
+  declaration: { integer?: true; choices?: readonly string[] },
+  value: string | boolean | undefined,
 ): void => {
-  for (const [name, value] of Object.entries(values)) {
-    const choices = options[name]?.choices;
-    if (choices && !choices.some((choice) => choice === value)) {
-      throw new UsageError(
-        `--${name} must be one of ${choices.join(", ")} (got ${String(value)})`,
-      );
-    }
+  if (typeof value !== "string") return;
+  if (declaration.integer !== undefined && !/^[1-9][0-9]*$/.test(value)) {
+    throw new UsageError(`${label} must be a positive integer, got ${value}`);
+  }
+  const { choices } = declaration;
+  if (choices && !choices.some((choice) => choice === value)) {
+    throw new UsageError(
+      `${label} must be one of ${choices.join(", ")} (got ${value})`,
+    );
   }
 };
 
-/** 宣言どおりのオプションだけを解析する。未知のオプション・位置引数の過不足は UsageError。 */
+/** 宣言どおりの引数だけを解析する。未知のオプション・位置引数の過不足は UsageError。 */
 export const parseCommandArgs = <
-  const Positionals extends PositionalDeclarations,
-  const Options extends OptionDeclarations,
+  const Arguments extends ArgumentDeclarations,
+  const Declared extends OptionDeclarations,
 >(
   declaration: {
-    readonly positionals: Positionals;
-    readonly options: Options;
+    readonly args: Arguments;
+    readonly options: Declared;
   },
   argv: readonly string[],
-): CommandArgs<Positionals, Options> => {
-  let parsed: ReturnType<typeof parseArgs<ParseConfig<Options>>>;
+): CommandArgs<Arguments, Declared> => {
+  let parsed: ReturnType<typeof parseArgs<ParseConfig<Declared>>>;
   try {
-    parsed = parseArgs<ParseConfig<Options>>({
-      args: expandInPlace(declaration.options, argv),
+    parsed = parseArgs<ParseConfig<Declared>>({
+      args: [...argv],
       options: declaration.options,
       strict: true,
       allowPositionals: true,
@@ -268,15 +225,21 @@ export const parseCommandArgs = <
   } catch (error) {
     throw new UsageError(errorMessage(error));
   }
-  assertChoices(declaration.options, parsed.values);
+  const values: Readonly<Record<string, string | boolean | undefined>> =
+    parsed.values;
+  for (const [name, option] of Object.entries(declaration.options)) {
+    assertDeclaredValue(`--${name}`, option, values[name]);
+  }
 
-  const names = Object.keys(declaration.positionals);
+  const names = Object.keys(declaration.args);
   const named: Record<string, string> = {};
   for (const [index, name] of names.entries()) {
+    const { integer } = declaration.args[name] ?? {};
     const value = parsed.positionals[index];
     if (value === undefined) {
       throw new UsageError(`missing argument <${name}>`);
     }
+    assertDeclaredValue(name, { integer }, value);
     named[name] = value;
   }
   const extra = parsed.positionals[names.length];
@@ -285,27 +248,27 @@ export const parseCommandArgs = <
   }
   // キーは宣言からしか分からないので、ここだけが宣言の型に合わせて締める。
   return Object.assign({}, parsed.values, named) as CommandArgs<
-    Positionals,
-    Options
+    Arguments,
+    Declared
   >;
 };
 
 /**
  * サブコマンドを宣言する。
  *
- * `positionals` は「名前 → 説明」の表で、usage と `run` の引数名はここから来る。
+ * `args` は「名前 → 宣言」の表で、usage と `run` の引数名はここから来る。
  * `options` は `parseArgs` の指定そのものなので、宣言に無いオプションは弾かれる。
  */
 export const defineCommand = <
-  const Positionals extends PositionalDeclarations,
-  const Options extends OptionDeclarations,
+  const Arguments extends ArgumentDeclarations,
+  const Declared extends OptionDeclarations,
 >(spec: {
   readonly name: string;
   readonly summary: string;
-  readonly positionals: Positionals;
-  readonly options: Options;
-  readonly run: (args: CommandArgs<Positionals, Options>) => void;
-}): DefinedCommand<Positionals, Options> => {
+  readonly args: Arguments;
+  readonly options: Declared;
+  readonly run: (args: CommandArgs<Arguments, Declared>) => void;
+}): DefinedCommand<Arguments, Declared> => {
   const usage = usageOf(spec);
   return {
     ...spec,
@@ -335,9 +298,8 @@ export const dispatch = (
   const args = argv.filter((_, index) => index !== commandIndex);
 
   if (name === undefined) {
-    const help = argv.some(isHelpFlag);
     console.error(helpText(commands));
-    process.exit(help ? 0 : 1);
+    process.exit(argv.some(isHelpFlag) ? 0 : 1);
   }
 
   const command = commands.find((candidate) => candidate.name === name);
@@ -346,22 +308,22 @@ export const dispatch = (
     process.exit(1);
   }
 
+  let helpRequested = false;
+
   try {
     if (command.invoke(args) === "helpRequested") {
-      console.error(command.help);
-      process.exit(0);
+      helpRequested = true;
     }
   } catch (error) {
-    if (error instanceof UsageError) {
-      console.error(
-        `error: ${error.message}\n\nUsage:\n  ${INVOCATION} ${command.usage}`,
-      );
-      process.exit(1);
-    }
-    if (error instanceof CliError) {
-      console.error(`error: ${error.message}`);
-      process.exit(1);
-    }
-    throw error;
+    const usage =
+      error instanceof UsageError
+        ? `\n\nUsage:\n  ${INVOCATION} ${command.usage}`
+        : "";
+    console.error(`error: ${errorMessage(error)}${usage}`);
+    process.exit(1);
+  }
+  if (helpRequested) {
+    console.error(command.help);
+    process.exit(0);
   }
 };

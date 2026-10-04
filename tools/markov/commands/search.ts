@@ -1,21 +1,30 @@
+/**
+ * `bun run markov search <modelPath> <query>`
+ * query を含むトークンを CSV で出す。
+ */
+import { MarkovChainModel } from "../../../lib/MarkovChainModel";
 import { defineCommand } from "../command";
-import { loadModel, printCsv, visible } from "../shared";
+import { printCsv, visibleNGram } from "../output";
 
-export const searchCommand = defineCommand({
+export const search = defineCommand({
   name: "search",
   summary: "tokens containing the query, as CSV",
-  positionals: {
-    modelPath: "path of the model file",
-    query: "substring to look for",
+  args: {
+    modelPath: { help: "path of the model file" },
+    query: { help: "substring to look for" },
   },
   options: {},
   run: ({ modelPath, query }) => {
-    const hits = loadModel(modelPath)
+    const hits = MarkovChainModel.fromFile(modelPath)
       .tokenStats()
       .filter((stat) => stat.token.includes(query));
     printCsv(
       ["token", "asFrom", "asToWeight"],
-      hits.map((stat) => [visible(stat.token), stat.asFrom, stat.asToWeight]),
+      hits.map((stat) => [
+        visibleNGram(stat.token),
+        stat.asFrom,
+        stat.asToWeight,
+      ]),
     );
   },
 });

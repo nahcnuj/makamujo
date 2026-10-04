@@ -3,7 +3,8 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { helpText } from "./command";
-import { decrementPhraseCommand, markovCommands } from "./commands";
+import { markovCommands } from "./commands";
+import { decrementPhrase } from "./commands/decrementPhrase";
 
 const tmpDir = join(import.meta.dir, "../../var/tmp-markov-cli-test");
 const modelPath = join(tmpDir, "model.json");
@@ -141,7 +142,7 @@ describe("markov cli decrement-phrase --in-place", () => {
   });
 });
 
-describe("markov cli decrement-phrase -iSUFFIX", () => {
+describe("markov cli decrement-phrase --suffix", () => {
   it("writes backup with suffix then overwrites model", async () => {
     mkdirSync(tmpDir, { recursive: true });
     writeFileSync(
@@ -162,7 +163,9 @@ describe("markov cli decrement-phrase -iSUFFIX", () => {
         "beige panty",
         "--delta",
         "1",
-        "-i.bak",
+        "--suffix",
+        ".bak",
+        "-i",
       ],
       { stdout: "pipe", stderr: "pipe" },
     );
@@ -485,7 +488,7 @@ describe("markov cli per-command options", () => {
     expect(code).toBe(1);
     expect(stderr).toContain("--tail");
     expect(stderr).toContain(
-      "bun run tools/markov/cli.ts transitions <modelPath> <word> [-d DELIM]",
+      "bun run markov transitions <modelPath> <word> [-d]",
     );
 
     rmSync(tmpDir, { recursive: true, force: true });
@@ -531,9 +534,17 @@ describe("markov cli per-command options", () => {
   it("<command> --help exits 0 and prints only that command", async () => {
     const { stderr, code } = await runCli(["decrement-phrase", "--help"]);
     expect(code).toBe(0);
-    expect(stderr.trim()).toBe(decrementPhraseCommand.help);
+    expect(stderr.trim()).toBe(decrementPhrase.help);
     expect(stderr).toContain("--purge");
     expect(stderr).not.toContain("--tail");
+  });
+
+  it("<command> --help shows only the help flag when there is no option", async () => {
+    const { stderr, code } = await runCli(["search", "--help"]);
+    expect(code).toBe(0);
+    expect(stderr).toContain("bun run markov search <modelPath> <query>");
+    expect(stderr).toContain("-h, --help");
+    expect(stderr).not.toContain("--sort");
   });
 
   it("no command exits 1", async () => {

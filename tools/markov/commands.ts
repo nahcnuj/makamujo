@@ -1,37 +1,25 @@
 /**
  * markov CLI のサブコマンド表。
  *
- * 各コマンドは `commands/<name>.ts` に宣言（summary / positionals / options）と
- * 処理だけを書いており、usage・ヘルプ・未知のオプションの検出は宣言から
- * `command.ts` が作る。別のコマンドのオプションを渡しても、宣言に無いので弾かれる。
+ * 1 コマンド 1 ファイル（git の `builtin/<cmd>.c` と同じ形）で、各ファイルが
+ * そのコマンドのオプション表（`options`）と処理（`run`）を持つ。ここは表の
+ * 並び順だけ（並び順が `bun run markov --help` の並び順になる）。
  *
- * このファイルが持つのは並び順だけ（`--help` の並び順 = オプション表の並び順）。
- * お手本は git の `builtin/<cmd>.c` の `struct option[]`（1 コマンド 1 ファイル）。
- * 設計は `architecture/markov-cli.md` を参照。
+ * `bun run markov <command> --help` に出る表は各コマンドの `options` から作られる。
  */
 import type { Command } from "./command";
-import { corpusCommand } from "./commands/corpus";
-import { decrementPhraseCommand } from "./commands/decrementPhrase";
-import { searchCommand } from "./commands/search";
-import { tokensCommand } from "./commands/tokens";
-import { transitionsCommand } from "./commands/transitions";
-import { unlearnCommand } from "./commands/unlearn";
+import { corpus } from "./commands/corpus";
+import { decrementPhrase } from "./commands/decrementPhrase";
+import { search } from "./commands/search";
+import { tokens } from "./commands/tokens";
+import { transitions } from "./commands/transitions";
+import { unlearn } from "./commands/unlearn";
 
-export {
-  corpusCommand,
-  decrementPhraseCommand,
-  searchCommand,
-  tokensCommand,
-  transitionsCommand,
-  unlearnCommand,
-};
-
-/** サブコマンドの表。並び順が `--help` の並び順になる。 */
 export const markovCommands: readonly Command[] = [
-  corpusCommand,
-  unlearnCommand,
-  decrementPhraseCommand,
-  tokensCommand,
-  searchCommand,
-  transitionsCommand,
+  corpus,
+  unlearn,
+  decrementPhrase,
+  tokens,
+  search,
+  transitions,
 ];

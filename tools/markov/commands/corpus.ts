@@ -1,28 +1,30 @@
+/**
+ * `bun run markov corpus <modelPath> [--tail]`
+ * 学習した文を新しい順に一覧する（1 = 最新）。
+ */
+import { MarkovChainModel } from "../../../lib/MarkovChainModel";
 import { defineCommand } from "../command";
-import { loadModel, positiveInteger, readModelJson } from "../shared";
+import { readModelJson } from "../modelFile";
 
-export const corpusCommand = defineCommand({
+export const corpus = defineCommand({
   name: "corpus",
   summary: "list corpus entries (1 = newest)",
-  positionals: {
-    modelPath: "path of the model file",
+  args: {
+    modelPath: { help: "path of the model file" },
   },
   options: {
     tail: {
       type: "string",
-      value: "N",
-      description: "list only the newest N entries",
+      integer: true,
+      help: "list only the newest N entries",
     },
   },
-  run: (args) => {
-    const { modelPath, tail } = args;
-    const newestFirst =
-      tail === undefined ? undefined : positiveInteger("--tail", tail);
-    const corpus = readModelJson(loadModel(modelPath)).corpus ?? [];
+  run: ({ modelPath, tail }) => {
     const entries =
-      newestFirst === undefined ? corpus : corpus.slice(-newestFirst);
-    entries.forEach((entry, index) => {
-      console.log(`${entries.length - index}\t${entry}`);
+      readModelJson(MarkovChainModel.fromFile(modelPath)).corpus ?? [];
+    const listed = tail === undefined ? entries : entries.slice(-Number(tail));
+    listed.forEach((entry, index) => {
+      console.log(`${listed.length - index}\t${entry}`);
     });
   },
 });

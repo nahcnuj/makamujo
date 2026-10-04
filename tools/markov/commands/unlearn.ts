@@ -1,18 +1,33 @@
+/**
+ * `bun run markov unlearn <modelPath> <n> [-i] [--suffix]`
+ * 末尾から n 番目の学習文（1 = 最新）を消す。
+ */
+import { MarkovChainModel } from "../../../lib/MarkovChainModel";
 import { defineCommand, UsageError } from "../command";
-import { emitModel, loadModel, positiveInteger } from "../shared";
-import { IN_PLACE_OPTIONS } from "./options";
+import { emitModel } from "../modelFile";
 
-export const unlearnCommand = defineCommand({
+export const unlearn = defineCommand({
   name: "unlearn",
   summary: "drop the n-th corpus entry from the end (1 = newest)",
-  positionals: {
-    modelPath: "path of the model file",
-    n: "1-based index from the newest entry",
+  args: {
+    modelPath: { help: "path of the model file" },
+    n: { help: "1-based index from the newest entry", integer: true },
   },
-  options: IN_PLACE_OPTIONS,
+  options: {
+    "in-place": {
+      type: "boolean",
+      short: "i",
+      default: false,
+      help: "write the model back to <modelPath> (default: print to stdout)",
+    },
+    suffix: {
+      type: "string",
+      help: "copy <modelPath> to <modelPath>SUFFIX before --in-place",
+    },
+  },
   run: ({ modelPath, n, suffix, "in-place": inPlace }) => {
-    const count = positiveInteger("n", n);
-    const model = loadModel(modelPath);
+    const count = Number(n);
+    const model = MarkovChainModel.fromFile(modelPath);
     const text = model.corpusFromEnd(count);
     if (text === undefined) {
       throw new UsageError(
@@ -24,6 +39,6 @@ export const unlearnCommand = defineCommand({
     console.error(
       `corpus: ${model.corpusLength()} => ${updated.corpusLength()}`,
     );
-    emitModel(modelPath, updated, inPlace, suffix);
+    emitModel({ modelPath, updated, inPlace, suffix });
   },
 });

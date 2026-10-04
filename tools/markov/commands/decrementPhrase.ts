@@ -1,54 +1,91 @@
+/**
+ * `bun run markov decrement-phrase <modelPath> <phrase> [--delta] [--purge] [-i] [--suffix] [-d]`
+ * フレーズの遷移を弱める（--purge なら消す）。
+ */
+import { MarkovChainModel } from "../../../lib/MarkovChainModel";
 import { defineCommand, UsageError } from "../command";
-import {
-  emitModel,
-  loadModel,
-  logTransitionDiff,
-  positiveInteger,
-  readModelJson,
-  splitPhrase,
-} from "../shared";
-import { DELIMITER_OPTION, IN_PLACE_OPTIONS } from "./options";
+import { emitModel, type ModelJson, readModelJson } from "../modelFile";
+import { visibleNGram } from "../output";
 
-export const decrementPhraseCommand = defineCommand({
+/** 変わった遷移を `context -> token: before => after` の形で数えて stderr に出す。 */
+const logTransitionDiff = (
+  before: ModelJson["model"],
+  after: ModelJson["model"],
+): void => {
+  const label = (context: string) => visibleNGram(context) || "(BOS)";
+  let changed = 0;
+  for (const context of new Set([
+    ...Object.keys(before),
+    ...Object.keys(after),
+  ])) {
+    const beforeTokens = before[context] ?? {};
+    const afterTokens = after[context] ?? {};
+    for (const token of new Set([
+      ...Object.keys(beforeTokens),
+      ...Object.keys(afterTokens),
+    ])) {
+      const weightBefore = beforeTokens[token] ?? 0;
+      const weightAfter = afterTokens[token] ?? 0;
+      if (weightBefore !== weightAfter) {
+        console.error(
+          `${label(context)} -> ${visibleNGram(token)}: ${weightBefore} => ${weightAfter}`,
+        );
+        changed++;
+      }
+    }
+  }
+  console.error(`changed: ${changed} transitions`);
+};
+
+export const decrementPhrase = defineCommand({
   name: "decrement-phrase",
   summary: "weaken (or purge) the transitions of a phrase",
-  positionals: {
-    modelPath: "path of the model file",
-    phrase: "phrase whose transitions are weakened",
+  args: {
+    modelPath: { help: "path of the model file" },
+    phrase: { help: "phrase whose transitions are weakened" },
   },
   options: {
     delta: {
       type: "string",
-      value: "N",
-      description: "subtract N from the weights (default 1); not with --purge",
+      integer: true,
+      help: "subtract N from the weights (default 1); not with --purge",
     },
     purge: {
       type: "boolean",
       default: false,
-      description: "drop the transitions instead of weakening them",
+      help: "drop the transitions instead of weakening them",
     },
-    ...IN_PLACE_OPTIONS,
-    ...DELIMITER_OPTION,
+    "in-place": {
+      type: "boolean",
+      short: "i",
+      default: false,
+      help: "write the model back to <modelPath> (default: print to stdout)",
+    },
+    suffix: {
+      type: "string",
+      help: "copy <modelPath> to <modelPath>SUFFIX before --in-place",
+    },
+    delimiter: {
+      type: "string",
+      short: "d",
+      default: " ",
+      help: "delimiter inside the phrase",
+    },
   },
   run: (args) => {
-    const {
-      modelPath,
-      phrase,
-      purge,
-      suffix,
-      delimiter,
-      "in-place": inPlace,
-    } = args;
+    const { modelPath, phrase, purge, suffix, delimiter } = args;
     if (purge && args.delta !== undefined) {
       throw new UsageError("--purge and --delta cannot be used together");
     }
-    const delta =
-      args.delta === undefined ? 1 : positiveInteger("--delta", args.delta);
-    const tokens = splitPhrase(phrase, delimiter);
+    const delta = args.delta === undefined ? 1 : Number(args.delta);
+    const tokens = phrase
+      .split(delimiter || " ")
+      .map((token) => token.trim())
+      .filter(Boolean);
     if (tokens.length === 0) {
       throw new UsageError("phrase is empty");
     }
-    const model = loadModel(modelPath);
+    const model = MarkovChainModel.fromFile(modelPath);
     const before = readModelJson(model).model;
     const updated = model.decrementPhrase(
       tokens,
@@ -58,6 +95,11 @@ export const decrementPhraseCommand = defineCommand({
       `decrement-phrase ${purge ? "purge" : `delta=${delta}`} tokens=${JSON.stringify(tokens)}`,
     );
     logTransitionDiff(before, readModelJson(updated).model);
-    emitModel(modelPath, updated, inPlace, suffix);
+    emitModel({
+      modelPath,
+      updated,
+      inPlace: args["in-place"],
+      suffix,
+    });
   },
 });

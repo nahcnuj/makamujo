@@ -1,7 +1,6 @@
 import { describe, expect, it, spyOn } from "bun:test";
 
 import {
-  CliError,
   type Command,
   defineCommand,
   dispatch,
@@ -13,37 +12,34 @@ import {
 
 /**
  * 宣言の機能をひととおり使うテスト用のコマンド。
- * 位置引数・既定値・choices・`-iSUFFIX`・内部用オプション（説明の無い `suffix`）を
- * すべて含めている。
+ * 位置引数・既定値・`integer`・`choices`・短縮形をすべて含めている。
  */
 const fixture = defineCommand({
   name: "fixture",
   summary: "fixture command",
-  positionals: {
-    modelPath: "path of the model file",
-    n: "1-based index",
+  args: {
+    modelPath: { help: "path of the model file" },
+    n: { help: "1-based index", integer: true },
   },
   options: {
-    tail: { type: "string", value: "N", description: "newest N entries" },
+    tail: { type: "string", integer: true, help: "newest N entries" },
     sort: {
       type: "string",
       default: "asToWeight",
       choices: ["token", "asToWeight"],
-      description: "column to sort by",
+      help: "column to sort by",
     },
     "in-place": {
       type: "boolean",
       short: "i",
       default: false,
-      description: "write the model back",
+      help: "write the model back",
     },
-    suffix: { type: "string", default: "" },
     delimiter: {
       type: "string",
       short: "d",
       default: " ",
-      value: "DELIM",
-      description: "delimiter inside the phrase",
+      help: "delimiter inside the phrase",
     },
   },
   run: () => {},
@@ -53,18 +49,17 @@ const fixture = defineCommand({
 const row = (left: string, right: string): RegExp => {
   const literal = (text: string): string =>
     text.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^ {2}${literal(left)} {2,}${literal(right)}$`, "m");
+  return new RegExp(` {2,}${literal(left)} {2,}${literal(right)}$`, "m");
 };
 
 describe("parseCommandArgs", () => {
-  it("names positionals as declared and applies declared defaults", () => {
+  it("names arguments as declared and applies declared defaults", () => {
     expect(fixture.parse(["m.json", "2"])).toEqual({
       modelPath: "m.json",
       n: "2",
       tail: undefined,
       sort: "asToWeight",
       "in-place": false,
-      suffix: "",
       delimiter: " ",
     });
   });
@@ -90,6 +85,12 @@ describe("parseCommandArgs", () => {
     expect(fixture.parse(["m.json", "1"]).tail).toBeUndefined();
   });
 
+  it("leaves the value attached to a short option alone", () => {
+    const args = fixture.parse(["m.json", "1", "-i", "-d/"]);
+    expect(args["in-place"]).toBe(true);
+    expect(args.delimiter).toBe("/");
+  });
+
   it("rejects an option the command does not declare", () => {
     expect(() => fixture.parse(["m.json", "1", "--delta", "2"])).toThrow(
       UsageError,
@@ -103,13 +104,28 @@ describe("parseCommandArgs", () => {
     expect(() => fixture.parse(["m.json", "1", "--tail"])).toThrow(UsageError);
   });
 
-  it("rejects a missing positional by name", () => {
+  it("rejects a missing argument by name", () => {
     expect(() => fixture.parse(["m.json"])).toThrow("missing argument <n>");
   });
 
-  it("rejects an unexpected extra positional", () => {
+  it("rejects an unexpected extra argument", () => {
     expect(() => fixture.parse(["m.json", "1", "extra"])).toThrow(
       'unexpected argument "extra"',
+    );
+  });
+
+  it("rejects an option value that is not a positive integer", () => {
+    expect(() => fixture.parse(["m.json", "1", "--tail", "0"])).toThrow(
+      "--tail must be a positive integer, got 0",
+    );
+    expect(() => fixture.parse(["m.json", "1", "--tail", "x"])).toThrow(
+      "--tail must be a positive integer, got x",
+    );
+  });
+
+  it("rejects an argument value that is not a positive integer", () => {
+    expect(() => fixture.parse(["m.json", "x"])).toThrow(
+      "n must be a positive integer, got x",
     );
   });
 
@@ -119,19 +135,6 @@ describe("parseCommandArgs", () => {
     );
   });
 
-  it("expands -iSUFFIX into -i --suffix SUFFIX", () => {
-    const args = fixture.parse(["m.json", "1", "-i.bak"]);
-    expect(args["in-place"]).toBe(true);
-    expect(args.suffix).toBe(".bak");
-  });
-
-  it("leaves -i and the value attached to a short option alone", () => {
-    const args = fixture.parse(["m.json", "1", "-i", "-d/"]);
-    expect(args["in-place"]).toBe(true);
-    expect(args.suffix).toBe("");
-    expect(args.delimiter).toBe("/");
-  });
-
   it("leaves an unknown --help-like option to parseArgs", () => {
     expect(() => fixture.parse(["m.json", "1", "--helpful"])).toThrow(
       UsageError,
@@ -139,8 +142,9 @@ describe("parseCommandArgs", () => {
   });
 
   it("is also usable on its own for a declaration", () => {
-    const args = parseCommandArgs({ positionals: {}, options: {} }, []);
-    expect(Object.keys(args)).toEqual([]);
+    expect(
+      Object.keys(parseCommandArgs({ args: {}, options: {} }, [])),
+    ).toEqual([]);
   });
 });
 
@@ -150,7 +154,7 @@ describe("invoke", () => {
     const command = defineCommand({
       name: "counter",
       summary: "count",
-      positionals: {},
+      args: {},
       options: {},
       run: () => {
         calls.push("ran");
@@ -165,7 +169,7 @@ describe("invoke", () => {
     const command = defineCommand({
       name: "counter",
       summary: "count",
-      positionals: {},
+      args: {},
       options: {},
       run: () => {
         calls.push("ran");
@@ -183,29 +187,20 @@ describe("invoke", () => {
 });
 
 describe("usage", () => {
-  it("lists positionals and options in declaration order", () => {
+  it("lists arguments and options in declaration order", () => {
     expect(fixture.usage).toBe(
-      "fixture <modelPath> <n> [--tail N] [--sort token|asToWeight] [-i|-iSUFFIX] [-d DELIM]",
+      "fixture <modelPath> <n> [--tail] [--sort] [-i] [-d]",
     );
-  });
-
-  it("leaves an internal option (no description) out of the usage", () => {
-    expect(fixture.usage).not.toContain("--suffix");
-    expect(fixture.usage).not.toContain("SUFFIX ");
   });
 
   it("shows plain boolean options without a suffix", () => {
     const command = defineCommand({
       name: "flags",
       summary: "…",
-      positionals: {},
+      args: {},
       options: {
-        purge: { type: "boolean", description: "purge it" },
-        quiet: {
-          type: "boolean",
-          short: "q",
-          description: "say nothing",
-        },
+        purge: { type: "boolean", help: "purge it" },
+        quiet: { type: "boolean", short: "q", help: "say nothing" },
       },
       run: () => {},
     });
@@ -227,17 +222,25 @@ describe("help", () => {
     expect(help).toMatch(row("<modelPath>", "path of the model file"));
     expect(help).toMatch(row("<n>", "1-based index"));
     expect(help).toContain("Options:");
-    expect(help).toMatch(row("--tail N", "newest N entries"));
+    expect(help).toMatch(row("--tail TAIL", "newest N entries"));
     expect(help).toMatch(row("--sort token|asToWeight", "column to sort by"));
     expect(help).toMatch(row("-i, --in-place", "write the model back"));
     expect(help).toMatch(
-      row("-d, --delimiter DELIM", "delimiter inside the phrase"),
+      row("-d, --delimiter DELIMITER", "delimiter inside the phrase"),
     );
     expect(help).toMatch(row("-h, --help", "show this help"));
   });
 
-  it("never mentions an internal option (no description)", () => {
-    expect(fixture.help).not.toContain("--suffix");
+  it("shows only the help flag for a command without options", () => {
+    const command = defineCommand({
+      name: "plain",
+      summary: "…",
+      args: { path: { help: "a file" } },
+      options: {},
+      run: () => {},
+    });
+    expect(command.usage).toBe("plain <path>");
+    expect(command.help).toMatch(row("-h, --help", "show this help"));
   });
 });
 
@@ -248,7 +251,7 @@ describe("helpText", () => {
       defineCommand({
         name: "other",
         summary: "other command",
-        positionals: {},
+        args: {},
         options: {},
         run: () => {},
       }),
@@ -268,9 +271,9 @@ describe("dispatch", () => {
   const fixtureCommand = defineCommand({
     name: "fixture",
     summary: "fixture command",
-    positionals: { modelPath: "path of the model file" },
+    args: { modelPath: { help: "path of the model file" } },
     options: {
-      tail: { type: "string", value: "N", description: "newest N entries" },
+      tail: { type: "string", integer: true, help: "newest N entries" },
     },
     run: () => {},
   });
@@ -342,19 +345,19 @@ describe("dispatch", () => {
     expect(printed).toHaveLength(1);
     expect(printed[0]).toContain("error: Unknown option '--purge'.");
     expect(printed[0]).toContain(
-      `\n\nUsage:\n  ${INVOCATION} fixture <modelPath> [--tail N]`,
+      `\n\nUsage:\n  ${INVOCATION} fixture <modelPath> [--tail]`,
     );
   });
 
-  it("reports a runtime failure without a usage", () => {
+  it("reports a runtime failure as one line without a usage", () => {
     const failing = [
       defineCommand({
         name: "boom",
         summary: "fails",
-        positionals: {},
+        args: {},
         options: {},
         run: () => {
-          throw new CliError("model is broken");
+          throw new RangeError("model is broken");
         },
       }),
     ];
@@ -363,32 +366,16 @@ describe("dispatch", () => {
       printed: ["error: model is broken"],
     });
   });
-
-  it("rethrows an error that is not a CLI error", () => {
-    const crashing = [
-      defineCommand({
-        name: "crash",
-        summary: "crashes",
-        positionals: {},
-        options: {},
-        run: () => {
-          throw new RangeError("bug");
-        },
-      }),
-    ];
-    expect(() => dispatch(crashing, ["crash"])).toThrow(RangeError);
-  });
 });
 
 describe("Command", () => {
   it("exposes the declaration next to the generated help", () => {
     const command: Command = fixture;
-    expect(Object.keys(command.positionals)).toEqual(["modelPath", "n"]);
+    expect(Object.keys(command.args)).toEqual(["modelPath", "n"]);
     expect(Object.keys(command.options)).toEqual([
       "tail",
       "sort",
       "in-place",
-      "suffix",
       "delimiter",
     ]);
   });
