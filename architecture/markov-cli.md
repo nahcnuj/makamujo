@@ -34,6 +34,8 @@ usage だけが出る。git は全コマンドで 1 つのオプション表を�
 | `parse_options()` | `parseArgs`（`strict: true`） |
 | `usage_with_options()` | `usage` と `help`（宣言から作る） |
 | `run_argv()`（コマンドを選んでパサへ渡す） | `dispatch` |
+| `t/tNNNN-<cmd>.sh` | `tools/markov/commands/<name>.test.ts` |
+| `t/test-lib.sh` | `tools/markov/testLib.ts`（モデルファイルと出力の採取） |
 
 ## 表は宣言そのもの
 
@@ -135,8 +137,10 @@ Options:
 | `tools/markov/command.ts` | 宣言から解析・usage・ヘルプ・終了コードを作る土台 |
 | `tools/markov/modelFile.ts` | モデルファイルの読み込み（`readModelJson`）と書き戻し（`emitModel`） |
 | `tools/markov/output.ts` | 人が読む出力（`visibleNGram`, `printCsv`） |
+| `tools/markov/commands/<name>.test.ts` | 1 コマンド 1 テストファイル。宣言（受け付けるオプション）と `run` の出力を確かめる |
+| `tools/markov/testLib.ts` | コマンドのテストで使う道具（モデルファイルの作成・出力の採取・CSV の分割）だけ |
 | `tools/markov/command.test.ts` | 土台（解析・usage・ヘルプ・終了コード）の単体テスト |
-| `tools/markov/commands.test.ts` | オプション表（上の表）と宣言の検証の単体テスト |
+| `tools/markov/commands.test.ts` | 表全体の約束（並び順・説明の妥当性・他コマンドのオプションを持たないこと） |
 | `tools/markov/modelFile.test.ts` / `tools/markov/output.test.ts` | `modelFile` / `output` の単体テスト |
 | `tools/markov/cli.test.ts` | 実プロセスの統合テスト（別コマンドのオプションを弾く等） |
 
@@ -144,12 +148,27 @@ Options:
 置き、複数コマンドで使うものだけを上の 2 ファイルに置く。オプション宣言を共有する
 ファイルは作らない（git も同じで、`struct option[]` はコマンドのファイルにある）。
 
+## テストもコマンドごとに
+
+git は `builtin/<cmd>.c` ごとに `t/tNNNN-<cmd>.sh` を持つ。同じようにコマンドごとに
+`commands/<name>.test.ts` を置き、**そのコマンドが受け付けるオプションと、その
+オプションの効き方**を 1 ファイルにまとめる。共有するのは `testLib.ts` の道具だけ
+（モデルファイルの作成、出力先の差し替え、CSV の分割）で、期待値は各コマンドの
+テストに書く。
+
+- `commands/<name>.test.ts` — 宣言（usage・受け付ける名前・他コマンドのオプションを弾くこと）と `run` の出力
+- `command.test.ts` — 宣言の土台（`parseArgs` の扱い、usage・ヘルプの生成、`dispatch` の終了コード）
+- `commands.test.ts` — 表全体の約束（並び順、説明の妥当性、コマンドをまたいだ重複がないこと）
+- `cli.test.ts` — 実プロセス（`bun run markov …`）としての終了コードと usage の添え方
+
 ## コマンドを足すとき
 
 1. `commands/<name>.ts` に `defineCommand({ name, summary, args, options, run })` を書く。
    usage・ヘルプ・未知のオプションの検出は宣言から自動で効く。
-2. `commands.ts` の `markovCommands` に並べる（並び順が `--help` の並び順）。
-3. `commands.test.ts` の `TABLE` に usage を足す。
+2. `commands/<name>.test.ts` に、そのコマンドだけを受け付けるオプションと `run` の
+   出力を書く（他コマンドのオプションを弾くことも含める）。
+3. `commands.ts` の `markovCommands` に並べる（並び順が `--help` の並び順）。
+4. `commands.test.ts` の `TABLE` に usage を足す。
 
 ## 表の確認方法
 
@@ -160,4 +179,5 @@ $ bun run markov transitions m.json word --tail 3
 error: Unknown option '--tail'. …
 Usage:
   bun run markov transitions <modelPath> <word> [-d]
+$ bun test tools/markov/commands/transitions.test.ts   # そのコマンドだけの単体テスト
 ```
