@@ -1,7 +1,8 @@
 /**
  * サブコマンドの「宣言」から解析・usage・ヘルプ・終了まで。
  *
- * お手本は git の `builtin/parse-options.c`。git もコマンドごとに
+ * お手本は **git**（`builtin/<cmd>.c` の `struct option[]` と
+ * `parse-options.c` の `parse_options()`）。git もコマンドごとに
  * `struct option[]` を置き、宣言に無いオプションはそのコマンドを解析するときに
  * 弾き、`<command> --help` にはそのコマンドの usage だけを出す。
  * ここでは同じことを宣言で表す。
@@ -11,7 +12,7 @@
  * - `usage` / `help` … 宣言から作る（git の `usage_with_options()` に相当）
  * - `dispatch` … git の `run_argv()`（コマンドを選んでパサへ渡す）
  *
- * 宣言表は `commands/<name>.ts`、表の並び順は `commands.ts`。
+ * 宣言は 1 コマンド 1 ファイル（`commands/<name>.ts`）、表の並び順は `commands.ts`。
  * 設計は `architecture/markov-cli.md`。
  */
 import { parseArgs } from "node:util";

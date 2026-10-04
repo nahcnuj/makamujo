@@ -5,7 +5,8 @@
  * 処理だけを書いており、usage・ヘルプ・未知のオプションの検出は宣言から
  * `command.ts` が作る。別のコマンドのオプションを渡しても、宣言に無いので弾かれる。
  *
- * この配列の並び順が `bun run markov --help` の並び順（= オプション表の並び順）。
+ * このファイルが持つのは並び順だけ（`--help` の並び順 = オプション表の並び順）。
+ * お手本は git の `builtin/<cmd>.c` の `struct option[]`（1 コマンド 1 ファイル）。
  * 設計は `architecture/markov-cli.md` を参照。
  */
 import type { Command } from "./command";
