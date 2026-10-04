@@ -11,17 +11,11 @@ import {
   unlearnCommand,
 } from "./commands";
 
-/** 表そのもの。`--help` と issue #534 のどちらもここを基準に見る。 */
-const NAMES = [
-  "corpus",
-  "unlearn",
-  "decrement-phrase",
-  "tokens",
-  "search",
-  "transitions",
-];
-
-const USAGES = [
+/**
+ * 宣言表そのもの（コマンド → 位置引数 → オプション）。
+ * `--help` が出す表と issue #534 のどちらもここを基準に見る。
+ */
+const TABLE = [
   "corpus <modelPath> [--tail N]",
   "unlearn <modelPath> <n> [-i|-iSUFFIX]",
   "decrement-phrase <modelPath> <phrase> [--delta N] [--purge] [-i|-iSUFFIX] [-d DELIM]",
@@ -32,8 +26,7 @@ const USAGES = [
 
 describe("markovCommands", () => {
   it("holds every command exactly once, in help order", () => {
-    expect(markovCommands.map((command) => command.name)).toEqual(NAMES);
-    expect(markovCommands.map((command) => command.usage)).toEqual(USAGES);
+    expect(markovCommands.map((command) => command.usage)).toEqual(TABLE);
   });
 
   it("gives every command a one-line summary", () => {
@@ -52,10 +45,10 @@ describe("markovCommands", () => {
     }
   });
 
-  it("mentions every declared option in its usage, except hidden ones", () => {
+  it("mentions every documented option in its usage, and no internal one", () => {
     for (const command of markovCommands) {
       for (const [name, option] of Object.entries(command.options)) {
-        if (option.hidden) {
+        if (option.description === undefined) {
           expect(command.usage).not.toContain(`--${name}`);
           continue;
         }
@@ -63,6 +56,17 @@ describe("markovCommands", () => {
         expect(command.usage).toContain(
           option.short === undefined ? `--${name}` : `-${option.short}`,
         );
+      }
+    }
+  });
+
+  it("gives every documented option a one-line description", () => {
+    for (const command of markovCommands) {
+      for (const option of Object.values(command.options)) {
+        if (option.description !== undefined) {
+          expect(option.description.length).toBeGreaterThan(0);
+          expect(option.description).not.toContain("\n");
+        }
       }
     }
   });

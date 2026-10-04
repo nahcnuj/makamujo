@@ -11,6 +11,7 @@
 | [domain-model-redesign.md](./domain-model-redesign.md) | 配信エージェント BC 再設計（#463 マージ済）。CommentPipeline / silence / Publication |
 | [console-domain-model.md](./console-domain-model.md) | **管理コンソール BC**（Access / Status plan）。UI は `console/src`、純関数は `lib/domain/console` |
 | [legacy-vs-main-integration.md](./legacy-vs-main-integration.md) | **`legacy` vs `main` 差分整理と取り込み方針**（orphan main、port 済み/未着手） |
+| [markov-cli.md](./markov-cli.md) | **markov CLI** の構成（`tools/markov/`）。git `parse-options` と同じ「コマンドごとのオプション表」 |
 
 ## 読み方（実装エージェント向け）
 

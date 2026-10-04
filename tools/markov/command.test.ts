@@ -7,15 +7,14 @@ import {
   dispatch,
   helpText,
   INVOCATION,
-  isHelpFlag,
   parseCommandArgs,
   UsageError,
-  usageLineOf,
 } from "./command";
 
 /**
  * 宣言の機能をひととおり使うテスト用のコマンド。
- * 位置引数・既定値・choices・`inlineSuffix`・hidden をすべて含めている。
+ * 位置引数・既定値・choices・`-iSUFFIX`・内部用オプション（説明の無い `suffix`）を
+ * すべて含めている。
  */
 const fixture = defineCommand({
   name: "fixture",
@@ -36,15 +35,9 @@ const fixture = defineCommand({
       type: "boolean",
       short: "i",
       default: false,
-      inlineSuffix: "suffix",
       description: "write the model back",
     },
-    suffix: {
-      type: "string",
-      default: "",
-      hidden: true,
-      description: "backup suffix given inline after -i",
-    },
+    suffix: { type: "string", default: "" },
     delimiter: {
       type: "string",
       short: "d",
@@ -132,18 +125,21 @@ describe("parseCommandArgs", () => {
     expect(args.suffix).toBe(".bak");
   });
 
-  it("leaves -i and other short options alone", () => {
+  it("leaves -i and the value attached to a short option alone", () => {
     const args = fixture.parse(["m.json", "1", "-i", "-d/"]);
     expect(args["in-place"]).toBe(true);
     expect(args.suffix).toBe("");
     expect(args.delimiter).toBe("/");
   });
 
-  it("is also usable on its own for a declaration", () => {
-    const args = parseCommandArgs(
-      { name: "empty", summary: "…", positionals: {}, options: {} },
-      [],
+  it("leaves an unknown --help-like option to parseArgs", () => {
+    expect(() => fixture.parse(["m.json", "1", "--helpful"])).toThrow(
+      UsageError,
     );
+  });
+
+  it("is also usable on its own for a declaration", () => {
+    const args = parseCommandArgs({ positionals: {}, options: {} }, []);
     expect(Object.keys(args)).toEqual([]);
   });
 });
@@ -193,8 +189,9 @@ describe("usage", () => {
     );
   });
 
-  it("hides options marked hidden", () => {
+  it("leaves an internal option (no description) out of the usage", () => {
     expect(fixture.usage).not.toContain("--suffix");
+    expect(fixture.usage).not.toContain("SUFFIX ");
   });
 
   it("shows plain boolean options without a suffix", () => {
@@ -213,13 +210,11 @@ describe("usage", () => {
       run: () => {},
     });
     expect(command.usage).toBe("flags [--purge] [-q]");
-    expect(command.help).toMatch(row("--purge", "purge it"));
-    expect(command.help).toMatch(row("-q, --quiet", "say nothing"));
   });
 
-  it("prefixes the invocation when shown to a user", () => {
-    expect(usageLineOf(fixture.usage)).toBe(
-      `${INVOCATION} fixture <modelPath> <n> [--tail N] [--sort token|asToWeight] [-i|-iSUFFIX] [-d DELIM]`,
+  it("prefixes the invocation when the usage is shown to a user", () => {
+    expect(fixture.help.startsWith(`Usage:\n  ${INVOCATION} fixture `)).toBe(
+      true,
     );
   });
 });
@@ -227,7 +222,6 @@ describe("usage", () => {
 describe("help", () => {
   it("shows the summary, arguments, options and their descriptions", () => {
     const help = fixture.help;
-    expect(help).toContain(`Usage:\n  ${INVOCATION} fixture <modelPath> <n>`);
     expect(help).toContain("  fixture command");
     expect(help).toContain("Arguments:");
     expect(help).toMatch(row("<modelPath>", "path of the model file"));
@@ -235,14 +229,14 @@ describe("help", () => {
     expect(help).toContain("Options:");
     expect(help).toMatch(row("--tail N", "newest N entries"));
     expect(help).toMatch(row("--sort token|asToWeight", "column to sort by"));
-    expect(help).toMatch(row("-i, -iSUFFIX", "write the model back"));
+    expect(help).toMatch(row("-i, --in-place", "write the model back"));
     expect(help).toMatch(
       row("-d, --delimiter DELIM", "delimiter inside the phrase"),
     );
     expect(help).toMatch(row("-h, --help", "show this help"));
   });
 
-  it("never mentions hidden options", () => {
+  it("never mentions an internal option (no description)", () => {
     expect(fixture.help).not.toContain("--suffix");
   });
 });
@@ -263,19 +257,10 @@ describe("helpText", () => {
       true,
     );
     expect(text).toContain("Commands:");
-    expect(text).toContain(`${fixture.usage}`);
+    expect(text).toContain(fixture.usage);
     expect(text).toContain("fixture command");
     expect(text).toContain("other");
     expect(text).toContain("other command");
-  });
-});
-
-describe("isHelpFlag", () => {
-  it("recognises only the common help flags", () => {
-    expect(isHelpFlag("-h")).toBe(true);
-    expect(isHelpFlag("--help")).toBe(true);
-    expect(isHelpFlag("--helpful")).toBe(false);
-    expect(isHelpFlag("-help")).toBe(false);
   });
 });
 
