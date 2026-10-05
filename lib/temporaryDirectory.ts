@@ -92,11 +92,18 @@ export const removeStaleBrowserTemporaryDirectories = (
   const tempRoot = resolve(tmpdir());
   const tempRootPrefix = `${tempRoot}${sep}`;
   const removed: string[] = [];
-  // `${root}${sep}` startsWith `${tempRoot}${sep}` covers both the temp dir
-  // itself and anything underneath it, and never a sibling like `/tmp-evil`.
-  // FS APIs only run inside this positive startsWith branch — the containment
-  // shape CodeQL recognizes for js/path-injection.
-  if (`${resolvedRoot}${sep}`.startsWith(tempRootPrefix)) {
+  // The guard has to be `resolvedRoot.startsWith(tempRoot)` — i.e. the very
+  // string later passed to the FS APIs — because that is the shape CodeQL's
+  // js/path-injection sanitizer recognizes. Comparing a concatenated
+  // `` `${resolvedRoot}${sep}` `` instead leaves the readdir unproven and the
+  // query fails the build.
+  if (resolvedRoot.startsWith(tempRoot)) {
+    // `startsWith(tempRoot)` alone would also accept a sibling such as
+    // `/tmp-evil`, so require the remainder to be empty (the temp dir itself)
+    // or to begin with a separator (something underneath it).
+    const remainder = resolvedRoot.slice(tempRoot.length);
+    if (remainder !== "" && !remainder.startsWith(sep)) return removed;
+
     let entries: string[];
     try {
       entries = readdirSync(resolvedRoot);
@@ -106,7 +113,7 @@ export const removeStaleBrowserTemporaryDirectories = (
         root,
         err instanceof Error ? err.message : String(err),
       );
-      return [];
+      return removed;
     }
 
     for (const entry of entries) {

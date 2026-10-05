@@ -81,6 +81,32 @@ describe("temporary directory ownership", () => {
     expect(tts).toContain("removeTemporaryDirectory(tempDir);");
   });
 
+  test("the server survives the stop signal systemd sends it", () => {
+    const entry = read("index.ts");
+
+    // SIGTERM is what `systemctl stop makamujo-screen.service` (and so
+    // `bin/stop`) delivers. Without a listener the process dies without running
+    // the "exit" hook, so the TTS scratch directory would survive every stop.
+    expect(entry).toContain(
+      'process.on("SIGTERM", signalHandler.bind(null, { exit: true }));',
+    );
+    expect(entry).toContain(
+      'process.on("SIGHUP", signalHandler.bind(null, { exit: true }));',
+    );
+  });
+
+  test("make install ships the temp sweep that bin/stop shells out to", () => {
+    const makefile = read("Makefile");
+
+    // bin/stop resolves ${PROJECT_ROOT}/bin/cleanup-temp.ts and swallows the
+    // failure, so a missing file would silently disable the whole sweep.
+    expect(makefile).toContain("bin/cleanup-temp.ts");
+    const installBin = makefile
+      .split("\n")
+      .find((line) => line.startsWith("INSTALL_BIN"));
+    expect(installBin).toContain("bin/cleanup-temp.ts");
+  });
+
   test("bin/stop prunes the browser scratch directories through bin/cleanup-temp", () => {
     const stop = read("bin/stop");
 

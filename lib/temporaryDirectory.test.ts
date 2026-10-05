@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import {
   BROWSER_TEMPORARY_DIRECTORY_PREFIXES,
   createTemporaryDirectory,
@@ -197,6 +197,23 @@ describe("removeStaleBrowserTemporaryDirectories", () => {
       expect(existsSync(link)).toBe(true);
     }
     expect(existsSync(target)).toBe(true);
+  });
+
+  it("refuses a sibling root that merely shares the temp dir's prefix", () => {
+    // `/tmp-evil` starts with `/tmp`, so a bare prefix comparison would let it
+    // through; the remainder must be empty or start with a separator.
+    const sibling = `${resolve(tmpdir())}-evil`;
+    const stale = join(
+      sibling,
+      `${GAME_BROWSER_TEMPORARY_DIRECTORY_PREFIX}abc`,
+    );
+    mkdirSync(stale, { recursive: true });
+    try {
+      expect(removeStaleBrowserTemporaryDirectories(sibling)).toBeEmpty();
+      expect(existsSync(stale)).toBe(true);
+    } finally {
+      rmSync(sibling, { recursive: true, force: true });
+    }
   });
 
   it("returns nothing when the root does not exist", () => {
