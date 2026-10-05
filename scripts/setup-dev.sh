@@ -16,7 +16,8 @@ playwright install --with-deps chromium || true
 
 echo "==> Installing Japanese fonts (optional, for screenshot OCR)"
 if command -v apt-get >/dev/null 2>&1; then
-  sudo apt-get update && sudo apt-get install -y fonts-noto-cjk || true
+  sudo apt-get update || true
+  sudo apt-get install -y fonts-noto-cjk || true
 fi
 
 echo "Setup complete. Run 'bun run test' to run the test suites."
