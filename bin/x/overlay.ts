@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 /**
  * Overlay browser for OBS "Comment" (XSHM left crop).
@@ -8,12 +7,18 @@ import { join } from "node:path";
  * Uses --app= and reuses that window (no second tabbed window).
  */
 import { chromium } from "playwright";
-import { removeTemporaryDirectory } from "../../lib/Browser/chromium";
+import {
+  createTemporaryDirectory,
+  OVERLAY_TEMPORARY_DIRECTORY_PREFIX,
+  removeTemporaryDirectory,
+} from "../../lib/temporaryDirectory";
 
 process.env.DISPLAY = process.env.DISPLAY || ":10";
 
 const url = process.env.OVERLAY_URL || "http://127.0.0.1:7777/";
-const userDataDir = mkdtempSync(join(tmpdir(), "makamujo-overlay-"));
+const userDataDir = createTemporaryDirectory(
+  OVERLAY_TEMPORARY_DIRECTORY_PREFIX,
+);
 mkdirSync(join(userDataDir, "Default"), { recursive: true });
 writeFileSync(
   join(userDataDir, "Default", "Preferences"),
@@ -31,24 +36,30 @@ console.log(
   url,
 );
 
-const context = await chromium.launchPersistentContext(userDataDir, {
-  headless: false,
-  ignoreDefaultArgs: ["--no-startup-window"],
-  locale: "ja-JP",
-  viewport: { width: 1280, height: 720 },
-  args: [
-    "--no-sandbox",
-    "--disable-dev-shm-usage",
-    "--disable-gpu",
-    "--window-size=1280,720",
-    "--window-position=0,40",
-    "--class=MakamujoComment",
-    "--disable-features=Translate,TranslateUI,TranslateScript,OptimizationHints",
-    "--disable-translate",
-    "--lang=ja",
-    `--app=${url}`,
-  ],
-});
+const context = await chromium
+  .launchPersistentContext(userDataDir, {
+    headless: false,
+    ignoreDefaultArgs: ["--no-startup-window"],
+    locale: "ja-JP",
+    viewport: { width: 1280, height: 720 },
+    args: [
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--window-size=1280,720",
+      "--window-position=0,40",
+      "--class=MakamujoComment",
+      "--disable-features=Translate,TranslateUI,TranslateScript,OptimizationHints",
+      "--disable-translate",
+      "--lang=ja",
+      `--app=${url}`,
+    ],
+  })
+  .catch((err: unknown) => {
+    // A failed launch must not leave the profile behind.
+    removeTemporaryDirectory(userDataDir);
+    throw err;
+  });
 
 // Reuse the app window; do NOT open a second tabbed page.
 let page = context.pages()[0];
@@ -60,8 +71,27 @@ if (!page) {
 }
 console.log("[INFO] overlay loaded", page.url());
 
-context.on("close", () => {
+let closed = false;
+const shutdown = () => {
+  if (closed) return;
+  closed = true;
   removeTemporaryDirectory(userDataDir);
+};
+context.on("close", () => {
+  shutdown();
+  process.exit(0);
 });
-context.on("close", () => process.exit(0));
+
+// `process.on("exit")` does not run for signals, so a stopped service would
+// leave the Chromium profile in the OS temp dir.
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+  process.on(signal, () => {
+    void context
+      .close()
+      .catch((err) => {
+        console.warn("[WARN] overlay close failed", err);
+      })
+      .finally(shutdown);
+  });
+}
 await new Promise(() => {});

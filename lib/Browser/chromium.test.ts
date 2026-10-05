@@ -1,19 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { removeTemporaryDirectory } from "../temporaryDirectory";
 import {
   cleanupChromiumLockFiles,
   createClickByElementId,
   createPopupPageHandler,
   createRedirectToHomeHandler,
-  removeTemporaryDirectory,
 } from "./chromium";
 
 const HOME_URL = "https://www.nahcnuj.work/vigilant-fiesta/";
@@ -30,36 +24,13 @@ describe("cleanupChromiumLockFiles", () => {
       expect(existsSync(join(dir, "SingletonSocket"))).toBe(false);
       expect(existsSync(join(dir, "keep-me"))).toBe(true);
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      removeTemporaryDirectory(dir);
     }
   });
 
   it("is a no-op when the directory does not exist", () => {
     expect(() =>
       cleanupChromiumLockFiles(join(tmpdir(), "missing-chromium-profile")),
-    ).not.toThrow();
-  });
-});
-
-describe("removeTemporaryDirectory", () => {
-  it("removes the directory when present", () => {
-    const dir = mkdtempSync(join(tmpdir(), "chromium-profile-"));
-    expect(existsSync(dir)).toBe(true);
-    removeTemporaryDirectory(dir);
-    expect(existsSync(dir)).toBe(false);
-  });
-
-  it("removes the directory recursively when non-empty", () => {
-    const dir = mkdtempSync(join(tmpdir(), "chromium-profile-"));
-    mkdirSync(join(dir, "Default", "Cache"), { recursive: true });
-    writeFileSync(join(dir, "Default", "Preferences"), "x");
-    removeTemporaryDirectory(dir);
-    expect(existsSync(dir)).toBe(false);
-  });
-
-  it("never throws for a missing directory", () => {
-    expect(() =>
-      removeTemporaryDirectory(join(tmpdir(), "missing-chromium-profile")),
     ).not.toThrow();
   });
 });
