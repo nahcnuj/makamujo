@@ -9,6 +9,15 @@ export PIPEWIRE_RUNTIME_DIR=/run/user/0
 export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus
 export PULSE_SERVER=unix:/run/user/0/pulse/native
 
+PULSE_SOCKET="${PULSE_RUNTIME_PATH}/native"
+
+# How often the watchdog samples the stack.
+WATCHDOG_INTERVAL_SECONDS=2
+# pipewire-pulse can blink while it rebinds, so only a sustained loss counts.
+PULSE_LOSS_TOLERANCE=3
+# How many times pipewire-pulse may be replaced in place before giving up.
+MAX_PULSE_RESTARTS=3
+
 mkdir -p "$XDG_RUNTIME_DIR" "$PULSE_RUNTIME_PATH"
 chmod 700 "$XDG_RUNTIME_DIR"
 
@@ -27,6 +36,49 @@ audio_process_alive() {
   pgrep -u root -x wireplumber >/dev/null 2>&1 ||
     pgrep -u root -x pipewire-pulse >/dev/null 2>&1 ||
     pgrep -u root -x pipewire >/dev/null 2>&1
+}
+
+process_alive() {
+  kill -0 "${1}" 2>/dev/null
+}
+
+# `kill` only delivers the signal. Wait until the daemon is really gone before
+# touching sockets, otherwise it can still unlink a socket a new instance has
+# already bound.
+wait_for_exit() {
+  for _ in $(seq 1 40); do
+    process_alive "${1}" || return 0
+    sleep 0.25
+  done
+  kill -9 "${1}" 2>/dev/null || true
+}
+
+wait_for_socket() {
+  for _ in $(seq 1 80); do
+    [ -S "${1}" ] && return 0
+    sleep 0.25
+  done
+  return 1
+}
+
+start_pulse_server() {
+  rm -f "${1}" 2>/dev/null || true
+  pipewire-pulse &
+  PULSE_PID=$!
+  wait_for_socket "${1}"
+}
+
+# The null sink and the default device live inside the pulse server, so they have
+# to be re-applied every time pipewire-pulse is replaced.
+configure_pulse_defaults() {
+  for _ in $(seq 1 40); do
+    pactl info >/dev/null 2>&1 && break
+    sleep 0.25
+  done
+  pactl info >/dev/null 2>&1 || return 1
+  pactl load-module module-null-sink sink_name=makamujo_out sink_properties=device.description=MakamujoOut 2>/dev/null || true
+  pactl set-default-sink makamujo_out 2>/dev/null || true
+  pactl set-default-source makamujo_out.monitor 2>/dev/null || true
 }
 
 pkill -u root -x pipewire 2>/dev/null || true
@@ -69,48 +121,53 @@ sleep 1
 wireplumber &
 WP_PID=$!
 
-for _ in $(seq 1 80); do
-  [ -S "${PULSE_RUNTIME_PATH}/native" ] && break
-  sleep 0.25
-done
-if [ ! -S "${PULSE_RUNTIME_PATH}/native" ]; then
-  echo "ERROR: pulse socket not ready" >&2
+configure_pulse_defaults || {
+  echo "ERROR: pulse not accepting connections at ${PULSE_SOCKET}" >&2
   exit 1
-fi
+}
 
-for _ in $(seq 1 40); do
-  pactl info >/dev/null 2>&1 && break
-  sleep 0.25
-done
-if ! pactl info >/dev/null 2>&1; then
-  echo "ERROR: pulse not accepting connections" >&2
-  exit 1
-fi
-
-pactl load-module module-null-sink sink_name=makamujo_out sink_properties=device.description=MakamujoOut 2>/dev/null || true
-pactl set-default-sink makamujo_out 2>/dev/null || true
-pactl set-default-source makamujo_out.monitor 2>/dev/null || true
-
-echo "Pulse ready: ${PULSE_RUNTIME_PATH}/native"
+echo "Pulse ready: ${PULSE_SOCKET}"
 systemd-notify --ready
 echo "systemd-notify ready"
 
 # The watchdog only fails the unit after a sustained loss. makamujo-screen,
 # -obs and -browser are all Requires=/PartOf= this unit, so reacting to a single
 # unlink would restart the app and the stream along with the audio.
+#
+# pipewire-pulse cannot rebind a socket that was unlinked from underneath it —
+# logind recreates /run/user/0 whenever root logs in again — so once the loss
+# has held long enough to rule out a rebind, replace the pulse server in place
+# and keep the unit (and the stream) up. Only a genuinely broken stack, one
+# that survives MAX_PULSE_RESTARTS repairs, still ends the unit.
 socket_misses=0
+pulse_restarts=0
 while true; do
-  kill -0 "$WP_PID" 2>/dev/null || { echo "ERROR: wireplumber exited" >&2; exit 1; }
-  kill -0 "$PW_PID" 2>/dev/null || { echo "ERROR: pipewire exited" >&2; exit 1; }
-  kill -0 "$PULSE_PID" 2>/dev/null || { echo "ERROR: pipewire-pulse exited" >&2; exit 1; }
-  if [ -S "${PULSE_RUNTIME_PATH}/native" ]; then
+  process_alive "${WP_PID}" || { echo "ERROR: wireplumber exited" >&2; exit 1; }
+  process_alive "${PW_PID}" || { echo "ERROR: pipewire exited" >&2; exit 1; }
+  process_alive "${PULSE_PID}" || { echo "ERROR: pipewire-pulse exited" >&2; exit 1; }
+  if [ -S "${PULSE_SOCKET}" ]; then
     socket_misses=0
   else
     socket_misses=$((socket_misses + 1))
-    if [ "$socket_misses" -ge 3 ]; then
-      echo "ERROR: pulse socket lost" >&2
-      exit 1
+    if [ "${socket_misses}" -ge "${PULSE_LOSS_TOLERANCE}" ]; then
+      socket_misses=0
+      if [ "${pulse_restarts}" -ge "${MAX_PULSE_RESTARTS}" ]; then
+        echo "ERROR: pulse socket lost (${PULSE_SOCKET}): still missing after ${MAX_PULSE_RESTARTS} restarts of pipewire-pulse" >&2
+        exit 1
+      fi
+      pulse_restarts=$((pulse_restarts + 1))
+      echo "WARN: pulse socket lost (${PULSE_SOCKET}): restarting pipewire-pulse (${pulse_restarts}/${MAX_PULSE_RESTARTS})" >&2
+      wait_for_exit "${PULSE_PID}"
+      start_pulse_server "${PULSE_SOCKET}" || {
+        echo "ERROR: pulse socket lost (${PULSE_SOCKET}): pipewire-pulse did not recreate it" >&2
+        exit 1
+      }
+      configure_pulse_defaults || {
+        echo "ERROR: pulse socket lost (${PULSE_SOCKET}): pulse not accepting connections after restart" >&2
+        exit 1
+      }
+      echo "Pulse ready again: ${PULSE_SOCKET}"
     fi
   fi
-  sleep 2
+  sleep "${WATCHDOG_INTERVAL_SECONDS}"
 done
