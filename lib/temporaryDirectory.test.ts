@@ -201,19 +201,28 @@ describe("removeStaleBrowserTemporaryDirectories", () => {
 
   it("refuses a sibling root that merely shares the temp dir's prefix", () => {
     // `/tmp-evil` starts with `/tmp`, so a bare prefix comparison would let it
-    // through; the remainder must be empty or start with a separator.
-    const sibling = `${resolve(tmpdir())}-evil`;
-    const stale = join(
-      sibling,
-      `${GAME_BROWSER_TEMPORARY_DIRECTORY_PREFIX}abc`,
-    );
-    mkdirSync(stale, { recursive: true });
+    // through; the remainder must be empty or start with a separator. The
+    // fixture is deliberately not created: the parent of the OS temp dir is
+    // normally root-owned, and a refused root must not be read at all — which
+    // the absence of the readdir warning below proves.
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map((arg) => String(arg)).join(" "));
+    };
+    let removed: string[];
     try {
-      expect(removeStaleBrowserTemporaryDirectories(sibling)).toBeEmpty();
-      expect(existsSync(stale)).toBe(true);
+      removed = removeStaleBrowserTemporaryDirectories(
+        `${resolve(tmpdir())}-evil`,
+      );
     } finally {
-      rmSync(sibling, { recursive: true, force: true });
+      console.warn = originalWarn;
     }
+
+    expect(removed).toBeEmpty();
+    // An unreadable root logs a warning, so an empty log means the containment
+    // check refused the path before any filesystem call was made.
+    expect(warnings).toBeEmpty();
   });
 
   it("returns nothing when the root does not exist", () => {
