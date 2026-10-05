@@ -90,6 +90,23 @@ describe("removeTemporaryDirectory", () => {
       removeTemporaryDirectory(join(tmpdir(), "missing-makamujo-profile")),
     ).not.toThrow();
   });
+
+  it("leaves directories outside the OS temp dir alone", () => {
+    // Fixture lives in var/ (not the OS temp dir), so only the explicit
+    // rmSync below may delete it — not the function under test.
+    const dir = join(
+      process.cwd(),
+      "var",
+      `temporary-directory-outside-${Date.now().toString(36)}`,
+    );
+    mkdirSync(dir, { recursive: true });
+    try {
+      removeTemporaryDirectory(dir);
+      expect(existsSync(dir)).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("isOwnedTemporaryDirectoryName", () => {
@@ -188,5 +205,26 @@ describe("removeStaleBrowserTemporaryDirectories", () => {
         join(tmpdir(), "makamujo-missing-tmp-root"),
       ),
     ).toBeEmpty();
+  });
+
+  it("refuses to sweep a root outside the OS temp dir", () => {
+    // Fixture lives in var/ (not the OS temp dir), so only the explicit
+    // rmSync below may delete it — not the function under test.
+    const root = join(
+      process.cwd(),
+      "var",
+      `temporary-directory-outside-root-${Date.now().toString(36)}`,
+    );
+    const stale = join(
+      root,
+      `${GAME_BROWSER_TEMPORARY_DIRECTORY_PREFIX}abcdef`,
+    );
+    mkdirSync(join(stale, "Default"), { recursive: true });
+    try {
+      expect(removeStaleBrowserTemporaryDirectories(root)).toBeEmpty();
+      expect(existsSync(stale)).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

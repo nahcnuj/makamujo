@@ -1,6 +1,6 @@
 import { lstatSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 
 /**
  * Scratch directory for synthesized speech WAV files. Owned by the long-running
@@ -49,16 +49,25 @@ export const createTemporaryDirectory = (prefix: string): string =>
  * Best-effort removal of a temporary directory owned by this project (e.g. a
  * Chromium profile dir created with `mkdtempSync` under the OS temp dir).
  * Never throws, so cleanup failures cannot break the browser lifecycle.
+ *
+ * Only directories strictly inside the OS temp dir are touched; anything
+ * resolving elsewhere is left alone.
  */
 export const removeTemporaryDirectory = (dir: string): void => {
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch (err) {
-    console.warn(
-      "[WARN] failed to remove temporary directory",
-      dir,
-      err instanceof Error ? err.message : String(err),
-    );
+  const resolved = resolve(dir);
+  const tempRootPrefix = `${resolve(tmpdir())}${sep}`;
+  // Positive startsWith only (no === / negated early-return): barrier CodeQL
+  // recognizes for js/path-injection.
+  if (resolved.startsWith(tempRootPrefix)) {
+    try {
+      rmSync(resolved, { recursive: true, force: true });
+    } catch (err) {
+      console.warn(
+        "[WARN] failed to remove temporary directory",
+        dir,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
   }
 };
 
@@ -79,31 +88,43 @@ export const isOwnedTemporaryDirectoryName = (
 export const removeStaleBrowserTemporaryDirectories = (
   root: string = tmpdir(),
 ): string[] => {
-  let entries: string[];
-  try {
-    entries = readdirSync(root);
-  } catch (err) {
-    console.warn(
-      "[WARN] failed to read the temporary directory root",
-      root,
-      err instanceof Error ? err.message : String(err),
-    );
-    return [];
-  }
-
+  const resolvedRoot = resolve(root);
+  const tempRoot = resolve(tmpdir());
+  const tempRootPrefix = `${tempRoot}${sep}`;
   const removed: string[] = [];
-  for (const entry of entries) {
-    if (!isOwnedTemporaryDirectoryName(entry)) continue;
-    const path = join(root, entry);
+  // `${root}${sep}` startsWith `${tempRoot}${sep}` covers both the temp dir
+  // itself and anything underneath it, and never a sibling like `/tmp-evil`.
+  // FS APIs only run inside this positive startsWith branch — the containment
+  // shape CodeQL recognizes for js/path-injection.
+  if (`${resolvedRoot}${sep}`.startsWith(tempRootPrefix)) {
+    let entries: string[];
     try {
-      // Symlinks are skipped: only real directories are ours to delete.
-      if (!lstatSync(path).isDirectory()) continue;
-    } catch {
-      // Vanished between readdir and lstat (or unreadable): nothing to do.
-      continue;
+      entries = readdirSync(resolvedRoot);
+    } catch (err) {
+      console.warn(
+        "[WARN] failed to read the temporary directory root",
+        root,
+        err instanceof Error ? err.message : String(err),
+      );
+      return [];
     }
-    removeTemporaryDirectory(path);
-    removed.push(path);
+
+    for (const entry of entries) {
+      if (!isOwnedTemporaryDirectoryName(entry)) continue;
+      const resolved = resolve(join(resolvedRoot, entry));
+      // Guard the path handed to the FS APIs itself (CodeQL barrier).
+      if (resolved.startsWith(tempRootPrefix)) {
+        try {
+          // Symlinks are skipped: only real directories are ours to delete.
+          if (!lstatSync(resolved).isDirectory()) continue;
+        } catch {
+          // Vanished between readdir and lstat (or unreadable): nothing to do.
+          continue;
+        }
+        removeTemporaryDirectory(resolved);
+        removed.push(resolved);
+      }
+    }
   }
   return removed;
 };
