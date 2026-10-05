@@ -23,11 +23,29 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+audio_process_alive() {
+  pgrep -u root -x wireplumber >/dev/null 2>&1 ||
+    pgrep -u root -x pipewire-pulse >/dev/null 2>&1 ||
+    pgrep -u root -x pipewire >/dev/null 2>&1
+}
+
 pkill -u root -x pipewire 2>/dev/null || true
 pkill -u root -x pipewire-pulse 2>/dev/null || true
 pkill -u root -x wireplumber 2>/dev/null || true
 pkill -u root -f 'dbus-daemon --session --address=unix:path=/run/user/0/bus' 2>/dev/null || true
-sleep 0.3
+
+# `pkill` only signals. A previous instance that is still shutting down can
+# unlink ${PULSE_RUNTIME_PATH}/native after the new one has bound it, which
+# leaves a live pipewire-pulse with no socket and trips the watchdog below with
+# "pulse socket lost". Wait for the old processes to be really gone before the
+# sockets are unlinked, then make sure of it.
+for _ in $(seq 1 40); do
+  audio_process_alive || break
+  sleep 0.25
+done
+pkill -9 -u root -x wireplumber 2>/dev/null || true
+pkill -9 -u root -x pipewire-pulse 2>/dev/null || true
+pkill -9 -u root -x pipewire 2>/dev/null || true
 rm -f "${PULSE_RUNTIME_PATH}/native" "${PIPEWIRE_RUNTIME_DIR}/pipewire-0" 2>/dev/null || true
 
 dbus-daemon --session \
@@ -39,9 +57,17 @@ sleep 1
 pipewire &
 PW_PID=$!
 sleep 1
+
 pipewire-pulse &
 PULSE_PID=$!
 sleep 1
+
+# wireplumber owns the Pulse graph, so it has to be up before anything loads a
+# module or announces readiness. Started last it takes the server over only
+# after the null sink below exists, resetting the graph and leaving clients
+# playing against a server nobody manages yet.
+wireplumber &
+WP_PID=$!
 
 for _ in $(seq 1 80); do
   [ -S "${PULSE_RUNTIME_PATH}/native" ] && break
@@ -69,13 +95,22 @@ echo "Pulse ready: ${PULSE_RUNTIME_PATH}/native"
 systemd-notify --ready
 echo "systemd-notify ready"
 
-wireplumber &
-WP_PID=$!
-
+# The watchdog only fails the unit after a sustained loss. makamujo-screen,
+# -obs and -browser are all Requires=/PartOf= this unit, so reacting to a single
+# unlink would restart the app and the stream along with the audio.
+socket_misses=0
 while true; do
   kill -0 "$WP_PID" 2>/dev/null || { echo "ERROR: wireplumber exited" >&2; exit 1; }
   kill -0 "$PW_PID" 2>/dev/null || { echo "ERROR: pipewire exited" >&2; exit 1; }
   kill -0 "$PULSE_PID" 2>/dev/null || { echo "ERROR: pipewire-pulse exited" >&2; exit 1; }
-  [ -S "${PULSE_RUNTIME_PATH}/native" ] || { echo "ERROR: pulse socket lost" >&2; exit 1; }
+  if [ -S "${PULSE_RUNTIME_PATH}/native" ]; then
+    socket_misses=0
+  else
+    socket_misses=$((socket_misses + 1))
+    if [ "$socket_misses" -ge 3 ]; then
+      echo "ERROR: pulse socket lost" >&2
+      exit 1
+    fi
+  fi
   sleep 2
 done
