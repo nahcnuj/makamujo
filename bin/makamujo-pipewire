@@ -9,17 +9,16 @@ export PIPEWIRE_RUNTIME_DIR=/run/user/0
 export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus
 export PULSE_SERVER=unix:/run/user/0/pulse/native
 
+DBUS_SOCKET="${XDG_RUNTIME_DIR}/bus"
+PIPEWIRE_SOCKET="${PIPEWIRE_RUNTIME_DIR}/pipewire-0"
 PULSE_SOCKET="${PULSE_RUNTIME_PATH}/native"
 
 # How often the watchdog samples the stack.
 WATCHDOG_INTERVAL_SECONDS=2
-# pipewire-pulse can blink while it rebinds, so only a sustained loss counts.
-PULSE_LOSS_TOLERANCE=3
-# How many times pipewire-pulse may be replaced in place before giving up.
-MAX_PULSE_RESTARTS=3
-
-mkdir -p "$XDG_RUNTIME_DIR" "$PULSE_RUNTIME_PATH"
-chmod 700 "$XDG_RUNTIME_DIR"
+# Every daemon blinks while it rebinds, so only a sustained loss counts.
+STACK_LOSS_TOLERANCE=3
+# How many times the stack may be rebuilt in place before giving up.
+MAX_STACK_RESTARTS=3
 
 cleanup() {
   for pid in ${WP_PID:-} ${PULSE_PID:-} ${PW_PID:-} ${DBUS_PID:-}; do
@@ -61,15 +60,46 @@ wait_for_socket() {
   return 1
 }
 
-start_pulse_server() {
-  rm -f "${1}" 2>/dev/null || true
-  pipewire-pulse &
-  PULSE_PID=$!
-  wait_for_socket "${1}"
+# logind owns /run/user/0 and its user-runtime-dir@0.service removes the whole
+# tree whenever the last root session ends. A new ssh login puts an empty
+# directory back, so the tree this stack lives in can vanish while every daemon
+# is still running. Nothing can bind a socket again until it exists.
+ensure_runtime_directories() {
+  mkdir -p "$XDG_RUNTIME_DIR" "$PULSE_RUNTIME_PATH"
+  chmod 700 "$XDG_RUNTIME_DIR"
 }
 
-# The null sink and the default device live inside the pulse server, so they have
-# to be re-applied every time pipewire-pulse is replaced.
+start_session_bus() {
+  dbus-daemon --session \
+    --address="unix:path=${DBUS_SOCKET}" \
+    --nofork --nopidfile --syslog-only &
+  DBUS_PID=$!
+  wait_for_socket "${DBUS_SOCKET}"
+}
+
+start_pipewire() {
+  pipewire &
+  PW_PID=$!
+  wait_for_socket "${PIPEWIRE_SOCKET}"
+}
+
+start_pulse_server() {
+  pipewire-pulse &
+  PULSE_PID=$!
+  wait_for_socket "${PULSE_SOCKET}"
+}
+
+# wireplumber owns the Pulse graph, so it has to be up before anything loads a
+# module or announces readiness. Started last it takes the server over only
+# after the null sink exists, resetting the graph and leaving clients playing
+# against a server nobody manages yet.
+start_wireplumber() {
+  wireplumber &
+  WP_PID=$!
+}
+
+# The null sink and the default device live inside the pulse server, so they
+# have to be re-applied every time the stack is replaced.
 configure_pulse_defaults() {
   for _ in $(seq 1 40); do
     pactl info >/dev/null 2>&1 && break
@@ -81,16 +111,46 @@ configure_pulse_defaults() {
   pactl set-default-source makamujo_out.monitor 2>/dev/null || true
 }
 
+start_audio_stack() {
+  start_pipewire || return 1
+  start_pulse_server || return 1
+  start_wireplumber
+  configure_pulse_defaults
+}
+
+# Put the pulse socket back after logind removed the runtime directory. The
+# pulse socket is not the only casualty: /run/user/0/pipewire-0 went with it, so
+# a fresh pipewire-pulse would come back with no server to attach to and never
+# accept a connection. Recreating just the one daemon cannot recover from this,
+# so rebuild the stack under a runtime directory that exists again. Doing it
+# in here keeps this unit alive, and makamujo-screen / -obs / -browser are all
+# Requires=/PartOf= it, so failing the unit would take the stream down with the
+# audio.
+rebuild_audio_stack() {
+  wait_for_exit "${WP_PID}"
+  wait_for_exit "${PULSE_PID}"
+  wait_for_exit "${PW_PID}"
+  ensure_runtime_directories
+  rm -f "${PULSE_SOCKET}" "${PIPEWIRE_SOCKET}" 2>/dev/null || true
+  # systemd's own dbus.socket only returns with user@0.service, the unit whose
+  # teardown took the tree down in the first place. Bring the bus up ourselves
+  # only when nobody else has, otherwise two daemons fight over the path.
+  if [ ! -S "${DBUS_SOCKET}" ]; then
+    start_session_bus || return 1
+  fi
+  start_audio_stack
+}
+
 pkill -u root -x pipewire 2>/dev/null || true
 pkill -u root -x pipewire-pulse 2>/dev/null || true
 pkill -u root -x wireplumber 2>/dev/null || true
 pkill -u root -f 'dbus-daemon --session --address=unix:path=/run/user/0/bus' 2>/dev/null || true
 
 # `pkill` only signals. A previous instance that is still shutting down can
-# unlink ${PULSE_RUNTIME_PATH}/native after the new one has bound it, which
-# leaves a live pipewire-pulse with no socket and trips the watchdog below with
-# "pulse socket lost". Wait for the old processes to be really gone before the
-# sockets are unlinked, then make sure of it.
+# unlink ${PULSE_SOCKET} after the new one has bound it, which leaves a live
+# pipewire-pulse with no socket and trips the watchdog below. Wait for the old
+# processes to be really gone before the sockets are unlinked, then make sure
+# of it.
 for _ in $(seq 1 40); do
   audio_process_alive || break
   sleep 0.25
@@ -98,31 +158,16 @@ done
 pkill -9 -u root -x wireplumber 2>/dev/null || true
 pkill -9 -u root -x pipewire-pulse 2>/dev/null || true
 pkill -9 -u root -x pipewire 2>/dev/null || true
-rm -f "${PULSE_RUNTIME_PATH}/native" "${PIPEWIRE_RUNTIME_DIR}/pipewire-0" 2>/dev/null || true
+ensure_runtime_directories
+rm -f "${PULSE_SOCKET}" "${PIPEWIRE_SOCKET}" 2>/dev/null || true
 
-dbus-daemon --session \
-  --address="unix:path=${XDG_RUNTIME_DIR}/bus" \
-  --nofork --nopidfile --syslog-only &
-DBUS_PID=$!
-sleep 1
+start_session_bus || {
+  echo "ERROR: session bus not ready at ${DBUS_SOCKET}" >&2
+  exit 1
+}
 
-pipewire &
-PW_PID=$!
-sleep 1
-
-pipewire-pulse &
-PULSE_PID=$!
-sleep 1
-
-# wireplumber owns the Pulse graph, so it has to be up before anything loads a
-# module or announces readiness. Started last it takes the server over only
-# after the null sink below exists, resetting the graph and leaving clients
-# playing against a server nobody manages yet.
-wireplumber &
-WP_PID=$!
-
-configure_pulse_defaults || {
-  echo "ERROR: pulse not accepting connections at ${PULSE_SOCKET}" >&2
+start_audio_stack || {
+  echo "ERROR: audio stack did not come up (${PIPEWIRE_SOCKET}, ${PULSE_SOCKET})" >&2
   exit 1
 }
 
@@ -134,13 +179,10 @@ echo "systemd-notify ready"
 # -obs and -browser are all Requires=/PartOf= this unit, so reacting to a single
 # unlink would restart the app and the stream along with the audio.
 #
-# pipewire-pulse cannot rebind a socket that was unlinked from underneath it —
-# logind recreates /run/user/0 whenever root logs in again — so once the loss
-# has held long enough to rule out a rebind, replace the pulse server in place
-# and keep the unit (and the stream) up. Only a genuinely broken stack, one
-# that survives MAX_PULSE_RESTARTS repairs, still ends the unit.
+# Only a genuinely broken stack, one that survives MAX_STACK_RESTARTS rebuilds,
+# still ends the unit.
 socket_misses=0
-pulse_restarts=0
+stack_restarts=0
 while true; do
   process_alive "${WP_PID}" || { echo "ERROR: wireplumber exited" >&2; exit 1; }
   process_alive "${PW_PID}" || { echo "ERROR: pipewire exited" >&2; exit 1; }
@@ -149,21 +191,16 @@ while true; do
     socket_misses=0
   else
     socket_misses=$((socket_misses + 1))
-    if [ "${socket_misses}" -ge "${PULSE_LOSS_TOLERANCE}" ]; then
+    if [ "${socket_misses}" -ge "${STACK_LOSS_TOLERANCE}" ]; then
       socket_misses=0
-      if [ "${pulse_restarts}" -ge "${MAX_PULSE_RESTARTS}" ]; then
-        echo "ERROR: pulse socket lost (${PULSE_SOCKET}): still missing after ${MAX_PULSE_RESTARTS} restarts of pipewire-pulse" >&2
+      if [ "${stack_restarts}" -ge "${MAX_STACK_RESTARTS}" ]; then
+        echo "ERROR: pulse socket lost (${PULSE_SOCKET}): still missing after ${MAX_STACK_RESTARTS} rebuilds of the audio stack" >&2
         exit 1
       fi
-      pulse_restarts=$((pulse_restarts + 1))
-      echo "WARN: pulse socket lost (${PULSE_SOCKET}): restarting pipewire-pulse (${pulse_restarts}/${MAX_PULSE_RESTARTS})" >&2
-      wait_for_exit "${PULSE_PID}"
-      start_pulse_server "${PULSE_SOCKET}" || {
-        echo "ERROR: pulse socket lost (${PULSE_SOCKET}): pipewire-pulse did not recreate it" >&2
-        exit 1
-      }
-      configure_pulse_defaults || {
-        echo "ERROR: pulse socket lost (${PULSE_SOCKET}): pulse not accepting connections after restart" >&2
+      stack_restarts=$((stack_restarts + 1))
+      echo "WARN: pulse socket lost (${PULSE_SOCKET}): rebuilding the audio stack (${stack_restarts}/${MAX_STACK_RESTARTS})" >&2
+      rebuild_audio_stack || {
+        echo "ERROR: pulse socket lost (${PULSE_SOCKET}): the audio stack did not come back" >&2
         exit 1
       }
       echo "Pulse ready again: ${PULSE_SOCKET}"
