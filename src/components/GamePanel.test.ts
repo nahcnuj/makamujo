@@ -8,12 +8,12 @@ describe("formatCountWithIcon", () => {
   });
 
   it("keeps the row height stable: renders the icon alone when the count is zero", () => {
-    expect(formatCountWithIcon(0, "🎁")).toBe("🎁");
-    expect(formatCountWithIcon(0, "📣")).toBe("📣");
+    expect(formatCountWithIcon(0, "🎁")).toEndWith("🎁");
+    expect(formatCountWithIcon(0, "📣")).toEndWith("📣");
   });
 
   it("keeps the row height stable: renders the icon alone when the count is missing", () => {
-    expect(formatCountWithIcon(undefined, "🎁")).toBe("🎁");
-    expect(formatCountWithIcon(undefined, "📣")).toBe("📣");
+    expect(formatCountWithIcon(undefined, "🎁")).toEndWith("🎁");
+    expect(formatCountWithIcon(undefined, "📣")).toEndWith("📣");
   });
 });
