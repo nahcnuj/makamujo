@@ -29,7 +29,7 @@ export const formatCountWithIcon = (
   count: number | undefined,
   icon: string,
 ): string =>
-  count !== undefined && count > 0 ? `${formatNumber(count)}${icon}` : icon;
+  count !== undefined ? `${formatNumber(count)}${icon}` : `- ${icon}`;
 
 /**
  * `Games[name].Component` is a union of per-game components, so handing it JSX
