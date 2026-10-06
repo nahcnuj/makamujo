@@ -22,6 +22,16 @@ const _formatDuration = (d: Date) =>
 const formatNumber = new Intl.NumberFormat("ja-JP").format;
 
 /**
+ * Renders a count with its icon, or the icon alone when the count is missing
+ * (not fetched) or zero, so the row keeps a constant height either way.
+ */
+export const formatCountWithIcon = (
+  count: number | undefined,
+  icon: string,
+): string =>
+  count !== undefined && count > 0 ? `${formatNumber(count)}${icon}` : icon;
+
+/**
  * `Games[name].Component` is a union of per-game components, so handing it JSX
  * would demand props satisfying *every* member (an intersection of the games'
  * state shapes). The payload really is whichever game `playing.name` selects,
@@ -59,38 +69,24 @@ export function GamePanel() {
           commentCount={commentCount ?? 0}
           previousStreamCommentCount={previousStreamCommentCount ?? 0}
         />
-        {streamState?.meta?.total && (
-          <div className="text-right">
-            <div>
-              {streamState.meta.total.gift > 0 && (
-                <HighlightOnChange
-                  timeout={30_000}
-                  classNameOnChanged="text-yellow-300"
-                >
-                  {`${formatNumber(streamState.meta.total.gift)}🎁`}
-                </HighlightOnChange>
-              )}
-              {streamState.meta.total.listeners > 0 && (
-                <HighlightOnChange
-                  timeout={5_000}
-                  classNameOnChanged="text-yellow-300"
-                >
-                  {`${formatNumber(streamState.meta.total.listeners)}🙎`}
-                </HighlightOnChange>
-              )}
-            </div>
-            {streamState.meta.total.ad > 0 && (
-              <div>
-                <HighlightOnChange
-                  timeout={60_000}
-                  classNameOnChanged="text-yellow-300"
-                >
-                  {`${formatNumber(streamState.meta.total.ad)}📣`}
-                </HighlightOnChange>
-              </div>
-            )}
+        <div className="flex">
+          <div className="flex-1 text-right">
+            <HighlightOnChange
+              timeout={30_000}
+              classNameOnChanged="text-yellow-300"
+            >
+              {formatCountWithIcon(streamState?.meta?.total?.gift, "🎁")}
+            </HighlightOnChange>
           </div>
-        )}
+          <div className="flex-1 text-right">
+            <HighlightOnChange
+              timeout={60_000}
+              classNameOnChanged="text-yellow-300"
+            >
+              {formatCountWithIcon(streamState?.meta?.total?.ad, "📣")}
+            </HighlightOnChange>
+          </div>
+        </div>
       </div>
     </div>
   );
