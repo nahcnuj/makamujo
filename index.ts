@@ -33,12 +33,16 @@ import {
   STREAM_BASELINE_BASENAME,
   saveStreamBaseline,
 } from "./lib/application/streamBaselineStore";
-import type { DisplayedStatistics } from "./lib/domain/broadcasting/watchPageStatistics";
+import {
+  type DisplayedStatistics,
+  retainDefinedStatistics,
+} from "./lib/domain/broadcasting/watchPageStatistics";
 import {
   assemblePublishedPayload,
   attachReplyTargetToPublished,
   extractMetaPostBody,
   GENERATED_SPEECH_HISTORY_SSE_SIZE,
+  mergePublishedProgramInfo,
 } from "./lib/domain/publication/assemblePublishedPayload";
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import { normalizePublishedStreamState } from "./lib/streamState";
@@ -172,6 +176,8 @@ const streamer = new MakaMujo(model, tts, {
 let lastPublishedStreamState: unknown;
 // 未取得なら undefined のまま。`POST /api/meta` へフォールバックする。
 let watchPageDisplayedStatistics: DisplayedStatistics | undefined;
+// ページが `-` でも、PUT / POST に無い統計は消さない。
+let retainedWatchPageStatistics: DisplayedStatistics | undefined;
 let currentSpeechState = { speech: "", silent: false };
 // WebSocket clients connected to the broadcasting server.
 const wsClients = new Set<WsLike>();
@@ -196,6 +202,7 @@ const getCurrentStreamPayload = () => {
     lastPublished: lastPublishedStreamState,
     agentStreamState: agent.getStreamState?.(),
     displayedStatistics: watchPageDisplayedStatistics,
+    retainedStatistics: retainedWatchPageStatistics,
     streamer: {
       canSpeak: streamer.canSpeak,
       currentGame: streamer.currentGame,
@@ -378,6 +385,7 @@ const apiApp = new Hono()
       }
 
       let { replyTargetComment, published } = extractMetaPostBody(body);
+      const previousPublished = lastPublishedStreamState;
 
       try {
         agent.publishStreamState?.(published);
@@ -399,7 +407,10 @@ const apiApp = new Hono()
       }
 
       try {
-        lastPublishedStreamState = published;
+        lastPublishedStreamState = mergePublishedProgramInfo(
+          previousPublished,
+          published,
+        );
       } catch (err) {
         console.warn(
           "[WARN] failed to persist published stream state locally:",
@@ -750,6 +761,10 @@ startIdleSpeechTimer(streamer, 1_000);
 void startWatchPageStatisticsSource({
   onStatistics: (statistics) => {
     watchPageDisplayedStatistics = statistics;
+    retainedWatchPageStatistics = retainDefinedStatistics(
+      retainedWatchPageStatistics,
+      statistics,
+    );
     broadcastCurrentPayloadLocal("onWatchPageStatistics");
   },
 });

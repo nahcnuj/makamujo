@@ -48,16 +48,18 @@
 | ニコニコ広告ポイント → `niconama.meta.total.ad` | `nicoad-count-item` |
 | ギフトポイント → `niconama.meta.total.gift` | `gift-count-item` |
 
-ページに値が無い（`-`）ときは `undefined` のまま公開する。表示をどうするかは
-UI 側の責務であり、domain / application では決めない（コンソールは
-`formatMetricValue(undefined) === "-"`、オーバーレイは `0` 扱い）。
+ページが数値を出している項目はそれを公開する。ページが `-` の項目は
+PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い項目は
+直前に自己収集した値を残す。一度も値が無い項目だけキーを出さない
+（コンソールは `formatMetricValue(undefined) === "-"`、オーバーレイは `0` 扱い）。
+`POST /api/meta` が `niconama` を含まない更新は、直前の番組情報を残す。
 
 ### モジュール
 
 | モジュール | 層 | 役割 |
 |------------|----|------|
 | `lib/domain/broadcasting/watchPageStatistics.ts` | domain（純関数） | 統計行の表示テキスト → 数値（`-` / `,` / `万` / `億` 対応） |
-| `lib/domain/publication/assemblePublishedPayload.ts` | domain（純関数） | `displayedStatistics` 入力で `niconama` の統計と `commentCount` を上書き |
+| `lib/domain/publication/assemblePublishedPayload.ts` | domain（純関数） | ページの数値だけ統計を更新し、PUT / POST に無い項目は消さない |
 | `composition/watchPageBrowser.ts` | composition | ブラウザ実体の契約（`open` / `read` / `close`）と生読み取りの変換。Playwright 非依存 |
 | `composition/chromiumWatchPageBrowser.ts` | composition | Playwright（Chromium）実装。**必要なときだけ動的 import** |
 | `composition/watchPageStatisticsSource.ts` | composition | 環境変数・採取周期・ブラウザの作り直し・失敗ログ。`index.ts` はこれを 1 回呼ぶだけ |

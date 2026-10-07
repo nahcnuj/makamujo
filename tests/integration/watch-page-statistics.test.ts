@@ -383,9 +383,24 @@ test.skipIf(!chromiumAvailable)(
 );
 
 test.skipIf(!chromiumAvailable)(
-  "omits metrics the page shows as a placeholder",
+  "keeps PUT metrics when the page shows a placeholder",
   async () => {
     await ensureFirstSample();
+    await fetch(`${broadcastingBaseUrl}/api/meta`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        type: "niconama",
+        data: {
+          isLive: true,
+          title: "プレースホルダでも残す配信",
+          startTime: 3,
+          total: 5,
+          points: { gift: 7, ad: 7 },
+          url: "https://onecomme.example/lv7",
+        },
+      }),
+    });
     statistics = {
       ...statistics,
       "nicoad-count-item": "-",
@@ -395,12 +410,13 @@ test.skipIf(!chromiumAvailable)(
     const meta = await waitForMeta(
       (m) =>
         m?.niconama?.meta?.total?.listeners === 111 &&
-        !("ad" in (m?.niconama?.meta?.total ?? {})),
+        m?.niconama?.meta?.total?.gift === 7 &&
+        m?.niconama?.meta?.total?.ad === 7,
       TEST_TIMEOUT_MS,
     );
 
-    expect("ad" in meta.niconama.meta.total).toBe(false);
-    expect("gift" in meta.niconama.meta.total).toBe(false);
+    expect(meta.niconama.meta.total.gift).toBe(7);
+    expect(meta.niconama.meta.total.ad).toBe(7);
     expect(meta.niconama.meta.total.listeners).toBe(111);
   },
   TEST_TIMEOUT_MS,

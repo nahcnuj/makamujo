@@ -1,5 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { parseDisplayedStatistics } from "./watchPageStatistics";
+import {
+  parseDisplayedStatistics,
+  retainDefinedStatistics,
+} from "./watchPageStatistics";
 
 /** 視聴者数だけを読んで、1 指標の読み取りを観察する。 */
 const parseViewers = (text: string | null | undefined) =>
@@ -85,6 +88,27 @@ describe("watch page statistics", () => {
       comments: undefined,
       nicoadPoints: undefined,
       giftPoints: undefined,
+    });
+  });
+});
+
+describe("retainDefinedStatistics", () => {
+  it("keeps a previously collected metric when the new reading is blank", () => {
+    expect(
+      retainDefinedStatistics(
+        { viewers: 10, comments: 4, nicoadPoints: 2, giftPoints: 3 },
+        {
+          viewers: undefined,
+          comments: 8,
+          nicoadPoints: undefined,
+          giftPoints: undefined,
+        },
+      ),
+    ).toEqual({
+      viewers: 10,
+      comments: 8,
+      nicoadPoints: 2,
+      giftPoints: 3,
     });
   });
 });

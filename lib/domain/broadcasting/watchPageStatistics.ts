@@ -94,3 +94,14 @@ export const parseDisplayedStatistics = (
   nicoadPoints: parseDisplayedMetric(texts.nicoadPoints),
   giftPoints: parseDisplayedMetric(texts.giftPoints),
 });
+
+/** 今回の読み取りに数値が無い項目は、直前に自己収集した値を残す。 */
+export const retainDefinedStatistics = (
+  previous: DisplayedStatistics | undefined,
+  next: DisplayedStatistics,
+): DisplayedStatistics => ({
+  viewers: next.viewers ?? previous?.viewers,
+  comments: next.comments ?? previous?.comments,
+  nicoadPoints: next.nicoadPoints ?? previous?.nicoadPoints,
+  giftPoints: next.giftPoints ?? previous?.giftPoints,
+});
