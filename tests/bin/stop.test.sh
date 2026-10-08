@@ -10,10 +10,25 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "${tmp_project_root}/bin" "${tmp_project_root}/var/pid" "${tmp_project_root}/fake-bin" "${tmp_project_root}/fake-state"
+mkdir -p "${tmp_project_root}/bin" "${tmp_project_root}/lib" "${tmp_project_root}/var/pid" "${tmp_project_root}/fake-bin" "${tmp_project_root}/fake-state"
 cp "${PROJECT_ROOT}/bin/stop" "${tmp_project_root}/bin/stop"
+cp "${PROJECT_ROOT}/bin/cleanup-temp.ts" "${tmp_project_root}/bin/cleanup-temp.ts"
+cp "${PROJECT_ROOT}/lib/temporaryDirectory.ts" "${tmp_project_root}/lib/temporaryDirectory.ts"
 chmod +x "${tmp_project_root}/bin/stop"
 echo "123" > "${tmp_project_root}/var/pid/screen"
+
+# Scratch directories a killed browser would leave behind in the temp dir.
+# TMPDIR keeps the sweep away from the real one.
+mkdir -p "${tmp_project_root}/tmp"
+for stale_dir in makamujo-game-abcdef makamujo-overlay-abcdef \
+  makamujo-playwright-abcdef playwright-artifacts-abcdef \
+  puppeteer_dev_profile-abcdef org.chromium.Chromium.abcdef; do
+  mkdir -p "${tmp_project_root}/tmp/${stale_dir}/Default"
+done
+# Owned by a process bin/stop leaves running, so it must survive.
+mkdir -p "${tmp_project_root}/tmp/makamujo-tts-abcdef"
+# Not ours at all.
+mkdir -p "${tmp_project_root}/tmp/systemd-private-abcdef"
 
 cat > "${tmp_project_root}/fake-bin/kill" <<'EOS'
 #!/usr/bin/env sh
@@ -81,6 +96,7 @@ EOS
 
 started_at_ns=$(date +%s%N)
 PATH="${tmp_project_root}/fake-bin:${PATH}" \
+TMPDIR="${tmp_project_root}/tmp" \
 FAKE_STATE_DIR="${tmp_project_root}/fake-state" \
 FAKE_KILL_BIN="${tmp_project_root}/fake-bin/kill" \
 BASH_ENV="${tmp_project_root}/bash_env" \
@@ -105,4 +121,29 @@ fi
 if ! grep -F -- "-KILL 789" "${tmp_project_root}/fake-state/calls.log" >/dev/null; then
   echo "descendant process was not terminated" >&2
   exit 1
+fi
+
+# The temp sweep runs through bun; skip when it is unavailable so this test
+# still covers the process termination above.
+if command -v bun >/dev/null 2>&1; then
+  for stale_dir in makamujo-game-abcdef makamujo-overlay-abcdef \
+    makamujo-playwright-abcdef playwright-artifacts-abcdef \
+    puppeteer_dev_profile-abcdef org.chromium.Chromium.abcdef; do
+    if [ -d "${tmp_project_root}/tmp/${stale_dir}" ]; then
+      echo "stale temp directory was not removed: ${stale_dir}" >&2
+      exit 1
+    fi
+  done
+
+  if [ ! -d "${tmp_project_root}/tmp/makamujo-tts-abcdef" ]; then
+    echo "the running server's scratch directory was removed" >&2
+    exit 1
+  fi
+
+  if [ ! -d "${tmp_project_root}/tmp/systemd-private-abcdef" ]; then
+    echo "an unrelated temp directory was removed" >&2
+    exit 1
+  fi
+else
+  echo "bun not found; skipping the temp directory sweep assertions" >&2
 fi

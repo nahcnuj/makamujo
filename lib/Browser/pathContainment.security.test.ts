@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  rmSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -45,14 +46,21 @@ describe("removeStaleUnixIpcSocket / createReceiverWithPath containment", () => 
   let outsideSock = "";
 
   afterEach(() => {
+    if (process.platform === "win32") return;
     for (const p of [staleUnderVar, outsideSock]) {
-      if (p && process.platform !== "win32" && existsSync(p)) {
+      if (p && existsSync(p)) {
         try {
           unlinkSync(p);
         } catch {
           /* ignore */
         }
       }
+    }
+    // The denial fixture lives in the OS temp dir, so the test owns the whole
+    // directory and not just the socket file inside it.
+    if (outsideDir) {
+      rmSync(outsideDir, { recursive: true, force: true });
+      outsideDir = "";
     }
   });
 

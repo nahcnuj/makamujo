@@ -2,7 +2,7 @@
 
 PREFIX ?= /opt/makamujo
 UNIT_DIR ?= /etc/systemd/system
-INSTALL_BIN = bin/x bin/xorg10 bin/x11vnc-10 bin/obs-studio bin/journal-makamujo bin/start bin/stop
+INSTALL_BIN = bin/x bin/xorg10 bin/x11vnc-10 bin/obs-studio bin/journal-makamujo bin/start bin/stop bin/cleanup-temp.ts
 INSTALL_DATA = package.json bunfig.toml tsconfig.json index.ts lib routes src console composition architecture obs-studio
 SERVICE = makamujo.service
 

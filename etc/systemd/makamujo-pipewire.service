@@ -2,6 +2,11 @@
 Description=Makamujo PipeWire stack for headless streaming
 After=network.target makamujo-xvfb.service
 Wants=makamujo-xvfb.service
+# Restarting every 5s forever only buries the real cause under a wall of
+# identical log lines. Five tries in five minutes is enough to clear a
+# transient fault and still settles into `failed` for a broken stack.
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=notify

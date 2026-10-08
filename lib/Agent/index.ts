@@ -306,4 +306,9 @@ type SpeechOptions = {
 
 export interface TTS {
   speech(text: string, options?: SpeechOptions): Promise<void>;
+  /**
+   * Release the OS resources held by the engine (e.g. the scratch directory
+   * used for synthesized audio). Must be idempotent.
+   */
+  close?(): void;
 }

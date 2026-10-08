@@ -54,6 +54,11 @@ import { handleCatchAll } from "./src/frontendServer";
 
 process.on("exit", exitHandler.bind(null, { cleanup: true }));
 process.on("SIGINT", signalHandler.bind(null, { exit: true }));
+// systemd stops makamujo-screen.service with SIGTERM, and an unhandled signal
+// kills the process without running the "exit" hook — which would leak the TTS
+// scratch directory on every single stop. The VPS temp filesystem is 2 GB.
+process.on("SIGTERM", signalHandler.bind(null, { exit: true }));
+process.on("SIGHUP", signalHandler.bind(null, { exit: true }));
 process.on("SIGUSR1", signalHandler.bind(null, { exit: true }));
 process.on("SIGUSR2", signalHandler.bind(null, { exit: true }));
 // Log uncaught exceptions for better diagnostics before invoking the
@@ -792,6 +797,14 @@ function exitHandler(
       }
     } catch {
       /* ignore */
+    }
+    // The TTS engine owns a scratch directory under the OS temp dir; the server
+    // never reaches the end of a stream on its own, so this is the only place
+    // it gets released. `tts` is in TDZ if startup failed before it was built.
+    try {
+      tts.close?.();
+    } catch {
+      /* ignore cleanup failures during crash paths */
     }
   }
 

@@ -24,7 +24,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Run ShellCheck
-        run: find bin -type f -name '*.sh' -print0 | xargs -0 shellcheck
+        # bin/ のエントリポイント (start / stop / makamujo-pipewire) は拡張子なしなので
+        # '*.sh' だけでは lint されず、起動に直結するスクリプトが検査を素通りしていた。
+        run: |
+          find bin scripts -type f \( -name '*.sh' -o -name start -o -name stop -o -name makamujo-pipewire \) -print0 \
+            | xargs -0 -r shellcheck
 
   setup:
     runs-on: ubuntu-latest

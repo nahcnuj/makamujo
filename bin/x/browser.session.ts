@@ -140,6 +140,27 @@ const browser = await create(executablePath, {
   height: 720, // match stream crop; scale via page zoom
 });
 
+let closed = false;
+const closeBrowser = async () => {
+  if (closed) return;
+  closed = true;
+  await browser.close();
+};
+
+// `process.on("exit")` does not run for signals, and the session spends its
+// whole life parked in the timeout below, so systemd's SIGTERM would skip the
+// cleanup and leak the Chromium profile in the OS temp dir.
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+  process.on(signal, () => {
+    console.log("[INFO] browser session received", signal);
+    void closeBrowser()
+      .catch((err) => {
+        console.warn("[WARN] browser close failed", err);
+      })
+      .finally(() => process.exit(0));
+  });
+}
+
 // Aw, Snap! 監視
 const awSnapTimer = setInterval(() => {
   void (async () => {
@@ -154,7 +175,7 @@ const awSnapTimer = setInterval(() => {
           err,
         );
         clearInterval(awSnapTimer);
-        process.exit(1);
+        void closeBrowser().finally(() => process.exit(1));
       }
     }
   })();
@@ -240,7 +261,7 @@ try {
   process.exitCode = 1;
 } finally {
   clearInterval(awSnapTimer);
-  await browser.close();
+  await closeBrowser();
   send({ name: "closed" });
 }
 
