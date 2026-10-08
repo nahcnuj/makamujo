@@ -202,6 +202,58 @@ describe("vigilant-fiesta stepIdle", () => {
     });
     expect(out.action).toBeUndefined();
   });
+
+  it("retries immediately on the result screen while silent (no free-talk wait)", () => {
+    const out = stepIdle(
+      { type: "idle", phase: "sight" },
+      idleAt("result", { score: 12 }) as any,
+      1_000_000,
+      () => true,
+    );
+    expect(out.action).toEqual(Action.clickByElementId("btn-retry"));
+    expect(out.state).toEqual({
+      type: "idle",
+      phase: "act",
+      freeTalkUntil: undefined,
+    });
+  });
+
+  it("ends the free-talk window right away when silence starts mid-window", () => {
+    const freeTalkUntil = 2_000_000;
+    const out = stepIdle(
+      { type: "idle", phase: "freeTalk", freeTalkUntil },
+      idleAt("result", { score: 12 }) as any,
+      freeTalkUntil - 1,
+      () => true,
+    );
+    expect(out.action).toEqual(Action.clickByElementId("btn-retry"));
+    expect(out.state).toEqual({
+      type: "idle",
+      phase: "act",
+      freeTalkUntil: undefined,
+    });
+  });
+});
+
+describe("vigilant-fiesta solver — silence (休憩)", () => {
+  it("skips the free-talk window and retries immediately while isSilent() is true", () => {
+    const gen = solver(
+      { type: "idle", phase: "sight" },
+      { isSilent: () => true },
+    );
+    expect(gen.next().value).toEqual(Action.noop);
+    expect(
+      gen.next(idleAt("result", { score: 30, level: 1 }) as any).value,
+    ).toEqual(Action.clickByElementId("btn-retry"));
+  });
+
+  it("still enters the free-talk window when speechable (default listeners)", () => {
+    const gen = solver({ type: "idle", phase: "sight" });
+    expect(gen.next().value).toEqual(Action.noop);
+    expect(
+      gen.next(idleAt("result", { score: 30, level: 1 }) as any).value,
+    ).toEqual(Action.noop);
+  });
 });
 
 describe("vigilant-fiesta solver generator — full play cycle", () => {
