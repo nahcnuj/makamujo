@@ -14,6 +14,7 @@ Environment=NODE_ENV=production
 Environment=DISPLAY=:10
 Environment=XDG_RUNTIME_DIR=/run/user/0
 Environment=PULSE_SERVER=unix:/run/user/0/pulse/native
+# 統計は配信ページを描画して読む。読むページも採取周期も既定のまま。
 ExecStart=/bin/true
 StandardOutput=journal
 StandardError=journal

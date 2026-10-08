@@ -3,6 +3,7 @@ import {
   assemblePublishedPayload,
   attachReplyTargetToPublished,
   extractMetaPostBody,
+  mergePublishedProgramInfo,
 } from "./assemblePublishedPayload";
 
 const streamer = {
@@ -116,6 +117,182 @@ describe("assemblePublishedPayload", () => {
     });
     expect(payload.speechHistory).toHaveLength(20);
   });
+
+  it("lets watch-page statistics win over POST /api/meta niconama", () => {
+    const payload = assemblePublishedPayload({
+      lastPublished: {
+        type: "niconama",
+        data: {
+          isLive: true,
+          title: "from-wancomme",
+          startTime: 1,
+          total: 1,
+          points: { gift: 0, ad: 0 },
+          url: "https://onecomme.example",
+        },
+      },
+      agentStreamState: null,
+      displayedStatistics: {
+        viewers: 42,
+        comments: 99,
+        nicoadPoints: 2,
+        giftPoints: 3,
+      },
+      streamer,
+      speechState: {},
+      history: [],
+    });
+
+    // ページから取らない項目（タイトル / URL / 開始時刻 / 放送状態）は
+    // 従来どおり POST /api/meta の値が残る。
+    expect(payload.niconama).toEqual({
+      type: "live",
+      meta: {
+        title: "from-wancomme",
+        url: "https://onecomme.example",
+        start: 1,
+        total: { listeners: 42, gift: 3, ad: 2 },
+      },
+    });
+    expect(payload.commentCount).toBe(99);
+  });
+
+  it("keeps PUT metrics when the watch page has no value", () => {
+    const payload = assemblePublishedPayload({
+      lastPublished: {
+        type: "niconama",
+        data: {
+          isLive: true,
+          title: "from-wancomme",
+          startTime: 1,
+          total: 1,
+          points: { gift: 7, ad: 8 },
+          url: "https://onecomme.example",
+        },
+        commentCount: 15,
+      },
+      agentStreamState: null,
+      displayedStatistics: {
+        viewers: 42,
+        comments: undefined,
+        nicoadPoints: undefined,
+        giftPoints: undefined,
+      },
+      streamer,
+      speechState: {},
+      history: [],
+    });
+
+    expect(payload.niconama).toEqual({
+      type: "live",
+      meta: {
+        title: "from-wancomme",
+        url: "https://onecomme.example",
+        start: 1,
+        total: { listeners: 42, gift: 7, ad: 8 },
+      },
+    });
+    expect(payload.commentCount).toBe(15);
+  });
+
+  it("omits a metric nobody has ever supplied", () => {
+    const payload = assemblePublishedPayload({
+      lastPublished: {
+        type: "niconama",
+        data: {
+          isLive: true,
+          title: "from-wancomme",
+          startTime: 1,
+          total: 1,
+          url: "https://onecomme.example",
+        },
+      },
+      agentStreamState: null,
+      displayedStatistics: {
+        viewers: undefined,
+        comments: undefined,
+        nicoadPoints: undefined,
+        giftPoints: undefined,
+      },
+      streamer: { ...streamer, commentCount: undefined },
+      speechState: {},
+      history: [],
+    });
+
+    expect(payload.niconama).toEqual({
+      type: "live",
+      meta: {
+        title: "from-wancomme",
+        url: "https://onecomme.example",
+        start: 1,
+        total: { listeners: 1 },
+      },
+    });
+    expect(payload.commentCount).toBeUndefined();
+  });
+
+  it("keeps self-collected metrics when the PUT omits them and the page is blank", () => {
+    const payload = assemblePublishedPayload({
+      lastPublished: {
+        replyTargetComment: { text: "only-reply", pickedTopic: "t" },
+      },
+      agentStreamState: null,
+      displayedStatistics: {
+        viewers: undefined,
+        comments: undefined,
+        nicoadPoints: undefined,
+        giftPoints: undefined,
+      },
+      retainedStatistics: {
+        viewers: 42,
+        comments: 9,
+        nicoadPoints: 2,
+        giftPoints: 3,
+      },
+      streamer,
+      speechState: {},
+      history: [],
+    });
+
+    expect(payload.niconama).toEqual({
+      meta: {
+        total: { listeners: 42, gift: 3, ad: 2 },
+      },
+    });
+    expect(payload.commentCount).toBe(9);
+  });
+
+  it("falls back to POST /api/meta when no watch-page statistics arrived", () => {
+    const payload = assemblePublishedPayload({
+      lastPublished: {
+        type: "niconama",
+        data: {
+          isLive: true,
+          title: "from-wancomme",
+          startTime: 1,
+          total: 1,
+          points: { gift: 0, ad: 0 },
+          url: "https://onecomme.example",
+        },
+      },
+      agentStreamState: null,
+      displayedStatistics: undefined,
+      streamer,
+      speechState: {},
+      history: [],
+    });
+
+    expect(payload.niconama).toEqual({
+      type: "live",
+      meta: {
+        title: "from-wancomme",
+        url: "https://onecomme.example",
+        start: 1,
+        total: { listeners: 1, gift: 0, ad: 0 },
+      },
+    });
+    expect(payload.commentCount).toBe(99);
+  });
 });
 
 describe("extractMetaPostBody", () => {
@@ -153,6 +330,55 @@ describe("attachReplyTargetToPublished", () => {
     ).toEqual({
       niconama: {},
       replyTargetComment: { text: "a", pickedTopic: "b" },
+    });
+  });
+});
+
+describe("mergePublishedProgramInfo", () => {
+  const previous = {
+    niconama: {
+      type: "live",
+      meta: {
+        title: "kept",
+        url: "https://example/lv1",
+        start: 1,
+        total: { listeners: 3, gift: 9, ad: 8 },
+      },
+    },
+  };
+
+  it("keeps program info when the update does not include niconama", () => {
+    expect(
+      mergePublishedProgramInfo(previous, {
+        replyTargetComment: { text: "reply", pickedTopic: "t" },
+      }),
+    ).toEqual({
+      replyTargetComment: { text: "reply", pickedTopic: "t" },
+      niconama: previous.niconama,
+    });
+  });
+
+  it("updates only the metrics the update actually includes", () => {
+    expect(
+      mergePublishedProgramInfo(previous, {
+        niconama: {
+          type: "live",
+          meta: {
+            title: "updated",
+            total: { listeners: 12 },
+          },
+        },
+      }),
+    ).toEqual({
+      niconama: {
+        type: "live",
+        meta: {
+          title: "updated",
+          url: "https://example/lv1",
+          start: 1,
+          total: { listeners: 12, gift: 9, ad: 8 },
+        },
+      },
     });
   });
 });

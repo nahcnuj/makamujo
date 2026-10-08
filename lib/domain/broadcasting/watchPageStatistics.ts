@@ -1,0 +1,107 @@
+/**
+ * 番組配信ページの**統計行が画面に表示しているテキスト**を数値へ読む純関数群。
+ *
+ * ページは 4 指標（視聴者数 / コメント数 / ニコニコ広告ポイント / ギフトポイント）を
+ * HTML には `-` プレースホルダで描画し、実際の値は JS が unama WebSocket から
+ * 受け取って埋め込む。したがって HTML ではなく**レンダリング後の文字列**を渡す。
+ * 値が無いとき（`-`）は `undefined` を返し、表示側の `-` にそのまま委ねる。
+ */
+
+/** 画面上の統計行が持っている表示テキスト（DOM からそのまま採取した文字列）。 */
+export type DisplayedStatisticsTexts = {
+  viewers: string | null | undefined;
+  comments: string | null | undefined;
+  nicoadPoints: string | null | undefined;
+  giftPoints: string | null | undefined;
+};
+
+/** 数値化した統計。`undefined` は「ページに値が無かった」を意味する。 */
+export type DisplayedStatistics = {
+  viewers?: number;
+  comments?: number;
+  nicoadPoints?: number;
+  giftPoints?: number;
+};
+
+/**
+ * 日本語の桁表現と、その分倍率。配信ページは 1 万以上になると
+ * `1.2万` / `1.5億` のように省略表示するので、読む側で元に戻してから数値にする。
+ *
+ * 単位そのものは `Intl` に決めさせる（`notation: "compact"`）。日本語なら
+ * `1e12` → `1兆`、`1e8` → `1億`、`1e4` → `1万` となるので、これを長い方から
+ * 並べた表に落とす。ハードコードするとロケールとずれる。
+ *
+ * `Intl.NumberFormat.prototype.parse`（逆方向）は Bun 1.3.11 に未実装のため
+ * 文字列側の読み取りは自前で行う。
+ */
+const buildUnitMultipliers = (
+  locale: string,
+): ReadonlyArray<readonly [string, number]> => {
+  const formatter = new Intl.NumberFormat(locale, {
+    notation: "compact",
+    compactDisplay: "short",
+  });
+  const table: Array<readonly [string, number]> = [];
+  for (let exponent = 4; exponent <= 12; exponent += 4) {
+    const magnitude = 10 ** exponent;
+    const suffix = formatter.format(magnitude).replace(/\p{Nd}/gu, "");
+    if (suffix.length > 0) {
+      table.push([suffix, magnitude]);
+    }
+  }
+  return table.reverse();
+};
+
+const UNIT_MULTIPLIERS = buildUnitMultipliers("ja");
+
+/**
+ * 1 指標の表示テキストを数値にする。`-` / 空文字 / 数値として読めないものは
+ * `undefined`。1,234 / 12.3万 / 1.2億 のような桁表現も受け付け、端数は保持する。
+ */
+const parseDisplayedMetric = (
+  text: string | null | undefined,
+): number | undefined => {
+  if (typeof text !== "string") {
+    return undefined;
+  }
+  const trimmed = text.trim();
+  if (trimmed.length === 0 || trimmed === "-") {
+    return undefined;
+  }
+
+  const unit = UNIT_MULTIPLIERS.find(([suffix]) => trimmed.includes(suffix));
+  const numericPart = unit
+    ? trimmed.slice(0, trimmed.indexOf(unit[0]))
+    : trimmed;
+  const normalized = numericPart.replaceAll(",", "").trim();
+  if (normalized.length === 0 || !/^\d+(?:\.\d+)?$/.test(normalized)) {
+    return undefined;
+  }
+
+  const value = Number.parseFloat(normalized);
+  if (!Number.isFinite(value)) {
+    return undefined;
+  }
+  return unit ? value * unit[1] : value;
+};
+
+/** 統計行の表示テキスト一式を数値化する。 */
+export const parseDisplayedStatistics = (
+  texts: DisplayedStatisticsTexts,
+): DisplayedStatistics => ({
+  viewers: parseDisplayedMetric(texts.viewers),
+  comments: parseDisplayedMetric(texts.comments),
+  nicoadPoints: parseDisplayedMetric(texts.nicoadPoints),
+  giftPoints: parseDisplayedMetric(texts.giftPoints),
+});
+
+/** 今回の読み取りに数値が無い項目は、直前に自己収集した値を残す。 */
+export const retainDefinedStatistics = (
+  previous: DisplayedStatistics | undefined,
+  next: DisplayedStatistics,
+): DisplayedStatistics => ({
+  viewers: next.viewers ?? previous?.viewers,
+  comments: next.comments ?? previous?.comments,
+  nicoadPoints: next.nicoadPoints ?? previous?.nicoadPoints,
+  giftPoints: next.giftPoints ?? previous?.giftPoints,
+});
