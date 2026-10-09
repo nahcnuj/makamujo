@@ -53,6 +53,7 @@ test.beforeAll(async () => {
         ...process.env,
         NODE_ENV: "production",
         CONSOLE_LOOPBACK_ONLY: "1",
+        NICONAMA_WATCH_PAGE_DISABLED: "1",
         MAKAMUJO_IPC_PATH: ipcPath,
       },
       stdio: ["ignore", "pipe", "pipe"],

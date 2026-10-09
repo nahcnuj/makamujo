@@ -101,21 +101,20 @@ let page = ctx.pages()[0] ?? (await ctx.newPage());
 
 const readCookies = () => ctx.cookies("https://www.nicovideo.jp");
 
-// The garage live history needs a session, so an unauthenticated visit
-// lands on the Niconico sign-in form; visiting it is what puts a login
-// form on the sign-in display for a human.
+// The garage live history needs a session, so an unauthenticated visit lands on
+// the Niconico sign-in form; visiting it is what puts a login form on the
+// sign-in display for a human.
 const SIGN_IN_PROMPT_URL =
   "https://garage.nicovideo.jp/niconico-garage/live/history";
 
-// The garage live history lost its iframe, so the 番組 tab of the user
-// page takes its place. That page shows the same programs without
-// signing in.
+// The garage live history lost its iframe, so the 番組 tab of the user page
+// takes its place. That page shows the same programs without signing in.
 const LIVE_PROGRAMS_URL =
   "https://www.nicovideo.jp/user/14171889/live_programs";
 
-// The 番組 tab renders with React and puts no datetime into the DOM
-// (only the start time and the duration), so the end time comes from
-// the JSON endpoint the embedded nicolive history app reads.
+// The 番組 tab renders with React and puts no datetime into the DOM (only the
+// start time and the duration), so the end time comes from the JSON endpoint
+// the embedded nicolive history app reads.
 const BROADCAST_HISTORY_URL =
   "https://live.nicovideo.jp/front/api/v2/user-broadcast-history" +
   "?providerId=14171889&providerType=user" +

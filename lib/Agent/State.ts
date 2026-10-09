@@ -4,10 +4,11 @@ export type StreamMeta = {
   title: string;
   url: string;
   start: number;
+  /** 集計値。ページに値が無い項目は `undefined`。 */
   total?: {
-    listeners: number;
-    gift: number;
-    ad: number;
+    listeners?: number;
+    gift?: number;
+    ad?: number;
     comments?: number;
   };
 };

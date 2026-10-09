@@ -27,14 +27,25 @@ const program = (options: {
   },
 });
 
-/** 番組一覧を新しい順に並べた応答を作る。 */
+/** 番組一覧を新しい順の応答に包む。 */
 const response = (programs: unknown[]) => ({
   meta: { status: 200 },
   data: { programsList: programs, hasNext: false, totalCount: programs.length },
 });
 
-describe("findLatestProgramEndAt", () => {
+describe("broadcast history", () => {
   it("reads the end time of the newest program", () => {
+    const endAt = findLatestProgramEndAt(
+      response([
+        program({ beginSeconds: 1_791_817_200, endSeconds: 1_791_860_400 }),
+        program({ beginSeconds: 1_791_774_000, endSeconds: 1_791_817_200 }),
+      ]),
+    );
+
+    expect(endAt?.toISOString()).toBe("2026-10-13T03:00:00.000Z");
+  });
+
+  it("prefers the newest program even when it is scheduled", () => {
     const endAt = findLatestProgramEndAt(
       response([
         program({ beginSeconds: 1_791_817_200, endSeconds: 1_791_860_400 }),
