@@ -11,6 +11,7 @@ import {
   setNoVncRunning,
   waitForNiconicoSession,
 } from "../../lib/Browser/niconicoSession";
+import { findLatestProgramEndAt } from "../../lib/domain/broadcasting/broadcastHistory";
 
 const {
   values: {
@@ -100,10 +101,25 @@ let page = ctx.pages()[0] ?? (await ctx.newPage());
 
 const readCookies = () => ctx.cookies("https://www.nicovideo.jp");
 
-// An authenticated page redirects here to the Niconico sign-in form, so
-// visiting it is what puts a login form on the sign-in display for a human.
-const LIVE_HISTORY_URL =
+// The garage live history needs a session, so an unauthenticated visit
+// lands on the Niconico sign-in form; visiting it is what puts a login
+// form on the sign-in display for a human.
+const SIGN_IN_PROMPT_URL =
   "https://garage.nicovideo.jp/niconico-garage/live/history";
+
+// The garage live history lost its iframe, so the 番組 tab of the user
+// page takes its place. That page shows the same programs without
+// signing in.
+const LIVE_PROGRAMS_URL =
+  "https://www.nicovideo.jp/user/14171889/live_programs";
+
+// The 番組 tab renders with React and puts no datetime into the DOM
+// (only the start time and the duration), so the end time comes from
+// the JSON endpoint the embedded nicolive history app reads.
+const BROADCAST_HISTORY_URL =
+  "https://live.nicovideo.jp/front/api/v2/user-broadcast-history" +
+  "?providerId=14171889&providerType=user" +
+  "&isIncludeNonPublic=false&offset=0&limit=1&withTotalCount=false";
 
 const firstDate = new Date("2025-08-03T10:48:00+09:00");
 const day = new Date().getDay();
@@ -124,7 +140,7 @@ try {
       page = ctx.pages()[0] ?? (await ctx.newPage());
     }
 
-    await page.goto(LIVE_HISTORY_URL);
+    await page.goto(SIGN_IN_PROMPT_URL);
     console.debug(
       `Not signed in to Niconico. Sign in on ${NOVNC_URL} (display :11), up to 15 minutes...`,
     );
@@ -145,15 +161,20 @@ try {
   do {
     console.debug(`Getting the date of the latest live...`);
     const next = await (async () => {
-      await page.goto(LIVE_HISTORY_URL);
-      const frame = page.frameLocator("iframe[src]");
-      const child = frame.getByText("終了").first();
-      await child.waitFor({ state: "attached" });
-      const datetime = await child.getAttribute("datetime");
-      if (!datetime) {
-        throw new Error("datetime is null");
+      await page.goto(LIVE_PROGRAMS_URL);
+      const response = await page.request.get(BROADCAST_HISTORY_URL, {
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok()) {
+        throw new Error(
+          `failed to read the broadcast history: ${response.status()}`,
+        );
       }
-      return new Date(datetime);
+      const endAt = findLatestProgramEndAt(await response.json());
+      if (!endAt) {
+        throw new Error("the broadcast history has no live to read");
+      }
+      return endAt;
     })();
     console.debug(next.toLocaleString("ja-JP"));
 
