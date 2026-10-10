@@ -15,7 +15,10 @@ const statistics = (
 
 const createStubBrowser = (
   readings: DisplayedStatistics[],
-  options: { failOnReadAt?: number } = {},
+  options: {
+    failOnReadAt?: number;
+    isAlive?: () => boolean;
+  } = {},
 ) => {
   const calls = { created: 0, opened: 0, reads: 0, closed: 0 };
   const browser: WatchPageBrowser = {
@@ -30,6 +33,7 @@ const createStubBrowser = (
       }
       return readings[Math.min(calls.reads - 1, readings.length - 1)] ?? {};
     },
+    isAlive: () => options.isAlive?.() ?? true,
     close: async () => {
       calls.closed += 1;
     },
@@ -129,7 +133,7 @@ describe("startWatchPageStatisticsSource", () => {
     expect(stub.calls.reads).toBe(3);
   });
 
-  it("keeps a failed read out of the published statistics and rebuilds the browser", async () => {
+  it("keeps a failed read out of the published statistics without reopening the page", async () => {
     const stub = createStubBrowser([statistics()], { failOnReadAt: 1 });
     const warnings: unknown[][] = [];
     const samples: DisplayedStatistics[] = [];
@@ -151,9 +155,59 @@ describe("startWatchPageStatisticsSource", () => {
     expect(samples).toEqual([statistics()]);
     expect(warnings).toHaveLength(1);
     expect(String(warnings[0]?.[0])).toContain("failed to read");
-    // 失敗したブラウザと、次の採取で作ulaçãoもの、stop() で閉じたものの 3 つ。
+    // 読み取りに失敗しても開いたままのページを捨てない。開き直すと unama
+    // WebSocket の閲覧セッションが 1 つ増え、視聴者数を水増ししてしまうため。
+    expect(stub.calls.created).toBe(1);
+    expect(stub.calls.opened).toBe(1);
+  });
+
+  it("keeps reading the same open page across repeated failures", async () => {
+    const stub = createStubBrowser([statistics()], { failOnReadAt: 2 });
+    const warnings: unknown[][] = [];
+    const samples: DisplayedStatistics[] = [];
+
+    const source = startWatchPageStatisticsSource({
+      env: {},
+      log: {
+        log: () => {},
+        warn: (...args: unknown[]) => warnings.push(args),
+        error: () => {},
+      },
+      createBrowser: stub.create,
+      onStatistics: (read) => samples.push(read),
+    });
+    await source.ready;
+    await source.readOnce();
+    await source.readOnce();
+    await source.stop();
+
+    expect(samples).toEqual([statistics(), statistics()]);
+    expect(warnings).toHaveLength(1);
+    expect(stub.calls.created).toBe(1);
+    expect(stub.calls.opened).toBe(1);
+    expect(stub.calls.reads).toBe(3);
+  });
+
+  it("rebuilds the browser only after it reports that it died", async () => {
+    let alive = true;
+    const stub = createStubBrowser([statistics()], { isAlive: () => alive });
+    const source = startWatchPageStatisticsSource({
+      env: {},
+      log: silentLog,
+      createBrowser: stub.create,
+      onStatistics: () => {},
+    });
+
+    await source.ready;
+    expect(stub.calls.opened).toBe(1);
+
+    alive = false;
+    await source.readOnce();
+    await source.stop();
+
     expect(stub.calls.created).toBe(2);
     expect(stub.calls.opened).toBe(2);
+    expect(stub.calls.closed).toBe(2);
   });
 
   it("reports a browser that cannot be created without throwing", async () => {

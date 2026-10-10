@@ -3,8 +3,10 @@
  *
  * ページは一度だけ開き、以降は開いたまま統計行の表示テキストを読み直す
  * （ページ自身が WebSocket で更新するため）。採取周期ごとに再読み込みはしない。
- * 読み取りに失敗したら失敗をログに出してブラウザを作り直すが、公開中の値は
- * 直前のものを保つ（勝手には空にしない）。
+ * 読み取りに失敗しても開いたページは捨てない。開き直すと unama WebSocket の
+ * 閲覧セッションが 1 つ増え、視聴者数を水増ししてしまうため。作り直すのは
+ * `isAlive()` が false（Chromium プロセス / ページが落ちた）のときだけで、
+ * 公開中の値は失敗中も直前のものを保つ（勝手には空にしない）。
  *
  * 差し替え口は `createBrowser`（ブラウザ実体そのもの）であって URL ではない。
  * テストは `NICONAMA_WATCH_PAGE_DISABLED=1` で全体を無効化するか、
@@ -124,22 +126,37 @@ export const startWatchPageStatisticsSource = (
           await import("./chromiumWatchPageBrowser")
         ).createChromiumWatchPageBrowser();
 
+  /**
+   * 生きているブラウザを返す。落ちていたとき（`isAlive()` が false）だけ
+   * 破棄して作り直す。ページが読めないだけの失敗では開いたまま維持する。
+   */
+  const ensureAliveBrowser = async (): Promise<WatchPageBrowser> => {
+    if (browser?.isAlive()) {
+      return browser;
+    }
+    await discardBrowser();
+    browser = await createChromiumBrowser();
+    return browser;
+  };
+
   const readOnce = async (): Promise<void> => {
     if (reading || stopped) {
       return;
     }
     reading = true;
     try {
-      browser ??= await createChromiumBrowser();
+      const current = await ensureAliveBrowser();
       if (!opened) {
-        await browser.open(watchPageUrl);
+        await current.open(watchPageUrl);
         opened = true;
       }
-      options.onStatistics(await browser.read());
+      options.onStatistics(await current.read());
     } catch (error) {
-      // ブラウザが落ちた / ページが変わった等等。次の採取で作り直す。
+      // ページが読めないだけの失敗では開いたページは捨てない。開き直すと
+      // unama WebSocket の閲覧セッションが 1 つ増え、視聴者数を水増しする。
+      // ブラウザ実体が落ちている場合は isAlive() が偽になり、次の採取で
+      // 作り直される。
       reportFailure(error);
-      await discardBrowser();
     } finally {
       reading = false;
     }
