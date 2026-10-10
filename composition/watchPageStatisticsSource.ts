@@ -3,8 +3,10 @@
  *
  * ページは一度だけ開き、以降は開いたまま統計行の表示テキストを読み直す
  * （ページ自身が WebSocket で更新するため）。採取周期ごとに再読み込みはしない。
- * 読み取りに失敗したら失敗をログに出してブラウザを作り直すが、公開中の値は
- * 直前のものを保つ（勝手には空にしない）。
+ * 読み取りに失敗しても開いたページは開き直したり閉じたりしない（普通に視聴
+ * するときと同じ）。作り直すのは `isAlive()` が false（実体が落ちた）か、
+ * `open` に失敗したときだけで、公開中の値は失敗中も直前のものを保つ（勝手
+ * には空にしない）。
  *
  * 差し替え口は `createBrowser`（ブラウザ実体そのもの）であって URL ではない。
  * テストは `NICONAMA_WATCH_PAGE_DISABLED=1` で全体を無効化するか、
@@ -100,20 +102,8 @@ export const startWatchPageStatisticsSource = (
 
   let stopped = false;
   let reading = false;
-  let opened = false;
   let browser: WatchPageBrowser | undefined;
   let timer: ReturnType<typeof setInterval> | undefined;
-
-  const discardBrowser = async () => {
-    const current = browser;
-    browser = undefined;
-    opened = false;
-    try {
-      await current?.close();
-    } catch {
-      /* ignore */
-    }
-  };
 
   const createChromiumBrowser = async (): Promise<WatchPageBrowser> =>
     options.createBrowser
@@ -124,22 +114,42 @@ export const startWatchPageStatisticsSource = (
           await import("./chromiumWatchPageBrowser")
         ).createChromiumWatchPageBrowser();
 
+  /**
+   * 開いたままのブラウザを返す。`isAlive()` が false（実体が落ちた）ときだけ
+   * 破棄して作り直し、ページを開き直す。ページが読めないだけの失敗では開いた
+   * まま維持する。`open` に失敗した実体は未オープンのまま残さず破棄する。
+   */
+  const ensureAliveBrowser = async (): Promise<WatchPageBrowser> => {
+    if (browser?.isAlive()) {
+      return browser;
+    }
+    await browser?.discard();
+    const created = await createChromiumBrowser();
+    browser = created;
+    try {
+      await created.open(watchPageUrl);
+    } catch (error) {
+      await created.discard();
+      browser = undefined;
+      throw error;
+    }
+    return created;
+  };
+
   const readOnce = async (): Promise<void> => {
     if (reading || stopped) {
       return;
     }
     reading = true;
     try {
-      browser ??= await createChromiumBrowser();
-      if (!opened) {
-        await browser.open(watchPageUrl);
-        opened = true;
-      }
-      options.onStatistics(await browser.read());
+      const current = await ensureAliveBrowser();
+      options.onStatistics(await current.read());
     } catch (error) {
-      // ブラウザが落ちた / ページが変わった等等。次の採取で作り直す。
+      // ページが読めないだけの失敗では開いたページはそのまま使う。普通に視聴
+      // するときにブラウザを開いたり閉じたりしないのと同じ理屈。実体が落ちた
+      // 場合や `open` に失敗した場合は ensureAliveBrowser が破棄するので、
+      // 次の採取で作り直される。
       reportFailure(error);
-      await discardBrowser();
     } finally {
       reading = false;
     }
@@ -171,7 +181,9 @@ export const startWatchPageStatisticsSource = (
         clearInterval(timer);
         timer = undefined;
       }
-      await discardBrowser();
+      const current = browser;
+      browser = undefined;
+      await current?.discard();
     },
   };
 };

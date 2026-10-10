@@ -2,7 +2,7 @@
  * 配信ページを描画したブラウザ実体の契約。統計行を読む責務だけを持つ。
  *
  * Playwright の実装は `composition/chromiumWatchPageBrowser.ts` にある。採取周期
- * （何秒ごとに読むか）や失敗時の作り直しは `composition/watchPageStatisticsSource.ts`
+ * （何秒ごとに読むか）や作り直しの判定は `composition/watchPageStatisticsSource.ts`
  * 側の責務で、ここでは「いま画面に表示されている値を 1 回読む」だけを行う。
  */
 
@@ -18,7 +18,14 @@ export type WatchPageBrowser = {
   open: (watchPageUrl: string) => Promise<void>;
   /** いま画面に表示されている値を採取する。 */
   read: () => Promise<DisplayedStatistics>;
-  close: () => Promise<void>;
+  /**
+   * ブラウザ実体（プロセス / ページ）が生きているか。統計行があるか等のページの
+   * 表示状態とは無関係で、source が作り直すべきとき（実体が落ちた）だけ false。
+   * `open` に失敗した実体は source 側が破棄する。
+   */
+  isAlive: () => boolean;
+  /** ブラウザ実体を捨てる。捨てたあとは再利用してはならない。 */
+  discard: () => Promise<void>;
 };
 
 /** `page.evaluate` が返す、生の表示テキスト一式。 */
