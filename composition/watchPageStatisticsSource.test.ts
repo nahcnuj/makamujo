@@ -42,7 +42,7 @@ const createStubBrowser = (
       return readings[Math.min(calls.reads - 1, readings.length - 1)] ?? {};
     },
     // 実体の生死だけを報告する。`open` に失敗した実体は source が破棄する。
-    isAlive: () => isAlive(),
+    isAlive,
     discard: async () => {
       calls.discarded += 1;
     },
