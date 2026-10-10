@@ -15,23 +15,36 @@ const statistics = (
 
 const createStubBrowser = (
   readings: DisplayedStatistics[],
-  options: { failOnReadAt?: number } = {},
+  {
+    failOnReadAt,
+    failOnOpenAt,
+    isAlive = () => true,
+  }: {
+    failOnReadAt?: number;
+    failOnOpenAt?: number;
+    isAlive?: () => boolean;
+  } = {},
 ) => {
-  const calls = { created: 0, opened: 0, reads: 0, closed: 0 };
+  const calls = { created: 0, opened: 0, reads: 0, discarded: 0 };
   const browser: WatchPageBrowser = {
     open: async (watchPageUrl) => {
       calls.opened += 1;
       void watchPageUrl;
+      if (failOnOpenAt === calls.opened) {
+        throw new Error("navigation failed");
+      }
     },
     read: async () => {
       calls.reads += 1;
-      if (options.failOnReadAt === calls.reads) {
+      if (failOnReadAt === calls.reads) {
         throw new Error("page closed");
       }
       return readings[Math.min(calls.reads - 1, readings.length - 1)] ?? {};
     },
-    close: async () => {
-      calls.closed += 1;
+    // 実体の生死だけを報告する。`open` に失敗した実体は source が破棄する。
+    isAlive,
+    discard: async () => {
+      calls.discarded += 1;
     },
   };
   return {
@@ -129,7 +142,7 @@ describe("startWatchPageStatisticsSource", () => {
     expect(stub.calls.reads).toBe(3);
   });
 
-  it("keeps a failed read out of the published statistics and rebuilds the browser", async () => {
+  it("keeps a failed read out of the published statistics without reopening the page", async () => {
     const stub = createStubBrowser([statistics()], { failOnReadAt: 1 });
     const warnings: unknown[][] = [];
     const samples: DisplayedStatistics[] = [];
@@ -151,9 +164,88 @@ describe("startWatchPageStatisticsSource", () => {
     expect(samples).toEqual([statistics()]);
     expect(warnings).toHaveLength(1);
     expect(String(warnings[0]?.[0])).toContain("failed to read");
-    // 失敗したブラウザと、次の採取で作ulaçãoもの、stop() で閉じたものの 3 つ。
+    // 読み取りに失敗しても開いたままのページを捨てない。普通に視聴するとき
+    // にブラウザを開いたり閉じたりしないのと同じ理屈。
+    expect(stub.calls.created).toBe(1);
+    expect(stub.calls.opened).toBe(1);
+  });
+
+  it("keeps reading the same open page across repeated failures", async () => {
+    const stub = createStubBrowser([statistics()], { failOnReadAt: 2 });
+    const warnings: unknown[][] = [];
+    const samples: DisplayedStatistics[] = [];
+
+    const source = startWatchPageStatisticsSource({
+      env: {},
+      log: {
+        log: () => {},
+        warn: (...args: unknown[]) => warnings.push(args),
+        error: () => {},
+      },
+      createBrowser: stub.create,
+      onStatistics: (read) => samples.push(read),
+    });
+    await source.ready;
+    await source.readOnce();
+    await source.readOnce();
+    await source.stop();
+
+    expect(samples).toEqual([statistics(), statistics()]);
+    expect(warnings).toHaveLength(1);
+    expect(stub.calls.created).toBe(1);
+    expect(stub.calls.opened).toBe(1);
+    expect(stub.calls.reads).toBe(3);
+  });
+
+  it("rebuilds the browser only after it reports that it died", async () => {
+    let alive = true;
+    const stub = createStubBrowser([statistics()], { isAlive: () => alive });
+    const source = startWatchPageStatisticsSource({
+      env: {},
+      log: silentLog,
+      createBrowser: stub.create,
+      onStatistics: () => {},
+    });
+
+    await source.ready;
+    expect(stub.calls.opened).toBe(1);
+
+    alive = false;
+    await source.readOnce();
+    await source.stop();
+
     expect(stub.calls.created).toBe(2);
     expect(stub.calls.opened).toBe(2);
+    expect(stub.calls.discarded).toBe(2);
+  });
+
+  it("reopens the page when the previous open did not finish", async () => {
+    const stub = createStubBrowser([statistics()], { failOnOpenAt: 1 });
+    const warnings: unknown[][] = [];
+    const samples: DisplayedStatistics[] = [];
+
+    const source = startWatchPageStatisticsSource({
+      env: {},
+      log: {
+        log: () => {},
+        warn: (...args: unknown[]) => warnings.push(args),
+        error: () => {},
+      },
+      createBrowser: stub.create,
+      onStatistics: (read) => samples.push(read),
+    });
+    await source.ready;
+    await source.readOnce();
+    await source.stop();
+
+    // `open` に失敗したブラウザは source が破棄する。次の採取で作り直し、
+    // ページを開き直す。
+    expect(samples).toEqual([statistics()]);
+    expect(warnings).toHaveLength(1);
+    expect(String(warnings[0]?.[1])).toContain("navigation failed");
+    expect(stub.calls.created).toBe(2);
+    expect(stub.calls.opened).toBe(2);
+    expect(stub.calls.discarded).toBe(2);
   });
 
   it("reports a browser that cannot be created without throwing", async () => {
@@ -195,6 +287,6 @@ describe("startWatchPageStatisticsSource", () => {
     await Bun.sleep(30);
 
     expect(stub.calls.reads).toBe(readsAtStop);
-    expect(stub.calls.closed).toBe(1);
+    expect(stub.calls.discarded).toBe(1);
   });
 });

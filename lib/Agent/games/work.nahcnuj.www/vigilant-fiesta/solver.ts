@@ -3,12 +3,16 @@ import { Action, type State } from "automated-gameplay-transmitter";
 import type { ScreenName } from "./State";
 import { getGameHomeUrl } from "./server";
 
-/** Default wait on the result screen for free talk before clicking retry. */
+/**
+ * Default wait on the result screen for free talk before clicking retry.
+ * Only applies while speechable: during silence (休憩) the window is skipped
+ * so gameplay keeps going without anyone to talk to.
+ */
 export const DEFAULT_FREE_TALK_MS = 30_000;
 
 /**
- * Free-talk window after game over.
- * Override with `VIGILANT_FIESTA_FREE_TALK_MS` (milliseconds).
+ * Free-talk window after game over. Skipped while silent, overridden with
+ * `VIGILANT_FIESTA_FREE_TALK_MS` (milliseconds).
  */
 export const resolveFreeTalkMs = (): number => {
   const raw = process.env.VIGILANT_FIESTA_FREE_TALK_MS?.trim();
@@ -36,6 +40,10 @@ export type GameState =
 type SolverEventListeners = {
   onSave: Array<(text: string) => void>;
   isSilent: () => boolean;
+};
+
+export type SolverContext = {
+  listeners: SolverEventListeners;
 };
 
 export type SolverStart =
@@ -129,6 +137,7 @@ export function stepInitialize(
 
 export function* handleInitialize(
   state: Extract<GameState, { type: "initialize" }>,
+  _ctx: SolverContext,
 ): Generator<Action.Action, GameState, State> {
   let s: Extract<GameState, { type: "initialize" }> = {
     type: "initialize",
@@ -158,6 +167,7 @@ export function stepIdle(
   state: Extract<GameState, { type: "idle" }>,
   event: State | undefined,
   nowMs: number = Date.now(),
+  isSilent: () => boolean = () => false,
 ): { state: GameState; action?: Action.Action } {
   if (event?.name === "closed") {
     return { state: { type: "closed" } };
@@ -186,6 +196,14 @@ export function stepIdle(
         };
       }
       if (screen === "result") {
+        // Nobody to talk to during silence (休憩) — keep playing instead of
+        // waiting on the free-talk window.
+        if (isSilent()) {
+          return {
+            state: { type: "idle", phase: "act", freeTalkUntil: undefined },
+            action: Action.clickByElementId("btn-retry"),
+          };
+        }
         // Enter free-talk window once per result screen, then wait / retry.
         const freeTalkUntil =
           state.freeTalkUntil ?? nowMs + resolveFreeTalkMs();
@@ -228,7 +246,8 @@ export function stepIdle(
       }
 
       const freeTalkUntil = state.freeTalkUntil ?? nowMs + resolveFreeTalkMs();
-      if (nowMs < freeTalkUntil) {
+      // Silence starting mid-window ends it right away, too.
+      if (!isSilent() && nowMs < freeTalkUntil) {
         return {
           state: { type: "idle", phase: "freeTalk", freeTalkUntil },
           action: Action.noop,
@@ -258,6 +277,7 @@ export function stepIdle(
 
 export function* handleIdle(
   state: Extract<GameState, { type: "idle" }>,
+  ctx: SolverContext,
 ): Generator<Action.Action, GameState, State> {
   let s: Extract<GameState, { type: "idle" }> = {
     type: "idle",
@@ -268,7 +288,7 @@ export function* handleIdle(
 
   for (;;) {
     const prevPhase = s.phase;
-    const out = stepIdle(s, event);
+    const out = stepIdle(s, event, undefined, ctx.listeners.isSilent);
     if (out.state.type !== "idle") {
       return out.state;
     }
@@ -291,6 +311,7 @@ export function* handleIdle(
 // biome-ignore lint/correctness/useYield: closed state emits no actions
 export function* handleClosed(
   state: Extract<GameState, { type: "closed" }>,
+  _ctx: SolverContext,
 ): Generator<Action.Action, GameState, State> {
   return state;
 }
@@ -303,16 +324,25 @@ const machine = {
   [K in GameState["type"]]: {
     run: (
       state: Extract<GameState, { type: K }>,
+      ctx: SolverContext,
     ) => Generator<Action.Action, GameState, State>;
   };
 };
 
 export function* solver(
   state: GameState | SolverStart = { type: "initialize" },
-  _eventListeners: Partial<SolverEventListeners> = {},
+  eventListeners: Partial<SolverEventListeners> = {},
 ): Generator<Action.Action, undefined, State> {
+  const ctx: SolverContext = {
+    listeners: {
+      onSave: [],
+      isSilent: () => false,
+      ...eventListeners,
+    },
+  };
+
   let current = hydrate(state);
   while (current.type !== "closed") {
-    current = yield* machine[current.type].run(current as never);
+    current = yield* machine[current.type].run(current as never, ctx);
   }
 }

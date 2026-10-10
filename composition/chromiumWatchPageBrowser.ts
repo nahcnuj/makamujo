@@ -116,7 +116,10 @@ export const createChromiumWatchPageBrowser =
         }
         return toDisplayedStatistics(raw);
       },
-      close: async () => {
+      // ページ実体が生きているかのみを報告する。`open` に失敗した実体は
+      // source が破棄するので、ここで未オープンを区別する必要はない。
+      isAlive: () => browser.isConnected() && !page.isClosed(),
+      discard: async () => {
         try {
           await browser.close();
         } catch {

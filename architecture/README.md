@@ -62,9 +62,9 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 |------------|----|------|
 | `lib/domain/broadcasting/watchPageStatistics.ts` | domain（純関数） | 統計行の表示テキスト → 数値（`-` / `,` / `万` / `億` 対応） |
 | `lib/domain/publication/assemblePublishedPayload.ts` | domain（純関数） | ページの数値だけ統計を更新し、PUT / POST に無い項目は消さない |
-| `composition/watchPageBrowser.ts` | composition | ブラウザ実体の契約（`open` / `read` / `close`）と生読み取りの変換。Playwright 非依存 |
+| `composition/watchPageBrowser.ts` | composition | ブラウザ実体の契約（`open` / `read` / `isAlive` / `discard`）と生読み取りの変換。Playwright 非依存 |
 | `composition/chromiumWatchPageBrowser.ts` | composition | Playwright（Chromium）実装。**必要なときだけ動的 import** |
-| `composition/watchPageStatisticsSource.ts` | composition | 環境変数・採取周期・ブラウザの作り直し・失敗ログ。`index.ts` はこれを 1 回呼ぶだけ |
+| `composition/watchPageStatisticsSource.ts` | composition | 環境変数・採取周期・ブラウザの生存確認と作り直し・失敗ログ。`index.ts` はこれを 1 回呼ぶだけ |
 
 差し替え口は URL ではなく `createBrowser`（ブラウザ実体そのもの）。
 
@@ -80,8 +80,13 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 
 - ページは**一度だけ開き、以降は開いたまま**統計行の表示テキストを読み直す
   （ページ自身が WebSocket で更新するため）。採取周期ごとに再読み込みはしない。
-- 読み取りに失敗したら失敗をログに出してブラウザを破棄するが、公開中の値は直前の
-  ものを保つ。次の採取で作り直す。
+- **読み取りに失敗しても開いたページは捨てない。** 普通に視聴するときと同じで、
+  ページは開いたら開きっぱなしにする。失敗はログに出し、公開中の値は直前の
+  ものを保つ。次の採取では開いたままのページを読み直す。
+- ブラウザ実体（Chromium プロセス / ページが落ちた）か、`open` に失敗したとき
+  だけ作り直す。実体の生死は `WatchPageBrowser.isAlive()`（`open` / `read` /
+  `discard` と同じ契約）で判定し、`open` に失敗した実体は source 側が破棄する。
+  作り直しのときだけページを開くので、生きている間は開き直さない。
 - 統計行そのものが無いページ（空 / エラーページ / JS 実行前）では `read()` が
   throw し、値を出さない。空の読み取りを「配信終了」と誤解させないため。
 - 失敗ログは source 側でスロットルする（1 回目の直後と、その後は 10 回ごと）。
