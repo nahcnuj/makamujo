@@ -23,7 +23,7 @@ const createStubBrowser = (
     isAlive?: () => boolean;
   } = {},
 ) => {
-  const calls = { created: 0, opened: 0, reads: 0, closed: 0 };
+  const calls = { created: 0, opened: 0, reads: 0, discarded: 0 };
   const browser: WatchPageBrowser = {
     open: async (watchPageUrl) => {
       calls.opened += 1;
@@ -37,8 +37,8 @@ const createStubBrowser = (
       return readings[Math.min(calls.reads - 1, readings.length - 1)] ?? {};
     },
     isAlive: () => isAlive(),
-    close: async () => {
-      calls.closed += 1;
+    discard: async () => {
+      calls.discarded += 1;
     },
   };
   return {
@@ -210,7 +210,7 @@ describe("startWatchPageStatisticsSource", () => {
 
     expect(stub.calls.created).toBe(2);
     expect(stub.calls.opened).toBe(2);
-    expect(stub.calls.closed).toBe(2);
+    expect(stub.calls.discarded).toBe(2);
   });
 
   it("reports a browser that cannot be created without throwing", async () => {
@@ -252,6 +252,6 @@ describe("startWatchPageStatisticsSource", () => {
     await Bun.sleep(30);
 
     expect(stub.calls.reads).toBe(readsAtStop);
-    expect(stub.calls.closed).toBe(1);
+    expect(stub.calls.discarded).toBe(1);
   });
 });

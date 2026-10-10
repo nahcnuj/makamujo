@@ -23,7 +23,8 @@ export type WatchPageBrowser = {
    * （統計行があるか等）とは無関係で、source が作り直すべきときだけ false。
    */
   isAlive: () => boolean;
-  close: () => Promise<void>;
+  /** ブラウザ実体を捨てる。捨てたあとは再利用してはならない。 */
+  discard: () => Promise<void>;
 };
 
 /** `page.evaluate` が返す、生の表示テキスト一式。 */

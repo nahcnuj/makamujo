@@ -117,7 +117,7 @@ export const createChromiumWatchPageBrowser =
         return toDisplayedStatistics(raw);
       },
       isAlive: () => browser.isConnected() && !page.isClosed(),
-      close: async () => {
+      discard: async () => {
         try {
           await browser.close();
         } catch {

@@ -106,17 +106,6 @@ export const startWatchPageStatisticsSource = (
   let browser: WatchPageBrowser | undefined;
   let timer: ReturnType<typeof setInterval> | undefined;
 
-  const discardBrowser = async () => {
-    const current = browser;
-    browser = undefined;
-    opened = false;
-    try {
-      await current?.close();
-    } catch {
-      /* ignore */
-    }
-  };
-
   const createChromiumBrowser = async (): Promise<WatchPageBrowser> =>
     options.createBrowser
       ? await options.createBrowser()
@@ -134,7 +123,8 @@ export const startWatchPageStatisticsSource = (
     if (browser?.isAlive()) {
       return browser;
     }
-    await discardBrowser();
+    await browser?.discard();
+    opened = false;
     browser = await createChromiumBrowser();
     return browser;
   };
@@ -187,7 +177,10 @@ export const startWatchPageStatisticsSource = (
         clearInterval(timer);
         timer = undefined;
       }
-      await discardBrowser();
+      const current = browser;
+      browser = undefined;
+      opened = false;
+      await current?.discard();
     },
   };
 };
