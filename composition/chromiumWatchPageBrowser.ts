@@ -81,6 +81,7 @@ export const createChromiumWatchPageBrowser =
     });
     const page = await context.newPage();
     console.log("[INFO] chromium launched for the niconama watch page");
+    let pageOpened = false;
     let lastReadLog: string | undefined;
 
     return {
@@ -94,6 +95,7 @@ export const createChromiumWatchPageBrowser =
           `[INFO] watch page opened (status=${response?.status() ?? "unknown"}, url=${page.url()})`,
         );
         await waitForStatistics(page);
+        pageOpened = true;
         console.log("[INFO] watch page statistics settled");
       },
       read: async () => {
@@ -116,7 +118,8 @@ export const createChromiumWatchPageBrowser =
         }
         return toDisplayedStatistics(raw);
       },
-      isAlive: () => browser.isConnected() && !page.isClosed(),
+      // `open` が済んでいないブラウザは source が作り直す。
+      isAlive: () => pageOpened && browser.isConnected() && !page.isClosed(),
       discard: async () => {
         try {
           await browser.close();

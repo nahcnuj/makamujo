@@ -17,17 +17,24 @@ const createStubBrowser = (
   readings: DisplayedStatistics[],
   {
     failOnReadAt,
+    failOnOpenAt,
     isAlive = () => true,
   }: {
     failOnReadAt?: number;
+    failOnOpenAt?: number;
     isAlive?: () => boolean;
   } = {},
 ) => {
   const calls = { created: 0, opened: 0, reads: 0, discarded: 0 };
+  let pageOpened = false;
   const browser: WatchPageBrowser = {
     open: async (watchPageUrl) => {
       calls.opened += 1;
       void watchPageUrl;
+      if (failOnOpenAt === calls.opened) {
+        throw new Error("navigation failed");
+      }
+      pageOpened = true;
     },
     read: async () => {
       calls.reads += 1;
@@ -36,7 +43,8 @@ const createStubBrowser = (
       }
       return readings[Math.min(calls.reads - 1, readings.length - 1)] ?? {};
     },
-    isAlive: () => isAlive(),
+    // 実体と同じく、`open` が済んでいないブラウザは生きていない扱いにする。
+    isAlive: () => pageOpened && isAlive(),
     discard: async () => {
       calls.discarded += 1;
     },
@@ -208,6 +216,35 @@ describe("startWatchPageStatisticsSource", () => {
     await source.readOnce();
     await source.stop();
 
+    expect(stub.calls.created).toBe(2);
+    expect(stub.calls.opened).toBe(2);
+    expect(stub.calls.discarded).toBe(2);
+  });
+
+  it("reopens the page when the previous open did not finish", async () => {
+    const stub = createStubBrowser([statistics()], { failOnOpenAt: 1 });
+    const warnings: unknown[][] = [];
+    const samples: DisplayedStatistics[] = [];
+
+    const source = startWatchPageStatisticsSource({
+      env: {},
+      log: {
+        log: () => {},
+        warn: (...args: unknown[]) => warnings.push(args),
+        error: () => {},
+      },
+      createBrowser: stub.create,
+      onStatistics: (read) => samples.push(read),
+    });
+    await source.ready;
+    await source.readOnce();
+    await source.stop();
+
+    // `open` が完了しなかったブラウザは isAlive() が偽のまま。次の採取で
+    // 破棄して作り直し、ページを開き直す。
+    expect(samples).toEqual([statistics()]);
+    expect(warnings).toHaveLength(1);
+    expect(String(warnings[0]?.[1])).toContain("navigation failed");
     expect(stub.calls.created).toBe(2);
     expect(stub.calls.opened).toBe(2);
     expect(stub.calls.discarded).toBe(2);

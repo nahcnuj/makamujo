@@ -3,10 +3,10 @@
  *
  * ページは一度だけ開き、以降は開いたまま統計行の表示テキストを読み直す
  * （ページ自身が WebSocket で更新するため）。採取周期ごとに再読み込みはしない。
- * 読み取りに失敗しても開いたページは捨てない。普通に視聴するときと同じで、
- * 開いたページは開き直したり閉じたりしない。作り直すのは
- * `isAlive()` が false（Chromium プロセス / ページが落ちた）のときだけで、
- * 公開中の値は失敗中も直前のものを保つ（勝手には空にしない）。
+ * 読み取りに失敗しても開いたページは開き直したり閉じたりしない（普通に視聴
+ * するときと同じ）。作り直すのは `isAlive()` が false（未オープン / 実体が
+ * 落ちた）のときだけで、公開中の値は失敗中も直前のものを保つ（勝手には空に
+ * しない）。
  *
  * 差し替え口は `createBrowser`（ブラウザ実体そのもの）であって URL ではない。
  * テストは `NICONAMA_WATCH_PAGE_DISABLED=1` で全体を無効化するか、
@@ -102,7 +102,6 @@ export const startWatchPageStatisticsSource = (
 
   let stopped = false;
   let reading = false;
-  let opened = false;
   let browser: WatchPageBrowser | undefined;
   let timer: ReturnType<typeof setInterval> | undefined;
 
@@ -116,16 +115,17 @@ export const startWatchPageStatisticsSource = (
         ).createChromiumWatchPageBrowser();
 
   /**
-   * 生きているブラウザを返す。落ちていたとき（`isAlive()` が false）だけ
-   * 破棄して作り直す。ページが読めないだけの失敗では開いたまま維持する。
+   * 開いたままのブラウザを返す。`isAlive()` が false（未オープン / 落ちた）
+   * ときだけ破棄して作り直し、ページを開き直す。ページが読めないだけの
+   * 失敗では開いたまま維持する。
    */
   const ensureAliveBrowser = async (): Promise<WatchPageBrowser> => {
     if (browser?.isAlive()) {
       return browser;
     }
     await browser?.discard();
-    opened = false;
     browser = await createChromiumBrowser();
+    await browser.open(watchPageUrl);
     return browser;
   };
 
@@ -136,15 +136,11 @@ export const startWatchPageStatisticsSource = (
     reading = true;
     try {
       const current = await ensureAliveBrowser();
-      if (!opened) {
-        await current.open(watchPageUrl);
-        opened = true;
-      }
       options.onStatistics(await current.read());
     } catch (error) {
-      // ページが読めないだけの失敗では開いたページはそのまま使う。普通に
-      // 視聴するときにブラウザを開いたり閉じたりしないのと同じ理屈。実体が
-      // 落ちている場合は isAlive() が偽になり、次の採取で作り直される。
+      // ページが読めないだけの失敗では開いたページはそのまま使う。普通に視聴
+      // するときにブラウザを開いたり閉じたりしないのと同じ理屈。実体が
+      // 未オープン / 落ちた場合は isAlive() が偽になり、次の採取で作り直される。
       reportFailure(error);
     } finally {
       reading = false;
@@ -179,7 +175,6 @@ export const startWatchPageStatisticsSource = (
       }
       const current = browser;
       browser = undefined;
-      opened = false;
       await current?.discard();
     },
   };
