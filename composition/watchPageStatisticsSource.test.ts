@@ -15,7 +15,10 @@ const statistics = (
 
 const createStubBrowser = (
   readings: DisplayedStatistics[],
-  options: {
+  {
+    failOnReadAt,
+    isAlive = () => true,
+  }: {
     failOnReadAt?: number;
     isAlive?: () => boolean;
   } = {},
@@ -28,12 +31,12 @@ const createStubBrowser = (
     },
     read: async () => {
       calls.reads += 1;
-      if (options.failOnReadAt === calls.reads) {
+      if (failOnReadAt === calls.reads) {
         throw new Error("page closed");
       }
       return readings[Math.min(calls.reads - 1, readings.length - 1)] ?? {};
     },
-    isAlive: () => options.isAlive?.() ?? true,
+    isAlive: () => isAlive(),
     close: async () => {
       calls.closed += 1;
     },
@@ -155,8 +158,8 @@ describe("startWatchPageStatisticsSource", () => {
     expect(samples).toEqual([statistics()]);
     expect(warnings).toHaveLength(1);
     expect(String(warnings[0]?.[0])).toContain("failed to read");
-    // 読み取りに失敗しても開いたままのページを捨てない。開き直すと unama
-    // WebSocket の閲覧セッションが 1 つ増え、視聴者数を水増ししてしまうため。
+    // 読み取りに失敗しても開いたままのページを捨てない。普通に視聴するとき
+    // にブラウザを開いたり閉じたりしないのと同じ理屈。
     expect(stub.calls.created).toBe(1);
     expect(stub.calls.opened).toBe(1);
   });
