@@ -26,7 +26,6 @@ const createStubBrowser = (
   } = {},
 ) => {
   const calls = { created: 0, opened: 0, reads: 0, discarded: 0 };
-  let pageOpened = false;
   const browser: WatchPageBrowser = {
     open: async (watchPageUrl) => {
       calls.opened += 1;
@@ -34,7 +33,6 @@ const createStubBrowser = (
       if (failOnOpenAt === calls.opened) {
         throw new Error("navigation failed");
       }
-      pageOpened = true;
     },
     read: async () => {
       calls.reads += 1;
@@ -43,8 +41,8 @@ const createStubBrowser = (
       }
       return readings[Math.min(calls.reads - 1, readings.length - 1)] ?? {};
     },
-    // 実体と同じく、`open` が済んでいないブラウザは生きていない扱いにする。
-    isAlive: () => pageOpened && isAlive(),
+    // 実体の生死だけを報告する。`open` に失敗した実体は source が破棄する。
+    isAlive: () => isAlive(),
     discard: async () => {
       calls.discarded += 1;
     },
@@ -240,8 +238,8 @@ describe("startWatchPageStatisticsSource", () => {
     await source.readOnce();
     await source.stop();
 
-    // `open` が完了しなかったブラウザは isAlive() が偽のまま。次の採取で
-    // 破棄して作り直し、ページを開き直す。
+    // `open` に失敗したブラウザは source が破棄する。次の採取で作り直し、
+    // ページを開き直す。
     expect(samples).toEqual([statistics()]);
     expect(warnings).toHaveLength(1);
     expect(String(warnings[0]?.[1])).toContain("navigation failed");
