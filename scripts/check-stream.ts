@@ -34,6 +34,8 @@ export interface CheckResult {
     gameDiffRatio?: number;
     pageTitle?: string;
     pageUrl?: string;
+    programStatus?: string;
+    programId?: string;
   };
 }
 
@@ -118,6 +120,26 @@ async function readVideoProbe(page: Page): Promise<{
   });
 }
 
+async function getProgramStatus(
+  page: Page,
+): Promise<{ status: string; programId?: string } | null> {
+  return page.evaluate(() => {
+    const script = document.getElementById("embedded-data");
+    if (!script) return null;
+    try {
+      const data = JSON.parse(script.getAttribute("data-props") || "{}");
+      const program = data.program;
+      if (!program) return null;
+      return {
+        status: program.status || "UNKNOWN",
+        programId: program.nicoliveProgramId,
+      };
+    } catch {
+      return null;
+    }
+  });
+}
+
 async function checkStream(): Promise<CheckResult> {
   const timestampJst = formatJst(new Date());
   const phenomena: string[] = [];
@@ -132,6 +154,7 @@ async function checkStream(): Promise<CheckResult> {
     args: [
       "--no-sandbox",
       "--disable-dev-shm-usage",
+      "--disable-gpu",
       "--autoplay-policy=no-user-gesture-required",
     ],
   });
@@ -158,7 +181,29 @@ async function checkStream(): Promise<CheckResult> {
     details.pageTitle = await page.title().catch(() => "");
     details.pageUrl = page.url();
 
-    await page.waitForSelector("video", { timeout: 15_000 });
+    const programInfo = await getProgramStatus(page);
+    if (programInfo) {
+      details.programStatus = programInfo.status;
+      details.programId = programInfo.programId;
+      console.log(
+        `[INFO] Program status: ${programInfo.status}, ID: ${programInfo.programId}`,
+      );
+    }
+
+    if (programInfo?.status !== "ON_AIR") {
+      const status = programInfo?.status ?? "UNKNOWN";
+      console.log(
+        `[INFO] Stream is not live (status: ${status}), skipping health check`,
+      );
+      return {
+        ok: true,
+        timestampJst,
+        phenomena: [`配信がライブ中ではありません (status: ${status})`],
+        details,
+      };
+    }
+
+    await page.waitForSelector("video", { timeout: 30_000 });
 
     await page.evaluate(() => {
       const video = document.querySelector("video");
