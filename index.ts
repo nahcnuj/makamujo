@@ -28,6 +28,7 @@ import {
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
 import { startWatchPageStatisticsSource } from "./composition/watchPageStatisticsSource";
 import { startConsoleServer } from "./console/index";
+import type { StreamBaseline } from "./lib/application/streamBaselineStore";
 import {
   loadStreamBaselineWithRecovery,
   STREAM_BASELINE_BASENAME,
@@ -169,8 +170,14 @@ const streamer = new MakaMujo(model, tts, {
     streamBaselinePath,
     streamCommentRecordsDir,
   ),
-  onBaselineChange: (baseline) =>
-    saveStreamBaseline(streamBaselinePath, baseline),
+  onBaselineChange: (baseline) => {
+    saveStreamBaseline(streamBaselinePath, baseline);
+    // Only update retainedWatchPageStatistics if the baseline has it;
+    // preserve previously persisted value otherwise (e.g., from onStatistics callback).
+    if (baseline.retainedStatistics !== undefined) {
+      retainedWatchPageStatistics = { ...baseline.retainedStatistics };
+    }
+  },
 });
 
 // Provide an in-memory fallback agent synchronously so the rest of the
@@ -770,6 +777,10 @@ void startWatchPageStatisticsSource({
       retainedWatchPageStatistics,
       statistics,
     );
+    // Persist retained statistics to survive process restarts (e.g., cron every 11 min).
+    saveStreamBaseline(streamBaselinePath, {
+      retainedStatistics: retainedWatchPageStatistics,
+    } as StreamBaseline);
     broadcastCurrentPayloadLocal("onWatchPageStatistics");
   },
 });
