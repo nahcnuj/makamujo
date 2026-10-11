@@ -1,0 +1,101 @@
+name: Stream Health Check
+
+on:
+  schedule:
+    - cron: "0 * * * *"  # Every hour at minute 0
+  workflow_dispatch:  # Manual trigger
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-stream:
+    name: Check Stream Health
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+
+      - name: Install Playwright Chromium
+        run: bunx playwright install chromium
+
+      - name: Install Japanese fonts
+        run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
+
+      - name: Run stream health check
+        id: stream-check
+        run: |
+          # Run the check and capture JSON result
+          RESULT=$(bun run scripts/check-stream.ts 2>&1)
+          echo "$RESULT"
+
+          # Extract the JSON from the last line that looks like JSON output
+          # The script outputs JSON as the last structured output
+          RESULT_JSON=$(echo "$RESULT" | grep -E '^\{"ok":' | tail -1)
+
+          if [ -z "$RESULT_JSON" ]; then
+            echo "Failed to extract result JSON"
+            echo "Full output:"
+            echo "$RESULT"
+            exit 1
+          fi
+
+          echo "Extracted result:"
+          echo "$RESULT_JSON"
+
+          # Parse ok field
+          OK=$(echo "$RESULT_JSON" | jq -r '.ok')
+          echo "OK=$OK"
+
+          if [ "$OK" = "false" ]; then
+            echo "Stream check failed - will create issue"
+            # Save result for next step
+            echo "$RESULT_JSON" > stream-check-result.json
+            exit 1
+          else
+            echo "Stream check passed"
+            exit 0
+          fi
+
+      - name: Create issue for stream problem
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const result = JSON.parse(fs.readFileSync('stream-check-result.json', 'utf8'));
+            const timestamp = result.timestampJst;
+            const phenomena = result.phenomena.join('\n- ');
+            const details = JSON.stringify(result.details, null, 2);
+
+            const title = `[Stream Health] 配信異常検知: ${timestamp} (JST)`;
+            const body = `## 配信状況チェックで異常を検知しました
+
+**確認時刻 (JST):** ${timestamp}
+
+**発生事象:**
+- ${phenomena}
+
+**詳細:**
+\`\`\`json
+${details}
+\`\`\`
+
+---
+*このIssueは自動生成されました (GitHub Actions: Stream Health Check)*
+`;
+
+            const { data: issue } = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['stream-health', 'auto-generated']
+            });
+
+            console.log(`Created issue #${issue.number}: ${issue.html_url}`);
