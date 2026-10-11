@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   utimesSync,
@@ -98,6 +99,31 @@ describe("loadStreamBaseline", () => {
     expect(existsSync(path)).toBe(true);
     expect(loadStreamBaseline(path)).toEqual(baseline);
     expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(baseline);
+  });
+
+  it("replaces the previous content without leaving temp files", () => {
+    const dir = makeTempDir();
+    const path = join(dir, "baseline.json");
+    saveStreamBaseline(path, {
+      previousStreamCommentCount: 1,
+      currentProgramLatestCommentNo: 2,
+    });
+    saveStreamBaseline(path, {
+      previousStreamCommentCount: 538,
+      currentProgramUrl: "https://live.example/watch/lv300",
+      currentProgramLatestCommentNo: 5,
+      retainedStatistics: { viewers: 42 },
+    });
+
+    expect(loadStreamBaseline(path)).toEqual({
+      previousStreamCommentCount: 538,
+      currentProgramUrl: "https://live.example/watch/lv300",
+      currentProgramLatestCommentNo: 5,
+      retainedStatistics: { viewers: 42 },
+    });
+    expect(readdirSync(dir).filter((name) => name.endsWith(".tmp"))).toEqual(
+      [],
+    );
   });
 });
 
