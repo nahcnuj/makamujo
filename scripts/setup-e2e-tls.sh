@@ -8,7 +8,8 @@ KEY_PATH="${CERT_DIR}/privkey.pem"
 CERT_PATH="${CERT_DIR}/fullchain.pem"
 
 mkdir -p "${CERT_DIR}"
-openssl req -x509 -newkey rsa:2048 \
+# MSYS_NO_PATHCONV=1 prevents Git Bash from converting /CN=... to a Windows path
+MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 \
   -keyout "${KEY_PATH}" \
   -out "${CERT_PATH}" \
   -days 7 -nodes -subj '/CN=localhost'
