@@ -1,4 +1,4 @@
-﻿import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { JSDOM } from "jsdom";
 import { mount } from "../mount";
 import { SilentCaption } from "./SilentCaption";
@@ -32,14 +32,13 @@ describe("SilentCaption portal lifecycle", () => {
     };
 
     if (!dom.window.Element.prototype.animate) {
-      dom.window.Element.prototype.animate = function () {
-        return {
+      dom.window.Element.prototype.animate = () =>
+        ({
           finished: Promise.resolve(),
           cancel() {},
           play() {},
           pause() {},
-        } as unknown as Animation;
-      };
+        }) as unknown as Animation;
     }
 
     container = document.createElement("div");
@@ -47,9 +46,9 @@ describe("SilentCaption portal lifecycle", () => {
   });
 
   afterEach(() => {
-    document
-      .querySelectorAll("[data-silent-caption-portal]")
-      .forEach((el) => el.remove());
+    document.querySelectorAll("[data-silent-caption-portal]").forEach((el) => {
+      el.remove();
+    });
     container.remove();
   });
 

@@ -1,8 +1,13 @@
+import { spawn } from "node:child_process";
+import {
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:net";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { spawn } from "child_process";
-import { createWriteStream, existsSync, mkdirSync, writeFileSync } from "fs";
-import { join } from "path";
 import { cloneAgentStateResponseMockFixture } from "../../fixtures/agentStateResponseMock";
 
 let CONSOLE_BASE_URL = `https://127.0.0.1`;
@@ -49,8 +54,8 @@ const waitForServerReady = async (): Promise<{
         return;
       }
 
-      const proc = server!;
-      const stdout = proc.stdout!;
+      const proc = server;
+      const stdout = proc.stdout;
 
       let settled = false;
       let buffer = "";
@@ -59,7 +64,7 @@ const waitForServerReady = async (): Promise<{
 
       const cleanup = () => {
         clearTimeout(timeout);
-        stdout.off("data", onData);
+        stdout?.off("data", onData);
         proc.off("exit", onExit);
       };
 
@@ -119,7 +124,7 @@ const waitForServerReady = async (): Promise<{
         rejectOnce(new Error("Server startup timed out"));
       }, SERVER_STARTUP_TIMEOUT_MS);
 
-      stdout.on("data", onData);
+      stdout?.on("data", onData);
       proc.on("exit", onExit);
     },
   );
@@ -339,7 +344,6 @@ test.describe("console", () => {
 
   test("connects via SSE and updates on broadcast (non-mock)", async ({
     page,
-    request,
   }) => {
     const probeEventStream = async (url: string) => {
       try {
@@ -383,23 +387,29 @@ test.describe("console", () => {
     // page's EventSource has opened. This avoids race conditions where
     // the test POST happens before the browser subscribes.
     await page.addInitScript(() => {
-      (function () {
+      (() => {
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
         const OrigEventSource = (window as any).EventSource;
         Object.defineProperty(window, "__sseOpen", {
           value: false,
           writable: true,
           configurable: true,
         });
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
+        // biome-ignore lint/complexity/useArrowFunction: must stay constructible for `new EventSource(...)`
         (window as any).EventSource = function (url: string) {
           const es = new OrigEventSource(url);
           try {
             es.addEventListener("open", () => {
+              // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
               (window as any).__sseOpen = true;
             });
           } catch {}
           return es;
+          // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
         } as any;
         try {
+          // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
           (window as any).EventSource.prototype = OrigEventSource.prototype;
         } catch {}
       })();
@@ -413,9 +423,11 @@ test.describe("console", () => {
     // Wait for the client to select an SSE URL (either same-origin proxy or
     // a direct broadcasting server URL) so we can inspect which path the
     // browser attempted to connect to.
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     await page.waitForFunction(() => (window as any).__sseUrl !== undefined, {
       timeout: 5_000,
     });
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const sseUrl = await page.evaluate(() => (window as any).__sseUrl ?? null);
     console.log("[TEST DIAG] page.__sseUrl ->", sseUrl);
     expect(
@@ -425,10 +437,12 @@ test.describe("console", () => {
 
     // Wait for the page to establish the SSE connection before sending
     // the broadcast POST to avoid timing-dependent flakiness.
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     await page.waitForFunction(() => (window as any).__sseOpen === true, {
       timeout: 10_000,
     });
 
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const payload: any = cloneAgentStateResponseMockFixture();
     const res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
       method: "POST",
@@ -444,29 +458,34 @@ test.describe("console", () => {
 
   test("displays replyTargetComment in the console after broadcast event", async ({
     page,
-    request,
   }) => {
     await page.route("**/*fonts*", (route) => route.abort());
     await page.route("**/*fonts.googleapis.com*", (route) => route.abort());
     await page.route("**/*fonts.gstatic.com*", (route) => route.abort());
 
     await page.addInitScript(() => {
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       const OrigEventSource = (window as any).EventSource;
       Object.defineProperty(window, "__sseOpen", {
         value: false,
         writable: true,
         configurable: true,
       });
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
+      // biome-ignore lint/complexity/useArrowFunction: must stay constructible for `new EventSource(...)`
       (window as any).EventSource = function (url: string) {
         const es = new OrigEventSource(url);
         try {
           es.addEventListener("open", () => {
+            // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
             (window as any).__sseOpen = true;
           });
         } catch {}
         return es;
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any;
       try {
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
         (window as any).EventSource.prototype = OrigEventSource.prototype;
       } catch {}
     });
@@ -477,9 +496,11 @@ test.describe("console", () => {
     });
     await expect(page.getByRole("heading", { name: "馬可無序" })).toBeVisible();
 
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     await page.waitForFunction(() => (window as any).__sseUrl !== undefined, {
       timeout: 5_000,
     });
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const sseUrl = await page.evaluate(() => (window as any).__sseUrl ?? null);
     console.log("[TEST DIAG] page.__sseUrl ->", sseUrl);
     expect(
@@ -487,10 +508,12 @@ test.describe("console", () => {
       "page did not select an SSE URL before timeout",
     ).toBeTruthy();
 
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     await page.waitForFunction(() => (window as any).__sseOpen === true, {
       timeout: 10_000,
     });
 
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const payload: any = cloneAgentStateResponseMockFixture();
     // Attach the replyTargetComment to the first speech history item so
     // the inline reply annotation is rendered by AgentStatus (PR #316
@@ -523,9 +546,9 @@ test.describe("console", () => {
 
   test("keeps SSE connection open while the console browser tab is open", async ({
     page,
-    request,
   }) => {
     await page.addInitScript(() => {
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       const OrigEventSource = (window as any).EventSource;
       Object.defineProperty(window, "__sseOpen", {
         value: false,
@@ -542,24 +565,29 @@ test.describe("console", () => {
         writable: true,
         configurable: true,
       });
+      // biome-ignore lint/complexity/useArrowFunction: must stay constructible for `new EventSource(...)`
       const WrappedEventSource = function (url: string) {
         const es = new OrigEventSource(url);
         try {
           es.addEventListener("open", () => {
+            // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
             (window as any).__sseOpen = true;
           });
         } catch {}
         try {
           es.addEventListener("message", () => {
+            // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
             (window as any).__sseMessageCount += 1;
           });
         } catch {}
         try {
           es.addEventListener("error", () => {
+            // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
             (window as any).__sseError = true;
           });
         } catch {}
         return es;
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any;
       try {
         for (const key of Object.getOwnPropertyNames(OrigEventSource)) {
@@ -572,6 +600,7 @@ test.describe("console", () => {
           }
         }
       } catch {}
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       (window as any).EventSource = WrappedEventSource;
     });
 
@@ -579,9 +608,11 @@ test.describe("console", () => {
       waitUntil: "domcontentloaded",
       timeout: BROWSER_PAGE_LOAD_TIMEOUT_MS,
     });
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     await page.waitForFunction(() => (window as any).__sseOpen === true, {
       timeout: 10_000,
     });
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     await page.waitForFunction(() => (window as any).__sseMessageCount > 0, {
       timeout: 10_000,
     });
@@ -589,14 +620,18 @@ test.describe("console", () => {
     // Keep the console tab open long enough for idle SSE/keepalive behavior
     // to be observed, then verify the connection is still alive.
     const messagesBeforeIdle = await page.evaluate(
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       () => (window as any).__sseMessageCount ?? 0,
     );
     await page.waitForTimeout(6_000);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(await page.evaluate(() => (window as any).__sseError)).toBeFalsy();
     expect(
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       await page.evaluate(() => (window as any).__sseMessageCount ?? 0),
     ).toBeGreaterThanOrEqual(messagesBeforeIdle);
 
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const payload: any = cloneAgentStateResponseMockFixture();
     const res = await fetch(`${BROADCASTING_BASE_URL}/api/meta`, {
       method: "POST",
@@ -610,11 +645,13 @@ test.describe("console", () => {
     await expect(detailsLocator).toContainText("4-gram", { timeout: 10_000 });
     await expect(
       page.waitForFunction(
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
         (count) => (window as any).__sseMessageCount > count,
         messagesBeforeIdle,
         { timeout: 10_000 },
       ),
     ).resolves.toBeTruthy();
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(await page.evaluate(() => (window as any).__sseError)).toBeFalsy();
   });
 
@@ -728,6 +765,7 @@ test.describe("console", () => {
     }
 
     expect(firstMessage).toBeTruthy();
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     let parsed: any;
     try {
       parsed = JSON.parse(firstMessage as string);

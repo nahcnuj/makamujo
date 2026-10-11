@@ -51,7 +51,7 @@ describe("VigilantFiestaRecords", () => {
   });
 
   it("loads slot best for the same 枠 after parse", () => {
-    const key = buildSlotKey({ url: "https://live.example/watch/lv1" })!;
+    const key = buildSlotKey({ url: "https://live.example/watch/lv1" }) ?? "";
     const stored = mergeRecordsIntoStored(
       emptyStoredHighscores(),
       { sessionBest: 77, allTimeBest: 200 },

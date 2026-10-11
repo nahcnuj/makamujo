@@ -85,6 +85,7 @@ describe("vigilant-fiesta stepInitialize", () => {
   });
 
   it("closes when browser closes during initialize", () => {
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const out = stepInitialize(States.initialize(), { name: "closed" } as any);
     expect(out.state.type).toBe("closed");
   });
@@ -96,6 +97,7 @@ describe("vigilant-fiesta stepIdle", () => {
       name: "idle",
       url: "https://example.com/",
       state: { screen: "playing" },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
     expect(out.state.type).toBe("initialize");
   });
@@ -103,6 +105,7 @@ describe("vigilant-fiesta stepIdle", () => {
   it("clicks start on title screen", () => {
     const out = stepIdle(
       { type: "idle", phase: "sight" },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       idleAt("title") as any,
     );
     expect(out.action).toEqual(Action.clickByElementId("btn-start"));
@@ -112,6 +115,7 @@ describe("vigilant-fiesta stepIdle", () => {
     const now = 1_000_000;
     const out = stepIdle(
       { type: "idle", phase: "sight" },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       idleAt("result", { score: 12 }) as any,
       now,
     );
@@ -128,6 +132,7 @@ describe("vigilant-fiesta stepIdle", () => {
     const now = 10_000;
     const out = stepIdle(
       { type: "idle", phase: "sight" },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       idleAt("result") as any,
       now,
     );
@@ -141,6 +146,7 @@ describe("vigilant-fiesta stepIdle", () => {
     const freeTalkUntil = 2_000_000;
     const out = stepIdle(
       { type: "idle", phase: "freeTalk", freeTalkUntil },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       idleAt("result", { score: 12 }) as any,
       freeTalkUntil - 1,
     );
@@ -153,6 +159,7 @@ describe("vigilant-fiesta stepIdle", () => {
     const freeTalkUntil = 2_000_000;
     const out = stepIdle(
       { type: "idle", phase: "freeTalk", freeTalkUntil },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       idleAt("result", { score: 12 }) as any,
       freeTalkUntil,
     );
@@ -167,6 +174,7 @@ describe("vigilant-fiesta stepIdle", () => {
   it("leaves freeTalk when result screen is gone", () => {
     const out = stepIdle(
       { type: "idle", phase: "freeTalk", freeTalkUntil: 9_999_999 },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       idleAt("playing") as any,
       0,
     );
@@ -180,6 +188,7 @@ describe("vigilant-fiesta stepIdle", () => {
   it("presses an arrow key while playing", () => {
     const out = stepIdle(
       { type: "idle", phase: "sight" },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       idleAt("playing") as any,
     );
     expect(out.action?.name).toBe("press");
@@ -206,6 +215,7 @@ describe("vigilant-fiesta stepIdle", () => {
   it("retries immediately on the result screen while silent (no free-talk wait)", () => {
     const out = stepIdle(
       { type: "idle", phase: "sight" },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       idleAt("result", { score: 12 }) as any,
       1_000_000,
       () => true,
@@ -222,6 +232,7 @@ describe("vigilant-fiesta stepIdle", () => {
     const freeTalkUntil = 2_000_000;
     const out = stepIdle(
       { type: "idle", phase: "freeTalk", freeTalkUntil },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       idleAt("result", { score: 12 }) as any,
       freeTalkUntil - 1,
       () => true,
@@ -243,6 +254,7 @@ describe("vigilant-fiesta solver — silence (休憩)", () => {
     );
     expect(gen.next().value).toEqual(Action.noop);
     expect(
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       gen.next(idleAt("result", { score: 30, level: 1 }) as any).value,
     ).toEqual(Action.clickByElementId("btn-retry"));
   });
@@ -251,6 +263,7 @@ describe("vigilant-fiesta solver — silence (休憩)", () => {
     const gen = solver({ type: "idle", phase: "sight" });
     expect(gen.next().value).toEqual(Action.noop);
     expect(
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       gen.next(idleAt("result", { score: 30, level: 1 }) as any).value,
     ).toEqual(Action.noop);
   });
@@ -269,6 +282,7 @@ describe("vigilant-fiesta solver generator — full play cycle", () => {
       const gen = solver({ type: "initialize" });
       const actions: Action.Action[] = [];
 
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       const step = (event?: any) => {
         const r = event === undefined ? gen.next() : gen.next(event);
         if (!r.done && r.value) actions.push(r.value as Action.Action);
@@ -306,6 +320,7 @@ describe("vigilant-fiesta solver generator — full play cycle", () => {
       expect(r.value).toEqual(Action.noop); // freeTalk
       expect(
         actions.filter(
+          // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
           (a) => a.name === "click" && (a as any).target?.id === "btn-retry",
         ),
       ).toHaveLength(0);
@@ -329,12 +344,14 @@ describe("vigilant-fiesta solver generator — full play cycle", () => {
       expect(actions.some((a) => a.name === "open")).toBe(true);
       expect(
         actions.some(
+          // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
           (a) => a.name === "click" && (a as any).target?.id === "btn-start",
         ),
       ).toBe(true);
       expect(actions.some((a) => a.name === "press")).toBe(true);
       expect(
         actions.some(
+          // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
           (a) => a.name === "click" && (a as any).target?.id === "btn-retry",
         ),
       ).toBe(true);
@@ -351,6 +368,7 @@ describe("vigilant-fiesta solver generator — full play cycle", () => {
       name: "result",
       succeeded: false,
       action: Action.open(getGameHomeUrl()),
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
     // failed open keeps initialize; may yield open again or same phase without action
     // stepInitialize open failure returns same phase open without advancing

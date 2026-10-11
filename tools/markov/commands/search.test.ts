@@ -9,7 +9,7 @@ const fixture = () =>
   modelFixture("search", {
     model: {
       "": { パンティー: 1 },
-      ["ベージュ" + String.fromCharCode(0) + "パンティー"]: { "。": 2 },
+      [`ベージュ${String.fromCharCode(0)}パンティー`]: { "。": 2 },
     },
     corpus: [],
   });

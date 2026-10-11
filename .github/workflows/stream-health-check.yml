@@ -5,8 +5,9 @@ on:
     - cron: "15 * * * *"  # Every hour at minute 15 (avoid exact hour boundaries)
 
 permissions:
-  contents: read
+  contents: write
   issues: write
+  pull-requests: write
 
 jobs:
   check-stream:
@@ -15,7 +16,6 @@ jobs:
     timeout-minutes: 10
     outputs:
       issue-number: ${{ steps.create-issue.outputs.issue-number }}
-      issue-title: ${{ steps.create-issue.outputs.issue-title }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -70,11 +70,7 @@ ${details}
             });
 
             console.log(`Created issue #${issue.number}: ${issue.html_url}`);
-
-            core.setOutput('issue-number', issue.number);
-            core.setOutput('issue-title', issue.title);
-            return issue.number;
-          result-encoding: string
+            core.setOutput('issue-number', String(issue.number));
 
   auto-drive:
     name: Auto-drive fix
@@ -83,4 +79,4 @@ ${details}
     uses: ./.github/workflows/auto-drive.yml
     with:
       issue_number: ${{ needs.check-stream.outputs.issue-number }}
-      issue_title: ${{ needs.check-stream.outputs.issue-title }}
+    secrets: inherit

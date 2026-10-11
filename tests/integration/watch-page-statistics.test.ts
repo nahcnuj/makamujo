@@ -1,4 +1,4 @@
-﻿import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
 import { appendFileSync, mkdirSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
@@ -97,15 +97,19 @@ let serverOutput = "";
 /** サーバーの起動完了を示すログが出たか。 */
 let startupMarkerSeen = false;
 
+// biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
 const fetchMeta = async (): Promise<any> =>
   (await fetch(`${broadcastingBaseUrl}/api/meta`)).json();
 
 const waitForMeta = async (
+  // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   predicate: (meta: any) => boolean,
   timeoutMs: number,
+  // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
 ): Promise<any> => {
   const deadline = Date.now() + timeoutMs;
-  let latest: any = undefined;
+  // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
+  let latest: any;
   while (Date.now() < deadline) {
     latest = await fetchMeta();
     if (predicate(latest)) {
@@ -119,6 +123,7 @@ const waitForMeta = async (
 };
 
 /** ページから読んだ統計が公開されている状態か。 */
+// biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
 const hasPageStatistics = (meta: any): boolean =>
   meta?.niconama?.meta?.total?.listeners === 111;
 

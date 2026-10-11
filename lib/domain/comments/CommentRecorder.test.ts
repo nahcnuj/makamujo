@@ -154,8 +154,8 @@ describe("recordComment", () => {
     const lines = readFileSync(filePath, "utf8").trim().split("\n");
     expect(lines).toHaveLength(2);
 
-    const first = JSON.parse(lines[0]!) as RecordedComment;
-    const second = JSON.parse(lines[1]!) as RecordedComment;
+    const first = JSON.parse(lines[0] ?? "") as RecordedComment;
+    const second = JSON.parse(lines[1] ?? "") as RecordedComment;
     expect(first.who).toBe("Alice");
     expect(first.comment).toBe("one");
     expect(second.who).toBe("anonymous");

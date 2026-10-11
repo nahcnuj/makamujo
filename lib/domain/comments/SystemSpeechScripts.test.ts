@@ -13,7 +13,7 @@ import {
 describe("SystemSpeechScripts", () => {
   it("matches cruise quote start exactly", () => {
     expect(isCruiseQuoteStart(CRUISE_QUOTE_START_COMMENT)).toBe(true);
-    expect(isCruiseQuoteStart(CRUISE_QUOTE_START_COMMENT + " ")).toBe(false);
+    expect(isCruiseQuoteStart(`${CRUISE_QUOTE_START_COMMENT} `)).toBe(false);
   });
 
   it("detects ad completed comments", () => {

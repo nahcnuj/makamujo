@@ -53,7 +53,7 @@ server = createServer((_req, res) => {
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
   res.end(fixtureHtml);
 });
-await new Promise<void>((r) => server!.listen(0, "127.0.0.1", () => r()));
+await new Promise<void>((r) => server?.listen(0, "127.0.0.1", () => r()));
 {
   const { port } = server.address() as AddressInfo;
   baseUrl = `http://127.0.0.1:${port}/`;
@@ -63,7 +63,7 @@ await new Promise<void>((r) => server!.listen(0, "127.0.0.1", () => r()));
 afterAll(async () => {
   await browser?.close().catch(() => {});
   if (server) {
-    await new Promise<void>((r) => server!.close(() => r()));
+    await new Promise<void>((r) => server?.close(() => r()));
   }
   delete process.env.VIGILANT_FIESTA_HOME_URL;
   delete process.env.VIGILANT_FIESTA_FREE_TALK_MS;
@@ -181,7 +181,8 @@ describe("vigilant-fiesta agent play loop (chromium + stub)", () => {
 
       try {
         const gen = solver({ type: "initialize" });
-        let event: any = undefined;
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
+        let event: any;
         let sawPress = false;
         let sawRetry = false;
         let sawStart = false;

@@ -1,7 +1,7 @@
+import { spawn } from "node:child_process";
+import { existsSync, unlinkSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { spawn } from "child_process";
-import { existsSync, unlinkSync, writeFileSync } from "fs";
-import { join } from "path";
 import {
   createReceiverWithPath,
   createSenderWithPath,
@@ -43,7 +43,7 @@ const waitForServerReady = async () => {
       reject(new Error(`Server process exited early with code ${code}`));
     });
 
-    server.stderr.on("data", (chunk) => {
+    server.stderr.on("data", (_chunk) => {
       // optionally log server stderr for diagnosis
       // console.error("server stderr:", chunk.toString());
     });
@@ -353,6 +353,7 @@ test.describe("server", () => {
                 startTime: 0,
                 total: 0,
                 points: { gift: 0, ad: 0 },
+                // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
                 url: (state as any)?.url ?? "https://example.com",
               },
             },

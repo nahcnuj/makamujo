@@ -9,7 +9,9 @@ let dom: JSDOM;
 
 beforeAll(() => {
   dom = new JSDOM("<!doctype html><html><body></body></html>");
+  // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   globalThis.window = dom.window as any;
+  // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   globalThis.document = dom.window.document as any;
   globalThis.requestAnimationFrame = (callback: FrameRequestCallback) =>
     setTimeout(callback, 0);
@@ -18,7 +20,9 @@ beforeAll(() => {
 
 afterAll(() => {
   dom.window.close();
+  // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   delete (globalThis as any).window;
+  // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   delete (globalThis as any).document;
 });
 

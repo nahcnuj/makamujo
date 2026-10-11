@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import {
   createFallbackAgent,
   isAgentLike,
@@ -64,7 +64,7 @@ describe("isAgentLike", () => {
 
 describe("createFallbackAgent", () => {
   it("stores speech and published stream state", () => {
-    let lastPublished: unknown = undefined;
+    let lastPublished: unknown;
     let speech = { speech: "", silent: false };
     const agent = createFallbackAgent(
       () => lastPublished,

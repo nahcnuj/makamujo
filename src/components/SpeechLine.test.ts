@@ -48,7 +48,7 @@ describe("render", () => {
     globalThis.window = dom.window as unknown as Window & typeof globalThis;
     globalThis.document = dom.window.document;
     globalThis.HTMLElement = dom.window.HTMLElement;
-    root = document.getElementById("root")!;
+    root = document.getElementById("root") ?? document.body;
   });
 
   afterAll(() => {
@@ -72,11 +72,11 @@ describe("render", () => {
     const visual = root.querySelector("[aria-hidden='true']");
     expect(visual?.textContent).toBe("ab");
     const spans = [
-      ...visual!.querySelectorAll(":scope > span"),
+      ...(visual?.querySelectorAll(":scope > span") ?? []),
     ] as HTMLElement[];
     expect(spans).toHaveLength(2);
-    expect(spans[0]!.style.animationDelay).toBe(`${animationDelayMs(0)}ms`);
-    expect(spans[1]!.style.animationDelay).toBe(`${animationDelayMs(1)}ms`);
+    expect(spans[0]?.style.animationDelay).toBe(`${animationDelayMs(0)}ms`);
+    expect(spans[1]?.style.animationDelay).toBe(`${animationDelayMs(1)}ms`);
   });
 
   it("SpeechLine: no animation styles when animate is false", () => {
@@ -85,7 +85,7 @@ describe("render", () => {
     const spans = [
       ...root.querySelectorAll("[aria-hidden='true'] > span"),
     ] as HTMLElement[];
-    expect(spans[0]!.style.animationDelay).toBe("");
-    expect(spans[0]!.style.opacity).toBe("");
+    expect(spans[0]?.style.animationDelay).toBe("");
+    expect(spans[0]?.style.opacity).toBe("");
   });
 });

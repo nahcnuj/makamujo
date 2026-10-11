@@ -13,11 +13,13 @@ describe("docs/index.html", () => {
     const scriptContents: string[] = [];
     const scriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/g;
     let match: RegExpExecArray | null;
-    while ((match = scriptRegex.exec(fullHtml)) !== null) {
+    match = scriptRegex.exec(fullHtml);
+    while (match !== null) {
       const code = match[1] ?? "";
       if (code.includes("twq") || code.includes("live-link")) {
         scriptContents.push(code.trim());
       }
+      match = scriptRegex.exec(fullHtml);
     }
     const handlerCode = scriptContents[1] || "";
 
@@ -70,7 +72,7 @@ describe("docs/index.html", () => {
     );
     expect(specificEvents.length).toBe(0);
 
-    liveLink!.dispatchEvent(
+    liveLink?.dispatchEvent(
       new dom.window.MouseEvent("click", { bubbles: true }),
     );
 

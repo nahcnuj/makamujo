@@ -111,7 +111,7 @@ describe("temporary directory ownership", () => {
     const stop = read("bin/stop");
 
     expect(stop).toContain("sweep_temporary_directories");
-    expect(stop).toContain('bin/cleanup-temp.ts" "${TMPDIR:-/tmp}"');
+    expect(stop).toContain(`bin/cleanup-temp.ts" "\${TMPDIR:-/tmp}"`);
     // Only after the browser processes are gone.
     expect(stop.indexOf("sweep_leftovers")).toBeLessThan(
       stop.lastIndexOf("sweep_temporary_directories"),

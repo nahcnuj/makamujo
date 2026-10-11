@@ -38,7 +38,7 @@ test("Ansible playbook configures makamujo-audio.sh with correct PulseAudio env 
         ) {
           break;
         }
-        deployedContent += contentLine.trimStart() + "\n";
+        deployedContent += `${contentLine.trimStart()}\n`;
         j++;
       }
       break;
@@ -84,7 +84,7 @@ test("Flatpak OBS uses the standard Pulse socket without conflicting binds", () 
     "flatpak override com.obsproject.Studio\n          --system\n          --socket=pulseaudio",
   );
   const verifyIndex = playbookContent.indexOf(
-    'test -S "${PULSE_SERVER#unix:}"',
+    `test -S "\${PULSE_SERVER#unix:}"`,
   );
 
   expect(resetIndex).toBeGreaterThanOrEqual(0);

@@ -67,7 +67,7 @@ describe("emitModel", () => {
       suffix: undefined,
     });
     expect(JSON.parse(readFileSync(modelPath, "utf8")).model[""].a).toBe(1);
-    expect(existsSync(modelPath + ".bak")).toBe(false);
+    expect(existsSync(`${modelPath}.bak`)).toBe(false);
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -75,7 +75,7 @@ describe("emitModel", () => {
     modelFile();
     emitModel({ modelPath, updated: updated(), inPlace: true, suffix: ".bak" });
     expect(
-      JSON.parse(readFileSync(modelPath + ".bak", "utf8")).model[""].a,
+      JSON.parse(readFileSync(`${modelPath}.bak`, "utf8")).model[""].a,
     ).toBe(2);
     expect(JSON.parse(readFileSync(modelPath, "utf8")).model[""].a).toBe(1);
     rmSync(tmpDir, { recursive: true, force: true });

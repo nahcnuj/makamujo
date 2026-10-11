@@ -11,6 +11,7 @@ test("Box returns a Hono JSX element wrapper", () => {
     >
       test
     </Box>
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   ) as any;
 
   expect(element.tag).toBe(Box);
@@ -25,6 +26,7 @@ test("Layout returns a Hono JSX element wrapper with three children", () => {
       <Container>side</Container>
       <Container>bottom</Container>
     </Layout>
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   ) as any;
 
   expect(element.tag).toBe(Layout);
@@ -42,6 +44,7 @@ test("CharacterSprite returns a Hono JSX element wrapper", () => {
       height="50"
       className="transform-[scale(-1,1)]"
     />
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   ) as any;
 
   expect(element.tag).toBe(CharacterSprite);

@@ -78,6 +78,7 @@ test("proxy maintains SSE connection and reconnects when upstream drops", async 
     headers: { accept: "text/event-stream" },
   });
   expect(res.ok).toBeTruthy();
+  // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   const body: any = res.body;
   expect(body).toBeTruthy();
   const reader = body.getReader();

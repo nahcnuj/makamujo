@@ -11,6 +11,7 @@ describe("createAgentStatusSections", () => {
       currentGame: { name: "ゲームID", state: { status: "running" } },
       nGram: 4,
       speechHistory: [{ id: "speech-1", speech: "hello world", nGram: 2 }],
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
 
     expect(sections.map((section) => section.title)).toEqual([
@@ -24,6 +25,7 @@ describe("createAgentStatusSections", () => {
     const sections = createAgentStatusSections({
       nGram: 4,
       speechHistory: [{ id: "speech-1", speech: "hello world", nGram: 2 }],
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
 
     expect(sections.map((section) => section.title)).toEqual([
@@ -39,6 +41,7 @@ describe("createAgentStatusSections", () => {
         text: "返信先コメントを表示します",
         pickedTopic: "返信",
       },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
 
     const markovSection = sections.find(
@@ -52,20 +55,22 @@ describe("createAgentStatusSections", () => {
   });
 
   it("shows fallback game title without detail rows when currentGame is null", () => {
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const sections = createAgentStatusSections({ currentGame: null } as any);
 
     expect(sections).toHaveLength(1);
-    const gameSection = sections[0]!;
-    expect(gameSection.title).toBe("『-』プレイ中");
-    expect(gameSection.rows).toEqual([]);
+    const gameSection = sections[0];
+    expect(gameSection?.title).toBe("『-』プレイ中");
+    expect(gameSection?.rows).toEqual([]);
   });
 
   it("shows fallback game title without detail rows when currentGame is missing", () => {
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const sections = createAgentStatusSections({} as any);
 
     expect(sections).toHaveLength(1);
-    const gameSection = sections[0]!;
-    expect(gameSection.title).toBe("『-』プレイ中");
-    expect(gameSection.rows).toEqual([]);
+    const gameSection = sections[0];
+    expect(gameSection?.title).toBe("『-』プレイ中");
+    expect(gameSection?.rows).toEqual([]);
   });
 });

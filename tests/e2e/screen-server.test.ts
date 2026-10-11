@@ -1,5 +1,4 @@
-import { expect, test } from "@playwright/test";
-import { spawnSync } from "child_process";
+import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
@@ -9,9 +8,10 @@ import {
   readFileSync,
   rmSync,
   writeFileSync,
-} from "fs";
-import os from "os";
-import { join } from "path";
+} from "node:fs";
+import os from "node:os";
+import { join } from "node:path";
+import { expect, test } from "@playwright/test";
 
 test("bin/start starts screen, browser and OBS via systemctl", async () => {
   const tmp = mkdtempSync(join(os.tmpdir(), "makamujo-screen-"));

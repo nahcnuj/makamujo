@@ -62,8 +62,8 @@ beforeAll(async () => {
     let buffer = "";
     let serverRunning = false;
     let agentReady = false;
-    const stdout = server!.stdout;
-    const stderr = server!.stderr;
+    const stdout = server?.stdout;
+    const stderr = server?.stderr;
 
     function checkReady() {
       if (serverRunning && agentReady) {
@@ -176,6 +176,7 @@ test("proxy forwards WebSocket upgrades to broadcasting server", async () => {
   }
 
   const wsUrl = `ws://127.0.0.1:${mainServerPort}/console/api/ws`;
+  // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   const firstMessage = await new Promise<any>((resolve, reject) => {
     const ws = new WebSocket(wsUrl);
     const timeout = setTimeout(() => {
@@ -186,6 +187,7 @@ test("proxy forwards WebSocket upgrades to broadcasting server", async () => {
       }
       reject(new Error("timeout"));
     }, 5000);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     ws.onmessage = (ev: any) => {
       clearTimeout(timeout);
       try {
@@ -195,6 +197,7 @@ test("proxy forwards WebSocket upgrades to broadcasting server", async () => {
       }
       resolve(ev.data);
     };
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     ws.onerror = (e: any) => {
       clearTimeout(timeout);
       try {
@@ -229,6 +232,7 @@ test("comment count in /api/meta reflects PUT comments after POST /api/meta stre
     },
   });
 
+  // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   let initialMeta: any = null;
   for (let i = 0; i < 30; i++) {
     await fetch(`${broadcastingBaseUrl}/api/meta`, {
@@ -259,7 +263,9 @@ test("comment count in /api/meta reflects PUT comments after POST /api/meta stre
 
   let updatedMeta = (await (
     await fetch(`${broadcastingBaseUrl}/api/meta`)
-  ).json()) as any;
+  )
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
+    .json()) as any;
   expect(updatedMeta.commentCount).toBe(1);
 
   await fetch(`${broadcastingBaseUrl}/`, {
@@ -279,6 +285,8 @@ test("comment count in /api/meta reflects PUT comments after POST /api/meta stre
 
   updatedMeta = (await (
     await fetch(`${broadcastingBaseUrl}/api/meta`)
-  ).json()) as any;
+  )
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
+    .json()) as any;
   expect(updatedMeta.commentCount).toBe(3);
 });

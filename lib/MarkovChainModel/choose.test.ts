@@ -1,4 +1,4 @@
-import { describe, expect, jest, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { choose } from "./choose";
 
 describe.each<[[string, number][], [number, string][]]>([
