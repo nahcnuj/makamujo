@@ -7,9 +7,12 @@ import {
   openSync,
   readdirSync,
   readFileSync,
+  renameSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import type { DisplayedStatistics } from "../domain/broadcasting/watchPageStatistics";
 import { sanitizeProgramKey } from "../domain/comments/CommentRecorder";
 
 export const STREAM_BASELINE_BASENAME = "stream-baseline.json";
@@ -25,6 +28,8 @@ export type StreamBaseline = {
   currentProgramUrl?: string;
   /** Last observed comment number of the active program. */
   currentProgramLatestCommentNo: number;
+  /** Retained watch page statistics from the previous session, surviving restarts. */
+  retainedStatistics?: DisplayedStatistics | undefined;
 };
 
 const toNonNegativeInteger = (value: unknown): number | undefined => {
@@ -54,6 +59,12 @@ export const parseStreamBaseline = (raw: unknown): StreamBaseline => {
         : undefined,
     currentProgramLatestCommentNo:
       toNonNegativeInteger(record?.currentProgramLatestCommentNo) ?? 0,
+    retainedStatistics:
+      record?.retainedStatistics &&
+      typeof record.retainedStatistics === "object"
+        ? (record as { retainedStatistics: DisplayedStatistics | undefined })
+            .retainedStatistics
+        : undefined,
   };
 };
 
@@ -72,14 +83,29 @@ export const loadStreamBaseline = (filePath: string): StreamBaseline => {
   }
 };
 
+/**
+ * Persist the baseline with an atomic replace (write a sibling temp file, then
+ * rename over the target). A plain `writeFileSync` can leave a truncated
+ * `var/stream-baseline.json` when the process is killed mid-write — the cron
+ * job restarts makamujo every 11 minutes, so that window is hit in practice.
+ * The rename is a single filesystem operation, so readers only ever observe the
+ * old or the new complete file.
+ */
 export const saveStreamBaseline = (
   filePath: string,
   baseline: StreamBaseline,
 ): void => {
+  const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
   try {
     mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, `${JSON.stringify(baseline, null, 2)}\n`, "utf8");
+    writeFileSync(tempPath, `${JSON.stringify(baseline, null, 2)}\n`, "utf8");
+    renameSync(tempPath, filePath);
   } catch (err) {
+    try {
+      unlinkSync(tempPath);
+    } catch {
+      // The temp file may never have been created; cleanup is best-effort.
+    }
     console.warn(
       "[WARN] failed to persist stream baseline:",
       err instanceof Error ? err.message : String(err),

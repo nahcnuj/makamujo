@@ -26,17 +26,24 @@ import {
   type WsLike,
 } from "./composition/broadcast";
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
+import { startWatchPageStatisticsSource } from "./composition/watchPageStatisticsSource";
 import { startConsoleServer } from "./console/index";
+import type { StreamBaseline } from "./lib/application/streamBaselineStore";
 import {
   loadStreamBaselineWithRecovery,
   STREAM_BASELINE_BASENAME,
   saveStreamBaseline,
 } from "./lib/application/streamBaselineStore";
 import {
+  type DisplayedStatistics,
+  retainDefinedStatistics,
+} from "./lib/domain/broadcasting/watchPageStatistics";
+import {
   assemblePublishedPayload,
   attachReplyTargetToPublished,
   extractMetaPostBody,
   GENERATED_SPEECH_HISTORY_SSE_SIZE,
+  mergePublishedProgramInfo,
 } from "./lib/domain/publication/assemblePublishedPayload";
 import { FallbackTTS, MakaMujo, MarkovChainModel, TTS } from "./lib/server";
 import { normalizePublishedStreamState } from "./lib/streamState";
@@ -158,13 +165,31 @@ const streamBaselinePath = resolve(
 );
 const streamCommentRecordsDir = resolve(process.cwd(), "var", "comments");
 
+const initialStreamBaseline = loadStreamBaselineWithRecovery(
+  streamBaselinePath,
+  streamCommentRecordsDir,
+);
+// Single source of truth for everything persisted to
+// `var/stream-baseline.json`. Comment tracking (`onBaselineChange`) and
+// retained statistics (`onStatistics`) update disjoint fields, so each write
+// must persist the merged object: writing one field group alone used to drop
+// the other's data and leave the file "half-baked".
+let streamBaseline: StreamBaseline = initialStreamBaseline;
+const persistStreamBaseline = (): void => {
+  saveStreamBaseline(streamBaselinePath, streamBaseline);
+};
+
 const streamer = new MakaMujo(model, tts, {
-  baseline: loadStreamBaselineWithRecovery(
-    streamBaselinePath,
-    streamCommentRecordsDir,
-  ),
-  onBaselineChange: (baseline) =>
-    saveStreamBaseline(streamBaselinePath, baseline),
+  baseline: initialStreamBaseline,
+  onBaselineChange: (baseline) => {
+    streamBaseline = {
+      ...streamBaseline,
+      previousStreamCommentCount: baseline.previousStreamCommentCount,
+      currentProgramUrl: baseline.currentProgramUrl,
+      currentProgramLatestCommentNo: baseline.currentProgramLatestCommentNo,
+    };
+    persistStreamBaseline();
+  },
 });
 
 // Provide an in-memory fallback agent synchronously so the rest of the
@@ -173,6 +198,12 @@ const streamer = new MakaMujo(model, tts, {
 // `automated-gameplay-transmitter` agent later and replace this fallback
 // when possible.
 let lastPublishedStreamState: unknown;
+// 未取得なら undefined のまま。`POST /api/meta` へフォールバックする。
+let watchPageDisplayedStatistics: DisplayedStatistics | undefined;
+// ページが `-` でも、PUT / POST に無い統計は消さない。
+// 前回プロセスの値を baseline から復元して、cron 再起動をまたいで保持する。
+let retainedWatchPageStatistics: DisplayedStatistics | undefined =
+  initialStreamBaseline.retainedStatistics;
 let currentSpeechState = { speech: "", silent: false };
 // WebSocket clients connected to the broadcasting server.
 const wsClients = new Set<WsLike>();
@@ -184,9 +215,9 @@ const sseClients = new Set<ReadableStreamDefaultController<string>>();
 const createSseStream = (label: string) =>
   createSseStreamImpl(label, sseClients, getCurrentStreamPayload);
 
-const broadcastCurrentPayloadLocal = (context: string) =>
+const broadcastCurrentPayloadLocal = (logContext: string) =>
   broadcastCurrentPayload(
-    context,
+    logContext,
     getCurrentStreamPayload,
     sseClients,
     wsClients,
@@ -196,6 +227,8 @@ const getCurrentStreamPayload = () => {
   return assemblePublishedPayload({
     lastPublished: lastPublishedStreamState,
     agentStreamState: agent.getStreamState?.(),
+    displayedStatistics: watchPageDisplayedStatistics,
+    retainedStatistics: retainedWatchPageStatistics,
     streamer: {
       canSpeak: streamer.canSpeak,
       currentGame: streamer.currentGame,
@@ -378,6 +411,7 @@ const apiApp = new Hono()
       }
 
       let { replyTargetComment, published } = extractMetaPostBody(body);
+      const previousPublished = lastPublishedStreamState;
 
       try {
         agent.publishStreamState?.(published);
@@ -399,7 +433,10 @@ const apiApp = new Hono()
       }
 
       try {
-        lastPublishedStreamState = published;
+        lastPublishedStreamState = mergePublishedProgramInfo(
+          previousPublished,
+          published,
+        );
       } catch (err) {
         console.warn(
           "[WARN] failed to persist published stream state locally:",
@@ -743,6 +780,27 @@ try {
 
 // Use a classic repeating timer (composition/idleSpeechTimer) for idle speech.
 startIdleSpeechTimer(streamer, 1_000);
+
+// 統計（視聴者数 / コメント数 / ニコニコ広告ポイント / ギフトポイント）を配信ページの
+// 描画済み画面から読む。配線は composition/watchPageStatisticsSource.ts にあり、
+// `NICONAMA_WATCH_PAGE_DISABLED=1` のときだけ `POST /api/meta` へフォールバックする。
+void startWatchPageStatisticsSource({
+  onStatistics: (statistics) => {
+    watchPageDisplayedStatistics = statistics;
+    retainedWatchPageStatistics = retainDefinedStatistics(
+      retainedWatchPageStatistics,
+      statistics,
+    );
+    // Persist retained statistics to survive process restarts (e.g., cron every 11 min).
+    // Merge into the shared baseline so comment-tracking fields are kept.
+    streamBaseline = {
+      ...streamBaseline,
+      retainedStatistics: retainedWatchPageStatistics,
+    };
+    persistStreamBaseline();
+    broadcastCurrentPayloadLocal("onWatchPageStatistics");
+  },
+});
 
 /**
  * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}

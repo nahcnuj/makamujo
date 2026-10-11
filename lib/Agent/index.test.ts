@@ -1026,6 +1026,39 @@ describe("VigilantFiesta game commentary", () => {
     // Fixed system scripts must not train Markov (same as ad/cruise)
     expect(learn).not.toHaveBeenCalled();
   });
+
+  it("keeps playing silently during break: solver advances, no speech", async () => {
+    const speech = jest.fn(async () => {});
+    const tts: TTS = {
+      speech: async () => {
+        await speech();
+      },
+    };
+    const agent = new MakaMujo(stubTalkModel, tts);
+    const heard: string[] = [];
+    agent.onSpeech(async (event) => {
+      heard.push(event.text);
+    });
+
+    agent.onAir(niconamaLive(10));
+    expect(agent.speechable).toBeFalse();
+
+    agent.play("VigilantFiesta");
+    const action = mockCapturedIpcCallback!({
+      name: "idle",
+      url: "https://www.nahcnuj.work/vigilant-fiesta/",
+      state: { screen: "playing", score: 0, level: 1 },
+    });
+
+    // even while silent, the hands keep going through the solver
+    expect(action).toEqual({ name: "noop" });
+
+    for (let i = 0; i < 10; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(heard).toEqual([]);
+    expect(speech).not.toHaveBeenCalled();
+  });
 });
 
 describe("MakaMujo stream baseline persistence", () => {
