@@ -22,6 +22,7 @@ describe("createAgentStatusRows", () => {
       speechHistory: [
         { id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 },
       ],
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
 
     expect(rows).not.toContainEqual({ label: "タイトル", value: "タイトル" });
@@ -45,6 +46,7 @@ describe("createAgentStatusRows", () => {
     const rows = createAgentStatusRows({
       nGram: 4,
       speechHistory: [{ id: "speech-1", speech: "alpha beta gamma", nGram: 4 }],
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
 
     const speechHistoryRow = rows.find((row) => row.label === "これまでの発話");
@@ -57,6 +59,7 @@ describe("createAgentStatusRows", () => {
     const rows = createAgentStatusRows({
       nGram: 4,
       speechHistory: [{ id: "speech-1", speech: "alpha beta gamma", nGram: 4 }],
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
     const markovRows = rows.filter(
       (r) => r.label === "これまでの発話" || r.label === "生成N-gram",
@@ -81,6 +84,7 @@ describe("createAgentStatusRows", () => {
         { id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 },
         { id: "speech-2", speech: "ぜひ遊びに来てね", nGram: 3, nGramRaw: 3 },
       ],
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
     const markovRows = rows.filter(
       (r) => r.label === "これまでの発話" || r.label === "生成N-gram",
@@ -105,6 +109,7 @@ describe("createAgentStatusRows", () => {
       speechHistory: [
         { id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 },
       ],
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
 
     expect(rows.find((row) => row.label === "発話内容")).toBeUndefined();
@@ -117,6 +122,7 @@ describe("createAgentStatusRows", () => {
       speechHistory: [
         { id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 },
       ],
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
     const markovRows = rows.filter(
       (r) => r.label === "これまでの発話" || r.label === "生成N-gram",
@@ -142,6 +148,7 @@ describe("createAgentStatusRows", () => {
       speechHistory: [
         { id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 },
       ],
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
 
     expect(rows.find((row) => row.label === "発話内容")?.value).toBe(
@@ -156,6 +163,7 @@ describe("createAgentStatusRows", () => {
       speechHistory: [
         { id: "speech-1", speech: "alpha beta gamma", nGram: 4, nGramRaw: 4 },
       ],
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
     const markovRows = rows.filter(
       (r) => r.label === "これまでの発話" || r.label === "生成N-gram",
@@ -179,6 +187,7 @@ describe("createAgentStatusRows", () => {
         speech: { text: "コメント", nodes: ["コメント"] },
         silent: false,
       },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
 
     expect(rows.find((row) => row.label === "発話内容")?.value).toBe(
@@ -197,6 +206,7 @@ describe("createAgentStatusRows", () => {
           nGramRaw: 4,
         },
       ],
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
     const markovRows = rows.filter(
       (r) => r.label === "これまでの発話" || r.label === "生成N-gram",
@@ -220,6 +230,7 @@ describe("createAgentStatusRows", () => {
           nodes: ["alpha", "beta", "gamma"],
         },
       ],
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
     const markovRows = rows.filter(
       (r) => r.label === "これまでの発話" || r.label === "生成N-gram",
@@ -241,13 +252,15 @@ describe("createAgentStatusRows", () => {
         text: "このコメントに返信します",
         pickedTopic: "返信",
       },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
     const replyRow = rows.find((row) => row.label === "返信先コメント");
 
     expect(replyRow).toBeDefined();
     expect(replyRow?.hideLabel).toBeFalsy();
     const html = renderToString(
-      <MarkovModelStatusSection markovModelRows={[replyRow!] as any} />,
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
+      <MarkovModelStatusSection markovModelRows={[replyRow] as any} />,
     );
 
     expect(html).toContain("返信先コメント");
@@ -272,6 +285,7 @@ describe("createAgentStatusRows", () => {
         text: "このコメントに返信します",
         pickedTopic: "返信",
       },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
 
     const replyRow = rows.find((row) => row.label === "返信先コメント");
@@ -290,11 +304,13 @@ describe("createAgentStatusRows", () => {
           nodes: ["alpha", "beta", "gamma"],
         },
       ],
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
     const speechHistoryRow = rows.find((row) => row.label === "これまでの発話");
     expect(speechHistoryRow?.value).toBeUndefined();
     const html = renderToString(
-      <MarkovModelStatusSection markovModelRows={[speechHistoryRow!] as any} />,
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
+      <MarkovModelStatusSection markovModelRows={[speechHistoryRow] as any} />,
     );
 
     expect(html).toContain("alpha");

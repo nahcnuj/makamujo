@@ -9,10 +9,12 @@ import {
 
 // Variables starting with "mock" are available in mock.module factory closures
 // even after hoisting (following the same convention as jest.mock).
+// biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
 let mockCapturedIpcCallback: ((state: any) => any) | undefined;
 const mockSolverControl = { done: false };
 
 mock.module("../Browser/socket", () => ({
+  // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   createReceiver: (cb: (state: any) => any) => {
     mockCapturedIpcCallback = cb;
   },
@@ -111,12 +113,14 @@ describe("anonymous comments are learned only while present", () => {
           hasGift: false,
           userId: "must-not-be-used",
         },
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
     ]);
 
     expect(learn).toHaveBeenCalledWith("匿名のコメントです。");
     expect(unlearn).not.toHaveBeenCalled();
     expect(generate).toHaveBeenCalled();
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const streamState = agent.streamState as any;
     expect(streamState?.replyTargetComment?.text).toBe("匿名のコメントです");
   });
@@ -142,6 +146,7 @@ describe("anonymous comments are learned only while present", () => {
           anonymity: true,
           hasGift: false,
         },
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
     ]);
     jest.spyOn(Date, "now").mockReturnValue(10 * 60 * 1_000);
@@ -154,6 +159,7 @@ describe("anonymous comments are learned only while present", () => {
           anonymity: true,
           hasGift: false,
         },
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
     ]);
     expect(unlearn).toHaveBeenCalledWith("荒らし。");
@@ -200,6 +206,7 @@ describe("per-program comment tracking", () => {
           anonymity: false,
           hasGift: false,
         },
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
     ]);
     expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(3);
@@ -211,6 +218,7 @@ describe("per-program comment tracking", () => {
 
     agent.listen([viewerComment]);
 
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const streamState = agent.streamState as any;
     expect(streamState?.replyTargetComment).toBeDefined();
     expect(streamState.replyTargetComment.text).toBe("こんにちは");
@@ -232,6 +240,7 @@ describe("per-program comment tracking", () => {
           hasGift: false,
           userId: "onecomme.system",
         },
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
     ]);
     expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(0);
@@ -401,6 +410,7 @@ describe("speechable", () => {
       }
       return;
     });
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const spyTts: TTS = { speech: called as any };
     const agent = new MakaMujo(stubTalkModel, spyTts);
     agent.onAir(niconamaLive(10));
@@ -435,6 +445,7 @@ describe("speechable", () => {
       }
       return;
     });
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const failTts: TTS = { speech: fail as any };
     const agent = new MakaMujo(stubTalkModel, failTts);
     agent.onAir(niconamaLive(10));
@@ -757,6 +768,7 @@ describe("CommentPipeline characterization", () => {
           anonymity: false,
           hasGift: false,
         },
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
     ]);
 
@@ -780,6 +792,7 @@ describe("CommentPipeline characterization", () => {
           hasGift: false,
           userId: "onecomme.system",
         },
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
     ]);
     // After any comment, prompted flag is false so speechable not locked by prompt
@@ -805,6 +818,7 @@ describe("CommentPipeline characterization", () => {
           hasGift: true,
           origin: { message: { gift: { advertiserName: "花子" } } },
         },
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
     ]);
 
@@ -820,12 +834,14 @@ describe("CommentPipeline characterization", () => {
     agent.listen([
       {
         data: { comment: "a", no: 50, anonymity: false, hasGift: false },
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
     ]);
     expect(agent.streamState?.meta?.total?.comments).toBe(50);
     agent.listen([
       {
         data: { comment: "b", no: 10, anonymity: false, hasGift: false },
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
     ]);
     expect(agent.streamState?.meta?.total?.comments).toBe(10);
@@ -848,6 +864,7 @@ describe("CommentPipeline characterization", () => {
           anonymity: false,
           hasGift: false,
         },
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
     ]);
 
@@ -875,7 +892,7 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(listener);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback!({ name: "closed" });
+    mockCapturedIpcCallback?.({ name: "closed" });
     await flushMicrotasks();
 
     expect(listener).toHaveBeenCalledTimes(1);
@@ -887,7 +904,7 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(listener);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback!({ name: "idle", state: { cookies: 42 } });
+    mockCapturedIpcCallback?.({ name: "idle", state: { cookies: 42 } });
     await flushMicrotasks();
 
     expect(listener).toHaveBeenCalledTimes(1);
@@ -899,7 +916,7 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(listener);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback!({ name: "idle" });
+    mockCapturedIpcCallback?.({ name: "idle" });
     await flushMicrotasks();
 
     expect(listener).not.toHaveBeenCalled();
@@ -912,7 +929,7 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(listener);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback!({ name: "idle" });
+    mockCapturedIpcCallback?.({ name: "idle" });
     await flushMicrotasks();
 
     expect(listener).toHaveBeenCalledTimes(1);
@@ -926,7 +943,7 @@ describe("onGameStateChange", () => {
     });
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback!({ name: "closed" });
+    mockCapturedIpcCallback?.({ name: "closed" });
     callOrder.push("afterReceiver");
 
     // Listener must not have run synchronously
@@ -944,7 +961,7 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(listenerB);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback!({ name: "closed" });
+    mockCapturedIpcCallback?.({ name: "closed" });
     await flushMicrotasks();
 
     expect(listenerA).toHaveBeenCalledTimes(1);
@@ -961,7 +978,7 @@ describe("onGameStateChange", () => {
     agent.onGameStateChange(succeedingListener);
 
     agent.play("CookieClicker");
-    mockCapturedIpcCallback!({ name: "closed" });
+    mockCapturedIpcCallback?.({ name: "closed" });
     await flushMicrotasks();
 
     expect(failingListener).toHaveBeenCalledTimes(1);
@@ -985,7 +1002,7 @@ describe("VigilantFiesta game commentary", () => {
       toJSON: () => "{}",
     };
     const tts: TTS = {
-      speech: async (text: string) => {
+      speech: async (_text: string) => {
         await speech();
       },
     };
@@ -997,17 +1014,17 @@ describe("VigilantFiesta game commentary", () => {
     });
 
     agent.play("VigilantFiesta");
-    mockCapturedIpcCallback!({
+    mockCapturedIpcCallback?.({
       name: "idle",
       url: "https://www.nahcnuj.work/vigilant-fiesta/",
       state: { screen: "title", score: Number.NaN, level: Number.NaN },
     });
-    mockCapturedIpcCallback!({
+    mockCapturedIpcCallback?.({
       name: "idle",
       url: "https://www.nahcnuj.work/vigilant-fiesta/",
       state: { screen: "playing", score: 0, level: 1 },
     });
-    mockCapturedIpcCallback!({
+    mockCapturedIpcCallback?.({
       name: "idle",
       url: "https://www.nahcnuj.work/vigilant-fiesta/",
       state: { screen: "result", score: 88, level: 2 },
@@ -1044,7 +1061,7 @@ describe("VigilantFiesta game commentary", () => {
     expect(agent.speechable).toBeFalse();
 
     agent.play("VigilantFiesta");
-    const action = mockCapturedIpcCallback!({
+    const action = mockCapturedIpcCallback?.({
       name: "idle",
       url: "https://www.nahcnuj.work/vigilant-fiesta/",
       state: { screen: "playing", score: 0, level: 1 },

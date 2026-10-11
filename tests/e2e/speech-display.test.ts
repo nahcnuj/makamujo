@@ -1,7 +1,7 @@
-﻿import { expect, type Locator, type Page, test } from "@playwright/test";
-import { spawn } from "child_process";
-import { existsSync, writeFileSync } from "fs";
-import { join } from "path";
+﻿import { spawn } from "node:child_process";
+import { existsSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 const PORT = 17778;
 const BASE_URL = `http://localhost:${PORT}`;

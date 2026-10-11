@@ -108,7 +108,8 @@ describe("vigilant-fiesta play-loop harness (solver + stub game)", () => {
       const game = createStub();
       const gen = solver({ type: "initialize" });
 
-      let event: any = undefined;
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
+      let event: any;
       let sawOpen = false;
       let sawStart = false;
       let sawPress = false;
@@ -184,8 +185,10 @@ describe("vigilant-fiesta play-loop harness (solver + stub game)", () => {
     // open + start to reach idle loop
     let r = gen.next();
     expect(r.value).toMatchObject({ name: "open" });
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     r = gen.next({ name: "result", succeeded: true, action: r.value } as any);
     expect(r.value).toMatchObject({ name: "click" });
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     r = gen.next({ name: "result", succeeded: true, action: r.value } as any);
     // noop sight
     expect(r.value).toMatchObject({ name: "noop" });
@@ -193,6 +196,7 @@ describe("vigilant-fiesta play-loop harness (solver + stub game)", () => {
       name: "idle",
       url: "https://evil.example/",
       state: { screen: "playing", score: 0, level: 1 },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
     // should re-open home
     expect(r.value).toEqual({ name: "open", url: home });

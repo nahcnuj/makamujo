@@ -10,7 +10,7 @@ const fixture = () =>
     model: {
       "": { パンティー: 5 },
       パンティー: { "。": 10 },
-      ["ベージュ" + String.fromCharCode(0) + "パンティー"]: { "。": 9 },
+      [`ベージュ${String.fromCharCode(0)}パンティー`]: { "。": 9 },
       の: { パンティー: 4 },
     },
     corpus: [],

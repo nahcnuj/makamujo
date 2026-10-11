@@ -116,7 +116,7 @@ describe("a distribution with two even branches", () => {
   it("should choose each branch evenly", () => {
     const randomSpy = jest.spyOn(Math, "random");
     for (const i in [...new Array(times)]) {
-      randomSpy.mockReturnValue(Number.parseInt(i) / times);
+      randomSpy.mockReturnValue(Number.parseInt(i, 10) / times);
       const got = getResultText(model.generate()) as
         | "こんにちは。"
         | "こんばんは。";
@@ -217,10 +217,10 @@ describe("decrementPhrase", () => {
     });
     const updated = model.decrementPhrase(["あ", "んま", "り"], { delta: 1 });
     const json = JSON.parse(updated.toJSON()).model;
-    expect(json[""]?.["あ"]).toBe(2);
-    expect(json["あ"]?.["んま"]).toBe(1);
-    expect(json["んま"]?.["り"]).toBe(1);
-    expect(json["あ\u0000んま"]?.["り"]).toBeUndefined();
+    expect(json[""]?.あ).toBe(2);
+    expect(json.あ?.んま).toBe(1);
+    expect(json.んま?.り).toBe(1);
+    expect(json["あ\u0000んま"]?.り).toBeUndefined();
   });
 
   it("removes entries when weight reaches zero or below", () => {
@@ -231,8 +231,8 @@ describe("decrementPhrase", () => {
     });
     const updated = model.decrementPhrase(["x", "y"], { delta: 1 });
     const json = JSON.parse(updated.toJSON()).model;
-    expect(json[""]?.["x"]).toBeUndefined();
-    expect(json["x"]).toBeUndefined();
+    expect(json[""]?.x).toBeUndefined();
+    expect(json.x).toBeUndefined();
   });
 
   it("does not modify corpus", () => {
@@ -255,7 +255,7 @@ describe("decrementPhrase", () => {
     const model = new MarkovChainModel({
       "": { beige: 2 },
       beige: { panty: 3 },
-      ["beige" + String.fromCharCode(0) + "panty"]: { end: 5, other: 2 },
+      [`beige${String.fromCharCode(0)}panty`]: { end: 5, other: 2 },
       ["pre" +
         String.fromCharCode(0) +
         "beige" +
@@ -266,7 +266,7 @@ describe("decrementPhrase", () => {
 
     const updated = model.decrementPhrase(["beige", "panty"], { delta: 1 });
     const m = JSON.parse(updated.toJSON()).model;
-    const phraseKey = "beige" + String.fromCharCode(0) + "panty";
+    const phraseKey = `beige${String.fromCharCode(0)}panty`;
     const longKey =
       "pre" +
       String.fromCharCode(0) +
@@ -283,7 +283,7 @@ describe("decrementPhrase", () => {
   });
 
   it("removes phrase state outgoings when weight reaches zero", () => {
-    const phraseKey = "beige" + String.fromCharCode(0) + "panty";
+    const phraseKey = `beige${String.fromCharCode(0)}panty`;
     const model = new MarkovChainModel({
       "": {},
       [phraseKey]: { end: 1 },
@@ -298,12 +298,12 @@ describe("decrementPhrase", () => {
       "": { beige: 10, other: 1 },
       beige: { panty: 3 },
       no: { panty: 4 },
-      ["beige" + String.fromCharCode(0) + "panty"]: { end: 5 },
+      [`beige${String.fromCharCode(0)}panty`]: { end: 5 },
       unrelated: { x: 9 },
     });
     const updated = model.decrementPhrase(["beige", "panty"], { purge: true });
     const m = JSON.parse(updated.toJSON()).model;
-    const phraseKey = "beige" + String.fromCharCode(0) + "panty";
+    const phraseKey = `beige${String.fromCharCode(0)}panty`;
 
     // min(10, 3) = 3
     expect(m[""]?.beige).toBe(7);
@@ -351,7 +351,7 @@ describe("decrementPhrase", () => {
       purge: true,
     });
     const m = JSON.parse(updated.toJSON()).model;
-    expect(m["女"]?.["教師"]).toBe(119);
+    expect(m.女?.教師).toBe(119);
     expect(m[""]?.other).toBe(1);
   });
 });
@@ -368,9 +368,9 @@ describe("tokenStats and transitionsOf", () => {
   it("tokenStats returns frequency-like ranking", () => {
     const stats = model.tokenStats();
     expect(stats.length).toBeGreaterThan(0);
-    expect(stats[0]!.token).toBeTruthy();
-    expect(typeof stats[0]!.asFrom).toBe("number");
-    expect(typeof stats[0]!.asToWeight).toBe("number");
+    expect(stats[0]?.token).toBeTruthy();
+    expect(typeof stats[0]?.asFrom).toBe("number");
+    expect(typeof stats[0]?.asToWeight).toBe("number");
   });
 
   it("transitionsOf returns asFrom and asTo", () => {

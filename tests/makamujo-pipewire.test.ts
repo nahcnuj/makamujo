@@ -67,7 +67,7 @@ describe("makamujo-pipewire", () => {
     // Searched from the force kill so the rebuild's own unlink cannot satisfy
     // the ordering assertion for the startup path.
     const unlinkIndex = indexOfLine(
-      'rm -f "${PULSE_SOCKET}" "${PIPEWIRE_SOCKET}"',
+      `rm -f "\${PULSE_SOCKET}" "\${PIPEWIRE_SOCKET}"`,
       forceKillIndex,
     );
 
@@ -120,7 +120,7 @@ describe("makamujo-pipewire", () => {
   it("tolerates a transient socket blip before touching the stack", () => {
     const missesIndex = indexOfLine("socket_misses=$((socket_misses + 1))");
     const thresholdIndex = indexOfLine(
-      '[ "${socket_misses}" -ge "${STACK_LOSS_TOLERANCE}" ]',
+      `[ "\${socket_misses}" -ge "\${STACK_LOSS_TOLERANCE}" ]`,
     );
     const resetIndex = indexOfLine("socket_misses=0");
 
@@ -130,7 +130,7 @@ describe("makamujo-pipewire", () => {
   });
 
   it("rebuilds the stack in place instead of failing the unit", () => {
-    const guardIndex = indexOfLine('process_alive "${PULSE_PID}" || {');
+    const guardIndex = indexOfLine(`process_alive "\${PULSE_PID}" || {`);
     const warnIndex = indexOfLine("rebuilding the audio stack");
     const rebuildIndex = indexOfLine("rebuild_audio_stack || {", warnIndex);
     const readyIndex = indexOfLine("Pulse ready again", rebuildIndex);
@@ -146,10 +146,10 @@ describe("makamujo-pipewire", () => {
   it("recreates the runtime directory and every socket the rebuild depends on", () => {
     const body = functionBody("rebuild_audio_stack");
 
-    const drainIndex = body.indexOf('wait_for_exit "${WP_PID}"');
+    const drainIndex = body.indexOf(`wait_for_exit "\${WP_PID}"`);
     const mkdirIndex = body.indexOf("ensure_runtime_directories");
-    const unlinkIndex = body.indexOf('rm -f "${PULSE_SOCKET}"');
-    const busIndex = body.indexOf('[ ! -S "${DBUS_SOCKET}" ]');
+    const unlinkIndex = body.indexOf(`rm -f "\${PULSE_SOCKET}"`);
+    const busIndex = body.indexOf(`[ ! -S "\${DBUS_SOCKET}" ]`);
     const startIndex = body.indexOf("start_audio_stack");
 
     expect(drainIndex).toBeGreaterThanOrEqual(0);
@@ -161,7 +161,7 @@ describe("makamujo-pipewire", () => {
     // logind takes /run/user/0/pipewire-0 with it, so pipewire-pulse alone would
     // come back with no server to attach to.
     expect(body).toContain(
-      'rm -f "${PULSE_SOCKET}" "${PIPEWIRE_SOCKET}" 2>/dev/null || true',
+      `rm -f "\${PULSE_SOCKET}" "\${PIPEWIRE_SOCKET}" 2>/dev/null || true`,
     );
     // Only when systemd's own dbus.socket has not returned with user@0.service.
     expect(body).toContain("start_session_bus || return 1");
@@ -169,10 +169,10 @@ describe("makamujo-pipewire", () => {
 
   it("gives up after a bounded number of in-place rebuilds", () => {
     const budgetIndex = indexOfLine(
-      '[ "${stack_restarts}" -ge "${MAX_STACK_RESTARTS}" ]',
+      `[ "\${stack_restarts}" -ge "\${MAX_STACK_RESTARTS}" ]`,
     );
     const fatalIndex = indexOfLine(
-      "ERROR: pulse socket lost (${PULSE_SOCKET}): still missing",
+      `ERROR: pulse socket lost (\${PULSE_SOCKET}): still missing`,
     );
 
     expect(script).toContain("MAX_STACK_RESTARTS=3");

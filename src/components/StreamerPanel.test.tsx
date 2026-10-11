@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,7 +11,7 @@ describe("StreamerPanel keys", () => {
     );
     // Index-based keys change from `2-${line}` to `1-${line}` after the rise
     // transition and remount SpeechLine, replaying speech-fade-in.
-    expect(src).not.toContain("key={`${i}-${line}`}");
+    expect(src).not.toContain(`key=\`\${i}-\${line}\``);
     expect(src).toContain("key={line}");
   });
 });

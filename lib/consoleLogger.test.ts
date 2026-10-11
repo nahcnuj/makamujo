@@ -137,7 +137,7 @@ test("rotates stale startup log based on file mtime", async () => {
 });
 
 test("throws when logger initialization fails", () => {
-  const { tempDirectoryPath, logFilePath } = createTempLogPath();
+  const { tempDirectoryPath } = createTempLogPath();
   const invalidDirectoryPath = join(tempDirectoryPath, "not-a-directory");
   const invalidLogFilePath = join(invalidDirectoryPath, "access.log");
 

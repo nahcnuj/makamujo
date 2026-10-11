@@ -1,5 +1,4 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import type { Action as ActionType } from "automated-gameplay-transmitter";
 import { Action, ActionResult } from "automated-gameplay-transmitter";
 import {
   type GameState,
@@ -25,6 +24,7 @@ beforeAll(() => {
   console.error = () => {};
 });
 
+// biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
 const expectOk = (solve: Generator, action: any) =>
   expect(solve.next(ActionResult.ok(action)).value);
 
@@ -40,7 +40,7 @@ describe("solver", () => {
       Action.clickByText("次回から表示しない"),
     ];
 
-    let prev;
+    let prev: Action.Action | undefined;
     for (const action of actions) {
       expectOk(solve, prev).toEqual(action);
       prev = action;
@@ -58,7 +58,7 @@ describe("solver", () => {
 
     expect(solve.next().value).toHaveProperty("name", "open");
 
-    const actions = [
+    const actions: Action.Action[] = [
       Action.clickByText("日本語"),
       Action.clickByText("Got it"),
       Action.clickByText("次回から表示しない"),
@@ -67,7 +67,7 @@ describe("solver", () => {
       { name: "press", key: "Enter" },
     ];
 
-    let prev;
+    let prev: Action.Action | undefined;
     for (const action of actions) {
       expectOk(solve, prev).toEqual(action);
       prev = action;
@@ -80,15 +80,18 @@ describe("solver", () => {
     expect(solve.next().value).toHaveProperty("name", "open");
 
     // open succeeds
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(ActionResult.ok(undefined as any)).value).toEqual(
       Action.clickByText("日本語"),
     );
 
     // optional steps fail (e.g. dialogs not present) — initialization should continue
     expect(
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       solve.next(ActionResult.error(Action.clickByText("日本語")) as any).value,
     ).toEqual(Action.clickByText("Got it"));
     expect(
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       solve.next(ActionResult.error(Action.clickByText("Got it")) as any).value,
     ).toEqual(Action.clickByText("次回から表示しない"));
   });
@@ -108,6 +111,7 @@ describe("solver", () => {
     const solve = solver({ type: "idle", phase: "sight", count: 0 });
 
     expect(solve.next().value).toEqual(Action.noop);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(idleState as any).value).toEqual(
       Action.clickByElementId("bigCookie"),
     );
@@ -123,6 +127,7 @@ describe("solver", () => {
     const solve = solver({ type: "idle", phase: "sight", count: 0 });
 
     expect(solve.next().value).toEqual(Action.noop);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const clickAction = solve.next(idleState as any).value as any;
     expect(clickAction).toHaveProperty("name", "click");
     expect(["bigCookie", "shimmer1", "shimmer2"]).toContain(
@@ -140,6 +145,7 @@ describe("solver", () => {
     const solve = solver({ type: "idle", phase: "sight", count: 0 });
 
     expect(solve.next().value).toEqual(Action.noop);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(idleState as any).value).toEqual(
       Action.clickByElementId("bigCookie"),
     );
@@ -158,6 +164,7 @@ describe("solver", () => {
     );
 
     expect(solve.next().value).toEqual(Action.noop);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(idleState as any).value).toEqual(
       Action.clickByElementId("bigCookie"),
     );
@@ -176,6 +183,7 @@ describe("solver", () => {
     );
 
     expect(solve.next().value).toEqual(Action.noop);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const clickAction = solve.next(idleState as any).value as any;
     expect(clickAction).toHaveProperty("name", "click");
     expect(["bigCookie", "shimmer1", "shimmer2"]).toContain(
@@ -194,8 +202,10 @@ describe("solver", () => {
 
     expect(solve.next().value).toEqual(Action.noop);
     // When at wrong URL, transition to initialize state and open Cookie Clicker
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(wrongUrlState as any).value).toEqual(openAction);
     // After opening, should proceed with initialization steps (not idle clicking)
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(ActionResult.ok(openAction) as any).value).toEqual(
       Action.clickByText("日本語"),
     );
@@ -212,7 +222,9 @@ describe("solver", () => {
     const solve = solver({ type: "idle", phase: "sight", count: 0 });
 
     expect(solve.next().value).toEqual(Action.noop);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(idleState as any).value).toEqual(clickAction);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(ActionResult.error(clickAction) as any).value).toEqual({
       name: "press",
       key: "Escape",
@@ -225,6 +237,7 @@ describe("solver", () => {
     const solve = solver({ type: "save", phase: "options", failureCount: 0 });
 
     expect(solve.next().value).toEqual(optionsAction);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual({
       name: "press",
       key: "Escape",
@@ -238,9 +251,11 @@ describe("solver", () => {
     const solve = solver({ type: "save", phase: "options", failureCount: 0 });
 
     expect(solve.next().value).toEqual(optionsAction);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(ActionResult.ok(optionsAction) as any).value).toEqual(
       exportAction,
     );
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(ActionResult.error(exportAction) as any).value).toEqual({
       name: "press",
       key: "Escape",
@@ -258,11 +273,14 @@ describe("solver", () => {
     const solve = solver({ type: "idle", phase: "sight", count: 0 });
 
     expect(solve.next().value).toEqual(Action.noop);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(idleState as any).value).toEqual(clickAction);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(ActionResult.error(clickAction) as any).value).toEqual({
       name: "press",
       key: "Escape",
     });
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next({ name: "closed" } as any).done).toBeTrue();
   });
 
@@ -274,26 +292,32 @@ describe("solver", () => {
 
     // First failure: failureCount 0 → 1, stays in save
     expect(solve.next().value).toEqual(optionsAction);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(
       escapeAction,
     );
     expect(
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       solve.next(ActionResult.ok(escapeAction as any) as any).value,
     ).toEqual(optionsAction);
 
     // Second failure: failureCount 1 → 2, stays in save
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(
       escapeAction,
     );
     expect(
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       solve.next(ActionResult.ok(escapeAction as any) as any).value,
     ).toEqual(optionsAction);
 
     // Third failure: failureCount 2 → 3 >= MAX_CONSECUTIVE_FAILURES → transitions to idle
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(ActionResult.error(optionsAction) as any).value).toEqual(
       escapeAction,
     );
     expect(
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       solve.next(ActionResult.ok(escapeAction as any) as any).value,
     ).toEqual(Action.noop);
   });
@@ -306,26 +330,32 @@ describe("solver", () => {
 
     // First failure: failureCount 0 → 1, stays in seeStats
     expect(solve.next().value).toEqual(statsAction);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(
       escapeAction,
     );
     expect(
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       solve.next(ActionResult.ok(escapeAction as any) as any).value,
     ).toEqual(statsAction);
 
     // Second failure: failureCount 1 → 2, stays in seeStats
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(
       escapeAction,
     );
     expect(
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       solve.next(ActionResult.ok(escapeAction as any) as any).value,
     ).toEqual(statsAction);
 
     // Third failure: failureCount 2 → 3 >= MAX_CONSECUTIVE_FAILURES → transitions to idle
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(ActionResult.error(statsAction) as any).value).toEqual(
       escapeAction,
     );
     expect(
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       solve.next(ActionResult.ok(escapeAction as any) as any).value,
     ).toEqual(Action.noop);
   });
@@ -334,6 +364,7 @@ describe("solver", () => {
     const stats = Action.clickByText("記録");
 
     expect(solve.next().value).toEqual(stats);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(ActionResult.ok(stats) as any).value).toEqual(
       Action.noop,
     );
@@ -343,12 +374,14 @@ describe("solver", () => {
     const solve = solver({ type: "save", phase: "options", failureCount: 0 });
     const options = Action.clickByText("オプション");
     const exportSave = Action.clickByText("セーブをエクスポート");
-    const escape = { name: "press", key: "Escape" } as const;
+    const escapeKeyPress = { name: "press", key: "Escape" } as const;
 
     expect(solve.next().value).toEqual(options);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(ActionResult.ok(options) as any).value).toEqual(
       exportSave,
     );
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(ActionResult.ok(exportSave) as any).value).toEqual(
       Action.noop,
     );
@@ -357,8 +390,9 @@ describe("solver", () => {
         name: "idle",
         url: "https://orteil.dashnet.org/cookieclicker/",
         selectedText: "SAVE_DATA",
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any).value,
-    ).toEqual(escape);
+    ).toEqual(escapeKeyPress);
   });
 
   it("idle starts save after enough clicks", () => {
@@ -376,7 +410,9 @@ describe("solver", () => {
 
     for (let i = 0; i < maxClicks; i++) {
       expect(action).toEqual(Action.noop);
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       expect(solve.next(idleState as any).value).toEqual(click);
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       action = solve.next(ActionResult.ok(click) as any).value;
 
       const a = action as { name?: string; target?: { text?: string } };
@@ -389,8 +425,8 @@ describe("solver", () => {
 });
 
 function* testRunActions(
-  actions: readonly ActionType.Action[],
-): Generator<ActionType.Action, boolean, unknown> {
+  actions: readonly Action.Action[],
+): Generator<Action.Action, boolean, unknown> {
   for (const action of actions) {
     const result = yield action;
     if ((result as { name?: string } | undefined)?.name === "closed") {
@@ -401,7 +437,7 @@ function* testRunActions(
       (result as { name?: string })?.name === "result" &&
       (result as { succeeded?: boolean })?.succeeded === false
     ) {
-      yield { name: "press", key: "Escape" } as ActionType.Action;
+      yield { name: "press", key: "Escape" } as Action.Action;
       return false;
     }
   }
@@ -421,10 +457,10 @@ function baseCtx(overrides: Partial<HandlerCtx> = {}): HandlerCtx {
 }
 
 function drive(
-  gen: Generator<ActionType.Action, GameState, unknown>,
+  gen: Generator<Action.Action, GameState, unknown>,
   replies: unknown[],
-): { actions: ActionType.Action[]; state: GameState } {
-  const actions: ActionType.Action[] = [];
+): { actions: Action.Action[]; state: GameState } {
+  const actions: Action.Action[] = [];
   let step = gen.next();
   let i = 0;
   while (!step.done) {
@@ -456,6 +492,7 @@ describe("handleSeeStats", () => {
     );
     const { actions, state } = drive(gen, [
       ActionResult.error(Action.clickByText("記録")),
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok({ name: "press", key: "Escape" } as any),
     ]);
     expect(actions[0]).toEqual(Action.clickByText("記録"));
@@ -488,6 +525,7 @@ describe("handleSave", () => {
         url: "https://orteil.dashnet.org/cookieclicker/",
         selectedText: "SAVE_BLOB",
       },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok({ name: "press", key: "Escape" } as any),
     ]);
     expect(actions[0]).toEqual(options);
@@ -509,6 +547,7 @@ describe("stepSeeStats", () => {
   it("open success moves to sight with noop", () => {
     const out = stepSeeStats(
       States.seeStats(),
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok(Action.clickByText("記録")) as any,
     );
     expect(out.action).toEqual(Action.noop);
@@ -518,6 +557,7 @@ describe("stepSeeStats", () => {
   it("open failure moves to escape", () => {
     const out = stepSeeStats(
       States.seeStats(),
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.error(Action.clickByText("記録")) as any,
     );
     expect(out.action).toEqual({ name: "press", key: "Escape" });
@@ -527,12 +567,14 @@ describe("stepSeeStats", () => {
   it("sight after noop goes idle", () => {
     const out = stepSeeStats(
       { type: "seeStats", phase: "sight", failureCount: 0 },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok(Action.noop) as any,
     );
     expect(out.state).toMatchObject({ type: "idle" });
   });
 
   it("closed event closes", () => {
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const out = stepSeeStats(States.seeStats(), { name: "closed" } as any);
     expect(out.state).toEqual({ type: "closed" });
   });
@@ -555,6 +597,7 @@ describe("stepSave", () => {
   it("options success moves to export", () => {
     const out = stepSave(
       States.save(),
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok(Action.clickByText("オプション")) as any,
       ctx,
     );
@@ -570,6 +613,7 @@ describe("stepSave", () => {
         name: "idle",
         url: "https://orteil.dashnet.org/cookieclicker/",
         selectedText: "BLOB",
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
       {
         listeners: { onSave: [(t) => saved.push(t)], isSilent: () => false },
@@ -584,6 +628,7 @@ describe("stepSave", () => {
   it("escape success goes to seeStats", () => {
     const out = stepSave(
       { type: "save", phase: "escape", failureCount: 0 },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok({ name: "press", key: "Escape" } as any) as any,
       ctx,
     );
@@ -599,8 +644,10 @@ describe("stepIdle", () => {
       setGameData: () => {},
       getHasReloadedForShoten: () => false,
       setHasReloadedForShoten: () => {},
+      // biome-ignore lint/correctness/useYield: runActions mock returns a boolean from its generator
       runActions: function* () {
         return true;
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
       ...overrides,
     };
@@ -614,6 +661,7 @@ describe("stepIdle", () => {
   it("sight on foreign origin re-initializes", () => {
     const out = stepIdle(
       States.idle(),
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       { name: "idle", url: "https://example.com/" } as any,
       idleCtx({ getGameData: () => "X" }),
     );
@@ -623,6 +671,7 @@ describe("stepIdle", () => {
   it("click success below threshold stays idle", () => {
     const out = stepIdle(
       { type: "idle", phase: "click", count: 0 },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok(Action.clickByElementId("bigCookie")) as any,
       idleCtx(),
     );
@@ -632,6 +681,7 @@ describe("stepIdle", () => {
   it("click success at threshold enters save", () => {
     const out = stepIdle(
       { type: "idle", phase: "click", count: IDLE_CLICKS_BEFORE_SAVE },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok(Action.clickByElementId("bigCookie")) as any,
       idleCtx(),
     );
@@ -650,6 +700,7 @@ describe("stepInitialize", () => {
       States.initialize(),
       ActionResult.ok(
         Action.open("https://orteil.dashnet.org/cookieclicker/"),
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ) as any,
     );
     expect(out.state).toMatchObject({ type: "initialize", phase: "lang" });
@@ -658,6 +709,7 @@ describe("stepInitialize", () => {
   it("dontShow without data finishes to seeStats", () => {
     const out = stepInitialize(
       { type: "initialize", phase: "dontShow" },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok(Action.clickByText("次回から表示しない")) as any,
     );
     expect(out.state).toMatchObject({ type: "seeStats" });
@@ -666,6 +718,7 @@ describe("stepInitialize", () => {
   it("dontShow with data moves to importKey", () => {
     const out = stepInitialize(
       { type: "initialize", phase: "dontShow", data: "SAVE" },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok(Action.clickByText("次回から表示しない")) as any,
     );
     expect(out.state).toMatchObject({ phase: "importKey" });
@@ -688,8 +741,10 @@ describe("step* remaining branches", () => {
       setGameData: () => {},
       getHasReloadedForShoten: () => false,
       setHasReloadedForShoten: () => {},
+      // biome-ignore lint/correctness/useYield: runActions mock returns a boolean from its generator
       runActions: function* () {
         return true;
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
       ...overrides,
     };
@@ -698,6 +753,7 @@ describe("step* remaining branches", () => {
   it("stepSeeStats escape after fail bumps failureCount", () => {
     const out = stepSeeStats(
       { type: "seeStats", phase: "escape", failureCount: 0 },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok({ name: "press", key: "Escape" } as any) as any,
     );
     expect(out.state).toMatchObject({
@@ -710,6 +766,7 @@ describe("step* remaining branches", () => {
   it("stepSave options failure moves to failEscape", () => {
     const out = stepSave(
       States.save(),
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.error(Action.clickByText("オプション")) as any,
       saveCtx,
     );
@@ -720,6 +777,7 @@ describe("step* remaining branches", () => {
   it("stepSave failEscape bumps failureCount", () => {
     const out = stepSave(
       { type: "save", phase: "failEscape", failureCount: 0 },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok({ name: "press", key: "Escape" } as any) as any,
       saveCtx,
     );
@@ -733,6 +791,7 @@ describe("step* remaining branches", () => {
   it("stepSave export success moves to read", () => {
     const out = stepSave(
       { type: "save", phase: "export", failureCount: 0 },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok(Action.clickByText("セーブをエクスポート")) as any,
       saveCtx,
     );
@@ -748,6 +807,7 @@ describe("step* remaining branches", () => {
         name: "idle",
         url: "https://orteil.dashnet.org/cookieclicker/",
         state: { title: "昇天中", clickableElementIds: ["bigCookie"] },
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
       idleCtx({
         listeners: { onSave: [], isSilent: () => true },
@@ -764,6 +824,7 @@ describe("step* remaining branches", () => {
   it("stepIdle click failure moves to failEscape", () => {
     const out = stepIdle(
       { type: "idle", phase: "click", count: 3 },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.error(Action.clickByElementId("bigCookie")) as any,
       idleCtx(),
     );
@@ -774,6 +835,7 @@ describe("step* remaining branches", () => {
   it("stepIdle failEscape returns to sight", () => {
     const out = stepIdle(
       { type: "idle", phase: "failEscape", count: 3 },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok({ name: "press", key: "Escape" } as any) as any,
       idleCtx(),
     );
@@ -783,6 +845,7 @@ describe("step* remaining branches", () => {
   it("stepInitialize lang advances to gotIt", () => {
     const out = stepInitialize(
       { type: "initialize", phase: "lang" },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok(Action.clickByText("日本語")) as any,
     );
     expect(out.state).toMatchObject({ phase: "gotIt" });
@@ -799,12 +862,14 @@ describe("step* remaining branches", () => {
   it("stepInitialize importEnter success goes to seeStats", () => {
     const out = stepInitialize(
       { type: "initialize", phase: "importEnter", data: "SAVE" },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok({ name: "press", key: "Enter" } as any) as any,
     );
     expect(out.state).toMatchObject({ type: "seeStats" });
   });
 
   it("hydrate fills default phases", () => {
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(hydrate({ type: "initialize" } as any)).toMatchObject({
       phase: "open",
     });
@@ -856,8 +921,10 @@ describe("States factories and thin handles", () => {
         setGameData: () => {},
         getHasReloadedForShoten: () => false,
         setHasReloadedForShoten: () => {},
+        // biome-ignore lint/correctness/useYield: runActions mock returns a boolean from its generator
         runActions: function* () {
           return true;
+          // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
         } as any,
       },
     );
@@ -873,10 +940,13 @@ describe("States factories and thin handles", () => {
       setGameData: () => {},
       getHasReloadedForShoten: () => false,
       setHasReloadedForShoten: () => {},
+      // biome-ignore lint/correctness/useYield: runActions mock returns a boolean from its generator
       runActions: function* () {
         return true;
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
     };
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const gen = handleIdle(States.idle(0), ctx as any);
     let s = gen.next();
     expect(s.value).toEqual(Action.noop);
@@ -884,9 +954,11 @@ describe("States factories and thin handles", () => {
       name: "idle",
       url: "https://orteil.dashnet.org/cookieclicker/",
       state: { clickableElementIds: ["bigCookie"] },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
     // click action
     expect(s.done).toBeFalse();
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     s = gen.next(ActionResult.ok(s.value as any) as any);
     expect(s.done).toBeTrue();
     expect(s.value).toMatchObject({ type: "idle", count: 1 });
@@ -898,22 +970,27 @@ describe("States factories and thin handles", () => {
       setGameData: () => {},
       getHasReloadedForShoten: () => false,
       setHasReloadedForShoten: () => {},
+      // biome-ignore lint/correctness/useYield: runActions mock returns a boolean from its generator
       runActions: function* () {
         return true;
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
     });
     // open
     let s = gen.next();
     expect(s.value).toHaveProperty("name", "open");
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     s = gen.next(ActionResult.ok(s.value as any) as any);
     // lang, gotIt, dontShow
     for (const _ of [0, 1, 2]) {
       if (s.done) break;
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       s = gen.next(ActionResult.ok(s.value as any) as any);
     }
     // may still be yielding dialogs — drain until done
     let guard = 0;
     while (!s.done && guard++ < 20) {
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       s = gen.next(ActionResult.ok(s.value as any) as any);
     }
     expect(s.done).toBeTrue();
@@ -926,6 +1003,7 @@ describe("failure ceiling and runActions edges", () => {
     // failureCount 2 + 1 → idle (MAX_CONSECUTIVE_FAILURES = 3)
     const out = stepSeeStats(
       { type: "seeStats", phase: "escape", failureCount: 2 },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok({ name: "press", key: "Escape" } as any) as any,
     );
     expect(out.state).toMatchObject({ type: "idle" });
@@ -934,6 +1012,7 @@ describe("failure ceiling and runActions edges", () => {
   it("bumpFailureCount reaches idle after enough save failures", () => {
     const out = stepSave(
       { type: "save", phase: "failEscape", failureCount: 2 },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok({ name: "press", key: "Escape" } as any) as any,
       {
         listeners: { onSave: [], isSilent: () => false },
@@ -946,15 +1025,17 @@ describe("failure ceiling and runActions edges", () => {
   it("runActions warns on unexpected result then continues", () => {
     const solve = solver(States.idle(0));
     expect(solve.next().value).toEqual(Action.noop);
-    const click = solve.next({
+    const _click = solve.next({
       name: "idle",
       url: "https://orteil.dashnet.org/cookieclicker/",
       state: { clickableElementIds: ["bigCookie"] },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any).value;
     // non-result, non-closed reply to a click — hits unexpected branch inside runActions
     const next = solve.next({
       name: "idle",
       url: "https://orteil.dashnet.org/cookieclicker/",
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
     expect(next.done === true || next.value != null).toBeTrue();
   });
@@ -976,8 +1057,10 @@ describe("obvious step* branches", () => {
       setGameData: () => {},
       getHasReloadedForShoten: () => false,
       setHasReloadedForShoten: () => {},
+      // biome-ignore lint/correctness/useYield: runActions mock returns a boolean from its generator
       runActions: function* () {
         return true;
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
       ...overrides,
     };
@@ -985,12 +1068,14 @@ describe("obvious step* branches", () => {
 
   it("stepInitialize closed event", () => {
     expect(
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       stepInitialize(States.initialize(), { name: "closed" } as any).state,
     ).toEqual({ type: "closed" });
   });
 
   it("stepSave closed event", () => {
     expect(
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       stepSave(States.save(), { name: "closed" } as any, saveCtx).state,
     ).toEqual({ type: "closed" });
   });
@@ -999,6 +1084,7 @@ describe("obvious step* branches", () => {
     const open = Action.open("https://orteil.dashnet.org/cookieclicker/");
     const out = stepInitialize(
       States.initialize(),
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.error(open) as any,
     );
     expect(out.state).toMatchObject({ type: "initialize", phase: "open" });
@@ -1008,6 +1094,7 @@ describe("obvious step* branches", () => {
   it("stepInitialize importEnter failure stays", () => {
     const out = stepInitialize(
       { type: "initialize", phase: "importEnter", data: "SAVE" },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.error({ name: "press", key: "Enter" } as any) as any,
     );
     expect(out.state).toMatchObject({ phase: "importEnter" });
@@ -1043,6 +1130,7 @@ describe("obvious step* branches", () => {
   it("stepSave escape failure calls afterFail", () => {
     const out = stepSave(
       { type: "save", phase: "escape", failureCount: 0 },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.error({ name: "press", key: "Escape" } as any) as any,
       saveCtx,
     );
@@ -1077,11 +1165,14 @@ describe("obvious step* branches", () => {
       name: "idle",
       url: "https://orteil.dashnet.org/cookieclicker/",
       state: { clickableElementIds: ["bigCookie"] },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any).value;
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     expect(solve.next(ActionResult.error(click as any) as any).value).toEqual({
       name: "press",
       key: "Escape",
     });
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const done = solve.next({ name: "closed" } as any);
     expect(done.done).toBeTrue();
   });
@@ -1093,6 +1184,7 @@ describe("runActions", () => {
     const gen = runActions([action]);
     let s = gen.next();
     expect(s.value).toEqual(action);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     s = gen.next(ActionResult.ok(action) as any);
     expect(s.done).toBeTrue();
     expect(s.value).toBe(true);
@@ -1105,6 +1197,7 @@ describe("runActions", () => {
       closed = true;
     });
     gen.next();
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     const s = gen.next({ name: "closed" } as any);
     expect(s.done).toBeTrue();
     expect(s.value).toBe(false);
@@ -1115,9 +1208,11 @@ describe("runActions", () => {
     const action = Action.clickByText("x");
     const gen = runActions([action]);
     let s = gen.next();
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     s = gen.next(ActionResult.error(action) as any);
     expect(s.value).toEqual({ name: "press", key: "Escape" });
     s = gen.next(
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.ok({ name: "press", key: "Escape" } as any) as any,
     );
     expect(s.done).toBeTrue();
@@ -1131,8 +1226,10 @@ describe("runActions", () => {
       closed = true;
     });
     gen.next();
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     let s = gen.next(ActionResult.error(action) as any);
     expect(s.value).toEqual({ name: "press", key: "Escape" });
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     s = gen.next({ name: "closed" } as any);
     expect(s.value).toBe(false);
     expect(closed).toBeTrue();
@@ -1142,6 +1239,7 @@ describe("runActions", () => {
     const gen = runActions([Action.noop]);
     let s = gen.next();
     expect(s.value).toEqual(Action.noop);
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     s = gen.next({ name: "idle", url: "https://example.com/" } as any);
     expect(s.done).toBeTrue();
     expect(s.value).toBe(true);
@@ -1160,6 +1258,7 @@ describe("step* invalid phase", () => {
   it("stepSeeStats throws on unknown phase", () => {
     expect(() =>
       stepSeeStats(
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
         { type: "seeStats", phase: "nope" as any, failureCount: 0 },
         undefined,
       ),
@@ -1169,6 +1268,7 @@ describe("step* invalid phase", () => {
   it("stepSave throws on unknown phase", () => {
     expect(() =>
       stepSave(
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
         { type: "save", phase: "nope" as any, failureCount: 0 },
         undefined,
         saveCtx,
@@ -1181,6 +1281,7 @@ describe("remaining stepInitialize branches", () => {
   it("importKey failure stays", () => {
     const out = stepInitialize(
       { type: "initialize", phase: "importKey", data: "SAVE" },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       ActionResult.error({ name: "press", key: "Control+O" } as any) as any,
     );
     expect(out.state).toMatchObject({ phase: "importKey" });
@@ -1194,6 +1295,7 @@ describe("remaining stepInitialize branches", () => {
         name: "fill",
         value: "SAVE",
         on: { selector: "#game", role: "textbox" },
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any) as any,
     );
     expect(out.state).toMatchObject({ phase: "importFill" });
@@ -1208,12 +1310,16 @@ describe("handleInitialize terminal open failure", () => {
       setGameData: () => {},
       getHasReloadedForShoten: () => false,
       setHasReloadedForShoten: () => {},
+      // biome-ignore lint/correctness/useYield: runActions mock returns a boolean from its generator
       runActions: function* () {
         return true;
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
       } as any,
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     } as any);
     let s = gen.next();
     expect(s.value).toHaveProperty("name", "open");
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     s = gen.next(ActionResult.error(s.value as any) as any);
     expect(s.done).toBeTrue();
     expect(s.value).toMatchObject({ type: "initialize", phase: "open" });
@@ -1226,6 +1332,7 @@ describe("runActions unexpected result branch", () => {
     let s = gen.next();
     expect(s.value).toEqual(action);
     // not result / not closed — hits console.warn branch then continues
+    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
     s = gen.next({ name: "idle", url: "https://example.com/" } as any);
     expect(s.done).toBeTrue();
     expect(s.value).toBe(true);

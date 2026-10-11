@@ -48,6 +48,7 @@ test.describe("createClickByElementId (real browser)", () => {
 
         await createClickByElementId(page)("promptOption0");
 
+        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
         const clicked = await page.evaluate(() => (window as any)._clicked);
         expect(clicked).toBe("first");
       } finally {

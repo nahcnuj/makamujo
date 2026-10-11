@@ -1,13 +1,13 @@
-import { expect, test } from "@playwright/test";
-import { spawn } from "child_process";
+import { spawn } from "node:child_process";
 import {
   createWriteStream,
   existsSync,
   mkdirSync,
   unlinkSync,
   writeFileSync,
-} from "fs";
-import { join } from "path";
+} from "node:fs";
+import { join } from "node:path";
+import { expect, test } from "@playwright/test";
 
 const PORT = 17779;
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
@@ -60,13 +60,13 @@ test.describe("Full IPC operation", () => {
 
         let buffer = "";
 
-        if (!serverProcess!.stdout || !serverProcess!.stderr) {
+        if (!serverProcess?.stdout || !serverProcess?.stderr) {
           clearTimeout(timeout);
           reject(new Error("Server stdout/stderr stream not available"));
           return;
         }
 
-        serverProcess!.stdout.on("data", (chunk: Buffer) => {
+        serverProcess?.stdout.on("data", (chunk: Buffer) => {
           buffer += chunk.toString();
           if (buffer.includes("Server running")) {
             clearTimeout(timeout);
@@ -74,7 +74,7 @@ test.describe("Full IPC operation", () => {
           }
         });
 
-        serverProcess!.on("exit", (code) => {
+        serverProcess?.on("exit", (code) => {
           clearTimeout(timeout);
           reject(new Error(`Server exited early with code ${code}`));
         });
@@ -112,7 +112,7 @@ test.describe("Full IPC operation", () => {
       const idleReached = await new Promise<boolean>((resolve) => {
         const timeout = setTimeout(() => resolve(false), IDLE_STATE_TIMEOUT_MS);
 
-        if (!serverProcess!.stdout || !serverProcess!.stderr) {
+        if (!serverProcess?.stdout || !serverProcess?.stderr) {
           clearTimeout(timeout);
           resolve(false);
           return;
@@ -127,10 +127,10 @@ test.describe("Full IPC operation", () => {
           }
         };
 
-        serverProcess!.stdout.on("data", checkOutput);
-        serverProcess!.stderr.on("data", checkOutput);
+        serverProcess?.stdout.on("data", checkOutput);
+        serverProcess?.stderr.on("data", checkOutput);
 
-        serverProcess!.on("exit", () => {
+        serverProcess?.on("exit", () => {
           clearTimeout(timeout);
           resolve(false);
         });

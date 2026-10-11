@@ -18,16 +18,22 @@ const installDom = (
     return !this.hasAttribute("hidden");
   };
   // Set globals for JSDOM (cast to any for strict mode)
+  // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   (globalThis as any).window = window;
+  // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   (globalThis as any).document = window.document;
+  // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   (globalThis as any).location = window.location;
   return dom;
 };
 
 afterEach(() => {
   // Clean up globals after each test
+  // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   (globalThis as any).document = undefined;
+  // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   (globalThis as any).window = undefined;
+  // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
   (globalThis as any).location = undefined;
 });
 

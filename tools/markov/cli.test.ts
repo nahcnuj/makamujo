@@ -18,7 +18,7 @@ describe("markov cli transitions", () => {
         model: {
           "": { パンティー: 5 },
           パンティー: { "。": 10 },
-          ["ベージュ" + String.fromCharCode(0) + "パンティー"]: { "。": 9 },
+          [`ベージュ${String.fromCharCode(0)}パンティー`]: { "。": 9 },
           の: { パンティー: 4 },
         },
         corpus: [],
@@ -134,7 +134,9 @@ describe("markov cli decrement-phrase --in-place", () => {
     expect(stderr).toContain("changed:");
     expect(stderr).toContain("wrote:");
 
-    const saved = JSON.parse(require("fs").readFileSync(modelPath, "utf8"));
+    const saved = JSON.parse(
+      require("node:fs").readFileSync(modelPath, "utf8"),
+    );
     expect(saved.model[""].beige).toBe(1);
     expect(saved.model.beige.panty).toBe(2);
 
@@ -179,11 +181,13 @@ describe("markov cli decrement-phrase --suffix", () => {
     expect(stderr).toContain("wrote:");
 
     const backup = JSON.parse(
-      require("fs").readFileSync(modelPath + ".bak", "utf8"),
+      require("node:fs").readFileSync(`${modelPath}.bak`, "utf8"),
     );
     expect(backup.model[""].beige).toBe(2);
 
-    const saved = JSON.parse(require("fs").readFileSync(modelPath, "utf8"));
+    const saved = JSON.parse(
+      require("node:fs").readFileSync(modelPath, "utf8"),
+    );
     expect(saved.model[""].beige).toBe(1);
 
     rmSync(tmpDir, { recursive: true, force: true });
@@ -198,7 +202,7 @@ describe("markov cli search visibility", () => {
       JSON.stringify({
         model: {
           "": { パンティー: 1 },
-          ["ベージュ" + String.fromCharCode(0) + "パンティー"]: { "。": 2 },
+          [`ベージュ${String.fromCharCode(0)}パンティー`]: { "。": 2 },
         },
         corpus: [],
       }),
