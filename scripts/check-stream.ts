@@ -1,10 +1,14 @@
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { chromium } from "playwright";
 
 const WATCH_PAGE_URL = "https://live.nicovideo.jp/watch/user/14171889";
 const CHECK_DURATION_MS = 10_000;
 const NAVIGATION_TIMEOUT_MS = 60_000;
+const SCREENSHOT_QUALITY = 80;
+const MIN_DIFF_RATIO = 0.01;
 
-interface CheckResult {
+export interface CheckResult {
   ok: boolean;
   timestampJst: string;
   phenomena: string[];
@@ -16,12 +20,16 @@ interface CheckResult {
     videoCurrentTimeEnd?: number;
     videoPaused?: boolean;
     videoMuted?: boolean;
+    videoVolume?: number;
+    hasAudioTracks?: boolean;
     pageTitle?: string;
     pageUrl?: string;
+    fullPageDiffRatio?: number;
+    videoRegionDiffRatio?: number;
   };
 }
 
-function formatJst(date: Date): string {
+export function formatJst(date: Date): string {
   return date
     .toLocaleString("ja-JP", {
       timeZone: "Asia/Tokyo",
@@ -34,6 +42,74 @@ function formatJst(date: Date): string {
       hour12: false,
     })
     .replace(/\//g, "-");
+}
+
+export function isVideoPlaying(
+  _initialPaused: boolean,
+  initialCurrentTime: number,
+  finalPaused: boolean,
+  finalCurrentTime: number,
+): boolean {
+  if (finalPaused) return false;
+  const timeAdvanced = finalCurrentTime - initialCurrentTime;
+  const expectedAdvance = CHECK_DURATION_MS / 1000;
+  const tolerance = 2;
+  return timeAdvanced >= expectedAdvance - tolerance;
+}
+
+export function isAudioPlaying(
+  videoPlaying: boolean,
+  muted: boolean,
+  volume: number,
+  hasAudioTracks: boolean,
+): boolean {
+  return videoPlaying && !muted && volume > 0 && hasAudioTracks;
+}
+
+export function isOverallOk(
+  audioPlaying: boolean,
+  videoPlaying: boolean,
+  gameScreenPlaying: boolean,
+): boolean {
+  return audioPlaying && videoPlaying && gameScreenPlaying;
+}
+
+async function hideComments(page: import("playwright").Page): Promise<void> {
+  await page.addStyleTag({
+    content: `
+      [class*="comment" i],
+      [class*="Comment" i],
+      [id*="comment" i],
+      [id*="Comment" i] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+      }
+    `,
+  });
+}
+
+async function takeFullPageScreenshot(
+  page: import("playwright").Page,
+): Promise<Buffer> {
+  return page.screenshot({ type: "jpeg", quality: SCREENSHOT_QUALITY });
+}
+
+async function takeVideoRegionScreenshot(
+  page: import("playwright").Page,
+): Promise<Buffer | null> {
+  const video = await page.$("video");
+  if (!video) return null;
+  return video.screenshot({ type: "jpeg", quality: SCREENSHOT_QUALITY });
+}
+
+export function calculateDiffRatio(buf1: Buffer, buf2: Buffer): number {
+  if (buf1.length !== buf2.length) return 1;
+  let diff = 0;
+  for (let i = 0; i < buf1.length; i++) {
+    if (buf1[i] !== buf2[i]) diff++;
+  }
+  return diff / buf1.length;
 }
 
 async function checkStream(): Promise<CheckResult> {
@@ -76,18 +152,20 @@ async function checkStream(): Promise<CheckResult> {
     details.pageTitle = await page.title().catch(() => "");
     details.pageUrl = page.url();
 
-    // Wait for the video element to be present
     await page.waitForSelector("video", { timeout: 15_000 });
 
-    // Get initial video state
     const initialVideoState = await page.evaluate(() => {
-      const video = document.querySelector("video");
+      const video = document.querySelector("video") as HTMLVideoElement & {
+        audioTracks?: { length: number };
+      };
       if (!video) return { found: false };
       return {
         found: true,
         currentTime: video.currentTime,
         paused: video.paused,
         muted: video.muted,
+        volume: video.volume,
+        audioTracks: video.audioTracks?.length ?? 0,
         readyState: video.readyState,
         ended: video.ended,
       };
@@ -101,23 +179,31 @@ async function checkStream(): Promise<CheckResult> {
     details.videoCurrentTimeStart = initialVideoState.currentTime;
     details.videoPaused = initialVideoState.paused;
     details.videoMuted = initialVideoState.muted;
+    details.videoVolume = initialVideoState.volume;
+    details.hasAudioTracks = (initialVideoState.audioTracks ?? 0) > 0;
 
     console.log(
-      `[INFO] Initial video state: currentTime=${initialVideoState.currentTime}, paused=${initialVideoState.paused}, muted=${initialVideoState.muted}, readyState=${initialVideoState.readyState}`,
+      `[INFO] Initial video state: currentTime=${initialVideoState.currentTime}, paused=${initialVideoState.paused}, muted=${initialVideoState.muted}, volume=${initialVideoState.volume}, audioTracks=${initialVideoState.audioTracks}, readyState=${initialVideoState.readyState}`,
     );
 
-    // Wait for CHECK_DURATION_MS to observe playback
+    const fullPageStart = await takeFullPageScreenshot(page);
+    await hideComments(page);
+    const videoRegionStart = await takeVideoRegionScreenshot(page);
+
     await page.waitForTimeout(CHECK_DURATION_MS);
 
-    // Get final video state
     const finalVideoState = await page.evaluate(() => {
-      const video = document.querySelector("video");
+      const video = document.querySelector("video") as HTMLVideoElement & {
+        audioTracks?: { length: number };
+      };
       if (!video) return { found: false };
       return {
         found: true,
         currentTime: video.currentTime,
         paused: video.paused,
         muted: video.muted,
+        volume: video.volume,
+        audioTracks: video.audioTracks?.length ?? 0,
         readyState: video.readyState,
         ended: video.ended,
       };
@@ -128,54 +214,100 @@ async function checkStream(): Promise<CheckResult> {
       return { ok: false, timestampJst, phenomena, details };
     }
 
-    details.videoCurrentTimeEnd = finalVideoState.currentTime;
-
-    // Check video playing: not paused and currentTime advanced
     const startTime = initialVideoState.currentTime ?? 0;
     const endTime = finalVideoState.currentTime ?? 0;
-    const timeAdvanced = endTime - startTime;
-    const expectedAdvance = CHECK_DURATION_MS / 1000; // ~10 seconds
-    const tolerance = 2; // allow 2 seconds tolerance
+    details.videoCurrentTimeEnd = endTime;
 
-    const videoPlaying =
-      !finalVideoState.paused && timeAdvanced >= expectedAdvance - tolerance;
+    const videoPlaying = isVideoPlaying(
+      initialVideoState.paused ?? false,
+      startTime,
+      finalVideoState.paused ?? false,
+      endTime,
+    );
 
     if (!videoPlaying) {
       if (finalVideoState.paused) {
         phenomena.push("ビデオが一時停止状態です");
       } else {
+        const timeAdvanced = endTime - startTime;
+        const expectedAdvance = CHECK_DURATION_MS / 1000;
         phenomena.push(
           `ビデオが停止している可能性があります (currentTime 進捗: ${timeAdvanced.toFixed(1)}秒 / 期待: ~${expectedAdvance}秒)`,
         );
       }
     } else {
       console.log(
-        `[INFO] Video playing: currentTime advanced from ${startTime.toFixed(1)} to ${endTime.toFixed(1)} (Δ${timeAdvanced.toFixed(1)}s)`,
+        `[INFO] Video playing: currentTime advanced from ${startTime.toFixed(1)} to ${endTime.toFixed(1)} (Δ${(endTime - startTime).toFixed(1)}s)`,
       );
     }
     details.videoPlaying = videoPlaying;
 
-    // Check audio: not muted and video is playing
-    const audioPlaying = !finalVideoState.muted && videoPlaying;
+    const audioPlaying = isAudioPlaying(
+      videoPlaying,
+      finalVideoState.muted ?? false,
+      finalVideoState.volume ?? 0,
+      (finalVideoState.audioTracks ?? 0) > 0,
+    );
     if (!audioPlaying) {
       if (finalVideoState.muted) {
         phenomena.push("ビデオがミュートされています");
+      } else if (finalVideoState.volume === 0) {
+        phenomena.push("ビデオの音量が 0 です");
+      } else if (finalVideoState.audioTracks === 0) {
+        phenomena.push("音声トラックがありません");
       } else {
         phenomena.push("音声が再生されていない可能性があります");
       }
     } else {
-      console.log("[INFO] Audio likely playing (video playing and not muted)");
+      console.log(
+        "[INFO] Audio likely playing (video playing, not muted, volume > 0, has audio tracks)",
+      );
     }
     details.audioPlaying = audioPlaying;
 
-    // Game screen check: same as video playing for now
-    details.gameScreenPlaying = videoPlaying;
-    if (!videoPlaying) {
-      phenomena.push("ゲーム画面部分が停止している可能性があります");
+    const fullPageEnd = await takeFullPageScreenshot(page);
+    await hideComments(page);
+    const videoRegionEnd = await takeVideoRegionScreenshot(page);
+
+    const fullPageDiffRatio = calculateDiffRatio(fullPageStart, fullPageEnd);
+    details.fullPageDiffRatio = fullPageDiffRatio;
+
+    if (fullPageDiffRatio < MIN_DIFF_RATIO) {
+      phenomena.push(
+        "映像全体が停止している可能性があります (全画面の変化が検出されません)",
+      );
+    } else {
+      console.log(
+        `[INFO] Full page changed: diff ratio = ${(fullPageDiffRatio * 100).toFixed(2)}%`,
+      );
     }
 
-    const ok =
-      details.audioPlaying && details.videoPlaying && details.gameScreenPlaying;
+    let gameScreenPlaying = false;
+    if (videoRegionStart && videoRegionEnd) {
+      const videoRegionDiffRatio = calculateDiffRatio(
+        videoRegionStart,
+        videoRegionEnd,
+      );
+      details.videoRegionDiffRatio = videoRegionDiffRatio;
+
+      if (videoRegionDiffRatio < MIN_DIFF_RATIO) {
+        phenomena.push(
+          "ゲーム画面部分が停止している可能性があります (動画領域の変化が検出されません)",
+        );
+      } else {
+        console.log(
+          `[INFO] Video region changed: diff ratio = ${(videoRegionDiffRatio * 100).toFixed(2)}%`,
+        );
+        gameScreenPlaying = true;
+      }
+    } else {
+      phenomena.push(
+        "ゲーム画面部分のスクリーンショットを取得できませんでした",
+      );
+    }
+    details.gameScreenPlaying = gameScreenPlaying;
+
+    const ok = isOverallOk(audioPlaying, videoPlaying, gameScreenPlaying);
 
     return { ok, timestampJst, phenomena, details };
   } finally {
@@ -192,15 +324,9 @@ async function main() {
   console.log(`[RESULT] phenomena=${JSON.stringify(result.phenomena)}`);
   console.log(`[RESULT] details=${JSON.stringify(result.details)}`);
 
-  // Output JSON for GitHub Actions to parse (using GITHUB_OUTPUT with heredoc for multiline safety)
-  const output = JSON.stringify(result);
-  console.log(`result=${output}`);
-  if (process.env.GITHUB_OUTPUT) {
-    const fs = await import("node:fs");
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, "result<<EOF\n");
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `${output}\n`);
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, "EOF\n");
-  }
+  const outputPath = join(process.cwd(), "stream-check-result.json");
+  writeFileSync(outputPath, JSON.stringify(result));
+  console.log(`[INFO] Result written to ${outputPath}`);
 
   if (!result.ok) {
     process.exitCode = 1;

@@ -2,7 +2,7 @@ name: Stream Health Check
 
 on:
   schedule:
-    - cron: "15 * * * *"  # Every hour at minute 15 (avoid exact hour)
+    - cron: "17 * * * *"  # Every hour at minute 17 (avoid exact hour boundaries)
 
 permissions:
   contents: read
@@ -36,7 +36,8 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const result = JSON.parse(process.env.STREAM_CHECK_RESULT || '{}');
+            const fs = require('fs');
+            const result = JSON.parse(fs.readFileSync('stream-check-result.json', 'utf8'));
             const timestamp = result.timestampJst;
             const phenomena = result.phenomena.join('\n- ');
             const details = JSON.stringify(result.details, null, 2);
@@ -80,5 +81,3 @@ ${details}
             }).catch(err => {
               console.warn('Failed to trigger auto-drive workflow:', err.message);
             });
-        env:
-          STREAM_CHECK_RESULT: ${{ steps.stream-check.outputs.result }}
