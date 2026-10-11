@@ -1,12 +1,24 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { chromium } from "playwright";
+import { chromium, type Page } from "playwright";
 
 const WATCH_PAGE_URL = "https://live.nicovideo.jp/watch/user/14171889";
 const CHECK_DURATION_MS = 10_000;
 const NAVIGATION_TIMEOUT_MS = 60_000;
 const SCREENSHOT_QUALITY = 80;
 const MIN_DIFF_RATIO = 0.01;
+
+/** Left 60% of the video: game panel on the 10×8 layout. */
+export const GAME_CLIP = {
+  xRatio: 0,
+  yRatio: 0,
+  widthRatio: 0.6,
+  heightRatio: 1,
+} as const;
+
+type VideoProbe = HTMLVideoElement & {
+  webkitAudioDecodedByteCount?: number;
+};
 
 export interface CheckResult {
   ok: boolean;
@@ -16,15 +28,12 @@ export interface CheckResult {
     audioPlaying: boolean;
     videoPlaying: boolean;
     gameScreenPlaying: boolean;
-    videoCurrentTimeStart?: number;
-    videoCurrentTimeEnd?: number;
-    videoPaused?: boolean;
-    videoMuted?: boolean;
-    videoVolume?: number;
-    hasAudioTracks?: boolean;
+    decodedAudioBytesStart?: number;
+    decodedAudioBytesEnd?: number;
+    videoDiffRatio?: number;
+    gameDiffRatio?: number;
     pageTitle?: string;
     pageUrl?: string;
-    videoRegionDiffRatio?: number;
   };
 }
 
@@ -43,26 +52,15 @@ export function formatJst(date: Date): string {
     .replace(/\//g, "-");
 }
 
-export function isVideoPlaying(
-  _initialPaused: boolean,
-  initialCurrentTime: number,
-  finalPaused: boolean,
-  finalCurrentTime: number,
+export function isAudioPlaying(
+  decodedBytesStart: number,
+  decodedBytesEnd: number,
 ): boolean {
-  if (finalPaused) return false;
-  const timeAdvanced = finalCurrentTime - initialCurrentTime;
-  const expectedAdvance = CHECK_DURATION_MS / 1000;
-  const tolerance = 2;
-  return timeAdvanced >= expectedAdvance - tolerance;
+  return decodedBytesEnd > decodedBytesStart;
 }
 
-export function isAudioPlaying(
-  videoPlaying: boolean,
-  muted: boolean,
-  volume: number,
-  hasAudioTracks: boolean,
-): boolean {
-  return videoPlaying && !muted && volume > 0 && hasAudioTracks;
+export function isPictureMoving(diffRatio: number): boolean {
+  return diffRatio >= MIN_DIFF_RATIO;
 }
 
 export function isOverallOk(
@@ -73,14 +71,6 @@ export function isOverallOk(
   return audioPlaying && videoPlaying && gameScreenPlaying;
 }
 
-export async function takeVideoRegionScreenshot(
-  page: import("playwright").Page,
-): Promise<Buffer | null> {
-  const video = await page.$("video");
-  if (!video) return null;
-  return video.screenshot({ type: "jpeg", quality: SCREENSHOT_QUALITY });
-}
-
 export function calculateDiffRatio(buf1: Buffer, buf2: Buffer): number {
   if (buf1.length !== buf2.length) return 1;
   let diff = 0;
@@ -88,6 +78,44 @@ export function calculateDiffRatio(buf1: Buffer, buf2: Buffer): number {
     if (buf1[i] !== buf2[i]) diff++;
   }
   return diff / buf1.length;
+}
+
+export function clipFromBox(
+  box: { x: number; y: number; width: number; height: number },
+  ratios: typeof GAME_CLIP,
+): { x: number; y: number; width: number; height: number } {
+  return {
+    x: box.x + box.width * ratios.xRatio,
+    y: box.y + box.height * ratios.yRatio,
+    width: box.width * ratios.widthRatio,
+    height: box.height * ratios.heightRatio,
+  };
+}
+
+async function screenshotClip(
+  page: Page,
+  clip: { x: number; y: number; width: number; height: number },
+): Promise<Buffer | null> {
+  if (clip.width < 1 || clip.height < 1) return null;
+  return page.screenshot({
+    type: "jpeg",
+    quality: SCREENSHOT_QUALITY,
+    clip,
+  });
+}
+
+async function readVideoProbe(page: Page): Promise<{
+  found: boolean;
+  decodedAudioBytes: number;
+}> {
+  return page.evaluate(() => {
+    const video = document.querySelector("video") as VideoProbe | null;
+    if (!video) return { found: false, decodedAudioBytes: 0 };
+    return {
+      found: true,
+      decodedAudioBytes: video.webkitAudioDecodedByteCount ?? 0,
+    };
+  });
 }
 
 async function checkStream(): Promise<CheckResult> {
@@ -132,134 +160,88 @@ async function checkStream(): Promise<CheckResult> {
 
     await page.waitForSelector("video", { timeout: 15_000 });
 
-    const initialVideoState = await page.evaluate(() => {
-      const video = document.querySelector("video") as HTMLVideoElement & {
-        audioTracks?: { length: number };
-      };
-      if (!video) return { found: false };
-      return {
-        found: true,
-        currentTime: video.currentTime,
-        paused: video.paused,
-        muted: video.muted,
-        volume: video.volume,
-        audioTracks: video.audioTracks?.length ?? 0,
-        readyState: video.readyState,
-        ended: video.ended,
-      };
+    await page.evaluate(() => {
+      const video = document.querySelector("video");
+      if (!video) return;
+      video.muted = false;
+      video.volume = 1;
+      void video.play();
     });
 
-    if (!initialVideoState.found) {
+    const video = await page.$("video");
+    if (!video) {
       phenomena.push("ビデオ要素が見つかりません");
       return { ok: false, timestampJst, phenomena, details };
     }
 
-    details.videoCurrentTimeStart = initialVideoState.currentTime;
-    details.videoPaused = initialVideoState.paused;
-    details.videoMuted = initialVideoState.muted;
-    details.videoVolume = initialVideoState.volume;
-    details.hasAudioTracks = (initialVideoState.audioTracks ?? 0) > 0;
-
-    console.log(
-      `[INFO] Initial video state: currentTime=${initialVideoState.currentTime}, paused=${initialVideoState.paused}, muted=${initialVideoState.muted}, volume=${initialVideoState.volume}, audioTracks=${initialVideoState.audioTracks}, readyState=${initialVideoState.readyState}`,
-    );
-
-    const videoRegionStart = await takeVideoRegionScreenshot(page);
-
-    await page.waitForTimeout(CHECK_DURATION_MS);
-
-    const finalVideoState = await page.evaluate(() => {
-      const video = document.querySelector("video") as HTMLVideoElement & {
-        audioTracks?: { length: number };
-      };
-      if (!video) return { found: false };
-      return {
-        found: true,
-        currentTime: video.currentTime,
-        paused: video.paused,
-        muted: video.muted,
-        volume: video.volume,
-        audioTracks: video.audioTracks?.length ?? 0,
-        readyState: video.readyState,
-        ended: video.ended,
-      };
-    });
-
-    if (!finalVideoState.found) {
-      phenomena.push("チェック中にビデオ要素が消失しました");
+    const box = await video.boundingBox();
+    if (!box) {
+      phenomena.push("ビデオ要素の位置を取得できません");
       return { ok: false, timestampJst, phenomena, details };
     }
 
-    const startTime = initialVideoState.currentTime ?? 0;
-    const endTime = finalVideoState.currentTime ?? 0;
-    details.videoCurrentTimeEnd = endTime;
+    const gameClip = clipFromBox(box, GAME_CLIP);
+    const startProbe = await readVideoProbe(page);
+    details.decodedAudioBytesStart = startProbe.decodedAudioBytes;
 
-    const videoPlaying = isVideoPlaying(
-      initialVideoState.paused ?? false,
-      startTime,
-      finalVideoState.paused ?? false,
-      endTime,
+    const videoStart = await screenshotClip(page, box);
+    const gameStart = await screenshotClip(page, gameClip);
+
+    await page.waitForTimeout(CHECK_DURATION_MS);
+
+    const endProbe = await readVideoProbe(page);
+    if (!endProbe.found) {
+      phenomena.push("チェック中にビデオ要素が消失しました");
+      return { ok: false, timestampJst, phenomena, details };
+    }
+    details.decodedAudioBytesEnd = endProbe.decodedAudioBytes;
+
+    const videoEnd = await screenshotClip(page, box);
+    const gameEnd = await screenshotClip(page, gameClip);
+
+    const audioPlaying = isAudioPlaying(
+      startProbe.decodedAudioBytes,
+      endProbe.decodedAudioBytes,
     );
+    details.audioPlaying = audioPlaying;
+    if (!audioPlaying) {
+      phenomena.push(
+        "音声が流れていません (デコードされた音声バイトが増えません)",
+      );
+    } else {
+      console.log(
+        `[INFO] Audio playing: decoded bytes ${startProbe.decodedAudioBytes} -> ${endProbe.decodedAudioBytes}`,
+      );
+    }
 
-    if (!videoPlaying) {
-      if (finalVideoState.paused) {
-        phenomena.push("ビデオが一時停止状態です");
+    let videoPlaying = false;
+    if (videoStart && videoEnd) {
+      const videoDiffRatio = calculateDiffRatio(videoStart, videoEnd);
+      details.videoDiffRatio = videoDiffRatio;
+      videoPlaying = isPictureMoving(videoDiffRatio);
+      if (!videoPlaying) {
+        phenomena.push("映像全体が停止し続けています");
       } else {
-        const timeAdvanced = endTime - startTime;
-        const expectedAdvance = CHECK_DURATION_MS / 1000;
-        phenomena.push(
-          `ビデオが停止している可能性があります (currentTime 進捗: ${timeAdvanced.toFixed(1)}秒 / 期待: ~${expectedAdvance}秒)`,
+        console.log(
+          `[INFO] Video moving: diff ratio = ${(videoDiffRatio * 100).toFixed(2)}%`,
         );
       }
     } else {
-      console.log(
-        `[INFO] Video playing: currentTime advanced from ${startTime.toFixed(1)} to ${endTime.toFixed(1)} (Δ${(endTime - startTime).toFixed(1)}s)`,
-      );
+      phenomena.push("映像全体のスクリーンショットを取得できませんでした");
     }
     details.videoPlaying = videoPlaying;
 
-    const audioPlaying = isAudioPlaying(
-      videoPlaying,
-      finalVideoState.muted ?? false,
-      finalVideoState.volume ?? 0,
-      (finalVideoState.audioTracks ?? 0) > 0,
-    );
-    if (!audioPlaying) {
-      if (finalVideoState.muted) {
-        phenomena.push("ビデオがミュートされています");
-      } else if (finalVideoState.volume === 0) {
-        phenomena.push("ビデオの音量が 0 です");
-      } else if (finalVideoState.audioTracks === 0) {
-        phenomena.push("音声トラックがありません");
-      } else {
-        phenomena.push("音声が再生されていない可能性があります");
-      }
-    } else {
-      console.log(
-        "[INFO] Audio likely playing (video playing, not muted, volume > 0, has audio tracks)",
-      );
-    }
-    details.audioPlaying = audioPlaying;
-
-    const videoRegionEnd = await takeVideoRegionScreenshot(page);
-
     let gameScreenPlaying = false;
-    if (videoRegionStart && videoRegionEnd) {
-      const videoRegionDiffRatio = calculateDiffRatio(
-        videoRegionStart,
-        videoRegionEnd,
-      );
-      details.videoRegionDiffRatio = videoRegionDiffRatio;
-
-      if (videoRegionDiffRatio < MIN_DIFF_RATIO) {
-        phenomena.push(
-          "ゲーム画面部分が停止している可能性があります (動画領域の変化が検出されません)",
-        );
+    if (gameStart && gameEnd) {
+      const gameDiffRatio = calculateDiffRatio(gameStart, gameEnd);
+      details.gameDiffRatio = gameDiffRatio;
+      gameScreenPlaying = isPictureMoving(gameDiffRatio);
+      if (!gameScreenPlaying) {
+        phenomena.push("ゲーム画面部分が停止し続けています");
       } else {
         console.log(
-          `[INFO] Video region changed: diff ratio = ${(videoRegionDiffRatio * 100).toFixed(2)}%`,
+          `[INFO] Game screen moving: diff ratio = ${(gameDiffRatio * 100).toFixed(2)}%`,
         );
-        gameScreenPlaying = true;
       }
     } else {
       phenomena.push(
@@ -268,9 +250,12 @@ async function checkStream(): Promise<CheckResult> {
     }
     details.gameScreenPlaying = gameScreenPlaying;
 
-    const ok = isOverallOk(audioPlaying, videoPlaying, gameScreenPlaying);
-
-    return { ok, timestampJst, phenomena, details };
+    return {
+      ok: isOverallOk(audioPlaying, videoPlaying, gameScreenPlaying),
+      timestampJst,
+      phenomena,
+      details,
+    };
   } finally {
     await browser.close();
   }

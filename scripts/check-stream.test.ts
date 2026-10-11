@@ -1,10 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import {
   calculateDiffRatio,
+  clipFromBox,
   formatJst,
+  GAME_CLIP,
   isAudioPlaying,
   isOverallOk,
-  isVideoPlaying,
+  isPictureMoving,
 } from "./check-stream.ts";
 
 describe("formatJst", () => {
@@ -21,50 +23,27 @@ describe("formatJst", () => {
   });
 });
 
-describe("isVideoPlaying", () => {
-  const CHECK_DURATION_MS = 10_000;
-  const expectedAdvance = CHECK_DURATION_MS / 1000;
-  const tolerance = 2;
-
-  it("returns false when video is paused", () => {
-    expect(isVideoPlaying(false, 0, true, 5)).toBe(false);
+describe("isAudioPlaying", () => {
+  it("returns false when decoded bytes do not increase", () => {
+    expect(isAudioPlaying(0, 0)).toBe(false);
+    expect(isAudioPlaying(100, 100)).toBe(false);
   });
 
-  it("returns false when currentTime didn't advance enough", () => {
-    expect(isVideoPlaying(false, 0, false, 7)).toBe(false);
-  });
-
-  it("returns true when currentTime advanced enough", () => {
-    expect(isVideoPlaying(false, 0, false, 9)).toBe(true);
-    expect(isVideoPlaying(false, 0, false, 10)).toBe(true);
-    expect(isVideoPlaying(false, 0, false, 15)).toBe(true);
-  });
-
-  it("handles non-zero start time", () => {
-    expect(isVideoPlaying(false, 100, false, 109)).toBe(true);
-    expect(isVideoPlaying(false, 100, false, 107)).toBe(false);
+  it("returns true when decoded bytes increase", () => {
+    expect(isAudioPlaying(0, 1)).toBe(true);
+    expect(isAudioPlaying(100, 250)).toBe(true);
   });
 });
 
-describe("isAudioPlaying", () => {
-  it("returns false when muted", () => {
-    expect(isAudioPlaying(true, true, 1, true)).toBe(false);
+describe("isPictureMoving", () => {
+  it("returns false when the frame barely changes", () => {
+    expect(isPictureMoving(0)).toBe(false);
+    expect(isPictureMoving(0.009)).toBe(false);
   });
 
-  it("returns false when volume is 0", () => {
-    expect(isAudioPlaying(true, false, 0, true)).toBe(false);
-  });
-
-  it("returns false when no audio tracks", () => {
-    expect(isAudioPlaying(true, false, 1, false)).toBe(false);
-  });
-
-  it("returns false when video not playing", () => {
-    expect(isAudioPlaying(false, false, 1, true)).toBe(false);
-  });
-
-  it("returns true when video playing and not muted and volume > 0 and has audio tracks", () => {
-    expect(isAudioPlaying(true, false, 1, true)).toBe(true);
+  it("returns true when the frame changes enough", () => {
+    expect(isPictureMoving(0.01)).toBe(true);
+    expect(isPictureMoving(0.5)).toBe(true);
   });
 });
 
@@ -76,7 +55,7 @@ describe("isOverallOk", () => {
     expect(isOverallOk(false, false, false)).toBe(false);
   });
 
-  it("returns true only when all checks pass", () => {
+  it("returns true only when all three checks pass", () => {
     expect(isOverallOk(true, true, true)).toBe(true);
   });
 });
@@ -104,5 +83,15 @@ describe("calculateDiffRatio", () => {
     const buf1 = Buffer.from([1, 2, 3]);
     const buf2 = Buffer.from([1, 2, 3, 4]);
     expect(calculateDiffRatio(buf1, buf2)).toBe(1);
+  });
+});
+
+describe("clipFromBox", () => {
+  it("takes the left 60% of the video for the game screen", () => {
+    const clip = clipFromBox(
+      { x: 100, y: 50, width: 1000, height: 400 },
+      GAME_CLIP,
+    );
+    expect(clip).toEqual({ x: 100, y: 50, width: 600, height: 400 });
   });
 });
