@@ -2,7 +2,7 @@ name: Stream Health Check
 
 on:
   schedule:
-    - cron: "17 * * * *"  # Every hour at minute 17 (avoid exact hour boundaries)
+    - cron: "1 * * * *"  # Every hour at minute 1 (avoid exact hour boundaries)
 
 permissions:
   contents: read

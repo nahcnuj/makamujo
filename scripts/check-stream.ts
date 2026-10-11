@@ -24,7 +24,6 @@ export interface CheckResult {
     hasAudioTracks?: boolean;
     pageTitle?: string;
     pageUrl?: string;
-    fullPageDiffRatio?: number;
     videoRegionDiffRatio?: number;
   };
 }
@@ -74,28 +73,7 @@ export function isOverallOk(
   return audioPlaying && videoPlaying && gameScreenPlaying;
 }
 
-async function hideComments(page: import("playwright").Page): Promise<void> {
-  await page.addStyleTag({
-    content: `
-      [class*="comment" i],
-      [class*="Comment" i],
-      [id*="comment" i],
-      [id*="Comment" i] {
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-      }
-    `,
-  });
-}
-
-async function takeFullPageScreenshot(
-  page: import("playwright").Page,
-): Promise<Buffer> {
-  return page.screenshot({ type: "jpeg", quality: SCREENSHOT_QUALITY });
-}
-
-async function takeVideoRegionScreenshot(
+export async function takeVideoRegionScreenshot(
   page: import("playwright").Page,
 ): Promise<Buffer | null> {
   const video = await page.$("video");
@@ -186,8 +164,6 @@ async function checkStream(): Promise<CheckResult> {
       `[INFO] Initial video state: currentTime=${initialVideoState.currentTime}, paused=${initialVideoState.paused}, muted=${initialVideoState.muted}, volume=${initialVideoState.volume}, audioTracks=${initialVideoState.audioTracks}, readyState=${initialVideoState.readyState}`,
     );
 
-    const fullPageStart = await takeFullPageScreenshot(page);
-    await hideComments(page);
     const videoRegionStart = await takeVideoRegionScreenshot(page);
 
     await page.waitForTimeout(CHECK_DURATION_MS);
@@ -265,22 +241,7 @@ async function checkStream(): Promise<CheckResult> {
     }
     details.audioPlaying = audioPlaying;
 
-    const fullPageEnd = await takeFullPageScreenshot(page);
-    await hideComments(page);
     const videoRegionEnd = await takeVideoRegionScreenshot(page);
-
-    const fullPageDiffRatio = calculateDiffRatio(fullPageStart, fullPageEnd);
-    details.fullPageDiffRatio = fullPageDiffRatio;
-
-    if (fullPageDiffRatio < MIN_DIFF_RATIO) {
-      phenomena.push(
-        "映像全体が停止している可能性があります (全画面の変化が検出されません)",
-      );
-    } else {
-      console.log(
-        `[INFO] Full page changed: diff ratio = ${(fullPageDiffRatio * 100).toFixed(2)}%`,
-      );
-    }
 
     let gameScreenPlaying = false;
     if (videoRegionStart && videoRegionEnd) {
