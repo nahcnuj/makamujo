@@ -55,7 +55,7 @@
 - 識別子は具体的に付ける。関数・メソッドは動詞始まり、変数は名詞句始まり。
 - 型の絞り込みは `as const` / `satisfies T` のみ。`as any as ...` のような二重キャストは禁止。
 - コミットメッセージは Conventional Commits。機能ブランチは `main` から、PR でレビュー。
-- Biome は `*.test.ts` の linter のみ無効（formatter は有効）。整形は `bun run format` に任せる。
+- Biome は `*.test.ts` / `*.test.tsx` を対象外（`files.includes` で除外）。整形は `bun run format` に任せる。
 
 ## 環境・運用手順の注意
 - Windows では POSIX 表記のスクリプト（`NODE_ENV=...`、bash 呼び出し）がそのまま動かない。WSL / Git Bash を使うか互換性を確認する。
