@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import type { DisplayedStatistics } from "../domain/broadcasting/watchPageStatistics";
 import { sanitizeProgramKey } from "../domain/comments/CommentRecorder";
 
 export const STREAM_BASELINE_BASENAME = "stream-baseline.json";
@@ -25,6 +26,8 @@ export type StreamBaseline = {
   currentProgramUrl?: string;
   /** Last observed comment number of the active program. */
   currentProgramLatestCommentNo: number;
+  /** Retained watch page statistics from the previous session, surviving restarts. */
+  retainedStatistics?: DisplayedStatistics | undefined;
 };
 
 const toNonNegativeInteger = (value: unknown): number | undefined => {
@@ -54,6 +57,12 @@ export const parseStreamBaseline = (raw: unknown): StreamBaseline => {
         : undefined,
     currentProgramLatestCommentNo:
       toNonNegativeInteger(record?.currentProgramLatestCommentNo) ?? 0,
+    retainedStatistics:
+      record?.retainedStatistics &&
+      typeof record.retainedStatistics === "object"
+        ? (record as { retainedStatistics: DisplayedStatistics | undefined })
+            .retainedStatistics
+        : undefined,
   };
 };
 
