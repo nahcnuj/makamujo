@@ -3,12 +3,11 @@ name: Stream Health Check
 on:
   schedule:
     - cron: "15 * * * *"  # Every hour at minute 15 (avoid exact hour)
-  workflow_dispatch:  # Manual trigger
 
 permissions:
   contents: read
   issues: write
-  actions: write  # Required for workflow_dispatch
+  actions: write  # Required for workflow_dispatch to trigger auto-drive
 
 jobs:
   check-stream:
@@ -30,18 +29,14 @@ jobs:
 
       - name: Run stream health check
         id: stream-check
-        run: bun run scripts/check-stream.ts 2>&1
+        run: bun run scripts/check-stream.ts
 
       - name: Create issue and trigger auto-drive
         if: failure()
         uses: actions/github-script@v7
         with:
           script: |
-            const { stdout } = require('child_process').execSync(
-              `grep '^result=' "${process.env.GITHUB_OUTPUT}" | cut -d'=' -f2-`,
-              { encoding: 'utf8' }
-            );
-            const result = JSON.parse(stdout.trim());
+            const result = JSON.parse(process.env.STREAM_CHECK_RESULT || '{}');
             const timestamp = result.timestampJst;
             const phenomena = result.phenomena.join('\n- ');
             const details = JSON.stringify(result.details, null, 2);
@@ -67,7 +62,7 @@ ${details}
               repo: context.repo.repo,
               title,
               body,
-              labels: ['stream-health', 'auto-generated']
+              labels: ['bug']
             });
 
             console.log(`Created issue #${issue.number}: ${issue.html_url}`);
@@ -85,3 +80,5 @@ ${details}
             }).catch(err => {
               console.warn('Failed to trigger auto-drive workflow:', err.message);
             });
+        env:
+          STREAM_CHECK_RESULT: ${{ steps.stream-check.outputs.result }}

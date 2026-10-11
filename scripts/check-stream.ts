@@ -192,12 +192,14 @@ async function main() {
   console.log(`[RESULT] phenomena=${JSON.stringify(result.phenomena)}`);
   console.log(`[RESULT] details=${JSON.stringify(result.details)}`);
 
-  // Output JSON for GitHub Actions to parse (using GITHUB_OUTPUT)
+  // Output JSON for GitHub Actions to parse (using GITHUB_OUTPUT with heredoc for multiline safety)
   const output = JSON.stringify(result);
   console.log(`result=${output}`);
   if (process.env.GITHUB_OUTPUT) {
     const fs = await import("node:fs");
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `result=${output}\n`);
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, "result<<EOF\n");
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `${output}\n`);
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, "EOF\n");
   }
 
   if (!result.ok) {
