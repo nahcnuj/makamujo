@@ -396,7 +396,8 @@ test.describe("console", () => {
           configurable: true,
         });
         // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-        (window as any).EventSource = ((url: string) => {
+        // biome-ignore lint/complexity/useArrowFunction: must stay constructible for `new EventSource(...)`
+        (window as any).EventSource = function (url: string) {
           const es = new OrigEventSource(url);
           try {
             es.addEventListener("open", () => {
@@ -406,7 +407,7 @@ test.describe("console", () => {
           } catch {}
           return es;
           // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-        }) as any;
+        } as any;
         try {
           // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
           (window as any).EventSource.prototype = OrigEventSource.prototype;
@@ -471,7 +472,8 @@ test.describe("console", () => {
         configurable: true,
       });
       // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      (window as any).EventSource = ((url: string) => {
+      // biome-ignore lint/complexity/useArrowFunction: must stay constructible for `new EventSource(...)`
+      (window as any).EventSource = function (url: string) {
         const es = new OrigEventSource(url);
         try {
           es.addEventListener("open", () => {
@@ -481,7 +483,7 @@ test.describe("console", () => {
         } catch {}
         return es;
         // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      }) as any;
+      } as any;
       try {
         // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
         (window as any).EventSource.prototype = OrigEventSource.prototype;
@@ -563,7 +565,8 @@ test.describe("console", () => {
         writable: true,
         configurable: true,
       });
-      const WrappedEventSource = ((url: string) => {
+      // biome-ignore lint/complexity/useArrowFunction: must stay constructible for `new EventSource(...)`
+      const WrappedEventSource = function (url: string) {
         const es = new OrigEventSource(url);
         try {
           es.addEventListener("open", () => {
@@ -585,7 +588,7 @@ test.describe("console", () => {
         } catch {}
         return es;
         // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      }) as any;
+      } as any;
       try {
         for (const key of Object.getOwnPropertyNames(OrigEventSource)) {
           const descriptor = Object.getOwnPropertyDescriptor(
