@@ -2,24 +2,26 @@ name: Stream Health Check
 
 on:
   schedule:
-    - cron: "1 * * * *"  # Every hour at minute 1 (avoid exact hour boundaries)
+    - cron: "15 * * * *"  # Every hour at minute 15 (avoid exact hour boundaries)
 
 permissions:
   contents: read
   issues: write
-  actions: write  # Required for workflow_dispatch to trigger auto-drive
 
 jobs:
   check-stream:
     name: Check Stream Health
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      issue-number: ${{ steps.create-issue.outputs.issue-number }}
+      issue-title: ${{ steps.create-issue.outputs.issue-title }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
       - name: Install Playwright Chromium
         run: bunx playwright install chromium
@@ -31,7 +33,8 @@ jobs:
         id: stream-check
         run: bun run scripts/check-stream.ts
 
-      - name: Create issue and trigger auto-drive
+      - name: Create issue if check failed
+        id: create-issue
         if: failure()
         uses: actions/github-script@v7
         with:
@@ -68,16 +71,16 @@ ${details}
 
             console.log(`Created issue #${issue.number}: ${issue.html_url}`);
 
-            // Trigger auto-drive workflow to attempt fix
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'auto-drive.yml',
-              ref: 'main',
-              inputs: {
-                issue_number: String(issue.number),
-                issue_title: issue.title
-              }
-            }).catch(err => {
-              console.warn('Failed to trigger auto-drive workflow:', err.message);
-            });
+            core.setOutput('issue-number', issue.number);
+            core.setOutput('issue-title', issue.title);
+            return issue.number;
+          result-encoding: string
+
+  auto-drive:
+    name: Auto-drive fix
+    needs: check-stream
+    if: failure() && needs.check-stream.result == 'failure' && needs.check-stream.outputs.issue-number != ''
+    uses: ./.github/workflows/auto-drive.yml
+    with:
+      issue_number: ${{ needs.check-stream.outputs.issue-number }}
+      issue_title: ${{ needs.check-stream.outputs.issue-title }}
