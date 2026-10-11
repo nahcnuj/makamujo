@@ -3,6 +3,7 @@ name: Stream Health Check
 on:
   schedule:
     - cron: "15 * * * *"  # Every hour at minute 15 (avoid exact hour boundaries)
+  workflow_dispatch:  # Allow manual trigger for testing
 
 permissions:
   contents: write
