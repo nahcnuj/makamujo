@@ -165,18 +165,30 @@ const streamBaselinePath = resolve(
 );
 const streamCommentRecordsDir = resolve(process.cwd(), "var", "comments");
 
+const initialStreamBaseline = loadStreamBaselineWithRecovery(
+  streamBaselinePath,
+  streamCommentRecordsDir,
+);
+// Single source of truth for everything persisted to
+// `var/stream-baseline.json`. Comment tracking (`onBaselineChange`) and
+// retained statistics (`onStatistics`) update disjoint fields, so each write
+// must persist the merged object: writing one field group alone used to drop
+// the other's data and leave the file "half-baked".
+let streamBaseline: StreamBaseline = initialStreamBaseline;
+const persistStreamBaseline = (): void => {
+  saveStreamBaseline(streamBaselinePath, streamBaseline);
+};
+
 const streamer = new MakaMujo(model, tts, {
-  baseline: loadStreamBaselineWithRecovery(
-    streamBaselinePath,
-    streamCommentRecordsDir,
-  ),
+  baseline: initialStreamBaseline,
   onBaselineChange: (baseline) => {
-    saveStreamBaseline(streamBaselinePath, baseline);
-    // Only update retainedWatchPageStatistics if the baseline has it;
-    // preserve previously persisted value otherwise (e.g., from onStatistics callback).
-    if (baseline.retainedStatistics !== undefined) {
-      retainedWatchPageStatistics = { ...baseline.retainedStatistics };
-    }
+    streamBaseline = {
+      ...streamBaseline,
+      previousStreamCommentCount: baseline.previousStreamCommentCount,
+      currentProgramUrl: baseline.currentProgramUrl,
+      currentProgramLatestCommentNo: baseline.currentProgramLatestCommentNo,
+    };
+    persistStreamBaseline();
   },
 });
 
@@ -189,7 +201,9 @@ let lastPublishedStreamState: unknown;
 // 未取得なら undefined のまま。`POST /api/meta` へフォールバックする。
 let watchPageDisplayedStatistics: DisplayedStatistics | undefined;
 // ページが `-` でも、PUT / POST に無い統計は消さない。
-let retainedWatchPageStatistics: DisplayedStatistics | undefined;
+// 前回プロセスの値を baseline から復元して、cron 再起動をまたいで保持する。
+let retainedWatchPageStatistics: DisplayedStatistics | undefined =
+  initialStreamBaseline.retainedStatistics;
 let currentSpeechState = { speech: "", silent: false };
 // WebSocket clients connected to the broadcasting server.
 const wsClients = new Set<WsLike>();
@@ -778,9 +792,12 @@ void startWatchPageStatisticsSource({
       statistics,
     );
     // Persist retained statistics to survive process restarts (e.g., cron every 11 min).
-    saveStreamBaseline(streamBaselinePath, {
+    // Merge into the shared baseline so comment-tracking fields are kept.
+    streamBaseline = {
+      ...streamBaseline,
       retainedStatistics: retainedWatchPageStatistics,
-    } as StreamBaseline);
+    };
+    persistStreamBaseline();
     broadcastCurrentPayloadLocal("onWatchPageStatistics");
   },
 });
