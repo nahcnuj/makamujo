@@ -22,6 +22,9 @@ jobs:
     name: Drive fix (reusing conahcnuj/issue-driver pattern)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      ISSUE_NUMBER: ${{ inputs.issue_number }}
+      ISSUE_TITLE: ${{ inputs.issue_title }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -35,14 +38,14 @@ jobs:
       - name: Run opencode to fix the issue (conahcnuj pattern)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bunx opencode --issue ${{ inputs.issue_number }}
+        run: bunx opencode --issue "$ISSUE_NUMBER"
 
       - name: Comment on issue
         uses: actions/github-script@v7
         with:
           script: |
-            const issueNumber = parseInt('${{ inputs.issue_number }}');
-            const issueTitle = '${{ inputs.issue_title }}';
+            const issueNumber = parseInt(process.env.ISSUE_NUMBER);
+            const issueTitle = process.env.ISSUE_TITLE;
 
             const body = `## Auto-drive 開始 (conahcnuj pattern)
 
