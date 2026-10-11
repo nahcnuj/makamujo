@@ -333,7 +333,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error("[ERROR] Stream check failed:", error);
-  process.exitCode = 1;
-});
+if (import.meta.main) {
+  main().catch((error) => {
+    console.error("[ERROR] Stream check failed:", error);
+    process.exitCode = 1;
+  });
+}
