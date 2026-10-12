@@ -17,12 +17,6 @@ on:
         description: Issue or pull request number to continue
         required: true
         type: number
-  workflow_call:
-    inputs:
-      number:
-        description: Issue or pull request number to continue
-        required: true
-        type: number
 
 permissions:
   contents: read
@@ -33,7 +27,7 @@ jobs:
     uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@dedc0091d368773aa5bbb0ec5e882737209aa334
     with:
       number: ${{ inputs.number }}
-      # The caller's repository (stream-health-check.yml) owns the issue; the
-      # reusable workflow's default would drive conahcnuj instead.
+      # The caller's repository owns the issue; the reusable workflow's
+      # default would drive conahcnuj instead.
       repository: ${{ github.repository }}
     secrets: inherit
