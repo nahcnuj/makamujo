@@ -79,7 +79,9 @@ jobs:
     name: Auto-drive fix
     needs: check-stream
     if: failure() && needs.check-stream.result == 'failure' && needs.check-stream.outputs.issue-number != ''
-    uses: ./.github/workflows/auto-drive.yml
+    uses: ./.github/workflows/issue-driver.yml
     with:
-      issue_number: ${{ needs.check-stream.outputs.issue-number }}
+      # fromJSON: step outputs are strings, but the reusable workflow's
+      # `number` input is typed as a number.
+      number: ${{ fromJSON(needs.check-stream.outputs.issue-number) }}
     secrets: inherit
