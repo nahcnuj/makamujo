@@ -261,18 +261,55 @@ async function checkStream(): Promise<CheckResult> {
   }
 }
 
+/**
+ * Always persist the result, even when the check threw.
+ *
+ * The workflow's "Create issue if check failed" step reads this file
+ * unconditionally, so an unwritten file would abort issue creation and the
+ * auto-drive job would never be triggered.
+ */
+function writeResult(result: CheckResult): string {
+  const outputPath = join(process.cwd(), "stream-check-result.json");
+  writeFileSync(outputPath, JSON.stringify(result));
+  console.log(`[INFO] Result written to ${outputPath}`);
+  return outputPath;
+}
+
+export function toErrorResult(
+  error: unknown,
+  timestampJst: string,
+): CheckResult {
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    ok: false,
+    timestampJst,
+    phenomena: [`チェック中に想定外のエラーが発生しました: ${message}`],
+    details: {
+      audioPlaying: false,
+      videoPlaying: false,
+      gameScreenPlaying: false,
+    },
+  };
+}
+
 async function main() {
   console.log("[INFO] Starting stream health check...");
-  const result = await checkStream();
+  const startedAt = formatJst(new Date());
+
+  let result: CheckResult;
+  try {
+    result = await checkStream();
+  } catch (error) {
+    console.error("[ERROR] Stream check failed:", error);
+    result = toErrorResult(error, startedAt);
+  }
 
   console.log(`[RESULT] ok=${result.ok}`);
   console.log(`[RESULT] timestampJst=${result.timestampJst}`);
   console.log(`[RESULT] phenomena=${JSON.stringify(result.phenomena)}`);
   console.log(`[RESULT] details=${JSON.stringify(result.details)}`);
 
-  const outputPath = join(process.cwd(), "stream-check-result.json");
-  writeFileSync(outputPath, JSON.stringify(result));
-  console.log(`[INFO] Result written to ${outputPath}`);
+  writeResult(result);
 
   if (!result.ok) {
     process.exitCode = 1;
