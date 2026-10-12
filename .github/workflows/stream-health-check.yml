@@ -47,20 +47,22 @@ jobs:
             const details = JSON.stringify(result.details, null, 2);
 
             const title = `[Stream Health] 配信異常検知: ${timestamp} (JST)`;
-            const body = `## 配信状況チェックで異常を検知しました
-
-**確認時刻 (JST):** ${timestamp}
-
-**発生事象:**
-- ${phenomena}
-
-**詳細:**
-\`\`\`json
-${details}
-\`\`\`
-
----
-*このIssueは自動生成されました (GitHub Actions: Stream Health Check)*`;
+            const body = [
+              "## 配信状況チェックで異常を検知しました",
+              "",
+              `**確認時刻 (JST):** ${timestamp}`,
+              "",
+              "**発生事象:**",
+              `- ${phenomena}`,
+              "",
+              "**詳細:**",
+              "```json",
+              details,
+              "```",
+              "",
+              "---",
+              "*このIssueは自動生成されました (GitHub Actions: Stream Health Check)*",
+            ].join("\n");
 
             const { data: issue } = await github.rest.issues.create({
               owner: context.repo.owner,
