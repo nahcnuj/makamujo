@@ -7,6 +7,7 @@ import {
   isAudioPlaying,
   isOverallOk,
   isPictureMoving,
+  toErrorResult,
 } from "./check-stream.ts";
 
 describe("formatJst", () => {
@@ -93,5 +94,32 @@ describe("clipFromBox", () => {
       GAME_CLIP,
     );
     expect(clip).toEqual({ x: 100, y: 50, width: 600, height: 400 });
+  });
+});
+
+describe("toErrorResult", () => {
+  it("produces a failing result so the workflow can still file an issue", () => {
+    const result = toErrorResult(
+      new Error("Timeout 30000ms exceeded"),
+      "2024-01-15 21:30:45",
+    );
+    expect(result.ok).toBe(false);
+    expect(result.timestampJst).toBe("2024-01-15 21:30:45");
+    expect(result.phenomena).toEqual([
+      "チェック中に想定外のエラーが発生しました: Timeout 30000ms exceeded",
+    ]);
+    expect(result.details).toEqual({
+      audioPlaying: false,
+      videoPlaying: false,
+      gameScreenPlaying: false,
+    });
+  });
+
+  it("stringifies non-Error throwables", () => {
+    const result = toErrorResult("boom", "2024-01-15 21:30:45");
+    expect(result.ok).toBe(false);
+    expect(result.phenomena).toEqual([
+      "チェック中に想定外のエラーが発生しました: boom",
+    ]);
   });
 });

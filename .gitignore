@@ -156,3 +156,7 @@ ansible/.vault_pass
 # Accidental plaintext vault before encrypt
 ansible/group_vars/all/vault.yml.plain
 dist/
+
+# Driver commit message artifact (never commit)
+.commit-msg
+.c.commit-msg

@@ -3,6 +3,7 @@ name: Stream Health Check
 on:
   schedule:
     - cron: "15 * * * *"  # Every hour at minute 15 (avoid exact hour boundaries)
+  workflow_dispatch:  # Allow manual trigger for testing
 
 permissions:
   contents: write
@@ -18,7 +19,7 @@ jobs:
       issue-number: ${{ steps.create-issue.outputs.issue-number }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -36,7 +37,7 @@ jobs:
       - name: Create issue if check failed
         id: create-issue
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const fs = require('fs');
@@ -46,20 +47,22 @@ jobs:
             const details = JSON.stringify(result.details, null, 2);
 
             const title = `[Stream Health] 配信異常検知: ${timestamp} (JST)`;
-            const body = `## 配信状況チェックで異常を検知しました
-
-**確認時刻 (JST):** ${timestamp}
-
-**発生事象:**
-- ${phenomena}
-
-**詳細:**
-\`\`\`json
-${details}
-\`\`\`
-
----
-*このIssueは自動生成されました (GitHub Actions: Stream Health Check)*`;
+            const body = [
+              "## 配信状況チェックで異常を検知しました",
+              "",
+              `**確認時刻 (JST):** ${timestamp}`,
+              "",
+              "**発生事象:**",
+              `- ${phenomena}`,
+              "",
+              "**詳細:**",
+              "```json",
+              details,
+              "```",
+              "",
+              "---",
+              "*このIssueは自動生成されました (GitHub Actions: Stream Health Check)*",
+            ].join("\n");
 
             const { data: issue } = await github.rest.issues.create({
               owner: context.repo.owner,

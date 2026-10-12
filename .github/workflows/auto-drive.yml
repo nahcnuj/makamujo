@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout conahcnuj
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: nahcnuj/conahcnuj
           ref: aae2dd50c828010104ed54b3fd88a899c1275863
