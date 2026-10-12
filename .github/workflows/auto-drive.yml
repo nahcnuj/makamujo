@@ -7,6 +7,13 @@ on:
         description: Issue number to address
         required: true
         type: string
+    secrets:
+      APP_ID:
+        required: true
+      INSTALLATION_ID:
+        required: true
+      PRIVATE_KEY:
+        required: true
 
 permissions:
   contents: write
@@ -24,6 +31,24 @@ jobs:
         with:
           repository: nahcnuj/conahcnuj
           ref: aae2dd50c828010104ed54b3fd88a899c1275863
+
+      - name: Stage App private key and app.env
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+          INSTALLATION_ID: ${{ secrets.INSTALLATION_ID }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+        run: |
+          pem="$RUNNER_TEMP/conahcnuj-app.pem"
+          printf '%s\n' "$PRIVATE_KEY" > "$pem"
+          chmod 600 "$pem"
+          cat > gh-app/app.env <<EOF
+          APP_ID="$APP_ID"
+          INSTALLATION_ID="$INSTALLATION_ID"
+          PRIVATE_KEY_PATH="$pem"
+          BASH_EXE="/usr/bin/bash"
+          EOF
+          APP_SLUG="$(bash gh-app/app-slug.sh)"
+          printf 'APP_SLUG="%s"\n' "${APP_SLUG}" >> gh-app/app.env
 
       - name: Run conahcnuj driver
         env:
