@@ -4,9 +4,16 @@ import { chromium, type Page } from "playwright";
 
 const WATCH_PAGE_URL = "https://live.nicovideo.jp/watch/user/14171889";
 const CHECK_DURATION_MS = 10_000;
+const FPS_BUCKET_MS = 1_000;
 const NAVIGATION_TIMEOUT_MS = 60_000;
-const SCREENSHOT_QUALITY = 80;
-const MIN_DIFF_RATIO = 0.01;
+const MAX_SAMPLE_DIMENSION = 128;
+const PIXEL_CHANNEL_TOLERANCE = 16;
+/** A sampled frame counts as "changed" when this fraction of pixels moved. */
+const MIN_CHANGED_RATIO = 0.001;
+/** Whole video: minimum moving frames per second over the window. */
+export const VIDEO_MIN_FPS = 24;
+/** Game panel: minimum moving frames per second over the window. */
+export const GAME_MIN_FPS = 8;
 
 /** Left 60% of the video: game panel on the 10×8 layout. */
 export const GAME_CLIP = {
@@ -30,8 +37,10 @@ export interface CheckResult {
     gameScreenPlaying: boolean;
     decodedAudioBytesStart?: number;
     decodedAudioBytesEnd?: number;
-    videoDiffRatio?: number;
-    gameDiffRatio?: number;
+    videoMinFps?: number;
+    videoAvgFps?: number;
+    gameMinFps?: number;
+    gameAvgFps?: number;
     pageTitle?: string;
     pageUrl?: string;
   };
@@ -59,8 +68,15 @@ export function isAudioPlaying(
   return decodedBytesEnd > decodedBytesStart;
 }
 
-export function isPictureMoving(diffRatio: number): boolean {
-  return diffRatio >= MIN_DIFF_RATIO;
+/**
+ * A picture counts as moving only when its slowest one-second bucket keeps
+ * enough changed frames. A threshold of N means "N FPS or below is an error".
+ */
+export function isFpsAboveThreshold(
+  minFps: number,
+  thresholdFps: number,
+): boolean {
+  return minFps > thresholdFps;
 }
 
 export function isOverallOk(
@@ -71,37 +87,78 @@ export function isOverallOk(
   return audioPlaying && videoPlaying && gameScreenPlaying;
 }
 
-export function calculateDiffRatio(buf1: Buffer, buf2: Buffer): number {
-  if (buf1.length !== buf2.length) return 1;
-  let diff = 0;
-  for (let i = 0; i < buf1.length; i++) {
-    if (buf1[i] !== buf2[i]) diff++;
+export interface MotionSample {
+  /** Milliseconds since the sampler started. */
+  elapsedMs: number;
+  /** The whole downscaled frame differs from the previous frame. */
+  wholeChanged: boolean;
+  /** The left game-panel region differs from the previous frame. */
+  gameChanged: boolean;
+}
+
+export interface MotionSamples {
+  samples: MotionSample[];
+  /** Wall-clock milliseconds the sampler ran. */
+  elapsedMs: number;
+  /** Reading pixels threw (e.g. tainted canvas); comparison is impossible. */
+  tainted: boolean;
+}
+
+export interface FpsSummary {
+  /** Fewest changed frames in any one-second bucket. */
+  minFps: number;
+  /** Changed frames per second over the whole window. */
+  avgFps: number;
+  /** Total adjacent pairs that differed. */
+  changedFrames: number;
+  /** Total adjacent pairs compared. */
+  comparedFrames: number;
+}
+
+/**
+ * Summarise how fast a picture kept changing, in changed frames per second.
+ *
+ * The in-page sampler records, for every presented frame, whether it differs
+ * from the previous frame. Samples are grouped into one-second buckets and
+ * each bucket yields an FPS value; the minimum across buckets exposes even a
+ * brief freeze, which a window-wide average would hide. A bucket with no
+ * samples at all (the picture stopped presenting frames) counts as zero.
+ */
+export function summarizeFps(
+  samples: MotionSample[],
+  pickChanged: (sample: MotionSample) => boolean,
+  bucketMs: number,
+  windowMs: number,
+): FpsSummary {
+  const bucketCount = Math.max(1, Math.ceil(windowMs / bucketMs));
+  const bucketChanged = new Array<number>(bucketCount).fill(0);
+  let comparedFrames = 0;
+  let changedFrames = 0;
+  for (const sample of samples) {
+    if (sample.elapsedMs < 0 || sample.elapsedMs >= windowMs) continue;
+    const index = Math.min(
+      Math.floor(sample.elapsedMs / bucketMs),
+      bucketCount - 1,
+    );
+    comparedFrames += 1;
+    if (pickChanged(sample)) {
+      changedFrames += 1;
+      bucketChanged[index] = (bucketChanged[index] ?? 0) + 1;
+    }
   }
-  return diff / buf1.length;
-}
-
-export function clipFromBox(
-  box: { x: number; y: number; width: number; height: number },
-  ratios: typeof GAME_CLIP,
-): { x: number; y: number; width: number; height: number } {
+  const windowSec = Math.max(windowMs, 1) / 1000;
+  const bucketSec = Math.max(bucketMs, 1) / 1000;
+  let minFps = Number.POSITIVE_INFINITY;
+  for (const count of bucketChanged) {
+    minFps = Math.min(minFps, count / bucketSec);
+  }
+  if (!Number.isFinite(minFps)) minFps = 0;
   return {
-    x: box.x + box.width * ratios.xRatio,
-    y: box.y + box.height * ratios.yRatio,
-    width: box.width * ratios.widthRatio,
-    height: box.height * ratios.heightRatio,
+    minFps,
+    avgFps: changedFrames / windowSec,
+    changedFrames,
+    comparedFrames,
   };
-}
-
-async function screenshotClip(
-  page: Page,
-  clip: { x: number; y: number; width: number; height: number },
-): Promise<Buffer | null> {
-  if (clip.width < 1 || clip.height < 1) return null;
-  return page.screenshot({
-    type: "jpeg",
-    quality: SCREENSHOT_QUALITY,
-    clip,
-  });
 }
 
 async function readVideoProbe(page: Page): Promise<{
@@ -116,6 +173,120 @@ async function readVideoProbe(page: Page): Promise<{
       decodedAudioBytes: video.webkitAudioDecodedByteCount ?? 0,
     };
   });
+}
+
+/**
+ * Watch the playing video for the whole window and record, for every
+ * presented frame, whether it differs from the previous frame.
+ *
+ * Playwright screenshots are far too slow to resolve a 24 FPS threshold
+ * (each shot costs ~100ms), so frames are captured inside the page:
+ * requestAnimationFrame keeps ticking at the display rate even while the
+ * picture is frozen, which is exactly what exposes a stall as 0 changed
+ * frames in that second. Drawing the element needs no screenshot round
+ * trip; if the canvas is tainted the read throws and the caller treats the
+ * window as unmeasurable instead of guessing.
+ */
+async function sampleMotion(
+  page: Page,
+  durationMs: number,
+  gameWidthRatio: number,
+  maxDimension: number,
+  channelTolerance: number,
+  minChangedRatio: number,
+): Promise<MotionSamples> {
+  return page.evaluate(
+    async ({
+      durationMs,
+      gameWidthRatio,
+      maxDimension,
+      channelTolerance,
+      minChangedRatio,
+    }) => {
+      const video = document.querySelector("video");
+      if (!video?.videoWidth || !video.videoHeight) {
+        return { samples: [], elapsedMs: 0, tainted: false };
+      }
+      const scale = Math.min(
+        1,
+        maxDimension / Math.max(video.videoWidth, video.videoHeight),
+      );
+      const width = Math.max(1, Math.round(video.videoWidth * scale));
+      const height = Math.max(1, Math.round(video.videoHeight * scale));
+      const gameWidth = Math.max(1, Math.floor(width * gameWidthRatio));
+      const canvas = new OffscreenCanvas(width, height);
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) {
+        return { samples: [], elapsedMs: 0, tainted: false };
+      }
+      const samples: MotionSample[] = [];
+      let previous: Uint8ClampedArray | null = null;
+      const start = performance.now();
+      try {
+        await new Promise<void>((resolve) => {
+          const deadline = start + durationMs;
+          const safety = setTimeout(resolve, durationMs + 2_000);
+          const tick = () => {
+            const now = performance.now();
+            if (now >= deadline) {
+              clearTimeout(safety);
+              resolve();
+              return;
+            }
+            context.drawImage(video, 0, 0, width, height);
+            const current = context.getImageData(0, 0, width, height).data;
+            if (previous) {
+              let wholeDiff = 0;
+              let gameDiff = 0;
+              const total = width * height;
+              for (let p = 0; p < total; p++) {
+                const i = p * 4;
+                const redDiff = Math.abs(
+                  (previous[i] ?? 0) - (current[i] ?? 0),
+                );
+                const greenDiff = Math.abs(
+                  (previous[i + 1] ?? 0) - (current[i + 1] ?? 0),
+                );
+                const blueDiff = Math.abs(
+                  (previous[i + 2] ?? 0) - (current[i + 2] ?? 0),
+                );
+                if (
+                  redDiff > channelTolerance ||
+                  greenDiff > channelTolerance ||
+                  blueDiff > channelTolerance
+                ) {
+                  wholeDiff += 1;
+                  if (p % width < gameWidth) gameDiff += 1;
+                }
+              }
+              samples.push({
+                elapsedMs: now - start,
+                wholeChanged: wholeDiff / total > minChangedRatio,
+                gameChanged: gameDiff / (gameWidth * height) > minChangedRatio,
+              });
+            }
+            previous = current;
+            requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        });
+      } catch {
+        return {
+          samples,
+          elapsedMs: performance.now() - start,
+          tainted: true,
+        };
+      }
+      return { samples, elapsedMs: performance.now() - start, tainted: false };
+    },
+    {
+      durationMs,
+      gameWidthRatio,
+      maxDimension,
+      channelTolerance,
+      minChangedRatio,
+    },
+  );
 }
 
 async function checkStream(): Promise<CheckResult> {
@@ -174,20 +345,17 @@ async function checkStream(): Promise<CheckResult> {
       return { ok: false, timestampJst, phenomena, details };
     }
 
-    const box = await video.boundingBox();
-    if (!box) {
-      phenomena.push("ビデオ要素の位置を取得できません");
-      return { ok: false, timestampJst, phenomena, details };
-    }
-
-    const gameClip = clipFromBox(box, GAME_CLIP);
     const startProbe = await readVideoProbe(page);
     details.decodedAudioBytesStart = startProbe.decodedAudioBytes;
 
-    const videoStart = await screenshotClip(page, box);
-    const gameStart = await screenshotClip(page, gameClip);
-
-    await page.waitForTimeout(CHECK_DURATION_MS);
+    const motion = await sampleMotion(
+      page,
+      CHECK_DURATION_MS,
+      GAME_CLIP.widthRatio,
+      MAX_SAMPLE_DIMENSION,
+      PIXEL_CHANNEL_TOLERANCE,
+      MIN_CHANGED_RATIO,
+    );
 
     const endProbe = await readVideoProbe(page);
     if (!endProbe.found) {
@@ -195,9 +363,6 @@ async function checkStream(): Promise<CheckResult> {
       return { ok: false, timestampJst, phenomena, details };
     }
     details.decodedAudioBytesEnd = endProbe.decodedAudioBytes;
-
-    const videoEnd = await screenshotClip(page, box);
-    const gameEnd = await screenshotClip(page, gameClip);
 
     const audioPlaying = isAudioPlaying(
       startProbe.decodedAudioBytes,
@@ -215,38 +380,52 @@ async function checkStream(): Promise<CheckResult> {
     }
 
     let videoPlaying = false;
-    if (videoStart && videoEnd) {
-      const videoDiffRatio = calculateDiffRatio(videoStart, videoEnd);
-      details.videoDiffRatio = videoDiffRatio;
-      videoPlaying = isPictureMoving(videoDiffRatio);
+    if (motion.tainted || motion.samples.length < 2) {
+      phenomena.push("映像全体のフレームを取得できませんでした");
+    } else {
+      const videoFps = summarizeFps(
+        motion.samples,
+        (sample) => sample.wholeChanged,
+        FPS_BUCKET_MS,
+        CHECK_DURATION_MS,
+      );
+      details.videoMinFps = videoFps.minFps;
+      details.videoAvgFps = videoFps.avgFps;
+      videoPlaying = isFpsAboveThreshold(videoFps.minFps, VIDEO_MIN_FPS);
       if (!videoPlaying) {
         phenomena.push("映像全体が停止し続けています");
       } else {
         console.log(
-          `[INFO] Video moving: diff ratio = ${(videoDiffRatio * 100).toFixed(2)}%`,
+          `[INFO] Video moving: min fps = ${videoFps.minFps.toFixed(
+            1,
+          )} (avg ${videoFps.avgFps.toFixed(1)})`,
         );
       }
-    } else {
-      phenomena.push("映像全体のスクリーンショットを取得できませんでした");
     }
     details.videoPlaying = videoPlaying;
 
     let gameScreenPlaying = false;
-    if (gameStart && gameEnd) {
-      const gameDiffRatio = calculateDiffRatio(gameStart, gameEnd);
-      details.gameDiffRatio = gameDiffRatio;
-      gameScreenPlaying = isPictureMoving(gameDiffRatio);
+    if (motion.tainted || motion.samples.length < 2) {
+      phenomena.push("ゲーム画面部分のフレームを取得できませんでした");
+    } else {
+      const gameFps = summarizeFps(
+        motion.samples,
+        (sample) => sample.gameChanged,
+        FPS_BUCKET_MS,
+        CHECK_DURATION_MS,
+      );
+      details.gameMinFps = gameFps.minFps;
+      details.gameAvgFps = gameFps.avgFps;
+      gameScreenPlaying = isFpsAboveThreshold(gameFps.minFps, GAME_MIN_FPS);
       if (!gameScreenPlaying) {
         phenomena.push("ゲーム画面部分が停止し続けています");
       } else {
         console.log(
-          `[INFO] Game screen moving: diff ratio = ${(gameDiffRatio * 100).toFixed(2)}%`,
+          `[INFO] Game screen moving: min fps = ${gameFps.minFps.toFixed(
+            1,
+          )} (avg ${gameFps.avgFps.toFixed(1)})`,
         );
       }
-    } else {
-      phenomena.push(
-        "ゲーム画面部分のスクリーンショットを取得できませんでした",
-      );
     }
     details.gameScreenPlaying = gameScreenPlaying;
 
