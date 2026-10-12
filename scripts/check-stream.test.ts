@@ -8,6 +8,7 @@ import {
   isOverallOk,
   isPictureMoving,
   type SampledFrame,
+  summarizeMotion,
   toErrorResult,
 } from "./check-stream.ts";
 
@@ -129,6 +130,40 @@ describe("calculateDiffRatio", () => {
       data: [0, 0, 0, 255, 0, 0, 0, 255],
     };
     expect(calculateDiffRatio(before, after)).toBe(1);
+  });
+});
+
+describe("summarizeMotion", () => {
+  const solid = (value: number): SampledFrame => ({
+    width: 2,
+    height: 1,
+    data: [value, value, value, 255, value, value, value, 255],
+  });
+
+  it("reports no motion for empty or single-frame input", () => {
+    expect(summarizeMotion([])).toEqual({
+      meanDiffRatio: 0,
+      peakDiffRatio: 0,
+    });
+    expect(summarizeMotion([solid(0)])).toEqual({
+      meanDiffRatio: 0,
+      peakDiffRatio: 0,
+    });
+  });
+
+  it("reports no motion for identical consecutive frames", () => {
+    expect(summarizeMotion([solid(10), solid(10), solid(10)])).toEqual({
+      meanDiffRatio: 0,
+      peakDiffRatio: 0,
+    });
+  });
+
+  it("averages the changes between consecutive samples and keeps the peak", () => {
+    const frames = [solid(0), solid(255), solid(255)];
+    expect(summarizeMotion(frames)).toEqual({
+      meanDiffRatio: 0.5,
+      peakDiffRatio: 1,
+    });
   });
 });
 

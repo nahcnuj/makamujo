@@ -4,6 +4,8 @@ import { chromium, type Page } from "playwright";
 
 const WATCH_PAGE_URL = "https://live.nicovideo.jp/watch/user/14171889";
 const CHECK_DURATION_MS = 10_000;
+const SAMPLE_INTERVAL_MS = 1_000;
+const SAMPLE_COUNT = CHECK_DURATION_MS / SAMPLE_INTERVAL_MS + 1;
 const NAVIGATION_TIMEOUT_MS = 60_000;
 const SCREENSHOT_QUALITY = 80;
 const MIN_DIFF_RATIO = 0.01;
@@ -33,7 +35,9 @@ export interface CheckResult {
     decodedAudioBytesStart?: number;
     decodedAudioBytesEnd?: number;
     videoDiffRatio?: number;
+    videoPeakDiffRatio?: number;
     gameDiffRatio?: number;
+    gamePeakDiffRatio?: number;
     pageTitle?: string;
     pageUrl?: string;
   };
@@ -111,6 +115,44 @@ export function calculateDiffRatio(
     }
   }
   return changedPixels / (before.data.length / 4);
+}
+
+export interface MotionSummary {
+  /** Mean change between consecutive samples (0-1). */
+  meanDiffRatio: number;
+  /** Largest change between consecutive samples (0-1). */
+  peakDiffRatio: number;
+}
+
+/**
+ * Summarise how much a picture moved across a sequence of frames.
+ *
+ * Comparing only the first and last frame of a 10-second window measures
+ * whether the picture changed *at all*, but two unrelated moments of live
+ * video differ in most pixels, so that number saturates near 100% and reveals
+ * nothing about whether playback stayed smooth. Comparing consecutive samples
+ * instead reports ongoing motion: a frozen stream stays near 0% on every
+ * interval, while a playing stream keeps changing. The mean drives the pass/fail
+ * decision and the peak exposes bursts of motion.
+ */
+export function summarizeMotion(frames: SampledFrame[]): MotionSummary {
+  if (frames.length < 2) {
+    return { meanDiffRatio: 0, peakDiffRatio: 0 };
+  }
+  let ratioSum = 0;
+  let peakDiffRatio = 0;
+  for (let i = 1; i < frames.length; i++) {
+    const before = frames[i - 1];
+    const after = frames[i];
+    if (!before || !after) continue;
+    const ratio = calculateDiffRatio(before, after);
+    ratioSum += ratio;
+    peakDiffRatio = Math.max(peakDiffRatio, ratio);
+  }
+  return {
+    meanDiffRatio: ratioSum / (frames.length - 1),
+    peakDiffRatio,
+  };
 }
 
 export function clipFromBox(
@@ -266,10 +308,15 @@ async function checkStream(): Promise<CheckResult> {
     const startProbe = await readVideoProbe(page);
     details.decodedAudioBytesStart = startProbe.decodedAudioBytes;
 
-    const videoStart = await sampleClip(page, box);
-    const gameStart = await sampleClip(page, gameClip);
-
-    await page.waitForTimeout(CHECK_DURATION_MS);
+    const videoFrames: SampledFrame[] = [];
+    const gameFrames: SampledFrame[] = [];
+    for (let i = 0; i < SAMPLE_COUNT; i++) {
+      if (i > 0) await page.waitForTimeout(SAMPLE_INTERVAL_MS);
+      const videoFrame = await sampleClip(page, box);
+      const gameFrame = await sampleClip(page, gameClip);
+      if (videoFrame) videoFrames.push(videoFrame);
+      if (gameFrame) gameFrames.push(gameFrame);
+    }
 
     const endProbe = await readVideoProbe(page);
     if (!endProbe.found) {
@@ -277,9 +324,6 @@ async function checkStream(): Promise<CheckResult> {
       return { ok: false, timestampJst, phenomena, details };
     }
     details.decodedAudioBytesEnd = endProbe.decodedAudioBytes;
-
-    const videoEnd = await sampleClip(page, box);
-    const gameEnd = await sampleClip(page, gameClip);
 
     const audioPlaying = isAudioPlaying(
       startProbe.decodedAudioBytes,
@@ -297,15 +341,20 @@ async function checkStream(): Promise<CheckResult> {
     }
 
     let videoPlaying = false;
-    if (videoStart && videoEnd) {
-      const videoDiffRatio = calculateDiffRatio(videoStart, videoEnd);
-      details.videoDiffRatio = videoDiffRatio;
-      videoPlaying = isPictureMoving(videoDiffRatio);
+    const videoMotion = summarizeMotion(videoFrames);
+    if (videoFrames.length >= 2) {
+      details.videoDiffRatio = videoMotion.meanDiffRatio;
+      details.videoPeakDiffRatio = videoMotion.peakDiffRatio;
+      videoPlaying = isPictureMoving(videoMotion.meanDiffRatio);
       if (!videoPlaying) {
         phenomena.push("映像全体が停止し続けています");
       } else {
         console.log(
-          `[INFO] Video moving: diff ratio = ${(videoDiffRatio * 100).toFixed(2)}%`,
+          `[INFO] Video moving: mean diff ratio = ${(
+            videoMotion.meanDiffRatio * 100
+          ).toFixed(
+            2,
+          )}% (peak ${(videoMotion.peakDiffRatio * 100).toFixed(2)}%)`,
         );
       }
     } else {
@@ -314,15 +363,20 @@ async function checkStream(): Promise<CheckResult> {
     details.videoPlaying = videoPlaying;
 
     let gameScreenPlaying = false;
-    if (gameStart && gameEnd) {
-      const gameDiffRatio = calculateDiffRatio(gameStart, gameEnd);
-      details.gameDiffRatio = gameDiffRatio;
-      gameScreenPlaying = isPictureMoving(gameDiffRatio);
+    const gameMotion = summarizeMotion(gameFrames);
+    if (gameFrames.length >= 2) {
+      details.gameDiffRatio = gameMotion.meanDiffRatio;
+      details.gamePeakDiffRatio = gameMotion.peakDiffRatio;
+      gameScreenPlaying = isPictureMoving(gameMotion.meanDiffRatio);
       if (!gameScreenPlaying) {
         phenomena.push("ゲーム画面部分が停止し続けています");
       } else {
         console.log(
-          `[INFO] Game screen moving: diff ratio = ${(gameDiffRatio * 100).toFixed(2)}%`,
+          `[INFO] Game screen moving: mean diff ratio = ${(
+            gameMotion.meanDiffRatio * 100
+          ).toFixed(
+            2,
+          )}% (peak ${(gameMotion.peakDiffRatio * 100).toFixed(2)}%)`,
         );
       }
     } else {
