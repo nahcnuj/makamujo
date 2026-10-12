@@ -79,9 +79,14 @@ jobs:
     name: Auto-drive fix
     needs: check-stream
     if: failure() && needs.check-stream.result == 'failure' && needs.check-stream.outputs.issue-number != ''
-    uses: ./.github/workflows/issue-driver.yml
+    # Call the conahcnuj reusable workflow directly (pin to a commit so an
+    # upstream change cannot alter this repository's CI without a review).
+    uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@dedc0091d368773aa5bbb0ec5e882737209aa334
     with:
       # fromJSON: step outputs are strings, but the reusable workflow's
       # `number` input is typed as a number.
       number: ${{ fromJSON(needs.check-stream.outputs.issue-number) }}
+      # The caller's repository owns the issue; the reusable workflow's
+      # default would drive conahcnuj instead.
+      repository: ${{ github.repository }}
     secrets: inherit
