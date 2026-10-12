@@ -7,6 +7,7 @@ import {
   isAudioPlaying,
   isOverallOk,
   isPictureMoving,
+  type SampledFrame,
   toErrorResult,
 } from "./check-stream.ts";
 
@@ -62,28 +63,72 @@ describe("isOverallOk", () => {
 });
 
 describe("calculateDiffRatio", () => {
-  it("returns 0 for identical buffers", () => {
-    const buf1 = Buffer.from([1, 2, 3, 4]);
-    const buf2 = Buffer.from([1, 2, 3, 4]);
-    expect(calculateDiffRatio(buf1, buf2)).toBe(0);
+  const frame = (pixels: number[][]): SampledFrame => ({
+    width: 1,
+    height: pixels.length,
+    data: pixels.flat(),
   });
 
-  it("returns 1 for completely different buffers", () => {
-    const buf1 = Buffer.from([1, 2, 3, 4]);
-    const buf2 = Buffer.from([5, 6, 7, 8]);
-    expect(calculateDiffRatio(buf1, buf2)).toBe(1);
+  it("returns 0 for identical frames", () => {
+    const before = frame([
+      [1, 2, 3, 255],
+      [4, 5, 6, 255],
+    ]);
+    const after = frame([
+      [1, 2, 3, 255],
+      [4, 5, 6, 255],
+    ]);
+    expect(calculateDiffRatio(before, after)).toBe(0);
   });
 
-  it("returns ratio for partially different buffers", () => {
-    const buf1 = Buffer.from([1, 2, 3, 4]);
-    const buf2 = Buffer.from([1, 2, 5, 6]);
-    expect(calculateDiffRatio(buf1, buf2)).toBe(0.5);
+  it("returns 1 for completely different frames", () => {
+    const before = frame([
+      [0, 0, 0, 255],
+      [10, 20, 30, 255],
+    ]);
+    const after = frame([
+      [255, 255, 255, 255],
+      [250, 240, 230, 255],
+    ]);
+    expect(calculateDiffRatio(before, after)).toBe(1);
   });
 
-  it("returns 1 for buffers of different lengths", () => {
-    const buf1 = Buffer.from([1, 2, 3]);
-    const buf2 = Buffer.from([1, 2, 3, 4]);
-    expect(calculateDiffRatio(buf1, buf2)).toBe(1);
+  it("returns the ratio of changed pixels for partial changes", () => {
+    const before = frame([
+      [0, 0, 0, 255],
+      [0, 0, 0, 255],
+    ]);
+    const after = frame([
+      [255, 255, 255, 255],
+      [0, 0, 0, 255],
+    ]);
+    expect(calculateDiffRatio(before, after)).toBe(0.5);
+  });
+
+  it("ignores changes within the per-channel tolerance", () => {
+    const before = frame([[100, 100, 100, 255]]);
+    const after = frame([[110, 110, 110, 255]]);
+    expect(calculateDiffRatio(before, after)).toBe(0);
+  });
+
+  it("ignores alpha-only changes", () => {
+    const before = frame([[10, 20, 30, 0]]);
+    const after = frame([[10, 20, 30, 255]]);
+    expect(calculateDiffRatio(before, after)).toBe(0);
+  });
+
+  it("returns 1 for frames of different dimensions", () => {
+    const before: SampledFrame = {
+      width: 1,
+      height: 1,
+      data: [0, 0, 0, 255],
+    };
+    const after: SampledFrame = {
+      width: 1,
+      height: 2,
+      data: [0, 0, 0, 255, 0, 0, 0, 255],
+    };
+    expect(calculateDiffRatio(before, after)).toBe(1);
   });
 });
 

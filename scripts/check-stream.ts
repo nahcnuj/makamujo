@@ -7,6 +7,8 @@ const CHECK_DURATION_MS = 10_000;
 const NAVIGATION_TIMEOUT_MS = 60_000;
 const SCREENSHOT_QUALITY = 80;
 const MIN_DIFF_RATIO = 0.01;
+const MAX_SAMPLE_DIMENSION = 128;
+const PIXEL_CHANNEL_TOLERANCE = 16;
 
 /** Left 60% of the video: game panel on the 10×8 layout. */
 export const GAME_CLIP = {
@@ -71,13 +73,44 @@ export function isOverallOk(
   return audioPlaying && videoPlaying && gameScreenPlaying;
 }
 
-export function calculateDiffRatio(buf1: Buffer, buf2: Buffer): number {
-  if (buf1.length !== buf2.length) return 1;
-  let diff = 0;
-  for (let i = 0; i < buf1.length; i++) {
-    if (buf1[i] !== buf2[i]) diff++;
+export interface SampledFrame {
+  width: number;
+  height: number;
+  /** Row-major RGBA bytes of the downscaled frame. */
+  data: number[];
+}
+
+/**
+ * Ratio of sampled pixels that changed beyond a per-channel tolerance.
+ *
+ * Compressed screenshots must not be compared as raw bytes: JPEG encodes
+ * every block against the whole frame, so even a single moving pixel rewrites
+ * most of the stream (and its length), which saturated the old byte diff at
+ * 100%. Decoding first measures how much of the picture actually changed.
+ */
+export function calculateDiffRatio(
+  before: SampledFrame,
+  after: SampledFrame,
+  channelTolerance = PIXEL_CHANNEL_TOLERANCE,
+): number {
+  if (before.width !== after.width || before.height !== after.height) return 1;
+  if (before.data.length !== after.data.length || before.data.length === 0) {
+    return 1;
   }
-  return diff / buf1.length;
+  let changedPixels = 0;
+  for (let i = 0; i < before.data.length; i += 4) {
+    const redDiff = Math.abs((before.data[i] ?? 0) - (after.data[i] ?? 0));
+    const greenDiff = Math.abs(
+      (before.data[i + 1] ?? 0) - (after.data[i + 1] ?? 0),
+    );
+    const blueDiff = Math.abs(
+      (before.data[i + 2] ?? 0) - (after.data[i + 2] ?? 0),
+    );
+    if (Math.max(redDiff, greenDiff, blueDiff) > channelTolerance) {
+      changedPixels++;
+    }
+  }
+  return changedPixels / (before.data.length / 4);
 }
 
 export function clipFromBox(
@@ -102,6 +135,55 @@ async function screenshotClip(
     quality: SCREENSHOT_QUALITY,
     clip,
   });
+}
+
+/**
+ * Decode a screenshot inside the page and return its downscaled RGBA pixels.
+ *
+ * The image is reconstructed from an in-memory blob instead of a data URL so
+ * the page's CSP cannot block the decode. Downscaling both keeps the payload
+ * small and averages away JPEG compression noise.
+ */
+async function sampleFrame(
+  page: Page,
+  shot: Buffer,
+  maxDimension: number,
+): Promise<SampledFrame> {
+  const base64 = shot.toString("base64");
+  return page.evaluate(
+    async ({ base64, maxDimension }) => {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const bitmap = await createImageBitmap(
+        new Blob([bytes], { type: "image/jpeg" }),
+      );
+      const scale = Math.min(
+        1,
+        maxDimension / Math.max(bitmap.width, bitmap.height),
+      );
+      const width = Math.max(1, Math.round(bitmap.width * scale));
+      const height = Math.max(1, Math.round(bitmap.height * scale));
+      const canvas = new OffscreenCanvas(width, height);
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Failed to acquire a 2D context");
+      context.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close();
+      const imageData = context.getImageData(0, 0, width, height);
+      return { width, height, data: Array.from(imageData.data) };
+    },
+    { base64, maxDimension },
+  );
+}
+
+async function sampleClip(
+  page: Page,
+  clip: { x: number; y: number; width: number; height: number },
+): Promise<SampledFrame | null> {
+  const shot = await screenshotClip(page, clip);
+  return shot ? await sampleFrame(page, shot, MAX_SAMPLE_DIMENSION) : null;
 }
 
 async function readVideoProbe(page: Page): Promise<{
@@ -184,8 +266,8 @@ async function checkStream(): Promise<CheckResult> {
     const startProbe = await readVideoProbe(page);
     details.decodedAudioBytesStart = startProbe.decodedAudioBytes;
 
-    const videoStart = await screenshotClip(page, box);
-    const gameStart = await screenshotClip(page, gameClip);
+    const videoStart = await sampleClip(page, box);
+    const gameStart = await sampleClip(page, gameClip);
 
     await page.waitForTimeout(CHECK_DURATION_MS);
 
@@ -196,8 +278,8 @@ async function checkStream(): Promise<CheckResult> {
     }
     details.decodedAudioBytesEnd = endProbe.decodedAudioBytes;
 
-    const videoEnd = await screenshotClip(page, box);
-    const gameEnd = await screenshotClip(page, gameClip);
+    const videoEnd = await sampleClip(page, box);
+    const gameEnd = await sampleClip(page, gameClip);
 
     const audioPlaying = isAudioPlaying(
       startProbe.decodedAudioBytes,
