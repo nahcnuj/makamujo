@@ -35,6 +35,11 @@ export const BROWSER_TEMPORARY_DIRECTORY_PREFIXES = [
   PLAYWRIGHT_FALLBACK_TEMPORARY_DIRECTORY_PREFIX,
   // playwright-core creates this scratch dir on every launch.
   "playwright-artifacts-",
+  // ...and this Chromium profile when no userDataDir is passed, as the watch
+  // page browser (composition/chromiumWatchPageBrowser.ts) does. Only a
+  // graceful browser.close() removes it, which never happens when the server
+  // is SIGTERM'd, so the tens-of-MB profile survives every restart.
+  "playwright_chromiumdev_profile-",
   // puppeteer-extra-plugin-stealth creates this when no userDataDir is passed.
   "puppeteer_dev_profile-",
   // Chromium's own per-process scratch directories.
