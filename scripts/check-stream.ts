@@ -6,6 +6,11 @@ const WATCH_PAGE_URL = "https://live.nicovideo.jp/watch/user/14171889";
 const CHECK_DURATION_MS = 10_000;
 const FPS_BUCKET_MS = 1_000;
 const NAVIGATION_TIMEOUT_MS = 60_000;
+/** The player loads asynchronously; sampling before it does yields no frames. */
+const PLAYBACK_READY_TIMEOUT_MS = 30_000;
+const PLAYBACK_READY_POLL_MS = 250;
+/** Playback has to advance this far before the startup frames are skipped. */
+const PLAYBACK_WARMUP_SECONDS = 2;
 const MAX_SAMPLE_DIMENSION = 128;
 const PIXEL_CHANNEL_TOLERANCE = 16;
 /** A sampled frame counts as "changed" when this fraction of pixels moved. */
@@ -161,18 +166,88 @@ export function summarizeFps(
   };
 }
 
-async function readVideoProbe(page: Page): Promise<{
+export interface VideoState {
   found: boolean;
+  /** Intrinsic width; `0` until the player has decoded a frame. */
+  videoWidth: number;
+  /** `HTMLMediaElement.HAVE_CURRENT_DATA` is `2`. */
+  readyState: number;
+  paused: boolean;
+  currentTime: number;
   decodedAudioBytes: number;
-}> {
+}
+
+async function readVideoState(page: Page): Promise<VideoState> {
   return page.evaluate(() => {
     const video = document.querySelector("video") as VideoProbe | null;
-    if (!video) return { found: false, decodedAudioBytes: 0 };
+    if (!video) {
+      return {
+        found: false,
+        videoWidth: 0,
+        readyState: 0,
+        paused: true,
+        currentTime: 0,
+        decodedAudioBytes: 0,
+      };
+    }
     return {
       found: true,
+      videoWidth: video.videoWidth,
+      readyState: video.readyState,
+      paused: video.paused,
+      currentTime: video.currentTime,
       decodedAudioBytes: video.webkitAudioDecodedByteCount ?? 0,
     };
   });
+}
+
+/**
+ * The player is only measurable once it has decoded its first frame
+ * (`videoWidth > 0`, `readyState >= HAVE_CURRENT_DATA`) and is not paused.
+ * `sampleMotion` draws the element on every animation frame; an element that
+ * never loaded has no intrinsic size, so it yields no frames at all and the
+ * check would misreport a healthy stream as having no picture.
+ */
+export function isVideoReady(state: {
+  videoWidth: number;
+  readyState: number;
+  paused: boolean;
+}): boolean {
+  return (
+    state.videoWidth > 0 && state.readyState >= 2 && state.paused === false
+  );
+}
+
+/**
+ * Poll the player until it is decodable and advancing past its startup frames.
+ *
+ * Opening the watch page resolves `waitForSelector("video")` long before the
+ * player attaches a media source, so `videoWidth` is still `0` for a few
+ * seconds. Measuring in that window records zero decoded audio and no frames.
+ * The warm-up also skips the static first frames the player paints while it
+ * buffers, which would otherwise show up as a spurious one-second freeze.
+ */
+async function waitForVideoPlayback(
+  page: Page,
+  timeoutMs: number,
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  let warmupBase: number | null = null;
+  for (;;) {
+    const state = await readVideoState(page);
+    if (isVideoReady(state)) {
+      if (warmupBase === null) {
+        warmupBase = state.currentTime;
+      } else if (state.currentTime - warmupBase >= PLAYBACK_WARMUP_SECONDS) {
+        return true;
+      }
+    } else {
+      // The player dropped out (paused / re-buffering); restart the warm-up.
+      warmupBase = null;
+    }
+    if (Date.now() >= deadline) return false;
+    await page.waitForTimeout(PLAYBACK_READY_POLL_MS);
+  }
 }
 
 /**
@@ -345,7 +420,16 @@ async function checkStream(): Promise<CheckResult> {
       return { ok: false, timestampJst, phenomena, details };
     }
 
-    const startProbe = await readVideoProbe(page);
+    const playbackStarted = await waitForVideoPlayback(
+      page,
+      PLAYBACK_READY_TIMEOUT_MS,
+    );
+    if (!playbackStarted) {
+      phenomena.push("映像の再生が始まりませんでした");
+      return { ok: false, timestampJst, phenomena, details };
+    }
+
+    const startProbe = await readVideoState(page);
     details.decodedAudioBytesStart = startProbe.decodedAudioBytes;
 
     const motion = await sampleMotion(
@@ -357,7 +441,7 @@ async function checkStream(): Promise<CheckResult> {
       MIN_CHANGED_RATIO,
     );
 
-    const endProbe = await readVideoProbe(page);
+    const endProbe = await readVideoState(page);
     if (!endProbe.found) {
       phenomena.push("チェック中にビデオ要素が消失しました");
       return { ok: false, timestampJst, phenomena, details };
