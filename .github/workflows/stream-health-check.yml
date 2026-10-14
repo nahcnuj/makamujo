@@ -79,9 +79,9 @@ jobs:
     name: Auto-drive fix
     needs: check-stream
     if: failure() && needs.check-stream.result == 'failure' && needs.check-stream.outputs.issue-number != ''
-    # The reusable workflow resolves the environment in this repository, so
-    # the App secrets must live in makamujo's `conahcnuj` environment.
-    environment: conahcnuj
+    # Reusable workflow call jobs cannot declare a job-level `environment`;
+    # it is passed as an input below so the App secrets are resolved from
+    # makamujo's `conahcnuj` environment inside the reusable workflow.
     # Call the conahcnuj reusable workflow directly (pin to a commit so an
     # upstream change cannot alter this repository's CI without a review).
     uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@9dc2384e3ddc85dfc95314858bbf96272417b882
