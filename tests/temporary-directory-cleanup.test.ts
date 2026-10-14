@@ -118,6 +118,19 @@ describe("temporary directory ownership", () => {
     );
   });
 
+  test("the watch page browser's auto-created profile is swept", () => {
+    const browser = read("composition/chromiumWatchPageBrowser.ts");
+
+    // chromium.launch() without a userDataDir makes playwright-core mkdtemp a
+    // `playwright_chromiumdev_profile-*` directory that only a graceful close
+    // removes. The server is stopped with SIGTERM, so bin/stop has to prune it
+    // or the 2 GB temp filesystem fills up across restarts (memory pressure).
+    expect(browser).toContain("chromium.launch(");
+    expect(BROWSER_TEMPORARY_DIRECTORY_PREFIXES).toContain(
+      "playwright_chromiumdev_profile-",
+    );
+  });
+
   test("bin/cleanup-temp leaves the running server's scratch dir alone", () => {
     const cleanup = read("bin/cleanup-temp.ts");
 

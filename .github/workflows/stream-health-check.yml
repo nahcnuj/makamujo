@@ -84,7 +84,7 @@ jobs:
     # makamujo's `conahcnuj` environment inside the reusable workflow.
     # Call the conahcnuj reusable workflow directly (pin to a commit so an
     # upstream change cannot alter this repository's CI without a review).
-    uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@dedc0091d368773aa5bbb0ec5e882737209aa334
+    uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@9dc2384e3ddc85dfc95314858bbf96272417b882
     with:
       # fromJSON: step outputs are strings, but the reusable workflow's
       # `number` input is typed as a number.
