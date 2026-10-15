@@ -4,6 +4,7 @@ import {
   formatJst,
   GAME_MIN_FPS,
   isAudioPlaying,
+  isCapturableMediaSource,
   isFpsAboveThreshold,
   isOverallOk,
   isVideoReady,
@@ -227,6 +228,54 @@ describe("summarizeFps", () => {
     const summary = summarizeFps(samples, (s) => s.wholeChanged, 1000, 10000);
     expect(summary.changedFrames).toBe(100);
     expect(summary.comparedFrames).toBe(100);
+  });
+});
+
+describe("isCapturableMediaSource", () => {
+  const origin = "https://live.nicovideo.jp";
+
+  it("accepts the same-origin blob stream", () => {
+    expect(
+      isCapturableMediaSource(
+        "blob:https://live.nicovideo.jp/5ff1666b-b664-423f-a456-00051a39e9e8",
+        origin,
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a cross-origin advertisement video", () => {
+    // Observed on the watch page: a mid-stream ad is a plain cross-origin
+    // file, and drawing it taints the sampling canvas.
+    expect(
+      isCapturableMediaSource(
+        "https://gcdn.2mdn.net/videoplayback/id/21b88bf5e807721e/itag/344/source/web_video_ads/file.mp4",
+        origin,
+      ),
+    ).toBe(false);
+  });
+
+  it("accepts an element that has not loaded a source yet", () => {
+    expect(isCapturableMediaSource("", origin)).toBe(true);
+  });
+
+  it("accepts a same-origin http source", () => {
+    expect(
+      isCapturableMediaSource(
+        "https://live.nicovideo.jp/assets/sample.mp4",
+        origin,
+      ),
+    ).toBe(true);
+  });
+
+  it("accepts data and mediastream sources", () => {
+    expect(isCapturableMediaSource("data:video/mp4;base64,AAAA", origin)).toBe(
+      true,
+    );
+    expect(isCapturableMediaSource("mediastream:abc", origin)).toBe(true);
+  });
+
+  it("rejects an unparseable source", () => {
+    expect(isCapturableMediaSource("http://[invalid", origin)).toBe(false);
   });
 });
 
