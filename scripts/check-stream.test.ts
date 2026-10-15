@@ -5,6 +5,7 @@ import {
   isAudioPlaying,
   isFpsAboveThreshold,
   isOverallOk,
+  isVideoReady,
   type MotionSample,
   summarizeFps,
   toErrorResult,
@@ -41,6 +42,27 @@ describe("video and game FPS thresholds", () => {
   it("uses 24 fps for the whole video and 8 fps for the game screen", () => {
     expect(VIDEO_MIN_FPS).toBe(24);
     expect(GAME_MIN_FPS).toBe(8);
+  });
+});
+
+describe("isVideoReady", () => {
+  const advancing = { videoWidth: 640, readyState: 2, paused: false };
+
+  it("rejects a player that has not decoded a frame yet", () => {
+    // Right after waitForSelector("video") the element is attached but empty.
+    expect(isVideoReady({ ...advancing, videoWidth: 0 })).toBe(false);
+    expect(isVideoReady({ ...advancing, readyState: 1 })).toBe(false);
+    expect(isVideoReady({ ...advancing, readyState: 0 })).toBe(false);
+  });
+
+  it("rejects a paused player", () => {
+    expect(isVideoReady({ ...advancing, paused: true })).toBe(false);
+  });
+
+  it("accepts a decoded, advancing player", () => {
+    expect(isVideoReady(advancing)).toBe(true);
+    expect(isVideoReady({ ...advancing, readyState: 4 })).toBe(true);
+    expect(isVideoReady({ ...advancing, videoWidth: 1280 })).toBe(true);
   });
 });
 
