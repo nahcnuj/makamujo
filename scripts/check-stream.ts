@@ -28,9 +28,76 @@ export const GAME_CLIP = {
   heightRatio: 1,
 } as const;
 
+declare global {
+  interface Window {
+    /**
+     * Installed by {@link SELECT_VIDEO_INIT_SCRIPT}; returns the first video
+     * element whose frames can be drawn onto a canvas (same-origin sources
+     * only), preferring one that is actively playing.
+     */
+    __mmjSelectCapturableVideo?: () => HTMLVideoElement | null;
+  }
+}
+
 type VideoProbe = HTMLVideoElement & {
   webkitAudioDecodedByteCount?: number;
 };
+
+/**
+ * True when a media element with this `currentSrc` can be drawn onto a canvas
+ * without tainting it.
+ *
+ * Nicovideo's watch page keeps several `<video>` elements around: the live
+ * stream arrives through Media Source Extensions under a same-origin `blob:`
+ * URL, but advertisements are plain cross-origin `https:` files. Drawing a
+ * cross-origin element makes the canvas unreadable (`getImageData` throws a
+ * `SecurityError`), so the motion sampler must never pick one. An empty source
+ * (an element using `srcObject`, or one that has not loaded yet) and
+ * `blob:`/`data:`/`mediastream:` URLs are treated as capturable.
+ */
+export function isCapturableMediaSource(
+  currentSrc: string,
+  pageOrigin: string,
+): boolean {
+  if (currentSrc === "") return true;
+  if (
+    currentSrc.startsWith("blob:") ||
+    currentSrc.startsWith("data:") ||
+    currentSrc.startsWith("mediastream:")
+  ) {
+    return true;
+  }
+  try {
+    return new URL(currentSrc, pageOrigin).origin === pageOrigin;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * In-page selector shared by every `page.evaluate` that has to touch the
+ * player. The selection order mirrors the old ad-hoc `find` chains, but a
+ * cross-origin element (an advertisement) is never chosen: picking one would
+ * taint the sampling canvas and report a healthy stream as having no picture.
+ *
+ * The capturability check is injected from {@link isCapturableMediaSource} so
+ * the browser-side logic stays in step with the unit-tested one.
+ */
+const SELECT_VIDEO_INIT_SCRIPT = `
+(() => {
+  const isCapturable = ${isCapturableMediaSource.toString()};
+  const origin = location.origin;
+  const isActive = (v) => v.videoWidth > 0 && v.readyState >= 2 && v.paused === false;
+  const isSized = (v) => v.videoWidth > 0 && v.readyState >= 2;
+  window.__mmjSelectCapturableVideo = () => {
+    const videos = Array.from(document.querySelectorAll("video"));
+    const capturable = videos.filter((v) =>
+      isCapturable(v.currentSrc || v.src || "", origin),
+    );
+    return capturable.find(isActive) ?? capturable.find(isSized) ?? null;
+  };
+})();
+`;
 
 export interface CheckResult {
   ok: boolean;
@@ -214,18 +281,8 @@ export interface VideoState {
 
 async function readVideoState(page: Page): Promise<VideoState> {
   return page.evaluate(() => {
-    const videos = Array.from(document.querySelectorAll("video"));
-    const video = (videos.find((v) => {
-      const probe = v as VideoProbe;
-      return (
-        probe.videoWidth > 0 && probe.readyState >= 2 && probe.paused === false
-      );
-    }) ??
-      videos.find((v) => {
-        const probe = v as VideoProbe;
-        return probe.videoWidth > 0 && probe.readyState >= 2;
-      }) ??
-      videos[0]) as VideoProbe | null;
+    const video = (window.__mmjSelectCapturableVideo?.() ??
+      null) as VideoProbe | null;
     if (!video) {
       return {
         found: false,
@@ -325,20 +382,7 @@ async function sampleMotion(
       channelTolerance,
       minChangedRatio,
     }) => {
-      const selectVideo = () =>
-        Array.from(document.querySelectorAll("video")).find((v) => {
-          const probe = v as HTMLVideoElement;
-          return (
-            probe.videoWidth > 0 &&
-            probe.readyState >= 2 &&
-            probe.paused === false
-          );
-        }) ??
-        Array.from(document.querySelectorAll("video")).find((v) => {
-          const probe = v as HTMLVideoElement;
-          return probe.videoWidth > 0 && probe.readyState >= 2;
-        }) ??
-        document.querySelector("video");
+      const selectVideo = () => window.__mmjSelectCapturableVideo?.() ?? null;
 
       const video = selectVideo();
       if (!video?.videoWidth || !video.videoHeight) {
@@ -372,20 +416,7 @@ async function sampleMotion(
               return;
             }
             try {
-              const activeVideo =
-                Array.from(document.querySelectorAll("video")).find((v) => {
-                  const probe = v as HTMLVideoElement;
-                  return (
-                    probe.videoWidth > 0 &&
-                    probe.readyState >= 2 &&
-                    probe.paused === false
-                  );
-                }) ??
-                Array.from(document.querySelectorAll("video")).find((v) => {
-                  const probe = v as HTMLVideoElement;
-                  return probe.videoWidth > 0 && probe.readyState >= 2;
-                }) ??
-                video;
+              const activeVideo = window.__mmjSelectCapturableVideo?.() ?? null;
               if (!activeVideo?.videoWidth || !activeVideo.videoHeight) {
                 requestAnimationFrame(tick);
                 return;
@@ -484,6 +515,28 @@ async function sampleMotionWithRetry(page: Page): Promise<MotionSamples> {
 }
 
 /**
+ * Nudge every `<video>` on the page to play unmuted.
+ *
+ * The launch flag disables the autoplay policy, but the player sometimes
+ * leaves an element paused. Every element is nudged because the live stream's
+ * `<video>` may not exist yet (an advertisement can hold the slot first);
+ * unmuting matters because a muted element is not guaranteed to decode audio.
+ */
+async function startPlayback(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    for (const video of Array.from(document.querySelectorAll("video"))) {
+      try {
+        video.muted = false;
+        video.volume = 1;
+        void video.play().catch(() => undefined);
+      } catch {
+        // Ignore: the readiness poll re-checks the element state.
+      }
+    }
+  });
+}
+
+/**
  * Reload the watch page and wait for the player to be decodable and
  * advancing again. Used when playback never started and when the player
  * rebuilt its media element in the middle of a measurement.
@@ -494,17 +547,7 @@ async function reloadAndWaitForPlayback(page: Page): Promise<boolean> {
     timeout: NAVIGATION_TIMEOUT_MS,
   });
   await page.waitForSelector("video", { timeout: 30_000 });
-  await page.evaluate(() => {
-    const videos = Array.from(document.querySelectorAll("video"));
-    const video = videos[0];
-    if (!video) return;
-    try {
-      (video as HTMLVideoElement).muted = true;
-      void (video as HTMLVideoElement).play().catch(() => undefined);
-    } catch {
-      // Ignore: the readiness poll re-checks the element state.
-    }
-  });
+  await startPlayback(page);
   return waitForVideoPlayback(page, PLAYBACK_READY_TIMEOUT_MS);
 }
 
@@ -556,6 +599,7 @@ async function checkStream(): Promise<CheckResult> {
   });
 
   const page = await context.newPage();
+  await page.addInitScript(SELECT_VIDEO_INIT_SCRIPT);
 
   try {
     console.log(`[INFO] Opening watch page: ${WATCH_PAGE_URL}`);
@@ -572,27 +616,7 @@ async function checkStream(): Promise<CheckResult> {
 
     await page.waitForSelector("video", { timeout: 30_000 });
 
-    await page.evaluate(() => {
-      const videos = Array.from(document.querySelectorAll("video"));
-      const video =
-        videos.find((v) => {
-          const probe = v as HTMLVideoElement;
-          return (
-            probe.videoWidth > 0 &&
-            probe.readyState >= 2 &&
-            probe.paused === false
-          );
-        }) ??
-        videos.find((v) => {
-          const probe = v as HTMLVideoElement;
-          return probe.videoWidth > 0 && probe.readyState >= 2;
-        }) ??
-        videos[0];
-      if (!video) return;
-      video.muted = false;
-      video.volume = 1;
-      void video.play().catch(() => undefined);
-    });
+    await startPlayback(page);
 
     const video = await page.$("video");
     if (!video) {
