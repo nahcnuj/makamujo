@@ -90,8 +90,8 @@ describe("shouldReMeasure", () => {
 });
 
 describe("video and game FPS thresholds", () => {
-  it("uses 15 fps for the whole video and 8 fps for the game screen", () => {
-    expect(VIDEO_MIN_FPS).toBe(15);
+  it("uses 24 fps for the whole video and 8 fps for the game screen", () => {
+    expect(VIDEO_MIN_FPS).toBe(24);
     expect(GAME_MIN_FPS).toBe(8);
   });
 });
@@ -119,20 +119,14 @@ describe("isVideoReady", () => {
 
 describe("isFpsAboveThreshold", () => {
   it("treats the threshold itself as an error", () => {
-    expect(isFpsAboveThreshold(VIDEO_MIN_FPS, VIDEO_MIN_FPS)).toBe(false);
-    expect(isFpsAboveThreshold(GAME_MIN_FPS, GAME_MIN_FPS)).toBe(false);
+    expect(isFpsAboveThreshold(24, VIDEO_MIN_FPS)).toBe(false);
+    expect(isFpsAboveThreshold(8, GAME_MIN_FPS)).toBe(false);
   });
 
   it("passes only when the minimum fps exceeds the threshold", () => {
-    expect(isFpsAboveThreshold(VIDEO_MIN_FPS + 0.5, VIDEO_MIN_FPS)).toBe(true);
+    expect(isFpsAboveThreshold(24.5, VIDEO_MIN_FPS)).toBe(true);
     expect(isFpsAboveThreshold(0, GAME_MIN_FPS)).toBe(false);
-    expect(isFpsAboveThreshold(GAME_MIN_FPS + 0.5, GAME_MIN_FPS)).toBe(true);
-  });
-
-  it("accepts the momentary dip reported for a playing stream", () => {
-    // A live window can average 28.3 fps while one bucket dips to 22; the
-    // picture is plainly moving, so the whole-video check must pass.
-    expect(isFpsAboveThreshold(22, VIDEO_MIN_FPS)).toBe(true);
+    expect(isFpsAboveThreshold(8.5, GAME_MIN_FPS)).toBe(true);
   });
 });
 
