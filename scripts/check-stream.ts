@@ -179,7 +179,18 @@ export interface VideoState {
 
 async function readVideoState(page: Page): Promise<VideoState> {
   return page.evaluate(() => {
-    const video = document.querySelector("video") as VideoProbe | null;
+    const videos = Array.from(document.querySelectorAll("video"));
+    const video = (videos.find((v) => {
+      const probe = v as VideoProbe;
+      return (
+        probe.videoWidth > 0 && probe.readyState >= 2 && probe.paused === false
+      );
+    }) ??
+      videos.find((v) => {
+        const probe = v as VideoProbe;
+        return probe.videoWidth > 0 && probe.readyState >= 2;
+      }) ??
+      videos[0]) as VideoProbe | null;
     if (!video) {
       return {
         found: false,
@@ -278,7 +289,22 @@ async function sampleMotion(
       channelTolerance,
       minChangedRatio,
     }) => {
-      const video = document.querySelector("video");
+      const selectVideo = () =>
+        Array.from(document.querySelectorAll("video")).find((v) => {
+          const probe = v as HTMLVideoElement;
+          return (
+            probe.videoWidth > 0 &&
+            probe.readyState >= 2 &&
+            probe.paused === false
+          );
+        }) ??
+        Array.from(document.querySelectorAll("video")).find((v) => {
+          const probe = v as HTMLVideoElement;
+          return probe.videoWidth > 0 && probe.readyState >= 2;
+        }) ??
+        document.querySelector("video");
+
+      const video = selectVideo();
       if (!video?.videoWidth || !video.videoHeight) {
         return { samples: [], elapsedMs: 0, tainted: false };
       }
@@ -308,7 +334,25 @@ async function sampleMotion(
               resolve();
               return;
             }
-            context.drawImage(video, 0, 0, width, height);
+            const activeVideo =
+              Array.from(document.querySelectorAll("video")).find((v) => {
+                const probe = v as HTMLVideoElement;
+                return (
+                  probe.videoWidth > 0 &&
+                  probe.readyState >= 2 &&
+                  probe.paused === false
+                );
+              }) ??
+              Array.from(document.querySelectorAll("video")).find((v) => {
+                const probe = v as HTMLVideoElement;
+                return probe.videoWidth > 0 && probe.readyState >= 2;
+              }) ??
+              video;
+            if (!activeVideo?.videoWidth || !activeVideo.videoHeight) {
+              requestAnimationFrame(tick);
+              return;
+            }
+            context.drawImage(activeVideo, 0, 0, width, height);
             const current = context.getImageData(0, 0, width, height).data;
             if (previous) {
               let wholeDiff = 0;
@@ -407,11 +451,25 @@ async function checkStream(): Promise<CheckResult> {
     await page.waitForSelector("video", { timeout: 30_000 });
 
     await page.evaluate(() => {
-      const video = document.querySelector("video");
+      const videos = Array.from(document.querySelectorAll("video"));
+      const video =
+        videos.find((v) => {
+          const probe = v as HTMLVideoElement;
+          return (
+            probe.videoWidth > 0 &&
+            probe.readyState >= 2 &&
+            probe.paused === false
+          );
+        }) ??
+        videos.find((v) => {
+          const probe = v as HTMLVideoElement;
+          return probe.videoWidth > 0 && probe.readyState >= 2;
+        }) ??
+        videos[0];
       if (!video) return;
       video.muted = false;
       video.volume = 1;
-      void video.play();
+      void video.play().catch(() => undefined);
     });
 
     const video = await page.$("video");
@@ -420,10 +478,32 @@ async function checkStream(): Promise<CheckResult> {
       return { ok: false, timestampJst, phenomena, details };
     }
 
-    const playbackStarted = await waitForVideoPlayback(
-      page,
-      PLAYBACK_READY_TIMEOUT_MS,
-    );
+    let playbackStarted = false;
+    for (let attempt = 0; attempt < 2 && !playbackStarted; attempt++) {
+      if (attempt > 0) {
+        console.log("[INFO] Playback did not start; reloading watch page");
+        await page.reload({
+          waitUntil: "domcontentloaded",
+          timeout: NAVIGATION_TIMEOUT_MS,
+        });
+        await page.waitForSelector("video", { timeout: 30_000 });
+        await page.evaluate(() => {
+          const videos = Array.from(document.querySelectorAll("video"));
+          const video = videos[0];
+          if (!video) return;
+          try {
+            (video as HTMLVideoElement).muted = true;
+            void (video as HTMLVideoElement).play().catch(() => undefined);
+          } catch {
+            // Ignore: retry below will re-check readiness.
+          }
+        });
+      }
+      playbackStarted = await waitForVideoPlayback(
+        page,
+        PLAYBACK_READY_TIMEOUT_MS,
+      );
+    }
     if (!playbackStarted) {
       phenomena.push("映像の再生が始まりませんでした");
       return { ok: false, timestampJst, phenomena, details };
@@ -432,7 +512,7 @@ async function checkStream(): Promise<CheckResult> {
     const startProbe = await readVideoState(page);
     details.decodedAudioBytesStart = startProbe.decodedAudioBytes;
 
-    const motion = await sampleMotion(
+    let motion = await sampleMotion(
       page,
       CHECK_DURATION_MS,
       GAME_CLIP.widthRatio,
@@ -440,6 +520,17 @@ async function checkStream(): Promise<CheckResult> {
       PIXEL_CHANNEL_TOLERANCE,
       MIN_CHANGED_RATIO,
     );
+    if (motion.tainted || motion.samples.length < 2) {
+      await page.waitForTimeout(1_000);
+      motion = await sampleMotion(
+        page,
+        CHECK_DURATION_MS,
+        GAME_CLIP.widthRatio,
+        MAX_SAMPLE_DIMENSION,
+        PIXEL_CHANNEL_TOLERANCE,
+        MIN_CHANGED_RATIO,
+      );
+    }
 
     const endProbe = await readVideoState(page);
     if (!endProbe.found) {
