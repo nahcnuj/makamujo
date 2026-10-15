@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  didAudioDecodedBytesReset,
   formatJst,
   GAME_MIN_FPS,
   isAudioPlaying,
@@ -7,6 +8,8 @@ import {
   isOverallOk,
   isVideoReady,
   type MotionSample,
+  type MotionSamples,
+  shouldReMeasure,
   summarizeFps,
   toErrorResult,
   VIDEO_MIN_FPS,
@@ -35,6 +38,53 @@ describe("isAudioPlaying", () => {
   it("returns true when decoded bytes increase", () => {
     expect(isAudioPlaying(0, 1)).toBe(true);
     expect(isAudioPlaying(100, 250)).toBe(true);
+  });
+});
+
+describe("didAudioDecodedBytesReset", () => {
+  it("flags a counter that went backwards (the element was replaced)", () => {
+    // Observed when the player rebuilt its media element mid-check:
+    // the start and end probes watched different elements.
+    expect(didAudioDecodedBytesReset(14129, 7690)).toBe(true);
+  });
+
+  it("accepts a counter that held still or advanced", () => {
+    expect(didAudioDecodedBytesReset(0, 0)).toBe(false);
+    expect(didAudioDecodedBytesReset(100, 100)).toBe(false);
+    expect(didAudioDecodedBytesReset(100, 250)).toBe(false);
+  });
+});
+
+describe("shouldReMeasure", () => {
+  const motionOf = (
+    tainted: boolean,
+    samples: MotionSample[],
+  ): MotionSamples => ({ tainted, elapsedMs: 10_000, samples });
+  const twoSamples: MotionSample[] = [
+    { elapsedMs: 0, wholeChanged: true, gameChanged: true },
+    { elapsedMs: 16, wholeChanged: true, gameChanged: true },
+  ];
+
+  it("accepts a window with enough frames and a stable counter", () => {
+    expect(shouldReMeasure(motionOf(false, twoSamples), 0, 100)).toBe(false);
+  });
+
+  it("rejects a window that captured too few frames", () => {
+    expect(shouldReMeasure(motionOf(false, []), 0, 100)).toBe(true);
+    const oneSample: MotionSample[] = [
+      { elapsedMs: 0, wholeChanged: true, gameChanged: true },
+    ];
+    expect(shouldReMeasure(motionOf(false, oneSample), 0, 100)).toBe(true);
+  });
+
+  it("rejects a window whose canvas read failed", () => {
+    expect(shouldReMeasure(motionOf(true, twoSamples), 0, 100)).toBe(true);
+  });
+
+  it("rejects a window whose decoded-audio counter went backwards", () => {
+    expect(shouldReMeasure(motionOf(false, twoSamples), 14129, 7690)).toBe(
+      true,
+    );
   });
 });
 

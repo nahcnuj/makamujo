@@ -74,6 +74,41 @@ export function isAudioPlaying(
 }
 
 /**
+ * True when the decoded-audio counter went backwards between two probes.
+ *
+ * `webkitAudioDecodedByteCount` only resets when the media element is
+ * replaced or its source is rebuilt, so a smaller end value means the two
+ * probes watched different elements and their difference proves nothing.
+ */
+export function didAudioDecodedBytesReset(
+  decodedBytesStart: number,
+  decodedBytesEnd: number,
+): boolean {
+  return decodedBytesEnd < decodedBytesStart;
+}
+
+/**
+ * True when one sampling window cannot be judged and the whole measurement
+ * should run again on a freshly loaded player.
+ *
+ * The player rebuilds its media element when the HLS stream stutters or
+ * ends: the video loses its intrinsic size (so no frames are capturable)
+ * and the decoded-audio counter restarts from zero. Judging that window
+ * would report a healthy stream as dead, so the caller re-measures instead.
+ */
+export function shouldReMeasure(
+  motion: MotionSamples,
+  decodedAudioBytesStart: number,
+  decodedAudioBytesEnd: number,
+): boolean {
+  return (
+    motion.tainted ||
+    motion.samples.length < 2 ||
+    didAudioDecodedBytesReset(decodedAudioBytesStart, decodedAudioBytesEnd)
+  );
+}
+
+/**
  * A picture counts as moving only when its slowest one-second bucket keeps
  * enough changed frames. A threshold of N means "N FPS or below is an error".
  */
@@ -270,8 +305,9 @@ async function waitForVideoPlayback(
  * requestAnimationFrame keeps ticking at the display rate even while the
  * picture is frozen, which is exactly what exposes a stall as 0 changed
  * frames in that second. Drawing the element needs no screenshot round
- * trip; if the canvas is tainted the read throws and the caller treats the
- * window as unmeasurable instead of guessing.
+ * trip; if the canvas is tainted the read throws inside the animation-frame
+ * callback, which marks the window `tainted` and ends it, so the caller
+ * treats the window as unmeasurable instead of guessing.
  */
 async function sampleMotion(
   page: Page,
@@ -322,6 +358,7 @@ async function sampleMotion(
       }
       const samples: MotionSample[] = [];
       let previous: Uint8ClampedArray | null = null;
+      let tainted = false;
       const start = performance.now();
       try {
         await new Promise<void>((resolve) => {
@@ -334,57 +371,68 @@ async function sampleMotion(
               resolve();
               return;
             }
-            const activeVideo =
-              Array.from(document.querySelectorAll("video")).find((v) => {
-                const probe = v as HTMLVideoElement;
-                return (
-                  probe.videoWidth > 0 &&
-                  probe.readyState >= 2 &&
-                  probe.paused === false
-                );
-              }) ??
-              Array.from(document.querySelectorAll("video")).find((v) => {
-                const probe = v as HTMLVideoElement;
-                return probe.videoWidth > 0 && probe.readyState >= 2;
-              }) ??
-              video;
-            if (!activeVideo?.videoWidth || !activeVideo.videoHeight) {
-              requestAnimationFrame(tick);
+            try {
+              const activeVideo =
+                Array.from(document.querySelectorAll("video")).find((v) => {
+                  const probe = v as HTMLVideoElement;
+                  return (
+                    probe.videoWidth > 0 &&
+                    probe.readyState >= 2 &&
+                    probe.paused === false
+                  );
+                }) ??
+                Array.from(document.querySelectorAll("video")).find((v) => {
+                  const probe = v as HTMLVideoElement;
+                  return probe.videoWidth > 0 && probe.readyState >= 2;
+                }) ??
+                video;
+              if (!activeVideo?.videoWidth || !activeVideo.videoHeight) {
+                requestAnimationFrame(tick);
+                return;
+              }
+              context.drawImage(activeVideo, 0, 0, width, height);
+              const current = context.getImageData(0, 0, width, height).data;
+              if (previous) {
+                let wholeDiff = 0;
+                let gameDiff = 0;
+                const total = width * height;
+                for (let p = 0; p < total; p++) {
+                  const i = p * 4;
+                  const redDiff = Math.abs(
+                    (previous[i] ?? 0) - (current[i] ?? 0),
+                  );
+                  const greenDiff = Math.abs(
+                    (previous[i + 1] ?? 0) - (current[i + 1] ?? 0),
+                  );
+                  const blueDiff = Math.abs(
+                    (previous[i + 2] ?? 0) - (current[i + 2] ?? 0),
+                  );
+                  if (
+                    redDiff > channelTolerance ||
+                    greenDiff > channelTolerance ||
+                    blueDiff > channelTolerance
+                  ) {
+                    wholeDiff += 1;
+                    if (p % width < gameWidth) gameDiff += 1;
+                  }
+                }
+                samples.push({
+                  elapsedMs: now - start,
+                  wholeChanged: wholeDiff / total > minChangedRatio,
+                  gameChanged:
+                    gameDiff / (gameWidth * height) > minChangedRatio,
+                });
+              }
+              previous = current;
+            } catch {
+              // An error thrown in this callback never rejects the awaited
+              // promise; without this catch a tainted canvas would surface
+              // only as an empty sample list with `tainted` left false.
+              tainted = true;
+              clearTimeout(safety);
+              resolve();
               return;
             }
-            context.drawImage(activeVideo, 0, 0, width, height);
-            const current = context.getImageData(0, 0, width, height).data;
-            if (previous) {
-              let wholeDiff = 0;
-              let gameDiff = 0;
-              const total = width * height;
-              for (let p = 0; p < total; p++) {
-                const i = p * 4;
-                const redDiff = Math.abs(
-                  (previous[i] ?? 0) - (current[i] ?? 0),
-                );
-                const greenDiff = Math.abs(
-                  (previous[i + 1] ?? 0) - (current[i + 1] ?? 0),
-                );
-                const blueDiff = Math.abs(
-                  (previous[i + 2] ?? 0) - (current[i + 2] ?? 0),
-                );
-                if (
-                  redDiff > channelTolerance ||
-                  greenDiff > channelTolerance ||
-                  blueDiff > channelTolerance
-                ) {
-                  wholeDiff += 1;
-                  if (p % width < gameWidth) gameDiff += 1;
-                }
-              }
-              samples.push({
-                elapsedMs: now - start,
-                wholeChanged: wholeDiff / total > minChangedRatio,
-                gameChanged: gameDiff / (gameWidth * height) > minChangedRatio,
-              });
-            }
-            previous = current;
             requestAnimationFrame(tick);
           };
           requestAnimationFrame(tick);
@@ -396,7 +444,7 @@ async function sampleMotion(
           tainted: true,
         };
       }
-      return { samples, elapsedMs: performance.now() - start, tainted: false };
+      return { samples, elapsedMs: performance.now() - start, tainted };
     },
     {
       durationMs,
@@ -406,6 +454,80 @@ async function sampleMotion(
       minChangedRatio,
     },
   );
+}
+
+/**
+ * Sample for the whole window, then once more after a short pause when the
+ * first pass captured too few frames to judge motion.
+ */
+async function sampleMotionWithRetry(page: Page): Promise<MotionSamples> {
+  let motion = await sampleMotion(
+    page,
+    CHECK_DURATION_MS,
+    GAME_CLIP.widthRatio,
+    MAX_SAMPLE_DIMENSION,
+    PIXEL_CHANNEL_TOLERANCE,
+    MIN_CHANGED_RATIO,
+  );
+  if (motion.tainted || motion.samples.length < 2) {
+    await page.waitForTimeout(1_000);
+    motion = await sampleMotion(
+      page,
+      CHECK_DURATION_MS,
+      GAME_CLIP.widthRatio,
+      MAX_SAMPLE_DIMENSION,
+      PIXEL_CHANNEL_TOLERANCE,
+      MIN_CHANGED_RATIO,
+    );
+  }
+  return motion;
+}
+
+/**
+ * Reload the watch page and wait for the player to be decodable and
+ * advancing again. Used when playback never started and when the player
+ * rebuilt its media element in the middle of a measurement.
+ */
+async function reloadAndWaitForPlayback(page: Page): Promise<boolean> {
+  await page.reload({
+    waitUntil: "domcontentloaded",
+    timeout: NAVIGATION_TIMEOUT_MS,
+  });
+  await page.waitForSelector("video", { timeout: 30_000 });
+  await page.evaluate(() => {
+    const videos = Array.from(document.querySelectorAll("video"));
+    const video = videos[0];
+    if (!video) return;
+    try {
+      (video as HTMLVideoElement).muted = true;
+      void (video as HTMLVideoElement).play().catch(() => undefined);
+    } catch {
+      // Ignore: the readiness poll re-checks the element state.
+    }
+  });
+  return waitForVideoPlayback(page, PLAYBACK_READY_TIMEOUT_MS);
+}
+
+interface PlaybackMeasurement {
+  startProbe: VideoState;
+  motion: MotionSamples;
+  endProbe: VideoState;
+}
+
+/**
+ * Probe decoded-audio bytes around one sampling window.
+ *
+ * Returns `null` when the video element disappeared before the closing
+ * probe, so the caller reports that instead of judging motion.
+ */
+async function measurePlayback(
+  page: Page,
+): Promise<PlaybackMeasurement | null> {
+  const startProbe = await readVideoState(page);
+  const motion = await sampleMotionWithRetry(page);
+  const endProbe = await readVideoState(page);
+  if (!endProbe.found) return null;
+  return { startProbe, motion, endProbe };
 }
 
 async function checkStream(): Promise<CheckResult> {
@@ -478,65 +600,48 @@ async function checkStream(): Promise<CheckResult> {
       return { ok: false, timestampJst, phenomena, details };
     }
 
-    let playbackStarted = false;
-    for (let attempt = 0; attempt < 2 && !playbackStarted; attempt++) {
-      if (attempt > 0) {
-        console.log("[INFO] Playback did not start; reloading watch page");
-        await page.reload({
-          waitUntil: "domcontentloaded",
-          timeout: NAVIGATION_TIMEOUT_MS,
-        });
-        await page.waitForSelector("video", { timeout: 30_000 });
-        await page.evaluate(() => {
-          const videos = Array.from(document.querySelectorAll("video"));
-          const video = videos[0];
-          if (!video) return;
-          try {
-            (video as HTMLVideoElement).muted = true;
-            void (video as HTMLVideoElement).play().catch(() => undefined);
-          } catch {
-            // Ignore: retry below will re-check readiness.
-          }
-        });
-      }
-      playbackStarted = await waitForVideoPlayback(
-        page,
-        PLAYBACK_READY_TIMEOUT_MS,
-      );
+    let playbackStarted = await waitForVideoPlayback(
+      page,
+      PLAYBACK_READY_TIMEOUT_MS,
+    );
+    if (!playbackStarted) {
+      console.log("[INFO] Playback did not start; reloading watch page");
+      playbackStarted = await reloadAndWaitForPlayback(page);
     }
     if (!playbackStarted) {
       phenomena.push("映像の再生が始まりませんでした");
       return { ok: false, timestampJst, phenomena, details };
     }
 
-    const startProbe = await readVideoState(page);
-    details.decodedAudioBytesStart = startProbe.decodedAudioBytes;
-
-    let motion = await sampleMotion(
-      page,
-      CHECK_DURATION_MS,
-      GAME_CLIP.widthRatio,
-      MAX_SAMPLE_DIMENSION,
-      PIXEL_CHANNEL_TOLERANCE,
-      MIN_CHANGED_RATIO,
-    );
-    if (motion.tainted || motion.samples.length < 2) {
-      await page.waitForTimeout(1_000);
-      motion = await sampleMotion(
-        page,
-        CHECK_DURATION_MS,
-        GAME_CLIP.widthRatio,
-        MAX_SAMPLE_DIMENSION,
-        PIXEL_CHANNEL_TOLERANCE,
-        MIN_CHANGED_RATIO,
+    let measurement = await measurePlayback(page);
+    if (
+      measurement &&
+      shouldReMeasure(
+        measurement.motion,
+        measurement.startProbe.decodedAudioBytes,
+        measurement.endProbe.decodedAudioBytes,
+      )
+    ) {
+      // The player rebuilt its media element while the window was sampled
+      // (the video lost its size, or the decoded-audio counter went
+      // backwards), so the probes watched different elements. Start the
+      // measurement over on a freshly loaded player instead of judging it.
+      console.log(
+        "[INFO] Measurement unusable (no frames captured or the decoded-audio counter went backwards); reloading and measuring again",
       );
+      const recovered = await reloadAndWaitForPlayback(page);
+      if (!recovered) {
+        phenomena.push("映像の再生が始まりませんでした");
+        return { ok: false, timestampJst, phenomena, details };
+      }
+      measurement = await measurePlayback(page);
     }
-
-    const endProbe = await readVideoState(page);
-    if (!endProbe.found) {
+    if (!measurement) {
       phenomena.push("チェック中にビデオ要素が消失しました");
       return { ok: false, timestampJst, phenomena, details };
     }
+    const { startProbe, motion, endProbe } = measurement;
+    details.decodedAudioBytesStart = startProbe.decodedAudioBytes;
     details.decodedAudioBytesEnd = endProbe.decodedAudioBytes;
 
     const audioPlaying = isAudioPlaying(
