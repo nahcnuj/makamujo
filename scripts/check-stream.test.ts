@@ -9,9 +9,11 @@ import {
   isMeasurementUnusable,
   isOverallOk,
   isVideoReady,
+  MAX_MEASUREMENT_ATTEMPTS,
   type MotionSample,
   type MotionSamples,
   type PlaybackMeasurement,
+  shouldReloadForMeasurement,
   shouldReMeasure,
   summarizeFps,
   toErrorResult,
@@ -160,6 +162,59 @@ describe("isMeasurementUnusable", () => {
         measurementOf(motionOf(false, twoSamples), 14129, 7690),
       ),
     ).toBe(true);
+  });
+});
+
+describe("shouldReloadForMeasurement", () => {
+  it("keeps recovering while the window is unusable and attempts remain", () => {
+    expect(shouldReloadForMeasurement(null, 1)).toBe(true);
+    expect(shouldReloadForMeasurement(null, MAX_MEASUREMENT_ATTEMPTS - 1)).toBe(
+      true,
+    );
+  });
+
+  it("stops reloading once the attempt budget is spent", () => {
+    expect(shouldReloadForMeasurement(null, MAX_MEASUREMENT_ATTEMPTS)).toBe(
+      false,
+    );
+    expect(shouldReloadForMeasurement(null, MAX_MEASUREMENT_ATTEMPTS + 1)).toBe(
+      false,
+    );
+  });
+
+  it("does not reload a window that can be judged", () => {
+    const measurement: PlaybackMeasurement = {
+      startProbe: {
+        found: true,
+        videoWidth: 640,
+        readyState: 2,
+        paused: false,
+        currentTime: 0,
+        decodedAudioBytes: 0,
+      },
+      motion: {
+        tainted: false,
+        elapsedMs: 10_000,
+        samples: [
+          { elapsedMs: 0, wholeChanged: true, gameChanged: true },
+          { elapsedMs: 16, wholeChanged: true, gameChanged: true },
+        ],
+        sawAdvertisement: false,
+      },
+      endProbe: {
+        found: true,
+        videoWidth: 640,
+        readyState: 2,
+        paused: false,
+        currentTime: 10,
+        decodedAudioBytes: 100,
+      },
+    };
+    expect(shouldReloadForMeasurement(measurement, 1)).toBe(false);
+  });
+
+  it("allows the initial window plus two reload recoveries", () => {
+    expect(MAX_MEASUREMENT_ATTEMPTS).toBe(3);
   });
 });
 

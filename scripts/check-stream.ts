@@ -16,7 +16,7 @@ const PLAYBACK_WARMUP_SECONDS = 2;
  * pre-roll advertisement on every page load and mid-roll ones while watching;
  * the live `<video>` is frozen for the whole advertisement, so measuring
  * during one reports a healthy stream as stopped. Ads run for tens of seconds,
- * hence the generous bound, but it stays well inside the job's 10-minute
+ * hence the generous bound, but it stays well inside the job's 15-minute
  * timeout even when a reload and a second wait follow.
  */
 const ADVERTISEMENT_WAIT_TIMEOUT_MS = 90_000;
@@ -29,6 +29,14 @@ const MIN_CHANGED_RATIO = 0.001;
 export const VIDEO_MIN_FPS = 24;
 /** Game panel: minimum moving frames per second over the window. */
 export const GAME_MIN_FPS = 8;
+/**
+ * How many sampling windows one check may take before it gives up: the
+ * initial window plus the reload recoveries that follow. Each recovery
+ * costs a reload (navigation + playback warm-up + a fresh advertisement
+ * wait + two sampling passes), so the workflow's job timeout has to cover
+ * the worst case of every window failing.
+ */
+export const MAX_MEASUREMENT_ATTEMPTS = 3;
 
 /** Left 60% of the video: game panel on the 10×8 layout. */
 export const GAME_CLIP = {
@@ -639,6 +647,30 @@ export function wasAdvertisementShown(motion: MotionSamples): boolean {
 }
 
 /**
+ * True when the next sampling window should run on a freshly reloaded
+ * player because the previous window cannot be judged.
+ *
+ * One reload recovery is not enough on its own: the player can rebuild its
+ * media element again during the post-reload window (the decoded-audio
+ * counter goes backwards a second time), and judging that window reports a
+ * healthy stream as stopped — observed on 2026-10-17 02:22 JST, where the
+ * check filed "音声が流れていません / 映像全体が停止 / ゲーム画面が停止" for a
+ * stream whose player had merely swapped elements mid-window (83614 → 6435
+ * decoded bytes). The caller keeps reloading until a window is judgeable or
+ * {@link MAX_MEASUREMENT_ATTEMPTS} windows have been spent, and then
+ * reports the measurement failure itself instead of misjudging motion.
+ */
+export function shouldReloadForMeasurement(
+  measurement: PlaybackMeasurement | null,
+  attemptsUsed: number,
+): boolean {
+  return (
+    isMeasurementUnusable(measurement) &&
+    attemptsUsed < MAX_MEASUREMENT_ATTEMPTS
+  );
+}
+
+/**
  * Probe decoded-audio bytes around one sampling window.
  *
  * Returns `null` when the video element disappeared before the closing
@@ -775,7 +807,8 @@ async function checkStream(): Promise<CheckResult> {
       );
       measurement = await measureAfterAdvertisements(page);
     }
-    if (isMeasurementUnusable(measurement)) {
+    let attemptsUsed = 1;
+    while (shouldReloadForMeasurement(measurement, attemptsUsed)) {
       // The player rebuilt its media element while the window was sampled
       // (the video lost its size, vanished, or the decoded-audio counter
       // went backwards), so the probes watched different elements. Start the
@@ -789,9 +822,24 @@ async function checkStream(): Promise<CheckResult> {
         return { ok: false, timestampJst, phenomena, details };
       }
       measurement = await measureAfterAdvertisements(page);
+      attemptsUsed += 1;
     }
     if (!measurement) {
       phenomena.push("チェック中にビデオ要素が消失しました");
+      return { ok: false, timestampJst, phenomena, details };
+    }
+    if (isMeasurementUnusable(measurement)) {
+      // Every window the check managed to sample was unusable: the player
+      // kept rebuilding its media element (or produced too few frames) for
+      // the whole check. Judging the last window anyway is what misreported
+      // a rebuilding player as a stopped stream, so report the measurement
+      // failure itself instead.
+      console.log(
+        "[INFO] Measurement stayed unusable after every attempt; reporting the failure instead of judging motion",
+      );
+      phenomena.push(
+        "映像を判定できる状態になれませんでした (プレーヤーが映像ソースを再構築し続けています)",
+      );
       return { ok: false, timestampJst, phenomena, details };
     }
     const { startProbe, motion, endProbe } = measurement;

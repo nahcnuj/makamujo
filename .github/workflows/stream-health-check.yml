@@ -14,7 +14,9 @@ jobs:
   check-stream:
     name: Check Stream Health
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Worst case: navigation + playback warm-up + advertisement wait + up to
+    # MAX_MEASUREMENT_ATTEMPTS sampling windows, each with a possible reload.
+    timeout-minutes: 15
     outputs:
       issue-number: ${{ steps.create-issue.outputs.issue-number }}
     steps:
