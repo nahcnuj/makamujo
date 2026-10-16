@@ -29,6 +29,15 @@ const MIN_CHANGED_RATIO = 0.001;
 export const VIDEO_MIN_FPS = 24;
 /** Game panel: minimum moving frames per second over the window. */
 export const GAME_MIN_FPS = 8;
+/**
+ * Fraction of the sampling window the media clock must advance for the player
+ * to count as progressing.
+ *
+ * A live stream plays in real time, so a healthy player advances its clock by
+ * about one second per second; requiring only half the window tolerates the
+ * brief re-buffering pauses that happen without the stream having stopped.
+ */
+const PLAYBACK_ADVANCE_MIN_RATIO = 0.5;
 
 /** Left 60% of the video: game panel on the 10×8 layout. */
 export const GAME_CLIP = {
@@ -203,6 +212,32 @@ export function isFpsAboveThreshold(
   thresholdFps: number,
 ): boolean {
   return minFps > thresholdFps;
+}
+
+/**
+ * True when the media element kept advancing its timeline across the window.
+ *
+ * The check exists to catch a stream that has stopped, but a live picture that
+ * is merely *still* is not the same thing. This broadcast is an interface and
+ * a puzzle game that change only when something happens, so a healthy stream
+ * can show an unchanged picture for a whole window while the audio and the
+ * media clock keep running (for example while the agent is idle or thinking,
+ * with the idle-speech timer talking over a static screen). The player's own
+ * timeline separates the two: a stalled player (re-buffering, ended, or a
+ * replaced element) stops advancing, so a frozen picture is reported as a
+ * stopped stream only when the clock stopped with it.
+ */
+export function isPlaybackAdvancing(
+  startProbe: VideoState,
+  endProbe: VideoState,
+  elapsedMs: number,
+): boolean {
+  if (!startProbe.found || !endProbe.found) return false;
+  if (endProbe.paused || endProbe.videoWidth <= 0) return false;
+  const advancedSeconds = endProbe.currentTime - startProbe.currentTime;
+  const requiredSeconds =
+    (Math.max(elapsedMs, 0) / 1000) * PLAYBACK_ADVANCE_MIN_RATIO;
+  return advancedSeconds >= requiredSeconds;
 }
 
 export function isOverallOk(
@@ -813,6 +848,19 @@ async function checkStream(): Promise<CheckResult> {
       );
     }
 
+    const playbackAdvancing = isPlaybackAdvancing(
+      startProbe,
+      endProbe,
+      motion.elapsedMs,
+    );
+    // An unchanged picture is not proof of a stopped stream: the broadcast is
+    // a static interface and an event-driven puzzle game, and the agent idles
+    // (talking over the screen) between moves, so a healthy window can show no
+    // moving pixels at all. Only judge the picture as stopped when the player
+    // also stopped advancing or the audio died; otherwise the still frames
+    // just mean nothing happened on screen during the window.
+    const stillPictureExplainedByLiveness = audioPlaying && playbackAdvancing;
+
     let videoPlaying = false;
     if (motion.tainted || motion.samples.length < 2) {
       phenomena.push("映像全体のフレームを取得できませんでした");
@@ -826,14 +874,23 @@ async function checkStream(): Promise<CheckResult> {
       details.videoMinFps = videoFps.minFps;
       details.videoAvgFps = videoFps.avgFps;
       videoPlaying = isFpsAboveThreshold(videoFps.minFps, VIDEO_MIN_FPS);
-      if (!videoPlaying) {
-        phenomena.push("映像全体が停止し続けています");
-      } else {
+      if (videoPlaying) {
         console.log(
           `[INFO] Video moving: min fps = ${videoFps.minFps.toFixed(
             1,
           )} (avg ${videoFps.avgFps.toFixed(1)})`,
         );
+      } else if (stillPictureExplainedByLiveness) {
+        videoPlaying = true;
+        console.log(
+          `[INFO] Video picture is still (min fps = ${videoFps.minFps.toFixed(
+            1,
+          )}, avg ${videoFps.avgFps.toFixed(
+            1,
+          )}) but the player is advancing and audio is playing; treating it as a static scene`,
+        );
+      } else {
+        phenomena.push("映像全体が停止し続けています");
       }
     }
     details.videoPlaying = videoPlaying;
@@ -851,14 +908,23 @@ async function checkStream(): Promise<CheckResult> {
       details.gameMinFps = gameFps.minFps;
       details.gameAvgFps = gameFps.avgFps;
       gameScreenPlaying = isFpsAboveThreshold(gameFps.minFps, GAME_MIN_FPS);
-      if (!gameScreenPlaying) {
-        phenomena.push("ゲーム画面部分が停止し続けています");
-      } else {
+      if (gameScreenPlaying) {
         console.log(
           `[INFO] Game screen moving: min fps = ${gameFps.minFps.toFixed(
             1,
           )} (avg ${gameFps.avgFps.toFixed(1)})`,
         );
+      } else if (stillPictureExplainedByLiveness) {
+        gameScreenPlaying = true;
+        console.log(
+          `[INFO] Game screen picture is still (min fps = ${gameFps.minFps.toFixed(
+            1,
+          )}, avg ${gameFps.avgFps.toFixed(
+            1,
+          )}) but the player is advancing and audio is playing; treating it as a static scene`,
+        );
+      } else {
+        phenomena.push("ゲーム画面部分が停止し続けています");
       }
     }
     details.gameScreenPlaying = gameScreenPlaying;

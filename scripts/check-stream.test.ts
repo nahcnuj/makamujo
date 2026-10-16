@@ -8,6 +8,7 @@ import {
   isFpsAboveThreshold,
   isMeasurementUnusable,
   isOverallOk,
+  isPlaybackAdvancing,
   isVideoReady,
   type MotionSample,
   type MotionSamples,
@@ -257,6 +258,52 @@ describe("isFpsAboveThreshold", () => {
     expect(isFpsAboveThreshold(24.5, VIDEO_MIN_FPS)).toBe(true);
     expect(isFpsAboveThreshold(0, GAME_MIN_FPS)).toBe(false);
     expect(isFpsAboveThreshold(8.5, GAME_MIN_FPS)).toBe(true);
+  });
+});
+
+describe("isPlaybackAdvancing", () => {
+  const probe = (currentTime: number): VideoState => ({
+    found: true,
+    videoWidth: 640,
+    readyState: 2,
+    paused: false,
+    currentTime,
+    decodedAudioBytes: 0,
+  });
+
+  it("accepts a player whose clock advanced across the window", () => {
+    // A healthy live player runs at real time, so a 10s window advances the
+    // clock by roughly 10 seconds even when every frame looks identical.
+    expect(isPlaybackAdvancing(probe(100), probe(110), 10_000)).toBe(true);
+  });
+
+  it("accepts a player that only advanced half the window", () => {
+    // Transient re-buffering may eat part of the window without the stream
+    // having stopped.
+    expect(isPlaybackAdvancing(probe(100), probe(105), 10_000)).toBe(true);
+  });
+
+  it("rejects a frozen clock", () => {
+    // A stalled or ended player keeps `currentTime` put; a still picture then
+    // really is a stopped stream.
+    expect(isPlaybackAdvancing(probe(100), probe(100), 10_000)).toBe(false);
+    expect(isPlaybackAdvancing(probe(100), probe(102), 10_000)).toBe(false);
+  });
+
+  it("rejects a player that stopped or lost its picture", () => {
+    const end = probe(110);
+    expect(
+      isPlaybackAdvancing(probe(100), { ...end, paused: true }, 10_000),
+    ).toBe(false);
+    expect(
+      isPlaybackAdvancing(probe(100), { ...end, videoWidth: 0 }, 10_000),
+    ).toBe(false);
+    expect(
+      isPlaybackAdvancing(probe(100), { ...end, found: false }, 10_000),
+    ).toBe(false);
+    expect(
+      isPlaybackAdvancing({ ...probe(100), found: false }, end, 10_000),
+    ).toBe(false);
   });
 });
 
