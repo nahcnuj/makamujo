@@ -551,17 +551,39 @@ async function reloadAndWaitForPlayback(page: Page): Promise<boolean> {
   return waitForVideoPlayback(page, PLAYBACK_READY_TIMEOUT_MS);
 }
 
-interface PlaybackMeasurement {
+export interface PlaybackMeasurement {
   startProbe: VideoState;
   motion: MotionSamples;
   endProbe: VideoState;
 }
 
 /**
+ * True when one probing window cannot be judged, so the whole measurement
+ * should run again on a freshly loaded player.
+ *
+ * `null` means the closing probe found no capturable video at all: the live
+ * element was replaced by a cross-origin advertisement (which the selector
+ * rejects) or the player rebuilt its media element and had not attached the
+ * new source yet. A window that captured too few frames, whose canvas read
+ * failed, or whose decoded-audio counter went backwards is unusable too.
+ * Judging any of these would report a healthy stream as dead.
+ */
+export function isMeasurementUnusable(
+  measurement: PlaybackMeasurement | null,
+): boolean {
+  if (measurement === null) return true;
+  return shouldReMeasure(
+    measurement.motion,
+    measurement.startProbe.decodedAudioBytes,
+    measurement.endProbe.decodedAudioBytes,
+  );
+}
+
+/**
  * Probe decoded-audio bytes around one sampling window.
  *
  * Returns `null` when the video element disappeared before the closing
- * probe, so the caller reports that instead of judging motion.
+ * probe, so the caller can re-measure instead of judging motion.
  */
 async function measurePlayback(
   page: Page,
@@ -638,20 +660,13 @@ async function checkStream(): Promise<CheckResult> {
     }
 
     let measurement = await measurePlayback(page);
-    if (
-      measurement &&
-      shouldReMeasure(
-        measurement.motion,
-        measurement.startProbe.decodedAudioBytes,
-        measurement.endProbe.decodedAudioBytes,
-      )
-    ) {
+    if (isMeasurementUnusable(measurement)) {
       // The player rebuilt its media element while the window was sampled
-      // (the video lost its size, or the decoded-audio counter went
-      // backwards), so the probes watched different elements. Start the
+      // (the video lost its size, vanished, or the decoded-audio counter
+      // went backwards), so the probes watched different elements. Start the
       // measurement over on a freshly loaded player instead of judging it.
       console.log(
-        "[INFO] Measurement unusable (no frames captured or the decoded-audio counter went backwards); reloading and measuring again",
+        "[INFO] Measurement unusable (no video, no frames captured, or the decoded-audio counter went backwards); reloading and measuring again",
       );
       const recovered = await reloadAndWaitForPlayback(page);
       if (!recovered) {
