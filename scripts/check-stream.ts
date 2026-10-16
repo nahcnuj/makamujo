@@ -11,6 +11,16 @@ const PLAYBACK_READY_TIMEOUT_MS = 30_000;
 const PLAYBACK_READY_POLL_MS = 250;
 /** Playback has to advance this far before the startup frames are skipped. */
 const PLAYBACK_WARMUP_SECONDS = 2;
+/**
+ * How long to wait for an advertisement to finish. A signed-out viewer gets a
+ * pre-roll advertisement on every page load and mid-roll ones while watching;
+ * the live `<video>` is frozen for the whole advertisement, so measuring
+ * during one reports a healthy stream as stopped. Ads run for tens of seconds,
+ * hence the generous bound, but it stays well inside the job's 10-minute
+ * timeout even when a reload and a second wait follow.
+ */
+const ADVERTISEMENT_WAIT_TIMEOUT_MS = 90_000;
+const ADVERTISEMENT_POLL_MS = 500;
 const MAX_SAMPLE_DIMENSION = 128;
 const PIXEL_CHANNEL_TOLERANCE = 16;
 /** A sampled frame counts as "changed" when this fraction of pixels moved. */
@@ -36,6 +46,11 @@ declare global {
      * only), preferring one that is actively playing.
      */
     __mmjSelectCapturableVideo?: () => HTMLVideoElement | null;
+    /**
+     * Installed by {@link SELECT_VIDEO_INIT_SCRIPT}; returns true while a
+     * cross-origin video (an advertisement) is actively playing.
+     */
+    __mmjIsAdvertisementPlaying?: () => boolean;
   }
 }
 
@@ -96,6 +111,10 @@ const SELECT_VIDEO_INIT_SCRIPT = `
     );
     return capturable.find(isActive) ?? capturable.find(isSized) ?? null;
   };
+  window.__mmjIsAdvertisementPlaying = () =>
+    Array.from(document.querySelectorAll("video")).some(
+      (v) => !isCapturable(v.currentSrc || v.src || "", origin) && isActive(v),
+    );
 })();
 `;
 
@@ -209,6 +228,12 @@ export interface MotionSamples {
   elapsedMs: number;
   /** Reading pixels threw (e.g. tainted canvas); comparison is impossible. */
   tainted: boolean;
+  /**
+   * An advertisement was playing at some point during the window. The live
+   * picture is frozen while nicovideo shows an ad to a signed-out viewer, so
+   * the motion recorded here does not describe the program.
+   */
+  sawAdvertisement: boolean;
 }
 
 export interface FpsSummary {
@@ -386,7 +411,12 @@ async function sampleMotion(
 
       const video = selectVideo();
       if (!video?.videoWidth || !video.videoHeight) {
-        return { samples: [], elapsedMs: 0, tainted: false };
+        return {
+          samples: [],
+          elapsedMs: 0,
+          tainted: false,
+          sawAdvertisement: false,
+        };
       }
       const scale = Math.min(
         1,
@@ -398,11 +428,17 @@ async function sampleMotion(
       const canvas = new OffscreenCanvas(width, height);
       const context = canvas.getContext("2d", { willReadFrequently: true });
       if (!context) {
-        return { samples: [], elapsedMs: 0, tainted: false };
+        return {
+          samples: [],
+          elapsedMs: 0,
+          tainted: false,
+          sawAdvertisement: false,
+        };
       }
       const samples: MotionSample[] = [];
       let previous: Uint8ClampedArray | null = null;
       let tainted = false;
+      let sawAdvertisement = false;
       const start = performance.now();
       try {
         await new Promise<void>((resolve) => {
@@ -414,6 +450,9 @@ async function sampleMotion(
               clearTimeout(safety);
               resolve();
               return;
+            }
+            if (window.__mmjIsAdvertisementPlaying?.()) {
+              sawAdvertisement = true;
             }
             try {
               const activeVideo = window.__mmjSelectCapturableVideo?.() ?? null;
@@ -473,9 +512,15 @@ async function sampleMotion(
           samples,
           elapsedMs: performance.now() - start,
           tainted: true,
+          sawAdvertisement,
         };
       }
-      return { samples, elapsedMs: performance.now() - start, tainted };
+      return {
+        samples,
+        elapsedMs: performance.now() - start,
+        tainted,
+        sawAdvertisement,
+      };
     },
     {
       durationMs,
@@ -580,6 +625,20 @@ export function isMeasurementUnusable(
 }
 
 /**
+ * True when an advertisement was on screen at some point during the window.
+ *
+ * A signed-out viewer gets a pre-roll advertisement on every page load and
+ * mid-roll ones while watching, and nicovideo freezes the live `<video>`
+ * while an ad plays. The sampled picture is then a still image, so judging it
+ * reports a healthy stream as having stopped. Lowering the FPS threshold
+ * cannot help (a frozen picture yields zero changed frames); the window has
+ * to be discarded and re-measured once the advertisement ends.
+ */
+export function wasAdvertisementShown(motion: MotionSamples): boolean {
+  return motion.sawAdvertisement;
+}
+
+/**
  * Probe decoded-audio bytes around one sampling window.
  *
  * Returns `null` when the video element disappeared before the closing
@@ -593,6 +652,53 @@ async function measurePlayback(
   const endProbe = await readVideoState(page);
   if (!endProbe.found) return null;
   return { startProbe, motion, endProbe };
+}
+
+/** True while a cross-origin (advertisement) video is actively playing. */
+async function readAdvertisementPlaying(page: Page): Promise<boolean> {
+  return page
+    .evaluate(() => window.__mmjIsAdvertisementPlaying?.() ?? false)
+    .catch(() => false);
+}
+
+/**
+ * Poll until no advertisement is playing, or the timeout expires.
+ *
+ * Returns `false` when an advertisement was still playing at the deadline, so
+ * the caller can decide whether to measure anyway instead of hanging.
+ */
+async function waitForAdvertisementEnd(
+  page: Page,
+  timeoutMs: number,
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (!(await readAdvertisementPlaying(page))) return true;
+    if (Date.now() >= deadline) return false;
+    await page.waitForTimeout(ADVERTISEMENT_POLL_MS);
+  }
+}
+
+/**
+ * Wait out any running advertisement, then sample one window.
+ *
+ * Waiting first avoids sampling the frozen live picture a pre-roll ad leaves
+ * behind; the sampler separately flags any ad that starts mid-window so the
+ * caller can discard that window.
+ */
+async function measureAfterAdvertisements(
+  page: Page,
+): Promise<PlaybackMeasurement | null> {
+  const ended = await waitForAdvertisementEnd(
+    page,
+    ADVERTISEMENT_WAIT_TIMEOUT_MS,
+  );
+  if (!ended) {
+    console.log(
+      "[INFO] Advertisement still playing after the wait; measuring anyway",
+    );
+  }
+  return measurePlayback(page);
 }
 
 async function checkStream(): Promise<CheckResult> {
@@ -659,7 +765,16 @@ async function checkStream(): Promise<CheckResult> {
       return { ok: false, timestampJst, phenomena, details };
     }
 
-    let measurement = await measurePlayback(page);
+    let measurement = await measureAfterAdvertisements(page);
+    if (measurement && wasAdvertisementShown(measurement.motion)) {
+      // An advertisement started inside the sampling window, freezing the
+      // live picture, so this window says nothing about the program. Wait for
+      // the ad to finish and measure a fresh window instead of judging it.
+      console.log(
+        "[INFO] An advertisement played during the sampling window; waiting for it to end and measuring again",
+      );
+      measurement = await measureAfterAdvertisements(page);
+    }
     if (isMeasurementUnusable(measurement)) {
       // The player rebuilt its media element while the window was sampled
       // (the video lost its size, vanished, or the decoded-audio counter
@@ -673,7 +788,7 @@ async function checkStream(): Promise<CheckResult> {
         phenomena.push("映像の再生が始まりませんでした");
         return { ok: false, timestampJst, phenomena, details };
       }
-      measurement = await measurePlayback(page);
+      measurement = await measureAfterAdvertisements(page);
     }
     if (!measurement) {
       phenomena.push("チェック中にビデオ要素が消失しました");

@@ -17,6 +17,7 @@ import {
   toErrorResult,
   VIDEO_MIN_FPS,
   type VideoState,
+  wasAdvertisementShown,
 } from "./check-stream.ts";
 
 describe("formatJst", () => {
@@ -63,7 +64,12 @@ describe("shouldReMeasure", () => {
   const motionOf = (
     tainted: boolean,
     samples: MotionSample[],
-  ): MotionSamples => ({ tainted, elapsedMs: 10_000, samples });
+  ): MotionSamples => ({
+    tainted,
+    elapsedMs: 10_000,
+    samples,
+    sawAdvertisement: false,
+  });
   const twoSamples: MotionSample[] = [
     { elapsedMs: 0, wholeChanged: true, gameChanged: true },
     { elapsedMs: 16, wholeChanged: true, gameChanged: true },
@@ -104,7 +110,12 @@ describe("isMeasurementUnusable", () => {
   const motionOf = (
     tainted: boolean,
     samples: MotionSample[],
-  ): MotionSamples => ({ tainted, elapsedMs: 10_000, samples });
+  ): MotionSamples => ({
+    tainted,
+    elapsedMs: 10_000,
+    samples,
+    sawAdvertisement: false,
+  });
   const twoSamples: MotionSample[] = [
     { elapsedMs: 0, wholeChanged: true, gameChanged: true },
     { elapsedMs: 16, wholeChanged: true, gameChanged: true },
@@ -149,6 +160,62 @@ describe("isMeasurementUnusable", () => {
         measurementOf(motionOf(false, twoSamples), 14129, 7690),
       ),
     ).toBe(true);
+  });
+});
+
+describe("wasAdvertisementShown", () => {
+  const motionOf = (sawAdvertisement: boolean): MotionSamples => ({
+    tainted: false,
+    elapsedMs: 10_000,
+    samples: [{ elapsedMs: 0, wholeChanged: false, gameChanged: false }],
+    sawAdvertisement,
+  });
+
+  it("flags a window during which an advertisement played", () => {
+    // A signed-out viewer gets pre-roll/mid-roll ads, and the live picture is
+    // frozen while one plays, so the recorded motion does not describe the
+    // program and the window must be discarded.
+    expect(wasAdvertisementShown(motionOf(true))).toBe(true);
+  });
+
+  it("accepts a window with no advertisement", () => {
+    expect(wasAdvertisementShown(motionOf(false))).toBe(false);
+  });
+});
+
+describe("isMeasurementUnusable and advertisements", () => {
+  // An advertisement is not a reason to reload the player (a reload triggers
+  // a fresh pre-roll ad), so `isMeasurementUnusable` deliberately ignores it;
+  // the caller waits the ad out using `wasAdvertisementShown` instead.
+  it("does not treat an advertisement alone as unusable", () => {
+    const measurement: PlaybackMeasurement = {
+      startProbe: {
+        found: true,
+        videoWidth: 640,
+        readyState: 2,
+        paused: false,
+        currentTime: 0,
+        decodedAudioBytes: 0,
+      },
+      motion: {
+        tainted: false,
+        elapsedMs: 10_000,
+        samples: [
+          { elapsedMs: 0, wholeChanged: false, gameChanged: false },
+          { elapsedMs: 16, wholeChanged: false, gameChanged: false },
+        ],
+        sawAdvertisement: true,
+      },
+      endProbe: {
+        found: true,
+        videoWidth: 640,
+        readyState: 2,
+        paused: false,
+        currentTime: 10,
+        decodedAudioBytes: 100,
+      },
+    };
+    expect(isMeasurementUnusable(measurement)).toBe(false);
   });
 });
 
