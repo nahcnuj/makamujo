@@ -11,6 +11,16 @@ const PLAYBACK_READY_TIMEOUT_MS = 30_000;
 const PLAYBACK_READY_POLL_MS = 250;
 /** Playback has to advance this far before the startup frames are skipped. */
 const PLAYBACK_WARMUP_SECONDS = 2;
+/**
+ * How long to wait for an advertisement to finish. A signed-out viewer gets a
+ * pre-roll advertisement on every page load and mid-roll ones while watching;
+ * the live `<video>` is frozen for the whole advertisement, so measuring
+ * during one reports a healthy stream as stopped. Ads run for tens of seconds,
+ * hence the generous bound, but it stays well inside the job's 10-minute
+ * timeout even when a reload and a second wait follow.
+ */
+const ADVERTISEMENT_WAIT_TIMEOUT_MS = 90_000;
+const ADVERTISEMENT_POLL_MS = 500;
 const MAX_SAMPLE_DIMENSION = 128;
 const PIXEL_CHANNEL_TOLERANCE = 16;
 /** A sampled frame counts as "changed" when this fraction of pixels moved. */
@@ -28,9 +38,85 @@ export const GAME_CLIP = {
   heightRatio: 1,
 } as const;
 
+declare global {
+  interface Window {
+    /**
+     * Installed by {@link SELECT_VIDEO_INIT_SCRIPT}; returns the first video
+     * element whose frames can be drawn onto a canvas (same-origin sources
+     * only), preferring one that is actively playing.
+     */
+    __mmjSelectCapturableVideo?: () => HTMLVideoElement | null;
+    /**
+     * Installed by {@link SELECT_VIDEO_INIT_SCRIPT}; returns true while a
+     * cross-origin video (an advertisement) is actively playing.
+     */
+    __mmjIsAdvertisementPlaying?: () => boolean;
+  }
+}
+
 type VideoProbe = HTMLVideoElement & {
   webkitAudioDecodedByteCount?: number;
 };
+
+/**
+ * True when a media element with this `currentSrc` can be drawn onto a canvas
+ * without tainting it.
+ *
+ * Nicovideo's watch page keeps several `<video>` elements around: the live
+ * stream arrives through Media Source Extensions under a same-origin `blob:`
+ * URL, but advertisements are plain cross-origin `https:` files. Drawing a
+ * cross-origin element makes the canvas unreadable (`getImageData` throws a
+ * `SecurityError`), so the motion sampler must never pick one. An empty source
+ * (an element using `srcObject`, or one that has not loaded yet) and
+ * `blob:`/`data:`/`mediastream:` URLs are treated as capturable.
+ */
+export function isCapturableMediaSource(
+  currentSrc: string,
+  pageOrigin: string,
+): boolean {
+  if (currentSrc === "") return true;
+  if (
+    currentSrc.startsWith("blob:") ||
+    currentSrc.startsWith("data:") ||
+    currentSrc.startsWith("mediastream:")
+  ) {
+    return true;
+  }
+  try {
+    return new URL(currentSrc, pageOrigin).origin === pageOrigin;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * In-page selector shared by every `page.evaluate` that has to touch the
+ * player. The selection order mirrors the old ad-hoc `find` chains, but a
+ * cross-origin element (an advertisement) is never chosen: picking one would
+ * taint the sampling canvas and report a healthy stream as having no picture.
+ *
+ * The capturability check is injected from {@link isCapturableMediaSource} so
+ * the browser-side logic stays in step with the unit-tested one.
+ */
+const SELECT_VIDEO_INIT_SCRIPT = `
+(() => {
+  const isCapturable = ${isCapturableMediaSource.toString()};
+  const origin = location.origin;
+  const isActive = (v) => v.videoWidth > 0 && v.readyState >= 2 && v.paused === false;
+  const isSized = (v) => v.videoWidth > 0 && v.readyState >= 2;
+  window.__mmjSelectCapturableVideo = () => {
+    const videos = Array.from(document.querySelectorAll("video"));
+    const capturable = videos.filter((v) =>
+      isCapturable(v.currentSrc || v.src || "", origin),
+    );
+    return capturable.find(isActive) ?? capturable.find(isSized) ?? null;
+  };
+  window.__mmjIsAdvertisementPlaying = () =>
+    Array.from(document.querySelectorAll("video")).some(
+      (v) => !isCapturable(v.currentSrc || v.src || "", origin) && isActive(v),
+    );
+})();
+`;
 
 export interface CheckResult {
   ok: boolean;
@@ -74,6 +160,41 @@ export function isAudioPlaying(
 }
 
 /**
+ * True when the decoded-audio counter went backwards between two probes.
+ *
+ * `webkitAudioDecodedByteCount` only resets when the media element is
+ * replaced or its source is rebuilt, so a smaller end value means the two
+ * probes watched different elements and their difference proves nothing.
+ */
+export function didAudioDecodedBytesReset(
+  decodedBytesStart: number,
+  decodedBytesEnd: number,
+): boolean {
+  return decodedBytesEnd < decodedBytesStart;
+}
+
+/**
+ * True when one sampling window cannot be judged and the whole measurement
+ * should run again on a freshly loaded player.
+ *
+ * The player rebuilds its media element when the HLS stream stutters or
+ * ends: the video loses its intrinsic size (so no frames are capturable)
+ * and the decoded-audio counter restarts from zero. Judging that window
+ * would report a healthy stream as dead, so the caller re-measures instead.
+ */
+export function shouldReMeasure(
+  motion: MotionSamples,
+  decodedAudioBytesStart: number,
+  decodedAudioBytesEnd: number,
+): boolean {
+  return (
+    motion.tainted ||
+    motion.samples.length < 2 ||
+    didAudioDecodedBytesReset(decodedAudioBytesStart, decodedAudioBytesEnd)
+  );
+}
+
+/**
  * A picture counts as moving only when its slowest one-second bucket keeps
  * enough changed frames. A threshold of N means "N FPS or below is an error".
  */
@@ -107,6 +228,12 @@ export interface MotionSamples {
   elapsedMs: number;
   /** Reading pixels threw (e.g. tainted canvas); comparison is impossible. */
   tainted: boolean;
+  /**
+   * An advertisement was playing at some point during the window. The live
+   * picture is frozen while nicovideo shows an ad to a signed-out viewer, so
+   * the motion recorded here does not describe the program.
+   */
+  sawAdvertisement: boolean;
 }
 
 export interface FpsSummary {
@@ -179,7 +306,8 @@ export interface VideoState {
 
 async function readVideoState(page: Page): Promise<VideoState> {
   return page.evaluate(() => {
-    const video = document.querySelector("video") as VideoProbe | null;
+    const video = (window.__mmjSelectCapturableVideo?.() ??
+      null) as VideoProbe | null;
     if (!video) {
       return {
         found: false,
@@ -259,8 +387,9 @@ async function waitForVideoPlayback(
  * requestAnimationFrame keeps ticking at the display rate even while the
  * picture is frozen, which is exactly what exposes a stall as 0 changed
  * frames in that second. Drawing the element needs no screenshot round
- * trip; if the canvas is tainted the read throws and the caller treats the
- * window as unmeasurable instead of guessing.
+ * trip; if the canvas is tainted the read throws inside the animation-frame
+ * callback, which marks the window `tainted` and ends it, so the caller
+ * treats the window as unmeasurable instead of guessing.
  */
 async function sampleMotion(
   page: Page,
@@ -278,9 +407,16 @@ async function sampleMotion(
       channelTolerance,
       minChangedRatio,
     }) => {
-      const video = document.querySelector("video");
+      const selectVideo = () => window.__mmjSelectCapturableVideo?.() ?? null;
+
+      const video = selectVideo();
       if (!video?.videoWidth || !video.videoHeight) {
-        return { samples: [], elapsedMs: 0, tainted: false };
+        return {
+          samples: [],
+          elapsedMs: 0,
+          tainted: false,
+          sawAdvertisement: false,
+        };
       }
       const scale = Math.min(
         1,
@@ -292,10 +428,17 @@ async function sampleMotion(
       const canvas = new OffscreenCanvas(width, height);
       const context = canvas.getContext("2d", { willReadFrequently: true });
       if (!context) {
-        return { samples: [], elapsedMs: 0, tainted: false };
+        return {
+          samples: [],
+          elapsedMs: 0,
+          tainted: false,
+          sawAdvertisement: false,
+        };
       }
       const samples: MotionSample[] = [];
       let previous: Uint8ClampedArray | null = null;
+      let tainted = false;
+      let sawAdvertisement = false;
       const start = performance.now();
       try {
         await new Promise<void>((resolve) => {
@@ -308,39 +451,58 @@ async function sampleMotion(
               resolve();
               return;
             }
-            context.drawImage(video, 0, 0, width, height);
-            const current = context.getImageData(0, 0, width, height).data;
-            if (previous) {
-              let wholeDiff = 0;
-              let gameDiff = 0;
-              const total = width * height;
-              for (let p = 0; p < total; p++) {
-                const i = p * 4;
-                const redDiff = Math.abs(
-                  (previous[i] ?? 0) - (current[i] ?? 0),
-                );
-                const greenDiff = Math.abs(
-                  (previous[i + 1] ?? 0) - (current[i + 1] ?? 0),
-                );
-                const blueDiff = Math.abs(
-                  (previous[i + 2] ?? 0) - (current[i + 2] ?? 0),
-                );
-                if (
-                  redDiff > channelTolerance ||
-                  greenDiff > channelTolerance ||
-                  blueDiff > channelTolerance
-                ) {
-                  wholeDiff += 1;
-                  if (p % width < gameWidth) gameDiff += 1;
-                }
-              }
-              samples.push({
-                elapsedMs: now - start,
-                wholeChanged: wholeDiff / total > minChangedRatio,
-                gameChanged: gameDiff / (gameWidth * height) > minChangedRatio,
-              });
+            if (window.__mmjIsAdvertisementPlaying?.()) {
+              sawAdvertisement = true;
             }
-            previous = current;
+            try {
+              const activeVideo = window.__mmjSelectCapturableVideo?.() ?? null;
+              if (!activeVideo?.videoWidth || !activeVideo.videoHeight) {
+                requestAnimationFrame(tick);
+                return;
+              }
+              context.drawImage(activeVideo, 0, 0, width, height);
+              const current = context.getImageData(0, 0, width, height).data;
+              if (previous) {
+                let wholeDiff = 0;
+                let gameDiff = 0;
+                const total = width * height;
+                for (let p = 0; p < total; p++) {
+                  const i = p * 4;
+                  const redDiff = Math.abs(
+                    (previous[i] ?? 0) - (current[i] ?? 0),
+                  );
+                  const greenDiff = Math.abs(
+                    (previous[i + 1] ?? 0) - (current[i + 1] ?? 0),
+                  );
+                  const blueDiff = Math.abs(
+                    (previous[i + 2] ?? 0) - (current[i + 2] ?? 0),
+                  );
+                  if (
+                    redDiff > channelTolerance ||
+                    greenDiff > channelTolerance ||
+                    blueDiff > channelTolerance
+                  ) {
+                    wholeDiff += 1;
+                    if (p % width < gameWidth) gameDiff += 1;
+                  }
+                }
+                samples.push({
+                  elapsedMs: now - start,
+                  wholeChanged: wholeDiff / total > minChangedRatio,
+                  gameChanged:
+                    gameDiff / (gameWidth * height) > minChangedRatio,
+                });
+              }
+              previous = current;
+            } catch {
+              // An error thrown in this callback never rejects the awaited
+              // promise; without this catch a tainted canvas would surface
+              // only as an empty sample list with `tainted` left false.
+              tainted = true;
+              clearTimeout(safety);
+              resolve();
+              return;
+            }
             requestAnimationFrame(tick);
           };
           requestAnimationFrame(tick);
@@ -350,9 +512,15 @@ async function sampleMotion(
           samples,
           elapsedMs: performance.now() - start,
           tainted: true,
+          sawAdvertisement,
         };
       }
-      return { samples, elapsedMs: performance.now() - start, tainted: false };
+      return {
+        samples,
+        elapsedMs: performance.now() - start,
+        tainted,
+        sawAdvertisement,
+      };
     },
     {
       durationMs,
@@ -362,6 +530,175 @@ async function sampleMotion(
       minChangedRatio,
     },
   );
+}
+
+/**
+ * Sample for the whole window, then once more after a short pause when the
+ * first pass captured too few frames to judge motion.
+ */
+async function sampleMotionWithRetry(page: Page): Promise<MotionSamples> {
+  let motion = await sampleMotion(
+    page,
+    CHECK_DURATION_MS,
+    GAME_CLIP.widthRatio,
+    MAX_SAMPLE_DIMENSION,
+    PIXEL_CHANNEL_TOLERANCE,
+    MIN_CHANGED_RATIO,
+  );
+  if (motion.tainted || motion.samples.length < 2) {
+    await page.waitForTimeout(1_000);
+    motion = await sampleMotion(
+      page,
+      CHECK_DURATION_MS,
+      GAME_CLIP.widthRatio,
+      MAX_SAMPLE_DIMENSION,
+      PIXEL_CHANNEL_TOLERANCE,
+      MIN_CHANGED_RATIO,
+    );
+  }
+  return motion;
+}
+
+/**
+ * Nudge every `<video>` on the page to play unmuted.
+ *
+ * The launch flag disables the autoplay policy, but the player sometimes
+ * leaves an element paused. Every element is nudged because the live stream's
+ * `<video>` may not exist yet (an advertisement can hold the slot first);
+ * unmuting matters because a muted element is not guaranteed to decode audio.
+ */
+async function startPlayback(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    for (const video of Array.from(document.querySelectorAll("video"))) {
+      try {
+        video.muted = false;
+        video.volume = 1;
+        void video.play().catch(() => undefined);
+      } catch {
+        // Ignore: the readiness poll re-checks the element state.
+      }
+    }
+  });
+}
+
+/**
+ * Reload the watch page and wait for the player to be decodable and
+ * advancing again. Used when playback never started and when the player
+ * rebuilt its media element in the middle of a measurement.
+ */
+async function reloadAndWaitForPlayback(page: Page): Promise<boolean> {
+  await page.reload({
+    waitUntil: "domcontentloaded",
+    timeout: NAVIGATION_TIMEOUT_MS,
+  });
+  await page.waitForSelector("video", { timeout: 30_000 });
+  await startPlayback(page);
+  return waitForVideoPlayback(page, PLAYBACK_READY_TIMEOUT_MS);
+}
+
+export interface PlaybackMeasurement {
+  startProbe: VideoState;
+  motion: MotionSamples;
+  endProbe: VideoState;
+}
+
+/**
+ * True when one probing window cannot be judged, so the whole measurement
+ * should run again on a freshly loaded player.
+ *
+ * `null` means the closing probe found no capturable video at all: the live
+ * element was replaced by a cross-origin advertisement (which the selector
+ * rejects) or the player rebuilt its media element and had not attached the
+ * new source yet. A window that captured too few frames, whose canvas read
+ * failed, or whose decoded-audio counter went backwards is unusable too.
+ * Judging any of these would report a healthy stream as dead.
+ */
+export function isMeasurementUnusable(
+  measurement: PlaybackMeasurement | null,
+): boolean {
+  if (measurement === null) return true;
+  return shouldReMeasure(
+    measurement.motion,
+    measurement.startProbe.decodedAudioBytes,
+    measurement.endProbe.decodedAudioBytes,
+  );
+}
+
+/**
+ * True when an advertisement was on screen at some point during the window.
+ *
+ * A signed-out viewer gets a pre-roll advertisement on every page load and
+ * mid-roll ones while watching, and nicovideo freezes the live `<video>`
+ * while an ad plays. The sampled picture is then a still image, so judging it
+ * reports a healthy stream as having stopped. Lowering the FPS threshold
+ * cannot help (a frozen picture yields zero changed frames); the window has
+ * to be discarded and re-measured once the advertisement ends.
+ */
+export function wasAdvertisementShown(motion: MotionSamples): boolean {
+  return motion.sawAdvertisement;
+}
+
+/**
+ * Probe decoded-audio bytes around one sampling window.
+ *
+ * Returns `null` when the video element disappeared before the closing
+ * probe, so the caller can re-measure instead of judging motion.
+ */
+async function measurePlayback(
+  page: Page,
+): Promise<PlaybackMeasurement | null> {
+  const startProbe = await readVideoState(page);
+  const motion = await sampleMotionWithRetry(page);
+  const endProbe = await readVideoState(page);
+  if (!endProbe.found) return null;
+  return { startProbe, motion, endProbe };
+}
+
+/** True while a cross-origin (advertisement) video is actively playing. */
+async function readAdvertisementPlaying(page: Page): Promise<boolean> {
+  return page
+    .evaluate(() => window.__mmjIsAdvertisementPlaying?.() ?? false)
+    .catch(() => false);
+}
+
+/**
+ * Poll until no advertisement is playing, or the timeout expires.
+ *
+ * Returns `false` when an advertisement was still playing at the deadline, so
+ * the caller can decide whether to measure anyway instead of hanging.
+ */
+async function waitForAdvertisementEnd(
+  page: Page,
+  timeoutMs: number,
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (!(await readAdvertisementPlaying(page))) return true;
+    if (Date.now() >= deadline) return false;
+    await page.waitForTimeout(ADVERTISEMENT_POLL_MS);
+  }
+}
+
+/**
+ * Wait out any running advertisement, then sample one window.
+ *
+ * Waiting first avoids sampling the frozen live picture a pre-roll ad leaves
+ * behind; the sampler separately flags any ad that starts mid-window so the
+ * caller can discard that window.
+ */
+async function measureAfterAdvertisements(
+  page: Page,
+): Promise<PlaybackMeasurement | null> {
+  const ended = await waitForAdvertisementEnd(
+    page,
+    ADVERTISEMENT_WAIT_TIMEOUT_MS,
+  );
+  if (!ended) {
+    console.log(
+      "[INFO] Advertisement still playing after the wait; measuring anyway",
+    );
+  }
+  return measurePlayback(page);
 }
 
 async function checkStream(): Promise<CheckResult> {
@@ -390,6 +727,7 @@ async function checkStream(): Promise<CheckResult> {
   });
 
   const page = await context.newPage();
+  await page.addInitScript(SELECT_VIDEO_INIT_SCRIPT);
 
   try {
     console.log(`[INFO] Opening watch page: ${WATCH_PAGE_URL}`);
@@ -406,13 +744,7 @@ async function checkStream(): Promise<CheckResult> {
 
     await page.waitForSelector("video", { timeout: 30_000 });
 
-    await page.evaluate(() => {
-      const video = document.querySelector("video");
-      if (!video) return;
-      video.muted = false;
-      video.volume = 1;
-      void video.play();
-    });
+    await startPlayback(page);
 
     const video = await page.$("video");
     if (!video) {
@@ -420,32 +752,50 @@ async function checkStream(): Promise<CheckResult> {
       return { ok: false, timestampJst, phenomena, details };
     }
 
-    const playbackStarted = await waitForVideoPlayback(
+    let playbackStarted = await waitForVideoPlayback(
       page,
       PLAYBACK_READY_TIMEOUT_MS,
     );
+    if (!playbackStarted) {
+      console.log("[INFO] Playback did not start; reloading watch page");
+      playbackStarted = await reloadAndWaitForPlayback(page);
+    }
     if (!playbackStarted) {
       phenomena.push("映像の再生が始まりませんでした");
       return { ok: false, timestampJst, phenomena, details };
     }
 
-    const startProbe = await readVideoState(page);
-    details.decodedAudioBytesStart = startProbe.decodedAudioBytes;
-
-    const motion = await sampleMotion(
-      page,
-      CHECK_DURATION_MS,
-      GAME_CLIP.widthRatio,
-      MAX_SAMPLE_DIMENSION,
-      PIXEL_CHANNEL_TOLERANCE,
-      MIN_CHANGED_RATIO,
-    );
-
-    const endProbe = await readVideoState(page);
-    if (!endProbe.found) {
+    let measurement = await measureAfterAdvertisements(page);
+    if (measurement && wasAdvertisementShown(measurement.motion)) {
+      // An advertisement started inside the sampling window, freezing the
+      // live picture, so this window says nothing about the program. Wait for
+      // the ad to finish and measure a fresh window instead of judging it.
+      console.log(
+        "[INFO] An advertisement played during the sampling window; waiting for it to end and measuring again",
+      );
+      measurement = await measureAfterAdvertisements(page);
+    }
+    if (isMeasurementUnusable(measurement)) {
+      // The player rebuilt its media element while the window was sampled
+      // (the video lost its size, vanished, or the decoded-audio counter
+      // went backwards), so the probes watched different elements. Start the
+      // measurement over on a freshly loaded player instead of judging it.
+      console.log(
+        "[INFO] Measurement unusable (no video, no frames captured, or the decoded-audio counter went backwards); reloading and measuring again",
+      );
+      const recovered = await reloadAndWaitForPlayback(page);
+      if (!recovered) {
+        phenomena.push("映像の再生が始まりませんでした");
+        return { ok: false, timestampJst, phenomena, details };
+      }
+      measurement = await measureAfterAdvertisements(page);
+    }
+    if (!measurement) {
       phenomena.push("チェック中にビデオ要素が消失しました");
       return { ok: false, timestampJst, phenomena, details };
     }
+    const { startProbe, motion, endProbe } = measurement;
+    details.decodedAudioBytesStart = startProbe.decodedAudioBytes;
     details.decodedAudioBytesEnd = endProbe.decodedAudioBytes;
 
     const audioPlaying = isAudioPlaying(

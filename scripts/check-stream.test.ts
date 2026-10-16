@@ -1,15 +1,23 @@
 import { describe, expect, it } from "bun:test";
 import {
+  didAudioDecodedBytesReset,
   formatJst,
   GAME_MIN_FPS,
   isAudioPlaying,
+  isCapturableMediaSource,
   isFpsAboveThreshold,
+  isMeasurementUnusable,
   isOverallOk,
   isVideoReady,
   type MotionSample,
+  type MotionSamples,
+  type PlaybackMeasurement,
+  shouldReMeasure,
   summarizeFps,
   toErrorResult,
   VIDEO_MIN_FPS,
+  type VideoState,
+  wasAdvertisementShown,
 } from "./check-stream.ts";
 
 describe("formatJst", () => {
@@ -35,6 +43,179 @@ describe("isAudioPlaying", () => {
   it("returns true when decoded bytes increase", () => {
     expect(isAudioPlaying(0, 1)).toBe(true);
     expect(isAudioPlaying(100, 250)).toBe(true);
+  });
+});
+
+describe("didAudioDecodedBytesReset", () => {
+  it("flags a counter that went backwards (the element was replaced)", () => {
+    // Observed when the player rebuilt its media element mid-check:
+    // the start and end probes watched different elements.
+    expect(didAudioDecodedBytesReset(14129, 7690)).toBe(true);
+  });
+
+  it("accepts a counter that held still or advanced", () => {
+    expect(didAudioDecodedBytesReset(0, 0)).toBe(false);
+    expect(didAudioDecodedBytesReset(100, 100)).toBe(false);
+    expect(didAudioDecodedBytesReset(100, 250)).toBe(false);
+  });
+});
+
+describe("shouldReMeasure", () => {
+  const motionOf = (
+    tainted: boolean,
+    samples: MotionSample[],
+  ): MotionSamples => ({
+    tainted,
+    elapsedMs: 10_000,
+    samples,
+    sawAdvertisement: false,
+  });
+  const twoSamples: MotionSample[] = [
+    { elapsedMs: 0, wholeChanged: true, gameChanged: true },
+    { elapsedMs: 16, wholeChanged: true, gameChanged: true },
+  ];
+
+  it("accepts a window with enough frames and a stable counter", () => {
+    expect(shouldReMeasure(motionOf(false, twoSamples), 0, 100)).toBe(false);
+  });
+
+  it("rejects a window that captured too few frames", () => {
+    expect(shouldReMeasure(motionOf(false, []), 0, 100)).toBe(true);
+    const oneSample: MotionSample[] = [
+      { elapsedMs: 0, wholeChanged: true, gameChanged: true },
+    ];
+    expect(shouldReMeasure(motionOf(false, oneSample), 0, 100)).toBe(true);
+  });
+
+  it("rejects a window whose canvas read failed", () => {
+    expect(shouldReMeasure(motionOf(true, twoSamples), 0, 100)).toBe(true);
+  });
+
+  it("rejects a window whose decoded-audio counter went backwards", () => {
+    expect(shouldReMeasure(motionOf(false, twoSamples), 14129, 7690)).toBe(
+      true,
+    );
+  });
+});
+
+describe("isMeasurementUnusable", () => {
+  const probe = (decodedAudioBytes: number): VideoState => ({
+    found: true,
+    videoWidth: 640,
+    readyState: 2,
+    paused: false,
+    currentTime: 0,
+    decodedAudioBytes,
+  });
+  const motionOf = (
+    tainted: boolean,
+    samples: MotionSample[],
+  ): MotionSamples => ({
+    tainted,
+    elapsedMs: 10_000,
+    samples,
+    sawAdvertisement: false,
+  });
+  const twoSamples: MotionSample[] = [
+    { elapsedMs: 0, wholeChanged: true, gameChanged: true },
+    { elapsedMs: 16, wholeChanged: true, gameChanged: true },
+  ];
+  const measurementOf = (
+    motion: MotionSamples,
+    decodedAudioBytesStart: number,
+    decodedAudioBytesEnd: number,
+  ): PlaybackMeasurement => ({
+    startProbe: probe(decodedAudioBytesStart),
+    motion,
+    endProbe: probe(decodedAudioBytesEnd),
+  });
+
+  it("rejects a window whose closing probe found no video", () => {
+    // The live element was replaced by an advertisement (cross-origin) or
+    // the player rebuilt it, so the window cannot be judged.
+    expect(isMeasurementUnusable(null)).toBe(true);
+  });
+
+  it("accepts a window with enough frames and a stable counter", () => {
+    expect(
+      isMeasurementUnusable(measurementOf(motionOf(false, twoSamples), 0, 100)),
+    ).toBe(false);
+  });
+
+  it("rejects a window that captured too few frames", () => {
+    expect(
+      isMeasurementUnusable(measurementOf(motionOf(false, []), 0, 100)),
+    ).toBe(true);
+  });
+
+  it("rejects a window whose canvas read failed", () => {
+    expect(
+      isMeasurementUnusable(measurementOf(motionOf(true, twoSamples), 0, 100)),
+    ).toBe(true);
+  });
+
+  it("rejects a window whose decoded-audio counter went backwards", () => {
+    expect(
+      isMeasurementUnusable(
+        measurementOf(motionOf(false, twoSamples), 14129, 7690),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("wasAdvertisementShown", () => {
+  const motionOf = (sawAdvertisement: boolean): MotionSamples => ({
+    tainted: false,
+    elapsedMs: 10_000,
+    samples: [{ elapsedMs: 0, wholeChanged: false, gameChanged: false }],
+    sawAdvertisement,
+  });
+
+  it("flags a window during which an advertisement played", () => {
+    // A signed-out viewer gets pre-roll/mid-roll ads, and the live picture is
+    // frozen while one plays, so the recorded motion does not describe the
+    // program and the window must be discarded.
+    expect(wasAdvertisementShown(motionOf(true))).toBe(true);
+  });
+
+  it("accepts a window with no advertisement", () => {
+    expect(wasAdvertisementShown(motionOf(false))).toBe(false);
+  });
+});
+
+describe("isMeasurementUnusable and advertisements", () => {
+  // An advertisement is not a reason to reload the player (a reload triggers
+  // a fresh pre-roll ad), so `isMeasurementUnusable` deliberately ignores it;
+  // the caller waits the ad out using `wasAdvertisementShown` instead.
+  it("does not treat an advertisement alone as unusable", () => {
+    const measurement: PlaybackMeasurement = {
+      startProbe: {
+        found: true,
+        videoWidth: 640,
+        readyState: 2,
+        paused: false,
+        currentTime: 0,
+        decodedAudioBytes: 0,
+      },
+      motion: {
+        tainted: false,
+        elapsedMs: 10_000,
+        samples: [
+          { elapsedMs: 0, wholeChanged: false, gameChanged: false },
+          { elapsedMs: 16, wholeChanged: false, gameChanged: false },
+        ],
+        sawAdvertisement: true,
+      },
+      endProbe: {
+        found: true,
+        videoWidth: 640,
+        readyState: 2,
+        paused: false,
+        currentTime: 10,
+        decodedAudioBytes: 100,
+      },
+    };
+    expect(isMeasurementUnusable(measurement)).toBe(false);
   });
 });
 
@@ -171,6 +352,54 @@ describe("summarizeFps", () => {
     const summary = summarizeFps(samples, (s) => s.wholeChanged, 1000, 10000);
     expect(summary.changedFrames).toBe(100);
     expect(summary.comparedFrames).toBe(100);
+  });
+});
+
+describe("isCapturableMediaSource", () => {
+  const origin = "https://live.nicovideo.jp";
+
+  it("accepts the same-origin blob stream", () => {
+    expect(
+      isCapturableMediaSource(
+        "blob:https://live.nicovideo.jp/5ff1666b-b664-423f-a456-00051a39e9e8",
+        origin,
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a cross-origin advertisement video", () => {
+    // Observed on the watch page: a mid-stream ad is a plain cross-origin
+    // file, and drawing it taints the sampling canvas.
+    expect(
+      isCapturableMediaSource(
+        "https://gcdn.2mdn.net/videoplayback/id/21b88bf5e807721e/itag/344/source/web_video_ads/file.mp4",
+        origin,
+      ),
+    ).toBe(false);
+  });
+
+  it("accepts an element that has not loaded a source yet", () => {
+    expect(isCapturableMediaSource("", origin)).toBe(true);
+  });
+
+  it("accepts a same-origin http source", () => {
+    expect(
+      isCapturableMediaSource(
+        "https://live.nicovideo.jp/assets/sample.mp4",
+        origin,
+      ),
+    ).toBe(true);
+  });
+
+  it("accepts data and mediastream sources", () => {
+    expect(isCapturableMediaSource("data:video/mp4;base64,AAAA", origin)).toBe(
+      true,
+    );
+    expect(isCapturableMediaSource("mediastream:abc", origin)).toBe(true);
+  });
+
+  it("rejects an unparseable source", () => {
+    expect(isCapturableMediaSource("http://[invalid", origin)).toBe(false);
   });
 });
 
