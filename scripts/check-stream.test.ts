@@ -6,14 +6,17 @@ import {
   isAudioPlaying,
   isCapturableMediaSource,
   isFpsAboveThreshold,
+  isMeasurementUnusable,
   isOverallOk,
   isVideoReady,
   type MotionSample,
   type MotionSamples,
+  type PlaybackMeasurement,
   shouldReMeasure,
   summarizeFps,
   toErrorResult,
   VIDEO_MIN_FPS,
+  type VideoState,
 } from "./check-stream.ts";
 
 describe("formatJst", () => {
@@ -86,6 +89,66 @@ describe("shouldReMeasure", () => {
     expect(shouldReMeasure(motionOf(false, twoSamples), 14129, 7690)).toBe(
       true,
     );
+  });
+});
+
+describe("isMeasurementUnusable", () => {
+  const probe = (decodedAudioBytes: number): VideoState => ({
+    found: true,
+    videoWidth: 640,
+    readyState: 2,
+    paused: false,
+    currentTime: 0,
+    decodedAudioBytes,
+  });
+  const motionOf = (
+    tainted: boolean,
+    samples: MotionSample[],
+  ): MotionSamples => ({ tainted, elapsedMs: 10_000, samples });
+  const twoSamples: MotionSample[] = [
+    { elapsedMs: 0, wholeChanged: true, gameChanged: true },
+    { elapsedMs: 16, wholeChanged: true, gameChanged: true },
+  ];
+  const measurementOf = (
+    motion: MotionSamples,
+    decodedAudioBytesStart: number,
+    decodedAudioBytesEnd: number,
+  ): PlaybackMeasurement => ({
+    startProbe: probe(decodedAudioBytesStart),
+    motion,
+    endProbe: probe(decodedAudioBytesEnd),
+  });
+
+  it("rejects a window whose closing probe found no video", () => {
+    // The live element was replaced by an advertisement (cross-origin) or
+    // the player rebuilt it, so the window cannot be judged.
+    expect(isMeasurementUnusable(null)).toBe(true);
+  });
+
+  it("accepts a window with enough frames and a stable counter", () => {
+    expect(
+      isMeasurementUnusable(measurementOf(motionOf(false, twoSamples), 0, 100)),
+    ).toBe(false);
+  });
+
+  it("rejects a window that captured too few frames", () => {
+    expect(
+      isMeasurementUnusable(measurementOf(motionOf(false, []), 0, 100)),
+    ).toBe(true);
+  });
+
+  it("rejects a window whose canvas read failed", () => {
+    expect(
+      isMeasurementUnusable(measurementOf(motionOf(true, twoSamples), 0, 100)),
+    ).toBe(true);
+  });
+
+  it("rejects a window whose decoded-audio counter went backwards", () => {
+    expect(
+      isMeasurementUnusable(
+        measurementOf(motionOf(false, twoSamples), 14129, 7690),
+      ),
+    ).toBe(true);
   });
 });
 
