@@ -765,21 +765,29 @@ async function checkStream(): Promise<CheckResult> {
       return { ok: false, timestampJst, phenomena, details };
     }
 
-    let measurement = await measureAfterAdvertisements(page);
-    if (measurement && wasAdvertisementShown(measurement.motion)) {
-      // An advertisement started inside the sampling window, freezing the
-      // live picture, so this window says nothing about the program. Wait for
-      // the ad to finish and measure a fresh window instead of judging it.
-      console.log(
-        "[INFO] An advertisement played during the sampling window; waiting for it to end and measuring again",
-      );
-      measurement = await measureAfterAdvertisements(page);
-    }
-    if (isMeasurementUnusable(measurement)) {
-      // The player rebuilt its media element while the window was sampled
-      // (the video lost its size, vanished, or the decoded-audio counter
-      // went backwards), so the probes watched different elements. Start the
-      // measurement over on a freshly loaded player instead of judging it.
+    // Keep re-measuring until the window contains neither an intervening
+    // advertisement nor an unusable (rebuilt media element) probe. A signed-out
+    // viewer can get several mid-roll ads in quick succession, and a single
+    // retry is not enough to land on a clean window.
+    let measurement: PlaybackMeasurement | null =
+      await measureAfterAdvertisements(page);
+    let measurementAttempts = 0;
+    while (
+      measurement !== null &&
+      (wasAdvertisementShown(measurement.motion) ||
+        isMeasurementUnusable(measurement))
+    ) {
+      measurementAttempts += 1;
+      if (measurementAttempts > 5) {
+        break;
+      }
+      if (wasAdvertisementShown(measurement.motion)) {
+        console.log(
+          "[INFO] An advertisement played during the sampling window; waiting for it to end and measuring again",
+        );
+        measurement = await measureAfterAdvertisements(page);
+        continue;
+      }
       console.log(
         "[INFO] Measurement unusable (no video, no frames captured, or the decoded-audio counter went backwards); reloading and measuring again",
       );
