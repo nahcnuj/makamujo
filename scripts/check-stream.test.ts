@@ -6,6 +6,7 @@ import {
   isAudioPlaying,
   isCapturableMediaSource,
   isFpsAboveThreshold,
+  isFrozenPictureExplainedByAdvertisement,
   isMeasurementUnusable,
   isOverallOk,
   isVideoReady,
@@ -18,6 +19,7 @@ import {
   VIDEO_MIN_FPS,
   type VideoState,
   wasAdvertisementShown,
+  wasPlaybackPaused,
 } from "./check-stream.ts";
 
 describe("formatJst", () => {
@@ -69,6 +71,7 @@ describe("shouldReMeasure", () => {
     elapsedMs: 10_000,
     samples,
     sawAdvertisement: false,
+    sawPaused: false,
   });
   const twoSamples: MotionSample[] = [
     { elapsedMs: 0, wholeChanged: true, gameChanged: true },
@@ -115,6 +118,7 @@ describe("isMeasurementUnusable", () => {
     elapsedMs: 10_000,
     samples,
     sawAdvertisement: false,
+    sawPaused: false,
   });
   const twoSamples: MotionSample[] = [
     { elapsedMs: 0, wholeChanged: true, gameChanged: true },
@@ -169,6 +173,7 @@ describe("wasAdvertisementShown", () => {
     elapsedMs: 10_000,
     samples: [{ elapsedMs: 0, wholeChanged: false, gameChanged: false }],
     sawAdvertisement,
+    sawPaused: false,
   });
 
   it("flags a window during which an advertisement played", () => {
@@ -180,6 +185,66 @@ describe("wasAdvertisementShown", () => {
 
   it("accepts a window with no advertisement", () => {
     expect(wasAdvertisementShown(motionOf(false))).toBe(false);
+  });
+});
+
+describe("wasPlaybackPaused", () => {
+  const motionOf = (sawPaused: boolean): MotionSamples => ({
+    tainted: false,
+    elapsedMs: 10_000,
+    samples: [{ elapsedMs: 0, wholeChanged: false, gameChanged: false }],
+    sawAdvertisement: false,
+    sawPaused,
+  });
+
+  it("flags a window during which the live element was paused", () => {
+    // An advertisement pauses the live `<video>`; it keeps presenting its last
+    // frame while audio and part of its clock advance, so a frozen window must
+    // be discarded instead of judged as a stopped stream.
+    expect(wasPlaybackPaused(motionOf(true))).toBe(true);
+  });
+
+  it("accepts a window whose element stayed playing", () => {
+    expect(wasPlaybackPaused(motionOf(false))).toBe(false);
+  });
+});
+
+describe("isFrozenPictureExplainedByAdvertisement", () => {
+  it("explains a frozen picture when an ad played and the clock advanced", () => {
+    // The live `<video>` keeps its clock running behind the ad while showing a
+    // still frame, so a frozen window with an advertisement is unobservable,
+    // not a stopped stream.
+    expect(isFrozenPictureExplainedByAdvertisement(true, 9.8, 10)).toBe(true);
+  });
+
+  it("does not explain a frozen picture with no advertisement seen", () => {
+    expect(isFrozenPictureExplainedByAdvertisement(false, 9.8, 10)).toBe(false);
+  });
+
+  it("does not explain a frozen picture whose clock also stalled", () => {
+    // A genuinely stopped stream stalls its player clock as well, even if an
+    // advertisement happened to play earlier in the check.
+    expect(isFrozenPictureExplainedByAdvertisement(true, 0.3, 10)).toBe(false);
+    expect(isFrozenPictureExplainedByAdvertisement(true, 5, 10)).toBe(false);
+  });
+
+  it("requires more than half the window of clock advance", () => {
+    expect(isFrozenPictureExplainedByAdvertisement(true, 5.0001, 10)).toBe(
+      true,
+    );
+  });
+
+  it("ignores a non-finite clock reading", () => {
+    expect(isFrozenPictureExplainedByAdvertisement(true, Number.NaN, 10)).toBe(
+      false,
+    );
+    expect(
+      isFrozenPictureExplainedByAdvertisement(
+        true,
+        Number.POSITIVE_INFINITY,
+        10,
+      ),
+    ).toBe(false);
   });
 });
 
@@ -205,6 +270,7 @@ describe("isMeasurementUnusable and advertisements", () => {
           { elapsedMs: 16, wholeChanged: false, gameChanged: false },
         ],
         sawAdvertisement: true,
+        sawPaused: false,
       },
       endProbe: {
         found: true,

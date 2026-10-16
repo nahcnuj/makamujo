@@ -21,6 +21,14 @@ const PLAYBACK_WARMUP_SECONDS = 2;
  */
 const ADVERTISEMENT_WAIT_TIMEOUT_MS = 90_000;
 const ADVERTISEMENT_POLL_MS = 500;
+/**
+ * How many times one check may discard a contaminated window and measure
+ * again. Ads freeze the live picture for tens of seconds and can run back to
+ * back, so one retry is not always enough; the cap keeps a permanently dead
+ * stream (which never produces a clean window) inside the job's 10-minute
+ * timeout instead of looping forever.
+ */
+const MAX_MEASUREMENT_ATTEMPTS = 5;
 const MAX_SAMPLE_DIMENSION = 128;
 const PIXEL_CHANNEL_TOLERANCE = 16;
 /** A sampled frame counts as "changed" when this fraction of pixels moved. */
@@ -104,16 +112,44 @@ const SELECT_VIDEO_INIT_SCRIPT = `
   const origin = location.origin;
   const isActive = (v) => v.videoWidth > 0 && v.readyState >= 2 && v.paused === false;
   const isSized = (v) => v.videoWidth > 0 && v.readyState >= 2;
-  window.__mmjSelectCapturableVideo = () => {
-    const videos = Array.from(document.querySelectorAll("video"));
-    const capturable = videos.filter((v) =>
-      isCapturable(v.currentSrc || v.src || "", origin),
+  // Nicovideo renders its advertisements in a separate video.js player whose
+  // media is a same-origin blob just like the live stream, so the source alone
+  // cannot tell them apart (and the ad's frozen picture is what gets mistaken
+  // for a stopped stream). The ad player is marked by its container, so walk up
+  // from each element and never treat one inside it as the program.
+  const inAdvertisementPlayer = (v) => {
+    let el = v;
+    for (let depth = 0; el && depth < 12; depth++, el = el.parentElement) {
+      const id = el.id || "";
+      const className = typeof el.className === "string" ? el.className : "";
+      if (id.indexOf("ap-player") === 0) return true;
+      if (id.indexOf("smarttag") >= 0) return true;
+      if (className.indexOf("ima-ad-container") >= 0) return true;
+      if (className.indexOf("_ap_apex_ad") >= 0) return true;
+      if (className.indexOf("ad-sticky-video") >= 0) return true;
+      if (el.getAttribute("title") === "Advertisement") return true;
+      // The live program lives in the video layer; reaching it first means
+      // this element belongs to the program, not to an advertisement.
+      if (el.getAttribute("data-layer-name") === "videoLayer") return false;
+    }
+    return false;
+  };
+  const programVideos = () =>
+    Array.from(document.querySelectorAll("video")).filter(
+      (v) =>
+        isCapturable(v.currentSrc || v.src || "", origin) &&
+        !inAdvertisementPlayer(v),
     );
-    return capturable.find(isActive) ?? capturable.find(isSized) ?? null;
+  window.__mmjSelectCapturableVideo = () => {
+    const programs = programVideos();
+    return programs.find(isActive) ?? programs.find(isSized) ?? null;
   };
   window.__mmjIsAdvertisementPlaying = () =>
     Array.from(document.querySelectorAll("video")).some(
-      (v) => !isCapturable(v.currentSrc || v.src || "", origin) && isActive(v),
+      (v) =>
+        isActive(v) &&
+        (!isCapturable(v.currentSrc || v.src || "", origin) ||
+          inAdvertisementPlayer(v)),
     );
 })();
 `;
@@ -234,6 +270,15 @@ export interface MotionSamples {
    * the motion recorded here does not describe the program.
    */
   sawAdvertisement: boolean;
+  /**
+   * The capturable media element was paused at some point during the window.
+   * The player pauses the live `<video>` while an advertisement holds the slot
+   * (and while it rebuilds the element), and a paused element keeps presenting
+   * its last frame even though its decoded-audio counter and `currentTime`
+   * partially advance. Frames drawn from it are frozen pixels that say nothing
+   * about the program, so the window must not be judged.
+   */
+  sawPaused: boolean;
 }
 
 export interface FpsSummary {
@@ -411,11 +456,15 @@ async function sampleMotion(
 
       const video = selectVideo();
       if (!video?.videoWidth || !video.videoHeight) {
+        // No program element is on screen: the live player is hidden behind an
+        // advertisement or rebuilding its media element. The window cannot be
+        // judged either way, so mark it as paused rather than as a stall.
         return {
           samples: [],
           elapsedMs: 0,
           tainted: false,
           sawAdvertisement: false,
+          sawPaused: true,
         };
       }
       const scale = Math.min(
@@ -433,12 +482,14 @@ async function sampleMotion(
           elapsedMs: 0,
           tainted: false,
           sawAdvertisement: false,
+          sawPaused: false,
         };
       }
       const samples: MotionSample[] = [];
       let previous: Uint8ClampedArray | null = null;
       let tainted = false;
       let sawAdvertisement = false;
+      let sawPaused = false;
       const start = performance.now();
       try {
         await new Promise<void>((resolve) => {
@@ -457,6 +508,16 @@ async function sampleMotion(
             try {
               const activeVideo = window.__mmjSelectCapturableVideo?.() ?? null;
               if (!activeVideo?.videoWidth || !activeVideo.videoHeight) {
+                requestAnimationFrame(tick);
+                return;
+              }
+              if (activeVideo.paused) {
+                // An advertisement (or a media-element rebuild) pauses the
+                // live `<video>`, which keeps presenting its last frame while
+                // its audio and clock partly advance. Comparing those frozen
+                // pixels would report a healthy stream as stopped, so skip
+                // them and mark the window unjudgeable instead.
+                sawPaused = true;
                 requestAnimationFrame(tick);
                 return;
               }
@@ -513,6 +574,7 @@ async function sampleMotion(
           elapsedMs: performance.now() - start,
           tainted: true,
           sawAdvertisement,
+          sawPaused,
         };
       }
       return {
@@ -520,6 +582,7 @@ async function sampleMotion(
         elapsedMs: performance.now() - start,
         tainted,
         sawAdvertisement,
+        sawPaused,
       };
     },
     {
@@ -639,6 +702,43 @@ export function wasAdvertisementShown(motion: MotionSamples): boolean {
 }
 
 /**
+ * True when the capturable element was paused at some point in the window.
+ *
+ * Nicovideo pauses the live `<video>` while an advertisement holds the player
+ * (and briefly while it rebuilds the media element). The paused element keeps
+ * presenting its last frame even though its audio and clock partly advance, so
+ * the sampled picture is frozen and says nothing about the program. Unlike a
+ * rebuilt element this needs no reload (a reload only triggers a fresh pre-roll
+ * ad), so the caller waits for playback to resume and measures again.
+ */
+export function wasPlaybackPaused(motion: MotionSamples): boolean {
+  return motion.sawPaused;
+}
+
+/**
+ * True when a frozen picture is explained by an advertisement rather than by a
+ * stream fault.
+ *
+ * Nicovideo shows a signed-out viewer an advertisement on top of the live
+ * player and freezes the program picture for the whole ad break (the live
+ * `<video>` keeps `paused === false` and its clock keeps advancing, but it
+ * presents a still frame), which can easily outlast every re-measurement. A
+ * frozen picture that coincides with an advertisement therefore says nothing
+ * about the program: it is unobservable through the ad, not stopped. The
+ * advancing clock guards the opposite mistake, so a stream whose player also
+ * stopped advancing is still reported as stopped.
+ */
+export function isFrozenPictureExplainedByAdvertisement(
+  advertisementSeen: boolean,
+  clockAdvancedSeconds: number,
+  windowSeconds: number,
+): boolean {
+  if (!advertisementSeen) return false;
+  if (!Number.isFinite(clockAdvancedSeconds)) return false;
+  return clockAdvancedSeconds > windowSeconds / 2;
+}
+
+/**
  * Probe decoded-audio bytes around one sampling window.
  *
  * Returns `null` when the video element disappeared before the closing
@@ -697,6 +797,24 @@ async function measureAfterAdvertisements(
     console.log(
       "[INFO] Advertisement still playing after the wait; measuring anyway",
     );
+  }
+  return measurePlayback(page);
+}
+
+/**
+ * Wait until the live player is decoding and advancing again, then sample.
+ *
+ * Used when a window showed a paused element (an advertisement held the player
+ * or the media element was rebuilt). It deliberately avoids a reload, which
+ * would only trigger a fresh pre-roll advertisement, and polls for the live
+ * element to become active again instead.
+ */
+async function measureAfterPlaybackResumes(
+  page: Page,
+): Promise<PlaybackMeasurement | null> {
+  const resumed = await waitForVideoPlayback(page, PLAYBACK_READY_TIMEOUT_MS);
+  if (!resumed) {
+    console.log("[INFO] Playback did not resume; measuring anyway");
   }
   return measurePlayback(page);
 }
@@ -765,36 +883,62 @@ async function checkStream(): Promise<CheckResult> {
       return { ok: false, timestampJst, phenomena, details };
     }
 
-    let measurement = await measureAfterAdvertisements(page);
-    if (measurement && wasAdvertisementShown(measurement.motion)) {
-      // An advertisement started inside the sampling window, freezing the
-      // live picture, so this window says nothing about the program. Wait for
-      // the ad to finish and measure a fresh window instead of judging it.
-      console.log(
-        "[INFO] An advertisement played during the sampling window; waiting for it to end and measuring again",
-      );
-      measurement = await measureAfterAdvertisements(page);
-    }
-    if (isMeasurementUnusable(measurement)) {
-      // The player rebuilt its media element while the window was sampled
-      // (the video lost its size, vanished, or the decoded-audio counter
-      // went backwards), so the probes watched different elements. Start the
-      // measurement over on a freshly loaded player instead of judging it.
-      console.log(
-        "[INFO] Measurement unusable (no video, no frames captured, or the decoded-audio counter went backwards); reloading and measuring again",
-      );
-      const recovered = await reloadAndWaitForPlayback(page);
-      if (!recovered) {
-        phenomena.push("映像の再生が始まりませんでした");
-        return { ok: false, timestampJst, phenomena, details };
+    // A window during which an advertisement held the player or the live
+    // element was otherwise paused says nothing about the program: the picture
+    // is frozen while audio keeps decoding, which would otherwise be reported
+    // as a stopped stream. A window whose media element was rebuilt is not
+    // judgeable either. Discard such windows and measure a clean one before
+    // judging; a genuinely dead stream never yields a clean window, so the
+    // bounded loop still ends in a failure instead of looping forever.
+    let advertisementSeen = false;
+    const record = (
+      value: PlaybackMeasurement | null,
+    ): PlaybackMeasurement | null => {
+      if (value !== null && wasAdvertisementShown(value.motion)) {
+        advertisementSeen = true;
       }
-      measurement = await measureAfterAdvertisements(page);
+      return value;
+    };
+    let measurement = record(await measureAfterAdvertisements(page));
+    let measurementAttempts = 0;
+    while (measurementAttempts < MAX_MEASUREMENT_ATTEMPTS) {
+      if (
+        measurement !== null &&
+        (wasAdvertisementShown(measurement.motion) ||
+          wasPlaybackPaused(measurement.motion))
+      ) {
+        measurementAttempts += 1;
+        console.log(
+          "[INFO] The live picture was frozen by an advertisement or a paused element; waiting for playback to resume and measuring again",
+        );
+        measurement = record(await measureAfterPlaybackResumes(page));
+        continue;
+      }
+      if (isMeasurementUnusable(measurement)) {
+        // The player rebuilt its media element while the window was sampled
+        // (the video lost its size, vanished, or the decoded-audio counter
+        // went backwards), so the probes watched different elements. Start the
+        // measurement over on a freshly loaded player instead of judging it.
+        measurementAttempts += 1;
+        console.log(
+          "[INFO] Measurement unusable (no video, no frames captured, or the decoded-audio counter went backwards); reloading and measuring again",
+        );
+        const recovered = await reloadAndWaitForPlayback(page);
+        if (!recovered) {
+          phenomena.push("映像の再生が始まりませんでした");
+          return { ok: false, timestampJst, phenomena, details };
+        }
+        measurement = record(await measureAfterAdvertisements(page));
+        continue;
+      }
+      break;
     }
     if (!measurement) {
       phenomena.push("チェック中にビデオ要素が消失しました");
       return { ok: false, timestampJst, phenomena, details };
     }
     const { startProbe, motion, endProbe } = measurement;
+    advertisementSeen = advertisementSeen || wasAdvertisementShown(motion);
     details.decodedAudioBytesStart = startProbe.decodedAudioBytes;
     details.decodedAudioBytesEnd = endProbe.decodedAudioBytes;
 
@@ -814,8 +958,9 @@ async function checkStream(): Promise<CheckResult> {
     }
 
     let videoPlaying = false;
+    let videoUnmeasurable: string | null = null;
     if (motion.tainted || motion.samples.length < 2) {
-      phenomena.push("映像全体のフレームを取得できませんでした");
+      videoUnmeasurable = "映像全体のフレームを取得できませんでした";
     } else {
       const videoFps = summarizeFps(
         motion.samples,
@@ -826,9 +971,7 @@ async function checkStream(): Promise<CheckResult> {
       details.videoMinFps = videoFps.minFps;
       details.videoAvgFps = videoFps.avgFps;
       videoPlaying = isFpsAboveThreshold(videoFps.minFps, VIDEO_MIN_FPS);
-      if (!videoPlaying) {
-        phenomena.push("映像全体が停止し続けています");
-      } else {
+      if (videoPlaying) {
         console.log(
           `[INFO] Video moving: min fps = ${videoFps.minFps.toFixed(
             1,
@@ -836,11 +979,11 @@ async function checkStream(): Promise<CheckResult> {
         );
       }
     }
-    details.videoPlaying = videoPlaying;
 
     let gameScreenPlaying = false;
+    let gameUnmeasurable: string | null = null;
     if (motion.tainted || motion.samples.length < 2) {
-      phenomena.push("ゲーム画面部分のフレームを取得できませんでした");
+      gameUnmeasurable = "ゲーム画面部分のフレームを取得できませんでした";
     } else {
       const gameFps = summarizeFps(
         motion.samples,
@@ -851,9 +994,7 @@ async function checkStream(): Promise<CheckResult> {
       details.gameMinFps = gameFps.minFps;
       details.gameAvgFps = gameFps.avgFps;
       gameScreenPlaying = isFpsAboveThreshold(gameFps.minFps, GAME_MIN_FPS);
-      if (!gameScreenPlaying) {
-        phenomena.push("ゲーム画面部分が停止し続けています");
-      } else {
+      if (gameScreenPlaying) {
         console.log(
           `[INFO] Game screen moving: min fps = ${gameFps.minFps.toFixed(
             1,
@@ -861,6 +1002,48 @@ async function checkStream(): Promise<CheckResult> {
         );
       }
     }
+
+    // An advertisement freezes the whole program picture for the length of the
+    // ad break, so every measured window can be frozen while the stream is
+    // healthy. When that is the case (an advertisement was seen and the player
+    // clock kept advancing behind it) the picture is unobservable, not
+    // stopped, and the stream must not be reported as faulty.
+    const windowSeconds = motion.elapsedMs / 1000;
+    const clockAdvancedSeconds = endProbe.currentTime - startProbe.currentTime;
+    const coveredByAdvertisement =
+      !videoPlaying &&
+      !gameScreenPlaying &&
+      isFrozenPictureExplainedByAdvertisement(
+        advertisementSeen,
+        clockAdvancedSeconds,
+        windowSeconds,
+      );
+
+    if (coveredByAdvertisement) {
+      videoPlaying = true;
+      gameScreenPlaying = true;
+      phenomena.push(
+        "広告の再生中で映像を確認できませんでしたが、配信は継続しています",
+      );
+      console.log(
+        `[INFO] The frozen picture is explained by an advertisement (clock advanced ${clockAdvancedSeconds.toFixed(
+          1,
+        )}s over a ${windowSeconds.toFixed(1)}s window); treating the stream as alive`,
+      );
+    } else {
+      if (videoUnmeasurable !== null) {
+        phenomena.push(videoUnmeasurable);
+      } else if (!videoPlaying) {
+        phenomena.push("映像全体が停止し続けています");
+      }
+      if (gameUnmeasurable !== null) {
+        phenomena.push(gameUnmeasurable);
+      } else if (!gameScreenPlaying) {
+        phenomena.push("ゲーム画面部分が停止し続けています");
+      }
+    }
+
+    details.videoPlaying = videoPlaying;
     details.gameScreenPlaying = gameScreenPlaying;
 
     return {
