@@ -305,7 +305,13 @@ export const create = async (
     width: 1280,
     height: 720,
   },
-): Promise<Browser & { reload: () => Promise<void> }> => {
+): Promise<
+  Browser & {
+    reload: () => Promise<void>;
+    /** PNG bytes of the current viewport, used by the game-stall watchdog. */
+    screenshot: () => Promise<Uint8Array>;
+  }
+> => {
   const launchTimeout = Number.parseInt(
     process.env.CHROMIUM_LAUNCH_TIMEOUT ?? "60000",
     10,
@@ -521,10 +527,15 @@ export const create = async (
     reload: async () => {
       await page.reload({ waitUntil: "domcontentloaded" });
     },
+
+    screenshot: async () => await page.screenshot(),
     get url() {
       return page.url();
     },
-  } as Browser & { reload: () => Promise<void> };
+  } as Browser & {
+    reload: () => Promise<void>;
+    screenshot: () => Promise<Uint8Array>;
+  };
 };
 
 type PageLike = { url(): string; close(): Promise<void> };

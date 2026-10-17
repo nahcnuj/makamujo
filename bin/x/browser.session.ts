@@ -6,9 +6,20 @@ import { parseArgs } from "node:util";
 import { ActionResult } from "automated-gameplay-transmitter";
 import { ServerGames as Games } from "../../lib/Agent/games/server";
 import { create } from "../../lib/Browser/chromium";
+import {
+  areFramesIdentical,
+  type GameStallState,
+  initialGameStallState,
+  observeGameFrame,
+  resolveGameStallCheckMs,
+  resolveGameStallStaticFrames,
+  shouldRestartGameSession,
+} from "../../lib/Browser/gameStall";
 import { createRetrySender } from "../../lib/Browser/socket";
 
 const AW_SNAP_CHECK_MS = 5_000;
+/** Reloads that did not restore the picture before restarting the session. */
+const MAX_CONSECUTIVE_STALLS = 3;
 
 async function isAwSnapPage(
   browser: Awaited<ReturnType<typeof create>>,
@@ -191,6 +202,68 @@ const awSnapTimer = setInterval(() => {
   })();
 }, AW_SNAP_CHECK_MS);
 
+// ゲームページ無反応監視
+// `isAwSnapPage` only looks at the DOM, so a page whose renderer keeps
+// answering `evaluate` but whose canvas stopped painting passes it while the
+// stream shows a still picture (the health checker reports "映像全体 /
+// ゲーム画面部分が停止し続けています" while audio keeps decoding). Sample the page
+// and reload it when it stops changing while it is supposed to be animating;
+// restart the whole session if reloading never helps.
+const stallCheckMs = resolveGameStallCheckMs();
+const stallStaticFrames = resolveGameStallStaticFrames();
+let checkingStall = false;
+let stallState: GameStallState = initialGameStallState();
+let previousFrame: Uint8Array | undefined;
+let consecutiveStalls = 0;
+const stallTimer = setInterval(() => {
+  if (checkingStall) return;
+  checkingStall = true;
+  void (async () => {
+    try {
+      const { sight } = Games.VigilantFiesta;
+      const [frame, screen] = await Promise.all([
+        browser.screenshot(),
+        browser
+          .evaluate(sight)
+          .then((state) => state?.screen)
+          .catch(() => undefined),
+      ]);
+      const decision = observeGameFrame(
+        stallState,
+        {
+          identicalToPrevious: areFramesIdentical(previousFrame, frame),
+          expectedToAnimate: screen !== "result",
+        },
+        stallStaticFrames,
+      );
+      stallState = decision.state;
+      previousFrame = frame;
+      if (!decision.stalled) {
+        consecutiveStalls = 0;
+        return;
+      }
+
+      consecutiveStalls += 1;
+      if (shouldRestartGameSession(consecutiveStalls, MAX_CONSECUTIVE_STALLS)) {
+        console.warn(
+          "[WARN] game page stayed frozen after reloads; exiting session for outer restart",
+        );
+        clearInterval(stallTimer);
+        void closeBrowser().finally(() => process.exit(1));
+        return;
+      }
+      console.warn("[WARN] game page stopped painting; reloading");
+      await browser.reload();
+      previousFrame = undefined;
+      stallState = initialGameStallState();
+    } catch (err) {
+      console.warn("[WARN] game liveness probe failed", err);
+    } finally {
+      checkingStall = false;
+    }
+  })();
+}, stallCheckMs);
+
 const send = await createRetrySender(
   async (action) => {
     try {
@@ -271,6 +344,7 @@ try {
   process.exitCode = 1;
 } finally {
   clearInterval(awSnapTimer);
+  clearInterval(stallTimer);
   await closeBrowser();
   send({ name: "closed" });
 }
