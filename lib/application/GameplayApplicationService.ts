@@ -4,6 +4,12 @@ import { Action, type State } from "automated-gameplay-transmitter";
 import { type GameName, ServerGames as Games } from "../Agent/games/server";
 import { createReceiver } from "../Browser/socket";
 import {
+  type GameActivityState,
+  initialGameActivityState,
+  observeGameActivity,
+  resolveGameActivityTimeoutMs,
+} from "../domain/games/GameActivityPolicy";
+import {
   buildSlotKey,
   emptyScoreRecords,
   emptyStoredHighscores,
@@ -53,19 +59,25 @@ export class GameplayApplicationService {
       this.#reloadVigilantRecordsFromDisk();
     }
 
-    const solver = Games[name].solver(
-      {
-        type: "initialize",
-        data,
-      },
-      {
-        onSave:
-          name === "CookieClicker"
-            ? [(text) => writeFileSync("./var/cookieclicker.txt", text)]
-            : [],
-        isSilent: () => !this.#isSpeechable(),
-      },
-    );
+    // Rebuilt whenever the round stops progressing so the next sight re-opens
+    // the game and clicks start (see `observeGameActivity`).
+    const createSolver = () =>
+      Games[name].solver(
+        {
+          type: "initialize",
+          data,
+        },
+        {
+          onSave:
+            name === "CookieClicker"
+              ? [(text) => writeFileSync("./var/cookieclicker.txt", text)]
+              : [],
+          isSilent: () => !this.#isSpeechable(),
+        },
+      );
+    let solver = createSolver();
+    let activity: GameActivityState = initialGameActivityState();
+    const activityTimeoutMs = resolveGameActivityTimeoutMs();
     try {
       createReceiver((state: State) => {
         this.#session.browserState = state;
@@ -107,6 +119,29 @@ export class GameplayApplicationService {
               this.#onGameSight?.(nextState);
             }
             this.#notifyGameStateChange();
+          }
+
+          // A round that never reaches the playing screen again is invisible
+          // to the session watchdogs (the page keeps answering and painting),
+          // so restart it here, where the open/start sequence lives. Only
+          // VigilantFiesta reports a screen, so only it can be judged this way.
+          if (name === "VigilantFiesta") {
+            const sightScreen =
+              state.state !== null && typeof state.state === "object"
+                ? (state.state as { screen?: unknown }).screen
+                : undefined;
+            const decision = observeGameActivity(
+              activity,
+              { playing: sightScreen === "playing", nowMs: Date.now() },
+              activityTimeoutMs,
+            );
+            activity = decision.state;
+            if (decision.restart) {
+              console.warn(
+                "[WARN] game stayed off the playing screen; restarting the round",
+              );
+              solver = createSolver();
+            }
           }
         }
 
