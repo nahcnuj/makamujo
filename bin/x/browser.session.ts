@@ -162,21 +162,31 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
 }
 
 // Aw, Snap! 監視
+// `isAwSnapPage` evaluates in the page; when the renderer hangs the bounded
+// evaluate rejects instead of blocking forever, so a check can outlast the
+// interval. The guard keeps a slow/timing-out probe from stacking up.
+let checkingAwSnap = false;
 const awSnapTimer = setInterval(() => {
+  if (checkingAwSnap) return;
+  checkingAwSnap = true;
   void (async () => {
-    if (await isAwSnapPage(browser)) {
-      console.warn("[WARN] Aw, Snap! detected — attempting reload");
-      try {
-        await browser.reload();
-        console.log("[INFO] page reloaded after Aw, Snap!");
-      } catch (err) {
-        console.warn(
-          "[WARN] reload failed, exiting session for outer restart",
-          err,
-        );
-        clearInterval(awSnapTimer);
-        void closeBrowser().finally(() => process.exit(1));
+    try {
+      if (await isAwSnapPage(browser)) {
+        console.warn("[WARN] Aw, Snap! detected — attempting reload");
+        try {
+          await browser.reload();
+          console.log("[INFO] page reloaded after Aw, Snap!");
+        } catch (err) {
+          console.warn(
+            "[WARN] reload failed, exiting session for outer restart",
+            err,
+          );
+          clearInterval(awSnapTimer);
+          void closeBrowser().finally(() => process.exit(1));
+        }
       }
+    } finally {
+      checkingAwSnap = false;
     }
   })();
 }, AW_SNAP_CHECK_MS);

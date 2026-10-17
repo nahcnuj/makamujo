@@ -8,6 +8,10 @@ import {
   createClickByElementId,
   createPopupPageHandler,
   createRedirectToHomeHandler,
+  DEFAULT_EVALUATE_TIMEOUT_MS,
+  EvaluateTimeoutError,
+  resolveEvaluateTimeoutMs,
+  withTimeout,
 } from "./chromium";
 
 const HOME_URL = "https://www.nahcnuj.work/vigilant-fiesta/";
@@ -273,5 +277,53 @@ describe("createClickByElementId", () => {
     await createClickByElementId(page)("promptOption0");
 
     expect(firstCalled).toBeTrue();
+  });
+});
+
+describe("withTimeout", () => {
+  it("resolves with the underlying value when it settles in time", async () => {
+    await expect(withTimeout(Promise.resolve("done"), 1_000)).resolves.toBe(
+      "done",
+    );
+  });
+
+  it("propagates the underlying rejection", async () => {
+    await expect(
+      withTimeout(Promise.reject(new Error("boom")), 1_000),
+    ).rejects.toThrow("boom");
+  });
+
+  it("rejects with EvaluateTimeoutError when the promise never settles", async () => {
+    await expect(
+      withTimeout(new Promise<void>(() => {}), 10),
+    ).rejects.toBeInstanceOf(EvaluateTimeoutError);
+  });
+
+  it("does not bound the promise when the timeout is non-positive", async () => {
+    await expect(withTimeout(Promise.resolve("ok"), 0)).resolves.toBe("ok");
+  });
+});
+
+describe("resolveEvaluateTimeoutMs", () => {
+  it("falls back to the default when unset or blank", () => {
+    expect(resolveEvaluateTimeoutMs({})).toBe(DEFAULT_EVALUATE_TIMEOUT_MS);
+    expect(
+      resolveEvaluateTimeoutMs({ BROWSER_EVALUATE_TIMEOUT_MS: "  " }),
+    ).toBe(DEFAULT_EVALUATE_TIMEOUT_MS);
+  });
+
+  it("uses a positive override", () => {
+    expect(
+      resolveEvaluateTimeoutMs({ BROWSER_EVALUATE_TIMEOUT_MS: "2500" }),
+    ).toBe(2_500);
+  });
+
+  it("ignores non-positive or non-numeric overrides", () => {
+    expect(
+      resolveEvaluateTimeoutMs({ BROWSER_EVALUATE_TIMEOUT_MS: "-1" }),
+    ).toBe(DEFAULT_EVALUATE_TIMEOUT_MS);
+    expect(
+      resolveEvaluateTimeoutMs({ BROWSER_EVALUATE_TIMEOUT_MS: "abc" }),
+    ).toBe(DEFAULT_EVALUATE_TIMEOUT_MS);
   });
 });
