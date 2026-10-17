@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  decideMeasurementRecovery,
   didAudioDecodedBytesReset,
   formatJst,
   GAME_MIN_FPS,
@@ -181,6 +182,80 @@ describe("wasAdvertisementShown", () => {
 
   it("accepts a window with no advertisement", () => {
     expect(wasAdvertisementShown(motionOf(false))).toBe(false);
+  });
+});
+
+describe("decideMeasurementRecovery", () => {
+  const probe = (decodedAudioBytes: number): VideoState => ({
+    found: true,
+    videoWidth: 640,
+    readyState: 2,
+    paused: false,
+    currentTime: 0,
+    decodedAudioBytes,
+  });
+  const twoSamples: MotionSample[] = [
+    { elapsedMs: 0, wholeChanged: true, gameChanged: true },
+    { elapsedMs: 16, wholeChanged: true, gameChanged: true },
+  ];
+  const motionOf = (
+    samples: MotionSample[],
+    sawAdvertisement: boolean,
+  ): MotionSamples => ({
+    tainted: false,
+    elapsedMs: 10_000,
+    samples,
+    sawAdvertisement,
+  });
+  const measurementOf = (
+    motion: MotionSamples,
+    decodedAudioBytesStart: number,
+    decodedAudioBytesEnd: number,
+  ): PlaybackMeasurement => ({
+    startProbe: probe(decodedAudioBytesStart),
+    motion,
+    endProbe: probe(decodedAudioBytesEnd),
+  });
+
+  it("reloads when the closing probe found no video and no ad is playing", () => {
+    // The player rebuilt its media element mid-window. The window must be
+    // re-measured on a fresh load instead of being judged, which would report
+    // a healthy stream as having lost its picture.
+    expect(decideMeasurementRecovery(null, false)).toBe("reload");
+  });
+
+  it("waits the ad out when the video vanished behind a playing advertisement", () => {
+    // A cross-origin advertisement makes the selector return no video, so the
+    // closing probe reports `null`. Reloading would only buy a pre-roll ad.
+    expect(decideMeasurementRecovery(null, true)).toBe(
+      "wait-for-advertisement",
+    );
+  });
+
+  it("waits an in-window advertisement out instead of reloading", () => {
+    const measurement = measurementOf(motionOf(twoSamples, true), 0, 100);
+    expect(decideMeasurementRecovery(measurement, false)).toBe(
+      "wait-for-advertisement",
+    );
+  });
+
+  it("prefers waiting over reloading when the window is also unusable", () => {
+    // A reload triggers a fresh pre-roll advertisement, so an advertisement
+    // seen in the window always wins over rebuilding the player.
+    const measurement = measurementOf(motionOf([], true), 0, 100);
+    expect(decideMeasurementRecovery(measurement, false)).toBe(
+      "wait-for-advertisement",
+    );
+  });
+
+  it("reloads a window that captured too few frames", () => {
+    const measurement = measurementOf(motionOf([], false), 0, 100);
+    expect(decideMeasurementRecovery(measurement, false)).toBe("reload");
+  });
+
+  it("judges a window that describes the program", () => {
+    const measurement = measurementOf(motionOf(twoSamples, false), 0, 100);
+    expect(decideMeasurementRecovery(measurement, false)).toBe("judge");
   });
 });
 

@@ -29,6 +29,8 @@ const MIN_CHANGED_RATIO = 0.001;
 export const VIDEO_MIN_FPS = 24;
 /** Game panel: minimum moving frames per second over the window. */
 export const GAME_MIN_FPS = 8;
+/** How many windows may be discarded and re-measured before giving up. */
+export const MAX_MEASUREMENT_ATTEMPTS = 5;
 
 /** Left 60% of the video: game panel on the 10×8 layout. */
 export const GAME_CLIP = {
@@ -694,6 +696,42 @@ export function wasAdvertisementShown(motion: MotionSamples): boolean {
   return motion.sawAdvertisement;
 }
 
+/** How to recover from one probing window before it can be judged. */
+export type MeasurementRecovery = "wait-for-advertisement" | "reload" | "judge";
+
+/**
+ * Decide whether one probing window has to be discarded and re-measured.
+ *
+ * - `wait-for-advertisement`: an advertisement was (or still is) on screen, so
+ *   the live picture was frozen or replaced by a cross-origin element. Waiting
+ *   it out is enough; a reload would only buy a fresh pre-roll advertisement.
+ * - `reload`: the window cannot be judged (no capturable video at the closing
+ *   probe, too few frames, a failed canvas read, or a rewound decoded-audio
+ *   counter), so the player has to be rebuilt on a freshly loaded page.
+ * - `judge`: the window describes the program and can be scored.
+ *
+ * A `null` measurement (the closing probe found no capturable video at all)
+ * is recovered the same way: it usually means the player rebuilt its media
+ * element mid-window, but it also happens when a cross-origin advertisement
+ * took the live element's place. Judging either would report a healthy stream
+ * as having lost its picture.
+ */
+export function decideMeasurementRecovery(
+  measurement: PlaybackMeasurement | null,
+  advertisementPlaying: boolean,
+): MeasurementRecovery {
+  if (measurement === null) {
+    return advertisementPlaying ? "wait-for-advertisement" : "reload";
+  }
+  if (wasAdvertisementShown(measurement.motion)) {
+    return "wait-for-advertisement";
+  }
+  if (isMeasurementUnusable(measurement)) {
+    return "reload";
+  }
+  return "judge";
+}
+
 /**
  * Probe decoded-audio bytes around one sampling window.
  *
@@ -824,20 +862,25 @@ async function checkStream(): Promise<CheckResult> {
     // Keep re-measuring until the window contains neither an intervening
     // advertisement nor an unusable (rebuilt media element) probe. A signed-out
     // viewer can get several mid-roll ads in quick succession, and a single
-    // retry is not enough to land on a clean window.
+    // retry is not enough to land on a clean window. A window whose video
+    // element vanished outright is retried too: judging it would report the
+    // player's mid-check rebuild as a lost stream.
     let measurement: PlaybackMeasurement | null =
       await measureAfterAdvertisements(page);
     let measurementAttempts = 0;
-    while (
-      measurement !== null &&
-      (wasAdvertisementShown(measurement.motion) ||
-        isMeasurementUnusable(measurement))
-    ) {
-      measurementAttempts += 1;
-      if (measurementAttempts > 5) {
+    for (;;) {
+      const recovery = decideMeasurementRecovery(
+        measurement,
+        await readAdvertisementPlaying(page),
+      );
+      if (recovery === "judge") {
         break;
       }
-      if (wasAdvertisementShown(measurement.motion)) {
+      measurementAttempts += 1;
+      if (measurementAttempts > MAX_MEASUREMENT_ATTEMPTS) {
+        break;
+      }
+      if (recovery === "wait-for-advertisement") {
         console.log(
           "[INFO] An advertisement played during the sampling window; waiting for it to end and measuring again",
         );
@@ -855,6 +898,8 @@ async function checkStream(): Promise<CheckResult> {
       measurement = await measureAfterAdvertisements(page);
     }
     if (!measurement) {
+      // Every window was discarded and the player never came back, so the
+      // stream really has no capturable video any more.
       phenomena.push("チェック中にビデオ要素が消失しました");
       return { ok: false, timestampJst, phenomena, details };
     }
