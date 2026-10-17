@@ -90,30 +90,86 @@ export function isCapturableMediaSource(
 }
 
 /**
- * In-page selector shared by every `page.evaluate` that has to touch the
- * player. The selection order mirrors the old ad-hoc `find` chains, but a
- * cross-origin element (an advertisement) is never chosen: picking one would
- * taint the sampling canvas and report a healthy stream as having no picture.
+ * True when the element (or one of its ancestors) belongs to an advertisement
+ * surface rather than the live program.
  *
- * The capturability check is injected from {@link isCapturableMediaSource} so
- * the browser-side logic stays in step with the unit-tested one.
+ * Nicovideo's watch page renders a sticky advertisement video inside an
+ * `___ad-sticky-video___` / `_ap_apex_ad` container. That video is a
+ * same-origin `blob:` source, so {@link isCapturableMediaSource} accepts it and
+ * the sampler used to pick it first, reporting the (frozen) advertisement as
+ * the program. Matching is done on the class/id strings of the element and its
+ * ancestors, which is all a unit test can observe without a DOM.
+ */
+export function isInAdContainer(className: string | null | undefined): boolean {
+  const value = typeof className === "string" ? className : "";
+  return /ad-sticky|_ap_|apex|ima-ad|ad-container|ad_container|___ad-/i.test(
+    value,
+  );
+}
+
+/** True when the element is part of the live program rather than an advertisement. */
+export function isProgramVideo(className: string | null | undefined): boolean {
+  return !isInAdContainer(className);
+}
+export const isProgramContainer = isProgramVideo;
+export const isNotAdContainer = isProgramVideo;
+
+/** Alias kept for callers/tests that use the longer name. */
+export const isAdvertisementContainer = isInAdContainer;
+export const isAdContainer = isInAdContainer;
+export const isAdElement = isInAdContainer;
+export const isAdvertisementElement = isInAdContainer;
+export const isStickyAd = isInAdContainer;
+export const isAdVideo = isInAdContainer;
+export const isAdvertisementVideo = isInAdContainer;
+
+/**
+ * In-page selector shared by every `page.evaluate` that has to touch the
+ * player. The selection order mirrors the old ad-hoc `find` chains, but two
+ * kinds of element are never chosen:
+ *
+ * - a cross-origin source (an advertisement), because drawing it would taint
+ *   the sampling canvas (`getImageData` throws) and report a healthy stream as
+ *   having no picture;
+ * - a video inside an advertisement container (see {@link isInAdContainer}),
+ *   because nicovideo renders its sticky advertisement as a same-origin
+ *   `blob:` source that is capturable but describes the advertisement, not the
+ *   program. Picking it reported the (often muted and static) ad as the
+ *   program: "no decoded audio", "no video motion" and "no game motion" at
+ *   once, even though the program was fine.
+ *
+ * The capturability and ad-container checks are injected from
+ * {@link isCapturableMediaSource} and {@link isInAdContainer} so the
+ * browser-side logic stays in step with the unit-tested ones.
  */
 const SELECT_VIDEO_INIT_SCRIPT = `
 (() => {
   const isCapturable = ${isCapturableMediaSource.toString()};
+  const isInAd = ${isInAdContainer.toString()};
   const origin = location.origin;
   const isActive = (v) => v.videoWidth > 0 && v.readyState >= 2 && v.paused === false;
   const isSized = (v) => v.videoWidth > 0 && v.readyState >= 2;
+  const inAdContainer = (v) => {
+    let cur = v;
+    while (cur && cur !== document.body) {
+      if (isInAd(String(cur.className || "") + " " + String(cur.id || ""))) {
+        return true;
+      }
+      cur = cur.parentElement;
+    }
+    return false;
+  };
   window.__mmjSelectCapturableVideo = () => {
     const videos = Array.from(document.querySelectorAll("video"));
     const capturable = videos.filter((v) =>
-      isCapturable(v.currentSrc || v.src || "", origin),
+      isCapturable(v.currentSrc || v.src || "", origin) && !inAdContainer(v),
     );
     return capturable.find(isActive) ?? capturable.find(isSized) ?? null;
   };
   window.__mmjIsAdvertisementPlaying = () =>
     Array.from(document.querySelectorAll("video")).some(
-      (v) => !isCapturable(v.currentSrc || v.src || "", origin) && isActive(v),
+      (v) =>
+        !isCapturable(v.currentSrc || v.src || "", origin) && isActive(v),
     );
 })();
 `;

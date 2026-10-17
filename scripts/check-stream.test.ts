@@ -6,6 +6,7 @@ import {
   isAudioPlaying,
   isCapturableMediaSource,
   isFpsAboveThreshold,
+  isInAdContainer,
   isMeasurementUnusable,
   isOverallOk,
   isVideoReady,
@@ -427,5 +428,20 @@ describe("toErrorResult", () => {
     expect(result.phenomena).toEqual([
       "チェック中に想定外のエラーが発生しました: boom",
     ]);
+  });
+});
+
+describe("isInAdContainer", () => {
+  it("flags sticky advertisement surfaces", () => {
+    expect(isInAdContainer("___ad-sticky-video___KZcuJ")).toBe(true);
+    expect(isInAdContainer("_ap_apex_ad")).toBe(true);
+    expect(isInAdContainer("apex")).toBe(true);
+  });
+
+  it("accepts the live program surface", () => {
+    expect(isInAdContainer("___dlive-player___J_ZVV")).toBe(false);
+    expect(isInAdContainer("___video___mddiR")).toBe(false);
+    expect(isInAdContainer(null)).toBe(false);
+    expect(isInAdContainer(undefined)).toBe(false);
   });
 });
