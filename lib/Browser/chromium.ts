@@ -160,11 +160,20 @@ export async function launchPersistentContext(
 ) {
   cleanupChromiumLockFiles(userDataDir);
 
+  const baseOptions = { ...options };
+  const existingArgs = Array.isArray(baseOptions.args)
+    ? [...(baseOptions.args as string[])]
+    : [];
+  if (!existingArgs.includes("--disable-gpu")) {
+    existingArgs.push("--disable-gpu");
+  }
+  baseOptions.args = existingArgs;
+
   const launchOpts = getChromiumLaunchOptions(
-    typeof options.executablePath === "string"
-      ? options.executablePath
+    typeof baseOptions.executablePath === "string"
+      ? baseOptions.executablePath
       : undefined,
-    options,
+    baseOptions,
   );
   const maxRetries = 3;
   const baseRetryDelayMs = 500;
