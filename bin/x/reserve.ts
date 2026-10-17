@@ -90,6 +90,7 @@ await startNoVnc();
 
 const launchOptions = {
   ...(executablePath ? { executablePath } : {}),
+  args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
 };
 
 let ctx = await launchPersistentContext(userDataDir, {
@@ -118,7 +119,7 @@ const LIVE_PROGRAMS_URL =
 const BROADCAST_HISTORY_URL =
   "https://live.nicovideo.jp/front/api/v2/user-broadcast-history" +
   "?providerId=14171889&providerType=user" +
-  "&isIncludeNonPublic=false&offset=0&limit=1&withTotalCount=false";
+  "&isIncludeNonPublic=true&offset=0&limit=1&withTotalCount=false";
 
 const firstDate = new Date("2025-08-03T10:48:00+09:00");
 const day = new Date().getDay();
