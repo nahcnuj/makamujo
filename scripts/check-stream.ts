@@ -47,8 +47,9 @@ declare global {
      */
     __mmjSelectCapturableVideo?: () => HTMLVideoElement | null;
     /**
-     * Installed by {@link SELECT_VIDEO_INIT_SCRIPT}; returns true while a
-     * cross-origin video (an advertisement) is actively playing.
+     * Installed by {@link SELECT_VIDEO_INIT_SCRIPT}; returns true while an
+     * advertisement (cross-origin or a same-origin advertisement player) is
+     * actively playing.
      */
     __mmjIsAdvertisementPlaying?: () => boolean;
   }
@@ -90,30 +91,116 @@ export function isCapturableMediaSource(
 }
 
 /**
- * In-page selector shared by every `page.evaluate` that has to touch the
- * player. The selection order mirrors the old ad-hoc `find` chains, but a
- * cross-origin element (an advertisement) is never chosen: picking one would
- * taint the sampling canvas and report a healthy stream as having no picture.
- *
- * The capturability check is injected from {@link isCapturableMediaSource} so
- * the browser-side logic stays in step with the unit-tested one.
+ * The container attributes that identify one node of the player DOM tree.
+ * Built in the page from a real element and matched by
+ * {@link classifyPlayerContainer}.
  */
-const SELECT_VIDEO_INIT_SCRIPT = `
+export interface PlayerLayerNode {
+  id: string;
+  className: string;
+  title: string | null;
+  dataLayerName: string | null;
+}
+
+/**
+ * Classify one node on the path from a `<video>` element up to the document
+ * root, by the markers nicovideo's player puts on its advertisement and
+ * program containers.
+ *
+ * `"advertisement"` means the node (and everything below it, including the
+ * `<video>`) belongs to an advertisement; `"program"` means it is the live
+ * program layer, so the walk can stop: reaching the program layer proves the
+ * element is not inside an advertisement even when an ad marker exists above
+ * it. `"unknown"` carries no information and the walk continues.
+ */
+export function classifyPlayerContainer(
+  node: PlayerLayerNode,
+): "advertisement" | "program" | "unknown" {
+  if (node.id.startsWith("ap-player")) return "advertisement";
+  if (node.id.includes("smarttag")) return "advertisement";
+  if (node.className.includes("ima-ad-container")) return "advertisement";
+  if (node.className.includes("_ap_apex_ad")) return "advertisement";
+  if (node.className.includes("ad-sticky-video")) return "advertisement";
+  if (node.title === "Advertisement") return "advertisement";
+  if (node.dataLayerName === "videoLayer") return "program";
+  return "unknown";
+}
+
+/**
+ * True when a `<video>` element is an advertisement rather than the live
+ * program.
+ *
+ * Nicovideo renders advertisements in a separate player whose media is a
+ * same-origin `blob:` just like the live stream, so
+ * {@link isCapturableMediaSource} alone cannot tell them apart; the frozen
+ * advertisement is then mistaken for a stopped stream. A cross-origin source
+ * (a plain ad file) is decisive by itself, otherwise the ancestor chain
+ * (`nearest-first`) decides from the player's own container markers.
+ */
+export function isAdvertisementVideo(
+  source: string,
+  pageOrigin: string,
+  ancestors: PlayerLayerNode[],
+): boolean {
+  if (!isCapturableMediaSource(source, pageOrigin)) return true;
+  for (const node of ancestors) {
+    const layer = classifyPlayerContainer(node);
+    if (layer === "advertisement") return true;
+    if (layer === "program") return false;
+  }
+  return false;
+}
+
+/**
+ * In-page selector shared by every `page.evaluate` that has to touch the
+ * player. The selection order mirrors the old ad-hoc `find` chains, but an
+ * advertisement is never chosen: a cross-origin element would taint the
+ * sampling canvas, and a same-origin advertisement player (which nicovideo
+ * also uses) presents a frozen picture that would be read as a stopped
+ * stream.
+ *
+ * The capturability and advertisement checks are injected from
+ * {@link isCapturableMediaSource} and {@link isAdvertisementVideo} so the
+ * browser-side logic stays in step with the unit-tested one. The ancestor
+ * descriptors that `isAdvertisementVideo` needs are built in the page from
+ * each element's id/class/title and `data-layer-name`.
+ */
+export const SELECT_VIDEO_INIT_SCRIPT = `
 (() => {
-  const isCapturable = ${isCapturableMediaSource.toString()};
+  const isCapturableMediaSource = ${isCapturableMediaSource.toString()};
+  const classifyPlayerContainer = ${classifyPlayerContainer.toString()};
+  const isAdvertisementVideo = ${isAdvertisementVideo.toString()};
   const origin = location.origin;
   const isActive = (v) => v.videoWidth > 0 && v.readyState >= 2 && v.paused === false;
   const isSized = (v) => v.videoWidth > 0 && v.readyState >= 2;
-  window.__mmjSelectCapturableVideo = () => {
-    const videos = Array.from(document.querySelectorAll("video"));
-    const capturable = videos.filter((v) =>
-      isCapturable(v.currentSrc || v.src || "", origin),
+  const ancestorLayers = (v) => {
+    const layers = [];
+    let el = v;
+    for (let depth = 0; el && depth < 12; depth++, el = el.parentElement) {
+      layers.push({
+        id: el.id || "",
+        className: typeof el.className === "string" ? el.className : "",
+        title: el.getAttribute("title"),
+        dataLayerName: el.getAttribute("data-layer-name"),
+      });
+    }
+    return layers;
+  };
+  const isAdvertisement = (v) =>
+    isAdvertisementVideo(
+      v.currentSrc || v.src || "",
+      origin,
+      ancestorLayers(v),
     );
-    return capturable.find(isActive) ?? capturable.find(isSized) ?? null;
+  window.__mmjSelectCapturableVideo = () => {
+    const programs = Array.from(document.querySelectorAll("video")).filter(
+      (v) => !isAdvertisement(v),
+    );
+    return programs.find(isActive) ?? programs.find(isSized) ?? null;
   };
   window.__mmjIsAdvertisementPlaying = () =>
     Array.from(document.querySelectorAll("video")).some(
-      (v) => !isCapturable(v.currentSrc || v.src || "", origin) && isActive(v),
+      (v) => isActive(v) && isAdvertisement(v),
     );
 })();
 `;

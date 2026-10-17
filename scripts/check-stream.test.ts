@@ -1,8 +1,11 @@
 import { describe, expect, it } from "bun:test";
+import { JSDOM } from "jsdom";
 import {
+  classifyPlayerContainer,
   didAudioDecodedBytesReset,
   formatJst,
   GAME_MIN_FPS,
+  isAdvertisementVideo,
   isAudioPlaying,
   isCapturableMediaSource,
   isFpsAboveThreshold,
@@ -12,6 +15,8 @@ import {
   type MotionSample,
   type MotionSamples,
   type PlaybackMeasurement,
+  type PlayerLayerNode,
+  SELECT_VIDEO_INIT_SCRIPT,
   shouldReMeasure,
   summarizeFps,
   toErrorResult,
@@ -400,6 +405,141 @@ describe("isCapturableMediaSource", () => {
 
   it("rejects an unparseable source", () => {
     expect(isCapturableMediaSource("http://[invalid", origin)).toBe(false);
+  });
+});
+
+describe("classifyPlayerContainer", () => {
+  const node = (overrides: Partial<PlayerLayerNode> = {}): PlayerLayerNode => ({
+    id: "",
+    className: "",
+    title: null,
+    dataLayerName: null,
+    ...overrides,
+  });
+
+  it("treats nicovideo's advertisement containers as advertisements", () => {
+    expect(classifyPlayerContainer(node({ id: "ap-player-123" }))).toBe(
+      "advertisement",
+    );
+    expect(classifyPlayerContainer(node({ id: "smarttag-frame" }))).toBe(
+      "advertisement",
+    );
+    expect(
+      classifyPlayerContainer(node({ className: "ima-ad-container ima" })),
+    ).toBe("advertisement");
+    expect(
+      classifyPlayerContainer(node({ className: "_ap_apex_ad _abc" })),
+    ).toBe("advertisement");
+    expect(
+      classifyPlayerContainer(node({ className: "ad-sticky-video" })),
+    ).toBe("advertisement");
+    expect(classifyPlayerContainer(node({ title: "Advertisement" }))).toBe(
+      "advertisement",
+    );
+  });
+
+  it("treats the live program layer as the program", () => {
+    expect(classifyPlayerContainer(node({ dataLayerName: "videoLayer" }))).toBe(
+      "program",
+    );
+  });
+
+  it("carries no information for unrelated nodes", () => {
+    expect(classifyPlayerContainer(node({ id: "player" }))).toBe("unknown");
+    expect(classifyPlayerContainer(node())).toBe("unknown");
+  });
+});
+
+describe("isAdvertisementVideo", () => {
+  const origin = "https://live.nicovideo.jp";
+  const blob = "blob:https://live.nicovideo.jp/abc";
+  const adFile = "https://gcdn.2mdn.net/file.mp4";
+  const programNode: PlayerLayerNode = {
+    id: "video-layer",
+    className: "",
+    title: null,
+    dataLayerName: "videoLayer",
+  };
+  const adNode: PlayerLayerNode = {
+    id: "ap-player-app",
+    className: "",
+    title: null,
+    dataLayerName: null,
+  };
+
+  it("flags a cross-origin ad file without needing any container", () => {
+    expect(isAdvertisementVideo(adFile, origin, [])).toBe(true);
+  });
+
+  it("flags a same-origin ad player from its container", () => {
+    // Observed on the watch page: the ad player streams a same-origin blob,
+    // so the source alone looks exactly like the live program.
+    expect(isAdvertisementVideo(blob, origin, [adNode])).toBe(true);
+  });
+
+  it("accepts the live program even when an ad container is an ancestor", () => {
+    // The program layer sits below the ad wrapper in the DOM; reaching it
+    // proves the element is the program, not the advertisement.
+    expect(isAdvertisementVideo(blob, origin, [programNode, adNode])).toBe(
+      false,
+    );
+  });
+
+  it("accepts the live program with no advertisement markers", () => {
+    expect(isAdvertisementVideo(blob, origin, [programNode])).toBe(false);
+    expect(isAdvertisementVideo(blob, origin, [])).toBe(false);
+  });
+});
+
+describe("SELECT_VIDEO_INIT_SCRIPT", () => {
+  const liveBlob = "blob:https://live.nicovideo.jp/live";
+
+  /**
+   * Build a watch-page fragment and install the real init script in it. The
+   * `<video>` elements are given the state a playing player would have; jsdom
+   * reports every element as empty otherwise.
+   */
+  const install = (body: string) => {
+    const dom = new JSDOM(`<!doctype html><body>${body}</body>`, {
+      url: "https://live.nicovideo.jp/watch/user/14171889",
+    });
+    const window = dom.window as unknown as Window & typeof globalThis;
+    for (const video of Array.from(window.document.querySelectorAll("video"))) {
+      Object.defineProperty(video, "videoWidth", { value: 640 });
+      Object.defineProperty(video, "videoHeight", { value: 360 });
+      Object.defineProperty(video, "readyState", { value: 4 });
+      Object.defineProperty(video, "paused", { value: false });
+      Object.defineProperty(video, "currentSrc", { value: liveBlob });
+    }
+    // `window.eval` is the host eval under Bun, so the window globals the
+    // script reads have to be passed in explicitly.
+    const injector = new Function(
+      "window",
+      "location",
+      "document",
+      SELECT_VIDEO_INIT_SCRIPT,
+    );
+    injector(window, window.location, window.document);
+    return window;
+  };
+
+  it("selects the live program and flags a same-origin ad player", () => {
+    // The ad player streams a same-origin blob, so only its container tells
+    // it apart from the program; the selector must never sample it.
+    const window = install(
+      '<div id="ap-player-app"><video id="ad"></video></div>' +
+        '<div data-layer-name="videoLayer"><video id="live"></video></div>',
+    );
+    expect(window.__mmjIsAdvertisementPlaying?.()).toBe(true);
+    expect(window.__mmjSelectCapturableVideo?.()?.id).toBe("live");
+  });
+
+  it("treats the program alone as advertisement-free", () => {
+    const window = install(
+      '<div data-layer-name="videoLayer"><video id="live"></video></div>',
+    );
+    expect(window.__mmjIsAdvertisementPlaying?.()).toBe(false);
+    expect(window.__mmjSelectCapturableVideo?.()?.id).toBe("live");
   });
 });
 
