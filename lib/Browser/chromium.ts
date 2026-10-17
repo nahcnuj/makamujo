@@ -359,6 +359,9 @@ export const create = async (
       "--lang=ja",
       "--no-sandbox",
       "--disable-dev-shm-usage",
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
       `--app=${gameHomeUrl}`,
     ],
   };
