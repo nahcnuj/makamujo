@@ -695,6 +695,26 @@ export function wasAdvertisementShown(motion: MotionSamples): boolean {
 }
 
 /**
+ * True when not a single sampled frame differed from the one before it.
+ *
+ * A healthy broadcast can still produce a perfectly still window: the player
+ * paints one frame while it re-attaches its media source after a network
+ * stall (and the element keeps its size, so the sampler draws it), or the
+ * program itself shows a still image. Judging the first such window reports a
+ * healthy stream as stopped, so the caller re-measures it a bounded number of
+ * times and only concludes "stopped" if the picture stays frozen throughout.
+ * A tainted or too-short window is left to {@link isMeasurementUnusable}
+ * instead, because "no comparison happened" is not the same as "nothing moved".
+ */
+export function isWindowFullyStatic(motion: MotionSamples): boolean {
+  if (motion.tainted) return false;
+  if (motion.samples.length < 2) return false;
+  return motion.samples.every(
+    (sample) => !sample.wholeChanged && !sample.gameChanged,
+  );
+}
+
+/**
  * Probe decoded-audio bytes around one sampling window.
  *
  * Returns `null` when the video element disappeared before the closing
@@ -822,16 +842,20 @@ async function checkStream(): Promise<CheckResult> {
     }
 
     // Keep re-measuring until the window contains neither an intervening
-    // advertisement nor an unusable (rebuilt media element) probe. A signed-out
-    // viewer can get several mid-roll ads in quick succession, and a single
-    // retry is not enough to land on a clean window.
+    // advertisement, an unusable (rebuilt media element) probe, nor a picture
+    // that never changed. A signed-out viewer can get several mid-roll ads in
+    // quick succession, the player can rebuild its element mid-window, and the
+    // first frame it paints after re-attaching its source can hold still for
+    // the whole window, so a single measurement is not enough to land on a
+    // clean, moving window.
     let measurement: PlaybackMeasurement | null =
       await measureAfterAdvertisements(page);
     let measurementAttempts = 0;
     while (
       measurement !== null &&
       (wasAdvertisementShown(measurement.motion) ||
-        isMeasurementUnusable(measurement))
+        isMeasurementUnusable(measurement) ||
+        isWindowFullyStatic(measurement.motion))
     ) {
       measurementAttempts += 1;
       if (measurementAttempts > 5) {
@@ -841,6 +865,18 @@ async function checkStream(): Promise<CheckResult> {
         console.log(
           "[INFO] An advertisement played during the sampling window; waiting for it to end and measuring again",
         );
+        measurement = await measureAfterAdvertisements(page);
+        continue;
+      }
+      if (isWindowFullyStatic(measurement.motion)) {
+        // The element is attached and advancing (the probes passed, no ad ran),
+        // so this is the player holding one frame rather than a broken
+        // measurement; measure a fresh window without reloading, which would
+        // trigger another pre-roll advertisement.
+        console.log(
+          "[INFO] The picture never changed during the sampling window; measuring again in case the player was holding a frame",
+        );
+        await page.waitForTimeout(1_000);
         measurement = await measureAfterAdvertisements(page);
         continue;
       }

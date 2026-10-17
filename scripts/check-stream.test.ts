@@ -10,6 +10,7 @@ import {
   isMeasurementUnusable,
   isOverallOk,
   isVideoReady,
+  isWindowFullyStatic,
   type MotionSample,
   type MotionSamples,
   type PlaybackMeasurement,
@@ -217,6 +218,50 @@ describe("isMeasurementUnusable and advertisements", () => {
       },
     };
     expect(isMeasurementUnusable(measurement)).toBe(false);
+  });
+});
+
+describe("isWindowFullyStatic", () => {
+  const motionOf = (
+    samples: MotionSample[],
+    overrides: Partial<MotionSamples> = {},
+  ): MotionSamples => ({
+    tainted: false,
+    elapsedMs: 10_000,
+    samples,
+    sawAdvertisement: false,
+    ...overrides,
+  });
+  const stillSample = (elapsedMs: number): MotionSample => ({
+    elapsedMs,
+    wholeChanged: false,
+    gameChanged: false,
+  });
+  const still: MotionSample[] = [stillSample(0), stillSample(16)];
+
+  it("flags a window in which no sampled frame ever changed", () => {
+    expect(isWindowFullyStatic(motionOf(still))).toBe(true);
+  });
+
+  it("accepts a window with any change, whole or game", () => {
+    expect(
+      isWindowFullyStatic(
+        motionOf([stillSample(0), { ...stillSample(16), wholeChanged: true }]),
+      ),
+    ).toBe(false);
+    expect(
+      isWindowFullyStatic(
+        motionOf([stillSample(0), { ...stillSample(16), gameChanged: true }]),
+      ),
+    ).toBe(false);
+  });
+
+  it("does not call an empty, single-sample, or tainted window static", () => {
+    // "No comparison happened" is not the same as "nothing moved"; those cases
+    // are handled by isMeasurementUnusable.
+    expect(isWindowFullyStatic(motionOf([]))).toBe(false);
+    expect(isWindowFullyStatic(motionOf([stillSample(0)]))).toBe(false);
+    expect(isWindowFullyStatic(motionOf(still, { tainted: true }))).toBe(false);
   });
 });
 
