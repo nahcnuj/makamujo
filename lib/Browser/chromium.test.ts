@@ -10,11 +10,22 @@ import {
   createRedirectToHomeHandler,
   DEFAULT_EVALUATE_TIMEOUT_MS,
   EvaluateTimeoutError,
+  GAME_BROWSER_ANTI_THROTTLE_FLAGS,
   resolveEvaluateTimeoutMs,
   withTimeout,
 } from "./chromium";
 
 const HOME_URL = "https://www.nahcnuj.work/vigilant-fiesta/";
+
+describe("GAME_BROWSER_ANTI_THROTTLE_FLAGS", () => {
+  it("disables background and occlusion throttling of the game window", () => {
+    expect([...GAME_BROWSER_ANTI_THROTTLE_FLAGS]).toEqual([
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
+    ]);
+  });
+});
 
 describe("cleanupChromiumLockFiles", () => {
   it("removes SingletonLock and SingletonSocket when present", () => {

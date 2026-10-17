@@ -299,6 +299,22 @@ export async function launchPersistentContext(
   throw lastError ?? new Error("launchPersistentContext failed");
 }
 
+/**
+ * Keep the game window painting while it is backgrounded or occluded.
+ *
+ * The session runs as a Chromium `--app` window that OBS captures. When the
+ * window manager reports it occluded (or the page is otherwise backgrounded)
+ * Chromium throttles its timers and `requestAnimationFrame` down to a frame or
+ * two per second, so the game renders at a crawl and the stream's picture
+ * looks frozen even though the page keeps answering. These flags pin the
+ * renderer to full speed regardless of window visibility.
+ */
+export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
+  "--disable-background-timer-throttling",
+  "--disable-backgrounding-occluded-windows",
+  "--disable-renderer-backgrounding",
+] as const;
+
 export const create = async (
   executablePath?: string,
   viewport: ViewportSize = {
@@ -359,6 +375,7 @@ export const create = async (
       "--lang=ja",
       "--no-sandbox",
       "--disable-dev-shm-usage",
+      ...GAME_BROWSER_ANTI_THROTTLE_FLAGS,
       `--app=${gameHomeUrl}`,
     ],
   };

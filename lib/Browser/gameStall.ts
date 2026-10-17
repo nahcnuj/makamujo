@@ -87,6 +87,71 @@ export const shouldRestartGameSession = (
   limit: number,
 ): boolean => limit > 0 && consecutiveStalls >= limit;
 
+export interface StallEscalationState {
+  /** Reloads attempted since the picture last demonstrably changed. */
+  consecutiveStalls: number;
+}
+
+export const initialStallEscalationState = (): StallEscalationState => ({
+  consecutiveStalls: 0,
+});
+
+export interface StallProbeObservation {
+  /** The page has been static long enough to be treated as frozen. */
+  stalled: boolean;
+  /**
+   * The current frame differs from the previous observation, which proves the
+   * page is painting. The first probe after a reload has no baseline and must
+   * report `false`.
+   */
+  frameChanged: boolean;
+}
+
+export interface StallProbeDecision {
+  state: StallEscalationState;
+  /** The page should be reloaded to try to restore painting. */
+  reload: boolean;
+  /** Reloading has not restored painting; the whole session should restart. */
+  restartSession: boolean;
+}
+
+/**
+ * Fold one stall probe into the reload budget.
+ *
+ * The budget must only be cleared by a frame that actually changed. The first
+ * probe after a reload has no baseline, so it reports `frameChanged === false`
+ * even though the page is healthy; clearing the budget on it made a page that
+ * never recovered reload forever instead of ever reaching the session-restart
+ * threshold, leaving the stream frozen for hours. A non-positive `reloadLimit`
+ * disables the restart (the page is reloaded on every stall instead).
+ */
+export const observeStallProbe = (
+  state: StallEscalationState,
+  observation: StallProbeObservation,
+  reloadLimit: number,
+): StallProbeDecision => {
+  if (!observation.stalled) {
+    return {
+      state: observation.frameChanged ? initialStallEscalationState() : state,
+      reload: false,
+      restartSession: false,
+    };
+  }
+  const consecutiveStalls = state.consecutiveStalls + 1;
+  if (shouldRestartGameSession(consecutiveStalls, reloadLimit)) {
+    return {
+      state: initialStallEscalationState(),
+      reload: false,
+      restartSession: true,
+    };
+  }
+  return {
+    state: { consecutiveStalls },
+    reload: true,
+    restartSession: false,
+  };
+};
+
 /** How often the page is screenshotted for the stall probe. */
 export const DEFAULT_GAME_STALL_CHECK_MS = 10_000;
 /** Identical frames needed to declare a stall (~60s at the default interval). */
