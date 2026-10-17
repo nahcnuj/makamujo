@@ -25,10 +25,21 @@ const MAX_SAMPLE_DIMENSION = 128;
 const PIXEL_CHANNEL_TOLERANCE = 16;
 /** A sampled frame counts as "changed" when this fraction of pixels moved. */
 const MIN_CHANGED_RATIO = 0.001;
-/** Whole video: minimum moving frames per second over the window. */
-export const VIDEO_MIN_FPS = 24;
-/** Game panel: minimum moving frames per second over the window. */
-export const GAME_MIN_FPS = 8;
+/**
+ * Whole video: the slowest one-second bucket must have changed more than this
+ * fraction of the frames it captured.
+ *
+ * The verdict judges change *ratios*, not absolute FPS. The check runs in
+ * headless Chromium on a CI runner, where requestAnimationFrame starves down
+ * to ~10 Hz and briefly to 1–2 Hz even while the program is healthy (issue
+ * #822: average 9 FPS with a 2 FPS dip on a clearly moving picture), so an
+ * absolute per-second count reports a healthy stream as stalled. A genuinely
+ * frozen picture yields zero changed frames out of however many were
+ * captured, which the ratio still exposes at any frame rate.
+ */
+export const VIDEO_MIN_CHANGE_RATIO = 0.2;
+/** Game panel: same rationale as {@link VIDEO_MIN_CHANGE_RATIO}. */
+export const GAME_MIN_CHANGE_RATIO = 0.2;
 
 /** Left 60% of the video: game panel on the 10×8 layout. */
 export const GAME_CLIP = {
@@ -186,8 +197,12 @@ export interface CheckResult {
     decodedAudioBytesEnd?: number;
     videoMinFps?: number;
     videoAvgFps?: number;
+    videoMinChangeRatio?: number;
+    videoAvgChangeRatio?: number;
     gameMinFps?: number;
     gameAvgFps?: number;
+    gameMinChangeRatio?: number;
+    gameAvgChangeRatio?: number;
     pageTitle?: string;
     pageUrl?: string;
   };
@@ -251,14 +266,17 @@ export function shouldReMeasure(
 }
 
 /**
- * A picture counts as moving only when its slowest one-second bucket keeps
- * enough changed frames. A threshold of N means "N FPS or below is an error".
+ * A picture counts as moving only when the slowest one-second bucket changed
+ * enough of the frames it captured. A threshold of N means "N or below is an
+ * error". Buckets that captured no frames at all cannot be judged (frame
+ * capture depends on the page's requestAnimationFrame, which the check's own
+ * environment throttles) and are excluded by {@link summarizeMotion}.
  */
-export function isFpsAboveThreshold(
-  minFps: number,
-  thresholdFps: number,
+export function isChangeRatioAboveThreshold(
+  minChangeRatio: number,
+  thresholdRatio: number,
 ): boolean {
-  return minFps > thresholdFps;
+  return minChangeRatio > thresholdRatio;
 }
 
 export function isOverallOk(
@@ -292,34 +310,54 @@ export interface MotionSamples {
   sawAdvertisement: boolean;
 }
 
-export interface FpsSummary {
-  /** Fewest changed frames in any one-second bucket. */
+export interface MotionSummary {
+  /**
+   * Smallest changed-frame ratio across the one-second buckets that captured
+   * at least one frame. This is what the verdict judges.
+   */
+  minChangeRatio: number;
+  /** Changed frames out of every compared frame in the window. */
+  avgChangeRatio: number;
+  /**
+   * Fewest changed frames in any one-second bucket that captured frames.
+   * Diagnostic only: the sampler's frame rate follows the page's
+   * requestAnimationFrame, which the check's own environment throttles, so an
+   * absolute FPS value cannot decide health on its own.
+   */
   minFps: number;
-  /** Changed frames per second over the whole window. */
+  /** Changed frames per second over the whole window. Diagnostic only. */
   avgFps: number;
   /** Total adjacent pairs that differed. */
   changedFrames: number;
   /** Total adjacent pairs compared. */
   comparedFrames: number;
+  /** One-second buckets that captured no frames at all. */
+  emptyBucketCount: number;
 }
 
 /**
- * Summarise how fast a picture kept changing, in changed frames per second.
+ * Summarise how steadily a picture kept changing over the sampling window.
  *
  * The in-page sampler records, for every presented frame, whether it differs
- * from the previous frame. Samples are grouped into one-second buckets and
- * each bucket yields an FPS value; the minimum across buckets exposes even a
- * brief freeze, which a window-wide average would hide. A bucket with no
- * samples at all (the picture stopped presenting frames) counts as zero.
+ * from the previous frame. Samples are grouped into one-second buckets; each
+ * bucket that captured frames yields a changed-frame ratio, and the minimum
+ * across those buckets exposes a freeze, which a window-wide average would
+ * hide. Buckets with no samples at all are counted in {@link
+ * MotionSummary.emptyBucketCount} but excluded from the minimum: a silent
+ * bucket means the check's own requestAnimationFrame was starved (headless
+ * Chromium on a loaded runner), which says nothing about the stream, whereas
+ * a frozen picture still receives animation-frame ticks with unchanged
+ * pixels and therefore lands in the ratio as zero.
  */
-export function summarizeFps(
+export function summarizeMotion(
   samples: MotionSample[],
   pickChanged: (sample: MotionSample) => boolean,
   bucketMs: number,
   windowMs: number,
-): FpsSummary {
+): MotionSummary {
   const bucketCount = Math.max(1, Math.ceil(windowMs / bucketMs));
   const bucketChanged = new Array<number>(bucketCount).fill(0);
+  const bucketCompared = new Array<number>(bucketCount).fill(0);
   let comparedFrames = 0;
   let changedFrames = 0;
   for (const sample of samples) {
@@ -329,6 +367,7 @@ export function summarizeFps(
       bucketCount - 1,
     );
     comparedFrames += 1;
+    bucketCompared[index] = (bucketCompared[index] ?? 0) + 1;
     if (pickChanged(sample)) {
       changedFrames += 1;
       bucketChanged[index] = (bucketChanged[index] ?? 0) + 1;
@@ -336,16 +375,29 @@ export function summarizeFps(
   }
   const windowSec = Math.max(windowMs, 1) / 1000;
   const bucketSec = Math.max(bucketMs, 1) / 1000;
+  let minChangeRatio = Number.POSITIVE_INFINITY;
   let minFps = Number.POSITIVE_INFINITY;
-  for (const count of bucketChanged) {
-    minFps = Math.min(minFps, count / bucketSec);
+  let emptyBucketCount = 0;
+  for (let index = 0; index < bucketCount; index += 1) {
+    const compared = bucketCompared[index] ?? 0;
+    if (compared === 0) {
+      emptyBucketCount += 1;
+      continue;
+    }
+    const changed = bucketChanged[index] ?? 0;
+    minChangeRatio = Math.min(minChangeRatio, changed / compared);
+    minFps = Math.min(minFps, changed / bucketSec);
   }
+  if (!Number.isFinite(minChangeRatio)) minChangeRatio = 0;
   if (!Number.isFinite(minFps)) minFps = 0;
   return {
+    minChangeRatio,
+    avgChangeRatio: comparedFrames > 0 ? changedFrames / comparedFrames : 0,
     minFps,
     avgFps: changedFrames / windowSec,
     changedFrames,
     comparedFrames,
+    emptyBucketCount,
   };
 }
 
@@ -438,8 +490,8 @@ async function waitForVideoPlayback(
  * Watch the playing video for the whole window and record, for every
  * presented frame, whether it differs from the previous frame.
  *
- * Playwright screenshots are far too slow to resolve a 24 FPS threshold
- * (each shot costs ~100ms), so frames are captured inside the page:
+ * Playwright screenshots are far too slow to resolve per-frame motion (each
+ * shot costs ~100ms), so frames are captured inside the page:
  * requestAnimationFrame keeps ticking at the display rate even while the
  * picture is frozen, which is exactly what exposes a stall as 0 changed
  * frames in that second. Drawing the element needs no screenshot round
@@ -881,22 +933,29 @@ async function checkStream(): Promise<CheckResult> {
     if (motion.tainted || motion.samples.length < 2) {
       phenomena.push("映像全体のフレームを取得できませんでした");
     } else {
-      const videoFps = summarizeFps(
+      const videoMotion = summarizeMotion(
         motion.samples,
         (sample) => sample.wholeChanged,
         FPS_BUCKET_MS,
         CHECK_DURATION_MS,
       );
-      details.videoMinFps = videoFps.minFps;
-      details.videoAvgFps = videoFps.avgFps;
-      videoPlaying = isFpsAboveThreshold(videoFps.minFps, VIDEO_MIN_FPS);
+      details.videoMinFps = videoMotion.minFps;
+      details.videoAvgFps = videoMotion.avgFps;
+      details.videoMinChangeRatio = videoMotion.minChangeRatio;
+      details.videoAvgChangeRatio = videoMotion.avgChangeRatio;
+      videoPlaying = isChangeRatioAboveThreshold(
+        videoMotion.minChangeRatio,
+        VIDEO_MIN_CHANGE_RATIO,
+      );
       if (!videoPlaying) {
         phenomena.push("映像全体が停止し続けています");
       } else {
         console.log(
-          `[INFO] Video moving: min fps = ${videoFps.minFps.toFixed(
-            1,
-          )} (avg ${videoFps.avgFps.toFixed(1)})`,
+          `[INFO] Video moving: min change ratio = ${videoMotion.minChangeRatio.toFixed(
+            2,
+          )} (avg ${videoMotion.avgChangeRatio.toFixed(2)}, min fps ${
+            videoMotion.minFps
+          } / avg ${videoMotion.avgFps.toFixed(1)})`,
         );
       }
     }
@@ -906,22 +965,29 @@ async function checkStream(): Promise<CheckResult> {
     if (motion.tainted || motion.samples.length < 2) {
       phenomena.push("ゲーム画面部分のフレームを取得できませんでした");
     } else {
-      const gameFps = summarizeFps(
+      const gameMotion = summarizeMotion(
         motion.samples,
         (sample) => sample.gameChanged,
         FPS_BUCKET_MS,
         CHECK_DURATION_MS,
       );
-      details.gameMinFps = gameFps.minFps;
-      details.gameAvgFps = gameFps.avgFps;
-      gameScreenPlaying = isFpsAboveThreshold(gameFps.minFps, GAME_MIN_FPS);
+      details.gameMinFps = gameMotion.minFps;
+      details.gameAvgFps = gameMotion.avgFps;
+      details.gameMinChangeRatio = gameMotion.minChangeRatio;
+      details.gameAvgChangeRatio = gameMotion.avgChangeRatio;
+      gameScreenPlaying = isChangeRatioAboveThreshold(
+        gameMotion.minChangeRatio,
+        GAME_MIN_CHANGE_RATIO,
+      );
       if (!gameScreenPlaying) {
         phenomena.push("ゲーム画面部分が停止し続けています");
       } else {
         console.log(
-          `[INFO] Game screen moving: min fps = ${gameFps.minFps.toFixed(
-            1,
-          )} (avg ${gameFps.avgFps.toFixed(1)})`,
+          `[INFO] Game screen moving: min change ratio = ${gameMotion.minChangeRatio.toFixed(
+            2,
+          )} (avg ${gameMotion.avgChangeRatio.toFixed(2)}, min fps ${
+            gameMotion.minFps
+          } / avg ${gameMotion.avgFps.toFixed(1)})`,
         );
       }
     }

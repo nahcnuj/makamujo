@@ -2,10 +2,10 @@ import { describe, expect, it } from "bun:test";
 import {
   didAudioDecodedBytesReset,
   formatJst,
-  GAME_MIN_FPS,
+  GAME_MIN_CHANGE_RATIO,
   isAudioPlaying,
   isCapturableMediaSource,
-  isFpsAboveThreshold,
+  isChangeRatioAboveThreshold,
   isInAdContainer,
   isMeasurementUnusable,
   isOverallOk,
@@ -14,9 +14,9 @@ import {
   type MotionSamples,
   type PlaybackMeasurement,
   shouldReMeasure,
-  summarizeFps,
+  summarizeMotion,
   toErrorResult,
-  VIDEO_MIN_FPS,
+  VIDEO_MIN_CHANGE_RATIO,
   type VideoState,
   wasAdvertisementShown,
 } from "./check-stream.ts";
@@ -220,10 +220,14 @@ describe("isMeasurementUnusable and advertisements", () => {
   });
 });
 
-describe("video and game FPS thresholds", () => {
-  it("uses 24 fps for the whole video and 8 fps for the game screen", () => {
-    expect(VIDEO_MIN_FPS).toBe(24);
-    expect(GAME_MIN_FPS).toBe(8);
+describe("video and game change-ratio thresholds", () => {
+  it("uses a 0.2 change ratio for both the whole video and the game screen", () => {
+    // Absolute FPS thresholds misfired on the CI runner: headless Chromium
+    // throttles requestAnimationFrame to ~10 fps with dips to 1-2 fps even
+    // on a healthy, moving picture (issue #822), so the verdict judges the
+    // fraction of captured frames that changed instead.
+    expect(VIDEO_MIN_CHANGE_RATIO).toBe(0.2);
+    expect(GAME_MIN_CHANGE_RATIO).toBe(0.2);
   });
 });
 
@@ -248,16 +252,20 @@ describe("isVideoReady", () => {
   });
 });
 
-describe("isFpsAboveThreshold", () => {
+describe("isChangeRatioAboveThreshold", () => {
   it("treats the threshold itself as an error", () => {
-    expect(isFpsAboveThreshold(24, VIDEO_MIN_FPS)).toBe(false);
-    expect(isFpsAboveThreshold(8, GAME_MIN_FPS)).toBe(false);
+    expect(isChangeRatioAboveThreshold(0.2, VIDEO_MIN_CHANGE_RATIO)).toBe(
+      false,
+    );
+    expect(isChangeRatioAboveThreshold(0.2, GAME_MIN_CHANGE_RATIO)).toBe(false);
   });
 
-  it("passes only when the minimum fps exceeds the threshold", () => {
-    expect(isFpsAboveThreshold(24.5, VIDEO_MIN_FPS)).toBe(true);
-    expect(isFpsAboveThreshold(0, GAME_MIN_FPS)).toBe(false);
-    expect(isFpsAboveThreshold(8.5, GAME_MIN_FPS)).toBe(true);
+  it("passes only when the minimum change ratio exceeds the threshold", () => {
+    expect(isChangeRatioAboveThreshold(0.21, VIDEO_MIN_CHANGE_RATIO)).toBe(
+      true,
+    );
+    expect(isChangeRatioAboveThreshold(0, GAME_MIN_CHANGE_RATIO)).toBe(false);
+    expect(isChangeRatioAboveThreshold(1, GAME_MIN_CHANGE_RATIO)).toBe(true);
   });
 });
 
@@ -274,7 +282,7 @@ describe("isOverallOk", () => {
   });
 });
 
-describe("summarizeFps", () => {
+describe("summarizeMotion", () => {
   const sample = (elapsedMs: number, changed: boolean): MotionSample => ({
     elapsedMs,
     wholeChanged: changed,
@@ -293,45 +301,61 @@ describe("summarizeFps", () => {
     return samples;
   };
 
-  it("reports zero fps for empty or still input", () => {
-    expect(summarizeFps([], (s) => s.wholeChanged, 1000, 10000)).toEqual({
+  it("reports zero ratio and fps for empty or still input", () => {
+    expect(summarizeMotion([], (s) => s.wholeChanged, 1000, 10000)).toEqual({
+      minChangeRatio: 0,
+      avgChangeRatio: 0,
       minFps: 0,
       avgFps: 0,
       changedFrames: 0,
       comparedFrames: 0,
+      emptyBucketCount: 10,
     });
     const still = steadySamples(10000, 100).map((s) => ({
       ...s,
       wholeChanged: false,
     }));
-    expect(summarizeFps(still, (s) => s.wholeChanged, 1000, 10000)).toEqual({
+    expect(summarizeMotion(still, (s) => s.wholeChanged, 1000, 10000)).toEqual({
+      minChangeRatio: 0,
+      avgChangeRatio: 0,
       minFps: 0,
       avgFps: 0,
       changedFrames: 0,
       comparedFrames: 100,
+      emptyBucketCount: 0,
     });
   });
 
-  it("measures ten fps for one changed frame every 100ms", () => {
-    const summary = summarizeFps(
+  it("measures a full change ratio for one changed frame every 100ms", () => {
+    const summary = summarizeMotion(
       steadySamples(10000, 100),
       (s) => s.wholeChanged,
       1000,
       10000,
     );
+    expect(summary.minChangeRatio).toBe(1);
+    expect(summary.avgChangeRatio).toBe(1);
     expect(summary.minFps).toBe(10);
     expect(summary.avgFps).toBe(10);
     expect(summary.changedFrames).toBe(100);
     expect(summary.comparedFrames).toBe(100);
+    expect(summary.emptyBucketCount).toBe(0);
   });
 
-  it("exposes a one-second freeze as a zero minimum", () => {
+  it("exposes a one-second freeze as a zero minimum ratio", () => {
     const samples = steadySamples(10000, 100).map((s) =>
       s.elapsedMs >= 4000 && s.elapsedMs < 5000
         ? { ...s, wholeChanged: false }
         : s,
     );
-    const summary = summarizeFps(samples, (s) => s.wholeChanged, 1000, 10000);
+    const summary = summarizeMotion(
+      samples,
+      (s) => s.wholeChanged,
+      1000,
+      10000,
+    );
+    expect(summary.minChangeRatio).toBe(0);
+    expect(summary.avgChangeRatio).toBe(0.9);
     expect(summary.minFps).toBe(0);
     expect(summary.avgFps).toBe(9);
     expect(summary.changedFrames).toBe(90);
@@ -342,7 +366,9 @@ describe("summarizeFps", () => {
       ...s,
       gameChanged: index % 2 === 0,
     }));
-    const summary = summarizeFps(samples, (s) => s.gameChanged, 1000, 10000);
+    const summary = summarizeMotion(samples, (s) => s.gameChanged, 1000, 10000);
+    expect(summary.minChangeRatio).toBe(0.5);
+    expect(summary.avgChangeRatio).toBe(0.5);
     expect(summary.minFps).toBe(5);
     expect(summary.avgFps).toBe(5);
     expect(summary.changedFrames).toBe(50);
@@ -350,9 +376,58 @@ describe("summarizeFps", () => {
 
   it("ignores samples recorded past the window", () => {
     const samples = [...steadySamples(10000, 100), sample(12000, true)];
-    const summary = summarizeFps(samples, (s) => s.wholeChanged, 1000, 10000);
+    const summary = summarizeMotion(
+      samples,
+      (s) => s.wholeChanged,
+      1000,
+      10000,
+    );
     expect(summary.changedFrames).toBe(100);
     expect(summary.comparedFrames).toBe(100);
+  });
+
+  it("excludes buckets that captured no frames from the minimum", () => {
+    // requestAnimationFrame starvation (headless Chromium on a loaded CI
+    // runner) leaves silent buckets. They say nothing about the stream, so
+    // they must not drag the minimum to zero the way the old absolute-FPS
+    // summary did.
+    const samples = steadySamples(3000, 100);
+    const summary = summarizeMotion(
+      samples,
+      (s) => s.wholeChanged,
+      1000,
+      10000,
+    );
+    expect(summary.emptyBucketCount).toBe(7);
+    expect(summary.minChangeRatio).toBe(1);
+    expect(summary.minFps).toBe(10);
+  });
+
+  it("passes a starved window whose frames all still changed (issue #822)", () => {
+    // Observed on a healthy stream: the page presented only ~9-10 frames per
+    // second and one second dipped to two frames, so the minimum absolute FPS
+    // (2) fell far below the old 24 FPS threshold even though every captured
+    // frame differed from its predecessor. Ratio-based judgement passes it.
+    const samples: MotionSample[] = [];
+    for (let t = 0; t < 10000; t += 100) {
+      if (t >= 4000 && t < 5000) continue;
+      samples.push(sample(t, true));
+    }
+    samples.push(sample(4500, true), sample(4800, true));
+    const summary = summarizeMotion(
+      samples,
+      (s) => s.wholeChanged,
+      1000,
+      10000,
+    );
+    expect(summary.minFps).toBe(2);
+    expect(summary.minChangeRatio).toBe(1);
+    expect(
+      isChangeRatioAboveThreshold(
+        summary.minChangeRatio,
+        VIDEO_MIN_CHANGE_RATIO,
+      ),
+    ).toBe(true);
   });
 });
 
