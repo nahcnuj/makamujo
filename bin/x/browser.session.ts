@@ -7,6 +7,14 @@ import { ActionResult } from "automated-gameplay-transmitter";
 import { ServerGames as Games } from "../../lib/Agent/games/server";
 import { create } from "../../lib/Browser/chromium";
 import {
+  type CompositorHeartbeatState,
+  compositorHeartbeatProbe,
+  initialCompositorHeartbeatState,
+  observeCompositorHeartbeat,
+  resolveCompositorHeartbeatCheckMs,
+  resolveCompositorHeartbeatWedgedFrames,
+} from "../../lib/Browser/compositorHeartbeat";
+import {
   areFramesIdentical,
   type GameStallState,
   initialGameStallState,
@@ -267,6 +275,7 @@ const stallTimer = setInterval(() => {
       await browser.reload();
       previousFrame = undefined;
       stallState = initialGameStallState();
+      compositorHeartbeatState = initialCompositorHeartbeatState();
     } catch (err) {
       console.warn("[WARN] game liveness probe failed", err);
     } finally {
@@ -274,6 +283,71 @@ const stallTimer = setInterval(() => {
     }
   })();
 }, stallCheckMs);
+
+// コンポジータ無反応監視
+// ゲームページ停止監視はスクリーンショットの比較なので、キャンバスが同じ
+// 絵を描き続ける故障しか捕まえない。フレーム生成全体が止まると
+// （レンダラは evaluate に応答するが新しいフレームを作らない）スクリーンショットは
+// ハングし、停止監視は盲る。ページ内の requestAnimationFrame プローブで
+// フレーム停止を検知し、リロード→セッション再起動へ昇進させる。
+const compositorHeartbeatCheckMs = resolveCompositorHeartbeatCheckMs();
+const compositorHeartbeatWedgedFrames =
+  resolveCompositorHeartbeatWedgedFrames();
+let checkingCompositorHeartbeat = false;
+let compositorHeartbeatState: CompositorHeartbeatState =
+  initialCompositorHeartbeatState();
+const compositorHeartbeatTimer = setInterval(() => {
+  if (checkingCompositorHeartbeat) return;
+  checkingCompositorHeartbeat = true;
+  void (async () => {
+    try {
+      const { sight } = Games.VigilantFiesta;
+      const [produced, screen] = await Promise.all([
+        browser.evaluate(compositorHeartbeatProbe).catch(() => undefined),
+        browser
+          .evaluate(sight)
+          .then((state) => state?.screen)
+          .catch(() => undefined),
+      ]);
+      // `Browser.evaluate` types the probe's promise without flattening it;
+      // Playwright flattens it at runtime, so unwrap once more here.
+      const frameProduced = produced === undefined ? undefined : await produced;
+      const decision = observeCompositorHeartbeat(
+        compositorHeartbeatState,
+        {
+          frameProduced,
+          expectedToAnimate: screen === "playing",
+        },
+        compositorHeartbeatWedgedFrames,
+      );
+      compositorHeartbeatState = decision.state;
+      if (!decision.wedged) {
+        consecutiveStalls = 0;
+        return;
+      }
+
+      consecutiveStalls += 1;
+      if (shouldRestartGameSession(consecutiveStalls, MAX_CONSECUTIVE_STALLS)) {
+        console.warn(
+          "[WARN] compositor kept producing no frames after reloads; exiting session for outer restart",
+        );
+        clearInterval(compositorHeartbeatTimer);
+        clearInterval(stallTimer);
+        void closeBrowser().finally(() => process.exit(1));
+        return;
+      }
+      console.warn("[WARN] compositor produced no frames; reloading");
+      await browser.reload();
+      compositorHeartbeatState = initialCompositorHeartbeatState();
+      stallState = initialGameStallState();
+      previousFrame = undefined;
+    } catch (err) {
+      console.warn("[WARN] compositor heartbeat probe failed", err);
+    } finally {
+      checkingCompositorHeartbeat = false;
+    }
+  })();
+}, compositorHeartbeatCheckMs);
 
 const send = await createRetrySender(
   async (action) => {
@@ -356,6 +430,7 @@ try {
 } finally {
   clearInterval(awSnapTimer);
   clearInterval(stallTimer);
+  clearInterval(compositorHeartbeatTimer);
   await closeBrowser();
   send({ name: "closed" });
 }
