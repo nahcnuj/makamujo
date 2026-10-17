@@ -695,6 +695,73 @@ export function wasAdvertisementShown(motion: MotionSamples): boolean {
 }
 
 /**
+ * How many consecutive windows with no visible change count the picture as
+ * "stopped" for good.
+ *
+ * The watch page idles for stretches of seconds whenever the game between
+ * turns and the overlay are both still — a single still window is ambient
+ * content, not a failure. A frozen video element keeps painting the same
+ * picture for minutes on end, so a run of consecutive still windows tells
+ * the two apart: any change resets the count and only a run reaching this
+ * threshold is reported as "映像全体が停止し続けています".
+ */
+export const STALL_WINDOW_THRESHOLD = 5;
+
+export interface PictureStallState {
+  /** Consecutive windows in which not a single frame changed. */
+  staticWindows: number;
+}
+
+export interface PictureStallObservation {
+  /** True when at least one frame changed during the window. */
+  windowChanged: boolean;
+}
+
+export interface PictureStallDecision {
+  state: PictureStallState;
+  /** Still windows reached the threshold; the picture counts as frozen. */
+  stalled: boolean;
+}
+
+export const initialPictureStallState = (): PictureStallState => ({
+  staticWindows: 0,
+});
+
+/**
+ * Fold one window into the running stall state.
+ *
+ * Any change clears the counter; consecutive still windows accumulate until
+ * `_stallWindowThreshold` is reached, at which point the state resets and
+ * `stalled` is reported once.
+ */
+export const observePictureStall = (
+  state: PictureStallState,
+  observation: PictureStallObservation,
+  stallWindowThreshold: number,
+): PictureStallDecision => {
+  if (observation.windowChanged) {
+    return { state: { staticWindows: 0 }, stalled: false };
+  }
+  const staticWindows = state.staticWindows + 1;
+  if (staticWindows >= stallWindowThreshold) {
+    return { state: { staticWindows: 0 }, stalled: true };
+  }
+  return { state: { staticWindows }, stalled: false };
+};
+
+/**
+ * Result of sampling one window that is clean enough to judge: a clean
+ * measurement, a playback that never started (the reload also failed), or a
+ * video element that vanished mid-probe.
+ */
+export type CleanWindow =
+  | { ok: true; measurement: PlaybackMeasurement }
+  | {
+      ok: false;
+      reason: "playback-never-started" | "video-vanished";
+    };
+
+/**
  * Probe decoded-audio bytes around one sampling window.
  *
  * Returns `null` when the video element disappeared before the closing
@@ -755,6 +822,104 @@ async function measureAfterAdvertisements(
     );
   }
   return measurePlayback(page);
+}
+
+/**
+ * Sample one window, re-measuring as long as the window carries no judgement.
+ *
+ * An advertisement freezes the live picture for the whole window and a
+ * rebuilt media element makes the opening and closing probes watch different
+ * elements, so a signed-out viewer can burn through several windows in a row.
+ * Each retry reloads the page once the media element is unusable; giving up
+ * mid-reload is reported as playback never starting, and a closing probe
+ * without a video element as the element vanishing. Running out of attempts
+ * still returns the last measurement; the caller then reports the picture as
+ * unjudgeable instead of guessing.
+ */
+async function measureUsableWindow(page: Page): Promise<CleanWindow> {
+  const maxAttempts = 5;
+  let measurement = await measureAfterAdvertisements(page);
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (measurement === null) {
+      return { ok: false, reason: "video-vanished" };
+    }
+    if (wasAdvertisementShown(measurement.motion)) {
+      console.log(
+        "[INFO] An advertisement played during the sampling window; waiting for it to end and measuring again",
+      );
+      measurement = await measureAfterAdvertisements(page);
+      continue;
+    }
+    if (!isMeasurementUnusable(measurement)) {
+      return { ok: true, measurement };
+    }
+    console.log(
+      "[INFO] Measurement unusable (no video, no frames captured, or the decoded-audio counter went backwards); reloading and measuring again",
+    );
+    const recovered = await reloadAndWaitForPlayback(page);
+    if (!recovered) {
+      return { ok: false, reason: "playback-never-started" };
+    }
+    measurement = await measureAfterAdvertisements(page);
+  }
+  if (measurement === null) {
+    return { ok: false, reason: "video-vanished" };
+  }
+  return { ok: true, measurement };
+}
+
+/** Per-region motion summary for one sampled window. */
+export interface RegionMotion {
+  /** The sampler captured enough frames to judge the picture at all. */
+  judgeable: boolean;
+  videoChanged: boolean;
+  gameChanged: boolean;
+  videoMinFps: number | undefined;
+  videoAvgFps: number | undefined;
+  gameMinFps: number | undefined;
+  gameAvgFps: number | undefined;
+}
+
+/**
+ * Summarise one sampled window for the stall fold.
+ *
+ * A window the sampler could not read from is reported as unjudgeable —
+ * callers reload and re-measure unusable windows, so only a run of *clean*
+ * still windows ends up counted as a stall.
+ */
+export function summarizeRegionMotion(motion: MotionSamples): RegionMotion {
+  if (motion.tainted || motion.samples.length < 2) {
+    return {
+      judgeable: false,
+      videoChanged: false,
+      gameChanged: false,
+      videoMinFps: undefined,
+      videoAvgFps: undefined,
+      gameMinFps: undefined,
+      gameAvgFps: undefined,
+    };
+  }
+  const videoFps = summarizeFps(
+    motion.samples,
+    (sample) => sample.wholeChanged,
+    FPS_BUCKET_MS,
+    CHECK_DURATION_MS,
+  );
+  const gameFps = summarizeFps(
+    motion.samples,
+    (sample) => sample.gameChanged,
+    FPS_BUCKET_MS,
+    CHECK_DURATION_MS,
+  );
+  return {
+    judgeable: true,
+    videoChanged: videoFps.changedFrames > 0,
+    gameChanged: gameFps.changedFrames > 0,
+    videoMinFps: videoFps.minFps,
+    videoAvgFps: videoFps.avgFps,
+    gameMinFps: gameFps.minFps,
+    gameAvgFps: gameFps.avgFps,
+  };
 }
 
 async function checkStream(): Promise<CheckResult> {
@@ -821,114 +986,131 @@ async function checkStream(): Promise<CheckResult> {
       return { ok: false, timestampJst, phenomena, details };
     }
 
-    // Keep re-measuring until the window contains neither an intervening
-    // advertisement nor an unusable (rebuilt media element) probe. A signed-out
-    // viewer can get several mid-roll ads in quick succession, and a single
-    // retry is not enough to land on a clean window.
-    let measurement: PlaybackMeasurement | null =
-      await measureAfterAdvertisements(page);
-    let measurementAttempts = 0;
-    while (
-      measurement !== null &&
-      (wasAdvertisementShown(measurement.motion) ||
-        isMeasurementUnusable(measurement))
-    ) {
-      measurementAttempts += 1;
-      if (measurementAttempts > 5) {
-        break;
-      }
-      if (wasAdvertisementShown(measurement.motion)) {
-        console.log(
-          "[INFO] An advertisement played during the sampling window; waiting for it to end and measuring again",
-        );
-        measurement = await measureAfterAdvertisements(page);
-        continue;
-      }
-      console.log(
-        "[INFO] Measurement unusable (no video, no frames captured, or the decoded-audio counter went backwards); reloading and measuring again",
-      );
-      const recovered = await reloadAndWaitForPlayback(page);
-      if (!recovered) {
-        phenomena.push("映像の再生が始まりませんでした");
+    // Sample one window at a time and fold each into a per-region stall
+    // counter: a single window without any visible change is ambient content
+    // (the watch page idles between game turns while the overlay shows
+    // nothing new), so a still window accumulates into its region's count and
+    // only a run of consecutive still windows reaching
+    // `STALL_WINDOW_THRESHOLD` is reported as "停止し続けています".
+    let videoStallState = initialPictureStallState();
+    let gameStallState = initialPictureStallState();
+    let videoChanged = false;
+    let gameChanged = false;
+    let videoStalled = false;
+    let gameStalled = false;
+    let audioPlaying = false;
+    let lastMotionRegion = summarizeRegionMotion({
+      samples: [],
+      elapsedMs: 0,
+      tainted: false,
+      sawAdvertisement: false,
+    });
+
+    for (;;) {
+      const window = await measureUsableWindow(page);
+      if (!window.ok) {
+        if (window.reason === "playback-never-started") {
+          phenomena.push("映像の再生が始まりませんでした");
+        } else {
+          phenomena.push("チェック中にビデオ要素が消失しました");
+        }
         return { ok: false, timestampJst, phenomena, details };
       }
-      measurement = await measureAfterAdvertisements(page);
-    }
-    if (!measurement) {
-      phenomena.push("チェック中にビデオ要素が消失しました");
-      return { ok: false, timestampJst, phenomena, details };
-    }
-    const { startProbe, motion, endProbe } = measurement;
-    details.decodedAudioBytesStart = startProbe.decodedAudioBytes;
-    details.decodedAudioBytesEnd = endProbe.decodedAudioBytes;
+      const measurement = window.measurement;
+      const { startProbe, motion, endProbe } = measurement;
+      details.decodedAudioBytesStart = startProbe.decodedAudioBytes;
+      details.decodedAudioBytesEnd = endProbe.decodedAudioBytes;
+      lastMotionRegion = summarizeRegionMotion(motion);
+      if (lastMotionRegion.videoMinFps !== undefined) {
+        details.videoMinFps = lastMotionRegion.videoMinFps;
+        details.videoAvgFps = lastMotionRegion.videoAvgFps;
+      }
+      if (lastMotionRegion.gameMinFps !== undefined) {
+        details.gameMinFps = lastMotionRegion.gameMinFps;
+        details.gameAvgFps = lastMotionRegion.gameAvgFps;
+      }
+      audioPlaying = isAudioPlaying(
+        startProbe.decodedAudioBytes,
+        endProbe.decodedAudioBytes,
+      );
 
-    const audioPlaying = isAudioPlaying(
-      startProbe.decodedAudioBytes,
-      endProbe.decodedAudioBytes,
-    );
+      if (!lastMotionRegion.judgeable) {
+        // The sampler could not read the window even after the reloads and
+        // ad waits inside `measureUsableWindow`; comparing a still count
+        // against nothing proves nothing, so the check fails here.
+        phenomena.push("映像全体のフレームを取得できませんでした");
+        phenomena.push("ゲーム画面部分のフレームを取得できませんでした");
+        details.audioPlaying = audioPlaying;
+        details.videoPlaying = false;
+        details.gameScreenPlaying = false;
+        return {
+          ok: isOverallOk(audioPlaying, false, false),
+          timestampJst,
+          phenomena,
+          details,
+        };
+      }
+
+      const videoStall = observePictureStall(
+        videoStallState,
+        { windowChanged: lastMotionRegion.videoChanged },
+        STALL_WINDOW_THRESHOLD,
+      );
+      const gameStall = observePictureStall(
+        gameStallState,
+        { windowChanged: lastMotionRegion.gameChanged },
+        STALL_WINDOW_THRESHOLD,
+      );
+      videoStallState = videoStall.state;
+      gameStallState = gameStall.state;
+      videoChanged ||= lastMotionRegion.videoChanged;
+      gameChanged ||= lastMotionRegion.gameChanged;
+      videoStalled ||= videoStall.stalled;
+      gameStalled ||= gameStall.stalled;
+
+      if (videoStall.stalled || gameStall.stalled) {
+        if (videoStall.stalled) {
+          console.log("[INFO] Whole video stopped changing between windows");
+          phenomena.push("映像全体が停止し続けています");
+        }
+        if (gameStall.stalled) {
+          console.log("[INFO] Game screen stopped changing between windows");
+          phenomena.push("ゲーム画面部分が停止し続けています");
+        }
+        break;
+      }
+      if (videoChanged && gameChanged) {
+        const videoAvgFps = lastMotionRegion.videoAvgFps ?? 0;
+        const gameAvgFps = lastMotionRegion.gameAvgFps ?? 0;
+        console.log(
+          `[INFO] Whole picture moving: video avg fps = ${videoAvgFps.toFixed(1)}, game avg fps = ${gameAvgFps.toFixed(1)}`,
+        );
+        break;
+      }
+      console.log(
+        `[INFO] Window had no picture change (video changed=${lastMotionRegion.videoChanged}, game changed=${lastMotionRegion.gameChanged}); measuring another window`,
+      );
+    }
+
+    // Only clean windows reach here, so the observed regions reflect the
+    // picture that was actually measured.
     details.audioPlaying = audioPlaying;
     if (!audioPlaying) {
       phenomena.push(
         "音声が流れていません (デコードされた音声バイトが増えません)",
       );
     } else {
-      console.log(
-        `[INFO] Audio playing: decoded bytes ${startProbe.decodedAudioBytes} -> ${endProbe.decodedAudioBytes}`,
-      );
+      console.log(`[INFO] Audio playing: decoded bytes advanced`);
     }
-
-    let videoPlaying = false;
-    if (motion.tainted || motion.samples.length < 2) {
-      phenomena.push("映像全体のフレームを取得できませんでした");
-    } else {
-      const videoFps = summarizeFps(
-        motion.samples,
-        (sample) => sample.wholeChanged,
-        FPS_BUCKET_MS,
-        CHECK_DURATION_MS,
-      );
-      details.videoMinFps = videoFps.minFps;
-      details.videoAvgFps = videoFps.avgFps;
-      videoPlaying = isFpsAboveThreshold(videoFps.minFps, VIDEO_MIN_FPS);
-      if (!videoPlaying) {
-        phenomena.push("映像全体が停止し続けています");
-      } else {
-        console.log(
-          `[INFO] Video moving: min fps = ${videoFps.minFps.toFixed(
-            1,
-          )} (avg ${videoFps.avgFps.toFixed(1)})`,
-        );
-      }
-    }
-    details.videoPlaying = videoPlaying;
-
-    let gameScreenPlaying = false;
-    if (motion.tainted || motion.samples.length < 2) {
-      phenomena.push("ゲーム画面部分のフレームを取得できませんでした");
-    } else {
-      const gameFps = summarizeFps(
-        motion.samples,
-        (sample) => sample.gameChanged,
-        FPS_BUCKET_MS,
-        CHECK_DURATION_MS,
-      );
-      details.gameMinFps = gameFps.minFps;
-      details.gameAvgFps = gameFps.avgFps;
-      gameScreenPlaying = isFpsAboveThreshold(gameFps.minFps, GAME_MIN_FPS);
-      if (!gameScreenPlaying) {
-        phenomena.push("ゲーム画面部分が停止し続けています");
-      } else {
-        console.log(
-          `[INFO] Game screen moving: min fps = ${gameFps.minFps.toFixed(
-            1,
-          )} (avg ${gameFps.avgFps.toFixed(1)})`,
-        );
-      }
-    }
-    details.gameScreenPlaying = gameScreenPlaying;
+    details.videoPlaying = videoChanged && !videoStalled;
+    details.gameScreenPlaying = gameChanged && !gameStalled;
 
     return {
-      ok: isOverallOk(audioPlaying, videoPlaying, gameScreenPlaying),
+      ok: isOverallOk(
+        audioPlaying,
+        details.videoPlaying,
+        details.gameScreenPlaying,
+      ),
       timestampJst,
       phenomena,
       details,

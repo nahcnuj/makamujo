@@ -3,6 +3,7 @@ import {
   didAudioDecodedBytesReset,
   formatJst,
   GAME_MIN_FPS,
+  initialPictureStallState,
   isAudioPlaying,
   isCapturableMediaSource,
   isFpsAboveThreshold,
@@ -12,9 +13,12 @@ import {
   isVideoReady,
   type MotionSample,
   type MotionSamples,
+  observePictureStall,
   type PlaybackMeasurement,
+  STALL_WINDOW_THRESHOLD,
   shouldReMeasure,
   summarizeFps,
+  summarizeRegionMotion,
   toErrorResult,
   VIDEO_MIN_FPS,
   type VideoState,
@@ -443,5 +447,118 @@ describe("isInAdContainer", () => {
     expect(isInAdContainer("___video___mddiR")).toBe(false);
     expect(isInAdContainer(null)).toBe(false);
     expect(isInAdContainer(undefined)).toBe(false);
+  });
+});
+
+describe("initialPictureStallState", () => {
+  it("starts with no consecutive still windows", () => {
+    expect(initialPictureStallState()).toEqual({ staticWindows: 0 });
+  });
+});
+
+describe("observePictureStall", () => {
+  const observe = (
+    staticWindows: number,
+    windowChanged: boolean,
+  ): { staticWindows: number; stalled: boolean } => {
+    const decision = observePictureStall(
+      { staticWindows },
+      { windowChanged },
+      STALL_WINDOW_THRESHOLD,
+    );
+    return { ...decision.state, stalled: decision.stalled };
+  };
+
+  it("keeps the counter clear while the picture changes", () => {
+    expect(observe(0, true)).toEqual({ staticWindows: 0, stalled: false });
+    expect(observe(4, true)).toEqual({ staticWindows: 0, stalled: false });
+  });
+
+  it("accumulates consecutive still windows short of the threshold", () => {
+    expect(observe(0, false)).toEqual({ staticWindows: 1, stalled: false });
+    expect(observe(3, false)).toEqual({ staticWindows: 4, stalled: false });
+  });
+
+  it("reports a stall once and resets at the threshold", () => {
+    expect(observe(4, false)).toEqual({ staticWindows: 0, stalled: true });
+  });
+
+  it("starts a fresh streak after a stall", () => {
+    expect(observe(0, false)).toEqual({ staticWindows: 1, stalled: false });
+  });
+});
+
+describe("summarizeRegionMotion", () => {
+  const motionOf = (
+    tainted: boolean,
+    samples: MotionSample[],
+  ): MotionSamples => ({
+    tainted,
+    elapsedMs: 10_000,
+    samples,
+    sawAdvertisement: false,
+  });
+  const stillSample = (elapsedMs: number): MotionSample => ({
+    elapsedMs,
+    wholeChanged: false,
+    gameChanged: false,
+  });
+
+  it("marks a tainted window unjudgeable", () => {
+    const motion = motionOf(true, [
+      { elapsedMs: 0, wholeChanged: true, gameChanged: true },
+      { elapsedMs: 100, wholeChanged: true, gameChanged: true },
+    ]);
+    expect(summarizeRegionMotion(motion)).toEqual({
+      judgeable: false,
+      videoChanged: false,
+      gameChanged: false,
+      videoMinFps: undefined,
+      videoAvgFps: undefined,
+      gameMinFps: undefined,
+      gameAvgFps: undefined,
+    });
+  });
+
+  it("marks a window with too few frames unjudgeable", () => {
+    const motion = motionOf(false, [
+      { elapsedMs: 0, wholeChanged: true, gameChanged: true },
+    ]);
+    expect(summarizeRegionMotion(motion).judgeable).toBe(false);
+  });
+
+  it("sees both regions as changed when the whole picture moves", () => {
+    const motion = motionOf(false, [
+      { elapsedMs: 0, wholeChanged: true, gameChanged: true },
+      { elapsedMs: 100, wholeChanged: true, gameChanged: true },
+    ]);
+    const summary = summarizeRegionMotion(motion);
+    expect(summary.judgeable).toBe(true);
+    expect(summary.videoChanged).toBe(true);
+    expect(summary.gameChanged).toBe(true);
+    expect(summary.videoAvgFps).toBeGreaterThan(0);
+    expect(summary.gameAvgFps).toBeGreaterThan(0);
+  });
+
+  it("sees a still window as unchanged in both regions", () => {
+    const motion = motionOf(false, [stillSample(0), stillSample(100)]);
+    const summary = summarizeRegionMotion(motion);
+    expect(summary.videoChanged).toBe(false);
+    expect(summary.gameChanged).toBe(false);
+    expect(summary.videoAvgFps).toBe(0);
+    expect(summary.gameAvgFps).toBe(0);
+  });
+
+  it("judges the two regions independently", () => {
+    // The game panel occupies only part of the picture, so a small burst there
+    // can clear the game-region threshold without clearing the whole-picture
+    // one; the two regions must be judged independently.
+    const motion = motionOf(false, [
+      { elapsedMs: 0, wholeChanged: false, gameChanged: true },
+      { elapsedMs: 100, wholeChanged: false, gameChanged: true },
+    ]);
+    const summary = summarizeRegionMotion(motion);
+    expect(summary.videoChanged).toBe(false);
+    expect(summary.gameChanged).toBe(true);
   });
 });
