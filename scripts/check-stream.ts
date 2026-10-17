@@ -694,6 +694,85 @@ export function wasAdvertisementShown(motion: MotionSamples): boolean {
   return motion.sawAdvertisement;
 }
 
+/** How one sampling window came out, with the FPS figures behind each call. */
+export interface MotionVerdict {
+  videoPlaying: boolean;
+  gameScreenPlaying: boolean;
+  /** `null` when the window captured too few frames to judge motion. */
+  videoFps: FpsSummary | null;
+  /** `null` when the window captured too few frames to judge motion. */
+  gameFps: FpsSummary | null;
+}
+
+/**
+ * Judge one sampling window: the whole picture and the game region must each
+ * keep changing faster than their threshold in every one-second bucket.
+ */
+export function judgeMotion(
+  motion: MotionSamples,
+  bucketMs: number,
+  windowMs: number,
+): MotionVerdict {
+  if (motion.tainted || motion.samples.length < 2) {
+    return {
+      videoPlaying: false,
+      gameScreenPlaying: false,
+      videoFps: null,
+      gameFps: null,
+    };
+  }
+  const videoFps = summarizeFps(
+    motion.samples,
+    (sample) => sample.wholeChanged,
+    bucketMs,
+    windowMs,
+  );
+  const gameFps = summarizeFps(
+    motion.samples,
+    (sample) => sample.gameChanged,
+    bucketMs,
+    windowMs,
+  );
+  return {
+    videoPlaying: isFpsAboveThreshold(videoFps.minFps, VIDEO_MIN_FPS),
+    gameScreenPlaying: isFpsAboveThreshold(gameFps.minFps, GAME_MIN_FPS),
+    videoFps,
+    gameFps,
+  };
+}
+
+/**
+ * The weaker of two FPS summaries — the window that saw the slower picture.
+ */
+export function worseFps(
+  first: FpsSummary | null,
+  second: FpsSummary | null,
+): FpsSummary | null {
+  if (first === null) return second;
+  if (second === null) return first;
+  return first.minFps <= second.minFps ? first : second;
+}
+
+/**
+ * Fold a confirmation window into the first verdict.
+ *
+ * A check passes when either window saw the picture moving: a stall that
+ * froze one window usually means the player was recovering from a rebuffer,
+ * and the next window shows the stream alive again. The published figures
+ * come from the slower window so the details keep showing the stall.
+ */
+export function mergeMotionVerdicts(
+  first: MotionVerdict,
+  second: MotionVerdict,
+): MotionVerdict {
+  return {
+    videoPlaying: first.videoPlaying || second.videoPlaying,
+    gameScreenPlaying: first.gameScreenPlaying || second.gameScreenPlaying,
+    videoFps: worseFps(first.videoFps, second.videoFps),
+    gameFps: worseFps(first.gameFps, second.gameFps),
+  };
+}
+
 /**
  * Probe decoded-audio bytes around one sampling window.
  *
@@ -877,58 +956,88 @@ async function checkStream(): Promise<CheckResult> {
       );
     }
 
-    let videoPlaying = false;
-    if (motion.tainted || motion.samples.length < 2) {
-      phenomena.push("映像全体のフレームを取得できませんでした");
-    } else {
-      const videoFps = summarizeFps(
-        motion.samples,
-        (sample) => sample.wholeChanged,
-        FPS_BUCKET_MS,
-        CHECK_DURATION_MS,
+    let verdict = judgeMotion(motion, FPS_BUCKET_MS, CHECK_DURATION_MS);
+    if (!verdict.videoPlaying || !verdict.gameScreenPlaying) {
+      // A single stalled bucket can mean the player was recovering from a
+      // rebuffer rather than the stream being dead. The phenomena wording
+      // ("し続けています") claims persistence, so confirm the stall on a
+      // second, fresh window before reporting it.
+      console.log(
+        "[INFO] The picture looked stalled in this window; confirming with a second measurement before reporting it as stopped",
       );
-      details.videoMinFps = videoFps.minFps;
-      details.videoAvgFps = videoFps.avgFps;
-      videoPlaying = isFpsAboveThreshold(videoFps.minFps, VIDEO_MIN_FPS);
-      if (!videoPlaying) {
+      const recovered = await waitForVideoPlayback(
+        page,
+        PLAYBACK_READY_TIMEOUT_MS,
+      );
+      if (!recovered) {
+        console.log(
+          "[INFO] Playback did not recover before confirmation; keeping the first measurement",
+        );
+      } else {
+        const confirmation = await measureAfterAdvertisements(page);
+        if (confirmation === null) {
+          console.log(
+            "[INFO] Confirmation window lost the video element; keeping the first measurement",
+          );
+        } else if (wasAdvertisementShown(confirmation.motion)) {
+          console.log(
+            "[INFO] An advertisement played during the confirmation window; keeping the first measurement",
+          );
+        } else if (isMeasurementUnusable(confirmation)) {
+          console.log(
+            "[INFO] Confirmation measurement unusable; keeping the first measurement",
+          );
+        } else {
+          verdict = mergeMotionVerdicts(
+            verdict,
+            judgeMotion(confirmation.motion, FPS_BUCKET_MS, CHECK_DURATION_MS),
+          );
+        }
+      }
+    }
+
+    if (verdict.videoFps === null) {
+      phenomena.push("映像全体のフレームを取得できませんでした");
+      details.videoPlaying = false;
+    } else {
+      details.videoMinFps = verdict.videoFps.minFps;
+      details.videoAvgFps = verdict.videoFps.avgFps;
+      details.videoPlaying = verdict.videoPlaying;
+      if (!verdict.videoPlaying) {
         phenomena.push("映像全体が停止し続けています");
       } else {
         console.log(
-          `[INFO] Video moving: min fps = ${videoFps.minFps.toFixed(
+          `[INFO] Video moving: min fps = ${verdict.videoFps.minFps.toFixed(
             1,
-          )} (avg ${videoFps.avgFps.toFixed(1)})`,
+          )} (avg ${verdict.videoFps.avgFps.toFixed(1)})`,
         );
       }
     }
-    details.videoPlaying = videoPlaying;
 
-    let gameScreenPlaying = false;
-    if (motion.tainted || motion.samples.length < 2) {
+    if (verdict.gameFps === null) {
       phenomena.push("ゲーム画面部分のフレームを取得できませんでした");
+      details.gameScreenPlaying = false;
     } else {
-      const gameFps = summarizeFps(
-        motion.samples,
-        (sample) => sample.gameChanged,
-        FPS_BUCKET_MS,
-        CHECK_DURATION_MS,
-      );
-      details.gameMinFps = gameFps.minFps;
-      details.gameAvgFps = gameFps.avgFps;
-      gameScreenPlaying = isFpsAboveThreshold(gameFps.minFps, GAME_MIN_FPS);
-      if (!gameScreenPlaying) {
+      details.gameMinFps = verdict.gameFps.minFps;
+      details.gameAvgFps = verdict.gameFps.avgFps;
+      details.gameScreenPlaying = verdict.gameScreenPlaying;
+      if (!verdict.gameScreenPlaying) {
         phenomena.push("ゲーム画面部分が停止し続けています");
       } else {
         console.log(
-          `[INFO] Game screen moving: min fps = ${gameFps.minFps.toFixed(
+          `[INFO] Game screen moving: min fps = ${verdict.gameFps.minFps.toFixed(
             1,
-          )} (avg ${gameFps.avgFps.toFixed(1)})`,
+          )} (avg ${verdict.gameFps.avgFps.toFixed(1)})`,
         );
       }
     }
-    details.gameScreenPlaying = gameScreenPlaying;
 
     return {
-      ok: isOverallOk(audioPlaying, videoPlaying, gameScreenPlaying),
+      ok: isOverallOk(
+        audioPlaying,
+        verdict.videoPlaying,
+        verdict.gameScreenPlaying,
+      ),
       timestampJst,
       phenomena,
       details,

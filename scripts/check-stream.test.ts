@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   didAudioDecodedBytesReset,
+  type FpsSummary,
   formatJst,
   GAME_MIN_FPS,
   isAudioPlaying,
@@ -10,8 +11,10 @@ import {
   isMeasurementUnusable,
   isOverallOk,
   isVideoReady,
+  judgeMotion,
   type MotionSample,
   type MotionSamples,
+  mergeMotionVerdicts,
   type PlaybackMeasurement,
   shouldReMeasure,
   summarizeFps,
@@ -19,6 +22,7 @@ import {
   VIDEO_MIN_FPS,
   type VideoState,
   wasAdvertisementShown,
+  worseFps,
 } from "./check-stream.ts";
 
 describe("formatJst", () => {
@@ -443,5 +447,193 @@ describe("isInAdContainer", () => {
     expect(isInAdContainer("___video___mddiR")).toBe(false);
     expect(isInAdContainer(null)).toBe(false);
     expect(isInAdContainer(undefined)).toBe(false);
+  });
+});
+
+describe("judgeMotion", () => {
+  const motionOf = (
+    samples: MotionSample[],
+    { tainted = false, sawAdvertisement = false } = {},
+  ): MotionSamples => ({
+    tainted,
+    elapsedMs: 10_000,
+    samples,
+    sawAdvertisement,
+  });
+
+  /** One changed frame every `intervalMs` for the whole window. */
+  const steadySamples = (intervalMs: number, windowMs: number) => {
+    const samples: MotionSample[] = [];
+    for (let t = 0; t < windowMs; t += intervalMs) {
+      samples.push({ elapsedMs: t, wholeChanged: true, gameChanged: true });
+    }
+    return samples;
+  };
+
+  it("passes a healthy window whose every bucket exceeds both thresholds", () => {
+    // 30 fps picture: the whole-video threshold (24) and the game threshold
+    // (8) are both cleared in every one-second bucket.
+    const verdict = judgeMotion(
+      motionOf(steadySamples(33, 10_000)),
+      1_000,
+      10_000,
+    );
+    expect(verdict.videoPlaying).toBe(true);
+    expect(verdict.gameScreenPlaying).toBe(true);
+    expect(verdict.videoFps?.minFps).toBeGreaterThan(VIDEO_MIN_FPS);
+    expect(verdict.gameFps?.minFps).toBeGreaterThan(GAME_MIN_FPS);
+  });
+
+  it("fails both regions when the picture is frozen for the whole window", () => {
+    const still = steadySamples(33, 10_000).map((sample) => ({
+      ...sample,
+      wholeChanged: false,
+      gameChanged: false,
+    }));
+    const verdict = judgeMotion(motionOf(still), 1_000, 10_000);
+    expect(verdict.videoPlaying).toBe(false);
+    expect(verdict.gameScreenPlaying).toBe(false);
+    expect(verdict.videoFps?.minFps).toBe(0);
+    expect(verdict.gameFps?.minFps).toBe(0);
+  });
+
+  it("fails the game region alone when only the game picture freezes", () => {
+    // The whole picture keeps moving from the streamer panel, but the game
+    // region holds still for one whole second.
+    const samples = steadySamples(33, 10_000).map((sample) =>
+      sample.elapsedMs >= 4_000 && sample.elapsedMs < 5_000
+        ? { ...sample, gameChanged: false }
+        : sample,
+    );
+    const verdict = judgeMotion(motionOf(samples), 1_000, 10_000);
+    expect(verdict.videoPlaying).toBe(true);
+    expect(verdict.gameScreenPlaying).toBe(false);
+  });
+
+  it("fails when a single bucket stalls, even if the rest of the window was healthy", () => {
+    // The window shape seen in issue #818: the picture moved most of the
+    // time but one second nearly froze. A single stalled bucket is below
+    // both thresholds, so one window alone cannot claim the stream "kept"
+    // stopping; the caller has to confirm on a second window.
+    const samples = steadySamples(33, 10_000).map((sample) =>
+      sample.elapsedMs >= 4_000 && sample.elapsedMs < 5_000
+        ? { ...sample, wholeChanged: false, gameChanged: false }
+        : sample,
+    );
+    const verdict = judgeMotion(motionOf(samples), 1_000, 10_000);
+    expect(verdict.videoPlaying).toBe(false);
+    expect(verdict.gameScreenPlaying).toBe(false);
+  });
+
+  it("reports no figures for a tainted or too-short window", () => {
+    const tainted = judgeMotion(
+      motionOf(steadySamples(33, 10_000), { tainted: true }),
+      1_000,
+      10_000,
+    );
+    expect(tainted).toEqual({
+      videoPlaying: false,
+      gameScreenPlaying: false,
+      videoFps: null,
+      gameFps: null,
+    });
+    const tooShort = judgeMotion(
+      motionOf([{ elapsedMs: 0, wholeChanged: true, gameChanged: true }]),
+      1_000,
+      10_000,
+    );
+    expect(tooShort).toEqual({
+      videoPlaying: false,
+      gameScreenPlaying: false,
+      videoFps: null,
+      gameFps: null,
+    });
+  });
+});
+
+describe("worseFps", () => {
+  const fps = (minFps: number, avgFps = minFps): FpsSummary => ({
+    minFps,
+    avgFps,
+    changedFrames: 0,
+    comparedFrames: 0,
+  });
+
+  it("falls back to whichever side has figures", () => {
+    expect(worseFps(null, null)).toBeNull();
+    expect(worseFps(null, fps(30))).toEqual(fps(30));
+    expect(worseFps(fps(30), null)).toEqual(fps(30));
+  });
+
+  it("picks the slower window", () => {
+    const fast = fps(30);
+    const slow = fps(1, 16.6);
+    expect(worseFps(fast, slow)).toBe(slow);
+    expect(worseFps(slow, fast)).toBe(slow);
+  });
+
+  it("keeps the first window when both slowed equally", () => {
+    const first = fps(10);
+    const second = fps(10);
+    expect(worseFps(first, second)).toBe(first);
+  });
+});
+
+describe("mergeMotionVerdicts", () => {
+  const verdictOf = (
+    videoPlaying: boolean,
+    gameScreenPlaying: boolean,
+    videoMinFps: number | null,
+  ) => ({
+    videoPlaying,
+    gameScreenPlaying,
+    videoFps:
+      videoMinFps === null
+        ? null
+        : {
+            minFps: videoMinFps,
+            avgFps: videoMinFps,
+            changedFrames: 0,
+            comparedFrames: 0,
+          },
+    gameFps:
+      videoMinFps === null
+        ? null
+        : {
+            minFps: videoMinFps,
+            avgFps: videoMinFps,
+            changedFrames: 0,
+            comparedFrames: 0,
+          },
+  });
+
+  it("treats a stall confirmed only by the first window as recovered", () => {
+    // Transient stall: the second window shows the picture moving again, so
+    // the check must not report the stream as stopped.
+    const merged = mergeMotionVerdicts(
+      verdictOf(false, false, 1),
+      verdictOf(true, true, 30),
+    );
+    expect(merged.videoPlaying).toBe(true);
+    expect(merged.gameScreenPlaying).toBe(true);
+  });
+
+  it("fails when every window saw a stalled picture", () => {
+    // A genuinely dead stream stays dead across the confirmation window.
+    const merged = mergeMotionVerdicts(
+      verdictOf(false, false, 1),
+      verdictOf(false, false, 0),
+    );
+    expect(merged.videoPlaying).toBe(false);
+    expect(merged.gameScreenPlaying).toBe(false);
+  });
+
+  it("reports the slower window's figures so the stall stays visible", () => {
+    const merged = mergeMotionVerdicts(
+      verdictOf(false, false, 1),
+      verdictOf(true, true, 30),
+    );
+    expect(merged.videoFps?.minFps).toBe(1);
+    expect(merged.gameFps?.minFps).toBe(1);
   });
 });
