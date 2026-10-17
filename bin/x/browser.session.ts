@@ -237,9 +237,18 @@ const stallTimer = setInterval(() => {
         stallStaticFrames,
       );
       stallState = decision.state;
+      // A frame that actually changed since the last probe proves the page is
+      // painting again, so the reload budget resets. The post-reload baseline
+      // (previousFrame === undefined) must not reset it, otherwise a page that
+      // never recovers never reaches the session-restart threshold.
+      const frameChanged =
+        previousFrame !== undefined &&
+        !areFramesIdentical(previousFrame, frame);
       previousFrame = frame;
       if (!decision.stalled) {
-        consecutiveStalls = 0;
+        if (frameChanged) {
+          consecutiveStalls = 0;
+        }
         return;
       }
 
