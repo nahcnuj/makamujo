@@ -29,10 +29,10 @@ export const chromium = $_.use(StealthPlugin());
  */
 export const DEFAULT_EVALUATE_TIMEOUT_MS = 15_000;
 
-/** An in-page `evaluate` that did not settle within the allotted time. */
+/** A bounded browser call that did not settle within the allotted time. */
 export class EvaluateTimeoutError extends Error {
-  constructor(timeoutMs: number) {
-    super(`browser.evaluate did not settle within ${timeoutMs}ms`);
+  constructor(label: string, timeoutMs: number) {
+    super(`${label} did not settle within ${timeoutMs}ms`);
     this.name = "EvaluateTimeoutError";
   }
 }
@@ -56,13 +56,14 @@ export const resolveEvaluateTimeoutMs = (
 export const withTimeout = <T>(
   promise: Promise<T>,
   timeoutMs: number,
+  label = "browser.evaluate",
 ): Promise<T> => {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     return promise;
   }
   return new Promise<T>((resolve, reject) => {
     const timer = globalThis.setTimeout(() => {
-      reject(new EvaluateTimeoutError(timeoutMs));
+      reject(new EvaluateTimeoutError(label, timeoutMs));
     }, timeoutMs);
     promise.then(
       (value) => {
@@ -528,7 +529,15 @@ export const create = async (
       await page.reload({ waitUntil: "domcontentloaded" });
     },
 
-    screenshot: async () => await page.screenshot(),
+    // A wedged compositor makes `page.screenshot` hang, which would stall the
+    // game-stall watchdog for the duration of Playwright's own timeout; bound
+    // it like `evaluate` so the watchdog sees a catchable error instead.
+    screenshot: async () =>
+      await withTimeout(
+        page.screenshot(),
+        evaluateTimeoutMs,
+        "browser.screenshot",
+      ),
     get url() {
       return page.url();
     },
