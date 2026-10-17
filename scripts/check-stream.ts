@@ -167,10 +167,14 @@ const SELECT_VIDEO_INIT_SCRIPT = `
     return capturable.find(isActive) ?? capturable.find(isSized) ?? null;
   };
   window.__mmjIsAdvertisementPlaying = () =>
-    Array.from(document.querySelectorAll("video")).some(
-      (v) =>
-        !isCapturable(v.currentSrc || v.src || "", origin) && isActive(v),
-    );
+    Array.from(document.querySelectorAll("video")).some((v) => {
+      // A same-origin blob: advertisement (nicovideo's sticky ad) is
+      // capturable but lives inside an advertisement container, so the
+      // container check catches it even though the source check does not.
+      const inAd = inAdContainer(v);
+      const capturable = isCapturable(v.currentSrc || v.src || "", origin);
+      return (inAd || !capturable) && isActive(v);
+    });
 })();
 `;
 
