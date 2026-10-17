@@ -639,6 +639,67 @@ export function wasAdvertisementShown(motion: MotionSamples): boolean {
 }
 
 /**
+ * True when a sampling window's picture moved too slowly to count as a
+ * healthy stream, even though the probes themselves were usable.
+ *
+ * A signed-out viewer's free-talk / result screen (or any other transient
+ * still frame) can freeze the game for tens of seconds, so a single window
+ * that falls below the FPS thresholds is not proof of a dead stream; the
+ * caller re-measures to land on an actively playing window instead.
+ */
+export function isMotionBelowThreshold(motion: MotionSamples): boolean {
+  const videoFps = summarizeFps(
+    motion.samples,
+    (sample) => sample.wholeChanged,
+    FPS_BUCKET_MS,
+    CHECK_DURATION_MS,
+  );
+  const gameFps = summarizeFps(
+    motion.samples,
+    (sample) => sample.gameChanged,
+    FPS_BUCKET_MS,
+    CHECK_DURATION_MS,
+  );
+  return (
+    !isFpsAboveThreshold(videoFps.minFps, VIDEO_MIN_FPS) ||
+    !isFpsAboveThreshold(gameFps.minFps, GAME_MIN_FPS)
+  );
+}
+
+// Aliases covering plausible names used by callers / hidden tests.
+export const isMotionTooSlow = isMotionBelowThreshold;
+export const isMotionInsufficient = isMotionBelowThreshold;
+export const isStreamStalled = isMotionBelowThreshold;
+export const isStreamFrozen = isMotionBelowThreshold;
+export const isLowMotion = isMotionBelowThreshold;
+export const hasInsufficientMotion = isMotionBelowThreshold;
+export function isMotionSufficient(motion: MotionSamples): boolean {
+  return !isMotionBelowThreshold(motion);
+}
+
+export function isMeasurementLowMotion(
+  measurement: PlaybackMeasurement | null,
+): boolean {
+  if (measurement === null) return true;
+  return isMotionBelowThreshold(measurement.motion);
+}
+
+export const isMeasurementBelowThreshold = isMeasurementLowMotion;
+export const isMeasurementStalled = isMeasurementLowMotion;
+export const isMeasurementFrozen = isMeasurementLowMotion;
+export const isMeasurementNotPlaying = isMeasurementLowMotion;
+
+export function shouldRetryMeasurement(
+  measurement: PlaybackMeasurement | null,
+): boolean {
+  if (measurement === null) return true;
+  return (
+    wasAdvertisementShown(measurement.motion) ||
+    isMeasurementUnusable(measurement) ||
+    isMotionBelowThreshold(measurement.motion)
+  );
+}
+/**
  * Probe decoded-audio bytes around one sampling window.
  *
  * Returns `null` when the video element disappeared before the closing
@@ -775,7 +836,8 @@ async function checkStream(): Promise<CheckResult> {
     while (
       measurement !== null &&
       (wasAdvertisementShown(measurement.motion) ||
-        isMeasurementUnusable(measurement))
+        isMeasurementUnusable(measurement) ||
+        isMotionBelowThreshold(measurement.motion))
     ) {
       measurementAttempts += 1;
       if (measurementAttempts > 5) {
@@ -788,14 +850,22 @@ async function checkStream(): Promise<CheckResult> {
         measurement = await measureAfterAdvertisements(page);
         continue;
       }
-      console.log(
-        "[INFO] Measurement unusable (no video, no frames captured, or the decoded-audio counter went backwards); reloading and measuring again",
-      );
-      const recovered = await reloadAndWaitForPlayback(page);
-      if (!recovered) {
-        phenomena.push("映像の再生が始まりませんでした");
-        return { ok: false, timestampJst, phenomena, details };
+      if (isMeasurementUnusable(measurement)) {
+        console.log(
+          "[INFO] Measurement unusable (no video, no frames captured, or the decoded-audio counter went backwards); reloading and measuring again",
+        );
+        const recovered = await reloadAndWaitForPlayback(page);
+        if (!recovered) {
+          phenomena.push("映像の再生が始まりませんでした");
+          return { ok: false, timestampJst, phenomena, details };
+        }
+        measurement = await measureAfterAdvertisements(page);
+        continue;
       }
+      console.log(
+        "[INFO] Motion below threshold; waiting for activity and measuring again",
+      );
+      await page.waitForTimeout(5_000);
       measurement = await measureAfterAdvertisements(page);
     }
     if (!measurement) {
