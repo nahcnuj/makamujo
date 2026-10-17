@@ -16,6 +16,67 @@ import {
 
 export const chromium = $_.use(StealthPlugin());
 
+/**
+ * How long an in-page `evaluate` may run before it is treated as a hang.
+ *
+ * Playwright's `page.evaluate` has no timeout of its own: when the renderer
+ * stops answering (a crashed/frozen tab, or a wedged game page), the returned
+ * promise never settles. The game session drives its whole IPC loop through
+ * `evaluate`, so an unbounded call freezes the stream indefinitely — the
+ * Aw, Snap! watchdog (which also evaluates) never fires and the supervisor
+ * only restarts the process on a crash, not on a hang. Bounding it turns the
+ * hang into an error the watchdog can react to (reload → restart).
+ */
+export const DEFAULT_EVALUATE_TIMEOUT_MS = 15_000;
+
+/** An in-page `evaluate` that did not settle within the allotted time. */
+export class EvaluateTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`browser.evaluate did not settle within ${timeoutMs}ms`);
+    this.name = "EvaluateTimeoutError";
+  }
+}
+
+/** Read `BROWSER_EVALUATE_TIMEOUT_MS`, falling back to the default. */
+export const resolveEvaluateTimeoutMs = (
+  env: NodeJS.ProcessEnv = process.env,
+): number => {
+  const parsed = Number.parseInt(env.BROWSER_EVALUATE_TIMEOUT_MS ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : DEFAULT_EVALUATE_TIMEOUT_MS;
+};
+
+/**
+ * Reject with an {@link EvaluateTimeoutError} when `promise` has not settled
+ * within `timeoutMs`. A non-positive timeout disables the bound (the promise
+ * is returned unchanged), which keeps the helper safe to call with an unset
+ * override.
+ */
+export const withTimeout = <T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T> => {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return promise;
+  }
+  return new Promise<T>((resolve, reject) => {
+    const timer = globalThis.setTimeout(() => {
+      reject(new EvaluateTimeoutError(timeoutMs));
+    }, timeoutMs);
+    promise.then(
+      (value) => {
+        globalThis.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        globalThis.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+};
+
 /** Roots under which Chromium/browser binaries may be resolved. */
 const listAllowedExecutableRoots = (): string[] => {
   const roots = [
@@ -249,6 +310,7 @@ export const create = async (
     process.env.CHROMIUM_LAUNCH_TIMEOUT ?? "60000",
     10,
   );
+  const evaluateTimeoutMs = resolveEvaluateTimeoutMs();
   const gameHomeUrl =
     process.env.GAME_HOME_URL?.trim() ||
     "https://www.nahcnuj.work/vigilant-fiesta/";
@@ -443,14 +505,17 @@ export const create = async (
     },
 
     evaluate: async (f) => {
-      return await page.evaluate((fnSource) => {
-        // Reconstruct the function in the page context from its source string.
-        // biome-ignore lint/security/noGlobalEval: required to run caller fn in page.evaluate
-        const evaluated = globalThis.eval(`(${fnSource})`) as (
-          document: Document,
-        ) => ReturnType<typeof f>;
-        return evaluated(document);
-      }, f.toString());
+      return await withTimeout(
+        page.evaluate((fnSource) => {
+          // Reconstruct the function in the page context from its source string.
+          // biome-ignore lint/security/noGlobalEval: required to run caller fn in page.evaluate
+          const evaluated = globalThis.eval(`(${fnSource})`) as (
+            document: Document,
+          ) => ReturnType<typeof f>;
+          return evaluated(document);
+        }, f.toString()),
+        evaluateTimeoutMs,
+      );
     },
 
     reload: async () => {
