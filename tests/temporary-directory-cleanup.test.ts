@@ -131,6 +131,24 @@ describe("temporary directory ownership", () => {
     );
   });
 
+  test("the server stops the watch page source so its profile is removed", () => {
+    const entry = read("index.ts");
+
+    // The source owns a Chromium whose auto-created profile only a graceful
+    // close removes. index.ts used to discard the returned source, so nothing
+    // ever stopped it and the tens-of-MB profile survived every restart. It is
+    // now handed to the exit handler, which stops it before exiting.
+    expect(entry).toContain(
+      "watchPageStatisticsSource = startWatchPageStatisticsSource(",
+    );
+    expect(entry).toContain(
+      "await stopWatchPageStatisticsSource(statisticsSource);",
+    );
+    expect(read("composition/watchPageStatisticsShutdown.ts")).toContain(
+      "source.stop()",
+    );
+  });
+
   test("bin/cleanup-temp leaves the running server's scratch dir alone", () => {
     const cleanup = read("bin/cleanup-temp.ts");
 

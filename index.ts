@@ -26,7 +26,11 @@ import {
   type WsLike,
 } from "./composition/broadcast";
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
-import { startWatchPageStatisticsSource } from "./composition/watchPageStatisticsSource";
+import { stopWatchPageStatisticsSource } from "./composition/watchPageStatisticsShutdown";
+import {
+  startWatchPageStatisticsSource,
+  type WatchPageStatisticsSource,
+} from "./composition/watchPageStatisticsSource";
 import { startConsoleServer } from "./console/index";
 import type { StreamBaseline } from "./lib/application/streamBaselineStore";
 import {
@@ -108,7 +112,7 @@ process.on("uncaughtException", (err) => {
   }
 
   // For other uncaught exceptions, perform the existing exit behavior.
-  exitHandler({ exit: true }, 1);
+  void exitHandler({ exit: true }, 1);
 });
 
 const {
@@ -604,6 +608,11 @@ const makeStreamHandler =
 let mainServer: Bun.Server<WsData> | undefined;
 /** Hoisted for exitHandler safety if startup fails mid-module. */
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
+/**
+ * Hoisted so the exit handler can close the watch page Chromium (and so remove
+ * its temp profile) no matter where startup stopped.
+ */
+let watchPageStatisticsSource: WatchPageStatisticsSource | undefined;
 
 const getMainServer = (): Bun.Server<WsData> => {
   if (!mainServer) throw new Error("Server not yet initialized");
@@ -784,7 +793,7 @@ startIdleSpeechTimer(streamer, 1_000);
 // 統計（視聴者数 / コメント数 / ニコニコ広告ポイント / ギフトポイント）を配信ページの
 // 描画済み画面から読む。配線は composition/watchPageStatisticsSource.ts にあり、
 // `NICONAMA_WATCH_PAGE_DISABLED=1` のときだけ `POST /api/meta` へフォールバックする。
-void startWatchPageStatisticsSource({
+watchPageStatisticsSource = startWatchPageStatisticsSource({
   onStatistics: (statistics) => {
     watchPageDisplayedStatistics = statistics;
     retainedWatchPageStatistics = retainDefinedStatistics(
@@ -805,7 +814,7 @@ void startWatchPageStatisticsSource({
 /**
  * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}
  */
-function exitHandler(
+async function exitHandler(
   options: { cleanup: true; exit?: never } | { cleanup?: never; exit: true },
   exitCode?: number,
 ) {
@@ -829,8 +838,21 @@ function exitHandler(
     // The TTS engine owns a scratch directory under the OS temp dir; the server
     // never reaches the end of a stream on its own, so this is the only place
     // it gets released. `tts` is in TDZ if startup failed before it was built.
+    // Kept synchronous (and before the first await) so the process "exit" event
+    // path, which cannot await, still releases it.
     try {
       tts.close?.();
+    } catch {
+      /* ignore cleanup failures during crash paths */
+    }
+    // Close the watch page Chromium so it removes the tens-of-MB profile it
+    // created in the OS temp dir. A `SIGTERM`ed server never reaches
+    // `browser.close()` on its own, so without this the profile piles up across
+    // restarts — `/tmp` is only a 2 GB tmpfs on the VPS (memory pressure).
+    const statisticsSource = watchPageStatisticsSource;
+    watchPageStatisticsSource = undefined;
+    try {
+      await stopWatchPageStatisticsSource(statisticsSource);
     } catch {
       /* ignore cleanup failures during crash paths */
     }
@@ -850,5 +872,8 @@ function signalHandler(
   _: string,
   exitCode?: number,
 ) {
-  exitHandler(options, exitCode);
+  // The exit handler is async (it closes the watch page browser); the process
+  // stays alive until it calls `process.exit()` and the SIGTERM listener must
+  // not return early, so the promise is intentionally not awaited here.
+  void exitHandler(options, exitCode);
 }
