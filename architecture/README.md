@@ -13,6 +13,7 @@
 | [domain-model-redesign.md](./domain-model-redesign.md) | 配信エージェント BC 再設計（#463 マージ済）。CommentPipeline / silence / Publication |
 | [console-domain-model.md](./console-domain-model.md) | **管理コンソール BC**（Access / Status plan）。UI は `console/src`、純関数は `lib/domain/console` |
 | [統計の読み取り](#統計の読み取り) | 配信ページを描画して統計行を読む。視聴者数 / コメント数 / ニコニコ広告ポイント / ギフトポイント |
+| [配信画面の停止回復](#配信画面の停止回復) | 配信ページの描画した映像の動きを測り、複数周期静止し続けた合成出力を systemd 再起動で回復する |
 | `legacy` vs `main` | orphan main の差分整理と取り込み方針は本 README の実装マップで追跡する（個別文書は持たない） |
 | [legacy-vs-main-integration.md](./legacy-vs-main-integration.md) | **`legacy` vs `main` 差分整理と取り込み方針**（orphan main、port 済み/未着手） |
 | [markov-cli.md](./markov-cli.md) | **markov CLI**（`tools/markov/`）。git `parse-options` と同じ「1 コマンド 1 ファイル、そのコマンドのオプション表だけ解析する」形。表は `--help` の出力（[表の確認方法](./markov-cli.md#表の確認方法)） |
@@ -99,6 +100,62 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
   ページと同じ挙動を再現する。Chromium が起動できない環境では skip する
   （CI は `pretest:e2e` 相当で Chromium を用意している）。
 
+## 配信画面の停止回復
+
+ 配信画面の**合成出力**（XSHM キャプチャ → x264 エンコード → RTMP の
+ 配信側機構）が固まり続けると、配信ページ経由で見える配信画面だけが
+ 静止する。検知は既存の配信異常検知がする（`scripts/check-stream.ts` は
+ 改変しない: owner 契約 #807）。ここで扱うのは**回復する**経路で、
+ セッション内監視（gameStall / compositorHeartbeat / Aw, Snap! watchdog は
+ Chromium 内しか見えない）の管轄外にあたる。
+
+### 判定の契約
+
+- 配信ページを描画する統計用ブラウザが、開いたままのページで 1 窓だけ
+  映像の動きを測る（`WatchPageBrowser.measurePictureMotion`）。動画の選別・
+  広告の除外・ピクセルの比較の根拠は `scripts/check-stream.ts` の
+  unit test 済み関数（`isCapturableMediaSource`, `isInAdContainer`）を
+  文字列化して注入して借りる。判定は
+  `composition/watchPageBrowser.ts` の `judgePictureMotion`:
+  changed fps が `PICTURE_STILL_FPS_THRESHOLD`（既定 2）を下回る窓が `still`。
+  測れない窓（広告が流れた、tainted、比較が少なすぎる）は判定できない。
+- 測定は機会良く（開いたままのページがあるときだけ）。ページを作り直さない。
+- 純ポリシー `lib/domain/broadcasting/CompositeFreezePolicy.ts` が、周期ごとの
+  観測（`still` / `moving` / `unknown`）を折りたたむ:
+  - `still` が `cyclesRequired`（既定 3）周期連続したら、回復ラングを打つ。
+    番組の一枚絵（フリートークの結果画面）は 1 周期で終わるので誤検知しない。
+  - `moving` と `unknown` は streak をリセットする。unknown で streak を
+    繋がないのは、中割り広告が `<video>` を止めて静止に見えるため
+    （広告の占有を bridge させて誤回復させない）。
+  - 回復の間隔は `recoveryCooldownMs`（既定 10 分）。連続回復を防ぐ。
+  - ラングは `obs` → `xorgAndObs` → `browserAndBroadcastStack` の順に深くなり
+    最深で留まる。やることは systemd restart:
+    `composition/broadcastFreezeWatchdog.ts` の `RECOVERY_SERVICES`。
+- 番組が放映外の間は観測をしない（番組終了の一枚絵を回復の対象にしない）。
+
+### モジュールと配線
+
+| モジュール | 層 | 役割 |
+|------------|----|------|
+| `lib/domain/broadcasting/CompositeFreezePolicy.ts` | domain（純関数） | 周期観測 → 回復ラングの決定 |
+| `composition/watchPageBrowser.ts` | composition | 映像の動きの型と判定（Playwright 非依存） |
+| `composition/chromiumWatchPageBrowser.ts` | composition | 1 窓の映像の動きを測る実装。rAF が来ない環境でも上限で帰る |
+| `composition/watchPageStatisticsSource.ts` | composition | 開いたままのページでの測定の代理。無効時 / 未オープン時は `undefined` |
+| `composition/broadcastFreezeWatchdog.ts` | composition | 採取の周期、ポリシーへの投入、systemd 回復の実行口 |
+
+`index.ts` が統計の採取と同じ場所で 1 回だけ配線する。回復口は
+`NODE_ENV=production` のときだけ systemd に触り、それ以外は dry run
+（ログだけ）にする。テスト / E2E は統計の読み取り自体を
+`NICONAMA_WATCH_PAGE_DISABLED=1` で無効化しているため、そもそも観測が流れない。
+
+### 環境変数
+
+| 変数 | 既定 | 意味 |
+|------|------|------|
+| `BROADCAST_FREEZE_CHECK_INTERVAL_MS` | `60000` | 観測周期 |
+| `BROADCAST_FREEZE_CYCLES` | `3` | 回復を打つまでに必要な `still` の連続周期 |
+| `BROADCAST_FREEZE_RECOVERY_COOLDOWN_MS` | `600000` | 二つの回復の最短間隔 |
+
 ## 実装マップ
 
 | 領域 | パス | 状態 |
@@ -108,6 +165,7 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 | Publication assemble | `lib/domain/publication/` | 済 |
 | AgentSession + services | `lib/application/` | 済 |
 | 統計のブラウザ読み取り | `composition/watchPageBrowser.ts`, `composition/chromiumWatchPageBrowser.ts`, `composition/watchPageStatisticsSource.ts` | 済 |
+| 配信画面の停止回復 | `lib/domain/broadcasting/CompositeFreezePolicy.ts`, `composition/broadcastFreezeWatchdog.ts` | 済 |
 | Console access / status plan / SSE frames | `lib/domain/console/` | 済（Basic auth 純関数含む） |
 | systemd / make install（main から port） | `Makefile`, `etc/systemd/` | 済 |
 | Outer console WS bridge | `composition/consoleOuterWebSocket.ts` | 済 |

@@ -14,6 +14,7 @@
  */
 
 import type { DisplayedStatistics } from "../lib/domain/broadcasting/watchPageStatistics";
+import type { PictureMotion } from "./watchPageBrowser";
 import {
   DEFAULT_NICONAMA_WATCH_PAGE_URL,
   WATCH_PAGE_READ_INTERVAL_MS,
@@ -37,6 +38,13 @@ export type WatchPageStatisticsSource = {
   ready: Promise<void>;
   /** 1 回だけ採取する。 */
   readOnce: () => Promise<void>;
+  /**
+   * 開いたままの配信ページで、映像の動きを 1 窓だけ測る。
+   * 測定できない（無効化されている、ページが開けていない、実装が測れない、
+   * 測定中に失敗した）ときは `undefined` を返して断念する。測定のために
+   * ページを開き直したりはしない: 開いたままのページで動くときだけ測れる。
+   */
+  measurePictureMotion: () => Promise<PictureMotion | undefined>;
   stop: () => Promise<void>;
 };
 
@@ -83,6 +91,7 @@ export const startWatchPageStatisticsSource = (
     return {
       ready: Promise.resolve(),
       readOnce: async () => {},
+      measurePictureMotion: async () => undefined,
       stop: async () => {},
     };
   }
@@ -175,6 +184,24 @@ export const startWatchPageStatisticsSource = (
   return {
     ready: run(),
     readOnce,
+    measurePictureMotion: async (): Promise<PictureMotion | undefined> => {
+      if (disabled || stopped) {
+        return undefined;
+      }
+      const current = browser;
+      // 測定のために実体やページを作り直さない。統計の採取が作ってくれる
+      // 開いたままのページがあるときにだけ機会良く測れる。
+      if (current === undefined || !current.isAlive()) {
+        return undefined;
+      }
+      try {
+        return await current.measurePictureMotion?.();
+      } catch {
+        // ナビゲーション中などで失敗するだけなら測定不可として扱う。
+        reportFailure(new Error("failed to measure the picture motion"));
+        return undefined;
+      }
+    },
     stop: async () => {
       stopped = true;
       if (timer !== undefined) {

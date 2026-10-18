@@ -19,6 +19,12 @@ export type WatchPageBrowser = {
   /** いま画面に表示されている値を採取する。 */
   read: () => Promise<DisplayedStatistics>;
   /**
+   * 配信映像が 1 窓の間にどれだけ動いたかを測る。省略可: 実装が測れない場合
+   * （古い差し替え実装など）はメソッドごと省いてよく、呼び出し側
+   * （`watchPageStatisticsSource`）はその場合測定不可として扱う。
+   */
+  measurePictureMotion?: () => Promise<PictureMotion>;
+  /**
    * ブラウザ実体（プロセス / ページ）が生きているか。統計行があるか等のページの
    * 表示状態とは無関係で、source が作り直すべきとき（実体が落ちた）だけ false。
    * `open` に失敗した実体は source 側が破棄する。
@@ -56,3 +62,41 @@ export const DEFAULT_NICONAMA_WATCH_PAGE_URL =
 
 /** ページが更新する仕組みが 30〜60 秒粒度なので、デフォルトは 30 秒。 */
 export const WATCH_PAGE_READ_INTERVAL_MS = 30_000;
+
+/** 配信ページの `<video>` が 1 窓の間 提示した画面の動きの測定。 */
+export interface PictureMotion {
+  /** 隣接フレームの比較回数。 */
+  comparedFrames: number;
+  /** 差があった隣接フレームの組の数。 */
+  changedFrames: number;
+  /** サンプラーが動いた実時間（ミリ秒）。 */
+  windowMs: number;
+  /** 描画に失敗して（tainted canvas）比較ができなかった。 */
+  tainted: boolean;
+  /** 窓の間に広告が流れた。測れた動きは番組のものではない。 */
+  sawAdvertisement: boolean;
+}
+
+/** この changed fps 未満で配信画面を「静止」とみなす。 */
+export const PICTURE_STILL_FPS_THRESHOLD = 2;
+
+/**
+ * 測定を静止 / 動き / 判定不能に分ける。
+ *
+ * 判定不能は `undefined`: 広告が流れた窓・tainted canvas・比較対象が少なすぎる
+ * 窓は、配信の不調でも正常でもないので観測から外れる（誤検知の防止）。
+ * 「配信が静止している」は changed fps がしきい値を下回ること。
+ */
+export const judgePictureMotion = (
+  motion: PictureMotion,
+): "still" | "moving" | undefined => {
+  if (motion.tainted || motion.sawAdvertisement) {
+    return undefined;
+  }
+  const windowSeconds = motion.windowMs / 1000;
+  if (windowSeconds < 1 || motion.comparedFrames < 5) {
+    return undefined;
+  }
+  const changedFps = motion.changedFrames / windowSeconds;
+  return changedFps < PICTURE_STILL_FPS_THRESHOLD ? "still" : "moving";
+};
