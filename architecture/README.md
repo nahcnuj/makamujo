@@ -119,6 +119,13 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
   `composition/watchPageBrowser.ts` の `judgePictureMotion`:
   changed fps が `PICTURE_STILL_FPS_THRESHOLD`（既定 2）を下回る窓が `still`。
   測れない窓（広告が流れた、tainted、比較が少なすぎる）は判定できない。
+- 動画の選択順は検知の権威と同じく `selectMeasurableVideo`
+  （`composition/watchPageBrowser.ts`）で純関数として持つ: 再生中でサイズの
+  ある要素を優先し、無ければサイズだけある要素に降りる。合成出力が固まると
+  配信の HLS が途切れ、視聴ページの `<video>` が一時停止 / バッファリングに
+  なりうる。再生中だけを選ぶと測定が空になり `unknown` に落ちて静止 streak が
+  毎周期リセットされるため、回復ラングを永久に打てない。一時停止した要素でも
+  最後のフレームは描画でき、変わらない絵は正しく `still` と測れる。
 - 測定は機会良く（開いたままのページがあるときだけ）。ページを作り直さない。
 - 純ポリシー `lib/domain/broadcasting/CompositeFreezePolicy.ts` が、周期ごとの
   観測（`still` / `moving` / `unknown`）を折りたたむ:
