@@ -119,6 +119,11 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
   `composition/watchPageBrowser.ts` の `judgePictureMotion`:
   changed fps が `PICTURE_STILL_FPS_THRESHOLD`（既定 2）を下回る窓が `still`。
   測れない窓（広告が流れた、tainted、比較が少なすぎる）は判定できない。
+  サンプラーは再生中の `<video>` しか選ばないため、統計用ブラウザは
+  `--autoplay-policy=no-user-gesture-required` で起動し、ページを開いた直後と
+  計測のたびに `startVideoPlayback` で全 `<video>` をミュート再生させる。
+  これが無いと headless では要素が paused のままになり、観測が永久に
+  `unknown` になって回復が一度も走らない（`check-stream.ts` と同じ扱い）。
 - 測定は機会良く（開いたままのページがあるときだけ）。ページを作り直さない。
 - 純ポリシー `lib/domain/broadcasting/CompositeFreezePolicy.ts` が、周期ごとの
   観測（`still` / `moving` / `unknown`）を折りたたむ:
