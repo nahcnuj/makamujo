@@ -5,13 +5,18 @@ import {
   DEFAULT_GAME_STALL_STATIC_FRAMES,
   type GameStallState,
   initialGameStallState,
+  initialStallEscalationState,
   observeGameFrame,
+  observeStallProbe,
   resolveGameStallCheckMs,
   resolveGameStallStaticFrames,
+  type StallEscalationState,
   shouldRestartGameSession,
 } from "./gameStall";
 
 const frame = (...bytes: number[]): Uint8Array => Uint8Array.from(bytes);
+
+const MAX_STALLS = 3;
 
 describe("areFramesIdentical", () => {
   it("is true for equal byte content", () => {
@@ -96,6 +101,88 @@ describe("shouldRestartGameSession", () => {
   it("is disabled by a non-positive limit", () => {
     expect(shouldRestartGameSession(100, 0)).toBe(false);
     expect(shouldRestartGameSession(100, -1)).toBe(false);
+  });
+});
+
+describe("observeStallProbe", () => {
+  const stalled: StallEscalationState = { consecutiveStalls: 0 };
+
+  it("does nothing while the page is painting", () => {
+    const decision = observeStallProbe(
+      stalled,
+      { stalled: false, frameChanged: true },
+      3,
+    );
+    expect(decision.reload).toBe(false);
+    expect(decision.restartSession).toBe(false);
+    expect(decision.state.consecutiveStalls).toBe(0);
+  });
+
+  it("clears a running budget only when the frame actually changed", () => {
+    const running: StallEscalationState = { consecutiveStalls: 2 };
+    expect(
+      observeStallProbe(running, { stalled: false, frameChanged: true }, 3)
+        .state.consecutiveStalls,
+    ).toBe(0);
+    expect(
+      observeStallProbe(running, { stalled: false, frameChanged: false }, 3)
+        .state.consecutiveStalls,
+    ).toBe(2);
+  });
+
+  it("reloads and increments the budget on a stall", () => {
+    const decision = observeStallProbe(
+      stalled,
+      { stalled: true, frameChanged: false },
+      3,
+    );
+    expect(decision.reload).toBe(true);
+    expect(decision.restartSession).toBe(false);
+    expect(decision.state.consecutiveStalls).toBe(1);
+  });
+
+  it("restarts the session once the budget is spent and resets it", () => {
+    const decision = observeStallProbe(
+      { consecutiveStalls: 2 },
+      { stalled: true, frameChanged: false },
+      3,
+    );
+    expect(decision.restartSession).toBe(true);
+    expect(decision.reload).toBe(false);
+    expect(decision.state.consecutiveStalls).toBe(0);
+  });
+
+  it("reaches the session restart across reloads that never recover", () => {
+    // Regression: the post-reload baseline reports `frameChanged === false`, so
+    // it must not clear the budget, or the restart threshold is never reached
+    // and the stream stays frozen while the page is reloaded forever.
+    let state = initialStallEscalationState();
+    const probe = (stalledNow: boolean, frameChanged: boolean) => {
+      const decision = observeStallProbe(
+        state,
+        { stalled: stalledNow, frameChanged },
+        MAX_STALLS,
+      );
+      state = decision.state;
+      return decision;
+    };
+    expect(probe(true, false).reload).toBe(true);
+    expect(probe(false, false).reload).toBe(false);
+    expect(probe(true, false).reload).toBe(true);
+    expect(probe(false, false).reload).toBe(false);
+    const escalation = probe(true, false);
+    expect(escalation.restartSession).toBe(true);
+    expect(state.consecutiveStalls).toBe(0);
+  });
+
+  it("keeps reloading without restarting when the limit is non-positive", () => {
+    const decision = observeStallProbe(
+      { consecutiveStalls: 100 },
+      { stalled: true, frameChanged: false },
+      0,
+    );
+    expect(decision.reload).toBe(true);
+    expect(decision.restartSession).toBe(false);
   });
 });
 
