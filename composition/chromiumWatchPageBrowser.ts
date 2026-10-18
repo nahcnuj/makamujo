@@ -15,6 +15,7 @@ import {
 import {
   isWatchPageReadable,
   type PictureMotion,
+  selectMeasurableVideo,
   toDisplayedStatistics,
   type WatchPageBrowser,
   type WatchPageRawReading,
@@ -51,6 +52,7 @@ const installVideoSelectors = (page: import("playwright").Page) =>
 (() => {
   const isCapturable = ${isCapturableMediaSource.toString()};
   const isInAd = ${isInAdContainer.toString()};
+  const selectMeasurableVideo = ${selectMeasurableVideo.toString()};
   const origin = location.origin;
   const isSized = (v) => v.videoWidth > 0 && v.readyState >= 2;
   const inAdContainer = (v) => {
@@ -68,7 +70,7 @@ const installVideoSelectors = (page: import("playwright").Page) =>
     const capturable = videos.filter(
       (v) => isCapturable(v.currentSrc || v.src || "", origin) && !inAdContainer(v),
     );
-    return capturable.find((v) => v.paused === false && isSized(v)) ?? null;
+    return selectMeasurableVideo(capturable) ?? null;
   };
   window.__mmjIsAdvertisementPlaying = () =>
     Array.from(document.querySelectorAll("video")).some(
