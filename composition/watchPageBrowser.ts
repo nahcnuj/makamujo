@@ -100,3 +100,32 @@ export const judgePictureMotion = (
   const changedFps = motion.changedFrames / windowSeconds;
   return changedFps < PICTURE_STILL_FPS_THRESHOLD ? "still" : "moving";
 };
+
+/** ページ側の再生開始に必要な `<video>` の最小限。 */
+export interface PlayableVideo {
+  muted: boolean;
+  play: () => unknown;
+}
+
+/**
+ * ページ上の動画をすべてミュートして再生開始する。
+ *
+ * 統計用ブラウザは headless で動く。muted 自動再生は既定で許されるが、
+ * unmuted 再生は自動再生ポリシーで拒否されうる。再生していない `<video>` は
+ * `measurePictureMotion` のサンプラーが比較対象に選べないため、配信が本当に
+ * 固まっていても観測は `unknown` のままになり、回復が一度も走らない。
+ * 起動フラグと併せて全要素を再生のきっかけにする（`play()` の失敗は無視する:
+ * サンプラーが計測前に要素の状態を再確認し、次の窓で再試行される）。
+ *
+ * ページへ文字列化して注入するため、外部参照を持たない自己完結な関数にする。
+ */
+export const startVideoPlayback = (videos: Iterable<PlayableVideo>): void => {
+  for (const video of videos) {
+    try {
+      video.muted = true;
+      void Promise.resolve(video.play()).catch(() => undefined);
+    } catch {
+      // 要素の再構築中でも次の計測で再試行される。
+    }
+  }
+};

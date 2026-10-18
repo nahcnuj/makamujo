@@ -3,6 +3,8 @@ import {
   isWatchPageReadable,
   judgePictureMotion,
   type PictureMotion,
+  type PlayableVideo,
+  startVideoPlayback,
   toDisplayedStatistics,
   type WatchPageRawReading,
 } from "./watchPageBrowser";
@@ -120,5 +122,48 @@ describe("judgePictureMotion", () => {
     expect(
       judgePictureMotion(motion({ comparedFrames: 3, changedFrames: 0 })),
     ).toBeUndefined();
+  });
+});
+
+describe("startVideoPlayback", () => {
+  const playable = (
+    play: () => unknown,
+    muted = false,
+  ): PlayableVideo & { muted: boolean } => ({ muted, play });
+
+  it("mutes and starts every element", async () => {
+    const played: number[] = [];
+    const videos = [
+      playable(() => {
+        played.push(1);
+      }),
+      playable(() => {
+        played.push(2);
+      }),
+    ];
+
+    startVideoPlayback(videos);
+    await Promise.resolve();
+
+    // A muted element is allowed to autoplay without a user gesture; an
+    // element left paused is never selected by the motion sampler.
+    expect(videos.every((video) => video.muted)).toBe(true);
+    expect(played).toEqual([1, 2]);
+  });
+
+  it("ignores a play() that rejects", () => {
+    const video = playable(() => Promise.reject(new Error("blocked")));
+    expect(() => startVideoPlayback([video])).not.toThrow();
+  });
+
+  it("ignores a play() that throws synchronously", () => {
+    const video = playable(() => {
+      throw new Error("no element");
+    });
+    expect(() => startVideoPlayback([video])).not.toThrow();
+  });
+
+  it("accepts an empty collection", () => {
+    expect(() => startVideoPlayback([])).not.toThrow();
   });
 });

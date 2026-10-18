@@ -15,6 +15,7 @@ import {
 import {
   isWatchPageReadable,
   type PictureMotion,
+  startVideoPlayback,
   toDisplayedStatistics,
   type WatchPageBrowser,
   type WatchPageRawReading,
@@ -45,12 +46,17 @@ const MOTION_MIN_CHANGED_RATIO = 0.001;
 /** rAF が一切来ない（レンダラ停止）ときでも絶対に帰る上限。 */
 const MOTION_EVALUATE_TIMEOUT_MS = MOTION_WINDOW_MS + 5_000;
 
-/** ページ側の動画選別ヘルパーを置く。navigation で消えるので毎回入れる。 */
+/**
+ * ページ側の動画選別ヘルパーと再生開始ヘルパーを置く。navigation で消えるの
+ * で毎回入れ、置いたついでに全 `<video>` の再生を促す。再生していない要素は
+ * `__mmjSelectCapturableVideo` に選ばれず、測定が永久に `unknown` になる。
+ */
 const installVideoSelectors = (page: import("playwright").Page) =>
   page.evaluate(`
 (() => {
   const isCapturable = ${isCapturableMediaSource.toString()};
   const isInAd = ${isInAdContainer.toString()};
+  const startPlayback = ${startVideoPlayback.toString()};
   const origin = location.origin;
   const isSized = (v) => v.videoWidth > 0 && v.readyState >= 2;
   const inAdContainer = (v) => {
@@ -74,6 +80,9 @@ const installVideoSelectors = (page: import("playwright").Page) =>
     Array.from(document.querySelectorAll("video")).some(
       (v) => !isCapturable(v.currentSrc || v.src || "", origin) && v.paused === false && isSized(v),
     );
+  window.__mmjStartPlayback = () =>
+    startPlayback(Array.from(document.querySelectorAll("video")));
+  window.__mmjStartPlayback();
 })()
 `);
 
@@ -249,7 +258,13 @@ export const createChromiumWatchPageBrowser =
     const browser = await chromium.launch({
       headless: true,
       timeout: LAUNCH_TIMEOUT_MS,
-      args: ["--no-sandbox", "--disable-dev-shm-usage"],
+      args: [
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        // 配信映像の動きを測るには `<video>` が再生している必要がある。
+        // unmuted 自動再生を許して、映像が止まっていないかを見られるようにする。
+        "--autoplay-policy=no-user-gesture-required",
+      ],
     });
     const context = await browser.newContext({
       userAgent: USER_AGENT,
@@ -271,6 +286,10 @@ export const createChromiumWatchPageBrowser =
           `[INFO] watch page opened (status=${response?.status() ?? "unknown"}, url=${page.url()})`,
         );
         await waitForStatistics(page);
+        // 統計行が描画された時点でプレイヤーは存在する。ここで再生を促して
+        // おかないと、headless では `<video>` が paused のままになり、以降の
+        // 映像の動きの測定がずっと `unknown` になる（回復が一度も走らない）。
+        await installVideoSelectors(page);
         console.log("[INFO] watch page statistics settled");
       },
       read: async () => {
