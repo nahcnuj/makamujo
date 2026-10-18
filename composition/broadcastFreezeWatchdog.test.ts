@@ -9,15 +9,15 @@ import {
 import type { PictureMotion } from "./watchPageBrowser";
 
 const moving: PictureMotion = {
-  comparedFrames: 60,
-  changedFrames: 30,
+  comparedFrames: 180,
+  changedFrames: 90,
   windowMs: 3_000,
   tainted: false,
   sawAdvertisement: false,
 };
 
 const still: PictureMotion = {
-  comparedFrames: 60,
+  comparedFrames: 180,
   changedFrames: 1,
   windowMs: 3_000,
   tainted: false,
