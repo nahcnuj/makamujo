@@ -8,8 +8,9 @@ import {
 } from "./watchPageBrowser";
 
 const motion = (overrides: Partial<PictureMotion> = {}): PictureMotion => ({
-  comparedFrames: 60,
-  changedFrames: 30,
+  // 60Hz のサンプラーが 30fps の健康な配信映像を観測した既定窓。
+  comparedFrames: 180,
+  changedFrames: 90,
   windowMs: 3_000,
   tainted: false,
   sawAdvertisement: false,
@@ -92,14 +93,33 @@ describe("judgePictureMotion", () => {
   });
 
   it("reads a picture under the still threshold as still", () => {
-    // ~0.3 changed fps: the composite stopped changing.
+    // 凍結した合成出力: 3 秒窓で 0〜1 changed frame。
     expect(judgePictureMotion(motion({ changedFrames: 1 }))).toBe("still");
     expect(judgePictureMotion(motion({ changedFrames: 0 }))).toBe("still");
   });
 
+  it("reads the chronically degraded bands of issue #857 as still", () => {
+    // issue #857: videoAvgFps 2.9（changedFrames 9 / 3s）。
+    expect(judgePictureMotion(motion({ changedFrames: 9 }))).toBe("still");
+    // issue #854: videoAvgFps 21.6（changedFrames 65 / 3s）— 権威は停止と判定する帯域。
+    expect(judgePictureMotion(motion({ changedFrames: 65 }))).toBe("still");
+  });
+
   it("treats a picture just above the still threshold as moving", () => {
-    // 4 changed frames in 3s ~ 1.3 fps < 立ったか borderline?
-    expect(judgePictureMotion(motion({ changedFrames: 6 }))).toBe("moving");
+    // 75 changed frames in 3s = 25 fps > PICTURE_STILL_FPS_THRESHOLD。
+    expect(judgePictureMotion(motion({ changedFrames: 75 }))).toBe("moving");
+  });
+
+  it("caps the still threshold at half the sampler rate", () => {
+    // 10Hz のサンプラーでは 24 fps を観測できない。健康（9 fps で変化）は
+    // サンプラーの半分を上回るので動き、凍結に近い 2 fps は静止。
+    const slowSampler = { ...motion(), comparedFrames: 30 };
+    expect(judgePictureMotion({ ...slowSampler, changedFrames: 27 })).toBe(
+      "moving",
+    );
+    expect(judgePictureMotion({ ...slowSampler, changedFrames: 6 })).toBe(
+      "still",
+    );
   });
 
   it("discards windows during an advertisement without judging", () => {

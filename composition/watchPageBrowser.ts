@@ -77,15 +77,33 @@ export interface PictureMotion {
   sawAdvertisement: boolean;
 }
 
-/** この changed fps 未満で配信画面を「静止」とみなす。 */
-export const PICTURE_STILL_FPS_THRESHOLD = 2;
+/**
+ * この changed fps を上回らない窓を配信画面「静止」とみなす。
+ *
+ * `scripts/check-stream.ts` の `VIDEO_MIN_FPS`（24: 下回ったら映像停止と
+ * 判定される）と同じ値で保つ。低解像（1〜21 changed fps）に落ち込む
+ * 慢性的な劣化は、しきい値 2 では「動き」に判別されて回復が打てなかった
+ * ため、検知の権威が映像停止と呼ぶ帯域をそのまま回復の対象にする。
+ */
+export const PICTURE_STILL_FPS_THRESHOLD = 24;
+
+/**
+ * サンプラー自身の観測レート（compared fps）に対するしきい値の下限倍率。
+ *
+ * changed fps はサンプラーの fps を超えられないため、サンプラーが遅い
+ * 窓では 24 を基準にすると健康な配信でも静止に見える。サンプラーが
+ * `PICTURE_STILL_FPS_THRESHOLD` 未満のときは、その半分の fps を下回る
+ * 変化だけを静止と数える（凍結はどの倍率でも静止のまま）。
+ */
+export const PICTURE_STILL_SAMPLER_FRACTION = 0.5;
 
 /**
  * 測定を静止 / 動き / 判定不能に分ける。
  *
  * 判定不能は `undefined`: 広告が流れた窓・tainted canvas・比較対象が少なすぎる
  * 窓は、配信の不調でも正常でもないので観測から外れる（誤検知の防止）。
- * 「配信が静止している」は changed fps がしきい値を下回ること。
+ * 「配信が静止している」は changed fps が（サンプラーの観測レートで絞った）
+ * しきい値を下回ること。
  */
 export const judgePictureMotion = (
   motion: PictureMotion,
@@ -97,6 +115,11 @@ export const judgePictureMotion = (
   if (windowSeconds < 1 || motion.comparedFrames < 5) {
     return undefined;
   }
+  const samplerFps = motion.comparedFrames / windowSeconds;
   const changedFps = motion.changedFrames / windowSeconds;
-  return changedFps < PICTURE_STILL_FPS_THRESHOLD ? "still" : "moving";
+  const stillThreshold = Math.min(
+    PICTURE_STILL_FPS_THRESHOLD,
+    samplerFps * PICTURE_STILL_SAMPLER_FRACTION,
+  );
+  return changedFps <= stillThreshold ? "still" : "moving";
 };

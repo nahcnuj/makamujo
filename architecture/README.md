@@ -117,7 +117,12 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
   unit test 済み関数（`isCapturableMediaSource`, `isInAdContainer`）を
   文字列化して注入して借りる。判定は
   `composition/watchPageBrowser.ts` の `judgePictureMotion`:
-  changed fps が `PICTURE_STILL_FPS_THRESHOLD`（既定 2）を下回る窓が `still`。
+  changed fps が `PICTURE_STILL_FPS_THRESHOLD`（既定 24、`scripts/check-stream.ts`
+  の `VIDEO_MIN_FPS` と同値）を上回らない窓が `still`。検知の権威が映像停止と
+  判定する低解像の帯域をそのまま回復の対象にするため、しきい値を 2 から
+  引き上げている。サンプラー自身の観測レートがしきい値に届かない窓では
+  `PICTURE_STILL_SAMPLER_FRACTION`（既定 0.5）でしきい値を比較レートの半分に
+  絞り、遅いサンプラーで健康な配信を静止と誤判定しない。
   測れない窓（広告が流れた、tainted、比較が少なすぎる）は判定できない。
 - 測定は機会良く（開いたままのページがあるときだけ）。ページを作り直さない。
 - 純ポリシー `lib/domain/broadcasting/CompositeFreezePolicy.ts` が、周期ごとの

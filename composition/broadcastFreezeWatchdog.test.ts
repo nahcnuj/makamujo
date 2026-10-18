@@ -9,16 +9,26 @@ import {
 import type { PictureMotion } from "./watchPageBrowser";
 
 const moving: PictureMotion = {
-  comparedFrames: 60,
-  changedFrames: 30,
+  // 60Hz のサンプラーが 30fps の健康な配信映像を観測した窓。
+  comparedFrames: 180,
+  changedFrames: 90,
   windowMs: 3_000,
   tainted: false,
   sawAdvertisement: false,
 };
 
 const still: PictureMotion = {
-  comparedFrames: 60,
+  comparedFrames: 180,
   changedFrames: 1,
+  windowMs: 3_000,
+  tainted: false,
+  sawAdvertisement: false,
+};
+
+/** issue #857 の帯域（videoAvgFps 2.9）: 動いてはいるが権威は映像停止と判定する。 */
+const degraded: PictureMotion = {
+  comparedFrames: 180,
+  changedFrames: 9,
   windowMs: 3_000,
   tainted: false,
   sawAdvertisement: false,
@@ -99,6 +109,23 @@ describe("startBroadcastFreezeWatchdog", () => {
     watchdog.stop();
 
     expect(options.recoveries).toEqual([]);
+  });
+
+  it("recovers while the picture stays in the authority's stopped band", async () => {
+    // issue #857 の再発防止: 数 fps に落ちたままの窓は「動き」と数えず、
+    // 連続周期が揃えば回復ラングを打つ。
+    const options = createWatcherOptions([degraded, degraded, degraded], {
+      intervalMs: 5,
+      config: { cyclesRequired: 3, recoveryCooldownMs: 60_000 },
+    });
+    const watchdog = startBroadcastFreezeWatchdog(options);
+    await waitTick();
+    await waitTick();
+    await waitTick();
+    await waitTick();
+    watchdog.stop();
+
+    expect(options.recoveries).toEqual(["obs"]);
   });
 
   it("does not count unmeasurable cycles as still", async () => {
