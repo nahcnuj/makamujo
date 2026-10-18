@@ -12,7 +12,10 @@
 
 補助:
 
-- `xorg10.service` / `x11vnc-10.service` — 永続 DISPLAY `:10` と VNC
+- `xorg10.service` / `x11vnc-10.service` — リポジトリ同梱の永続 DISPLAY `:10` と VNC。
+  本番の `:10` は ansible が導入する `makamujo-xvfb.service` で、`makamujo.service`
+  はそちらを `Wants=` する。回復ラング（`composition/broadcastFreezeWatchdog.ts`）も
+  `makamujo-xvfb.service` を再起動する。
 
 ローカル開発では従来どおり `bin/start` / `bin/stop` も利用できます。
 

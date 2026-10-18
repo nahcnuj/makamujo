@@ -136,6 +136,8 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
   - ラングは `obs` → `xorgAndObs` → `browserAndBroadcastStack` の順に深くなり
     最深で留まる。やることは systemd restart:
     `composition/broadcastFreezeWatchdog.ts` の `RECOVERY_SERVICES`。
+    配信画面 `:10` の実体は ansible が導入する `makamujo-xvfb.service` を指す
+    （リポジトリ同梱の `xorg10.service` は本番に無い。誤るとラングが進まない）。
 - 番組が放映外の間は観測をしない（番組終了の一枚絵を回復の対象にしない）。
 
 ### モジュールと配線
