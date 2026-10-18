@@ -1,6 +1,7 @@
 /**
- * Detect a compositor that stopped producing frames while the page is still
- * answering `evaluate`.
+ * Detect a compositor that stopped producing frames — or that produces them
+ * too slowly to keep the stream moving — while the page is still answering
+ * `evaluate`.
  *
  * The game-stall watchdog compares successive screenshots, so it only catches
  * a canvas that keeps painting the same picture. When frame production itself
@@ -10,19 +11,28 @@
  * (the health checker reports "映像全体 / ゲーム画面部分が停止し続けています"
  * while audio keeps decoding). An in-page `requestAnimationFrame` probe is the
  * signal that separates "painting the same frame" from "not painting at all":
- * a healthy compositor runs a frame callback within milliseconds, a wedged one
+ * a healthy compositor runs a frame callback at the display rate, a wedged one
  * never does.
+ *
+ * Merely counting *whether* a frame arrived is not enough. The health checker
+ * judges the stream by how many frames per second keep changing (24 for the
+ * whole picture, 8 for the game panel), so a compositor that answers the
+ * boolean probe with one lonely frame every few seconds leaves the stream
+ * frozen enough to fail every check while this watchdog stays quiet. The probe
+ * therefore counts the frames it sees in its budget, and a count below
+ * {@link DEFAULT_COMPOSITOR_HEARTBEAT_MIN_FPS} is treated exactly like a
+ * compositor that never produced one: reload, then restart the session.
  */
 
 /**
- * How long the in-page probe waits for a compositor frame before it reports a
- * wedge. The budget is written as a literal inside the probe (see below).
+ * How long the in-page probe waits for compositor frames before it reports.
+ * The budget is written as a literal inside the probe (see below).
  */
 export const COMPOSITOR_HEARTBEAT_PROBE_BUDGET_MS = 3_000;
 
 /**
- * In-page probe: resolves `true` when the compositor produced a frame,
- * `false` when none arrived within the budget.
+ * In-page probe: counts the frames the compositor produced and resolves with
+ * that count once the budget expires.
  *
  * The probe must stay self-contained (no closure over module scope):
  * `browser.evaluate` re-creates the function from its source string inside the
@@ -30,21 +40,25 @@ export const COMPOSITOR_HEARTBEAT_PROBE_BUDGET_MS = 3_000;
  * time and the literal below is the budget. The unit test pins the literal so
  * the two cannot drift apart.
  */
-export const compositorHeartbeatProbe = (): Promise<boolean> =>
-  new Promise<boolean>((resolve) => {
-    let settled = false;
-    const finish = (frameProduced: boolean): void => {
-      if (settled) return;
-      settled = true;
-      resolve(frameProduced);
+export const compositorHeartbeatProbe = (): Promise<number> =>
+  new Promise<number>((resolve) => {
+    let frames = 0;
+    let finished = false;
+    const tick = (): void => {
+      if (finished) return;
+      frames += 1;
+      requestAnimationFrame(tick);
     };
-    requestAnimationFrame(() => finish(true));
-    setTimeout(() => finish(false), COMPOSITOR_HEARTBEAT_PROBE_BUDGET_MS);
+    requestAnimationFrame(tick);
+    setTimeout(() => {
+      finished = true;
+      resolve(frames);
+    }, COMPOSITOR_HEARTBEAT_PROBE_BUDGET_MS);
   });
 
 export interface CompositorHeartbeatObservation {
-  /** The in-page frame probe resolved; `undefined` when it could not run. */
-  frameProduced: boolean | undefined;
+  /** Frames the in-page probe counted; `undefined` when it could not run. */
+  frameCount: number | undefined;
   /**
    * The game is on a screen that must keep painting. Screens that legitimately
    * hold a still picture (title waiting for input, result during free talk) are
@@ -69,11 +83,19 @@ export const initialCompositorHeartbeatState =
     wedgedFrames: 0,
   });
 
-/** True when no frame arrived (or the probe could not run) while one was due. */
+/**
+ * True when no usable number of frames arrived while one was due.
+ *
+ * Both a probe that could not run (`undefined`, e.g. the evaluate timed out)
+ * and one that counted fewer frames than `minFrames` mean the stream cannot
+ * keep moving; either way the window cannot be judged healthy.
+ */
 export const isCompositorWedged = (
   expectedToAnimate: boolean,
-  frameProduced: boolean | undefined,
-): boolean => expectedToAnimate && frameProduced !== true;
+  frameCount: number | undefined,
+  minFrames: number,
+): boolean =>
+  expectedToAnimate && (frameCount === undefined || frameCount < minFrames);
 
 /**
  * Fold one observation into the running state.
@@ -86,11 +108,13 @@ export const observeCompositorHeartbeat = (
   state: CompositorHeartbeatState,
   observation: CompositorHeartbeatObservation,
   wedgedFrameThreshold: number,
+  minFrames: number,
 ): CompositorHeartbeatDecision => {
   if (
     !isCompositorWedged(
       observation.expectedToAnimate,
-      observation.frameProduced,
+      observation.frameCount,
+      minFrames,
     )
   ) {
     return { state: { wedgedFrames: 0 }, wedged: false };
@@ -107,6 +131,22 @@ export const DEFAULT_COMPOSITOR_HEARTBEAT_CHECK_MS = 5_000;
 
 /** Wedged probes in a row that trigger a reload (~10s at the default interval). */
 export const DEFAULT_COMPOSITOR_HEARTBEAT_WEDGED_FRAMES = 2;
+
+/**
+ * Frames per second the probe must see before the compositor counts as
+ * healthy. The health checker fails the stream below 24 changed frames per
+ * second for the whole picture, so this floor sits well below that: it stays
+ * quiet for a busy page (the probe counts at the display rate) and only trips
+ * when the compositor is starving the page hard enough that the picture the
+ * stream shows has already become a slideshow.
+ */
+export const DEFAULT_COMPOSITOR_HEARTBEAT_MIN_FPS = 10;
+
+/** Frames the probe must count within its budget to clear {@link minFps}. */
+export const minFramesWithinBudget = (
+  minFps: number,
+  budgetMs: number = COMPOSITOR_HEARTBEAT_PROBE_BUDGET_MS,
+): number => Math.max(1, Math.round((minFps * budgetMs) / 1000));
 
 const resolvePositiveInt = (
   raw: string | undefined,
@@ -132,4 +172,13 @@ export const resolveCompositorHeartbeatWedgedFrames = (
   resolvePositiveInt(
     env.COMPOSITOR_HEARTBEAT_WEDGED_FRAMES,
     DEFAULT_COMPOSITOR_HEARTBEAT_WEDGED_FRAMES,
+  );
+
+/** Read `COMPOSITOR_HEARTBEAT_MIN_FPS`, falling back to the default. */
+export const resolveCompositorHeartbeatMinFps = (
+  env: NodeJS.ProcessEnv = process.env,
+): number =>
+  resolvePositiveInt(
+    env.COMPOSITOR_HEARTBEAT_MIN_FPS,
+    DEFAULT_COMPOSITOR_HEARTBEAT_MIN_FPS,
   );
