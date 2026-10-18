@@ -10,8 +10,10 @@ import {
   type CompositorHeartbeatState,
   compositorHeartbeatProbe,
   initialCompositorHeartbeatState,
+  minFramesWithinBudget,
   observeCompositorHeartbeat,
   resolveCompositorHeartbeatCheckMs,
+  resolveCompositorHeartbeatMinFps,
   resolveCompositorHeartbeatWedgedFrames,
 } from "../../lib/Browser/compositorHeartbeat";
 import {
@@ -279,9 +281,16 @@ const stallTimer = setInterval(() => {
 // （レンダラは evaluate に応答するが新しいフレームを作らない）スクリーンショットは
 // ハングし、停止監視は盲る。ページ内の requestAnimationFrame プローブで
 // フレーム停止を検知し、リロード→セッション再起動へ昇進させる。
+// しかも「1 フレームでも届けば健全」では、フレームが秒速数枚にまで落ちる
+// コンポジータを見逃す（ヘルスチェックは 1.4fps を「映像全体停止」と判定する）。
+// そこでプローブは予算内のフレーム数を数え、下限（COMPOSITOR_HEARTBEAT_MIN_FPS、
+// 既定 10fps）未満でも停止とみなす。
 const compositorHeartbeatCheckMs = resolveCompositorHeartbeatCheckMs();
 const compositorHeartbeatWedgedFrames =
   resolveCompositorHeartbeatWedgedFrames();
+const compositorHeartbeatMinFrames = minFramesWithinBudget(
+  resolveCompositorHeartbeatMinFps(),
+);
 let checkingCompositorHeartbeat = false;
 let compositorHeartbeatState: CompositorHeartbeatState =
   initialCompositorHeartbeatState();
@@ -290,24 +299,17 @@ const compositorHeartbeatTimer = setInterval(() => {
   checkingCompositorHeartbeat = true;
   void (async () => {
     try {
-      const { sight } = Games.VigilantFiesta;
-      const [produced, screen] = await Promise.all([
-        browser.evaluate(compositorHeartbeatProbe).catch(() => undefined),
-        browser
-          .evaluate(sight)
-          .then((state) => state?.screen)
-          .catch(() => undefined),
-      ]);
+      const produced = await browser
+        .evaluate(compositorHeartbeatProbe)
+        .catch(() => undefined);
       // `Browser.evaluate` types the probe's promise without flattening it;
       // Playwright flattens it at runtime, so unwrap once more here.
-      const frameProduced = produced === undefined ? undefined : await produced;
+      const frameCount = produced === undefined ? undefined : await produced;
       const decision = observeCompositorHeartbeat(
         compositorHeartbeatState,
-        {
-          frameProduced,
-          expectedToAnimate: screen === "playing",
-        },
+        { frameCount },
         compositorHeartbeatWedgedFrames,
+        compositorHeartbeatMinFrames,
       );
       compositorHeartbeatState = decision.state;
       if (!decision.wedged) {
@@ -318,14 +320,16 @@ const compositorHeartbeatTimer = setInterval(() => {
       consecutiveStalls += 1;
       if (shouldRestartGameSession(consecutiveStalls, MAX_CONSECUTIVE_STALLS)) {
         console.warn(
-          "[WARN] compositor kept producing no frames after reloads; exiting session for outer restart",
+          "[WARN] compositor kept producing too few frames after reloads; exiting session for outer restart",
         );
         clearInterval(compositorHeartbeatTimer);
         clearInterval(stallTimer);
         void closeBrowser().finally(() => process.exit(1));
         return;
       }
-      console.warn("[WARN] compositor produced no frames; reloading");
+      console.warn(
+        `[WARN] compositor produced ${frameCount ?? "?"} frames in the probe budget (need ${compositorHeartbeatMinFrames}); reloading`,
+      );
       await browser.reload();
       compositorHeartbeatState = initialCompositorHeartbeatState();
       stallState = initialGameStallState();

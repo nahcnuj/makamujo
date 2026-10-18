@@ -2,11 +2,14 @@ import { afterEach, describe, expect, it } from "bun:test";
 import {
   compositorHeartbeatProbe,
   DEFAULT_COMPOSITOR_HEARTBEAT_CHECK_MS,
+  DEFAULT_COMPOSITOR_HEARTBEAT_MIN_FPS,
   DEFAULT_COMPOSITOR_HEARTBEAT_WEDGED_FRAMES,
   initialCompositorHeartbeatState,
   isCompositorWedged,
+  minFramesWithinBudget,
   observeCompositorHeartbeat,
   resolveCompositorHeartbeatCheckMs,
+  resolveCompositorHeartbeatMinFps,
   resolveCompositorHeartbeatWedgedFrames,
 } from "./compositorHeartbeat";
 
@@ -16,24 +19,33 @@ afterEach(() => {
     .requestAnimationFrame;
 });
 
-const stubRequestAnimationFrame = (fires: boolean): void => {
+/**
+ * Let the probe schedule at most `totalTicks` callbacks. Firing them all from
+ * the microtask queue would starve the timer the probe resolves on, so the
+ * stub stops scheduling once the budget of callbacks is spent.
+ */
+const stubRequestAnimationFrame = (totalTicks: number): void => {
+  let scheduled = 0;
   (globalThis as { requestAnimationFrame?: unknown }).requestAnimationFrame = (
     callback: () => void,
   ): number => {
-    if (fires) callback();
+    if (scheduled < totalTicks) {
+      scheduled += 1;
+      queueMicrotask(callback);
+    }
     return 0;
   };
 };
 
 describe("compositorHeartbeatProbe", () => {
-  it("resolves true when the compositor produces a frame", async () => {
-    stubRequestAnimationFrame(true);
-    await expect(compositorHeartbeatProbe()).resolves.toBe(true);
+  it("counts the frames the compositor produced within the budget", async () => {
+    stubRequestAnimationFrame(60);
+    await expect(compositorHeartbeatProbe()).resolves.toBe(60);
   });
 
-  it("resolves false when no frame arrives within the budget", async () => {
-    stubRequestAnimationFrame(false);
-    await expect(compositorHeartbeatProbe()).resolves.toBe(false);
+  it("resolves zero when no frame arrives within the budget", async () => {
+    stubRequestAnimationFrame(0);
+    await expect(compositorHeartbeatProbe()).resolves.toBe(0);
   });
 
   it("stays self-contained for the eval-from-source evaluate path", () => {
@@ -48,73 +60,115 @@ describe("compositorHeartbeatProbe", () => {
 });
 
 describe("isCompositorWedged", () => {
-  it("is false when a frame arrived", () => {
-    expect(isCompositorWedged(true, true)).toBe(false);
+  it("is false when enough frames arrived", () => {
+    expect(isCompositorWedged(30, 30)).toBe(false);
+    expect(isCompositorWedged(180, 30)).toBe(false);
   });
 
-  it("is true when no frame arrived while one was expected", () => {
-    expect(isCompositorWedged(true, false)).toBe(true);
+  it("is true when frames arrived too slowly to keep the stream moving", () => {
+    // Observed on the starved stream: the probe answered with a handful of
+    // frames while the picture the stream showed froze for the whole check.
+    expect(isCompositorWedged(4, 30)).toBe(true);
+    expect(isCompositorWedged(0, 30)).toBe(true);
   });
 
-  it("is true when the probe could not run while one was expected", () => {
-    expect(isCompositorWedged(true, undefined)).toBe(true);
+  it("is true when the probe could not run", () => {
+    expect(isCompositorWedged(undefined, 30)).toBe(true);
   });
 
-  it("is false whenever the screen is not expected to animate", () => {
-    expect(isCompositorWedged(false, true)).toBe(false);
-    expect(isCompositorWedged(false, false)).toBe(false);
-    expect(isCompositorWedged(false, undefined)).toBe(false);
+  it("does not exempt any game screen (a starved compositor starves all of them)", () => {
+    // The screen plays no role here: it describes content motion, while this
+    // probe measures the compositor, which must keep presenting frames in
+    // every game state.
+    expect(isCompositorWedged(4, 30)).toBe(true);
+    expect(isCompositorWedged(undefined, 30)).toBe(true);
   });
 });
 
 describe("observeCompositorHeartbeat", () => {
-  const observation = (
-    frameProduced: boolean | undefined,
-    expectedToAnimate = true,
-  ) => ({ frameProduced, expectedToAnimate });
+  const observation = (frameCount: number | undefined) => ({ frameCount });
+  const MIN_FRAMES = 30;
 
-  it("stays healthy while frames arrive", () => {
+  it("stays healthy while frames arrive at the display rate", () => {
     const decision = observeCompositorHeartbeat(
       { wedgedFrames: 0 },
-      observation(true),
+      observation(180),
       2,
+      MIN_FRAMES,
     );
     expect(decision.wedged).toBe(false);
     expect(decision.state.wedgedFrames).toBe(0);
   });
 
+  it("counts a starved compositor exactly like a wedged one", () => {
+    // 1.4 fps of picture, as the health checker measured it, is four frames
+    // in the probe's budget — far below the floor, so it must escalate.
+    const state = initialCompositorHeartbeatState();
+    const first = observeCompositorHeartbeat(
+      state,
+      observation(4),
+      2,
+      MIN_FRAMES,
+    );
+    expect(first.wedged).toBe(false);
+    expect(first.state.wedgedFrames).toBe(1);
+    const second = observeCompositorHeartbeat(
+      first.state,
+      observation(0),
+      2,
+      MIN_FRAMES,
+    );
+    expect(second.wedged).toBe(true);
+    expect(second.state.wedgedFrames).toBe(0);
+  });
+
   it("counts wedged probes and trips exactly at the threshold", () => {
     const state = initialCompositorHeartbeatState();
-    const first = observeCompositorHeartbeat(state, observation(false), 2);
+    const first = observeCompositorHeartbeat(
+      state,
+      observation(undefined),
+      2,
+      MIN_FRAMES,
+    );
     expect(first.wedged).toBe(false);
     expect(first.state.wedgedFrames).toBe(1);
     const second = observeCompositorHeartbeat(
       first.state,
       observation(undefined),
       2,
+      MIN_FRAMES,
     );
     expect(second.wedged).toBe(true);
     expect(second.state.wedgedFrames).toBe(0);
   });
 
-  it("clears the counter when a frame arrives again", () => {
+  it("clears the counter when the frames pick up again", () => {
     const decision = observeCompositorHeartbeat(
       { wedgedFrames: 1 },
-      observation(true),
+      observation(60),
       2,
+      MIN_FRAMES,
     );
     expect(decision.wedged).toBe(false);
     expect(decision.state.wedgedFrames).toBe(0);
   });
+});
 
-  it("ignores a missing frame on a screen that is not expected to animate", () => {
-    const decision = observeCompositorHeartbeat(
-      { wedgedFrames: 1 },
-      observation(false, false),
-      2,
+describe("minFramesWithinBudget", () => {
+  it("turns the default floor into frames per probe budget", () => {
+    expect(DEFAULT_COMPOSITOR_HEARTBEAT_MIN_FPS).toBe(10);
+    expect(minFramesWithinBudget(10, 3_000)).toBe(30);
+    expect(minFramesWithinBudget(DEFAULT_COMPOSITOR_HEARTBEAT_MIN_FPS)).toBe(
+      30,
     );
-    expect(decision.wedged).toBe(false);
-    expect(decision.state.wedgedFrames).toBe(0);
+  });
+
+  it("always demands at least one frame", () => {
+    expect(minFramesWithinBudget(0, 3_000)).toBe(1);
+  });
+
+  it("scales with a custom budget", () => {
+    expect(minFramesWithinBudget(24, 1_000)).toBe(24);
   });
 });
 
@@ -170,5 +224,30 @@ describe("resolveCompositorHeartbeatWedgedFrames", () => {
         COMPOSITOR_HEARTBEAT_WEDGED_FRAMES: "0",
       }),
     ).toBe(DEFAULT_COMPOSITOR_HEARTBEAT_WEDGED_FRAMES);
+  });
+});
+
+describe("resolveCompositorHeartbeatMinFps", () => {
+  it("falls back to the default when unset or blank", () => {
+    expect(resolveCompositorHeartbeatMinFps({})).toBe(
+      DEFAULT_COMPOSITOR_HEARTBEAT_MIN_FPS,
+    );
+    expect(
+      resolveCompositorHeartbeatMinFps({
+        COMPOSITOR_HEARTBEAT_MIN_FPS: "  ",
+      }),
+    ).toBe(DEFAULT_COMPOSITOR_HEARTBEAT_MIN_FPS);
+  });
+
+  it("uses a positive override and ignores invalid values", () => {
+    expect(
+      resolveCompositorHeartbeatMinFps({ COMPOSITOR_HEARTBEAT_MIN_FPS: "24" }),
+    ).toBe(24);
+    expect(
+      resolveCompositorHeartbeatMinFps({ COMPOSITOR_HEARTBEAT_MIN_FPS: "0" }),
+    ).toBe(DEFAULT_COMPOSITOR_HEARTBEAT_MIN_FPS);
+    expect(
+      resolveCompositorHeartbeatMinFps({ COMPOSITOR_HEARTBEAT_MIN_FPS: "abc" }),
+    ).toBe(DEFAULT_COMPOSITOR_HEARTBEAT_MIN_FPS);
   });
 });
