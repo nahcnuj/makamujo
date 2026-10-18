@@ -14,6 +14,7 @@
 | [console-domain-model.md](./console-domain-model.md) | **管理コンソール BC**（Access / Status plan）。UI は `console/src`、純関数は `lib/domain/console` |
 | [統計の読み取り](#統計の読み取り) | 配信ページを描画して統計行を読む。視聴者数 / コメント数 / ニコニコ広告ポイント / ギフトポイント |
 | [配信画面の停止回復](#配信画面の停止回復) | 配信ページの描画した映像の動きを測り、複数周期静止し続けた合成出力を systemd 再起動で回復する |
+| [配信画面の常時モーション](#配信画面の常時モーション) | 合成出力の最下部に全幅の帯を OBS マーキーで流し、配信異常検知の下限（whole 24fps / game 8fps）を常に満たす |
 | `legacy` vs `main` | orphan main の差分整理と取り込み方針は本 README の実装マップで追跡する（個別文書は持たない） |
 | [legacy-vs-main-integration.md](./legacy-vs-main-integration.md) | **`legacy` vs `main` 差分整理と取り込み方針**（orphan main、port 済み/未着手） |
 | [markov-cli.md](./markov-cli.md) | **markov CLI**（`tools/markov/`）。git `parse-options` と同じ「1 コマンド 1 ファイル、そのコマンドのオプション表だけ解析する」形。表は `--help` の出力（[表の確認方法](./markov-cli.md#表の確認方法)） |
@@ -156,6 +157,58 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 | `BROADCAST_FREEZE_CYCLES` | `3` | 回復を打つまでに必要な `still` の連続周期 |
 | `BROADCAST_FREEZE_RECOVERY_COOLDOWN_MS` | `600000` | 二つの回復の最短間隔 |
 
+## 配信画面の常時モーション
+
+配信異常検知（`scripts/check-stream.ts`、**改変しない**: owner 契約 #807）は
+配信ページの映像を長辺 128 に縮小し、隣接フレーム差分が閾値
+（チャンネル 16 / 変化率 0.001）を超えた画素を数えて 1 秒毎に fps にする。
+合否は 10 秒窓の毎秒最小値で、whole は `VIDEO_MIN_FPS`（24）以上、
+game は `GAME_MIN_FPS`（8）以上（左 60%: `GAME_CLIP`）が全秒必要。
+閾値引き下げは却下済み（#858 / #860 / #862 / #864 をマージせず close）。
+**下げるのは検知ではなく、配信側が常時その下限を満たす動きを持つこと**
+（#807 の指す「配信側の改善」）。
+
+OBS シーン `obs-studio/basic/scenes/Makamujo.json` の `marquee`
+（`text_ft2_source` + Scroll フィルタ）を常時表示し、画面最下部に全幅の
+細い帯を流す。ゲーム頁もコメント頁も静止・固着していても OBS の合成は
+帯を更新し続け、検知窓を満たし続ける。帯はブラウザ（ゲーム頁 / コメント
+CEF）に依存しないため、ブラウザ側が固着したときも動く唯一の経路になる
+（停止回復の systemd 再起動・セッション内監視とは互いに独立）。
+
+### 数値の契約
+
+`tests/obs-marquee-motion.test.ts` が以下を検査する（unit テスト登録済み）。
+
+| 項目 | 値 | 根拠 |
+|------|----|------|
+| 出力 | 1280×720 / 30fps | `obs-studio/basic/profiles/Makamujo/basic.ini`（`BaseCX` / `FPSCommon`） |
+| 縮小 | 1280 → 128（÷10） | check-stream の `MAX_SAMPLE_DIMENSION` |
+| 必要移動量 | 1 サンプル px / 出力 1 フレーム | 差分カウントの最小単位はサンプル px |
+| 最低速度 | 30 × 10 × 1 = **300 px/s** | 出力 fps × ÷10 × 必要移動量 |
+| 採用速度 | **360 px/s**（Scroll の `speed_x`、OBS の単位は px/s） | 300 に対し 12 px/出力フレーム = 1.2 サンプル px の余裕 |
+| テキスト | `░▒▓█` の周期（4 グリフ）の繰り返し | 相隣 shade の差 ≈ 0.25 × 輝度 > チャンネル許容 16 |
+| 位置 | 全幅・画面下半分 | `GAME_CLIP`（左 60% 全高）と whole の両方に重なる |
+| `loop: true` | 必須 | false ならシフトが端で止まり「常時」が壊れる |
+
+出力 30fps なら 1 秒あたりの変化フレームは最大 ≈30（動画のフレーム更新
+ごとに差分が 1 回立ち）で `VIDEO_MIN_FPS`（24）を上回る。出力 fps を上げる
+と最低速度も比例して上がるため、そのときは帯の `speed_x` も合わせる
+（テストが basic.ini と突き合わせて検出する）。
+
+同種の帯はインアプリ実装（#870 TickerRail）でも可能だが、それらは
+ブラウザ描画に依存する。OBS マーキーは合成側で動くため、両者は独立・補完
+関係であり、どちらか一方だけではブラウザ側固着を覆えない。
+
+### モジュール
+
+| モジュール | 役割 |
+|------------|------|
+| `obs-studio/basic/scenes/Makamujo.json` | `marquee` ソース（text / 色）・Scroll フィルタ・シーン item（表示 / 位置） |
+| `tests/obs-marquee-motion.test.ts` | 上表の契約と、番組シーンに最上位で表示されることを検査 |
+
+シーン JSON はデプロイでそのまま本番に届く（`XDG_CONFIG_HOME` がレポジトリ
+を指し、stream key を `service.json` に書くタスクと同じ配り方）。
+
 ## 実装マップ
 
 | 領域 | パス | 状態 |
@@ -166,6 +219,7 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 | AgentSession + services | `lib/application/` | 済 |
 | 統計のブラウザ読み取り | `composition/watchPageBrowser.ts`, `composition/chromiumWatchPageBrowser.ts`, `composition/watchPageStatisticsSource.ts` | 済 |
 | 配信画面の停止回復 | `lib/domain/broadcasting/CompositeFreezePolicy.ts`, `composition/broadcastFreezeWatchdog.ts` | 済 |
+| 配信画面の常時モーション（マーキー帯） | `obs-studio/basic/scenes/Makamujo.json`, `tests/obs-marquee-motion.test.ts` | 済 |
 | Console access / status plan / SSE frames | `lib/domain/console/` | 済（Basic auth 純関数含む） |
 | systemd / make install（main から port） | `Makefile`, `etc/systemd/` | 済 |
 | Outer console WS bridge | `composition/consoleOuterWebSocket.ts` | 済 |

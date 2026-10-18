@@ -116,17 +116,17 @@
       "versioned_id": "text_ft2_source_v2",
       "settings": {
         "from_file": false,
-        "text": "",
+        "text": "░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█░▒▓█",
         "font": {
           "face": "Noto Serif CJK JP",
           "style": "Bold",
-          "size": 24,
+          "size": 32,
           "flags": 1
         },
-        "outline": true,
+        "outline": false,
         "drop_shadow": false,
-        "color1": 4286578687,
-        "color2": 4278255615
+        "color1": 4290290580,
+        "color2": 4285093191
       },
       "mixers": 0,
       "sync": 0,
@@ -152,9 +152,10 @@
           "id": "scroll_filter",
           "versioned_id": "scroll_filter",
           "settings": {
-            "speed_x": 10.0,
+            "speed_x": 360.0,
             "limit_cx": true,
-            "cx": 1024
+            "cx": 1280,
+            "loop": true
           },
           "mixers": 0,
           "sync": 0,
@@ -330,7 +331,7 @@
           {
             "name": "marquee",
             "source_uuid": "b6a526b3-317d-404c-80c7-2f5a51089e76",
-            "visible": false,
+            "visible": true,
             "locked": true,
             "rot": 0.0,
             "scale_ref": {
@@ -348,8 +349,8 @@
             "id": 3,
             "group_item_backup": false,
             "pos": {
-              "x": -34.0,
-              "y": 537.0
+              "x": 0.0,
+              "y": 674.0
             },
             "pos_rel": {
               "x": -1.8722221851348877,
