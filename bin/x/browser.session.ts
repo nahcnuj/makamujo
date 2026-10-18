@@ -7,12 +7,23 @@ import { ActionResult } from "automated-gameplay-transmitter";
 import { ServerGames as Games } from "../../lib/Agent/games/server";
 import { create } from "../../lib/Browser/chromium";
 import {
+  type CompositorHeartbeatState,
+  compositorHeartbeatProbe,
+  initialCompositorHeartbeatState,
+  observeCompositorHeartbeat,
+  resolveCompositorHeartbeatCheckMs,
+  resolveCompositorHeartbeatWedgedFrames,
+} from "../../lib/Browser/compositorHeartbeat";
+import {
   areFramesIdentical,
   type GameStallState,
   initialGameStallState,
+  initialStallEscalationState,
   observeGameFrame,
+  observeStallProbe,
   resolveGameStallCheckMs,
   resolveGameStallStaticFrames,
+  type StallEscalationState,
   shouldRestartGameSession,
 } from "../../lib/Browser/gameStall";
 import { createRetrySender } from "../../lib/Browser/socket";
@@ -213,8 +224,8 @@ const stallCheckMs = resolveGameStallCheckMs();
 const stallStaticFrames = resolveGameStallStaticFrames();
 let checkingStall = false;
 let stallState: GameStallState = initialGameStallState();
+let stallEscalation: StallEscalationState = initialStallEscalationState();
 let previousFrame: Uint8Array | undefined;
-let consecutiveStalls = 0;
 const stallTimer = setInterval(() => {
   if (checkingStall) return;
   checkingStall = true;
@@ -237,14 +248,22 @@ const stallTimer = setInterval(() => {
         stallStaticFrames,
       );
       stallState = decision.state;
+      // A frame that differs from the previous probe proves the page is
+      // painting again. The post-reload baseline (previousFrame === undefined)
+      // reports `false` so it cannot clear the reload budget.
+      const frameChanged =
+        previousFrame !== undefined &&
+        !areFramesIdentical(previousFrame, frame);
       previousFrame = frame;
-      if (!decision.stalled) {
-        consecutiveStalls = 0;
-        return;
-      }
+      const escalation = observeStallProbe(
+        stallEscalation,
+        { stalled: decision.stalled, frameChanged },
+        MAX_CONSECUTIVE_STALLS,
+      );
+      stallEscalation = escalation.state;
+      if (!decision.stalled) return;
 
-      consecutiveStalls += 1;
-      if (shouldRestartGameSession(consecutiveStalls, MAX_CONSECUTIVE_STALLS)) {
+      if (escalation.restartSession) {
         console.warn(
           "[WARN] game page stayed frozen after reloads; exiting session for outer restart",
         );
@@ -252,10 +271,12 @@ const stallTimer = setInterval(() => {
         void closeBrowser().finally(() => process.exit(1));
         return;
       }
+      if (!escalation.reload) return;
       console.warn("[WARN] game page stopped painting; reloading");
       await browser.reload();
       previousFrame = undefined;
       stallState = initialGameStallState();
+      compositorHeartbeatState = initialCompositorHeartbeatState();
     } catch (err) {
       console.warn("[WARN] game liveness probe failed", err);
     } finally {
@@ -263,6 +284,74 @@ const stallTimer = setInterval(() => {
     }
   })();
 }, stallCheckMs);
+
+// コンポジータ無反応監視
+// ゲームページ停止監視はスクリーンショットの比較なので、キャンバスが同じ
+// 絵を描き続ける故障しか捕まえない。フレーム生成全体が止まると
+// （レンダラは evaluate に応答するが新しいフレームを作らない）スクリーンショットは
+// ハングし、停止監視は盲る。ページ内の requestAnimationFrame プローブで
+// フレーム停止を検知し、リロード→セッション再起動へ昇進させる。
+const compositorHeartbeatCheckMs = resolveCompositorHeartbeatCheckMs();
+const compositorHeartbeatWedgedFrames =
+  resolveCompositorHeartbeatWedgedFrames();
+let checkingCompositorHeartbeat = false;
+let compositorHeartbeatState: CompositorHeartbeatState =
+  initialCompositorHeartbeatState();
+// The compositor watchdog keeps its own reload budget: sharing the stall
+// watchdog's counter let a recovery seen by one probe clear the other's.
+let compositorStalls = 0;
+const compositorHeartbeatTimer = setInterval(() => {
+  if (checkingCompositorHeartbeat) return;
+  checkingCompositorHeartbeat = true;
+  void (async () => {
+    try {
+      const { sight } = Games.VigilantFiesta;
+      const [produced, screen] = await Promise.all([
+        browser.evaluate(compositorHeartbeatProbe).catch(() => undefined),
+        browser
+          .evaluate(sight)
+          .then((state) => state?.screen)
+          .catch(() => undefined),
+      ]);
+      // `Browser.evaluate` types the probe's promise without flattening it;
+      // Playwright flattens it at runtime, so unwrap once more here.
+      const frameProduced = produced === undefined ? undefined : await produced;
+      const decision = observeCompositorHeartbeat(
+        compositorHeartbeatState,
+        {
+          frameProduced,
+          expectedToAnimate: screen === "playing",
+        },
+        compositorHeartbeatWedgedFrames,
+      );
+      compositorHeartbeatState = decision.state;
+      if (!decision.wedged) {
+        compositorStalls = 0;
+        return;
+      }
+
+      compositorStalls += 1;
+      if (shouldRestartGameSession(compositorStalls, MAX_CONSECUTIVE_STALLS)) {
+        console.warn(
+          "[WARN] compositor kept producing no frames after reloads; exiting session for outer restart",
+        );
+        clearInterval(compositorHeartbeatTimer);
+        clearInterval(stallTimer);
+        void closeBrowser().finally(() => process.exit(1));
+        return;
+      }
+      console.warn("[WARN] compositor produced no frames; reloading");
+      await browser.reload();
+      compositorHeartbeatState = initialCompositorHeartbeatState();
+      stallState = initialGameStallState();
+      previousFrame = undefined;
+    } catch (err) {
+      console.warn("[WARN] compositor heartbeat probe failed", err);
+    } finally {
+      checkingCompositorHeartbeat = false;
+    }
+  })();
+}, compositorHeartbeatCheckMs);
 
 const send = await createRetrySender(
   async (action) => {
@@ -345,6 +434,7 @@ try {
 } finally {
   clearInterval(awSnapTimer);
   clearInterval(stallTimer);
+  clearInterval(compositorHeartbeatTimer);
   await closeBrowser();
   send({ name: "closed" });
 }
