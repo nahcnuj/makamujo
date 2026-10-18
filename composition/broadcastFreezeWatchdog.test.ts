@@ -4,6 +4,7 @@ import {
   type BroadcastFreezeWatchdogOptions,
   RECOVERY_SERVICES,
   resolveBroadcastFreezeWatchdogEnv,
+  restartServices,
   startBroadcastFreezeWatchdog,
 } from "./broadcastFreezeWatchdog";
 import type { PictureMotion } from "./watchPageBrowser";
@@ -156,15 +157,72 @@ describe("startBroadcastFreezeWatchdog", () => {
   });
 
   it("maps each recovery rung to the systemd units it restarts", () => {
+    // :10 の実体は ansible が導入する makamujo-xvfb.service。ここを
+    // リポジトリ同梱の xorg10.service にすると本番に unit が無く、
+    // systemctl restart が失敗してラングが進まない。
     expect(RECOVERY_SERVICES.obs).toEqual(["makamujo-obs.service"]);
     expect(RECOVERY_SERVICES.xorgAndObs).toEqual([
-      "xorg10.service",
+      "makamujo-xvfb.service",
       "makamujo-obs.service",
     ]);
     expect(RECOVERY_SERVICES.browserAndBroadcastStack).toEqual([
       "makamujo-browser.service",
-      "xorg10.service",
+      "makamujo-xvfb.service",
       "makamujo-obs.service",
     ]);
+  });
+});
+
+describe("restartServices", () => {
+  it("restarts every unit in order, settling between them", async () => {
+    const restarted: string[] = [];
+    const slept: number[] = [];
+
+    await restartServices(
+      ["a.service", "b.service", "c.service"],
+      async (service) => {
+        restarted.push(service);
+      },
+      3_000,
+      async (ms) => {
+        slept.push(ms);
+      },
+    );
+
+    expect(restarted).toEqual(["a.service", "b.service", "c.service"]);
+    // 最後の unit の後は待たない。
+    expect(slept).toEqual([3_000, 3_000]);
+  });
+
+  it("keeps going past a failing unit and reports the failures together", async () => {
+    const restarted: string[] = [];
+
+    const failure = restartServices(
+      ["missing.service", "makamujo-obs.service"],
+      async (service) => {
+        restarted.push(service);
+        if (service === "missing.service") {
+          throw new Error(`systemctl restart ${service} failed`);
+        }
+      },
+      0,
+      async () => {},
+    );
+
+    // 途中の失敗で残りの unit を諦めると、古い unit 名ひとつでラングが
+    // 何もしなくなる。失敗しても次の unit は試す。
+    await expect(failure).rejects.toThrow("missing.service");
+    expect(restarted).toEqual(["missing.service", "makamujo-obs.service"]);
+  });
+
+  it("resolves when every unit restarts", async () => {
+    await expect(
+      restartServices(
+        ["makamujo-obs.service"],
+        async () => {},
+        0,
+        async () => {},
+      ),
+    ).resolves.toBeUndefined();
   });
 });

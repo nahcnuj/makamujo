@@ -11,8 +11,8 @@
  *
  * 回復は systemctl restart で行う:
  * - `obs` — makamujo-obs.service だけ
- * - `xorgAndObs` — xorg10.service と makamujo-obs.service
- * - `browserAndBroadcastStack` — ゲーム用ブラウザ実体 + xorg10 + obs
+ * - `xorgAndObs` — makamujo-xvfb.service と makamujo-obs.service
+ * - `browserAndBroadcastStack` — ゲーム用ブラウザ実体 + makamujo-xvfb + obs
  */
 
 import { execFile } from "node:child_process";
@@ -31,13 +31,20 @@ import { judgePictureMotion } from "./watchPageBrowser";
 
 export const DEFAULT_FREEZE_CHECK_INTERVAL_MS = 60_000;
 
-/** 回復ラングが触る systemd unit。unit 名は VPS の実構成のもの。 */
+/**
+ * 回復ラングが触る systemd unit。unit 名は VPS の実構成のもの。
+ *
+ * 配信画面 `:10` の実体は ansible が導入する `makamujo-xvfb.service`
+ * （`makamujo.service` が `Wants=` する）で、リポジトリ同梱の
+ * `xorg10.service` は使われていない。誤った unit 名を渡すと
+ * `systemctl restart` が失敗し、そのラングは何も回復できない。
+ */
 export const RECOVERY_SERVICES: Record<CompositeFreezeRecovery, string[]> = {
   obs: ["makamujo-obs.service"],
-  xorgAndObs: ["xorg10.service", "makamujo-obs.service"],
+  xorgAndObs: ["makamujo-xvfb.service", "makamujo-obs.service"],
   browserAndBroadcastStack: [
     "makamujo-browser.service",
-    "xorg10.service",
+    "makamujo-xvfb.service",
     "makamujo-obs.service",
   ],
 };
@@ -68,38 +75,75 @@ export const createSystemdRecovery =
       );
       return;
     }
-    for (const index of services.keys()) {
-      const service = services[index];
-      if (service === undefined) continue;
-      log.log(`[INFO] restarting ${service} (recovery "${recovery}")...`);
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error(`systemctl restart ${service} timed out`));
-        }, RESTART_COMMAND_TIMEOUT_MS);
-        execFile(
-          "systemctl",
-          ["restart", service],
-          { timeout: RESTART_COMMAND_TIMEOUT_MS },
-          (error, stdout, stderr) => {
-            clearTimeout(timeout);
-            if (error !== null) {
-              reject(
-                new Error(
-                  `systemctl restart ${service} failed: ${error.message} ${stderr?.trim() ?? ""}`,
-                ),
-              );
-            } else {
-              void stdout;
-              resolve();
-            }
-          },
-        );
-      });
-      if (index + 1 < services.length) {
-        await Bun.sleep(RESTART_SETTLE_MS);
-      }
-    }
+    await restartServices(
+      services,
+      (service) => restartService(service, recovery, log),
+      RESTART_SETTLE_MS,
+      (ms) => Bun.sleep(ms),
+    );
   };
+
+/**
+ * unit を順に再起動する。1 つの失敗で残りを諦めない: ラングは複数の unit を
+ * 束ねていて、古い / 存在しない unit 名が 1 つ混じるだけで「より深い回復が
+ * 何もしない」状態に陥る（実際に `xorg10.service` で起きていた）。試行後に
+ * まとめて失敗を報告し、呼び出し側のログに残す。
+ */
+export const restartServices = async (
+  services: readonly string[],
+  restart: (service: string) => Promise<void>,
+  settleMs: number,
+  sleep: (ms: number) => Promise<void>,
+): Promise<void> => {
+  const failures: string[] = [];
+  for (const index of services.keys()) {
+    const service = services[index];
+    if (service === undefined) continue;
+    try {
+      await restart(service);
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error));
+    }
+    if (index + 1 < services.length) {
+      await sleep(settleMs);
+    }
+  }
+  if (failures.length > 0) {
+    throw new Error(failures.join("; "));
+  }
+};
+
+/** systemctl restart を 1 unit 実行する。応答が無いときは上限で reject する。 */
+const restartService = (
+  service: string,
+  recovery: CompositeFreezeRecovery,
+  log: Pick<Console, "log" | "warn" | "error">,
+): Promise<void> => {
+  log.log(`[INFO] restarting ${service} (recovery "${recovery}")...`);
+  return new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`systemctl restart ${service} timed out`));
+    }, RESTART_COMMAND_TIMEOUT_MS);
+    execFile(
+      "systemctl",
+      ["restart", service],
+      { timeout: RESTART_COMMAND_TIMEOUT_MS },
+      (error, stdout, stderr) => {
+        clearTimeout(timeout);
+        if (error !== null) {
+          reject(
+            new Error(
+              `systemctl restart ${service} failed: ${error.message} ${stderr?.trim() ?? ""}`,
+            ),
+          );
+        } else {
+          void stdout;
+          resolve();
+        }
+      },
+    );
+  });
+};
 
 const parsePositive = (raw: string | undefined, fallback: number): number => {
   if (raw === undefined) return fallback;
