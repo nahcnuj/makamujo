@@ -277,6 +277,7 @@ const stallTimer = setInterval(() => {
       previousFrame = undefined;
       stallState = initialGameStallState();
       compositorHeartbeatState = initialCompositorHeartbeatState();
+      compositorStalls = 0;
     } catch (err) {
       console.warn("[WARN] game liveness probe failed", err);
     } finally {
@@ -344,6 +345,7 @@ const compositorHeartbeatTimer = setInterval(() => {
       await browser.reload();
       compositorHeartbeatState = initialCompositorHeartbeatState();
       stallState = initialGameStallState();
+      stallEscalation = initialStallEscalationState();
       previousFrame = undefined;
     } catch (err) {
       console.warn("[WARN] compositor heartbeat probe failed", err);

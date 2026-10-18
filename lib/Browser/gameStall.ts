@@ -68,6 +68,11 @@ export const observeGameFrame = (
   if (!observation.expectedToAnimate || !state.hasBaseline) {
     return { state: { hasBaseline: true, staticFrames: 0 }, stalled: false };
   }
+  if (staticFrameThreshold <= 0) {
+    // A non-positive threshold disables the stall detection instead of
+    // tripping on the very first identical frame.
+    return { state: { hasBaseline: true, staticFrames: 0 }, stalled: false };
+  }
   if (!observation.identicalToPrevious) {
     return { state: { hasBaseline: true, staticFrames: 0 }, stalled: false };
   }

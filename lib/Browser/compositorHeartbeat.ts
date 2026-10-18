@@ -95,6 +95,11 @@ export const observeCompositorHeartbeat = (
   ) {
     return { state: { wedgedFrames: 0 }, wedged: false };
   }
+  if (wedgedFrameThreshold <= 0) {
+    // A non-positive threshold disables the heartbeat detection instead of
+    // tripping on the very first wedged probe.
+    return { state: { wedgedFrames: 0 }, wedged: false };
+  }
   const wedgedFrames = state.wedgedFrames + 1;
   if (wedgedFrames >= wedgedFrameThreshold) {
     return { state: { wedgedFrames: 0 }, wedged: true };
