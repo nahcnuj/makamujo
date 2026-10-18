@@ -25,6 +25,10 @@ import {
   sseBroadcast,
   type WsLike,
 } from "./composition/broadcast";
+import {
+  createSystemdRecovery,
+  startBroadcastFreezeWatchdog,
+} from "./composition/broadcastFreezeWatchdog";
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
 import { startWatchPageStatisticsSource } from "./composition/watchPageStatisticsSource";
 import { startConsoleServer } from "./console/index";
@@ -784,7 +788,7 @@ startIdleSpeechTimer(streamer, 1_000);
 // 統計（視聴者数 / コメント数 / ニコニコ広告ポイント / ギフトポイント）を配信ページの
 // 描画済み画面から読む。配線は composition/watchPageStatisticsSource.ts にあり、
 // `NICONAMA_WATCH_PAGE_DISABLED=1` のときだけ `POST /api/meta` へフォールバックする。
-void startWatchPageStatisticsSource({
+const watchPageStatisticsSource = startWatchPageStatisticsSource({
   onStatistics: (statistics) => {
     watchPageDisplayedStatistics = statistics;
     retainedWatchPageStatistics = retainDefinedStatistics(
@@ -800,6 +804,23 @@ void startWatchPageStatisticsSource({
     persistStreamBaseline();
     broadcastCurrentPayloadLocal("onWatchPageStatistics");
   },
+});
+
+// 配信画面の合成出力（XSHM キャプチャを x264 に通したもの）が固まり続ける状態に
+// なると、セッション内の監視では検知も回復もできないまま配信画面だけ静止する。
+// 上の統計用ブラウザが開いたままの配信ページで映像の動きを機会良く測らせ、
+// 複数周期にわたる静止を systemd 経由の再起動で回復する。回復の判断は
+// composition/broadcastFreezeWatchdog.ts、判断の本体は
+// lib/domain/broadcasting/CompositeFreezePolicy.ts にある。
+startBroadcastFreezeWatchdog({
+  measurePictureMotion: () => watchPageStatisticsSource.measurePictureMotion(),
+  // SoundPolicy と同じ基準: エージェントのセッションが番組に張れているか。
+  isStreamLive: () => streamer.streamState !== undefined,
+  // systemd のある本番以外では dry run にして観測だけ残す（開発 / CI は
+  // 統計の読み取り自体を無効化しているので、そもそも観測も測れない）。
+  recover: createSystemdRecovery({
+    dryRun: process.env.NODE_ENV !== "production",
+  }),
 });
 
 /**
