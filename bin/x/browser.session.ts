@@ -18,9 +18,12 @@ import {
   areFramesIdentical,
   type GameStallState,
   initialGameStallState,
+  initialStallEscalationState,
   observeGameFrame,
+  observeStallProbe,
   resolveGameStallCheckMs,
   resolveGameStallStaticFrames,
+  type StallEscalationState,
   shouldRestartGameSession,
 } from "../../lib/Browser/gameStall";
 import { createRetrySender } from "../../lib/Browser/socket";
@@ -221,8 +224,8 @@ const stallCheckMs = resolveGameStallCheckMs();
 const stallStaticFrames = resolveGameStallStaticFrames();
 let checkingStall = false;
 let stallState: GameStallState = initialGameStallState();
+let stallEscalation: StallEscalationState = initialStallEscalationState();
 let previousFrame: Uint8Array | undefined;
-let consecutiveStalls = 0;
 const stallTimer = setInterval(() => {
   if (checkingStall) return;
   checkingStall = true;
@@ -245,14 +248,22 @@ const stallTimer = setInterval(() => {
         stallStaticFrames,
       );
       stallState = decision.state;
+      // A frame that differs from the previous probe proves the page is
+      // painting again. The post-reload baseline (previousFrame === undefined)
+      // reports `false` so it cannot clear the reload budget.
+      const frameChanged =
+        previousFrame !== undefined &&
+        !areFramesIdentical(previousFrame, frame);
       previousFrame = frame;
-      if (!decision.stalled) {
-        consecutiveStalls = 0;
-        return;
-      }
+      const escalation = observeStallProbe(
+        stallEscalation,
+        { stalled: decision.stalled, frameChanged },
+        MAX_CONSECUTIVE_STALLS,
+      );
+      stallEscalation = escalation.state;
+      if (!decision.stalled) return;
 
-      consecutiveStalls += 1;
-      if (shouldRestartGameSession(consecutiveStalls, MAX_CONSECUTIVE_STALLS)) {
+      if (escalation.restartSession) {
         console.warn(
           "[WARN] game page stayed frozen after reloads; exiting session for outer restart",
         );
@@ -260,6 +271,7 @@ const stallTimer = setInterval(() => {
         void closeBrowser().finally(() => process.exit(1));
         return;
       }
+      if (!escalation.reload) return;
       console.warn("[WARN] game page stopped painting; reloading");
       await browser.reload();
       previousFrame = undefined;
@@ -285,6 +297,9 @@ const compositorHeartbeatWedgedFrames =
 let checkingCompositorHeartbeat = false;
 let compositorHeartbeatState: CompositorHeartbeatState =
   initialCompositorHeartbeatState();
+// The compositor watchdog keeps its own reload budget: sharing the stall
+// watchdog's counter let a recovery seen by one probe clear the other's.
+let compositorStalls = 0;
 const compositorHeartbeatTimer = setInterval(() => {
   if (checkingCompositorHeartbeat) return;
   checkingCompositorHeartbeat = true;
@@ -311,12 +326,12 @@ const compositorHeartbeatTimer = setInterval(() => {
       );
       compositorHeartbeatState = decision.state;
       if (!decision.wedged) {
-        consecutiveStalls = 0;
+        compositorStalls = 0;
         return;
       }
 
-      consecutiveStalls += 1;
-      if (shouldRestartGameSession(consecutiveStalls, MAX_CONSECUTIVE_STALLS)) {
+      compositorStalls += 1;
+      if (shouldRestartGameSession(compositorStalls, MAX_CONSECUTIVE_STALLS)) {
         console.warn(
           "[WARN] compositor kept producing no frames after reloads; exiting session for outer restart",
         );
