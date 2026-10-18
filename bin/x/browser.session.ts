@@ -279,6 +279,9 @@ const stallTimer = setInterval(() => {
 // （レンダラは evaluate に応答するが新しいフレームを作らない）スクリーンショットは
 // ハングし、停止監視は盲る。ページ内の requestAnimationFrame プローブで
 // フレーム停止を検知し、リロード→セッション再起動へ昇進させる。
+// ゲーム画面の種別は判断に使わない: コンポジータはどの画面でもフレームを作る
+// 必要があり、レンダラが止まると画面の取得自体が失敗して unknown になり、
+// 画面種別で絞るとまさに検知すべき局を盲にしてしまう。
 const compositorHeartbeatCheckMs = resolveCompositorHeartbeatCheckMs();
 const compositorHeartbeatWedgedFrames =
   resolveCompositorHeartbeatWedgedFrames();
@@ -290,23 +293,15 @@ const compositorHeartbeatTimer = setInterval(() => {
   checkingCompositorHeartbeat = true;
   void (async () => {
     try {
-      const { sight } = Games.VigilantFiesta;
-      const [produced, screen] = await Promise.all([
-        browser.evaluate(compositorHeartbeatProbe).catch(() => undefined),
-        browser
-          .evaluate(sight)
-          .then((state) => state?.screen)
-          .catch(() => undefined),
-      ]);
+      const produced = await browser
+        .evaluate(compositorHeartbeatProbe)
+        .catch(() => undefined);
       // `Browser.evaluate` types the probe's promise without flattening it;
       // Playwright flattens it at runtime, so unwrap once more here.
       const frameProduced = produced === undefined ? undefined : await produced;
       const decision = observeCompositorHeartbeat(
         compositorHeartbeatState,
-        {
-          frameProduced,
-          expectedToAnimate: screen === "playing",
-        },
+        { frameProduced },
         compositorHeartbeatWedgedFrames,
       );
       compositorHeartbeatState = decision.state;

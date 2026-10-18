@@ -49,29 +49,29 @@ describe("compositorHeartbeatProbe", () => {
 
 describe("isCompositorWedged", () => {
   it("is false when a frame arrived", () => {
-    expect(isCompositorWedged(true, true)).toBe(false);
+    expect(isCompositorWedged(true)).toBe(false);
   });
 
-  it("is true when no frame arrived while one was expected", () => {
-    expect(isCompositorWedged(true, false)).toBe(true);
+  it("is true when no frame arrived", () => {
+    expect(isCompositorWedged(false)).toBe(true);
   });
 
-  it("is true when the probe could not run while one was expected", () => {
-    expect(isCompositorWedged(true, undefined)).toBe(true);
+  it("is true when the probe could not run", () => {
+    expect(isCompositorWedged(undefined)).toBe(true);
   });
 
-  it("is false whenever the screen is not expected to animate", () => {
-    expect(isCompositorWedged(false, true)).toBe(false);
-    expect(isCompositorWedged(false, false)).toBe(false);
-    expect(isCompositorWedged(false, undefined)).toBe(false);
+  it("does not exempt any game screen (a wedged compositor wedges on all of them)", () => {
+    // The predicate no longer takes the screen: title/result/unknown used to
+    // swallow the wedge signal (regression behind issue #842).
+    expect(isCompositorWedged(false)).toBe(true);
+    expect(isCompositorWedged(undefined)).toBe(true);
   });
 });
 
 describe("observeCompositorHeartbeat", () => {
-  const observation = (
-    frameProduced: boolean | undefined,
-    expectedToAnimate = true,
-  ) => ({ frameProduced, expectedToAnimate });
+  const observation = (frameProduced: boolean | undefined) => ({
+    frameProduced,
+  });
 
   it("stays healthy while frames arrive", () => {
     const decision = observeCompositorHeartbeat(
@@ -107,14 +107,16 @@ describe("observeCompositorHeartbeat", () => {
     expect(decision.state.wedgedFrames).toBe(0);
   });
 
-  it("ignores a missing frame on a screen that is not expected to animate", () => {
+  it("counts a wedged probe on every game screen, including result", () => {
+    // Regression: the previous screen guard ignored wedges on title / result /
+    // unknown and on a failed sight probe, leaving a frozen stream unrecovered.
     const decision = observeCompositorHeartbeat(
       { wedgedFrames: 1 },
-      observation(false, false),
-      2,
+      observation(false),
+      3,
     );
     expect(decision.wedged).toBe(false);
-    expect(decision.state.wedgedFrames).toBe(0);
+    expect(decision.state.wedgedFrames).toBe(2);
   });
 });
 

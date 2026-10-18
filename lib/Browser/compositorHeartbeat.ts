@@ -45,16 +45,10 @@ export const compositorHeartbeatProbe = (): Promise<boolean> =>
 export interface CompositorHeartbeatObservation {
   /** The in-page frame probe resolved; `undefined` when it could not run. */
   frameProduced: boolean | undefined;
-  /**
-   * The game is on a screen that must keep painting. Screens that legitimately
-   * hold a still picture (title waiting for input, result during free talk) are
-   * excluded so they are not mistaken for a wedge.
-   */
-  expectedToAnimate: boolean;
 }
 
 export interface CompositorHeartbeatState {
-  /** Consecutive observations that saw no new frame while one was expected. */
+  /** Consecutive observations that saw no new compositor frame. */
   wedgedFrames: number;
 }
 
@@ -69,17 +63,27 @@ export const initialCompositorHeartbeatState =
     wedgedFrames: 0,
   });
 
-/** True when no frame arrived (or the probe could not run) while one was due. */
+/**
+ * True when no frame arrived (or the probe could not run) while the page should
+ * be alive.
+ *
+ * The game screen plays no role here: it describes content motion (the stall
+ * probe's concern), while this probe measures the compositor, which must keep
+ * presenting frames in every game state. Guarding on the screen also left two
+ * blind spots — a wedge while the game sat on `title` / `result` / `unknown`
+ * was ignored, and `sight()` failing on the wedged renderer itself made
+ * `expectedToAnimate` false, dropping the wedge signal exactly when recovery
+ * was needed.
+ */
 export const isCompositorWedged = (
-  expectedToAnimate: boolean,
   frameProduced: boolean | undefined,
-): boolean => expectedToAnimate && frameProduced !== true;
+): boolean => frameProduced !== true;
 
 /**
  * Fold one observation into the running state.
  *
- * A healthy probe or an expected-still screen clears the counter; consecutive
- * wedged observations count until `wedgedFrameThreshold` is reached, at which
+ * A healthy probe clears the counter; consecutive wedged observations count
+ * until `wedgedFrameThreshold` is reached, at which
  * point the state resets and `wedged` is reported once.
  */
 export const observeCompositorHeartbeat = (
@@ -87,12 +91,7 @@ export const observeCompositorHeartbeat = (
   observation: CompositorHeartbeatObservation,
   wedgedFrameThreshold: number,
 ): CompositorHeartbeatDecision => {
-  if (
-    !isCompositorWedged(
-      observation.expectedToAnimate,
-      observation.frameProduced,
-    )
-  ) {
+  if (!isCompositorWedged(observation.frameProduced)) {
     return { state: { wedgedFrames: 0 }, wedged: false };
   }
   const wedgedFrames = state.wedgedFrames + 1;
