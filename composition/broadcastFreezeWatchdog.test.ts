@@ -8,9 +8,10 @@ import {
 } from "./broadcastFreezeWatchdog";
 import type { PictureMotion } from "./watchPageBrowser";
 
+/** 60fps でサンプリングして映像も 30fps で動いている健康な窓。 */
 const moving: PictureMotion = {
-  comparedFrames: 60,
-  changedFrames: 30,
+  comparedFrames: 180,
+  changedFrames: 90,
   windowMs: 3_000,
   tainted: false,
   sawAdvertisement: false,
@@ -19,6 +20,18 @@ const moving: PictureMotion = {
 const still: PictureMotion = {
   comparedFrames: 60,
   changedFrames: 1,
+  windowMs: 3_000,
+  tainted: false,
+  sawAdvertisement: false,
+};
+
+/**
+ * 健全ライン（24 changed fps）を下回るが完全には止まっていない窓。
+ * 時刻毎のチェッカーが「映像全体が停止し続けています」と出す状態。
+ */
+const stuttering: PictureMotion = {
+  comparedFrames: 180,
+  changedFrames: 40,
   windowMs: 3_000,
   tainted: false,
   sawAdvertisement: false,
@@ -84,6 +97,25 @@ describe("startBroadcastFreezeWatchdog", () => {
     await waitTick();
     watchdog.stop();
 
+    expect(options.recoveries).toEqual(["obs"]);
+  });
+
+  it("recovers from a picture that stutters below the health checker's bar", async () => {
+    const options = createWatcherOptions(
+      [moving, stuttering, stuttering, stuttering],
+      {
+        intervalMs: 5,
+        config: { cyclesRequired: 3, recoveryCooldownMs: 60_000 },
+      },
+    );
+    const watchdog = startBroadcastFreezeWatchdog(options);
+    await waitTick();
+    await waitTick();
+    await waitTick();
+    await waitTick();
+    watchdog.stop();
+
+    // 完全に静止していなくても、チェッカーが停止と判定する帯は回復の対象。
     expect(options.recoveries).toEqual(["obs"]);
   });
 

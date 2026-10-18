@@ -193,9 +193,11 @@ export const startBroadcastFreezeWatchdog = (
         config,
       );
       state = decision.state;
-      if (measured !== undefined && judged !== undefined) {
+      if (measured !== undefined) {
+        // 判定不能（広告・tainted・サンプラが基準を解像できない）でも測定値は
+        // 残す。回復が打たれない理由をログから追えるようにするため。
         log.log(
-          `[INFO] measured the delivered picture (${judged}, ${measured.changedFrames}/${measured.comparedFrames} frames changed in ${Math.round(measured.windowMs)}ms)`,
+          `[INFO] measured the delivered picture (${judged ?? "unknown"}, ${measured.changedFrames}/${measured.comparedFrames} frames changed in ${Math.round(measured.windowMs)}ms)`,
         );
       }
       if (decision.action !== undefined) {

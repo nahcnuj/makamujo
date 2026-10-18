@@ -65,7 +65,7 @@ export const WATCH_PAGE_READ_INTERVAL_MS = 30_000;
 
 /** 配信ページの `<video>` が 1 窓の間 提示した画面の動きの測定。 */
 export interface PictureMotion {
-  /** 隣接フレームの比較回数。 */
+  /** 隣接フレームの比較回数。`windowMs` で割った値はサンプリングレート。 */
   comparedFrames: number;
   /** 差があった隣接フレームの組の数。 */
   changedFrames: number;
@@ -77,15 +77,41 @@ export interface PictureMotion {
   sawAdvertisement: boolean;
 }
 
-/** この changed fps 未満で配信画面を「静止」とみなす。 */
-export const PICTURE_STILL_FPS_THRESHOLD = 2;
+/**
+ * 完全に止まったとみなす changed fps。サンプリングレートがどれだけ低くても、
+ * これを下回る窓は「映像が変わっていない」と言い切れる。
+ */
+export const PICTURE_FROZEN_FPS_THRESHOLD = 2;
+
+/**
+ * 健全な配信が満たすべき changed fps。**時刻毎のチェッカー**
+ * （`scripts/check-stream.ts` の `VIDEO_MIN_FPS`）が「映像全体が停止し続けて
+ * います」と出すのと同じ基準で、配信側も同じ窓を劣化として見る。
+ *
+ * OBS の出力は 30fps（`obs-studio/basic/profiles/Makamujo/basic.ini`）なので、
+ * 健全なときの changed fps は 24 を超える。しきい値を 2 に留めていた頃は、
+ * チェッカーが停止と判定した窓（実測 0〜21 fps）を配信側は「動き」と読み違え、
+ * `CompositeFreezePolicy` の回復ラングが一度も打たれず、劣化したまま毎時
+ * Issue になっていた。
+ *
+ * 契約上 `scripts/check-stream.ts` は改変できない（issue #807）ので、値の一致は
+ * unit test で縛る。
+ */
+export const PICTURE_STILL_FPS_THRESHOLD = 24;
 
 /**
  * 測定を静止 / 動き / 判定不能に分ける。
  *
  * 判定不能は `undefined`: 広告が流れた窓・tainted canvas・比較対象が少なすぎる
  * 窓は、配信の不調でも正常でもないので観測から外れる（誤検知の防止）。
- * 「配信が静止している」は changed fps がしきい値を下回ること。
+ * 「配信が静止している」は changed fps が {@link PICTURE_STILL_FPS_THRESHOLD}
+ * を下回ること。
+ *
+ * 基準未満でも `PICTURE_FROZEN_FPS_THRESHOLD` 未満ならどのレートでも `still`。
+ * その中間帯は、サンプラが基準を解像できるレートで比較していたときだけ
+ * `still` にする: changed fps はサンプリングレートを超えないので、rAF が遅い
+ * 環境では「基準未満」が配信の劣化なのかサンプラの速度不足なのかを切り分け
+ * できず、後者を静止と判定すると健全な配信に再起動を乱打することになる。
  */
 export const judgePictureMotion = (
   motion: PictureMotion,
@@ -98,5 +124,12 @@ export const judgePictureMotion = (
     return undefined;
   }
   const changedFps = motion.changedFrames / windowSeconds;
-  return changedFps < PICTURE_STILL_FPS_THRESHOLD ? "still" : "moving";
+  if (changedFps >= PICTURE_STILL_FPS_THRESHOLD) {
+    return "moving";
+  }
+  if (changedFps < PICTURE_FROZEN_FPS_THRESHOLD) {
+    return "still";
+  }
+  const sampledFps = motion.comparedFrames / windowSeconds;
+  return sampledFps > PICTURE_STILL_FPS_THRESHOLD ? "still" : undefined;
 };

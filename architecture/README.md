@@ -117,8 +117,21 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
   unit test 済み関数（`isCapturableMediaSource`, `isInAdContainer`）を
   文字列化して注入して借りる。判定は
   `composition/watchPageBrowser.ts` の `judgePictureMotion`:
-  changed fps が `PICTURE_STILL_FPS_THRESHOLD`（既定 2）を下回る窓が `still`。
-  測れない窓（広告が流れた、tainted、比較が少なすぎる）は判定できない。
+  - changed fps が `PICTURE_STILL_FPS_THRESHOLD`（**24**）を下回る窓が `still`。
+    この値は時刻毎のチェッカーの `VIDEO_MIN_FPS` と同じで（一致は unit test で
+    縛る。`scripts/check-stream.ts` は #807 契約で改変しない）、チェッカーが
+    「映像全体が停止し続けています」と出した窓（実測 0〜21 fps）を配信側でも同じ
+    基準で劣化として見えるようにするため。OBS の出力は 30fps なので健全な
+    ときに満たる。しきい値が 2 のままだった頃は劣化を「動き」と読み違え、
+    回復ラングが一度も打たれなかった。
+  - `PICTURE_FROZEN_FPS_THRESHOLD`（2）未満はサンプリングレートに依存せず
+    `still`（完全に止まった窓）。
+  - その中間帯は、サンプラが基準を解像できるレートで比較していたときだけ
+    `still`。changed fps はサンプリングレートを超えないので、rAF が遅い環境
+    では「基準未満」が配信の劣化かサンプラの速度不足かを切り分けられず、
+    後者を静止と判定すると健全な配信に再起動を乱打する。
+  - 測れない窓（広告が流れた、tainted、比較が少なすぎる、サンプラが基準を
+    解像できない）は判定できない。
 - 測定は機会良く（開いたままのページがあるときだけ）。ページを作り直さない。
 - 純ポリシー `lib/domain/broadcasting/CompositeFreezePolicy.ts` が、周期ごとの
   観測（`still` / `moving` / `unknown`）を折りたたむ:
