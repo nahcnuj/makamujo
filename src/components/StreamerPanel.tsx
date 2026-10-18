@@ -13,6 +13,7 @@ import {
   VISIBLE,
   visibilityFromSilenceClock,
 } from "./spriteVisibility";
+import { TickerRail } from "./TickerRail";
 
 const RISE_MS = 300;
 
@@ -147,61 +148,64 @@ export function StreamerPanel() {
   const awayStyle = spriteAwayStyle(visibility, FADE_OUT_MS);
 
   return (
-    <div className="flex gap-2 h-full">
-      <div
-        className="flex-none w-45 max-h-full -m-1 aspect-square"
-        style={awayStyle}
-      >
-        <CharacterSprite />
-      </div>
-      <div className="flex-auto h-full">
-        <Box
-          borderColor="border-emerald-300"
-          borderWidth="border-8"
-          borderStyle="border-double"
-          rounded="rounded-xl"
+    <div className="flex flex-col h-full">
+      <TickerRail />
+      <div className="flex gap-2 flex-auto min-h-0">
+        <div
+          className="flex-none w-45 max-h-full -m-1 aspect-square"
+          style={awayStyle}
         >
-          <Container>
-            <div className="w-full h-full text-3xl/9 break-all overflow-hidden">
-              {silent ? (
-                <SilentCaption
-                  text={
-                    "\uFF08\u30B3\u30E1\u30F3\u30C8\u3057\u3066\u306D\uFF09"
-                  }
-                />
-              ) : (
-                <div
-                  style={
-                    risePx > 0
-                      ? {
-                          transform: `translateY(-${risePx}px)`,
-                          transition: `transform ${RISE_MS}ms ease-out`,
+          <CharacterSprite />
+        </div>
+        <div className="flex-auto h-full">
+          <Box
+            borderColor="border-emerald-300"
+            borderWidth="border-8"
+            borderStyle="border-double"
+            rounded="rounded-xl"
+          >
+            <Container>
+              <div className="w-full h-full text-3xl/9 break-all overflow-hidden">
+                {silent ? (
+                  <SilentCaption
+                    text={
+                      "\uFF08\u30B3\u30E1\u30F3\u30C8\u3057\u3066\u306D\uFF09"
+                    }
+                  />
+                ) : (
+                  <div
+                    style={
+                      risePx > 0
+                        ? {
+                            transform: `translateY(-${risePx}px)`,
+                            transition: `transform ${RISE_MS}ms ease-out`,
+                          }
+                        : {}
+                    }
+                  >
+                    {displayLines.map((line, i) => (
+                      <div
+                        key={line}
+                        ref={
+                          i === 0
+                            ? (el: HTMLDivElement | null) => {
+                                firstRef.current = el;
+                              }
+                            : undefined
                         }
-                      : {}
-                  }
-                >
-                  {displayLines.map((line, i) => (
-                    <div
-                      key={line}
-                      ref={
-                        i === 0
-                          ? (el: HTMLDivElement | null) => {
-                              firstRef.current = el;
-                            }
-                          : undefined
-                      }
-                    >
-                      <SpeechLine
-                        text={line}
-                        animate={i === displayLines.length - 1}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </Container>
-        </Box>
+                      >
+                        <SpeechLine
+                          text={line}
+                          animate={i === displayLines.length - 1}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Container>
+          </Box>
+        </div>
       </div>
     </div>
   );

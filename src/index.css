@@ -26,3 +26,13 @@
     opacity: 1;
   }
 }
+/* 2 枚組ストリップを 1 枚分（-50%）だけ進める。1 枚が x 周期の整数倍なので
+   戻り位置で模様が一致し、継ぎ目なく流れる（StreamerPanel 上端のリボン） */
+@keyframes ticker-rail-scroll {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}

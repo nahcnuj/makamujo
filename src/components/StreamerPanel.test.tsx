@@ -14,4 +14,15 @@ describe("StreamerPanel keys", () => {
     expect(src).not.toContain(`key=\`\${i}-\${line}\``);
     expect(src).toContain("key={line}");
   });
+
+  it("keeps the always-on ticker rail above the streamer row", () => {
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "StreamerPanel.tsx"),
+      "utf8",
+    );
+    // scripts/check-stream.ts の映像停止誤検知（#868 ほか）対策。
+    // リボンがないと下部パネルの上端に常時モーションが立たない。
+    expect(src).toContain('import { TickerRail } from "./TickerRail"');
+    expect(src).toContain("<TickerRail />");
+  });
 });

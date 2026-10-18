@@ -14,6 +14,7 @@
 | [console-domain-model.md](./console-domain-model.md) | **管理コンソール BC**（Access / Status plan）。UI は `console/src`、純関数は `lib/domain/console` |
 | [統計の読み取り](#統計の読み取り) | 配信ページを描画して統計行を読む。視聴者数 / コメント数 / ニコニコ広告ポイント / ギフトポイント |
 | [配信画面の停止回復](#配信画面の停止回復) | 配信ページの描画した映像の動きを測り、複数周期静止し続けた合成出力を systemd 再起動で回復する |
+| [配信画面の常時モーション](#配信画面の常時モーション) | 毎時の配信異常検知が求めるフレーム変化を、配信ページ下部のティッカーが常に満たす契約 |
 | `legacy` vs `main` | orphan main の差分整理と取り込み方針は本 README の実装マップで追跡する（個別文書は持たない） |
 | [legacy-vs-main-integration.md](./legacy-vs-main-integration.md) | **`legacy` vs `main` 差分整理と取り込み方針**（orphan main、port 済み/未着手） |
 | [markov-cli.md](./markov-cli.md) | **markov CLI**（`tools/markov/`）。git `parse-options` と同じ「1 コマンド 1 ファイル、そのコマンドのオプション表だけ解析する」形。表は `--help` の出力（[表の確認方法](./markov-cli.md#表の確認方法)） |
@@ -155,6 +156,45 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 | `BROADCAST_FREEZE_CHECK_INTERVAL_MS` | `60000` | 観測周期 |
 | `BROADCAST_FREEZE_CYCLES` | `3` | 回復を打つまでに必要な `still` の連続周期 |
 | `BROADCAST_FREEZE_RECOVERY_COOLDOWN_MS` | `600000` | 二つの回復の最短間隔 |
+
+## 配信画面の常時モーション
+
+毎時の配信異常検知（`scripts/check-stream.ts`、**改変しない: owner 契約 #807**）は、
+配信ページを描画した合成出力を 128px 縮小して隣接フレームを比較し、映像全体で
+どの 1 秒バケットでも 24 フレーム以上（`VIDEO_MIN_FPS`）、ゲーム枠（左 60% ×
+高さ全体、`GAME_CLIP`）で 8 フレーム以上（`GAME_MIN_FPS`）が「変化したフレーム」
+であることを配信の健康とみなす。変化とは 1 フレーム中にチャンネル差 16 超の
+ピクセルが全体の 0.1%（≒10px）以上あること。テンポの遅い盤面と静かなコメント欄
+だけの時間帯はこの下限を割り、「映像が停止し続けています」と誤検知される
+（#865 / #867 / #868）。
+
+上の「配信画面の停止回復」では救えない。動きが「無い」のではなく「遅い」ので、
+回復の `still` 判定（2fps 未満 × 3 周期）に入らない。よって配信側（このページ）が
+毎フレームを動かし続ける。
+
+### 契約
+
+- 配信ページ（OBS ブラウザソース「Comment」）は下部パネルの上端に全幅の
+  ストライプ・ティッカー（`src/components/TickerRail.tsx`）を置く。位置は
+  ゲーム枠（左 60%）にまたがるので、映像全体とゲーム枠の双方に毎フレームの
+  変化が立つ。
+- 速度は「30fps 出力で縮小画像が毎フレーム 1px（実画面 10px）動く」下限
+  （300px/s）の 1.2 倍 = 360px/s。模様は x 周期ぴったりのタイルにし、
+  2 枚組ストリップを 1 枚分（-50%）だけ進めるので、ループの戻り位置で
+  模様が一致し途切れない。
+- 色は純黒を避ける（OBS のカラーキーが黒を抜くため）。沈黙中も止めない
+  （沈黙はコンテンツの話であって映像の話ではない）。
+
+### モジュール
+
+| モジュール | 層 | 役割 |
+|------------|----|------|
+| `src/components/TickerRail.tsx` | 配信ページ UI（純関数 + JSX） | 速度・模様・ループ幅の計算とリボン描画 |
+| `src/components/StreamerPanel.tsx` | 配信ページ UI | 下部パネルの先頭に TickerRail を置く |
+
+検証は単体（`src/components/TickerRail.test.ts`: 数値の契約と要素構造、
+`src/components/StreamerPanel.test.tsx`: 配置）と E2E
+（`tests/e2e/stream-ticker.test.ts`: 実際に動き続けること）。
 
 ## 実装マップ
 
