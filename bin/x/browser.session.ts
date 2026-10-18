@@ -10,8 +10,10 @@ import {
   type CompositorHeartbeatState,
   compositorHeartbeatProbe,
   initialCompositorHeartbeatState,
+  minFramesWithinBudget,
   observeCompositorHeartbeat,
   resolveCompositorHeartbeatCheckMs,
+  resolveCompositorHeartbeatMinFps,
   resolveCompositorHeartbeatWedgedFrames,
 } from "../../lib/Browser/compositorHeartbeat";
 import {
@@ -294,35 +296,29 @@ const stallTimer = setInterval(() => {
 const compositorHeartbeatCheckMs = resolveCompositorHeartbeatCheckMs();
 const compositorHeartbeatWedgedFrames =
   resolveCompositorHeartbeatWedgedFrames();
+const compositorHeartbeatMinFrames = minFramesWithinBudget(
+  resolveCompositorHeartbeatMinFps(),
+);
 let checkingCompositorHeartbeat = false;
 let compositorHeartbeatState: CompositorHeartbeatState =
   initialCompositorHeartbeatState();
-// The compositor watchdog keeps its own reload budget: sharing the stall
-// watchdog's counter let a recovery seen by one probe clear the other's.
 let compositorStalls = 0;
 const compositorHeartbeatTimer = setInterval(() => {
   if (checkingCompositorHeartbeat) return;
   checkingCompositorHeartbeat = true;
   void (async () => {
     try {
-      const { sight } = Games.VigilantFiesta;
-      const [produced, screen] = await Promise.all([
-        browser.evaluate(compositorHeartbeatProbe).catch(() => undefined),
-        browser
-          .evaluate(sight)
-          .then((state) => state?.screen)
-          .catch(() => undefined),
-      ]);
+      const produced = await browser
+        .evaluate(compositorHeartbeatProbe)
+        .catch(() => undefined);
       // `Browser.evaluate` types the probe's promise without flattening it;
       // Playwright flattens it at runtime, so unwrap once more here.
-      const frameProduced = produced === undefined ? undefined : await produced;
+      const frameCount = produced === undefined ? undefined : await produced;
       const decision = observeCompositorHeartbeat(
         compositorHeartbeatState,
-        {
-          frameProduced,
-          expectedToAnimate: screen === "playing",
-        },
+        { frameCount },
         compositorHeartbeatWedgedFrames,
+        compositorHeartbeatMinFrames,
       );
       compositorHeartbeatState = decision.state;
       if (!decision.wedged) {
@@ -333,14 +329,16 @@ const compositorHeartbeatTimer = setInterval(() => {
       compositorStalls += 1;
       if (shouldRestartGameSession(compositorStalls, MAX_CONSECUTIVE_STALLS)) {
         console.warn(
-          "[WARN] compositor kept producing no frames after reloads; exiting session for outer restart",
+          "[WARN] compositor kept producing too few frames after reloads; exiting session for outer restart",
         );
         clearInterval(compositorHeartbeatTimer);
         clearInterval(stallTimer);
         void closeBrowser().finally(() => process.exit(1));
         return;
       }
-      console.warn("[WARN] compositor produced no frames; reloading");
+      console.warn(
+        `[WARN] compositor produced ${frameCount ?? "?"} frames in the probe budget (need ${compositorHeartbeatMinFrames}); reloading`,
+      );
       await browser.reload();
       compositorHeartbeatState = initialCompositorHeartbeatState();
       stallState = initialGameStallState();
