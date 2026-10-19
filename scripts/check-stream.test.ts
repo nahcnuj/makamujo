@@ -24,6 +24,7 @@ import {
   VIDEO_MIN_FPS,
   type VideoState,
   waitForMeasurableVideo,
+  waitForPlaybackStart,
   wasAdvertisementShown,
 } from "./check-stream.ts";
 
@@ -517,6 +518,178 @@ describe("waitForMeasurableVideo", () => {
     expect(state.currentTime).toBe(13);
     expect(taken).toBe(4);
     expect(clock.sleeps).toEqual([100, 100, 100]);
+  });
+});
+
+describe("waitForPlaybackStart", () => {
+  const ready: VideoState = {
+    found: true,
+    videoWidth: 640,
+    readyState: 2,
+    paused: false,
+    currentTime: 0,
+    decodedAudioBytes: 0,
+  };
+  const absent: VideoState = {
+    found: false,
+    videoWidth: 0,
+    readyState: 0,
+    paused: true,
+    currentTime: 0,
+    decodedAudioBytes: 0,
+  };
+
+  /** Controllable clock + sleep so the wait never runs in real time. */
+  const createClock = () => {
+    let currentMs = 0;
+    const sleeps: number[] = [];
+    return {
+      now: () => currentMs,
+      sleep: async (ms: number) => {
+        sleeps.push(ms);
+        currentMs += ms;
+      },
+      sleeps,
+    };
+  };
+
+  it("returns started once the live video is playing", async () => {
+    const clock = createClock();
+    let probes = 0;
+
+    const outcome = await waitForPlaybackStart({
+      probe: async () => {
+        probes += 1;
+        return ready;
+      },
+      probeAdvertisement: async () => false,
+      timeoutMs: 1_000,
+      advertisementTimeoutMs: 10_000,
+      pollMs: 100,
+      sleep: clock.sleep,
+      now: clock.now,
+    });
+
+    expect(outcome.started).toBe(true);
+    expect(outcome.advertisementPlaying).toBe(false);
+    expect(probes).toBe(1);
+    expect(clock.sleeps).toEqual([]);
+  });
+
+  it("waits for the media clock to advance when asked", async () => {
+    const clock = createClock();
+    let probes = 0;
+    const advancing = [
+      { ...ready, currentTime: 120 },
+      { ...ready, currentTime: 120.5 },
+      { ...ready, currentTime: 123 },
+    ];
+
+    const outcome = await waitForPlaybackStart({
+      probe: async () => {
+        const next = advancing[Math.min(probes, advancing.length - 1)] ?? ready;
+        probes += 1;
+        return next;
+      },
+      probeAdvertisement: async () => false,
+      timeoutMs: 1_000,
+      advertisementTimeoutMs: 10_000,
+      pollMs: 100,
+      sleep: clock.sleep,
+      now: clock.now,
+      requireAdvanceSeconds: 2,
+    });
+
+    expect(outcome.started).toBe(true);
+    expect(outcome.state.currentTime).toBe(123);
+    expect(probes).toBe(3);
+  });
+
+  it("does not count advertisement time against the playback deadline", async () => {
+    // A pre-roll longer than the playback timeout used to read as "playback
+    // never started" (issue #919); the wait has to outlast the advertisement.
+    const clock = createClock();
+    const advertisementUntilMs = 600;
+
+    const outcome = await waitForPlaybackStart({
+      probe: async () => ready,
+      probeAdvertisement: async () => clock.now() < advertisementUntilMs,
+      timeoutMs: 300,
+      advertisementTimeoutMs: 10_000,
+      pollMs: 100,
+      sleep: clock.sleep,
+      now: clock.now,
+    });
+
+    expect(outcome.started).toBe(true);
+    expect(outcome.advertisementPlaying).toBe(false);
+    expect(clock.now()).toBeGreaterThan(300);
+  });
+
+  it("gives up with the advertisement flag when an ad does not end", async () => {
+    const clock = createClock();
+
+    const outcome = await waitForPlaybackStart({
+      probe: async () => absent,
+      probeAdvertisement: async () => true,
+      timeoutMs: 1_000,
+      advertisementTimeoutMs: 250,
+      pollMs: 100,
+      sleep: clock.sleep,
+      now: clock.now,
+    });
+
+    expect(outcome.started).toBe(false);
+    expect(outcome.advertisementPlaying).toBe(true);
+  });
+
+  it("gives up without the advertisement flag when playback never starts", async () => {
+    const clock = createClock();
+
+    const outcome = await waitForPlaybackStart({
+      probe: async () => absent,
+      probeAdvertisement: async () => false,
+      timeoutMs: 250,
+      advertisementTimeoutMs: 10_000,
+      pollMs: 100,
+      sleep: clock.sleep,
+      now: clock.now,
+    });
+
+    expect(outcome.started).toBe(false);
+    expect(outcome.advertisementPlaying).toBe(false);
+    expect(clock.sleeps).toEqual([100, 100, 100]);
+  });
+
+  it("restarts the warm-up when the player drops out mid-wait", async () => {
+    const clock = createClock();
+    let probes = 0;
+    const recovering = [
+      { ...ready, currentTime: 10 },
+      absent,
+      { ...ready, currentTime: 11 },
+      { ...ready, currentTime: 13 },
+    ];
+
+    const outcome = await waitForPlaybackStart({
+      probe: async () => {
+        const next =
+          recovering[Math.min(probes, recovering.length - 1)] ?? ready;
+        probes += 1;
+        return next;
+      },
+      probeAdvertisement: async () => false,
+      timeoutMs: 1_000,
+      advertisementTimeoutMs: 10_000,
+      pollMs: 100,
+      sleep: clock.sleep,
+      now: clock.now,
+      requireAdvanceSeconds: 2,
+    });
+
+    // The dropout reset the base to 11, so 13 clears the 2-second floor.
+    expect(outcome.started).toBe(true);
+    expect(outcome.state.currentTime).toBe(13);
   });
 });
 
