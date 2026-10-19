@@ -192,6 +192,67 @@ describe("startBroadcastFreezeWatchdog", () => {
     expect(options.recoveries).toEqual([]);
   });
 
+  it("keeps the recovery ladder while liveness is still unknown after a restart", async () => {
+    let live = false;
+    const saved: CompositeFreezeState[] = [];
+    const options = createWatcherOptions([still, still, still, still, still], {
+      isStreamLive: () => live,
+      intervalMs: 5,
+      // 前プロセスが `obs` を打ち終えた直後。cron で再起動すると、エージェントが
+      // 番組に繋がるまでの間 isStreamLive() が false を返す。
+      stateStore: {
+        load: () => ({
+          stillCycles: 0,
+          recoveryIndex: 1,
+          lastRecoveryAtMs: Date.now() - 60_000,
+        }),
+        save: (state) => saved.push(structuredClone(state)),
+      },
+      config: { cyclesRequired: 3, recoveryCooldownMs: 0 },
+    });
+    const watchdog = startBroadcastFreezeWatchdog(options);
+    // 起動直後の tick が放映観測前に走る。旧実装はここで持続状態を消した。
+    await waitTick();
+    await waitTick();
+    const savedWhileUnknown = saved.slice();
+    live = true;
+    for (let tick = 0; tick < 5; tick++) {
+      await waitTick();
+    }
+    watchdog.stop();
+
+    expect(savedWhileUnknown.length).toBeGreaterThan(0);
+    expect(savedWhileUnknown.every((s) => s.recoveryIndex === 1)).toBe(true);
+    // ラングは `obs` に戻らず、次は深い `xorgAndObs` が動く。
+    expect(options.recoveries).toEqual(["xorgAndObs"]);
+  });
+
+  it("clears the persisted ladder once a live program ends", async () => {
+    let live = true;
+    const saved: CompositeFreezeState[] = [];
+    const options = createWatcherOptions([still], {
+      isStreamLive: () => live,
+      intervalMs: 5,
+      stateStore: {
+        load: () => ({
+          stillCycles: 0,
+          recoveryIndex: 1,
+          lastRecoveryAtMs: Date.now() - 60_000,
+        }),
+        save: (state) => saved.push(structuredClone(state)),
+      },
+      config: { cyclesRequired: 3, recoveryCooldownMs: 0 },
+    });
+    const watchdog = startBroadcastFreezeWatchdog(options);
+    // 放映を観測した後の放映外は番組の終了。次の番組は `obs` から始める。
+    await waitTick();
+    live = false;
+    await waitTick();
+    watchdog.stop();
+
+    expect(saved.at(-1)).toEqual(createCompositeFreezeState());
+  });
+
   it("stops measuring after stop()", async () => {
     const measurements: (PictureMotion | undefined)[] = [];
     const options = createWatcherOptions([], {

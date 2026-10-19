@@ -18,6 +18,11 @@
  * サーバーは cron に 11 分ごとに殺され start されるので、メモリだけの状態では
  * 再起動のたびにラングが `obs` に戻り、OBS を何度も繰り返し落とすだけで
  * 合成出力は回復しない。`stateStore` で前プロセスの状態を引き継ぎ、深くなる。
+ *
+ * 再起動直後、エージェントがまだ番組に繋がっていない間は `isStreamLive()` が
+ * false を返す（放映外と同じ）。ここで状態を消すと、毎回の再起動の起動直後の
+ * 1 tick で永続状態が消え、引き継ぎが無効になる（issue #891）。放映を一度も
+ * 観測していない間は「放映外」と断定せず、連続静止のみ抜いてラングを残す。
  */
 
 import { execFile } from "node:child_process";
@@ -162,7 +167,11 @@ export interface BroadcastFreezeWatchdogOptions {
    * 実装が測れない）で、policy の `unknown` になる。
    */
   measurePictureMotion: () => Promise<PictureMotion | undefined>;
-  /** 番組が放映中か。放映外の静止（番組終了の一枚絵）は回復の対象にしない。 */
+  /**
+   * 番組が放映中か。放映外の静止（番組終了の一枚絵）は回復の対象にしない。
+   * ただし起動直後でエージェント未接続の間も false を返すので、呼び出し側は
+   * 「放映中と観測された後で false になった」ことを見分ける必要がある。
+   */
   isStreamLive: () => boolean;
   /** 回復を実行する口。既定は systemctl（`createSystemdRecovery`）。 */
   recover?: (recovery: CompositeFreezeRecovery) => Promise<void>;
@@ -231,6 +240,9 @@ export const startBroadcastFreezeWatchdog = (
 
   let stopped = false;
   let ticking = false;
+  // 稼働後に放映を一度でも観測したか。false の間の `isStreamLive() === false` は
+  // 「放映外」ではなく「まだエージェントに繋がっていない」かもしれない。
+  let observedLive = false;
   let state: CompositeFreezeState =
     options.stateStore?.load() ?? createCompositeFreezeState();
   if (
@@ -263,11 +275,21 @@ export const startBroadcastFreezeWatchdog = (
     ticking = true;
     try {
       if (!options.isStreamLive()) {
+        if (!observedLive) {
+          // エージェント未接続の可能性がある。ここで持続状態を消すと、cron の
+          // 再起動ごとに起動直後の 1 tick でラングとクールダウンが消え、
+          // 永続化（issue #889 の修正）が無効化される（issue #891）。
+          // 番組を観測していない以上「放映外」とは断定せず、連続静止のみ抜く。
+          state = { ...state, stillCycles: 0 };
+          persistState();
+          return;
+        }
         // 放映外の静止は回復の意味を持たないので、見なかったことにする。
         state = createCompositeFreezeState();
         persistState();
         return;
       }
+      observedLive = true;
       const measured = await options.measurePictureMotion();
       const judged =
         measured === undefined ? "unknown" : judgePictureMotion(measured);
