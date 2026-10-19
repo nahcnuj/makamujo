@@ -32,6 +32,11 @@ import {
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
 import { startWatchPageStatisticsSource } from "./composition/watchPageStatisticsSource";
 import { startConsoleServer } from "./console/index";
+import {
+  COMPOSITE_FREEZE_STATE_BASENAME,
+  loadCompositeFreezeState,
+  saveCompositeFreezeState,
+} from "./lib/application/compositeFreezeStateStore";
 import type { StreamBaseline } from "./lib/application/streamBaselineStore";
 import {
   loadStreamBaselineWithRecovery,
@@ -812,10 +817,24 @@ const watchPageStatisticsSource = startWatchPageStatisticsSource({
 // 複数周期にわたる静止を systemd 経由の再起動で回復する。回復の判断は
 // composition/broadcastFreezeWatchdog.ts、判断の本体は
 // lib/domain/broadcasting/CompositeFreezePolicy.ts にある。
+//
+// ラング（obs → xorgAndObs → …）とクールダウンはプロセスの寿命を超えて
+// 続く。サーバーは cron に 11 分ごとに殺され start されるので、メモリだけ
+// だと毎回 `obs` から始まり、OBS を繰り返し落とすだけになって合成出力が
+// 回復しない（issue #889）。そこで var/ に状態を残して引き継ぐ。
+const broadcastFreezeStatePath = resolve(
+  process.cwd(),
+  "var",
+  COMPOSITE_FREEZE_STATE_BASENAME,
+);
 startBroadcastFreezeWatchdog({
   measurePictureMotion: () => watchPageStatisticsSource.measurePictureMotion(),
   // SoundPolicy と同じ基準: エージェントのセッションが番組に張れているか。
   isStreamLive: () => streamer.streamState !== undefined,
+  stateStore: {
+    load: () => loadCompositeFreezeState(broadcastFreezeStatePath),
+    save: (state) => saveCompositeFreezeState(broadcastFreezeStatePath, state),
+  },
   // systemd のある本番以外では dry run にして観測だけ残す（開発 / CI は
   // 統計の読み取り自体を無効化しているので、そもそも観測も測れない）。
   recover: createSystemdRecovery({
