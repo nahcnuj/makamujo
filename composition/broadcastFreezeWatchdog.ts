@@ -18,6 +18,11 @@
  * サーバーは cron に 11 分ごとに殺され start されるので、メモリだけの状態では
  * 再起動のたびにラングが `obs` に戻り、OBS を何度も繰り返し落とすだけで
  * 合成出力は回復しない。`stateStore` で前プロセスの状態を引き継ぎ、深くなる。
+ * ただし引き継いだ状態は放映外の周期では消さない: `streamState` は
+ * `POST /api/meta` が届いてからで undefined で、起動直後の最初の tick は
+ * 必ず放映外に当たる。そこで放映外ごとに状態を全消しすると、永続化した
+ * 状態が毎回の起動直後に消えてラングが永遠に `obs` のままであった
+ * （issue #927）。
  */
 
 import { execFile } from "node:child_process";
@@ -162,7 +167,11 @@ export interface BroadcastFreezeWatchdogOptions {
    * 実装が測れない）で、policy の `unknown` になる。
    */
   measurePictureMotion: () => Promise<PictureMotion | undefined>;
-  /** 番組が放映中か。放映外の静止（番組終了の一枚絵）は回復の対象にしない。 */
+  /**
+   * 番組が放映中か。放映外の静止（番組終了の一枚絵）は回復の対象にしない。
+   * 放映外の周期は観測せず、ポリシー状態のうち streak のみリセットする
+   * （ラングとクールダウンは消さない。`unknown` と同じ扱い）。
+   */
   isStreamLive: () => boolean;
   /** 回復を実行する口。既定は systemctl（`createSystemdRecovery`）。 */
   recover?: (recovery: CompositeFreezeRecovery) => Promise<void>;
@@ -263,9 +272,22 @@ export const startBroadcastFreezeWatchdog = (
     ticking = true;
     try {
       if (!options.isStreamLive()) {
-        // 放映外の静止は回復の意味を持たないので、見なかったことにする。
-        state = createCompositeFreezeState();
-        persistState();
+        // 放映外の周期は観測しない（番組終了の一枚絵を回復の対象にしない）。
+        // ただしポリシーには `unknown` として投入して streak をリセットする
+        // だけで、ラングとクールダウンは消さない: それはすでに打了った回復の
+        // 記録であり、「配信状態の更新がまだ届いていない」ことは合成出力を
+        // 回復した証拠ではない。ここで状態を全消しすると、cron の再起動ごと
+        // （起動直後は `streamState` が undefined のため最初の tick が必ず
+        // これに当たる）に永続化された状態が消え、issue #889 で引き継ぐように
+        // したはずのラングが `obs` のまま深まらない（issue #927）。
+        if (state.stillCycles !== 0) {
+          state = observeCompositeFreezeCycle(
+            state,
+            { motion: "unknown", nowMs: Date.now() },
+            config,
+          ).state;
+          persistState();
+        }
         return;
       }
       const measured = await options.measurePictureMotion();
