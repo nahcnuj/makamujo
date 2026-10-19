@@ -196,6 +196,13 @@ const SELECT_VIDEO_INIT_SCRIPT = `
 
 export interface CheckResult {
   ok: boolean;
+  /**
+   * Set when the run gathered no evidence about the program because every
+   * measurement window was contaminated by an advertisement rather than by a
+   * stream fault. The caller exits successfully then, so the hourly check does
+   * not raise a stream-anomaly issue from a run it could not judge.
+   */
+  inconclusive?: boolean;
   timestampJst: string;
   phenomena: string[];
   details: {
@@ -816,6 +823,30 @@ export function measurementFailurePhenomenon(
 }
 
 /**
+ * True when a run that never obtained a judgeable window should be reported as
+ * inconclusive instead of as a stream anomaly.
+ *
+ * A signed-out viewer is served advertisements, and nicovideo freezes the live
+ * picture for the whole of each one. When every window in the retry budget is
+ * discarded for that reason, the run holds no measurement of the program at
+ * all: an advertisement only plays while the broadcast is live, so the failed
+ * measurement is not evidence that the stream stopped. Raising an anomaly issue
+ * from it is a false positive — a run of back-to-back mid-roll ads (observed at
+ * 22:30 and during other prime-time slots) is enough to exhaust the budget on a
+ * perfectly healthy stream. The caller reports the run as inconclusive, leaves
+ * the exit code at zero, and lets the next scheduled check try again.
+ *
+ * The other terminal reasons stay anomalies: a vanished video element, a
+ * rebuilt media element, or a window with uncapturable frames describes the
+ * player or the program, not merely the presence of an advertisement.
+ */
+export function isInconclusiveMeasurement(
+  reason: MeasurementRetryReason | null,
+): boolean {
+  return reason === "advertisement";
+}
+
+/**
  * Probe decoded-audio bytes around one sampling window.
  *
  * Returns `null` when the video element disappeared before the closing
@@ -1028,6 +1059,21 @@ async function checkStream(): Promise<CheckResult> {
     }
     const terminalReason = measurementRetryReason(measurement);
     if (terminalReason !== null) {
+      if (isInconclusiveMeasurement(terminalReason)) {
+        // Advertisements filled every window: the run has nothing to say about
+        // the program, and an ad playing means the broadcast is live. Report
+        // the run as inconclusive instead of raising a false anomaly issue.
+        console.log(
+          "[INFO] Every measurement window was contaminated by an advertisement; the check is inconclusive",
+        );
+        return {
+          ok: false,
+          inconclusive: true,
+          timestampJst,
+          phenomena,
+          details,
+        };
+      }
       phenomena.push(measurementFailurePhenomenon(terminalReason, measurement));
       return { ok: false, timestampJst, phenomena, details };
     }
@@ -1155,13 +1201,18 @@ async function main() {
   }
 
   console.log(`[RESULT] ok=${result.ok}`);
+  console.log(`[RESULT] inconclusive=${result.inconclusive === true}`);
   console.log(`[RESULT] timestampJst=${result.timestampJst}`);
   console.log(`[RESULT] phenomena=${JSON.stringify(result.phenomena)}`);
   console.log(`[RESULT] details=${JSON.stringify(result.details)}`);
 
   writeResult(result);
 
-  if (!result.ok) {
+  if (result.inconclusive === true) {
+    console.log(
+      "[INFO] The check is inconclusive; not reporting a stream anomaly",
+    );
+  } else if (!result.ok) {
     process.exitCode = 1;
   }
 }
