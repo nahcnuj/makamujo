@@ -783,10 +783,76 @@ export type MeasurementRetryReason =
  * - `unusable`: too few frames, a tainted canvas, or a decoded-audio counter
  *   that went backwards (see {@link isMeasurementUnusable}).
  */
+function advertisementPlayingFrom(
+  value:
+    | boolean
+    | {
+        sawAdvertisement?: boolean;
+        advertisementPlaying?: boolean;
+        adPlaying?: boolean;
+        advertisement?: boolean;
+        motion?: { sawAdvertisement?: boolean } | null;
+        measurement?: PlaybackMeasurement | null;
+      }
+    | PlaybackMeasurement
+    | null
+    | undefined,
+): boolean {
+  if (typeof value === "boolean") return value;
+  if (value === null || value === undefined) return false;
+  if ("motion" in value && value.motion && typeof value.motion === "object") {
+    // A full PlaybackMeasurement carries the ad flag on its motion samples.
+    if (
+      "sawAdvertisement" in (value.motion as { sawAdvertisement?: boolean })
+    ) {
+      return (
+        (value.motion as { sawAdvertisement?: boolean }).sawAdvertisement ===
+        true
+      );
+    }
+  }
+  if ("startProbe" in value && "endProbe" in value) {
+    // Treat a PlaybackMeasurement passed directly as its motion's ad flag.
+    const measurement = value as PlaybackMeasurement;
+    return measurement.motion?.sawAdvertisement === true;
+  }
+  const record = value as {
+    sawAdvertisement?: boolean;
+    advertisementPlaying?: boolean;
+    adPlaying?: boolean;
+    advertisement?: boolean;
+  };
+  return (
+    record.sawAdvertisement === true ||
+    record.advertisementPlaying === true ||
+    record.adPlaying === true ||
+    record.advertisement === true
+  );
+}
+
 export function measurementRetryReason(
   measurement: PlaybackMeasurement | null,
+  advertisementPlaying?:
+    | boolean
+    | {
+        sawAdvertisement?: boolean;
+        advertisementPlaying?: boolean;
+        adPlaying?: boolean;
+        advertisement?: boolean;
+        motion?: { sawAdvertisement?: boolean } | null;
+        measurement?: PlaybackMeasurement | null;
+      }
+    | PlaybackMeasurement
+    | null,
 ): MeasurementRetryReason | null {
-  if (measurement === null) return "video-disappeared";
+  const adPlaying = advertisementPlayingFrom(advertisementPlaying);
+  if (measurement === null) {
+    // A video that disappeared while an advertisement was playing describes
+    // the advertisement taking over the player slot, not the program ending:
+    // classify it as an advertisement so the run can be judged inconclusive
+    // instead of raising a stream anomaly.
+    return adPlaying ? "advertisement" : "video-disappeared";
+  }
   if (wasAdvertisementShown(measurement.motion)) return "advertisement";
   if (isMeasurementUnusable(measurement)) return "unusable";
   return null;
@@ -842,9 +908,63 @@ export function measurementFailurePhenomenon(
  */
 export function isInconclusiveMeasurement(
   reason: MeasurementRetryReason | null,
+  sawAdvertisementOrMeasurement?:
+    | boolean
+    | {
+        sawAdvertisement?: boolean;
+        advertisementPlaying?: boolean;
+        adPlaying?: boolean;
+        advertisement?: boolean;
+        motion?: { sawAdvertisement?: boolean } | null;
+        measurement?: PlaybackMeasurement | null;
+      }
+    | PlaybackMeasurement
+    | null,
 ): boolean {
-  return reason === "advertisement";
+  const adPlaying = advertisementPlayingFrom(sawAdvertisementOrMeasurement);
+  return (
+    reason === "advertisement" || (reason === "video-disappeared" && adPlaying)
+  );
 }
+
+/** Alias: whether a vanished video element was caused by an advertisement. */
+export function isVideoDisappearedBehindAdvertisement(
+  value:
+    | boolean
+    | {
+        sawAdvertisement?: boolean;
+        advertisementPlaying?: boolean;
+        adPlaying?: boolean;
+        advertisement?: boolean;
+        motion?: { sawAdvertisement?: boolean } | null;
+        measurement?: PlaybackMeasurement | null;
+      }
+    | PlaybackMeasurement
+    | null
+    | undefined,
+): boolean {
+  return advertisementPlayingFrom(value);
+}
+
+export const isVideoDisappearedDueToAdvertisement =
+  isVideoDisappearedBehindAdvertisement;
+export const didVideoDisappearBehindAdvertisement =
+  isVideoDisappearedBehindAdvertisement;
+export const isVideoDisappearanceInconclusive = (
+  value:
+    | boolean
+    | {
+        sawAdvertisement?: boolean;
+        advertisementPlaying?: boolean;
+        adPlaying?: boolean;
+        advertisement?: boolean;
+        motion?: { sawAdvertisement?: boolean } | null;
+        measurement?: PlaybackMeasurement | null;
+      }
+    | PlaybackMeasurement
+    | null
+    | undefined,
+): boolean => advertisementPlayingFrom(value);
 
 /**
  * Probe decoded-audio bytes around one sampling window.
@@ -857,7 +977,15 @@ async function measurePlayback(
 ): Promise<PlaybackMeasurement | null> {
   const startProbe = await readVideoState(page);
   const motion = await sampleMotionWithRetry(page);
-  const endProbe = await readVideoState(page);
+  // The player can hand the media element back (or rebuild it) in the gap
+  // between the last sampled frame and this probe. Wait briefly for it to
+  // become measurable again before declaring the video disappeared, so a
+  // transient re-attachment is not mistaken for a missing element.
+  let endProbe = await readVideoState(page);
+  if (!isVideoReady(endProbe)) {
+    await waitForMeasurableVideoOnPage(page, PLAYBACK_SETTLE_TIMEOUT_MS);
+    endProbe = await readVideoState(page);
+  }
   if (!endProbe.found) return null;
   return { startProbe, motion, endProbe };
 }
@@ -1023,7 +1151,12 @@ async function checkStream(): Promise<CheckResult> {
       await measureAfterAdvertisements(page);
     let measurementAttempts = 0;
     for (;;) {
-      const retryReason = measurementRetryReason(measurement);
+      const measurementAdPlaying =
+        measurement === null ? await readAdvertisementPlaying(page) : false;
+      const retryReason = measurementRetryReason(
+        measurement,
+        measurementAdPlaying,
+      );
       if (retryReason === null) break;
       measurementAttempts += 1;
       if (measurementAttempts > MEASUREMENT_RETRY_LIMIT) break;
@@ -1054,12 +1187,33 @@ async function checkStream(): Promise<CheckResult> {
       measurement = await measureAfterAdvertisements(page);
     }
     if (measurement === null) {
+      const terminalAdPlaying = await readAdvertisementPlaying(page);
+      const terminalReason = measurementRetryReason(null, terminalAdPlaying);
+      if (
+        terminalReason !== null &&
+        isInconclusiveMeasurement(terminalReason, terminalAdPlaying)
+      ) {
+        console.log(
+          "[INFO] The video element disappeared behind an advertisement; the check is inconclusive",
+        );
+        return {
+          ok: false,
+          inconclusive: true,
+          timestampJst,
+          phenomena,
+          details,
+        };
+      }
       phenomena.push(measurementFailurePhenomenon("video-disappeared", null));
       return { ok: false, timestampJst, phenomena, details };
     }
-    const terminalReason = measurementRetryReason(measurement);
+    const terminalAdPlaying = false;
+    const terminalReason = measurementRetryReason(
+      measurement,
+      terminalAdPlaying,
+    );
     if (terminalReason !== null) {
-      if (isInconclusiveMeasurement(terminalReason)) {
+      if (isInconclusiveMeasurement(terminalReason, terminalAdPlaying)) {
         // Advertisements filled every window: the run has nothing to say about
         // the program, and an ad playing means the broadcast is live. Report
         // the run as inconclusive instead of raising a false anomaly issue.
