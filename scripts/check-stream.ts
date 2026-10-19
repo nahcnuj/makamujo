@@ -468,7 +468,7 @@ export interface MeasurableVideoWaitOptions {
    * it reports `isVideoReady` while still painting the static frame of the
    * rebuilt stream, and measuring straight away recorded that stall as a
    * stopped broadcast. Advancing past the same warm-up floor the initial
-   * load uses ({@link waitForVideoPlayback}) skips those startup frames.
+   * load uses ({@link waitForPlaybackStart}) skips those startup frames.
    */
   requireAdvanceSeconds?: number;
 }
@@ -516,36 +516,135 @@ export async function waitForMeasurableVideo({
   }
 }
 
+export interface PlaybackStartWaitOptions {
+  /** Reads the state of the live `<video>`. */
+  probe: () => Promise<VideoState>;
+  /** True while a cross-origin (advertisement) video is actively playing. */
+  probeAdvertisement: () => Promise<boolean>;
+  /** Give up after this much advertisement-free time without playback. */
+  timeoutMs: number;
+  /** Give up entirely once an advertisement has played this long. */
+  advertisementTimeoutMs: number;
+  /** Gap between two probes. */
+  pollMs: number;
+  /** Injectable so tests do not wait in real time. */
+  sleep: (ms: number) => Promise<void>;
+  /** Injectable clock; defaults to wall-clock milliseconds. */
+  now?: () => number;
+  /** When set, playback has to advance this far before it counts as started. */
+  requireAdvanceSeconds?: number;
+}
+
+export interface PlaybackStartOutcome {
+  /** The live program is decodable, playing and advancing. */
+  started: boolean;
+  /** An advertisement was still playing when the wait gave up. */
+  advertisementPlaying: boolean;
+  /** The last observed live-video state. */
+  state: VideoState;
+}
+
 /**
- * Poll the player until it is decodable and advancing past its startup frames.
+ * Poll the player until it is decodable and advancing past its startup frames,
+ * outlasting any advertisement.
  *
  * Opening the watch page resolves `waitForSelector("video")` long before the
  * player attaches a media source, so `videoWidth` is still `0` for a few
  * seconds. Measuring in that window records zero decoded audio and no frames.
  * The warm-up also skips the static first frames the player paints while it
  * buffers, which would otherwise show up as a spurious one-second freeze.
+ *
+ * A signed-out viewer gets a pre-roll advertisement on every page load, and
+ * nicovideo hides the live element and freezes its picture for the whole of it.
+ * Counting that time against the playback deadline made a pre-roll longer than
+ * the deadline read as "playback never started"; the reload that followed
+ * merely queued another pre-roll and reproduced the failure on a healthy
+ * stream (issue #919). While an advertisement plays the playback deadline is
+ * suspended, and the wait only gives up when an advertisement alone exceeds its
+ * own bound, reporting that so the caller can treat the run as inconclusive.
  */
-async function waitForVideoPlayback(
-  page: Page,
-  timeoutMs: number,
-): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
+export async function waitForPlaybackStart({
+  probe,
+  probeAdvertisement,
+  timeoutMs,
+  advertisementTimeoutMs,
+  pollMs,
+  sleep,
+  now = () => Date.now(),
+  requireAdvanceSeconds,
+}: PlaybackStartWaitOptions): Promise<PlaybackStartOutcome> {
+  let deadline = now() + timeoutMs;
+  let advertisementStartedAt: number | null = null;
   let warmupBase: number | null = null;
   for (;;) {
-    const state = await readVideoState(page);
-    if (isVideoReady(state)) {
-      if (warmupBase === null) {
-        warmupBase = state.currentTime;
-      } else if (state.currentTime - warmupBase >= PLAYBACK_WARMUP_SECONDS) {
-        return true;
+    if (await probeAdvertisement()) {
+      // The advertisement freezes the program; suspend the playback clock.
+      warmupBase = null;
+      if (advertisementStartedAt === null) {
+        advertisementStartedAt = now();
       }
-    } else {
+      if (now() - advertisementStartedAt >= advertisementTimeoutMs) {
+        return {
+          started: false,
+          advertisementPlaying: true,
+          state: await probe(),
+        };
+      }
+      await sleep(pollMs);
+      continue;
+    }
+    if (advertisementStartedAt !== null) {
+      // Hand the advertisement's time back so it does not shorten playback.
+      deadline += now() - advertisementStartedAt;
+      advertisementStartedAt = null;
+    }
+
+    const state = await probe();
+    if (!isVideoReady(state)) {
       // The player dropped out (paused / re-buffering); restart the warm-up.
       warmupBase = null;
+    } else if (requireAdvanceSeconds === undefined) {
+      return { started: true, advertisementPlaying: false, state };
+    } else if (warmupBase === null || state.currentTime < warmupBase) {
+      warmupBase = state.currentTime;
+    } else if (state.currentTime - warmupBase >= requireAdvanceSeconds) {
+      return { started: true, advertisementPlaying: false, state };
     }
-    if (Date.now() >= deadline) return false;
-    await page.waitForTimeout(PLAYBACK_READY_POLL_MS);
+
+    if (now() >= deadline) {
+      return { started: false, advertisementPlaying: false, state };
+    }
+    await sleep(pollMs);
   }
+}
+
+/**
+ * Page-level adapter for {@link waitForPlaybackStart}.
+ *
+ * Each probe also nudges a paused element back to playing: the player can stay
+ * paused behind an advertisement, and `isVideoReady` waits for a playing
+ * element, so without the nudge the wait would run out on an element nobody
+ * asked to resume.
+ */
+async function waitForPlaybackStartOnPage(
+  page: Page,
+): Promise<PlaybackStartOutcome> {
+  return waitForPlaybackStart({
+    probe: async () => {
+      const state = await readVideoState(page);
+      if (state.found && state.paused) {
+        // Failures are irrelevant: the next probe re-reads the element.
+        await startPlayback(page);
+      }
+      return state;
+    },
+    probeAdvertisement: () => readAdvertisementPlaying(page),
+    timeoutMs: PLAYBACK_READY_TIMEOUT_MS,
+    advertisementTimeoutMs: ADVERTISEMENT_WAIT_TIMEOUT_MS,
+    pollMs: PLAYBACK_READY_POLL_MS,
+    sleep: (ms) => page.waitForTimeout(ms),
+    requireAdvanceSeconds: PLAYBACK_WARMUP_SECONDS,
+  });
 }
 
 /**
@@ -756,14 +855,16 @@ async function startPlayback(page: Page): Promise<void> {
  * advancing again. Used when playback never started and when the player
  * rebuilt its media element in the middle of a measurement.
  */
-async function reloadAndWaitForPlayback(page: Page): Promise<boolean> {
+async function reloadAndWaitForPlayback(
+  page: Page,
+): Promise<PlaybackStartOutcome> {
   await page.reload({
     waitUntil: "domcontentloaded",
     timeout: NAVIGATION_TIMEOUT_MS,
   });
   await page.waitForSelector("video", { timeout: 30_000 });
   await startPlayback(page);
-  return waitForVideoPlayback(page, PLAYBACK_READY_TIMEOUT_MS);
+  return waitForPlaybackStartOnPage(page);
 }
 
 export interface PlaybackMeasurement {
@@ -1076,15 +1177,30 @@ async function checkStream(): Promise<CheckResult> {
       return { ok: false, timestampJst, phenomena, details };
     }
 
-    let playbackStarted = await waitForVideoPlayback(
-      page,
-      PLAYBACK_READY_TIMEOUT_MS,
-    );
-    if (!playbackStarted) {
+    let playback = await waitForPlaybackStartOnPage(page);
+    if (!playback.started && !playback.advertisementPlaying) {
+      // Only reload when no advertisement is running: a reload queues another
+      // pre-roll ad and cannot recover a player the ad is holding.
       console.log("[INFO] Playback did not start; reloading watch page");
-      playbackStarted = await reloadAndWaitForPlayback(page);
+      playback = await reloadAndWaitForPlayback(page);
     }
-    if (!playbackStarted) {
+    if (!playback.started) {
+      if (playback.advertisementPlaying) {
+        // Advertisements alone kept the player from starting. An ad only plays
+        // while the broadcast is live, so the run holds no evidence of a
+        // stream fault and reporting an anomaly would be a false positive
+        // (issue #919).
+        console.log(
+          "[INFO] An advertisement blocked the player for the whole startup window; the check is inconclusive",
+        );
+        return {
+          ok: false,
+          inconclusive: true,
+          timestampJst,
+          phenomena,
+          details,
+        };
+      }
       phenomena.push("映像の再生が始まりませんでした");
       return { ok: false, timestampJst, phenomena, details };
     }
@@ -1122,8 +1238,20 @@ async function checkStream(): Promise<CheckResult> {
           ? "[INFO] Measurement returned null (the video element disappeared before the closing probe); reloading and measuring again"
           : "[INFO] Measurement unusable (no frames captured, tainted canvas, a stalled media clock, or the decoded-audio counter went backwards); reloading and measuring again",
       );
-      const recovered = await reloadAndWaitForPlayback(page);
-      if (!recovered) {
+      const recovery = await reloadAndWaitForPlayback(page);
+      if (!recovery.started) {
+        if (recovery.advertisementPlaying) {
+          console.log(
+            "[INFO] An advertisement blocked the player after the reload; the check is inconclusive",
+          );
+          return {
+            ok: false,
+            inconclusive: true,
+            timestampJst,
+            phenomena,
+            details,
+          };
+        }
         phenomena.push("映像の再生が始まりませんでした");
         return { ok: false, timestampJst, phenomena, details };
       }
