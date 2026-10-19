@@ -172,24 +172,69 @@ describe("startBroadcastFreezeWatchdog", () => {
     ]);
   });
 
-  it("resets when the stream is not live", async () => {
-    let live = true;
-    const options = createWatcherOptions([still, still, still], {
-      isStreamLive: () => live,
+  it("breaks the still streak at an off-air cycle without erasing the ladder", async () => {
+    // tick ごとに放映中 / 放映外を切り替える。`isStreamLive` は tick の
+    // 先頭で 1 回だけ呼ばれるので、この台本どおりに周期が進む。
+    const liveScript = [true, true, false, true, true, true, true, true];
+    let checks = 0;
+    const saved: CompositeFreezeState[] = [];
+    const options = createWatcherOptions([], {
+      measurePictureMotion: async () => still,
+      isStreamLive: () => liveScript[checks++] ?? true,
       intervalMs: 5,
+      stateStore: {
+        load: () => createCompositeFreezeState(),
+        save: (state) => saved.push(structuredClone(state)),
+      },
+      config: { cyclesRequired: 3, recoveryCooldownMs: 60_000 },
     });
     const watchdog = startBroadcastFreezeWatchdog(options);
-    await waitTick();
-    live = false;
-    await waitTick();
-    await waitTick();
-    live = true;
-    await waitTick();
-    await waitTick();
+    for (let tick = 0; tick < 8; tick++) {
+      await waitTick();
+    }
     watchdog.stop();
 
-    // 放映外の周期で防ぐ: 番組終了後の一枚絵でも回復を打たない。
-    expect(options.recoveries).toEqual([]);
+    // 放映外の周期は streak を断つ（番組終了後の一枚絵を静止として数えない）
+    // が、ラングは消さない。静止は放映外のあとから数え直し、`obs` を 1 度だけ
+    // 打って、クールダウンで次のラングは待つ。
+    expect(options.recoveries).toEqual(["obs"]);
+    expect(saved).toContainEqual({
+      stillCycles: 0,
+      recoveryIndex: 0,
+      lastRecoveryAtMs: undefined,
+    });
+  });
+
+  it("keeps the resumed ladder across the not-live startup tick", async () => {
+    // サーバーは cron に 11 分ごとに殺され start されるたびに streamState が
+    // undefined から始まり、起動直後の最初の tick は放映外に当たる。ここで
+    // 永続化された状態を消すと、ラングが毎回 `obs` に戻って deep な回復が
+    // 一度も打てない（issue #927）。
+    const liveScript = [false, true, true, true, true, true, true, true];
+    let checks = 0;
+    const options = createWatcherOptions([], {
+      measurePictureMotion: async () => still,
+      isStreamLive: () => liveScript[checks++] ?? true,
+      intervalMs: 5,
+      // 前プロセスが `obs` を打ち終えた直後の状態を引き継いで起動した想定。
+      stateStore: {
+        load: () => ({
+          stillCycles: 0,
+          recoveryIndex: 1,
+          lastRecoveryAtMs: undefined,
+        }),
+        save: () => {},
+      },
+      config: { cyclesRequired: 3, recoveryCooldownMs: 60_000 },
+    });
+    const watchdog = startBroadcastFreezeWatchdog(options);
+    for (let tick = 0; tick < 8; tick++) {
+      await waitTick();
+    }
+    watchdog.stop();
+
+    // 起動直後の放映外 tick を挟んでも、次に打たれるのは 2 番目のラング。
+    expect(options.recoveries).toEqual(["xorgAndObs"]);
   });
 
   it("stops measuring after stop()", async () => {
