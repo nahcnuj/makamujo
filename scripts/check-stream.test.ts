@@ -12,6 +12,8 @@ import {
   isVideoReady,
   type MotionSample,
   type MotionSamples,
+  measurementFailurePhenomenon,
+  measurementRetryReason,
   type PlaybackMeasurement,
   shouldReMeasure,
   summarizeFps,
@@ -443,5 +445,136 @@ describe("isInAdContainer", () => {
     expect(isInAdContainer("___video___mddiR")).toBe(false);
     expect(isInAdContainer(null)).toBe(false);
     expect(isInAdContainer(undefined)).toBe(false);
+  });
+});
+
+describe("measurementRetryReason", () => {
+  const probe = (decodedAudioBytes: number): VideoState => ({
+    found: true,
+    videoWidth: 640,
+    readyState: 2,
+    paused: false,
+    currentTime: 0,
+    decodedAudioBytes,
+  });
+  const motionOf = (
+    tainted: boolean,
+    samples: MotionSample[],
+    sawAdvertisement = false,
+  ): MotionSamples => ({
+    tainted,
+    elapsedMs: 10_000,
+    samples,
+    sawAdvertisement,
+  });
+  const twoSamples: MotionSample[] = [
+    { elapsedMs: 0, wholeChanged: true, gameChanged: true },
+    { elapsedMs: 16, wholeChanged: true, gameChanged: true },
+  ];
+  const measurementOf = (
+    motion: MotionSamples,
+    decodedAudioBytesStart: number,
+    decodedAudioBytesEnd: number,
+  ): PlaybackMeasurement => ({
+    startProbe: probe(decodedAudioBytesStart),
+    motion,
+    endProbe: probe(decodedAudioBytesEnd),
+  });
+
+  it("flags a measurement whose video disappeared before the closing probe", () => {
+    // Historically the check gave up here and failed the whole run; the
+    // caller reloads and re-measures instead.
+    expect(measurementRetryReason(null)).toBe("video-disappeared");
+  });
+
+  it("prefers the advertisement reason over an unusable window", () => {
+    expect(
+      measurementRetryReason(measurementOf(motionOf(false, [], true), 0, 100)),
+    ).toBe("advertisement");
+  });
+
+  it("flags a window that captured too few frames", () => {
+    expect(
+      measurementRetryReason(measurementOf(motionOf(false, []), 0, 100)),
+    ).toBe("unusable");
+  });
+
+  it("flags a window whose canvas read failed", () => {
+    expect(
+      measurementRetryReason(measurementOf(motionOf(true, twoSamples), 0, 100)),
+    ).toBe("unusable");
+  });
+
+  it("flags a window whose decoded-audio counter went backwards", () => {
+    expect(
+      measurementRetryReason(
+        measurementOf(motionOf(false, twoSamples), 14129, 7690),
+      ),
+    ).toBe("unusable");
+  });
+
+  it("returns null for a judgeable window", () => {
+    expect(
+      measurementRetryReason(
+        measurementOf(motionOf(false, twoSamples), 0, 100),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("measurementFailurePhenomenon", () => {
+  const probe = (decodedAudioBytes: number): VideoState => ({
+    found: true,
+    videoWidth: 640,
+    readyState: 2,
+    paused: false,
+    currentTime: 0,
+    decodedAudioBytes,
+  });
+  const twoSamples: MotionSample[] = [
+    { elapsedMs: 0, wholeChanged: true, gameChanged: true },
+    { elapsedMs: 16, wholeChanged: true, gameChanged: true },
+  ];
+  const measurementWith = (
+    samples: MotionSample[],
+    decodedAudioBytesStart: number,
+    decodedAudioBytesEnd: number,
+    sawAdvertisement = false,
+  ): PlaybackMeasurement => ({
+    startProbe: probe(decodedAudioBytesStart),
+    motion: {
+      tainted: false,
+      elapsedMs: 10_000,
+      samples,
+      sawAdvertisement,
+    },
+    endProbe: probe(decodedAudioBytesEnd),
+  });
+
+  it("reports the video element disappearing", () => {
+    expect(measurementFailurePhenomenon("video-disappeared", null)).toBe(
+      "チェック中にビデオ要素が消失しました",
+    );
+  });
+
+  it("reports a window measured during an advertisement", () => {
+    const measurement = measurementWith(twoSamples, 0, 100, true);
+    expect(measurementFailurePhenomenon("advertisement", measurement)).toBe(
+      "広告の再生中に測定されました",
+    );
+  });
+
+  it("reports unavailable frames for a window without frames", () => {
+    const measurement = measurementWith([], 0, 100);
+    expect(measurementFailurePhenomenon("unusable", measurement)).toBe(
+      "映像全体のフレームを取得できませんでした",
+    );
+  });
+
+  it("reports the rebuilt media element when the audio counter reset", () => {
+    const measurement = measurementWith(twoSamples, 14129, 7690);
+    expect(measurementFailurePhenomenon("unusable", measurement)).toBe(
+      "測定中にプレイヤーのメディア要素が置き換わりました",
+    );
   });
 });

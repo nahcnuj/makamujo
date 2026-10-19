@@ -21,6 +21,12 @@ const PLAYBACK_WARMUP_SECONDS = 2;
  */
 const ADVERTISEMENT_WAIT_TIMEOUT_MS = 90_000;
 const ADVERTISEMENT_POLL_MS = 500;
+/**
+ * Maximum retries when a window has to be discarded (advertisement, rebuilt
+ * media element, missing video): the measurement is re-taken at most this
+ * many times before the check gives up.
+ */
+const MEASUREMENT_RETRY_LIMIT = 5;
 const MAX_SAMPLE_DIMENSION = 128;
 const PIXEL_CHANNEL_TOLERANCE = 16;
 /** A sampled frame counts as "changed" when this fraction of pixels moved. */
@@ -694,6 +700,67 @@ export function wasAdvertisementShown(motion: MotionSamples): boolean {
   return motion.sawAdvertisement;
 }
 
+/** Why one probing window has to be discarded instead of judged. */
+export type MeasurementRetryReason =
+  | "video-disappeared"
+  | "advertisement"
+  | "unusable";
+
+/**
+ * Why this measurement must be thrown away and taken again, or `null` when
+ * the window is judgeable.
+ *
+ * - `video-disappeared`: the closing probe found no capturable video at all
+ *   (`measurePlayback` returned `null`) — usually transient: an advertisement
+ *   hid the live element or the player rebuilt it mid-window. The health
+ *   check historically gave up here, so a single rebuild failed the whole
+ *   run; the caller reloads and re-measures instead.
+ * - `advertisement`: nicovideo froze the live picture behind an ad during the
+ *   window, so the sampled motion describes the advertisement, not the
+ *   program. Checked before `unusable` because a frozen picture also looks
+ *   like too few frames.
+ * - `unusable`: too few frames, a tainted canvas, or a decoded-audio counter
+ *   that went backwards (see {@link isMeasurementUnusable}).
+ */
+export function measurementRetryReason(
+  measurement: PlaybackMeasurement | null,
+): MeasurementRetryReason | null {
+  if (measurement === null) return "video-disappeared";
+  if (wasAdvertisementShown(measurement.motion)) return "advertisement";
+  if (isMeasurementUnusable(measurement)) return "unusable";
+  return null;
+}
+
+/**
+ * The user-facing phenomenon for a measurement that outlived the retry budget.
+ *
+ * The generic judge would state values that do not describe the stream for a
+ * window that cannot be judged (e.g. "no audio" when the audio counter was
+ * merely reset by a rebuilt element), so each terminal reason names what
+ * actually went wrong.
+ */
+export function measurementFailurePhenomenon(
+  reason: MeasurementRetryReason,
+  measurement: PlaybackMeasurement | null,
+): string {
+  if (reason === "video-disappeared") {
+    return "チェック中にビデオ要素が消失しました";
+  }
+  if (reason === "advertisement") {
+    return "広告の再生中に測定されました";
+  }
+  if (
+    measurement !== null &&
+    didAudioDecodedBytesReset(
+      measurement.startProbe.decodedAudioBytes,
+      measurement.endProbe.decodedAudioBytes,
+    )
+  ) {
+    return "測定中にプレイヤーのメディア要素が置き換わりました";
+  }
+  return "映像全体のフレームを取得できませんでした";
+}
+
 /**
  * Probe decoded-audio bytes around one sampling window.
  *
@@ -822,30 +889,37 @@ async function checkStream(): Promise<CheckResult> {
     }
 
     // Keep re-measuring until the window contains neither an intervening
-    // advertisement nor an unusable (rebuilt media element) probe. A signed-out
-    // viewer can get several mid-roll ads in quick succession, and a single
-    // retry is not enough to land on a clean window.
+    // advertisement nor a probe that cannot be judged. A signed-out viewer
+    // can get several mid-roll ads in quick succession, and the player may
+    // rebuild its media element mid-window; a single retry is not enough to
+    // land on a clean window, and giving up on the first disappearing video
+    // element reported a recoverable hiccup as a dead stream.
     let measurement: PlaybackMeasurement | null =
       await measureAfterAdvertisements(page);
     let measurementAttempts = 0;
-    while (
-      measurement !== null &&
-      (wasAdvertisementShown(measurement.motion) ||
-        isMeasurementUnusable(measurement))
-    ) {
+    for (;;) {
+      const retryReason = measurementRetryReason(measurement);
+      if (retryReason === null) break;
       measurementAttempts += 1;
-      if (measurementAttempts > 5) {
-        break;
-      }
-      if (wasAdvertisementShown(measurement.motion)) {
+      if (measurementAttempts > MEASUREMENT_RETRY_LIMIT) break;
+
+      const waitForAdvertisement =
+        retryReason === "advertisement" ||
+        (retryReason === "video-disappeared" &&
+          (await readAdvertisementPlaying(page)));
+      if (waitForAdvertisement) {
         console.log(
-          "[INFO] An advertisement played during the sampling window; waiting for it to end and measuring again",
+          retryReason === "advertisement"
+            ? "[INFO] An advertisement played during the sampling window; waiting for it to end and measuring again"
+            : "[INFO] The video element disappeared behind an advertisement; waiting for it to end and measuring again",
         );
         measurement = await measureAfterAdvertisements(page);
         continue;
       }
       console.log(
-        "[INFO] Measurement unusable (no video, no frames captured, or the decoded-audio counter went backwards); reloading and measuring again",
+        retryReason === "video-disappeared"
+          ? "[INFO] Measurement returned null (the video element disappeared before the closing probe); reloading and measuring again"
+          : "[INFO] Measurement unusable (no frames captured, tainted canvas, or the decoded-audio counter went backwards); reloading and measuring again",
       );
       const recovered = await reloadAndWaitForPlayback(page);
       if (!recovered) {
@@ -854,8 +928,13 @@ async function checkStream(): Promise<CheckResult> {
       }
       measurement = await measureAfterAdvertisements(page);
     }
-    if (!measurement) {
-      phenomena.push("チェック中にビデオ要素が消失しました");
+    if (measurement === null) {
+      phenomena.push(measurementFailurePhenomenon("video-disappeared", null));
+      return { ok: false, timestampJst, phenomena, details };
+    }
+    const terminalReason = measurementRetryReason(measurement);
+    if (terminalReason !== null) {
+      phenomena.push(measurementFailurePhenomenon(terminalReason, measurement));
       return { ok: false, timestampJst, phenomena, details };
     }
     const { startProbe, motion, endProbe } = measurement;
