@@ -127,6 +127,25 @@ export function isInAdContainer(className: string | null | undefined): boolean {
   );
 }
 
+/**
+ * True when a video element describes an advertisement rather than the live
+ * program, regardless of where its media comes from.
+ *
+ * Nicovideo renders its sticky advertisement as a same-origin `blob:` source
+ * inside an ad container, so {@link isCapturableMediaSource} alone misses it:
+ * the sampler's selector excludes it (the live element then reads as missing)
+ * while the advertisement probe ignores it (the check never waits the ad out
+ * and reloads into the next pre-roll instead, until the retry budget runs out
+ * on a healthy stream).
+ */
+export function isAdvertisementSource(
+  currentSrc: string,
+  pageOrigin: string,
+  inAdContainer: boolean,
+): boolean {
+  return !isCapturableMediaSource(currentSrc, pageOrigin) || inAdContainer;
+}
+
 /** True when the element is part of the live program rather than an advertisement. */
 export function isProgramVideo(className: string | null | undefined): boolean {
   return !isInAdContainer(className);
@@ -166,6 +185,7 @@ const SELECT_VIDEO_INIT_SCRIPT = `
 (() => {
   const isCapturable = ${isCapturableMediaSource.toString()};
   const isInAd = ${isInAdContainer.toString()};
+  const isAdvertisement = ${isAdvertisementSource.toString()};
   const origin = location.origin;
   const isActive = (v) => v.videoWidth > 0 && v.readyState >= 2 && v.paused === false;
   const isSized = (v) => v.videoWidth > 0 && v.readyState >= 2;
@@ -189,7 +209,8 @@ const SELECT_VIDEO_INIT_SCRIPT = `
   window.__mmjIsAdvertisementPlaying = () =>
     Array.from(document.querySelectorAll("video")).some(
       (v) =>
-        !isCapturable(v.currentSrc || v.src || "", origin) && isActive(v),
+        isAdvertisement(v.currentSrc || v.src || "", origin, inAdContainer(v)) &&
+        isActive(v),
     );
 })();
 `;

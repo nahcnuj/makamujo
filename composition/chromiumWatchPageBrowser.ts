@@ -9,6 +9,7 @@
 
 import { chromium } from "playwright";
 import {
+  isAdvertisementSource,
   isCapturableMediaSource,
   isInAdContainer,
 } from "../scripts/check-stream";
@@ -65,6 +66,7 @@ const installVideoSelectors = (page: import("playwright").Page) =>
 (() => {
   const isCapturable = ${isCapturableMediaSource.toString()};
   const isInAd = ${isInAdContainer.toString()};
+  const isAdvertisement = ${isAdvertisementSource.toString()};
   const startPlayback = ${startVideoPlayback.toString()};
   const origin = location.origin;
   const isSized = (v) => v.videoWidth > 0 && v.readyState >= 2;
@@ -91,7 +93,10 @@ const installVideoSelectors = (page: import("playwright").Page) =>
   };
   window.__mmjIsAdvertisementPlaying = () =>
     Array.from(document.querySelectorAll("video")).some(
-      (v) => !isCapturable(v.currentSrc || v.src || "", origin) && v.paused === false && isSized(v),
+      (v) =>
+        isAdvertisement(v.currentSrc || v.src || "", origin, inAdContainer(v)) &&
+        v.paused === false &&
+        isSized(v),
     );
   window.__mmjStartPlayback = () =>
     startPlayback(Array.from(document.querySelectorAll("video")));

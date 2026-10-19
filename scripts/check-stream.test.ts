@@ -3,6 +3,7 @@ import {
   didAudioDecodedBytesReset,
   formatJst,
   GAME_MIN_FPS,
+  isAdvertisementSource,
   isAudioPlaying,
   isCapturableMediaSource,
   isFpsAboveThreshold,
@@ -565,6 +566,29 @@ describe("isInAdContainer", () => {
     expect(isInAdContainer("___video___mddiR")).toBe(false);
     expect(isInAdContainer(null)).toBe(false);
     expect(isInAdContainer(undefined)).toBe(false);
+  });
+});
+
+describe("isAdvertisementSource", () => {
+  const origin = "https://live.nicovideo.jp";
+  const liveBlob =
+    "blob:https://live.nicovideo.jp/5ff1666b-b664-423f-a456-00051a39e9e8";
+  const adMp4 =
+    "https://gcdn.2mdn.net/videoplayback/id/21b88bf5e807721e/itag/344/source/web_video_ads/file.mp4";
+
+  it("flags a cross-origin advertisement source", () => {
+    expect(isAdvertisementSource(adMp4, origin, false)).toBe(true);
+  });
+
+  it("flags a same-origin source inside an advertisement container", () => {
+    // The sticky advertisement is a same-origin blob: source, so capturability
+    // alone misses it; the container check is what exposes it.
+    expect(isAdvertisementSource(liveBlob, origin, true)).toBe(true);
+  });
+
+  it("accepts the live program source outside an advertisement container", () => {
+    expect(isAdvertisementSource(liveBlob, origin, false)).toBe(false);
+    expect(isAdvertisementSource("", origin, false)).toBe(false);
   });
 });
 
