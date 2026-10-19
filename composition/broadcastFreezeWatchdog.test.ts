@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import type { CompositeFreezeRecovery } from "../lib/domain/broadcasting/CompositeFreezePolicy";
+import {
+  type CompositeFreezeRecovery,
+  type CompositeFreezeState,
+  createCompositeFreezeState,
+} from "../lib/domain/broadcasting/CompositeFreezePolicy";
 import {
   type BroadcastFreezeWatchdogOptions,
   RECOVERY_SERVICES,
@@ -116,6 +120,56 @@ describe("startBroadcastFreezeWatchdog", () => {
 
     // 静止 x2（周期をまたいで連続しない）+ unknown: まだ必要回数に届かない。
     expect(options.recoveries).toEqual([]);
+  });
+
+  it("keeps climbing the ladder when a cycle could not be measured", async () => {
+    const options = createWatcherOptions(
+      [still, undefined, still, still, still],
+      {
+        intervalMs: 5,
+        // 前プロセスが `obs` を打ち終えた直後の状態。cron の再起動で観測が
+        // 1 周期飛んでも、ラングは `obs` に戻らない。
+        stateStore: {
+          load: () => ({
+            stillCycles: 0,
+            recoveryIndex: 1,
+            lastRecoveryAtMs: Date.now() - 60_000,
+          }),
+          save: () => {},
+        },
+        config: { cyclesRequired: 3, recoveryCooldownMs: 0 },
+      },
+    );
+    const watchdog = startBroadcastFreezeWatchdog(options);
+    for (let tick = 0; tick < 6; tick++) {
+      await waitTick();
+    }
+    watchdog.stop();
+
+    expect(options.recoveries).toEqual(["xorgAndObs"]);
+  });
+
+  it("persists the policy state after every cycle", async () => {
+    const saved: CompositeFreezeState[] = [];
+    const options = createWatcherOptions([still, still], {
+      intervalMs: 5,
+      config: { cyclesRequired: 3, recoveryCooldownMs: 60_000 },
+      stateStore: {
+        load: () => createCompositeFreezeState(),
+        save: (state) => saved.push(structuredClone(state)),
+      },
+    });
+    const watchdog = startBroadcastFreezeWatchdog(options);
+    await waitTick();
+    await waitTick();
+    watchdog.stop();
+
+    // 静止が 2 周期分。以降の周期は測定が尽きて unknown になるが、ここでは
+    // 保存されることだけを見ている。
+    expect(saved.slice(0, 2)).toEqual([
+      { stillCycles: 1, recoveryIndex: 0, lastRecoveryAtMs: undefined },
+      { stillCycles: 2, recoveryIndex: 0, lastRecoveryAtMs: undefined },
+    ]);
   });
 
   it("resets when the stream is not live", async () => {

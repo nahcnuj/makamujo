@@ -128,6 +128,35 @@ describe("observeCompositeFreezeCycle", () => {
     expect(third.action).toBe("obs");
   });
 
+  it("keeps the ladder and the cooldown on unmeasurable cycles", () => {
+    // A freeze that already ran the first rung, measured one minute after the
+    // recovery (still inside the cooldown).
+    const recovered = stillStreak(createCompositeFreezeState(), 0, 3);
+    expect(recovered.action).toBe("obs");
+
+    // The stream could not be measured for a while afterwards: the statistics
+    // browser was rebuilt by a restart, an advertisement played, the player
+    // swapped its element. None of that is evidence that the composite
+    // recovered, so the ladder position and the cooldown anchor survive.
+    let observed = recovered.state;
+    for (let offset = 3; offset <= 10; offset++) {
+      const decision = observeCompositeFreezeCycle(
+        observed,
+        cycle("unknown", stepMs(offset)),
+      );
+      observed = decision.state;
+      expect(decision.action).toBeUndefined();
+      expect(observed.recoveryIndex).toBe(1);
+      expect(observed.lastRecoveryAtMs).toBe(stepMs(2));
+      expect(observed.stillCycles).toBe(0);
+    }
+
+    // The picture is still frozen and the cooldown is over: the next clean
+    // streak takes the second rung instead of running the first one again.
+    const escalated = stillStreak(observed, 11, 3);
+    expect(escalated.action).toBe("xorgAndObs");
+  });
+
   it("exposes the default configuration and the recovery ladder", () => {
     expect(COMPOSITE_FREEZE_RECOVERIES).toEqual([
       "obs",

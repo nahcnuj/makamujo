@@ -13,6 +13,11 @@
  * - `obs` — makamujo-obs.service だけ
  * - `xorgAndObs` — makamujo-xvfb.service と makamujo-obs.service
  * - `browserAndBroadcastStack` — ゲーム用ブラウザ実体 + makamujo-xvfb + obs
+ *
+ * ポリシーの状態（streak・ラング・クールダウン）はプロセスの寿命より長い。
+ * サーバーは cron に 11 分ごとに殺され start されるので、メモリだけの状態では
+ * 再起動のたびにラングが `obs` に戻り、OBS を何度も繰り返し落とすだけで
+ * 合成出力は回復しない。`stateStore` で前プロセスの状態を引き継ぎ、深くなる。
  */
 
 import { execFile } from "node:child_process";
@@ -161,12 +166,23 @@ export interface BroadcastFreezeWatchdogOptions {
   isStreamLive: () => boolean;
   /** 回復を実行する口。既定は systemctl（`createSystemdRecovery`）。 */
   recover?: (recovery: CompositeFreezeRecovery) => Promise<void>;
+  /**
+   * ポリシー状態の永続化口。cron の再起動をまたいでラングとクールダウンを
+   * 引き継ぐ。省略時はメモリだけ（開発 / テスト）。
+   */
+  stateStore?: CompositeFreezeStateStore;
   /** ポリシー設定の差し替え口（テスト用）。既定は既定値 + 環境変数。 */
   config?: CompositeFreezeConfig;
   /** 観測間隔（ミリ秒）。 */
   intervalMs?: number;
   env?: Record<string, string | undefined>;
   log?: Pick<Console, "log" | "warn" | "error">;
+}
+
+/** ポリシー状態の読み書き口。実体は `lib/application/compositeFreezeStateStore`。 */
+export interface CompositeFreezeStateStore {
+  load: () => CompositeFreezeState;
+  save: (state: CompositeFreezeState) => void;
 }
 
 export interface BroadcastFreezeWatchdog {
@@ -215,7 +231,30 @@ export const startBroadcastFreezeWatchdog = (
 
   let stopped = false;
   let ticking = false;
-  let state: CompositeFreezeState = createCompositeFreezeState();
+  let state: CompositeFreezeState =
+    options.stateStore?.load() ?? createCompositeFreezeState();
+  if (
+    state.stillCycles > 0 ||
+    state.recoveryIndex > 0 ||
+    state.lastRecoveryAtMs !== undefined
+  ) {
+    // 前プロセスが残したラングを無視すると、cron の再起動ごとに `obs` から
+    // 始まって OBS を落とすだけの永久運動になる。どこまで進んでいたかは
+    // journal に残しておく（次に深いラングが動く理由が追えるように）。
+    log.log(
+      `[INFO] resumed the composite freeze state (stillCycles=${state.stillCycles}, recoveryIndex=${state.recoveryIndex}, lastRecoveryAtMs=${state.lastRecoveryAtMs ?? "none"})`,
+    );
+  }
+  const persistState = (): void => {
+    try {
+      options.stateStore?.save(state);
+    } catch (error) {
+      log.warn(
+        "[WARN] failed to persist the composite freeze state:",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  };
 
   const tick = async (): Promise<void> => {
     if (ticking) {
@@ -226,6 +265,7 @@ export const startBroadcastFreezeWatchdog = (
       if (!options.isStreamLive()) {
         // 放映外の静止は回復の意味を持たないので、見なかったことにする。
         state = createCompositeFreezeState();
+        persistState();
         return;
       }
       const measured = await options.measurePictureMotion();
@@ -237,6 +277,7 @@ export const startBroadcastFreezeWatchdog = (
         config,
       );
       state = decision.state;
+      persistState();
       if (measured !== undefined && judged !== undefined) {
         log.log(
           `[INFO] measured the delivered picture (${judged}, ${measured.changedFrames}/${measured.comparedFrames} frames changed in ${Math.round(measured.windowMs)}ms)`,

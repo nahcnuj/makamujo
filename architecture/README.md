@@ -136,15 +136,25 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
   観測（`still` / `moving` / `unknown`）を折りたたむ:
   - `still` が `cyclesRequired`（既定 3）周期連続したら、回復ラングを打つ。
     番組の一枚絵（フリートークの結果画面）は 1 周期で終わるので誤検知しない。
-  - `moving` と `unknown` は streak をリセットする。unknown で streak を
-    繋がないのは、中割り広告が `<video>` を止めて静止に見えるため
-    （広告の占有を bridge させて誤回復させない）。
+  - `moving` は streak・ラング・クールダウンをすべてリセットする。映像が動いた
+    以上、合成出力は回復しており、次の停止は最初のラングから始まる。
+  - `unknown` は streak のみリセットする。測れなかった周期は「止まっていない」
+    証拠ではないので、ラングとクールダウンは消さない
+    （中割り広告が `<video>` を止めて静止に見えて streak を伸ばさない、は維持）。
+    ここを全消しにすると、周期ごとに測れない本番（中割り広告・要素の再構築・
+    プロセス再起動後の最初の周期）ではラングが `obs` のまま進まず、
+    OBS を繰り返し落とすだけで合成出力が回復しなかった（issue #889）。
   - 回復の間隔は `recoveryCooldownMs`（既定 10 分）。連続回復を防ぐ。
   - ラングは `obs` → `xorgAndObs` → `browserAndBroadcastStack` の順に深くなり
     最深で留まる。やることは systemd restart:
     `composition/broadcastFreezeWatchdog.ts` の `RECOVERY_SERVICES`。
     配信画面 `:10` の実体は ansible が導入する `makamujo-xvfb.service` を指す
     （リポジトリ同梱の `xorg10.service` は本番に無い。誤るとラングが進まない）。
+- ポリシーの状態は `var/broadcast-freeze-state.json` に残して引き継ぐ
+  （`lib/application/compositeFreezeStateStore.ts`）。サーバーは cron に
+  11 分ごとに殺され start されるので、メモリだけの状態では最深のラングに
+  届く前に毎回 `obs` からやり直しになる。原子的な書換え（一時ファイル → rename）で
+  書き、壊れたファイルは新規扱いで起動する（`var/stream-baseline.json` と同じ）。
 - 番組が放映外の間は観測をしない（番組終了の一枚絵を回復の対象にしない）。
 
 ### モジュールと配線
@@ -156,11 +166,14 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 | `composition/chromiumWatchPageBrowser.ts` | composition | 1 窓の映像の動きを測る実装。rAF が来ない環境でも上限で帰る |
 | `composition/watchPageStatisticsSource.ts` | composition | 開いたままのページでの測定の代理。無効時 / 未オープン時は `undefined` |
 | `composition/broadcastFreezeWatchdog.ts` | composition | 採取の周期、ポリシーへの投入、systemd 回復の実行口 |
+| `lib/application/compositeFreezeStateStore.ts` | application | ポリシー状態の `var/` への永続化（壊れたファイルは新規扱い） |
 
 `index.ts` が統計の採取と同じ場所で 1 回だけ配線する。回復口は
 `NODE_ENV=production` のときだけ systemd に触り、それ以外は dry run
 （ログだけ）にする。テスト / E2E は統計の読み取り自体を
 `NICONAMA_WATCH_PAGE_DISABLED=1` で無効化しているため、そもそも観測が流れない。
+起動時に前プロセスの状態を引き継いだら journal に
+`resumed the composite freeze state` を残す（どのラングまで進んでいたかの根拠）。
 
 ### 環境変数
 

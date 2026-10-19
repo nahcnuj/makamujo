@@ -49,7 +49,9 @@ export const createCompositeFreezeState = (): CompositeFreezeState => ({
  * advertisements freeze the live `<video>` exactly like a stall, so judging
  * them would report healthy streams as still and bridging the streak across
  * one would let an advertisement carry a freeze streak. Unmeasurable cycles
- * therefore reset the streak as if the picture were moving.
+ * therefore reset the streak — but nothing else: the recovery ladder and the
+ * cooldown are the record of recoveries that already ran, and "this cycle
+ * could not be measured" is not evidence that the composite recovered.
  */
 export type CompositeFreezeMotion = "still" | "moving" | "unknown";
 
@@ -86,19 +88,31 @@ const resetState = (): CompositeFreezeState => createCompositeFreezeState();
 /**
  * Take one cycle's measurement into the running state.
  *
- * Anything other than `still` resets everything: the streak, the ladder, and
- * the cooldown anchor. A `still` streak accumulates; once it reaches
- * `cyclesRequired` and the cooldown has elapsed, the next rung of the ladder
- * runs and the streak restarts from the following cycle, with the ladder
- * position advanced for the next time.
+ * `moving` (the picture proved healthy) resets everything: the streak, the
+ * ladder, and the cooldown anchor, so the next freeze starts from the first
+ * rung. `unknown` resets only the streak: an unmeasurable cycle is not proof
+ * that the composite recovered, so the ladder position and the cooldown of a
+ * recovery that already ran are kept — otherwise a stream that cannot be
+ * measured every cycle (mid-roll advertisements, the player rebuilding its
+ * element, the process restarting) would never climb past the first rung and
+ * the deepest rungs would stay unreachable for exactly the freezes they exist
+ * for.
+ *
+ * A `still` streak accumulates; once it reaches `cyclesRequired` and the
+ * cooldown has elapsed, the next rung of the ladder runs and the streak
+ * restarts from the following cycle, with the ladder position advanced for the
+ * next time.
  */
 export const observeCompositeFreezeCycle = (
   state: CompositeFreezeState,
   cycle: CompositeFreezeCycle,
   config: CompositeFreezeConfig = COMPOSITE_FREEZE_DEFAULT_CONFIG,
 ): CompositeFreezeDecision => {
-  if (cycle.motion !== "still") {
+  if (cycle.motion === "moving") {
     return { state: resetState(), action: undefined };
+  }
+  if (cycle.motion === "unknown") {
+    return { state: { ...state, stillCycles: 0 }, action: undefined };
   }
 
   const stillCycles = state.stillCycles + 1;
