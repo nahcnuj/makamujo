@@ -7,6 +7,7 @@ import {
   isCapturableMediaSource,
   isFpsAboveThreshold,
   isInAdContainer,
+  isInconclusiveMeasurement,
   isMeasurementUnusable,
   isOverallOk,
   isVideoReady,
@@ -639,6 +640,21 @@ describe("measurementRetryReason", () => {
         measurementOf(motionOf(false, twoSamples), 0, 100),
       ),
     ).toBeNull();
+  });
+});
+
+describe("isInconclusiveMeasurement", () => {
+  it("treats an advertisement-only exhaustion as inconclusive", () => {
+    // Every window was frozen behind an ad, so the run has no measurement of
+    // the program; an ad playing also proves the broadcast is live. Raising an
+    // anomaly from that is a false positive.
+    expect(isInconclusiveMeasurement("advertisement")).toBe(true);
+  });
+
+  it("keeps the other terminal reasons as anomalies", () => {
+    expect(isInconclusiveMeasurement("video-disappeared")).toBe(false);
+    expect(isInconclusiveMeasurement("unusable")).toBe(false);
+    expect(isInconclusiveMeasurement(null)).toBe(false);
   });
 });
 
