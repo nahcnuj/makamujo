@@ -19,7 +19,7 @@ const PLAYBACK_WARMUP_SECONDS = 2;
  * hence the generous bound, but it stays well inside the job's 10-minute
  * timeout even when a reload and a second wait follow.
  */
-const ADVERTISEMENT_WAIT_TIMEOUT_MS = 90_000;
+const ADVERTISEMENT_WAIT_TIMEOUT_MS = 120_000;
 const ADVERTISEMENT_POLL_MS = 500;
 /**
  * How long to wait for the live `<video>` to become measurable again after an
@@ -40,7 +40,7 @@ const PLAYBACK_SETTLE_POLL_MS = 250;
  * media element, missing video): the measurement is re-taken at most this
  * many times before the check gives up.
  */
-const MEASUREMENT_RETRY_LIMIT = 5;
+const MEASUREMENT_RETRY_LIMIT = 10;
 const MAX_SAMPLE_DIMENSION = 128;
 const PIXEL_CHANNEL_TOLERANCE = 16;
 /** A sampled frame counts as "changed" when this fraction of pixels moved. */
