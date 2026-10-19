@@ -101,6 +101,39 @@ export const judgePictureMotion = (
   return changedFps < PICTURE_STILL_FPS_THRESHOLD ? "still" : "moving";
 };
 
+/** 映像の選別に必要な `<video>` の最小限。DOM 無しでテストできる。 */
+export interface MeasurableVideoLike {
+  paused: boolean;
+  videoWidth: number;
+  readyState: number;
+}
+
+/**
+ * 採取可能な `<video>` の中から測るものを 1 つ選ぶ。
+ *
+ * 選択順は配信異常検知の権威 `scripts/check-stream.ts` と同じ: 再生中で
+ * サイズのある要素を優先し、無ければサイズだけある要素に降りる。
+ *
+ * このフォールバックは合成出力の停止検知に必須。合成出力（XSHM → x264）が
+ * 固まると配信の HLS が途切れ、視聴ページの `<video>` が一時停止 /
+ * バッファリング状態になりうる。再生中だけを選ぶと要素が取れず測定が空に
+ * なり、判定が `unknown` になって `CompositeFreezePolicy` の静止 streak が
+ * 毎周期リセットされるため、回復ラングが永久に打たれない。一時停止した要素
+ * でも最後のフレームは描画でき、変わらない絵は正しく「静止」と測れる。
+ *
+ * `scripts/check-stream.ts` 自体は改変しない（owner 契約 #807）。ここで
+ * 純関数として持つことで、unit test とページ注入の双方が同じ順序を使う。
+ */
+export const selectMeasurableVideo = <T extends MeasurableVideoLike>(
+  capturable: readonly T[],
+): T | undefined => {
+  const isActive = (video: T): boolean =>
+    video.videoWidth > 0 && video.readyState >= 2 && !video.paused;
+  const isSized = (video: T): boolean =>
+    video.videoWidth > 0 && video.readyState >= 2;
+  return capturable.find(isActive) ?? capturable.find(isSized);
+};
+
 export interface AdvertisementWaitOptions {
   /** True while a cross-origin (advertisement) video is actively playing. */
   isAdvertisementPlaying: () => Promise<boolean>;

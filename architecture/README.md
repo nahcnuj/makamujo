@@ -119,11 +119,16 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
   `composition/watchPageBrowser.ts` の `judgePictureMotion`:
   changed fps が `PICTURE_STILL_FPS_THRESHOLD`（既定 2）を下回る窓が `still`。
   測れない窓（広告が流れた、tainted、比較が少なすぎる）は判定できない。
-  サンプラーは再生中の `<video>` しか選ばないため、統計用ブラウザは
-  `--autoplay-policy=no-user-gesture-required` で起動し、ページを開いた直後と
-  計測のたびに `startVideoPlayback` で全 `<video>` をミュート再生させる。
-  これが無いと headless では要素が paused のままになり、観測が永久に
-  `unknown` になって回復が一度も走らない（`check-stream.ts` と同じ扱い）。
+  統計用ブラウザは `--autoplay-policy=no-user-gesture-required` で起動し、
+  ページを開いた直後と計測のたびに `startVideoPlayback` で全 `<video>` を
+  ミュート再生させる。これが無いと headless では要素が paused のままになり、
+  観測が永久に `unknown` になって回復が一度も走らない（`check-stream.ts` と
+  同じ扱い）。さらに `selectMeasurableVideo` は再生中の要素を優先しつつ、
+  サイズのある一時停止要素にも降りる。合成出力が固まると配信の HLS が途切れ、
+  視聴ページの `<video>` が一時停止 / バッファリングするため、再生中だけを
+  選ぶと測定が空の `unknown` になり、静止 streak が毎周期リセットされて
+  回復ラングが永久に打たれない。一時停止した要素でも最後のフレームは描画でき、
+  変わらない絵は正しく `still` と測れる。
   中割り広告で `<video>` が止まると窓は静止に見えて判定不能（`unknown`）に
   なり、`CompositeFreezePolicy` の streak をリセットする。統計用ブラウザは
   サインアウトのまま長く開いておくので中割りが繰り返され、待たずに測ると

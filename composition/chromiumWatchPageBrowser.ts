@@ -15,6 +15,7 @@ import {
 import {
   isWatchPageReadable,
   type PictureMotion,
+  selectMeasurableVideo,
   startVideoPlayback,
   toDisplayedStatistics,
   type WatchPageBrowser,
@@ -58,7 +59,8 @@ const ADVERTISEMENT_POLL_MS = 500;
 /**
  * ページ側の動画選別ヘルパーと再生開始ヘルパーを置く。navigation で消えるの
  * で毎回入れ、置いたついでに全 `<video>` の再生を促す。再生していない要素は
- * `__mmjSelectCapturableVideo` に選ばれず、測定が永久に `unknown` になる。
+ * 選別のフォールバックで拾う（合成出力が固まるとプレイヤーが一時停止 /
+ * バッファリングし、再生中だけを選ぶと測定が永久に `unknown` になる）。
  */
 const installVideoSelectors = (page: import("playwright").Page) =>
   page.evaluate(`
@@ -66,6 +68,7 @@ const installVideoSelectors = (page: import("playwright").Page) =>
   const isCapturable = ${isCapturableMediaSource.toString()};
   const isInAd = ${isInAdContainer.toString()};
   const startPlayback = ${startVideoPlayback.toString()};
+  const selectMeasurableVideo = ${selectMeasurableVideo.toString()};
   const origin = location.origin;
   const isSized = (v) => v.videoWidth > 0 && v.readyState >= 2;
   const inAdContainer = (v) => {
@@ -83,7 +86,7 @@ const installVideoSelectors = (page: import("playwright").Page) =>
     const capturable = videos.filter(
       (v) => isCapturable(v.currentSrc || v.src || "", origin) && !inAdContainer(v),
     );
-    return capturable.find((v) => v.paused === false && isSized(v)) ?? null;
+    return selectMeasurableVideo(capturable) ?? null;
   };
   window.__mmjIsAdvertisementPlaying = () =>
     Array.from(document.querySelectorAll("video")).some(
