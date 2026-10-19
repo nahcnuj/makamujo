@@ -2,8 +2,10 @@ import { describe, expect, it } from "bun:test";
 import {
   isWatchPageReadable,
   judgePictureMotion,
+  type MeasurableVideoLike,
   type PictureMotion,
   type PlayableVideo,
+  selectMeasurableVideo,
   startVideoPlayback,
   toDisplayedStatistics,
   type WatchPageRawReading,
@@ -165,5 +167,47 @@ describe("startVideoPlayback", () => {
 
   it("accepts an empty collection", () => {
     expect(() => startVideoPlayback([])).not.toThrow();
+  });
+});
+
+describe("selectMeasurableVideo", () => {
+  const video = (
+    overrides: Partial<MeasurableVideoLike> & { tag: string },
+  ): MeasurableVideoLike & { tag: string } => ({
+    paused: false,
+    videoWidth: 1_280,
+    readyState: 4,
+    ...overrides,
+  });
+
+  it("prefers a playing, sized video over a paused one", () => {
+    const playing = video({ tag: "playing" });
+    const paused = video({ paused: true, tag: "paused" });
+    expect(selectMeasurableVideo([paused, playing])?.tag).toBe("playing");
+  });
+
+  it("falls back to a sized-but-paused video", () => {
+    // Regression: the composite-freeze measurement needs this fallback. When the
+    // delivered picture stalls, the watch page's <video> can pause/buffer;
+    // without the fallback the window came back empty, judged `unknown`, and the
+    // freeze streak reset every cycle so recovery never escalated.
+    const paused = video({ paused: true, tag: "paused" });
+    expect(selectMeasurableVideo([paused])?.tag).toBe("paused");
+  });
+
+  it("ignores videos with no decoded frame", () => {
+    const unsized = video({ videoWidth: 0, tag: "unsized" });
+    const loading = video({ readyState: 1, tag: "loading" });
+    expect(selectMeasurableVideo([unsized, loading])).toBeUndefined();
+  });
+
+  it("returns undefined when there is nothing to measure", () => {
+    expect(selectMeasurableVideo([])).toBeUndefined();
+  });
+
+  it("prefers a sized video over a paused one with no frame", () => {
+    const unsized = video({ paused: true, videoWidth: 0, tag: "unsized" });
+    const sized = video({ paused: true, tag: "sized" });
+    expect(selectMeasurableVideo([unsized, sized])?.tag).toBe("sized");
   });
 });
