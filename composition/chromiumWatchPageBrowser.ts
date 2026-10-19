@@ -83,7 +83,11 @@ const installVideoSelectors = (page: import("playwright").Page) =>
     const capturable = videos.filter(
       (v) => isCapturable(v.currentSrc || v.src || "", origin) && !inAdContainer(v),
     );
-    return capturable.find((v) => v.paused === false && isSized(v)) ?? null;
+    return (
+      capturable.find((v) => v.paused === false && isSized(v)) ??
+      capturable.find(isSized) ??
+      null
+    );
   };
   window.__mmjIsAdvertisementPlaying = () =>
     Array.from(document.querySelectorAll("video")).some(
