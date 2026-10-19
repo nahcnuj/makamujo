@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  classifyMeasurement,
   didAudioDecodedBytesReset,
   didPlaybackStall,
   formatJst,
@@ -813,6 +814,90 @@ describe("isInconclusiveMeasurement", () => {
     expect(isInconclusiveMeasurement("video-disappeared")).toBe(true);
     expect(isInconclusiveMeasurement("unusable")).toBe(true);
     expect(isInconclusiveMeasurement(null)).toBe(false);
+  });
+});
+
+describe("classifyMeasurement", () => {
+  const probe = (decodedAudioBytes: number, currentTime = 0): VideoState => ({
+    found: true,
+    videoWidth: 640,
+    readyState: 2,
+    paused: false,
+    currentTime,
+    decodedAudioBytes,
+  });
+  const twoSamples: MotionSample[] = [
+    { elapsedMs: 0, wholeChanged: true, gameChanged: true },
+    { elapsedMs: 16, wholeChanged: true, gameChanged: true },
+  ];
+  const measurementOf = (
+    overrides: {
+      tainted?: boolean;
+      samples?: MotionSample[];
+      sawAdvertisement?: boolean;
+      decodedAudioBytesStart?: number;
+      decodedAudioBytesEnd?: number;
+      currentTimeStart?: number;
+      currentTimeEnd?: number;
+    } = {},
+  ): PlaybackMeasurement => ({
+    startProbe: probe(
+      overrides.decodedAudioBytesStart ?? 0,
+      overrides.currentTimeStart ?? 0,
+    ),
+    motion: {
+      tainted: overrides.tainted ?? false,
+      elapsedMs: 10_000,
+      samples: overrides.samples ?? twoSamples,
+      sawAdvertisement: overrides.sawAdvertisement ?? false,
+    },
+    endProbe: probe(
+      overrides.decodedAudioBytesEnd ?? 100,
+      overrides.currentTimeEnd ?? 10,
+    ),
+  });
+
+  it("hands a judgeable window back for the audio/FPS judgement", () => {
+    const measurement = measurementOf();
+    expect(classifyMeasurement(measurement)).toEqual({
+      kind: "judgeable",
+      measurement,
+    });
+  });
+
+  it("reports a run whose video never became capturable as inconclusive", () => {
+    // Observed in issue #921: every reload left the closing probe without a
+    // capturable video, and the old shortcut past the inconclusive policy
+    // raised a stream-anomaly issue on a healthy stream.
+    expect(classifyMeasurement(null)).toEqual({ kind: "inconclusive" });
+  });
+
+  it("reports advertisement-exhausted runs as inconclusive", () => {
+    expect(
+      classifyMeasurement(measurementOf({ sawAdvertisement: true })),
+    ).toEqual({ kind: "inconclusive" });
+  });
+
+  it("reports unusable-window runs as inconclusive", () => {
+    expect(classifyMeasurement(measurementOf({ samples: [] }))).toEqual({
+      kind: "inconclusive",
+    });
+    expect(classifyMeasurement(measurementOf({ tainted: true }))).toEqual({
+      kind: "inconclusive",
+    });
+    expect(
+      classifyMeasurement(
+        measurementOf({
+          decodedAudioBytesStart: 14129,
+          decodedAudioBytesEnd: 7690,
+        }),
+      ),
+    ).toEqual({ kind: "inconclusive" });
+    expect(
+      classifyMeasurement(
+        measurementOf({ currentTimeStart: 120, currentTimeEnd: 120.05 }),
+      ),
+    ).toEqual({ kind: "inconclusive" });
   });
 });
 

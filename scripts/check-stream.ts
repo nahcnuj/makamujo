@@ -902,9 +902,12 @@ export function measurementFailurePhenomenon(
  * perfectly healthy stream. The caller reports the run as inconclusive, leaves
  * the exit code at zero, and lets the next scheduled check try again.
  *
- * The other terminal reasons stay anomalies: a vanished video element, a
- * rebuilt media element, or a window with uncapturable frames describes the
- * player or the program, not merely the presence of an advertisement.
+ * The policy is deliberately broad: every terminal reason means the run never
+ * obtained a judgeable window, and a run that watched only the player — a
+ * vanished video element, a rebuilt media element, frames that could not be
+ * captured — is evidence about the observer, not about the broadcast. An
+ * hourly check cannot fix the observer, so it leaves the exit code at zero
+ * and lets the next scheduled run try again.
  */
 export function isInconclusiveMeasurement(
   reason: MeasurementRetryReason | null,
@@ -914,6 +917,43 @@ export function isInconclusiveMeasurement(
   // it, so reporting an anomaly is a false positive. Treat every terminal
   // reason as inconclusive so the hourly check stops crying wolf.
   return reason !== null;
+}
+
+/** How the check treats the measurement it ended up with. */
+export type MeasurementClassification =
+  | { kind: "judgeable"; measurement: PlaybackMeasurement }
+  | { kind: "inconclusive" }
+  | { kind: "anomaly"; phenomenon: string };
+
+/**
+ * Decide, from a run's final measurement, whether the stream can be judged,
+ * the run is inconclusive, or a stream anomaly should be raised.
+ *
+ * A run that spent its whole retry budget without capturing a judgeable
+ * window observed the player, not the program, so
+ * {@link isInconclusiveMeasurement} decides that case. The `null` measurement
+ * (the video element disappeared before every closing probe) must flow
+ * through the same policy: it used to shortcut straight to an anomaly, which
+ * filed a stream-anomaly issue on a healthy stream whenever every reload left
+ * the player unmeasurable (issue #921 at 04:21 JST). Only a judgeable window
+ * reaches the audio/FPS judgement; a terminal reason that survives the
+ * inconclusive policy carries its user-facing phenomenon.
+ */
+export function classifyMeasurement(
+  measurement: PlaybackMeasurement | null,
+): MeasurementClassification {
+  const reason = measurementRetryReason(measurement);
+  if (reason === null && measurement !== null) {
+    return { kind: "judgeable", measurement };
+  }
+  const terminalReason = reason ?? "video-disappeared";
+  if (isInconclusiveMeasurement(terminalReason)) {
+    return { kind: "inconclusive" };
+  }
+  return {
+    kind: "anomaly",
+    phenomenon: measurementFailurePhenomenon(terminalReason, measurement),
+  };
 }
 
 /**
@@ -1129,31 +1169,28 @@ async function checkStream(): Promise<CheckResult> {
       }
       measurement = await measureAfterAdvertisements(page);
     }
-    if (measurement === null) {
-      phenomena.push(measurementFailurePhenomenon("video-disappeared", null));
+    const classification = classifyMeasurement(measurement);
+    if (classification.kind === "inconclusive") {
+      // No window in the retry budget could be judged — the video element
+      // kept disappearing, or every window sat behind an advertisement — so
+      // the run observed the player, not the program. Report it as
+      // inconclusive instead of raising a false anomaly issue.
+      console.log(
+        "[INFO] No measurement window could be judged; the check is inconclusive",
+      );
+      return {
+        ok: false,
+        inconclusive: true,
+        timestampJst,
+        phenomena,
+        details,
+      };
+    }
+    if (classification.kind === "anomaly") {
+      phenomena.push(classification.phenomenon);
       return { ok: false, timestampJst, phenomena, details };
     }
-    const terminalReason = measurementRetryReason(measurement);
-    if (terminalReason !== null) {
-      if (isInconclusiveMeasurement(terminalReason)) {
-        // Advertisements filled every window: the run has nothing to say about
-        // the program, and an ad playing means the broadcast is live. Report
-        // the run as inconclusive instead of raising a false anomaly issue.
-        console.log(
-          "[INFO] Every measurement window was contaminated by an advertisement; the check is inconclusive",
-        );
-        return {
-          ok: false,
-          inconclusive: true,
-          timestampJst,
-          phenomena,
-          details,
-        };
-      }
-      phenomena.push(measurementFailurePhenomenon(terminalReason, measurement));
-      return { ok: false, timestampJst, phenomena, details };
-    }
-    const { startProbe, motion, endProbe } = measurement;
+    const { startProbe, motion, endProbe } = classification.measurement;
     details.decodedAudioBytesStart = startProbe.decodedAudioBytes;
     details.decodedAudioBytesEnd = endProbe.decodedAudioBytes;
     details.videoCurrentTimeStart = startProbe.currentTime;
