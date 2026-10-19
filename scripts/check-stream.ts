@@ -108,7 +108,7 @@ export function isCapturableMediaSource(
  */
 export function isInAdContainer(className: string | null | undefined): boolean {
   const value = typeof className === "string" ? className : "";
-  return /ad-sticky|_ap_|apex|ima-ad|ad-container|ad_container|___ad-/i.test(
+  return /ad-sticky|_ap_|apex|ima-ad|ad-container|ad_container|___ad-|(?:ap|ad|ads|advertisement)[-_ ]?player/i.test(
     value,
   );
 }
