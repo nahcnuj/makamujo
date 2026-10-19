@@ -19,6 +19,7 @@ import {
   toDisplayedStatistics,
   type WatchPageBrowser,
   type WatchPageRawReading,
+  waitForAdvertisementEnd,
 } from "./watchPageBrowser";
 
 const NAVIGATION_TIMEOUT_MS = 60_000;
@@ -45,6 +46,14 @@ const MOTION_CHANNEL_TOLERANCE = 16;
 const MOTION_MIN_CHANGED_RATIO = 0.001;
 /** rAF が一切来ない（レンダラ停止）ときでも絶対に帰る上限。 */
 const MOTION_EVALUATE_TIMEOUT_MS = MOTION_WINDOW_MS + 5_000;
+/**
+ * 測定の前に待つ広告の上限。`scripts/check-stream.ts` と同じく長めに待ってでも
+ * 清潔な窓を取る: 統計用ブラウザはサインアウトのまま長く開いておくので中割り
+ * 広告が繰り返され、待たずに測ると停止と広告を区別できず回復が走らない。
+ */
+const ADVERTISEMENT_WAIT_TIMEOUT_MS = 90_000;
+/** 広告の終了を何ミリ秒ごとに確かめるか。 */
+const ADVERTISEMENT_POLL_MS = 500;
 
 /**
  * ページ側の動画選別ヘルパーと再生開始ヘルパーを置く。navigation で消えるの
@@ -317,6 +326,27 @@ export const createChromiumWatchPageBrowser =
       isAlive: () => browser.isConnected() && !page.isClosed(),
       measurePictureMotion: async () => {
         await installVideoSelectors(page);
+        // 中割り広告で `<video>` が止まると窓は静止に見え、判定不能として破棄
+        // される。統計用ブラウザはサインアウトのまま長く開いておくので中割りが
+        // 繰り返され、待たずに測ると清潔な窓がほとんど取れず本物の停止が回復に
+        // 達しない。健康チェック (check-stream.ts) と同じく、測定前に流れる広告
+        // が終わるのを待つ。上限まで待っても流れていたら測定を続行する（サン
+        // プラーが sawAdvertisement を立て、その窓は判定不能として破棄される）。
+        const advertisementEnded = await waitForAdvertisementEnd({
+          isAdvertisementPlaying: () =>
+            page
+              .evaluate(() => window.__mmjIsAdvertisementPlaying?.() ?? false)
+              .catch(() => false),
+          timeoutMs: ADVERTISEMENT_WAIT_TIMEOUT_MS,
+          pollMs: ADVERTISEMENT_POLL_MS,
+          sleep: (ms) =>
+            new Promise<void>((resolve) => globalThis.setTimeout(resolve, ms)),
+        });
+        if (!advertisementEnded) {
+          console.log(
+            "[INFO] an advertisement was still playing after the wait; measuring anyway",
+          );
+        }
         // レンダラが固まっていると evaluate が帰らない可能性がある。待ちの
         // 上限を置いて、帰らなければ「測れなかった」に落とす。
         return Promise.race([
