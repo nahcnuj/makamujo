@@ -22,6 +22,20 @@ const PLAYBACK_WARMUP_SECONDS = 2;
 const ADVERTISEMENT_WAIT_TIMEOUT_MS = 90_000;
 const ADVERTISEMENT_POLL_MS = 500;
 /**
+ * How long to wait for the live `<video>` to become measurable again after an
+ * advertisement releases the player.
+ *
+ * Advertisement teardown re-attaches the live media source a few seconds after
+ * the last ad frame (and can leave the element paused). Probing in that gap
+ * finds no capturable video, so `measurePlayback` returned `null` and the
+ * check reported a healthy stream as "the video element disappeared" — while
+ * its reload queued the next pre-roll advertisement and reproduced the very
+ * same gap until the retry budget ran out. The bound covers the hand-off plus
+ * a little buffering without eating the job's 10-minute timeout.
+ */
+const PLAYBACK_SETTLE_TIMEOUT_MS = 15_000;
+const PLAYBACK_SETTLE_POLL_MS = 250;
+/**
  * Maximum retries when a window has to be discarded (advertisement, rebuilt
  * media element, missing video): the measurement is re-taken at most this
  * many times before the check gives up.
@@ -406,6 +420,46 @@ export function isVideoReady(state: {
   return (
     state.videoWidth > 0 && state.readyState >= 2 && state.paused === false
   );
+}
+
+export interface MeasurableVideoWaitOptions {
+  /** Reads the state of the live `<video>`. */
+  probe: () => Promise<VideoState>;
+  /** Give up after this long; the caller decides whether to measure anyway. */
+  timeoutMs: number;
+  /** Gap between two probes. */
+  pollMs: number;
+  /** Injectable so tests do not wait in real time. */
+  sleep: (ms: number) => Promise<void>;
+  /** Injectable clock; defaults to wall-clock milliseconds. */
+  now?: () => number;
+}
+
+/**
+ * Poll until the live `<video>` is measurable again, or the timeout expires.
+ *
+ * Advertisement teardown hands the player back a moment after the last ad
+ * frame: the live media source is re-attached (and sometimes left paused)
+ * only after that, so probing straight away finds no capturable video and a
+ * healthy stream reads as "the video element disappeared".
+ *
+ * Returns the last observed probe either way, so the caller can still decide
+ * from `isVideoReady` whether to measure instead of waiting for the deadline
+ * twice.
+ */
+export async function waitForMeasurableVideo({
+  probe,
+  timeoutMs,
+  pollMs,
+  sleep,
+  now = () => Date.now(),
+}: MeasurableVideoWaitOptions): Promise<VideoState> {
+  const deadline = now() + timeoutMs;
+  for (;;) {
+    const state = await probe();
+    if (isVideoReady(state) || now() >= deadline) return state;
+    await sleep(pollMs);
+  }
 }
 
 /**
@@ -803,11 +857,45 @@ async function waitForAdvertisementEnd(
 }
 
 /**
- * Wait out any running advertisement, then sample one window.
+ * Wait until the live `<video>` is decodable and playing again, so a window
+ * can be sampled.
+ *
+ * Each probe also nudges a paused element back to playing: the player can
+ * stay paused behind an advertisement, and {@link isVideoReady} waits for a
+ * playing element, so without the nudge the wait would run out on an element
+ * nobody asked to resume.
+ */
+async function waitForMeasurableVideoOnPage(
+  page: Page,
+  timeoutMs: number,
+): Promise<boolean> {
+  const state = await waitForMeasurableVideo({
+    probe: async () => {
+      const probed = await readVideoState(page);
+      if (probed.found && probed.paused) {
+        // Failures are irrelevant: the next probe re-reads the element.
+        await startPlayback(page);
+      }
+      return probed;
+    },
+    timeoutMs,
+    pollMs: PLAYBACK_SETTLE_POLL_MS,
+    sleep: (ms) => page.waitForTimeout(ms),
+  });
+  return isVideoReady(state);
+}
+
+/**
+ * Wait out any running advertisement, wait for the live video to be
+ * measurable again, then sample one window.
  *
  * Waiting first avoids sampling the frozen live picture a pre-roll ad leaves
  * behind; the sampler separately flags any ad that starts mid-window so the
- * caller can discard that window.
+ * caller can discard that window. The readiness wait covers the hand-off
+ * after the last ad frame, while the player re-attaches the live media
+ * source: probing in that gap found no capturable video, and the resulting
+ * "the video element disappeared" gave up (and its reload queued the next
+ * pre-roll, reproducing the gap) on a perfectly healthy stream.
  */
 async function measureAfterAdvertisements(
   page: Page,
@@ -819,6 +907,12 @@ async function measureAfterAdvertisements(
   if (!ended) {
     console.log(
       "[INFO] Advertisement still playing after the wait; measuring anyway",
+    );
+  } else if (
+    !(await waitForMeasurableVideoOnPage(page, PLAYBACK_SETTLE_TIMEOUT_MS))
+  ) {
+    console.log(
+      "[INFO] The live video did not become measurable after the wait; measuring anyway",
     );
   }
   return measurePlayback(page);
