@@ -95,7 +95,6 @@ const installVideoSelectors = (page: import("playwright").Page) =>
     Array.from(document.querySelectorAll("video")).some(
       (v) =>
         isAdvertisement(v.currentSrc || v.src || "", origin, inAdContainer(v)) &&
-        v.paused === false &&
         isSized(v),
     );
   window.__mmjStartPlayback = () =>

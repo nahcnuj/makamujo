@@ -122,7 +122,7 @@ export function isCapturableMediaSource(
  */
 export function isInAdContainer(className: string | null | undefined): boolean {
   const value = typeof className === "string" ? className : "";
-  return /ad-sticky|_ap_|apex|ima-ad|ad-container|ad_container|___ad-|(?:ap|ad|ads|advertisement)[-_ ]?player/i.test(
+  return /ad-sticky|sticky[-_ ]?ad|stickyad|_ap_|apex|ima[-_ ]?ad|imaad|ad[-_ ]?container|adcontainer|ad_container|ad[-_ ]?overlay|adoverlay|ad[-_ ]?modal|admodal|adsticky|advert|midroll|preroll|instream[-_ ]?ad|___ad[-_]?|___ad\b|(?:ap|ad|ads|advertisement)[-_ ]?player/i.test(
     value,
   );
 }
@@ -210,7 +210,7 @@ const SELECT_VIDEO_INIT_SCRIPT = `
     Array.from(document.querySelectorAll("video")).some(
       (v) =>
         isAdvertisement(v.currentSrc || v.src || "", origin, inAdContainer(v)) &&
-        isActive(v),
+        isSized(v),
     );
 })();
 `;
@@ -847,8 +847,15 @@ async function measurePlayback(
 ): Promise<PlaybackMeasurement | null> {
   const startProbe = await readVideoState(page);
   const motion = await sampleMotionWithRetry(page);
-  const endProbe = await readVideoState(page);
-  if (!endProbe.found) return null;
+  let endProbe = await readVideoState(page);
+  if (!endProbe.found) {
+    // The closing probe can race the player rebuilding its media element
+    // (or an advertisement releasing it); wait briefly for the live video to
+    // become measurable again before declaring it disappeared.
+    await waitForMeasurableVideoOnPage(page, PLAYBACK_SETTLE_TIMEOUT_MS);
+    endProbe = await readVideoState(page);
+    if (!endProbe.found) return null;
+  }
   return { startProbe, motion, endProbe };
 }
 
