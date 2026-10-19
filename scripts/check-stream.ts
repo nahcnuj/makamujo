@@ -67,8 +67,10 @@ declare global {
      */
     __mmjSelectCapturableVideo?: () => HTMLVideoElement | null;
     /**
-     * Installed by {@link SELECT_VIDEO_INIT_SCRIPT}; returns true while a
-     * cross-origin video (an advertisement) is actively playing.
+     * Installed by {@link SELECT_VIDEO_INIT_SCRIPT}; returns true while an
+     * advertisement is actively playing — either a cross-origin video or a
+     * video inside an advertisement container (nicovideo serves its
+     * pre-roll/sticky ad as a same-origin `blob:` source).
      */
     __mmjIsAdvertisementPlaying?: () => boolean;
   }
@@ -169,12 +171,12 @@ const SELECT_VIDEO_INIT_SCRIPT = `
   const origin = location.origin;
   const isActive = (v) => v.videoWidth > 0 && v.readyState >= 2 && v.paused === false;
   const isSized = (v) => v.videoWidth > 0 && v.readyState >= 2;
+  const adTouch = (cur) =>
+    isInAd(String(cur.className || "") + " " + String(cur.id || ""));
   const inAdContainer = (v) => {
     let cur = v;
     while (cur && cur !== document.body) {
-      if (isInAd(String(cur.className || "") + " " + String(cur.id || ""))) {
-        return true;
-      }
+      if (adTouch(cur)) return true;
       cur = cur.parentElement;
     }
     return false;
@@ -186,10 +188,14 @@ const SELECT_VIDEO_INIT_SCRIPT = `
     );
     return capturable.find(isActive) ?? capturable.find(isSized) ?? null;
   };
+  // An advertisement is either a cross-origin file (drawing it would taint
+  // the canvas) or any video inside an advertisement container — nicovideo's
+  // pre-roll/sticky ad is a same-origin blob: source, so the source check
+  // alone missed it and the playback wait ran out behind it (issue #911).
   window.__mmjIsAdvertisementPlaying = () =>
-    Array.from(document.querySelectorAll("video")).some(
-      (v) =>
-        !isCapturable(v.currentSrc || v.src || "", origin) && isActive(v),
+    Array.from(document.querySelectorAll("video")).some((v) =>
+      isActive(v) &&
+      (!isCapturable(v.currentSrc || v.src || "", origin) || inAdContainer(v)),
     );
 })();
 `;
@@ -719,6 +725,62 @@ async function reloadAndWaitForPlayback(page: Page): Promise<boolean> {
   return waitForVideoPlayback(page, PLAYBACK_READY_TIMEOUT_MS);
 }
 
+/**
+ * Recover a startup whose playback wait expired: wait any playing
+ * advertisement out, let the live player settle, then wait for playback on
+ * the already loaded page.
+ *
+ * Reloading a page whose pre-roll advertisement is still running re-queues
+ * another one, and the fresh ad holds the player all over again — that is how
+ * the pre-#911 check turned back-to-back advertisements into a stream
+ * anomaly. An advertisement only plays while the broadcast is live, so the
+ * healthy recovery is to end the ad and resume the program, not to reload
+ * into the next ad.
+ */
+async function waitOutAdvertisementAndRecover(page: Page): Promise<boolean> {
+  const ended = await waitForAdvertisementEnd(
+    page,
+    ADVERTISEMENT_WAIT_TIMEOUT_MS,
+  );
+  if (!ended) {
+    console.log(
+      "[INFO] Advertisement still playing after the wait; waiting for playback anyway",
+    );
+  } else if (
+    !(await waitForMeasurableVideoOnPage(page, PLAYBACK_SETTLE_TIMEOUT_MS))
+  ) {
+    console.log(
+      "[INFO] The live video did not become measurable after the wait; waiting for playback anyway",
+    );
+  }
+  return waitForVideoPlayback(page, PLAYBACK_READY_TIMEOUT_MS);
+}
+
+/**
+ * Terminal result when the player never started and the recoveries are used
+ * up.
+ *
+ * An advertisement on screen makes the run inconclusive (the broadcast is
+ * live, and the player was held by the advertisement the whole time), so the
+ * exit code stays at zero and the next scheduled check re-runs. A give-up
+ * with no advertisement in sight is a stream fault.
+ */
+async function finishPlaybackStartupFailure(
+  page: Page,
+  timestampJst: string,
+  phenomena: string[],
+  details: CheckResult["details"],
+): Promise<CheckResult> {
+  if (isInconclusiveStartup(await readAdvertisementPlaying(page))) {
+    console.log(
+      "[INFO] The playback waits ran out behind an advertisement; the check is inconclusive",
+    );
+    return { ok: false, inconclusive: true, timestampJst, phenomena, details };
+  }
+  phenomena.push("映像の再生が始まりませんでした");
+  return { ok: false, timestampJst, phenomena, details };
+}
+
 export interface PlaybackMeasurement {
   startProbe: VideoState;
   motion: MotionSamples;
@@ -846,6 +908,66 @@ export function isInconclusiveMeasurement(
   return reason === "advertisement";
 }
 
+/** What the startup path does after one `waitForVideoPlayback` expired. */
+export type StartupRecoveryPlan =
+  | { kind: "give-up" }
+  | { kind: "wait-out-advertisement" }
+  | { kind: "reload" };
+
+export interface StartupRecoveryPlanInput {
+  /**
+   * Failed startups so far, including the one being judged. `1` is the
+   * first failure (the initial page load), `2` one recovery already
+   * exhausted, and so on.
+   */
+  failures: number;
+  /** True while an advertisement was playing at the moment of the failure. */
+  advertisementPlaying: boolean;
+}
+
+export const STARTUP_RECOVERY_FAILURE_LIMIT = 2;
+
+/**
+ * Decide the next move when playback did not start.
+ *
+ * A signed-out viewer gets a pre-roll advertisement on every page load and
+ * nicovideo freezes the live `<video>` for the whole of it, so the startup
+ * wait can expire behind an ad on a perfectly healthy stream (issue #911,
+ * checked at 23:28 prime time). Reload is the wrong move there: another page
+ * load queues another pre-roll, which reproduces the very same failure (the
+ * original code burned both its 30-second waits this way). Waiting an
+ * advertisement out instead ends the ad that actually blocks the player, so
+ * a failure while an advertisement is playing is recovered by waiting; only
+ * a failure with no advertisement on screen is recovered by a reload.
+ */
+export function startupRecoveryPlan({
+  failures,
+  advertisementPlaying,
+}: StartupRecoveryPlanInput): StartupRecoveryPlan {
+  if (failures >= STARTUP_RECOVERY_FAILURE_LIMIT) return { kind: "give-up" };
+  return advertisementPlaying
+    ? { kind: "wait-out-advertisement" }
+    : { kind: "reload" };
+}
+
+/**
+ * True when a startup that never confirmed the program should be reported as
+ * inconclusive instead of as a stream anomaly.
+ *
+ * The startup goes through the same advertisement states the measurement
+ * windows do (see also {@link isInconclusiveMeasurement}): an advertisement
+ * only plays while the broadcast is live, so a run whose startup wait
+ * expired with one still on screen holds no observation of the program —
+ * raising an anomaly issue from it would be a false positive, and reloading
+ * again would only queue the next pre-roll. The caller reports the run as
+ * inconclusive, leaves the exit code at zero, and lets the next scheduled
+ * check try again. A give-up with no advertisement in sight is evidence of
+ * a stream fault and stays an anomaly.
+ */
+export function isInconclusiveStartup(advertisementPlaying: boolean): boolean {
+  return advertisementPlaying;
+}
+
 /**
  * Probe decoded-audio bytes around one sampling window.
  *
@@ -862,7 +984,7 @@ async function measurePlayback(
   return { startProbe, motion, endProbe };
 }
 
-/** True while a cross-origin (advertisement) video is actively playing. */
+/** True while an advertisement video is actively playing. */
 async function readAdvertisementPlaying(page: Page): Promise<boolean> {
   return page
     .evaluate(() => window.__mmjIsAdvertisementPlaying?.() ?? false)
@@ -1000,17 +1122,37 @@ async function checkStream(): Promise<CheckResult> {
       return { ok: false, timestampJst, phenomena, details };
     }
 
-    let playbackStarted = await waitForVideoPlayback(
-      page,
-      PLAYBACK_READY_TIMEOUT_MS,
-    );
-    if (!playbackStarted) {
-      console.log("[INFO] Playback did not start; reloading watch page");
-      playbackStarted = await reloadAndWaitForPlayback(page);
-    }
-    if (!playbackStarted) {
-      phenomena.push("映像の再生が始まりませんでした");
-      return { ok: false, timestampJst, phenomena, details };
+    let playbackStarted = false;
+    let startupFailures = 0;
+    for (;;) {
+      playbackStarted = await waitForVideoPlayback(
+        page,
+        PLAYBACK_READY_TIMEOUT_MS,
+      );
+      if (playbackStarted) break;
+      startupFailures += 1;
+      const advertisementPlaying = await readAdvertisementPlaying(page);
+      const plan = startupRecoveryPlan({
+        failures: startupFailures,
+        advertisementPlaying,
+      });
+      if (plan.kind === "give-up") {
+        return finishPlaybackStartupFailure(
+          page,
+          timestampJst,
+          phenomena,
+          details,
+        );
+      }
+      if (plan.kind === "wait-out-advertisement") {
+        console.log(
+          "[INFO] Playback did not start behind an advertisement; waiting for it to end and for playback again",
+        );
+        if (await waitOutAdvertisementAndRecover(page)) break;
+      } else {
+        console.log("[INFO] Playback did not start; reloading watch page");
+        if (await reloadAndWaitForPlayback(page)) break;
+      }
     }
 
     // Keep re-measuring until the window contains neither an intervening
@@ -1048,8 +1190,27 @@ async function checkStream(): Promise<CheckResult> {
       );
       const recovered = await reloadAndWaitForPlayback(page);
       if (!recovered) {
-        phenomena.push("映像の再生が始まりませんでした");
-        return { ok: false, timestampJst, phenomena, details };
+        // One more chance, bounded like the startup ladder: a reload queues
+        // its fresh pre-roll advertisement (#911), so wait that one out and
+        // re-measure when the player resumes. The terminal decision below
+        // (see `finishPlaybackStartupFailure`) also replaces a fault report
+        // with an inconclusive run when the advertisement is what held the
+        // player.
+        if (await readAdvertisementPlaying(page)) {
+          console.log(
+            "[INFO] Playback did not start behind an advertisement after the reload; waiting for it to end and for playback again",
+          );
+          if (await waitOutAdvertisementAndRecover(page)) {
+            measurement = await measureAfterAdvertisements(page);
+            continue;
+          }
+        }
+        return finishPlaybackStartupFailure(
+          page,
+          timestampJst,
+          phenomena,
+          details,
+        );
       }
       measurement = await measureAfterAdvertisements(page);
     }

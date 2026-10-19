@@ -8,6 +8,7 @@ import {
   isFpsAboveThreshold,
   isInAdContainer,
   isInconclusiveMeasurement,
+  isInconclusiveStartup,
   isMeasurementUnusable,
   isOverallOk,
   isVideoReady,
@@ -16,7 +17,9 @@ import {
   measurementFailurePhenomenon,
   measurementRetryReason,
   type PlaybackMeasurement,
+  STARTUP_RECOVERY_FAILURE_LIMIT,
   shouldReMeasure,
+  startupRecoveryPlan,
   summarizeFps,
   toErrorResult,
   VIDEO_MIN_FPS,
@@ -655,6 +658,49 @@ describe("isInconclusiveMeasurement", () => {
     expect(isInconclusiveMeasurement("video-disappeared")).toBe(false);
     expect(isInconclusiveMeasurement("unusable")).toBe(false);
     expect(isInconclusiveMeasurement(null)).toBe(false);
+  });
+});
+
+describe("startupRecoveryPlan", () => {
+  it("waits an advertisement out before reloading a page that failed to start", () => {
+    // The reload queues the very pre-roll that froze the player: burning the
+    // budget on reloads reproduced the failure twice on a healthy stream
+    // (issue #911). Waiting the current ad out instead leaves the player
+    // handed, and playback can begin.
+    expect(
+      startupRecoveryPlan({ failures: 1, advertisementPlaying: true }),
+    ).toEqual({ kind: "wait-out-advertisement" });
+  });
+
+  it("reloads a page whose failure no advertisement explains", () => {
+    expect(
+      startupRecoveryPlan({ failures: 1, advertisementPlaying: false }),
+    ).toEqual({ kind: "reload" });
+  });
+
+  it("gives up once the budget is exhausted either way", () => {
+    for (const advertisementPlaying of [true, false]) {
+      const failures = STARTUP_RECOVERY_FAILURE_LIMIT;
+      expect(startupRecoveryPlan({ failures, advertisementPlaying })).toEqual({
+        kind: "give-up",
+      });
+      expect(
+        startupRecoveryPlan({ failures: failures + 1, advertisementPlaying }),
+      ).toEqual({ kind: "give-up" });
+    }
+  });
+});
+
+describe("isInconclusiveStartup", () => {
+  it("treats a give-up with an advertisement on screen as inconclusive", () => {
+    // An advertisement only plays while the broadcast is live, so a startup
+    // that expired behind one carries nothing about the program (#911 was an
+    // hour of this at 23:28 prime time). The next scheduled check retries.
+    expect(isInconclusiveStartup(true)).toBe(true);
+  });
+
+  it("keeps a give-up with no advertisement in sight as an anomaly", () => {
+    expect(isInconclusiveStartup(false)).toBe(false);
   });
 });
 
