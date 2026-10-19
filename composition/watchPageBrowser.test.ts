@@ -7,6 +7,7 @@ import {
   startVideoPlayback,
   toDisplayedStatistics,
   type WatchPageRawReading,
+  waitForAdvertisementEnd,
 } from "./watchPageBrowser";
 
 const motion = (overrides: Partial<PictureMotion> = {}): PictureMotion => ({
@@ -165,5 +166,82 @@ describe("startVideoPlayback", () => {
 
   it("accepts an empty collection", () => {
     expect(() => startVideoPlayback([])).not.toThrow();
+  });
+});
+
+describe("waitForAdvertisementEnd", () => {
+  /** A controllable clock + sleep so the wait does not run in real time. */
+  const createClock = () => {
+    let currentMs = 0;
+    const sleeps: number[] = [];
+    return {
+      now: () => currentMs,
+      sleep: async (ms: number) => {
+        sleeps.push(ms);
+        currentMs += ms;
+      },
+      sleeps,
+    };
+  };
+
+  it("returns immediately when no advertisement is playing", async () => {
+    const clock = createClock();
+    let probes = 0;
+
+    const ended = await waitForAdvertisementEnd({
+      isAdvertisementPlaying: async () => {
+        probes += 1;
+        return false;
+      },
+      timeoutMs: 1_000,
+      pollMs: 100,
+      sleep: clock.sleep,
+      now: clock.now,
+    });
+
+    expect(ended).toBe(true);
+    expect(probes).toBe(1);
+    expect(clock.sleeps).toEqual([]);
+  });
+
+  it("waits while an advertisement plays and returns true once it ends", async () => {
+    const clock = createClock();
+    // Playing for the first three probes, then finished.
+    const answers = [true, true, true, false];
+    let probes = 0;
+
+    const ended = await waitForAdvertisementEnd({
+      isAdvertisementPlaying: async () => {
+        const answer = answers[probes] ?? false;
+        probes += 1;
+        return answer;
+      },
+      timeoutMs: 10_000,
+      pollMs: 100,
+      sleep: clock.sleep,
+      now: clock.now,
+    });
+
+    expect(ended).toBe(true);
+    expect(probes).toBe(4);
+    // Polled at the configured gap until the advertisement ended.
+    expect(clock.sleeps).toEqual([100, 100, 100]);
+  });
+
+  it("gives up after the timeout and reports the advertisement still playing", async () => {
+    const clock = createClock();
+
+    const ended = await waitForAdvertisementEnd({
+      isAdvertisementPlaying: async () => true,
+      timeoutMs: 250,
+      pollMs: 100,
+      sleep: clock.sleep,
+      now: clock.now,
+    });
+
+    expect(ended).toBe(false);
+    // The deadline is checked after each probe, so it overshoots by at most
+    // one poll gap rather than polling forever.
+    expect(clock.sleeps).toEqual([100, 100, 100]);
   });
 });

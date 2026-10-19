@@ -101,6 +101,55 @@ export const judgePictureMotion = (
   return changedFps < PICTURE_STILL_FPS_THRESHOLD ? "still" : "moving";
 };
 
+export interface AdvertisementWaitOptions {
+  /** True while a cross-origin (advertisement) video is actively playing. */
+  isAdvertisementPlaying: () => Promise<boolean>;
+  /** Give up after this long; the caller decides whether to measure anyway. */
+  timeoutMs: number;
+  /** Gap between two probes. */
+  pollMs: number;
+  /** Injectable so tests do not wait in real time. */
+  sleep: (ms: number) => Promise<void>;
+  /** Injectable clock; defaults to wall-clock milliseconds. */
+  now?: () => number;
+}
+
+/**
+ * Poll until no advertisement is playing, or the timeout expires.
+ *
+ * A signed-out viewer gets a pre-roll on every load and mid-rolls while
+ * watching; the live `<video>` is frozen for the whole advertisement, so a
+ * window sampled during one measures a still picture and is discarded as
+ * unmeasurable (`judgePictureMotion` returns `undefined`). The statistics
+ * browser keeps its page open across many cycles, so recurring mid-rolls leave
+ * almost no clean window and a genuine composite freeze never accumulates the
+ * consecutive `still` cycles needed to recover — the scheduled health check
+ * then raises the issue. Waiting for the current advertisement to end before
+ * sampling (the same approach `scripts/check-stream.ts` uses) gives the
+ * watchdog a clean window to judge.
+ *
+ * Returns `true` when the wait observed no advertisement (a clean window can be
+ * sampled), `false` when one was still playing at the deadline.
+ */
+export const waitForAdvertisementEnd = async ({
+  isAdvertisementPlaying,
+  timeoutMs,
+  pollMs,
+  sleep,
+  now = () => Date.now(),
+}: AdvertisementWaitOptions): Promise<boolean> => {
+  const deadline = now() + timeoutMs;
+  for (;;) {
+    if (!(await isAdvertisementPlaying())) {
+      return true;
+    }
+    if (now() >= deadline) {
+      return false;
+    }
+    await sleep(pollMs);
+  }
+};
+
 /** ページ側の再生開始に必要な `<video>` の最小限。 */
 export interface PlayableVideo {
   muted: boolean;

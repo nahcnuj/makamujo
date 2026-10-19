@@ -124,6 +124,13 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
   計測のたびに `startVideoPlayback` で全 `<video>` をミュート再生させる。
   これが無いと headless では要素が paused のままになり、観測が永久に
   `unknown` になって回復が一度も走らない（`check-stream.ts` と同じ扱い）。
+  中割り広告で `<video>` が止まると窓は静止に見えて判定不能（`unknown`）に
+  なり、`CompositeFreezePolicy` の streak をリセットする。統計用ブラウザは
+  サインアウトのまま長く開いておくので中割りが繰り返され、待たずに測ると
+  清潔な窓がほとんど取れず本物の合成停止が回復に達しない。そこで測定の前に
+  `waitForAdvertisementEnd` で流れる広告が終わるのを待つ（`check-stream.ts`
+  の `waitForAdvertisementEnd` と同じ考え方。上限まで待っても流れていたら
+  測定を続行し、その窓は判定不能として破棄される）。
 - 測定は機会良く（開いたままのページがあるときだけ）。ページを作り直さない。
 - 純ポリシー `lib/domain/broadcasting/CompositeFreezePolicy.ts` が、周期ごとの
   観測（`still` / `moving` / `unknown`）を折りたたむ:
