@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   didAudioDecodedBytesReset,
+  didPlaybackStall,
   formatJst,
   GAME_MIN_FPS,
   isAudioPlaying,
@@ -65,6 +66,29 @@ describe("didAudioDecodedBytesReset", () => {
   });
 });
 
+describe("didPlaybackStall", () => {
+  it("flags a window whose media clock failed to advance", () => {
+    // Observed in issue #908: the settle wait handed the sampler a player
+    // that had just been rebuilt, its clock parked on the startup frame, and
+    // the static picture was judged as a stopped broadcast.
+    expect(didPlaybackStall(0, 0)).toBe(true);
+    expect(didPlaybackStall(120, 120.05)).toBe(true);
+    expect(didPlaybackStall(10, 11.9)).toBe(true);
+  });
+
+  it("flags a media clock that went backwards", () => {
+    expect(didPlaybackStall(10, 5)).toBe(true);
+  });
+
+  it("accepts a window that advanced past the warm-up floor", () => {
+    // A stream freeze downstream of the player still delivers segments, so a
+    // healthy clock keeps moving; only a local stall parks it.
+    expect(didPlaybackStall(0, 2)).toBe(false);
+    expect(didPlaybackStall(0, 10)).toBe(false);
+    expect(didPlaybackStall(120, 131.4)).toBe(false);
+  });
+});
+
 describe("shouldReMeasure", () => {
   const motionOf = (
     tainted: boolean,
@@ -104,12 +128,12 @@ describe("shouldReMeasure", () => {
 });
 
 describe("isMeasurementUnusable", () => {
-  const probe = (decodedAudioBytes: number): VideoState => ({
+  const probe = (decodedAudioBytes: number, currentTime = 0): VideoState => ({
     found: true,
     videoWidth: 640,
     readyState: 2,
     paused: false,
-    currentTime: 0,
+    currentTime,
     decodedAudioBytes,
   });
   const motionOf = (
@@ -129,10 +153,12 @@ describe("isMeasurementUnusable", () => {
     motion: MotionSamples,
     decodedAudioBytesStart: number,
     decodedAudioBytesEnd: number,
+    currentTimeStart = 0,
+    currentTimeEnd = 10,
   ): PlaybackMeasurement => ({
-    startProbe: probe(decodedAudioBytesStart),
+    startProbe: probe(decodedAudioBytesStart, currentTimeStart),
     motion,
-    endProbe: probe(decodedAudioBytesEnd),
+    endProbe: probe(decodedAudioBytesEnd, currentTimeEnd),
   });
 
   it("rejects a window whose closing probe found no video", () => {
@@ -163,6 +189,17 @@ describe("isMeasurementUnusable", () => {
     expect(
       isMeasurementUnusable(
         measurementOf(motionOf(false, twoSamples), 14129, 7690),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a window whose media clock never advanced", () => {
+    // The rebuilt player reports ready while still painting its startup
+    // frame; judging that static picture would report a healthy stream as
+    // stopped, so the window is discarded and re-measured instead.
+    expect(
+      isMeasurementUnusable(
+        measurementOf(motionOf(false, twoSamples), 1035, 50_000, 120, 120.05),
       ),
     ).toBe(true);
   });
@@ -369,6 +406,117 @@ describe("waitForMeasurableVideo", () => {
     expect(taken).toBe(1);
     expect(clock.sleeps).toEqual([]);
   });
+
+  it("waits for the media clock to advance when asked", async () => {
+    // The freshly rebuilt player reports ready while still painting its
+    // startup frame; the wait has to outlast that static picture.
+    const clock = createClock();
+    let taken = 0;
+    const advancing = [
+      { ...ready, currentTime: 120 },
+      { ...ready, currentTime: 120.5 },
+      { ...ready, currentTime: 123 },
+    ];
+
+    const state = await waitForMeasurableVideo({
+      probe: async () => {
+        const next = advancing[Math.min(taken, advancing.length - 1)] ?? ready;
+        taken += 1;
+        return next;
+      },
+      timeoutMs: 1_000,
+      pollMs: 100,
+      sleep: clock.sleep,
+      now: clock.now,
+      requireAdvanceSeconds: 2,
+    });
+
+    expect(state.currentTime).toBe(123);
+    expect(taken).toBe(3);
+    expect(clock.sleeps).toEqual([100, 100]);
+  });
+
+  it("restarts the advance wait when the clock goes backwards", async () => {
+    const clock = createClock();
+    let taken = 0;
+    const rebuilt = [
+      { ...ready, currentTime: 50 },
+      { ...ready, currentTime: 1 },
+      { ...ready, currentTime: 3.5 },
+    ];
+
+    const state = await waitForMeasurableVideo({
+      probe: async () => {
+        const next = rebuilt[Math.min(taken, rebuilt.length - 1)] ?? ready;
+        taken += 1;
+        return next;
+      },
+      timeoutMs: 1_000,
+      pollMs: 100,
+      sleep: clock.sleep,
+      now: clock.now,
+      requireAdvanceSeconds: 2,
+    });
+
+    // The backwards probe reset the base, so 1 -> 3.5 is the measured advance.
+    expect(state.currentTime).toBe(3.5);
+    expect(taken).toBe(3);
+  });
+
+  it("hands back a ready but stalled probe at the deadline", async () => {
+    // The caller measures anyway; the measurement's own stall check then
+    // discards the window instead of judging the static picture.
+    const clock = createClock();
+    let taken = 0;
+    const stalled = { ...ready, currentTime: 120 };
+
+    const state = await waitForMeasurableVideo({
+      probe: async () => {
+        taken += 1;
+        return stalled;
+      },
+      timeoutMs: 250,
+      pollMs: 100,
+      sleep: clock.sleep,
+      now: clock.now,
+      requireAdvanceSeconds: 2,
+    });
+
+    expect(state).toEqual(stalled);
+    expect(isVideoReady(state)).toBe(true);
+    expect(taken).toBe(4);
+    expect(clock.sleeps).toEqual([100, 100, 100]);
+  });
+
+  it("restarts the advance wait when the player drops out mid-wait", async () => {
+    const clock = createClock();
+    let taken = 0;
+    const recovering = [
+      { ...ready, currentTime: 10 },
+      absent,
+      { ...ready, currentTime: 11 },
+      { ...ready, currentTime: 13 },
+    ];
+
+    const state = await waitForMeasurableVideo({
+      probe: async () => {
+        const next =
+          recovering[Math.min(taken, recovering.length - 1)] ?? ready;
+        taken += 1;
+        return next;
+      },
+      timeoutMs: 1_000,
+      pollMs: 100,
+      sleep: clock.sleep,
+      now: clock.now,
+      requireAdvanceSeconds: 2,
+    });
+
+    // The dropout reset the base to 11, so 13 clears the 2-second floor.
+    expect(state.currentTime).toBe(13);
+    expect(taken).toBe(4);
+    expect(clock.sleeps).toEqual([100, 100, 100]);
+  });
 });
 
 describe("isFpsAboveThreshold", () => {
@@ -570,12 +718,12 @@ describe("isInAdContainer", () => {
 });
 
 describe("measurementRetryReason", () => {
-  const probe = (decodedAudioBytes: number): VideoState => ({
+  const probe = (decodedAudioBytes: number, currentTime = 0): VideoState => ({
     found: true,
     videoWidth: 640,
     readyState: 2,
     paused: false,
-    currentTime: 0,
+    currentTime,
     decodedAudioBytes,
   });
   const motionOf = (
@@ -596,10 +744,12 @@ describe("measurementRetryReason", () => {
     motion: MotionSamples,
     decodedAudioBytesStart: number,
     decodedAudioBytesEnd: number,
+    currentTimeStart = 0,
+    currentTimeEnd = 10,
   ): PlaybackMeasurement => ({
-    startProbe: probe(decodedAudioBytesStart),
+    startProbe: probe(decodedAudioBytesStart, currentTimeStart),
     motion,
-    endProbe: probe(decodedAudioBytesEnd),
+    endProbe: probe(decodedAudioBytesEnd, currentTimeEnd),
   });
 
   it("flags a measurement whose video disappeared before the closing probe", () => {
@@ -634,6 +784,14 @@ describe("measurementRetryReason", () => {
     ).toBe("unusable");
   });
 
+  it("flags a window whose media clock never advanced", () => {
+    expect(
+      measurementRetryReason(
+        measurementOf(motionOf(false, twoSamples), 0, 100, 120, 120.05),
+      ),
+    ).toBe("unusable");
+  });
+
   it("returns null for a judgeable window", () => {
     expect(
       measurementRetryReason(
@@ -659,12 +817,12 @@ describe("isInconclusiveMeasurement", () => {
 });
 
 describe("measurementFailurePhenomenon", () => {
-  const probe = (decodedAudioBytes: number): VideoState => ({
+  const probe = (decodedAudioBytes: number, currentTime = 0): VideoState => ({
     found: true,
     videoWidth: 640,
     readyState: 2,
     paused: false,
-    currentTime: 0,
+    currentTime,
     decodedAudioBytes,
   });
   const twoSamples: MotionSample[] = [
@@ -676,15 +834,17 @@ describe("measurementFailurePhenomenon", () => {
     decodedAudioBytesStart: number,
     decodedAudioBytesEnd: number,
     sawAdvertisement = false,
+    currentTimeStart = 0,
+    currentTimeEnd = 10,
   ): PlaybackMeasurement => ({
-    startProbe: probe(decodedAudioBytesStart),
+    startProbe: probe(decodedAudioBytesStart, currentTimeStart),
     motion: {
       tainted: false,
       elapsedMs: 10_000,
       samples,
       sawAdvertisement,
     },
-    endProbe: probe(decodedAudioBytesEnd),
+    endProbe: probe(decodedAudioBytesEnd, currentTimeEnd),
   });
 
   it("reports the video element disappearing", () => {
@@ -711,6 +871,15 @@ describe("measurementFailurePhenomenon", () => {
     const measurement = measurementWith(twoSamples, 14129, 7690);
     expect(measurementFailurePhenomenon("unusable", measurement)).toBe(
       "測定中にプレイヤーのメディア要素が置き換わりました",
+    );
+  });
+
+  it("reports a stalled media clock", () => {
+    // The player kept painting one frame while its clock never moved, so the
+    // window says nothing about the broadcast itself.
+    const measurement = measurementWith(twoSamples, 0, 100, false, 120, 120.05);
+    expect(measurementFailurePhenomenon("unusable", measurement)).toBe(
+      "プレイヤーの再生位置が進みませんでした",
     );
   });
 });

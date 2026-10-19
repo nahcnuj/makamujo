@@ -211,6 +211,8 @@ export interface CheckResult {
     gameScreenPlaying: boolean;
     decodedAudioBytesStart?: number;
     decodedAudioBytesEnd?: number;
+    videoCurrentTimeStart?: number;
+    videoCurrentTimeEnd?: number;
     videoMinFps?: number;
     videoAvgFps?: number;
     gameMinFps?: number;
@@ -254,6 +256,24 @@ export function didAudioDecodedBytesReset(
   decodedBytesEnd: number,
 ): boolean {
   return decodedBytesEnd < decodedBytesStart;
+}
+
+/**
+ * True when the media clock failed to advance across a sampling window.
+ *
+ * A stream freeze further downstream (XSHM → x264 → RTMP) still delivers
+ * segments with identical pictures, so a healthy player keeps consuming them
+ * and `currentTime` keeps moving. A window that advanced by less than the
+ * warm-up floor therefore describes the local player — one freshly rebuilt
+ * after an advertisement that never started playing, or one stalled on a
+ * buffer — rather than the broadcast, and judging it would report a healthy
+ * stream as stopped.
+ */
+export function didPlaybackStall(
+  currentTimeStart: number,
+  currentTimeEnd: number,
+): boolean {
+  return currentTimeEnd - currentTimeStart < PLAYBACK_WARMUP_SECONDS;
 }
 
 /**
@@ -440,6 +460,17 @@ export interface MeasurableVideoWaitOptions {
   sleep: (ms: number) => Promise<void>;
   /** Injectable clock; defaults to wall-clock milliseconds. */
   now?: () => number;
+  /**
+   * When set, a measurable probe only ends the wait once the media clock has
+   * advanced this far past the first measurable probe's `currentTime`.
+   *
+   * Advertisement teardown hands the player a freshly rebuilt media element:
+   * it reports `isVideoReady` while still painting the static frame of the
+   * rebuilt stream, and measuring straight away recorded that stall as a
+   * stopped broadcast. Advancing past the same warm-up floor the initial
+   * load uses ({@link waitForVideoPlayback}) skips those startup frames.
+   */
+  requireAdvanceSeconds?: number;
 }
 
 /**
@@ -460,11 +491,27 @@ export async function waitForMeasurableVideo({
   pollMs,
   sleep,
   now = () => Date.now(),
+  requireAdvanceSeconds,
 }: MeasurableVideoWaitOptions): Promise<VideoState> {
   const deadline = now() + timeoutMs;
+  let warmupBase: number | null = null;
   for (;;) {
     const state = await probe();
-    if (isVideoReady(state) || now() >= deadline) return state;
+    const timedOut = now() >= deadline;
+    if (!isVideoReady(state)) {
+      // The player dropped out (paused / re-buffering); restart the warm-up.
+      warmupBase = null;
+      if (timedOut) return state;
+      await sleep(pollMs);
+      continue;
+    }
+    if (requireAdvanceSeconds === undefined) return state;
+    if (warmupBase === null || state.currentTime < warmupBase) {
+      warmupBase = state.currentTime;
+    } else if (state.currentTime - warmupBase >= requireAdvanceSeconds) {
+      return state;
+    }
+    if (timedOut) return state;
     await sleep(pollMs);
   }
 }
@@ -733,13 +780,22 @@ export interface PlaybackMeasurement {
  * element was replaced by a cross-origin advertisement (which the selector
  * rejects) or the player rebuilt its media element and had not attached the
  * new source yet. A window that captured too few frames, whose canvas read
- * failed, or whose decoded-audio counter went backwards is unusable too.
- * Judging any of these would report a healthy stream as dead.
+ * failed, whose decoded-audio counter went backwards, or whose media clock
+ * never advanced is unusable too. Judging any of these would report a
+ * healthy stream as dead.
  */
 export function isMeasurementUnusable(
   measurement: PlaybackMeasurement | null,
 ): boolean {
   if (measurement === null) return true;
+  if (
+    didPlaybackStall(
+      measurement.startProbe.currentTime,
+      measurement.endProbe.currentTime,
+    )
+  ) {
+    return true;
+  }
   return shouldReMeasure(
     measurement.motion,
     measurement.startProbe.decodedAudioBytes,
@@ -780,8 +836,9 @@ export type MeasurementRetryReason =
  *   window, so the sampled motion describes the advertisement, not the
  *   program. Checked before `unusable` because a frozen picture also looks
  *   like too few frames.
- * - `unusable`: too few frames, a tainted canvas, or a decoded-audio counter
- *   that went backwards (see {@link isMeasurementUnusable}).
+ * - `unusable`: too few frames, a tainted canvas, a decoded-audio counter
+ *   that went backwards, or a media clock that never advanced (see
+ *   {@link isMeasurementUnusable}).
  */
 export function measurementRetryReason(
   measurement: PlaybackMeasurement | null,
@@ -818,6 +875,15 @@ export function measurementFailurePhenomenon(
     )
   ) {
     return "測定中にプレイヤーのメディア要素が置き換わりました";
+  }
+  if (
+    measurement !== null &&
+    didPlaybackStall(
+      measurement.startProbe.currentTime,
+      measurement.endProbe.currentTime,
+    )
+  ) {
+    return "プレイヤーの再生位置が進みませんでした";
   }
   return "映像全体のフレームを取得できませんでした";
 }
@@ -892,13 +958,16 @@ async function waitForAdvertisementEnd(
 }
 
 /**
- * Wait until the live `<video>` is decodable and playing again, so a window
- * can be sampled.
+ * Wait until the live `<video>` is decodable, playing, and advancing again,
+ * so a window can be sampled.
  *
  * Each probe also nudges a paused element back to playing: the player can
  * stay paused behind an advertisement, and {@link isVideoReady} waits for a
  * playing element, so without the nudge the wait would run out on an element
- * nobody asked to resume.
+ * nobody asked to resume. The advance requirement skips the static startup
+ * frame a freshly rebuilt player paints before its clock moves; sampling
+ * that frame would look like a frozen broadcast (see
+ * {@link didPlaybackStall}).
  */
 async function waitForMeasurableVideoOnPage(
   page: Page,
@@ -916,6 +985,7 @@ async function waitForMeasurableVideoOnPage(
     timeoutMs,
     pollMs: PLAYBACK_SETTLE_POLL_MS,
     sleep: (ms) => page.waitForTimeout(ms),
+    requireAdvanceSeconds: PLAYBACK_WARMUP_SECONDS,
   });
   return isVideoReady(state);
 }
@@ -930,7 +1000,9 @@ async function waitForMeasurableVideoOnPage(
  * after the last ad frame, while the player re-attaches the live media
  * source: probing in that gap found no capturable video, and the resulting
  * "the video element disappeared" gave up (and its reload queued the next
- * pre-roll, reproducing the gap) on a perfectly healthy stream.
+ * pre-roll, reproducing the gap) on a perfectly healthy stream. It also
+ * waits for the media clock to advance, so the freshly rebuilt player's
+ * static startup frame is not sampled as a stopped broadcast.
  */
 async function measureAfterAdvertisements(
   page: Page,
@@ -1048,7 +1120,7 @@ async function checkStream(): Promise<CheckResult> {
       console.log(
         retryReason === "video-disappeared"
           ? "[INFO] Measurement returned null (the video element disappeared before the closing probe); reloading and measuring again"
-          : "[INFO] Measurement unusable (no frames captured, tainted canvas, or the decoded-audio counter went backwards); reloading and measuring again",
+          : "[INFO] Measurement unusable (no frames captured, tainted canvas, a stalled media clock, or the decoded-audio counter went backwards); reloading and measuring again",
       );
       const recovered = await reloadAndWaitForPlayback(page);
       if (!recovered) {
@@ -1084,6 +1156,8 @@ async function checkStream(): Promise<CheckResult> {
     const { startProbe, motion, endProbe } = measurement;
     details.decodedAudioBytesStart = startProbe.decodedAudioBytes;
     details.decodedAudioBytesEnd = endProbe.decodedAudioBytes;
+    details.videoCurrentTimeStart = startProbe.currentTime;
+    details.videoCurrentTimeEnd = endProbe.currentTime;
 
     const audioPlaying = isAudioPlaying(
       startProbe.decodedAudioBytes,
