@@ -843,7 +843,11 @@ export function measurementFailurePhenomenon(
 export function isInconclusiveMeasurement(
   reason: MeasurementRetryReason | null,
 ): boolean {
-  return reason === "advertisement";
+  // Any run that never obtained a judgeable window cannot say anything about
+  // the stream: the broadcast is (at least) live enough for nicovideo to serve
+  // it, so reporting an anomaly is a false positive. Treat every terminal
+  // reason as inconclusive so the hourly check stops crying wolf.
+  return reason !== null;
 }
 
 /**

@@ -651,9 +651,9 @@ describe("isInconclusiveMeasurement", () => {
     expect(isInconclusiveMeasurement("advertisement")).toBe(true);
   });
 
-  it("keeps the other terminal reasons as anomalies", () => {
-    expect(isInconclusiveMeasurement("video-disappeared")).toBe(false);
-    expect(isInconclusiveMeasurement("unusable")).toBe(false);
+  it("treats any non-judgeable run as inconclusive", () => {
+    expect(isInconclusiveMeasurement("video-disappeared")).toBe(true);
+    expect(isInconclusiveMeasurement("unusable")).toBe(true);
     expect(isInconclusiveMeasurement(null)).toBe(false);
   });
 });
