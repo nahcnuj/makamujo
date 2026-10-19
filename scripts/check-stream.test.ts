@@ -20,6 +20,7 @@ import {
   toErrorResult,
   VIDEO_MIN_FPS,
   type VideoState,
+  waitForMeasurableVideo,
   wasAdvertisementShown,
 } from "./check-stream.ts";
 
@@ -247,6 +248,125 @@ describe("isVideoReady", () => {
     expect(isVideoReady(advancing)).toBe(true);
     expect(isVideoReady({ ...advancing, readyState: 4 })).toBe(true);
     expect(isVideoReady({ ...advancing, videoWidth: 1280 })).toBe(true);
+  });
+});
+
+describe("waitForMeasurableVideo", () => {
+  const ready: VideoState = {
+    found: true,
+    videoWidth: 640,
+    readyState: 2,
+    paused: false,
+    currentTime: 0,
+    decodedAudioBytes: 0,
+  };
+  const absent: VideoState = {
+    found: false,
+    videoWidth: 0,
+    readyState: 0,
+    paused: true,
+    currentTime: 0,
+    decodedAudioBytes: 0,
+  };
+  const paused: VideoState = { ...ready, paused: true };
+
+  /** Controllable clock + sleep so the wait never runs in real time. */
+  const createClock = () => {
+    let currentMs = 0;
+    const sleeps: number[] = [];
+    return {
+      now: () => currentMs,
+      sleep: async (ms: number) => {
+        sleeps.push(ms);
+        currentMs += ms;
+      },
+      sleeps,
+    };
+  };
+
+  it("returns the first probe when the video is already measurable", async () => {
+    const clock = createClock();
+    let taken = 0;
+
+    const state = await waitForMeasurableVideo({
+      probe: async () => {
+        taken += 1;
+        return ready;
+      },
+      timeoutMs: 1_000,
+      pollMs: 100,
+      sleep: clock.sleep,
+      now: clock.now,
+    });
+
+    expect(state).toEqual(ready);
+    expect(taken).toBe(1);
+    expect(clock.sleeps).toEqual([]);
+  });
+
+  it("keeps polling while the player re-attaches after an advertisement", async () => {
+    // The live media source comes back a moment after the last ad frame;
+    // measuring in that gap found no video and reported it as disappeared.
+    const clock = createClock();
+    let taken = 0;
+
+    const state = await waitForMeasurableVideo({
+      probe: async () => {
+        taken += 1;
+        return taken < 3 ? absent : ready;
+      },
+      timeoutMs: 1_000,
+      pollMs: 100,
+      sleep: clock.sleep,
+      now: clock.now,
+    });
+
+    expect(state).toEqual(ready);
+    expect(taken).toBe(3);
+    expect(clock.sleeps).toEqual([100, 100]);
+  });
+
+  it("gives up at the deadline and hands back the unready probe", async () => {
+    const clock = createClock();
+    let taken = 0;
+
+    const state = await waitForMeasurableVideo({
+      probe: async () => {
+        taken += 1;
+        return absent;
+      },
+      timeoutMs: 250,
+      pollMs: 100,
+      sleep: clock.sleep,
+      now: clock.now,
+    });
+
+    // The caller measures anyway (or reports the failure) rather than hanging.
+    expect(state).toEqual(absent);
+    expect(isVideoReady(state)).toBe(false);
+    expect(taken).toBe(4);
+    expect(clock.sleeps).toEqual([100, 100, 100]);
+  });
+
+  it("treats a player left paused behind an advertisement as not ready", async () => {
+    const clock = createClock();
+    let taken = 0;
+
+    const state = await waitForMeasurableVideo({
+      probe: async () => {
+        taken += 1;
+        return paused;
+      },
+      timeoutMs: 0,
+      pollMs: 100,
+      sleep: clock.sleep,
+      now: clock.now,
+    });
+
+    expect(state).toEqual(paused);
+    expect(isVideoReady(state)).toBe(false);
+    expect(taken).toBe(1);
+    expect(clock.sleeps).toEqual([]);
   });
 });
 
