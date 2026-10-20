@@ -193,11 +193,30 @@ const sampleMotionWindow = async ({
           // 再構築の途中で要素が消えうる。比較対象を落とさず待つ。
           if (video?.videoWidth && video.videoHeight) {
             if (video !== sampledVideo) {
-              // 別の要素のタイムラインなので、絵の比較と時計の基準を切り替える。
+              // 別の要素のタイムラインなので時計の基準は切り替える。絵の比較は
+              // 寸法が同じなら引き継ぐ: 再構築のたびに比較対象を捨てると、頻繁
+              // な再構築で comparedFrames が 0 になり、本物の停止が判定不能
+              // (`unknown`) として捨てられる。
               sampledVideo = video;
               lastClock = video.currentTime;
-              previous = null;
-              context = null;
+              const nextScale = Math.min(
+                1,
+                maxDimension / Math.max(video.videoWidth, video.videoHeight),
+              );
+              const nextWidth = Math.max(
+                1,
+                Math.round(video.videoWidth * nextScale),
+              );
+              const nextHeight = Math.max(
+                1,
+                Math.round(video.videoHeight * nextScale),
+              );
+              if (nextWidth !== width || nextHeight !== height) {
+                previous = null;
+                context = null;
+                width = 0;
+                height = 0;
+              }
             } else {
               const advanced = video.currentTime - lastClock;
               if (advanced > 0) {
