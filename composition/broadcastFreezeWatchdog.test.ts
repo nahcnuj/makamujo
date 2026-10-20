@@ -310,8 +310,10 @@ describe("startBroadcastFreezeWatchdog", () => {
     // 動くので、再起動すると残りの unit に届かなくなる。リストの最後に置く
     // ことで、他の unit の再起動が済んでから自プロセスが落ちる。
     expect(RECOVERY_SERVICES.browserAndBroadcastStack).toEqual([
-      "makamujo-browser.service",
+      // 先に表示を戻す。ブラウザ / OBS / 配信サーバは DISPLAY=:10 に描くので、
+      // Xorg を後から落とすと再起動したブラウザが表示を失ったまま残る。
       "makamujo-xvfb.service",
+      "makamujo-browser.service",
       "makamujo-obs.service",
       // リストの最後: 再起動すると watchdog 自身のプロセスが落ちる。
       "makamujo-screen.service",

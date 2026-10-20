@@ -144,7 +144,19 @@ export const judgePictureMotion = (
     return undefined;
   }
   const windowSeconds = motion.windowMs / 1000;
-  if (windowSeconds < 1 || motion.comparedFrames < 5) {
+  if (windowSeconds < 1) {
+    return undefined;
+  }
+  // A totally frozen picture (no changed frames at all) is evidence of a
+  // stopped stream even when the window captured only a handful of comparable
+  // frames — e.g. while the player rebuilds its media element mid-window.
+  // Requiring several compared frames there discarded real freezes as
+  // unmeasurable (`unknown`), so the freeze streak never accumulated.
+  // A window with motion still needs enough samples to be judged.
+  if (motion.comparedFrames < 1) {
+    return undefined;
+  }
+  if (motion.changedFrames !== 0 && motion.comparedFrames < 5) {
     return undefined;
   }
   const changedFps = motion.changedFrames / windowSeconds;

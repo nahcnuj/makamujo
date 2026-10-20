@@ -52,6 +52,12 @@ const MOTION_MIN_CHANGED_RATIO = 0.001;
 /** rAF が一切来ない（レンダラ停止）ときでも絶対に帰る上限。 */
 const MOTION_EVALUATE_TIMEOUT_MS = MOTION_WINDOW_MS + 5_000;
 /**
+ * 測定の前段の `page.evaluate`（セレクタ注入・広告確認・`<video>` の状態読み）
+ * に許す上限。レンダラが固まるとこれらも帰らず、`broadcastFreezeWatchdog` の
+ * 1 周期が永久に塞がる。帰らなければ「測れなかった」に落として次の周期へ進む。
+ */
+const MOTION_PROBE_TIMEOUT_MS = 10_000;
+/**
  * 測定の前に待つ広告の上限。`scripts/check-stream.ts` と同じく長めに待ってでも
  * 清潔な窓を取る: 統計用ブラウザはサインアウトのまま長く開いておくので中割り
  * 広告が繰り返され、待たずに測ると停止と広告を区別できず回復が走らない。
@@ -91,8 +97,30 @@ declare global {
  * 文字列化して注入するので、ヘルパー同士の参照は注入後のページスコープの名前で
  * 解決される（`isAnyPlayerAdvertisement` は `isPlayerAdvertisement` を呼ぶ）。
  */
+/**
+ * ページ側の評価を上限つきで待つ。帰らなければ `fallback` を返す。
+ * レンダラ停止中の `page.evaluate` は解決しないので、呼び出し側の周期を
+ * 塞がないようにここで打ち切る。
+ */
+const withProbeTimeout = <T>(
+  evaluate: Promise<T>,
+  fallback: T,
+  timeoutMs: number = MOTION_PROBE_TIMEOUT_MS,
+): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((resolve) => {
+    timer = globalThis.setTimeout(resolve, timeoutMs, fallback);
+  });
+  return Promise.race([evaluate.catch(() => fallback), timeout]).finally(() => {
+    if (timer !== undefined) {
+      globalThis.clearTimeout(timer);
+    }
+  });
+};
+
 const installVideoSelectors = (page: import("playwright").Page) =>
-  page.evaluate(`
+  withProbeTimeout(
+    page.evaluate(`
 (() => {
   const isCapturable = ${isCapturableMediaSource.toString()};
   const isInAd = ${isInAdContainer.toString()};
@@ -137,7 +165,9 @@ const installVideoSelectors = (page: import("playwright").Page) =>
     startPlayback(Array.from(document.querySelectorAll("video")));
   window.__mmjStartPlayback();
 })()
-`);
+`),
+    undefined,
+  );
 
 /**
  * 1 窓の間、縮小した配信映像を rAF のたびに比較する。
@@ -193,11 +223,30 @@ const sampleMotionWindow = async ({
           // 再構築の途中で要素が消えうる。比較対象を落とさず待つ。
           if (video?.videoWidth && video.videoHeight) {
             if (video !== sampledVideo) {
-              // 別の要素のタイムラインなので、絵の比較と時計の基準を切り替える。
+              // 別の要素のタイムラインなので時計の基準は切り替える。絵の比較は
+              // 寸法が同じなら引き継ぐ: 再構築のたびに比較対象を捨てると、頻繁
+              // な再構築で comparedFrames が 0 になり、本物の停止が判定不能
+              // (`unknown`) として捨てられる。
               sampledVideo = video;
               lastClock = video.currentTime;
-              previous = null;
-              context = null;
+              const nextScale = Math.min(
+                1,
+                maxDimension / Math.max(video.videoWidth, video.videoHeight),
+              );
+              const nextWidth = Math.max(
+                1,
+                Math.round(video.videoWidth * nextScale),
+              );
+              const nextHeight = Math.max(
+                1,
+                Math.round(video.videoHeight * nextScale),
+              );
+              if (nextWidth !== width || nextHeight !== height) {
+                previous = null;
+                context = null;
+                width = 0;
+                height = 0;
+              }
             } else {
               const advanced = video.currentTime - lastClock;
               if (advanced > 0) {
@@ -392,7 +441,15 @@ export const createChromiumWatchPageBrowser =
         console.log("[INFO] watch page statistics settled");
       },
       read: async () => {
-        const raw = await page.evaluate(readDisplayedValues);
+        const raw = await withProbeTimeout(page.evaluate(readDisplayedValues), {
+          statistics: {
+            viewers: null,
+            comments: null,
+            nicoadPoints: null,
+            giftPoints: null,
+          },
+          hasStatisticsRow: false,
+        } satisfies WatchPageRawReading);
         // 採取は短い周期で回るので、同じ内容ならログを出さない。
         const readLog = JSON.stringify(raw.statistics);
         if (readLog !== lastReadLog) {
@@ -424,9 +481,12 @@ export const createChromiumWatchPageBrowser =
         // プラーが sawAdvertisement を立て、その窓は判定不能として破棄される）。
         const advertisementEnded = await waitForAdvertisementEnd({
           isAdvertisementPlaying: () =>
-            page
-              .evaluate(() => window.__mmjIsAdvertisementPlaying?.() ?? false)
-              .catch(() => false),
+            withProbeTimeout(
+              page.evaluate(
+                () => window.__mmjIsAdvertisementPlaying?.() ?? false,
+              ),
+              false,
+            ),
           timeoutMs: ADVERTISEMENT_WAIT_TIMEOUT_MS,
           pollMs: ADVERTISEMENT_POLL_MS,
           sleep: (ms) =>
@@ -442,17 +502,14 @@ export const createChromiumWatchPageBrowser =
         // 途切れる。計測できる要素が戻り、時計が少し進むまで待ってから測る。
         const measurable = await waitForMeasurableVideo({
           probe: () =>
-            page.evaluate(readSelectedVideoState).catch(
-              () =>
-                ({
-                  found: false,
-                  videoWidth: 0,
-                  readyState: 0,
-                  paused: true,
-                  currentTime: 0,
-                  decodedAudioBytes: 0,
-                }) satisfies VideoState,
-            ),
+            withProbeTimeout(page.evaluate(readSelectedVideoState), {
+              found: false,
+              videoWidth: 0,
+              readyState: 0,
+              paused: true,
+              currentTime: 0,
+              decodedAudioBytes: 0,
+            } satisfies VideoState),
           timeoutMs: MEASURABLE_VIDEO_TIMEOUT_MS,
           pollMs: MEASURABLE_VIDEO_POLL_MS,
           sleep: (ms) =>

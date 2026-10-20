@@ -49,6 +49,14 @@ import type { PictureMotion } from "./watchPageBrowser";
 import { isOnAirFromClock, judgePictureMotion } from "./watchPageBrowser";
 
 export const DEFAULT_FREEZE_CHECK_INTERVAL_MS = 60_000;
+/**
+ * 1 周期の測定に許す上限。測定は広告待ち (90s)・計測可能な `<video>` 待ち
+ * (30s)・窓 (3s) を足しても 2 分程度で終わる。レンダラが固まると
+ * `page.evaluate` はいつまでも帰らず、tick が `ticking` のまま残ると以降の
+ * 周期がすべて素通りして回復が永久に走らなくなる（外からの健康チェックだけが
+ * 停止を検知し続ける）。上限を超えた周期は測定不能として捨て、次の周期へ進む。
+ */
+export const DEFAULT_MEASUREMENT_TIMEOUT_MS = 180_000;
 
 /**
  * 回復ラングが触る systemd unit。unit 名は VPS の実構成のもの。
@@ -73,8 +81,10 @@ export const RECOVERY_SERVICES: Record<CompositeFreezeRecovery, string[]> = {
   obs: ["makamujo-obs.service"],
   xorgAndObs: ["makamujo-xvfb.service", "makamujo-obs.service"],
   browserAndBroadcastStack: [
-    "makamujo-browser.service",
+    // 先に表示を戻す。ブラウザ / OBS / 配信サーバは DISPLAY=:10 に描くので、
+    // Xorg を後から落とすと再起動したブラウザが表示を失ったまま残る。
     "makamujo-xvfb.service",
+    "makamujo-browser.service",
     "makamujo-obs.service",
     // 意図的に最後: 再起動すると watchdog 自身のプロセスが落ちる。
     "makamujo-screen.service",
@@ -200,6 +210,11 @@ export interface BroadcastFreezeWatchdogOptions {
   config?: CompositeFreezeConfig;
   /** 観測間隔（ミリ秒）。 */
   intervalMs?: number;
+  /**
+   * 1 周期の測定に許す上限（ミリ秒）。超えたら測定不能として次の周期へ進む。
+   * 省略時は `BROADCAST_FREEZE_MEASUREMENT_TIMEOUT_MS` か既定値。
+   */
+  measurementTimeoutMs?: number;
   env?: Record<string, string | undefined>;
   log?: Pick<Console, "log" | "warn" | "error">;
 }
@@ -221,10 +236,18 @@ export interface BroadcastFreezeWatchdog {
  */
 export const resolveBroadcastFreezeWatchdogEnv = (
   env: NodeJS.ProcessEnv = process.env,
-): { intervalMs: number; config: CompositeFreezeConfig } => ({
+): {
+  intervalMs: number;
+  measurementTimeoutMs: number;
+  config: CompositeFreezeConfig;
+} => ({
   intervalMs: parsePositive(
     env.BROADCAST_FREEZE_CHECK_INTERVAL_MS,
     DEFAULT_FREEZE_CHECK_INTERVAL_MS,
+  ),
+  measurementTimeoutMs: parsePositive(
+    env.BROADCAST_FREEZE_MEASUREMENT_TIMEOUT_MS,
+    DEFAULT_MEASUREMENT_TIMEOUT_MS,
   ),
   config: {
     cyclesRequired: parsePositive(
@@ -237,6 +260,31 @@ export const resolveBroadcastFreezeWatchdogEnv = (
     ),
   },
 });
+
+/**
+ * 測定を上限つきで待つ。`measure` が解決しないときに tick を永久に塞がない。
+ * 返り値の `timedOut` が true のとき、測定は破棄して `unknown` として扱う。
+ */
+const measureWithTimeout = async (
+  measure: () => Promise<PictureMotion | undefined>,
+  timeoutMs: number,
+): Promise<
+  { timedOut: false; motion: PictureMotion | undefined } | { timedOut: true }
+> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      measure().then((motion) => ({ timedOut: false as const, motion })),
+      new Promise<{ timedOut: true }>((resolve) => {
+        timer = setTimeout(() => resolve({ timedOut: true }), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
+};
 
 export const startBroadcastFreezeWatchdog = (
   options: BroadcastFreezeWatchdogOptions,
@@ -252,6 +300,8 @@ export const startBroadcastFreezeWatchdog = (
     });
   const resolved = resolveBroadcastFreezeWatchdogEnv(env);
   const intervalMs = options.intervalMs ?? resolved.intervalMs;
+  const measurementTimeoutMs =
+    options.measurementTimeoutMs ?? resolved.measurementTimeoutMs;
   const config = options.config ?? resolved.config;
 
   let stopped = false;
@@ -295,7 +345,16 @@ export const startBroadcastFreezeWatchdog = (
       // 停止を放置した（issue #929/#933）。measure を先に行うので、測定不能
       // （ページ未オープン / 広告 / tainted）は clock も読めず `undefined` に
       // なり、ポリシーには `unknown` として入る。
-      const measured = await options.measurePictureMotion();
+      const result = await measureWithTimeout(
+        options.measurePictureMotion,
+        measurementTimeoutMs,
+      );
+      if (result.timedOut) {
+        log.warn(
+          `[WARN] the picture motion measurement did not finish within ${measurementTimeoutMs}ms; treating this cycle as unmeasurable`,
+        );
+      }
+      const measured = result.timedOut ? undefined : result.motion;
       if (measured === undefined || isOnAirFromClock(measured) !== true) {
         // 放映外（clock が進まない = 番組終了の一枚絵）または放映中か判断
         // できない周期は観測しない。ポリシーには `unknown` として投入して
