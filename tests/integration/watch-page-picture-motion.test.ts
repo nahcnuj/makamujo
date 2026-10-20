@@ -6,7 +6,6 @@ import {
   isOnAirFromClock,
   judgePictureMotion,
   type PictureMotion,
-  type WatchPageBrowser,
 } from "../../composition/watchPageBrowser";
 
 /**
@@ -46,8 +45,25 @@ const STICKY_AD_WEBM_BASE64 =
   "wsF/oABDgAB1oZmml+6BAaWS0QEAABAJIADAAMLBf6AAQ4AA+4IBL6C4oZaBAfcA0QEAABAJIADAAMLBf6AAQ4AAdaGZppfugQGl" +
   "ktEBAAAQCSAAwADCwX+gAEOAAPuCAZMcU7trjbuLs4EAt4b3gQHxgdQ=";
 
-/** 動く絵を `<video>` に流し込むページ。統計行も置いて `open` を待たせない。 */
-const PAGE = `<!doctype html>
+/** プレイヤー本体に流す MediaStream の初期化。 */
+const PLAYER_SCRIPT = `
+  const canvas = document.getElementById("c");
+  const context = canvas.getContext("2d");
+  const video = document.getElementById("v");
+  video.srcObject = canvas.captureStream(30);
+`;
+
+/** 常設広告面の初期化（クロスオリジンの広告動画）。 */
+const AD_SCRIPT = `
+  // ページは 127.0.0.1 で配信するので、localhost は別オリジンになる。
+  // クロスオリジンの広告動画というだけで広告と数えないことを見る。
+  const ad = document.getElementById("ad");
+  ad.src = "http://localhost:" + location.port + "/ad.webm";
+  ad.play().catch(() => undefined);
+`;
+
+/** 骨格。`HEAD` にプレイヤーの初期化スクリプトを差し込む。 */
+const page = (head: string): string => `<!doctype html>
 <html>
   <head><meta charset="utf-8"><title>picture motion</title></head>
   <body>
@@ -58,10 +74,14 @@ const PAGE = `<!doctype html>
       <video id="ad" autoplay muted loop playsinline></video>
     </aside>
     <script>
-      const canvas = document.getElementById("c");
-      const context = canvas.getContext("2d");
-      const video = document.getElementById("v");
-      video.srcObject = canvas.captureStream(30);
+      ${head}
+      ${AD_SCRIPT}
+    </script>
+  </body>
+</html>`;
+
+/** 動く絵を `<video>` に流し込むページ。統計行も置いて `open` を待たせない。 */
+const MOVING_PAGE = page(`${PLAYER_SCRIPT}
       let tick = 0;
       const draw = () => {
         context.fillStyle = "black";
@@ -72,19 +92,81 @@ const PAGE = `<!doctype html>
         requestAnimationFrame(draw);
       };
       draw();
+`);
 
-      // ページは 127.0.0.1 で配信するので、localhost は別オリジンになる。
-      // クロスオリジンの広告動画というだけで広告と数えないことを見る。
-      const ad = document.getElementById("ad");
-      ad.src = "http://localhost:" + location.port + "/ad.webm";
-      ad.play().catch(() => undefined);
-    </script>
-  </body>
-</html>`;
+/**
+ * 合成出力が固まった配信のページ（issue #959）。canvas には毎フレーム同じ
+ * 一枚絵を描き、`<video>` の media clock だけが進む。デコード済みフレームは
+ * 増え続けるのに絵は変わらない、という本物の停止の形。
+ */
+const FROZEN_PAGE = page(`${PLAYER_SCRIPT}
+      const draw = () => {
+        context.fillStyle = "black";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.fillStyle = "white";
+        context.fillRect(40, 20, 20, 80);
+        requestAnimationFrame(draw);
+      };
+      draw();
+`);
+
+/**
+ * 開いた直後は `<video>` が無く、少し経ってからプレイヤーが要素を作る
+ * ページ。広告の明けや hls.js の復帰で起きる作り直しの再現。窓を開く前に
+ * 計測できる要素を待たないと、この周期は判定不能になり連続静止が途切れる。
+ */
+const LATE_PAGE = page(`
+      const startPlayer = () => {
+        ${PLAYER_SCRIPT}
+        let tick = 0;
+        const draw = () => {
+          context.fillStyle = "black";
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.fillStyle = "white";
+          context.fillRect((tick * 7) % 140, 20, 20, 80);
+          tick += 1;
+          requestAnimationFrame(draw);
+        };
+        draw();
+      };
+      setTimeout(startPlayer, 2_500);
+`);
+
+/**
+ * プレイヤーが `<video>` を作り直し続けるページ。中割り広告の明けや hls.js
+ * の復帰で起きる。作り直しのたびに media clock は 0 付近へ戻るので、窓の
+ * 最初と最後の差だけを見ると「放映中」の根拠を失う。
+ */
+const REBUILDING_PAGE = page(`
+      const canvas = document.getElementById("c");
+      const context = canvas.getContext("2d");
+      const stream = canvas.captureStream(30);
+      let video = document.getElementById("v");
+      video.srcObject = stream;
+      let tick = 0;
+      const draw = () => {
+        context.fillStyle = "black";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.fillStyle = "white";
+        context.fillRect((tick * 7) % 140, 20, 20, 80);
+        tick += 1;
+        requestAnimationFrame(draw);
+      };
+      draw();
+      setInterval(() => {
+        const next = document.createElement("video");
+        next.id = "v";
+        next.autoplay = true;
+        next.muted = true;
+        next.playsInline = true;
+        next.srcObject = stream;
+        video.replaceWith(next);
+        video = next;
+      }, 1_000);
+`);
 
 let server: Server | undefined;
-let browser: WatchPageBrowser | undefined;
-let motion: PictureMotion | undefined;
+let port = 0;
 
 /** Chromium がこの環境で起動できるか（skip 判定）。 */
 const chromiumAvailable = await (async (): Promise<boolean> => {
@@ -106,6 +188,21 @@ const chromiumAvailable = await (async (): Promise<boolean> => {
   }
 })();
 
+/** 1 ページを開いて 1 窓ぶん測り、ブラウザを捨てる。 */
+const measurePage = async (path: string): Promise<PictureMotion> => {
+  const browser = await createChromiumWatchPageBrowser();
+  try {
+    await browser.open(`http://127.0.0.1:${port}${path}`);
+    const motion = await browser.measurePictureMotion?.();
+    if (motion === undefined) {
+      throw new Error("the browser cannot measure the picture motion");
+    }
+    return motion;
+  } finally {
+    await browser.discard();
+  }
+};
+
 beforeAll(async () => {
   if (!chromiumAvailable) {
     return;
@@ -117,27 +214,33 @@ beforeAll(async () => {
       return;
     }
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-    res.end(PAGE);
+    if (req.url === "/frozen") {
+      res.end(FROZEN_PAGE);
+      return;
+    }
+    if (req.url === "/late") {
+      res.end(LATE_PAGE);
+      return;
+    }
+    if (req.url === "/rebuilding") {
+      res.end(REBUILDING_PAGE);
+      return;
+    }
+    res.end(MOVING_PAGE);
   });
   // `localhost` からも届くよう全インターフェースで待つ（ページは 127.0.0.1）。
   await new Promise<void>((resolve) => server?.listen(0, () => resolve()));
-  const { port } = server.address() as AddressInfo;
-  browser = await createChromiumWatchPageBrowser();
-  await browser.open(`http://127.0.0.1:${port}/`);
-  motion = await browser.measurePictureMotion?.();
-}, 60_000);
+  ({ port } = server.address() as AddressInfo);
+});
 
-afterAll(async () => {
-  await browser?.discard();
+afterAll(() => {
   server?.close();
 });
 
 test.skipIf(!chromiumAvailable)(
   "measures the picture of a playing <video> as moving",
-  () => {
-    if (motion === undefined) {
-      throw new Error("the picture motion was not measured");
-    }
+  async () => {
+    const motion = await measurePage("/");
     expect(motion.tainted).toBe(false);
     expect(motion.sawAdvertisement).toBe(false);
     expect(motion.windowMs).toBeGreaterThanOrEqual(1_000);
@@ -149,4 +252,55 @@ test.skipIf(!chromiumAvailable)(
     expect(motion.clockAdvancedSeconds).toBeGreaterThan(1);
     expect(isOnAirFromClock(motion)).toBe(true);
   },
+  60_000,
+);
+
+test.skipIf(!chromiumAvailable)(
+  "judges a frozen picture with an advancing clock as still on air",
+  async () => {
+    // issue #959 の形。音声と media clock は進み、デコード済みフレームも
+    // 増えるが、届く絵は変わらない。これを静止・放映中と判定できないと、
+    // 本物の停止が観測から漏れる。
+    const motion = await measurePage("/frozen");
+    expect(motion.tainted).toBe(false);
+    expect(motion.sawAdvertisement).toBe(false);
+    expect(motion.comparedFrames).toBeGreaterThanOrEqual(5);
+    expect(motion.changedFrames).toBeLessThanOrEqual(5);
+    expect(judgePictureMotion(motion)).toBe("still");
+    expect(motion.clockAdvancedSeconds).toBeGreaterThan(1);
+    expect(isOnAirFromClock(motion)).toBe(true);
+  },
+  60_000,
+);
+
+test.skipIf(!chromiumAvailable)(
+  "keeps measuring while the player rebuilds its <video>",
+  async () => {
+    // 開いた直後は計測できる要素が無い。開始時に空測定で打ち切ると、この
+    // 周期は判定不能になり、`CompositeFreezePolicy` が連続静止を数え直す。
+    const motion = await measurePage("/late");
+    expect(motion.tainted).toBe(false);
+    expect(motion.comparedFrames).toBeGreaterThanOrEqual(5);
+    expect(motion.changedFrames).toBeGreaterThan(0);
+    expect(judgePictureMotion(motion)).toBe("moving");
+    expect(isOnAirFromClock(motion)).toBe(true);
+  },
+  60_000,
+);
+
+test.skipIf(!chromiumAvailable)(
+  "keeps the on-air clock while the player rebuilds mid-window",
+  async () => {
+    // 作り直しで media clock が 0 付近に戻っても、要素ごとの前進を足し上げて
+    // 「放映中」と判定できること。単純な最後と最初の差だと負になり、停止が
+    // 続いているのに放映外（= 判定不能）として捨てられる。
+    const motion = await measurePage("/rebuilding");
+    expect(motion.tainted).toBe(false);
+    expect(motion.comparedFrames).toBeGreaterThanOrEqual(5);
+    expect(motion.changedFrames).toBeGreaterThan(0);
+    expect(judgePictureMotion(motion)).toBe("moving");
+    expect(motion.clockAdvancedSeconds).toBeGreaterThan(1);
+    expect(isOnAirFromClock(motion)).toBe(true);
+  },
+  60_000,
 );

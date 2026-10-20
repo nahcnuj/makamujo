@@ -117,7 +117,7 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
   unit test 済み関数（`isCapturableMediaSource`, `isInAdContainer`）を
   文字列化して注入して借りる。判定は
   `composition/watchPageBrowser.ts` の `judgePictureMotion`:
-  changed fps が `PICTURE_STILL_FPS_THRESHOLD`（既定 2）を下回る窓が `still`。
+  changed fps が `PICTURE_STILL_FPS_THRESHOLD`（既定 24）を下回る窓が `still`。
   測れない窓（広告が流れた、tainted、比較が少なすぎる）は判定できない。
   同じ測定が、対象 `<video>` の media clock（`currentTime`）が窓の間に進んだ
   秒数 `clockAdvancedSeconds` も返す。放映中かはこの前進（
@@ -134,6 +134,17 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
   計測のたびに `startVideoPlayback` で全 `<video>` をミュート再生させる。
   これが無いと headless では要素が paused のままになり、観測が永久に
   `unknown` になって回復が一度も走らない（`check-stream.ts` と同じ扱い）。
+  窓を開く前に、計測できる `<video>`（`videoWidth > 0` / `readyState >= 2` /
+  再生中）が戻り、media clock が `MEASURABLE_VIDEO_ADVANCE_SECONDS` 以上進む
+  のを待つ（`check-stream.ts` の `waitForMeasurableVideo` と同じ）。プレイヤーは
+  中割り広告の明けや hls.js の復帰で `<video>` を作り直す。作り直し直後は
+  静止した一枚絵を出すので、待たずに測ると本物の停止と区別できない。さらに
+  開始時に要素が無いと空測定（判定不能）になり streak が途切れる。実際の
+  停止中は hls.js が復帰を試み続けて作り直しが重なるため、ここを待たないと
+  回復のラングが上がらない（2026-10-20 の停止では観測周期の約 2 割が空測定
+  だった）。窓の途中で要素が入れ替わったらピクセル比較を切り、
+  `clockAdvancedSeconds` は同じ要素の間の正の前進を足し上げる（作り直しで
+  `currentTime` が 0 付近へ戻っても放映中の根拠を失わない）。
   中割り広告で `<video>` が止まると窓は静止に見えて判定不能（`unknown`）に
   なり、`CompositeFreezePolicy` の streak をリセットする。統計用ブラウザは
   サインアウトのまま長く開いておくので中割りが繰り返され、待たずに測ると
@@ -164,7 +175,7 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
     ここを全消しにすると、周期ごとに測れない本番（中割り広告・要素の再構築・
     プロセス再起動後の最初の周期）ではラングが `obs` のまま進まず、
     OBS を繰り返し落とすだけで合成出力が回復しなかった（issue #889）。
-  - 回復の間隔は `recoveryCooldownMs`（既定 10 分）。連続回復を防ぐ。
+  - 回復の間隔は `recoveryCooldownMs`（既定 60 秒）。連続回復を防ぐ。
   - ラングは `obs` → `xorgAndObs` → `browserAndBroadcastStack` の順に深くなり
     最深で留まる。やることは systemd restart:
     `composition/broadcastFreezeWatchdog.ts` の `RECOVERY_SERVICES`。
@@ -214,7 +225,7 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 |------|------|------|
 | `BROADCAST_FREEZE_CHECK_INTERVAL_MS` | `60000` | 観測周期 |
 | `BROADCAST_FREEZE_CYCLES` | `3` | 回復を打つまでに必要な `still` の連続周期 |
-| `BROADCAST_FREEZE_RECOVERY_COOLDOWN_MS` | `600000` | 二つの回復の最短間隔 |
+| `BROADCAST_FREEZE_RECOVERY_COOLDOWN_MS` | `60000` | 二つの回復の最短間隔 |
 
 ## 実装マップ
 
