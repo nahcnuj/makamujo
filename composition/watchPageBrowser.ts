@@ -84,7 +84,7 @@ export interface PictureMotion {
 }
 
 /** この changed fps 未満で配信画面を「静止」とみなす。 */
-export const PICTURE_STILL_FPS_THRESHOLD = 2;
+export const PICTURE_STILL_FPS_THRESHOLD = 12;
 
 /**
  * この秒数より media clock が進んでいれば「放映中」とみなす。判定は
