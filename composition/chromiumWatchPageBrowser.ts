@@ -11,6 +11,9 @@ import { chromium } from "playwright";
 import {
   isCapturableMediaSource,
   isInAdContainer,
+  isVideoReady,
+  type VideoState,
+  waitForMeasurableVideo,
 } from "../scripts/check-stream";
 import {
   isAnyPlayerAdvertisementPlaying,
@@ -56,6 +59,29 @@ const MOTION_EVALUATE_TIMEOUT_MS = MOTION_WINDOW_MS + 5_000;
 const ADVERTISEMENT_WAIT_TIMEOUT_MS = 90_000;
 /** 広告の終了を何ミリ秒ごとに確かめるか。 */
 const ADVERTISEMENT_POLL_MS = 500;
+/**
+ * 窓を開く前に、計測できる `<video>` が戻るのを待つ上限。プレイヤーは
+ * 中割り広告の明けや hls.js の復帰で要素を作り直す。作り直しの最中に窓を
+ * 開くと空測定（= 判定不能）になり、`CompositeFreezePolicy` はそれを
+ * 「連続静止の途切れ」として扱う。実際の停止中は hls.js が復帰を試み続けて
+ * 要素の作り直しが重なるため、ここで待たないと回復のラングが上がらない。
+ * `scripts/check-stream.ts` の `waitForMeasurableVideo` と同じ趣旨。
+ */
+const MEASURABLE_VIDEO_TIMEOUT_MS = 30_000;
+/** 計測可能かの確認間隔。 */
+const MEASURABLE_VIDEO_POLL_MS = 250;
+/**
+ * 作り直された要素が最初の一枚絵を出し切るまで待つ秒数。時計がこれだけ
+ * 進むのを確かめてから窓を開く（`PLAYBACK_WARMUP_SECONDS` と同じ発想）。
+ */
+const MEASURABLE_VIDEO_ADVANCE_SECONDS = 1;
+
+declare global {
+  interface Window {
+    /** `installVideoSelectors` が置く。全 `<video>` の再生を促す。 */
+    __mmjStartPlayback?: () => void;
+  }
+}
 
 /**
  * ページ側の動画選別ヘルパーと再生開始ヘルパーを置く。navigation で消えるの
@@ -116,8 +142,14 @@ const installVideoSelectors = (page: import("playwright").Page) =>
 /**
  * 1 窓の間、縮小した配信映像を rAF のたびに比較する。
  * `scripts/check-stream.ts` のサンプラーと同じ骨格の、全部画面バージョン
- * （ゲーム画面クリップの区別は不要）。無音・未再生・要素再構築では対象が
- * 取れないので空測定を返し、判定は呼び出し側に委ねる。
+ * （ゲーム画面クリップの区別は不要）。
+ *
+ * 窓の開始時に計測できる `<video>` が無くても空測定で打ち切らない。プレイヤー
+ * は要素を作り直すので、開始の一瞬だけ対象が消えることがある。待たずに
+ * 打ち切るとその周期が判定不能になり、`CompositeFreezePolicy` が連続静止を
+ * 数え直して回復が走らない。要素が入れ替わったらピクセル比較を切り、media
+ * clock の前進は同じ要素の間の正の差分を足し上げる（作り直しで currentTime が
+ * 巻き戻っても「放映中」の根拠を失わない）。
  */
 const sampleMotionWindow = async ({
   durationMs,
@@ -130,38 +162,17 @@ const sampleMotionWindow = async ({
   channelTolerance: number;
   minChangedRatio: number;
 }): Promise<PictureMotion> => {
-  const unmoving = (): PictureMotion => ({
-    comparedFrames: 0,
-    changedFrames: 0,
-    windowMs: 0,
-    tainted: false,
-    sawAdvertisement: false,
-    clockAdvancedSeconds: 0,
-  });
-  const startProbe = window.__mmjSelectCapturableVideo?.();
-  if (!startProbe?.videoWidth || !startProbe.videoHeight) {
-    return unmoving();
-  }
-  // media clock の前進は「放映中か」の根拠になる（`isOnAirFromClock`）。合成
-  // 出力が固まっていても hls.js はセグメントを再生し続けるので clock は進む。
-  const startClock = startProbe.currentTime;
-  const scale = Math.min(
-    1,
-    maxDimension / Math.max(startProbe.videoWidth, startProbe.videoHeight),
-  );
-  const width = Math.max(1, Math.round(startProbe.videoWidth * scale));
-  const height = Math.max(1, Math.round(startProbe.videoHeight * scale));
-  const canvas = new OffscreenCanvas(width, height);
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  if (!context) {
-    return unmoving();
-  }
+  let context: OffscreenCanvasRenderingContext2D | null = null;
+  let width = 0;
+  let height = 0;
   let previous: Uint8ClampedArray | null = null;
   let comparedFrames = 0;
   let changedFrames = 0;
   let tainted = false;
   let sawAdvertisement = false;
-  let lastClock = startClock;
+  let sampledVideo: HTMLVideoElement | null = null;
+  let lastClock = 0;
+  let clockAdvancedSeconds = 0;
   const start = performance.now();
   try {
     await new Promise<void>((resolve) => {
@@ -178,40 +189,64 @@ const sampleMotionWindow = async ({
           sawAdvertisement = true;
         }
         try {
-          const video = window.__mmjSelectCapturableVideo?.();
+          const video = window.__mmjSelectCapturableVideo?.() ?? null;
           // 再構築の途中で要素が消えうる。比較対象を落とさず待つ。
           if (video?.videoWidth && video.videoHeight) {
-            lastClock = video.currentTime;
-            context.drawImage(video, 0, 0, width, height);
-            const current = context.getImageData(0, 0, width, height).data;
-            if (previous) {
-              let changed = 0;
-              const total = width * height;
-              for (let p = 0; p < total; p++) {
-                const i = p * 4;
-                const redDiff = Math.abs(
-                  (previous[i] ?? 0) - (current[i] ?? 0),
-                );
-                const greenDiff = Math.abs(
-                  (previous[i + 1] ?? 0) - (current[i + 1] ?? 0),
-                );
-                const blueDiff = Math.abs(
-                  (previous[i + 2] ?? 0) - (current[i + 2] ?? 0),
-                );
-                if (
-                  redDiff > channelTolerance ||
-                  greenDiff > channelTolerance ||
-                  blueDiff > channelTolerance
-                ) {
-                  changed += 1;
+            if (video !== sampledVideo) {
+              // 別の要素のタイムラインなので、絵の比較と時計の基準を切り替える。
+              sampledVideo = video;
+              lastClock = video.currentTime;
+              previous = null;
+              context = null;
+            } else {
+              const advanced = video.currentTime - lastClock;
+              if (advanced > 0) {
+                clockAdvancedSeconds += advanced;
+              }
+              lastClock = video.currentTime;
+            }
+            if (!context) {
+              const scale = Math.min(
+                1,
+                maxDimension / Math.max(video.videoWidth, video.videoHeight),
+              );
+              width = Math.max(1, Math.round(video.videoWidth * scale));
+              height = Math.max(1, Math.round(video.videoHeight * scale));
+              const canvas = new OffscreenCanvas(width, height);
+              context = canvas.getContext("2d", { willReadFrequently: true });
+            }
+            if (context) {
+              context.drawImage(video, 0, 0, width, height);
+              const current = context.getImageData(0, 0, width, height).data;
+              if (previous) {
+                let changed = 0;
+                const total = width * height;
+                for (let p = 0; p < total; p++) {
+                  const i = p * 4;
+                  const redDiff = Math.abs(
+                    (previous[i] ?? 0) - (current[i] ?? 0),
+                  );
+                  const greenDiff = Math.abs(
+                    (previous[i + 1] ?? 0) - (current[i + 1] ?? 0),
+                  );
+                  const blueDiff = Math.abs(
+                    (previous[i + 2] ?? 0) - (current[i + 2] ?? 0),
+                  );
+                  if (
+                    redDiff > channelTolerance ||
+                    greenDiff > channelTolerance ||
+                    blueDiff > channelTolerance
+                  ) {
+                    changed += 1;
+                  }
+                }
+                comparedFrames += 1;
+                if (changed / total > minChangedRatio) {
+                  changedFrames += 1;
                 }
               }
-              comparedFrames += 1;
-              if (changed / total > minChangedRatio) {
-                changedFrames += 1;
-              }
+              previous = current;
             }
-            previous = current;
           }
         } catch {
           // このコールバック内の例外は await された promise を reject しない。
@@ -231,7 +266,7 @@ const sampleMotionWindow = async ({
       windowMs: performance.now() - start,
       tainted: true,
       sawAdvertisement,
-      clockAdvancedSeconds: lastClock - startClock,
+      clockAdvancedSeconds,
     };
   }
   return {
@@ -240,7 +275,36 @@ const sampleMotionWindow = async ({
     windowMs: performance.now() - start,
     tainted,
     sawAdvertisement,
-    clockAdvancedSeconds: lastClock - startClock,
+    clockAdvancedSeconds,
+  };
+};
+
+/**
+ * 窓を開く前に対象 `<video>` の状態を読む。作り直しで paused に戻った要素は
+ * その場で再生を促す（再生していない要素は選別対象にならない）。
+ */
+const readSelectedVideoState = (): VideoState => {
+  const video = window.__mmjSelectCapturableVideo?.() ?? null;
+  if (!video) {
+    return {
+      found: false,
+      videoWidth: 0,
+      readyState: 0,
+      paused: true,
+      currentTime: 0,
+      decodedAudioBytes: 0,
+    };
+  }
+  if (video.paused) {
+    window.__mmjStartPlayback?.();
+  }
+  return {
+    found: true,
+    videoWidth: video.videoWidth,
+    readyState: video.readyState,
+    paused: video.paused,
+    currentTime: video.currentTime,
+    decodedAudioBytes: 0,
   };
 };
 
@@ -371,6 +435,33 @@ export const createChromiumWatchPageBrowser =
         if (!advertisementEnded) {
           console.log(
             "[INFO] an advertisement was still playing after the wait; measuring anyway",
+          );
+        }
+        // プレイヤーは広告の明けや hls.js の復帰で `<video>` を作り直す。作り
+        // 直しの最中に窓を開くと空測定になり、停止が続いていても連続静止が
+        // 途切れる。計測できる要素が戻り、時計が少し進むまで待ってから測る。
+        const measurable = await waitForMeasurableVideo({
+          probe: () =>
+            page.evaluate(readSelectedVideoState).catch(
+              () =>
+                ({
+                  found: false,
+                  videoWidth: 0,
+                  readyState: 0,
+                  paused: true,
+                  currentTime: 0,
+                  decodedAudioBytes: 0,
+                }) satisfies VideoState,
+            ),
+          timeoutMs: MEASURABLE_VIDEO_TIMEOUT_MS,
+          pollMs: MEASURABLE_VIDEO_POLL_MS,
+          sleep: (ms) =>
+            new Promise<void>((resolve) => globalThis.setTimeout(resolve, ms)),
+          requireAdvanceSeconds: MEASURABLE_VIDEO_ADVANCE_SECONDS,
+        });
+        if (!isVideoReady(measurable)) {
+          console.log(
+            "[INFO] the watch page video was not measurable; measuring the window anyway",
           );
         }
         // レンダラが固まっていると evaluate が帰らない可能性がある。待ちの
