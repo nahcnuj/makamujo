@@ -12,7 +12,10 @@
  * 回復は systemctl restart で行う:
  * - `obs` — makamujo-obs.service だけ
  * - `xorgAndObs` — makamujo-xvfb.service と makamujo-obs.service
- * - `browserAndBroadcastStack` — ゲーム用ブラウザ実体 + makamujo-xvfb + obs
+ * - `browserAndBroadcastStack` — ゲーム用ブラウザ実体 + makamujo-xvfb + obs +
+ *   配信サーバ makamujo-screen.service（画面を生成する側。最後に触る:
+ *   watchdog 自身がこの unit のプロセス（`bun start`）の中で動いており、
+ *   ここで落ちると残りの unit の再起動が打ち切られる）
  *
  * ポリシーの状態（streak・ラング・クールダウン）はプロセスの寿命より長い。
  * サーバーは cron に 11 分ごとに殺され start されるので、メモリだけの状態では
@@ -54,6 +57,17 @@ export const DEFAULT_FREEZE_CHECK_INTERVAL_MS = 60_000;
  * （`makamujo.service` が `Wants=` する）で、リポジトリ同梱の
  * `xorg10.service` は使われていない。誤った unit 名を渡すと
  * `systemctl restart` が失敗し、そのラングは何も回復できない。
+ *
+ * 最深ラングは ansible が束ねるアプリ三連（screen / browser / obs）に
+ * `makamujo-xvfb.service` を合わせた形にする。画面の描画元である
+ * `makamujo-screen.service`（配信サーバ。ゲーム状態・発話・アバター状態を
+ * ページへ配る側）が抜けると、そこで起因する静止は最深ラングでも回復しない
+ * （ブラウザを作り直しても、止まったサーバに繋ぎ直したページはすぐまた
+ * 静止する）。watchdog 自身もこの unit のプロセス（`bun start`）の中で動いて
+ * いるため、再起動すると自プロセスが SIGTERM で落ちて以降の unit に届かない。
+ * そこで `makamujo-screen.service` はリストの最後に置き、他の unit の
+ * 再起動が済んでから触る。ポリシー状態は recover の前に永続化してあるので、
+ * 次に起動したプロセスは最深のラングから観測を再開できる。
  */
 export const RECOVERY_SERVICES: Record<CompositeFreezeRecovery, string[]> = {
   obs: ["makamujo-obs.service"],
@@ -62,6 +76,8 @@ export const RECOVERY_SERVICES: Record<CompositeFreezeRecovery, string[]> = {
     "makamujo-browser.service",
     "makamujo-xvfb.service",
     "makamujo-obs.service",
+    // 意図的に最後: 再起動すると watchdog 自身のプロセスが落ちる。
+    "makamujo-screen.service",
   ],
 };
 
