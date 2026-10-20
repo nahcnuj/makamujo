@@ -119,6 +119,16 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
   `composition/watchPageBrowser.ts` の `judgePictureMotion`:
   changed fps が `PICTURE_STILL_FPS_THRESHOLD`（既定 2）を下回る窓が `still`。
   測れない窓（広告が流れた、tainted、比較が少なすぎる）は判定できない。
+  同じ測定が、対象 `<video>` の media clock（`currentTime`）が窓の間に進んだ
+  秒数 `clockAdvancedSeconds` も返す。放映中かはこの前進（
+  `CLOCK_ADVANCE_MIN_SECONDS` 超）で判断する（`isOnAirFromClock`）。合成出力が
+  固まっていても hls.js はセグメントを再生し続けるので clock は進むため、
+  「配信画面は静止しているのに放映中」を検知できる。わんコメの
+  `POST /api/meta` が張ったセッション（`streamState`）を放映中の根拠には
+  しない: cron の再起動直後は undefined で、わんコメの接続が切れていると
+  一度も定義されず、その間 watchdog が毎周期を放映外とみなして測定すら行わず、
+  本物の合成出力の停止を放置する（issue #929/#933: 音声と media clock は進み
+  続け、外からの健康チェックだけが停止を繰り返し検知していた）。
   サンプラーは再生中の `<video>` しか選ばないため、統計用ブラウザは
   `--autoplay-policy=no-user-gesture-required` で起動し、ページを開いた直後と
   計測のたびに `startVideoPlayback` で全 `<video>` をミュート再生させる。
@@ -156,12 +166,19 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
   届く前に毎回 `obs` からやり直しになる。原子的な書換え（一時ファイル → rename）で
   書き、壊れたファイルは新規扱いで起動する（`var/stream-baseline.json` と同じ）。
 - 番組が放映外の間は観測をしない（番組終了の一枚絵を回復の対象にしない）。
-  放映外の周期はポリシーに `unknown` として投入して streak をリセットするだけで、
-  ラングとクールダウンは消さない。サーバーは cron に 11 分ごとに殺され start
-  されるたびに `streamState` が undefined から始まり、起動直後の最初の周期は
-  必ず放映外に当たる。放映外で状態を全消ししていた間は、永続化した状態が毎回の
-  起動直後に消えてラングが `obs` のまま深まらず、合成出力が止まったままだった
-  （#927）。
+  放映中かは測定した `<video>` の media clock の前進（`isOnAirFromClock`）で
+  判断する。clock が進まない周期（番組終了の一枚絵 / paused）と測定不能な周期
+  （ページ未オープン / 広告 / tainted）は、ポリシーに `unknown` として投入して
+  streak をリセットするだけで、ラングとクールダウンは消さない。サーバーは cron に
+  11 分ごとに殺され start されるたびに、起動直後の最初の周期は配信ページの開設が
+  間に合わず測定不能に当たる。放映外 / 測定不能で状態を全消ししていた間は、
+  永続化した状態が毎回の起動直後に消えてラングが `obs` のまま深まらず、合成出力が
+  止まったままだった（#927）。放映中の根拠にわんコメのセッションを使うと、
+  cron 再起動直後やわんコメ切断時に毎周期が放映外になり、測定すら走らない
+  （#929/#933）。
+- 観測周期の tick は例外を外へ漏らさない（`tick` の else で `log.error` して
+  finally で続行）。漏らすと以降の周期が静かに止まり、回復の機会が失われる
+  （issue #931）。
 
 ### モジュールと配線
 
