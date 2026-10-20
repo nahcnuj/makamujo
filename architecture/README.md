@@ -141,7 +141,16 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
   `waitForAdvertisementEnd` で流れる広告が終わるのを待つ（`check-stream.ts`
   の `waitForAdvertisementEnd` と同じ考え方。上限まで待っても流れていたら
   測定を続行し、その窓は判定不能として破棄される）。
-- 測定は機会良く（開いたままのページがあるときだけ）。ページを作り直さない。
+- 測定は機会良く（開いたままのページがあるときだけ）。**測定のためにページを
+  作り直さない。**ただし測れないことが
+  `PICTURE_MOTION_PAGE_RECREATE_AFTER_FAILURES`（既定 3）周期連続したら、その
+  ページは測定に向かないものとして捨て、次の統計の採取に開き直させる。生きては
+  いるが測れないページ（プレイヤーが paused のまま、エラーページ、ナビゲーション
+  後）が残り続けると、watchdog は毎周期を測定不能（`unknown`）として回復を一度も
+  打てないままになり、外からの健康チェックだけが停止を検知し続ける
+  （issue #944）。健康チェックが検知を続けられるのは、毎回新しいページで測る
+  から。1 回だけの失敗では作り直さない（通常視聴でも起きるうえ、次の周期で
+  測れ直る）。
 - 純ポリシー `lib/domain/broadcasting/CompositeFreezePolicy.ts` が、周期ごとの
   観測（`still` / `moving` / `unknown`）を折りたたむ:
   - `still` が `cyclesRequired`（既定 3）周期連続したら、回復ラングを打つ。
@@ -176,6 +185,12 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
   止まったままだった（#927）。放映中の根拠にわんコメのセッションを使うと、
   cron 再起動直後やわんコメ切断時に毎周期が放映外になり、測定すら走らない
   （#929/#933）。
+- 見送った周期は理由（`unmeasurable` / `off-air`）と周期番号を journal に残す
+  （1 回目と 10 回ごと、
+  `composition/broadcastFreezeWatchdog.ts`）。回復が走らない理由そのものが
+  journal に無いと、外からの健康チェックだけが検知し続ける停止（#944）のあいだ
+  「なぜ回復が一度も走らなかったか」を辿れない。連続する見送りを毎周期ログに
+  しないのは、journal を埋め尽くさないため。
 - 観測周期の tick は例外を外へ漏らさない（`tick` の else で `log.error` して
   finally で続行）。漏らすと以降の周期が静かに止まり、回復の機会が失われる
   （issue #931）。
@@ -187,8 +202,8 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 | `lib/domain/broadcasting/CompositeFreezePolicy.ts` | domain（純関数） | 周期観測 → 回復ラングの決定 |
 | `composition/watchPageBrowser.ts` | composition | 映像の動きの型と判定（Playwright 非依存） |
 | `composition/chromiumWatchPageBrowser.ts` | composition | 1 窓の映像の動きを測る実装。rAF が来ない環境でも上限で帰る |
-| `composition/watchPageStatisticsSource.ts` | composition | 開いたままのページでの測定の代理。無効時 / 未オープン時は `undefined` |
-| `composition/broadcastFreezeWatchdog.ts` | composition | 採取の周期、ポリシーへの投入、systemd 回復の実行口 |
+| `composition/watchPageStatisticsSource.ts` | composition | 開いたままのページでの測定の代理。無効時 / 未オープン時は `undefined`。測れない連続が続けばページを捨てて採取に開き直させる |
+| `composition/broadcastFreezeWatchdog.ts` | composition | 採取の周期、ポリシーへの投入、systemd 回復の実行口。見送った周期は理由つきで journal に残す |
 | `lib/application/compositeFreezeStateStore.ts` | application | ポリシー状態の `var/` への永続化（壊れたファイルは新規扱い） |
 
 `index.ts` が統計の採取と同じ場所で 1 回だけ配線する。回復口は

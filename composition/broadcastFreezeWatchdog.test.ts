@@ -295,6 +295,56 @@ describe("startBroadcastFreezeWatchdog", () => {
     expect(calls).toBeGreaterThan(1);
   });
 
+  it("logs why a cycle was skipped without flooding the journal", async () => {
+    // 外からの健康チェックだけが検知し続ける停止（issue #944）のあいだ、
+    // watchdog は毎周期を見送っている。見送った理由が journal に残らないと、
+    // 「回復がなぜ一度も走らなかったか」を後から辿れない。
+    const warnings: string[] = [];
+    const options = createWatcherOptions(new Array(12).fill(undefined), {
+      intervalMs: 5,
+      log: {
+        ...silentLog,
+        warn: (...args: unknown[]) => warnings.push(args.join(" ")),
+      },
+    });
+    const watchdog = startBroadcastFreezeWatchdog(options);
+    for (let tick = 0; tick < 12; tick++) {
+      await waitTick();
+    }
+    watchdog.stop();
+
+    const skipped = warnings.filter((line) => line.includes("skipping"));
+    // 1 回目と 10 回ごとだけ。連続する見送りで journal を埋めない。
+    const skippedCounts = skipped.map((line) =>
+      Number(/#(\d+)/.exec(line)?.[1] ?? 0),
+    );
+    expect(skippedCounts.length).toBeGreaterThanOrEqual(2);
+    expect(skippedCounts[0]).toBe(1);
+    expect(skippedCounts[1]).toBe(10);
+    expect(skippedCounts.slice(2).every((count) => count % 10 === 0)).toBe(
+      true,
+    );
+    expect(skipped[0]).toContain("unmeasurable");
+    expect(skipped[0]).toContain("recoveryIndex");
+  });
+
+  it("labels an off-air cycle when it skips", async () => {
+    const warnings: string[] = [];
+    const options = createWatcherOptions([offAirStill, moving], {
+      intervalMs: 5,
+      log: {
+        ...silentLog,
+        warn: (...args: unknown[]) => warnings.push(args.join(" ")),
+      },
+    });
+    const watchdog = startBroadcastFreezeWatchdog(options);
+    await waitTick();
+    await waitTick();
+    watchdog.stop();
+
+    expect(warnings.some((line) => line.includes("off-air"))).toBe(true);
+  });
+
   it("maps each recovery rung to the systemd units it restarts", () => {
     // :10 の実体は ansible が導入する makamujo-xvfb.service。ここを
     // リポジトリ同梱の xorg10.service にすると本番に unit が無く、

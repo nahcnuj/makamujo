@@ -240,6 +240,7 @@ export const startBroadcastFreezeWatchdog = (
 
   let stopped = false;
   let ticking = false;
+  let skippedCycles = 0;
   let state: CompositeFreezeState =
     options.stateStore?.load() ?? createCompositeFreezeState();
   if (
@@ -288,6 +289,17 @@ export const startBroadcastFreezeWatchdog = (
         // 回復した証拠ではない。ここで状態を全消しすると、cron の再起動ごとに
         // 永続化された状態が消え、issue #889 で引き継ぐようにしたはずのラングが
         // `obs` のまま深まらない（issue #927）。
+        skippedCycles += 1;
+        // 連続して見送られる周期は、回復が一度も走らない理由そのものになる。
+        // ここを記録しないと、外からの健康チェックだけが検知し続ける停止
+        // （issue #944）のあいだに journal が何も語らなくなる。
+        if (skippedCycles === 1 || skippedCycles % 10 === 0) {
+          log.warn(
+            `[WARN] skipping the composite freeze cycle #${skippedCycles} (${
+              measured === undefined ? "unmeasurable" : "off-air"
+            }); the delivered picture cannot be judged (stillCycles=${state.stillCycles}, recoveryIndex=${state.recoveryIndex})`,
+          );
+        }
         if (state.stillCycles !== 0) {
           state = observeCompositeFreezeCycle(
             state,
@@ -298,6 +310,7 @@ export const startBroadcastFreezeWatchdog = (
         }
         return;
       }
+      skippedCycles = 0;
       const judged = judgePictureMotion(measured);
       const decision = observeCompositeFreezeCycle(
         state,

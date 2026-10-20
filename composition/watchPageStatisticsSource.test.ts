@@ -1,7 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import type { DisplayedStatistics } from "../lib/domain/broadcasting/watchPageStatistics";
-import type { WatchPageBrowser } from "./watchPageBrowser";
-import { startWatchPageStatisticsSource } from "./watchPageStatisticsSource";
+import type { PictureMotion, WatchPageBrowser } from "./watchPageBrowser";
+import {
+  PICTURE_MOTION_PAGE_RECREATE_AFTER_FAILURES,
+  startWatchPageStatisticsSource,
+} from "./watchPageStatisticsSource";
 
 const statistics = (
   overrides: DisplayedStatistics = {},
@@ -13,16 +16,28 @@ const statistics = (
   ...overrides,
 });
 
+/** 測定できた（`still` かどうかは watchdog の仕事なので問わない）。 */
+const measured: PictureMotion = {
+  comparedFrames: 60,
+  changedFrames: 0,
+  windowMs: 3_000,
+  tainted: false,
+  sawAdvertisement: false,
+  clockAdvancedSeconds: 3,
+};
+
 const createStubBrowser = (
   readings: DisplayedStatistics[],
   {
     failOnReadAt,
     failOnOpenAt,
     isAlive = () => true,
+    measurePictureMotion,
   }: {
     failOnReadAt?: number;
     failOnOpenAt?: number;
     isAlive?: () => boolean;
+    measurePictureMotion?: () => Promise<PictureMotion>;
   } = {},
 ) => {
   const calls = { created: 0, opened: 0, reads: 0, discarded: 0 };
@@ -46,6 +61,7 @@ const createStubBrowser = (
     discard: async () => {
       calls.discarded += 1;
     },
+    ...(measurePictureMotion === undefined ? {} : { measurePictureMotion }),
   };
   return {
     calls,
@@ -288,5 +304,154 @@ describe("startWatchPageStatisticsSource", () => {
 
     expect(stub.calls.reads).toBe(readsAtStop);
     expect(stub.calls.discarded).toBe(1);
+  });
+
+  it("measures on the kept-open page without reopening it", async () => {
+    const stub = createStubBrowser([statistics()], {
+      measurePictureMotion: async () => measured,
+    });
+    const source = startWatchPageStatisticsSource({
+      env: {},
+      log: silentLog,
+      createBrowser: stub.create,
+      onStatistics: () => {},
+    });
+
+    await source.ready;
+    await expect(source.measurePictureMotion()).resolves.toBe(measured);
+    await expect(source.measurePictureMotion()).resolves.toBe(measured);
+    await source.stop();
+
+    // 測定のためにページを開き直さない。開いているのは統計の採取が開いた
+    // それだけ。
+    expect(stub.calls.created).toBe(1);
+    expect(stub.calls.opened).toBe(1);
+  });
+
+  it("drops the page only after the measurement keeps failing", async () => {
+    const stub = createStubBrowser([statistics()], {
+      measurePictureMotion: async () => {
+        throw new Error("no capturable video");
+      },
+    });
+    const warnings: unknown[][] = [];
+    const source = startWatchPageStatisticsSource({
+      env: {},
+      log: {
+        log: () => {},
+        warn: (...args: unknown[]) => warnings.push(args),
+        error: () => {},
+      },
+      createBrowser: stub.create,
+      onStatistics: () => {},
+    });
+
+    await source.ready;
+    for (
+      let attempt = 1;
+      attempt < PICTURE_MOTION_PAGE_RECREATE_AFTER_FAILURES;
+      attempt++
+    ) {
+      await expect(source.measurePictureMotion()).resolves.toBeUndefined();
+      expect(stub.calls.discarded).toBe(0);
+    }
+    await expect(source.measurePictureMotion()).resolves.toBeUndefined();
+
+    // 生きてはいるが測れないページは、配信画面の停止を測る側を塞ぐ
+    // （外からの健康チェックは毎回新しいページで測り続ける）。連続する失敗が
+    // 続いたら捨て、次の統計の採取に開き直させる。
+    expect(stub.calls.discarded).toBe(1);
+    expect(String(warnings.at(-1)?.[0])).toContain("dropping the watch page");
+
+    // 測定そのものは開き直さない。開き直すのは統計の採取。
+    await expect(source.measurePictureMotion()).resolves.toBeUndefined();
+    expect(stub.calls.created).toBe(1);
+
+    await source.readOnce();
+    expect(stub.calls.created).toBe(2);
+    expect(stub.calls.opened).toBe(2);
+    await source.stop();
+  });
+
+  it("counts an implementation that cannot measure as unmeasurable", async () => {
+    // `measurePictureMotion` を持たない差し替え実装（古い実装 / 測れない環境）。
+    const stub = createStubBrowser([statistics()]);
+    const source = startWatchPageStatisticsSource({
+      env: {},
+      log: silentLog,
+      createBrowser: stub.create,
+      onStatistics: () => {},
+    });
+
+    await source.ready;
+    for (
+      let attempt = 0;
+      attempt < PICTURE_MOTION_PAGE_RECREATE_AFTER_FAILURES;
+      attempt++
+    ) {
+      await expect(source.measurePictureMotion()).resolves.toBeUndefined();
+    }
+
+    expect(stub.calls.discarded).toBe(1);
+    await source.stop();
+  });
+
+  it("keeps the page while measurements keep succeeding", async () => {
+    let attempts = 0;
+    const stub = createStubBrowser([statistics()], {
+      measurePictureMotion: async () => {
+        attempts += 1;
+        // 失敗と成功が混ざる周期でも、成功すれば連続失敗は数えない。
+        if (attempts % 2 === 0) {
+          return measured;
+        }
+        throw new Error("navigation gap");
+      },
+    });
+    const source = startWatchPageStatisticsSource({
+      env: {},
+      log: silentLog,
+      createBrowser: stub.create,
+      onStatistics: () => {},
+    });
+
+    await source.ready;
+    await source.measurePictureMotion(); // 失敗 1
+    await source.measurePictureMotion(); // 成功（連続失敗をリセット）
+    await source.measurePictureMotion(); // 失敗 1
+    await source.measurePictureMotion(); // 成功
+    await source.measurePictureMotion(); // 失敗 1
+    await source.measurePictureMotion(); // 成功
+    expect(stub.calls.discarded).toBe(0);
+    await source.stop();
+
+    expect(stub.calls.created).toBe(1);
+  });
+
+  it("does not drop a page while stopped", async () => {
+    const stub = createStubBrowser([statistics()], {
+      measurePictureMotion: async () => {
+        throw new Error("no capturable video");
+      },
+    });
+    const source = startWatchPageStatisticsSource({
+      env: {},
+      log: silentLog,
+      createBrowser: stub.create,
+      onStatistics: () => {},
+    });
+
+    await source.ready;
+    await source.stop();
+    const discardedAtStop = stub.calls.discarded;
+    for (
+      let attempt = 0;
+      attempt < PICTURE_MOTION_PAGE_RECREATE_AFTER_FAILURES;
+      attempt++
+    ) {
+      await expect(source.measurePictureMotion()).resolves.toBeUndefined();
+    }
+
+    expect(stub.calls.discarded).toBe(discardedAtStop);
   });
 });

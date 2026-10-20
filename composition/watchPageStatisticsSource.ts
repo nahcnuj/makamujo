@@ -8,6 +8,16 @@
  * `open` に失敗したときだけで、公開中の値は失敗中も直前のものを保つ（勝手
  * には空にしない）。
  *
+ * 映像の動きの測定（`measurePictureMotion`）は「測定のためにページを作り
+ * 直さない」のと同じ方針だが、**測れないまま続く**場合に限っては例外を置く:
+ * 生きてはいるが測れないページ（プレイヤーが paused のまま、エラーページ、
+ * ナビゲーション後）が永久に残ると、配信画面の停止を測る側
+ * （`broadcastFreezeWatchdog`）が毎周期を測定不能として回復を一度も打てない
+ * ままになる。外からの健康チェック（`scripts/check-stream.ts`）は毎回
+ * 新しいページで測るので検知を続け、うち回復だけが止まる。そこで測定が
+ * `PICTURE_MOTION_PAGE_RECREATE_AFTER_FAILURES` 回連続で失敗したときに限り、
+ * そのページを捨てて次の統計の採取に開き直させる。
+ *
  * 差し替え口は `createBrowser`（ブラウザ実体そのもの）であって URL ではない。
  * テストは `NICONAMA_WATCH_PAGE_DISABLED=1` で全体を無効化するか、
  * `createBrowser` を差し替えてローカルページを読ませることができる。
@@ -43,10 +53,24 @@ export type WatchPageStatisticsSource = {
    * 測定できない（無効化されている、ページが開けていない、実装が測れない、
    * 測定中に失敗した）ときは `undefined` を返して断念する。測定のために
    * ページを開き直したりはしない: 開いたままのページで動くときだけ測れる。
+   * ただし測れないことが
+   * `PICTURE_MOTION_PAGE_RECREATE_AFTER_FAILURES` 回連続したら、そのページは
+   * 測定に向かないものとして捨て、次の統計の採取に開き直させる。
    */
   measurePictureMotion: () => Promise<PictureMotion | undefined>;
   stop: () => Promise<void>;
 };
+
+/**
+ * 映像の動きの測定がこの回数連続して失敗したら、開いたままのページを捨てる。
+ *
+ * 1 回だけの失敗（ナビゲーションの隙間、広告の切り替わり）は通常視聴でも
+ * 起きるうえ、次の周期で測れ直る。連続する失敗は「生きてはいるが測れない
+ * ページ」を指すので、統計の採取に開き直させたほうがよい。この回数は
+ * watchdog の観測周期（既定 60 秒）で数え、統計の採取周期
+ * （既定 30 秒）より長めに取って、1 度の失敗で作り直さないようにする。
+ */
+export const PICTURE_MOTION_PAGE_RECREATE_AFTER_FAILURES = 3;
 
 const parseInterval = (raw: string | undefined, fallback: number): number => {
   if (raw === undefined) {
@@ -113,6 +137,7 @@ export const startWatchPageStatisticsSource = (
   let reading = false;
   let browser: WatchPageBrowser | undefined;
   let timer: ReturnType<typeof setInterval> | undefined;
+  let pictureMotionFailures = 0;
 
   const createChromiumBrowser = async (): Promise<WatchPageBrowser> =>
     options.createBrowser
@@ -181,6 +206,35 @@ export const startWatchPageStatisticsSource = (
     }
   };
 
+  /**
+   * 測定できない周期を数え、連続が続けば開いたままのページを捨てる。
+   * 捨てた分は次の統計の採取に開き直させる（ここで開き直さない:
+   * ページを作る責務は統計の採取のままだ）。
+   */
+  const giveUpOnUnmeasurablePage = async (
+    current: WatchPageBrowser,
+  ): Promise<undefined> => {
+    pictureMotionFailures += 1;
+    if (pictureMotionFailures < PICTURE_MOTION_PAGE_RECREATE_AFTER_FAILURES) {
+      return undefined;
+    }
+    pictureMotionFailures = 0;
+    // 測定中に別の周期がすでに捨てていたら何もしない。
+    if (browser !== current) {
+      return undefined;
+    }
+    browser = undefined;
+    log.warn(
+      `[WARN] dropping the watch page after ${PICTURE_MOTION_PAGE_RECREATE_AFTER_FAILURES} consecutive unmeasurable picture motion cycles; the next statistics read reopens it`,
+    );
+    try {
+      await current.discard();
+    } catch {
+      // 実体がすでに落ちているなら、次の採取が作り直す。
+    }
+    return undefined;
+  };
+
   return {
     ready: run(),
     readOnce,
@@ -194,13 +248,19 @@ export const startWatchPageStatisticsSource = (
       if (current === undefined || !current.isAlive()) {
         return undefined;
       }
+      let measured: PictureMotion | undefined;
       try {
-        return await current.measurePictureMotion?.();
+        measured = await current.measurePictureMotion?.();
       } catch {
         // ナビゲーション中などで失敗するだけなら測定不可として扱う。
         reportFailure(new Error("failed to measure the picture motion"));
-        return undefined;
+        measured = undefined;
       }
+      if (measured !== undefined) {
+        pictureMotionFailures = 0;
+        return measured;
+      }
+      return await giveUpOnUnmeasurablePage(current);
     },
     stop: async () => {
       stopped = true;
