@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
 import {
   type CompositeFreezeRecovery,
   type CompositeFreezeState,
@@ -316,6 +317,29 @@ describe("startBroadcastFreezeWatchdog", () => {
       // リストの最後: 再起動すると watchdog 自身のプロセスが落ちる。
       "makamujo-screen.service",
     ]);
+  });
+
+  it("does not bind the watchdog's own host unit to a unit a rung restarts first", () => {
+    // systemd の Requires= は明示的な restart も伝播する（systemd.unit(5)）。
+    // screen が makamujo-xvfb.service を Requires= していると、xorgAndObs
+    // ラング（xvfb → obs）の xvfb 再起動の時点で screen も再起動され、その中
+    // で動く watchdog が落ちて、そのあとに並ぶ makamujo-obs.service の再起動が
+    // まったく実行されない。X の再起動の後に settle をはさんで OBS を作り直す
+    // 一手しか、XSHM 側で固まった合成出力を回復する手段はないので、ここが欠け
+    // ると回復ラングを上がっても停止は直らない（2026-10-21 06:25 の停止: 音声
+    // は流れ続け、映像全体とゲーム画面部分が 0 fps のまま外部検知に繰り返し
+    // 捉えられた）。深いラングの中で自プロセスを落とす unit は screen（リスト
+    // の最後）だけにするため、ここは Wants= にして伝播を断つ。
+    const unit = readFileSync("etc/systemd/makamujo-screen.service", "utf8");
+    const unitSection = unit.slice(0, unit.indexOf("[Service]"));
+
+    // Requires= で xvfb を束縛しない: 伝播で screen が落ちるから。
+    expect(unitSection).not.toMatch(
+      /^(?!#).*Requires=.*makamujo-xvfb\.service/m,
+    );
+    // ただし起動時には引き続き :10 を束ねて、その順に開く。
+    expect(unitSection).toMatch(/^Wants=makamujo-xvfb\.service$/m);
+    expect(unitSection).toMatch(/^After=.*makamujo-xvfb\.service/m);
   });
 });
 

@@ -1,7 +1,13 @@
 [Unit]
 Description=Makamujo screen server (bun start)
 After=makamujo-xvfb.service makamujo-pipewire.service
-Requires=makamujo-xvfb.service makamujo-pipewire.service
+# Requires= propagates an explicit restart: `systemctl restart
+# makamujo-xvfb.service` would restart this unit too, killing the composite
+# freeze watchdog that runs inside this unit mid-rung and skipping the rest
+# of the recovery (see composition/broadcastFreezeWatchdog.ts). Wants= keeps
+# the display pulled in and ordered but leaves its restarts one-way.
+Wants=makamujo-xvfb.service
+Requires=makamujo-pipewire.service
 PartOf=makamujo-pipewire.service
 
 [Service]

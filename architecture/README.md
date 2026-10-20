@@ -189,7 +189,18 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
     自身がこの unit のプロセス（`bun start`）の中で動くので、再起動すると
     自プロセスが落ちて残りの unit に届かない。リストの最後に置いて、他の unit
     の再起動が済んでから触る（ポリシー状態は recover の前に永続化してあるので、
-    次に起動したプロセスは最深のラングから観測を再開できる）。
+    次に起動したプロセスは最深のラングから観測を再開できる）。深いラングの中で
+    自プロセスを落とすのは screen だけにする。systemd の `Requires=` は明示的な
+    restart も下流に伝播する（systemd.unit(5)）ので、screen が xvfb を
+    `Requires=` していると `xorgAndObs` ラング（xvfb → obs）の xvfb 再起動の
+    時点で screen も再起動され、watchdog が落ちて、そのあとに並ぶ
+    `makamujo-obs.service` の再起動がまったく実行されない。X の再起動の後に
+    settle をはさんで OBS を作り直す一手しか、XSHM 側で固まった合成出力を
+    回復する手段はなく、ここが欠けると回復ラングを上がっても停止が直らない
+    （2026-10-21 06:25 の停止: 音声は流れ続け、映像全体とゲーム画面部分が
+    0 fps のまま外部検知に繰り返し捉えられた）。そこで screen の xvfb 依存は
+    `Wants=` にして伝播を断つ（`etc/systemd/makamujo-screen.service`。起動時に
+    は引き続き `After=` で :10 を先に開く）。
 - ポリシーの状態は `var/broadcast-freeze-state.json` に残して引き継ぐ
   （`lib/application/compositeFreezeStateStore.ts`）。サーバーは cron に
   11 分ごとに殺され start されるので、メモリだけの状態では最深のラングに

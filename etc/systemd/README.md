@@ -17,6 +17,11 @@
   はそちらを `Wants=` する。回復ラング（`composition/broadcastFreezeWatchdog.ts`）も
   `makamujo-xvfb.service` を再起動し、最深ラングではアプリ三連
   （screen / browser / obs）もまとめて再起動する。
+- `makamujo-screen.service` は `makamujo-xvfb.service` を `Wants=` で束ねる
+  （`Requires=` にしない）。systemd は明示的な restart を `Requires=` の下流へ
+  伝播するので、`Requires=` のままだと xvfb の再起動が screen（watchdog の
+  実体）の再起動に変わり、回復ラングの残りの unit 再起動が実行されない
+  （`architecture/README.md` の「配信画面の停止回復」参照）。
 
 ローカル開発では従来どおり `bin/start` / `bin/stop` も利用できます。
 
