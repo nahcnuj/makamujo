@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
+  CLOCK_ADVANCE_MIN_SECONDS,
+  isOnAirFromClock,
   isWatchPageReadable,
   judgePictureMotion,
   type PictureMotion,
@@ -16,6 +18,7 @@ const motion = (overrides: Partial<PictureMotion> = {}): PictureMotion => ({
   windowMs: 3_000,
   tainted: false,
   sawAdvertisement: false,
+  clockAdvancedSeconds: 3,
   ...overrides,
 });
 
@@ -123,6 +126,38 @@ describe("judgePictureMotion", () => {
     expect(
       judgePictureMotion(motion({ comparedFrames: 3, changedFrames: 0 })),
     ).toBeUndefined();
+  });
+});
+
+describe("isOnAirFromClock", () => {
+  it("reads an advancing media clock as on air even when the picture is still", () => {
+    // 合成出力が固まっていても hls.js はセグメントを再生し続けるので clock は
+    // 進む。これが本物の停止を放映中と判断する根拠（issue #929/#933）。
+    expect(
+      isOnAirFromClock(motion({ changedFrames: 0, clockAdvancedSeconds: 3 })),
+    ).toBe(true);
+  });
+
+  it("reads a frozen media clock as off air", () => {
+    // 番組終了後の一枚絵 / paused の `<video>` は clock が進まない。
+    expect(isOnAirFromClock(motion({ clockAdvancedSeconds: 0 }))).toBe(false);
+  });
+
+  it("requires the clock to clear the minimum advance", () => {
+    expect(
+      isOnAirFromClock(
+        motion({ clockAdvancedSeconds: CLOCK_ADVANCE_MIN_SECONDS }),
+      ),
+    ).toBe(false);
+    expect(
+      isOnAirFromClock(
+        motion({ clockAdvancedSeconds: CLOCK_ADVANCE_MIN_SECONDS + 0.01 }),
+      ),
+    ).toBe(true);
+  });
+
+  it("cannot judge a measurement that is missing", () => {
+    expect(isOnAirFromClock(undefined)).toBeUndefined();
   });
 });
 

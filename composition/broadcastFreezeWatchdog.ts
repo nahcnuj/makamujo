@@ -18,6 +18,17 @@
  * サーバーは cron に 11 分ごとに殺され start されるので、メモリだけの状態では
  * 再起動のたびにラングが `obs` に戻り、OBS を何度も繰り返し落とすだけで
  * 合成出力は回復しない。`stateStore` で前プロセスの状態を引き継ぎ、深くなる。
+ * ただし引き継いだ状態は放映外の周期では消さない: 放映中かは測定した
+ * `<video>` の media clock の前進で判断し、進まない周期（番組終了の一枚絵 /
+ * 測定不能）は streak だけリセットしてラングとクールダウンは残す。ここで
+ * 状態を全消しすると、永続化した状態が消えてラングが永遠に `obs` のままで
+ * あった（issue #927）。
+ *
+ * 放映中の根拠にわんコメのセッション（`streamState`）は使わない: cron の
+ * 再起動直後は undefined で、わんコメの接続が切れていると毎周期を放映外と
+ * みなして測定すら行わず、本物の合成出力の停止を放置する（issue #929/#933:
+ * 音声と media clock は進み続け、外からの健康チェックだけが停止を繰り返し
+ * 検知していた）。
  */
 
 import { execFile } from "node:child_process";
@@ -32,7 +43,7 @@ import {
   observeCompositeFreezeCycle,
 } from "../lib/domain/broadcasting/CompositeFreezePolicy";
 import type { PictureMotion } from "./watchPageBrowser";
-import { judgePictureMotion } from "./watchPageBrowser";
+import { isOnAirFromClock, judgePictureMotion } from "./watchPageBrowser";
 
 export const DEFAULT_FREEZE_CHECK_INTERVAL_MS = 60_000;
 
@@ -162,8 +173,6 @@ export interface BroadcastFreezeWatchdogOptions {
    * 実装が測れない）で、policy の `unknown` になる。
    */
   measurePictureMotion: () => Promise<PictureMotion | undefined>;
-  /** 番組が放映中か。放映外の静止（番組終了の一枚絵）は回復の対象にしない。 */
-  isStreamLive: () => boolean;
   /** 回復を実行する口。既定は systemctl（`createSystemdRecovery`）。 */
   recover?: (recovery: CompositeFreezeRecovery) => Promise<void>;
   /**
@@ -262,15 +271,34 @@ export const startBroadcastFreezeWatchdog = (
     }
     ticking = true;
     try {
-      if (!options.isStreamLive()) {
-        // 放映外の静止は回復の意味を持たないので、見なかったことにする。
-        state = createCompositeFreezeState();
-        persistState();
+      // 放映中かの根拠は、監視対象そのものである配信ページの `<video>` の
+      // media clock の前進に置く（`isOnAirFromClock`）。わんコメの
+      // `POST /api/meta` が張ったセッションを根拠にしていた頃は、cron の
+      // 再起動直後に `streamState` が undefined であるうえ、わんコメの接続が
+      // 切れていると毎周期を放映外とみなして測定すら行わず、本物の合成出力の
+      // 停止を放置した（issue #929/#933）。measure を先に行うので、測定不能
+      // （ページ未オープン / 広告 / tainted）は clock も読めず `undefined` に
+      // なり、ポリシーには `unknown` として入る。
+      const measured = await options.measurePictureMotion();
+      if (measured === undefined || isOnAirFromClock(measured) !== true) {
+        // 放映外（clock が進まない = 番組終了の一枚絵）または放映中か判断
+        // できない周期は観測しない。ポリシーには `unknown` として投入して
+        // streak をリセットするだけで、ラングとクールダウンは消さない: それは
+        // すでに打了った回復の記録であり、「clock が進まない」ことは合成出力を
+        // 回復した証拠ではない。ここで状態を全消しすると、cron の再起動ごとに
+        // 永続化された状態が消え、issue #889 で引き継ぐようにしたはずのラングが
+        // `obs` のまま深まらない（issue #927）。
+        if (state.stillCycles !== 0) {
+          state = observeCompositeFreezeCycle(
+            state,
+            { motion: "unknown", nowMs: Date.now() },
+            config,
+          ).state;
+          persistState();
+        }
         return;
       }
-      const measured = await options.measurePictureMotion();
-      const judged =
-        measured === undefined ? "unknown" : judgePictureMotion(measured);
+      const judged = judgePictureMotion(measured);
       const decision = observeCompositeFreezeCycle(
         state,
         { motion: judged ?? "unknown", nowMs: Date.now() },
@@ -278,9 +306,9 @@ export const startBroadcastFreezeWatchdog = (
       );
       state = decision.state;
       persistState();
-      if (measured !== undefined && judged !== undefined) {
+      if (judged !== undefined) {
         log.log(
-          `[INFO] measured the delivered picture (${judged}, ${measured.changedFrames}/${measured.comparedFrames} frames changed in ${Math.round(measured.windowMs)}ms)`,
+          `[INFO] measured the delivered picture (${judged}, ${measured.changedFrames}/${measured.comparedFrames} frames changed in ${Math.round(measured.windowMs)}ms, clock +${measured.clockAdvancedSeconds.toFixed(2)}s)`,
         );
       }
       if (decision.action !== undefined) {
@@ -296,6 +324,13 @@ export const startBroadcastFreezeWatchdog = (
           );
         }
       }
+    } catch (error) {
+      // 測定や回復が throw しても watchdog を殺さない: tick の外へ漏らすと
+      // Bun の unhandled rejection になり、以降の周期が静かに止まる（issue #931）。
+      log.error(
+        "[ERROR] broadcast freeze watchdog tick failed:",
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
       ticking = false;
     }

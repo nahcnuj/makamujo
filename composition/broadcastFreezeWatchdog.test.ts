@@ -19,6 +19,7 @@ const moving: PictureMotion = {
   windowMs: 3_000,
   tainted: false,
   sawAdvertisement: false,
+  clockAdvancedSeconds: 3,
 };
 
 const still: PictureMotion = {
@@ -27,6 +28,16 @@ const still: PictureMotion = {
   windowMs: 3_000,
   tainted: false,
   sawAdvertisement: false,
+  clockAdvancedSeconds: 3,
+};
+
+/**
+ * 番組終了の一枚絵: 合成出力も media clock も止まっている。放映外とみなされ、
+ * 静止として数えない（`isOnAirFromClock` が false）。
+ */
+const offAirStill: PictureMotion = {
+  ...still,
+  clockAdvancedSeconds: 0,
 };
 
 const silentLog = { log: () => {}, warn: () => {}, error: () => {} };
@@ -42,7 +53,6 @@ const createWatcherOptions = (
   return {
     recoveries,
     measurePictureMotion: async () => measurements.shift(),
-    isStreamLive: () => true,
     recover: async (recovery) => {
       recoveries.push(recovery);
     },
@@ -172,24 +182,69 @@ describe("startBroadcastFreezeWatchdog", () => {
     ]);
   });
 
-  it("resets when the stream is not live", async () => {
-    let live = true;
-    const options = createWatcherOptions([still, still, still], {
-      isStreamLive: () => live,
+  it("breaks the still streak at an off-air cycle without erasing the ladder", async () => {
+    // 3 周期目だけ放映外（media clock が進まない一枚絵）。放映中かは測定した
+    // `PictureMotion` の clock から導くので、台本は measurement で組む。
+    const measurements = [still, still, offAirStill, still, still, still];
+    const saved: CompositeFreezeState[] = [];
+    const options = createWatcherOptions(measurements, {
       intervalMs: 5,
+      stateStore: {
+        load: () => createCompositeFreezeState(),
+        save: (state) => saved.push(structuredClone(state)),
+      },
+      config: { cyclesRequired: 3, recoveryCooldownMs: 60_000 },
     });
     const watchdog = startBroadcastFreezeWatchdog(options);
-    await waitTick();
-    live = false;
-    await waitTick();
-    await waitTick();
-    live = true;
-    await waitTick();
-    await waitTick();
+    for (let tick = 0; tick < 6; tick++) {
+      await waitTick();
+    }
     watchdog.stop();
 
-    // 放映外の周期で防ぐ: 番組終了後の一枚絵でも回復を打たない。
-    expect(options.recoveries).toEqual([]);
+    // 放映外の周期は streak を断つ（番組終了後の一枚絵を静止として数えない）
+    // が、ラングは消さない。静止は放映外のあとから数え直し、`obs` を 1 度だけ
+    // 打って、クールダウンで次のラングは待つ。
+    expect(options.recoveries).toEqual(["obs"]);
+    expect(saved).toContainEqual({
+      stillCycles: 0,
+      recoveryIndex: 0,
+      lastRecoveryAtMs: undefined,
+    });
+  });
+
+  it("keeps the resumed ladder across the off-air startup tick", async () => {
+    // サーバーは cron に 11 分ごとに殺され start される。起動直後の最初の tick
+    // は配信ページの開設が間に合わず測定できない（clock も読めない）ため
+    // `unknown` になる。ここで永続化された状態を消すと、ラングが毎回 `obs` に
+    // 戻って deep な回復が一度も打てない（issue #927）。
+    const measurements: (PictureMotion | undefined)[] = [
+      undefined,
+      still,
+      still,
+      still,
+      still,
+    ];
+    const options = createWatcherOptions(measurements, {
+      intervalMs: 5,
+      // 前プロセスが `obs` を打ち終えた直後の状態を引き継いで起動した想定。
+      stateStore: {
+        load: () => ({
+          stillCycles: 0,
+          recoveryIndex: 1,
+          lastRecoveryAtMs: undefined,
+        }),
+        save: () => {},
+      },
+      config: { cyclesRequired: 3, recoveryCooldownMs: 60_000 },
+    });
+    const watchdog = startBroadcastFreezeWatchdog(options);
+    for (let tick = 0; tick < 6; tick++) {
+      await waitTick();
+    }
+    watchdog.stop();
+
+    // 起動直後の測定不能 tick を挟んでも、次に打たれるのは 2 番目のラング。
+    expect(options.recoveries).toEqual(["xorgAndObs"]);
   });
 
   it("stops measuring after stop()", async () => {
@@ -208,6 +263,36 @@ describe("startBroadcastFreezeWatchdog", () => {
     await Bun.sleep(30);
 
     expect(measurements.length).toBe(measuredAtStop);
+  });
+
+  it("logs a measurement that throws and keeps the watchdog alive", async () => {
+    // tick の外へ例外を漏らすと Bun の unhandled rejection になり、以降の周期が
+    // 静かに止まる。回復の機会が失われるので、失敗を記録して次の周期を続ける
+    // （issue #931）。
+    const errors: string[] = [];
+    let calls = 0;
+    const options = createWatcherOptions([], {
+      measurePictureMotion: async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw new Error("measurement exploded");
+        }
+        return moving;
+      },
+      intervalMs: 5,
+      log: { ...silentLog, error: (...args) => errors.push(args.join(" ")) },
+    });
+    const watchdog = startBroadcastFreezeWatchdog(options);
+    for (let tick = 0; tick < 4; tick++) {
+      await waitTick();
+    }
+    watchdog.stop();
+
+    expect(errors.some((line) => line.includes("measurement exploded"))).toBe(
+      true,
+    );
+    // 最初の失敗で止まらず、以降の周期も測定している。
+    expect(calls).toBeGreaterThan(1);
   });
 
   it("maps each recovery rung to the systemd units it restarts", () => {
