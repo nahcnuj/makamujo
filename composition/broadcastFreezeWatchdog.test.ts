@@ -7,6 +7,7 @@ import {
 } from "../lib/domain/broadcasting/CompositeFreezePolicy";
 import {
   type BroadcastFreezeWatchdogOptions,
+  measureWithTimeout,
   RECOVERY_SERVICES,
   resolveBroadcastFreezeWatchdogEnv,
   restartServices,
@@ -71,6 +72,7 @@ describe("resolveBroadcastFreezeWatchdogEnv", () => {
   it("keeps the documented defaults", () => {
     const resolved = resolveBroadcastFreezeWatchdogEnv({});
     expect(resolved.intervalMs).toBe(60_000);
+    expect(resolved.measurementTimeoutMs).toBe(180_000);
     expect(resolved.config.cyclesRequired).toBe(3);
     expect(resolved.config.recoveryCooldownMs).toBe(60_000);
   });
@@ -78,12 +80,22 @@ describe("resolveBroadcastFreezeWatchdogEnv", () => {
   it("honors the environment overrides", () => {
     const resolved = resolveBroadcastFreezeWatchdogEnv({
       BROADCAST_FREEZE_CHECK_INTERVAL_MS: "10000",
+      BROADCAST_FREEZE_MEASUREMENT_TIMEOUT_MS: "5000",
       BROADCAST_FREEZE_CYCLES: "5",
       BROADCAST_FREEZE_RECOVERY_COOLDOWN_MS: "30000",
     });
     expect(resolved.intervalMs).toBe(10_000);
+    expect(resolved.measurementTimeoutMs).toBe(5_000);
     expect(resolved.config.cyclesRequired).toBe(5);
     expect(resolved.config.recoveryCooldownMs).toBe(30_000);
+  });
+
+  it("allows the measurement more time than one advertisement wait", () => {
+    // 広告待ち (90s) + 計測可能な <video> 待ち (30s) + 窓 (3s) より短いと、
+    // 正常な測定まで打ち切って streak が永久に伸びない。
+    expect(resolveBroadcastFreezeWatchdogEnv({}).measurementTimeoutMs).toBe(
+      180_000,
+    );
   });
 });
 
@@ -310,13 +322,43 @@ describe("startBroadcastFreezeWatchdog", () => {
     // 合成出力の静止が回復しない。watchdog 自身がこの unit のプロセスの中で
     // 動くので、再起動すると残りの unit に届かなくなる。リストの最後に置く
     // ことで、他の unit の再起動が済んでから自プロセスが落ちる。
+    // 表示 (xvfb) はブラウザ / OBS / 配信サーバより先に戻す: 後から Xorg を
+    // 落とすと、再起動したブラウザが表示を失ったまま残って静止が続く。
     expect(RECOVERY_SERVICES.browserAndBroadcastStack).toEqual([
-      "makamujo-browser.service",
       "makamujo-xvfb.service",
+      "makamujo-browser.service",
       "makamujo-obs.service",
       // リストの最後: 再起動すると watchdog 自身のプロセスが落ちる。
       "makamujo-screen.service",
     ]);
+  });
+
+  it("times out a measurement that never resolves and keeps recovering", async () => {
+    // レンダラが固まると page.evaluate はいつまでも帰らない。上限が無いと
+    // tick が `ticking` のまま残り、以降の周期がすべて素通りして回復が永久に
+    // 走らない（外からの健康チェックだけが停止を検知し続ける）。
+    const warnings: string[] = [];
+    let calls = 0;
+    const options = createWatcherOptions([], {
+      measurePictureMotion: () => {
+        calls += 1;
+        if (calls === 1) {
+          return new Promise<PictureMotion | undefined>(() => {});
+        }
+        return Promise.resolve(still);
+      },
+      measurementTimeoutMs: 25,
+      intervalMs: 5,
+      config: { cyclesRequired: 3, recoveryCooldownMs: 60_000 },
+      log: { ...silentLog, warn: (...args) => warnings.push(args.join(" ")) },
+    });
+    const watchdog = startBroadcastFreezeWatchdog(options);
+    await Bun.sleep(120);
+    watchdog.stop();
+
+    expect(calls).toBeGreaterThan(1);
+    expect(warnings.some((line) => line.includes("did not finish"))).toBe(true);
+    expect(options.recoveries).toEqual(["obs"]);
   });
 
   it("does not bind the watchdog's own host unit to a unit a rung restarts first", () => {
@@ -340,6 +382,26 @@ describe("startBroadcastFreezeWatchdog", () => {
     // ただし起動時には引き続き :10 を束ねて、その順に開く。
     expect(unitSection).toMatch(/^Wants=makamujo-xvfb\.service$/m);
     expect(unitSection).toMatch(/^After=.*makamujo-xvfb\.service/m);
+  });
+});
+
+describe("measureWithTimeout", () => {
+  it("returns the measurement when it resolves in time", async () => {
+    const result = await measureWithTimeout(async () => still, 1_000);
+    expect(result).toEqual({ timedOut: false, motion: still });
+  });
+
+  it("passes through an unmeasurable (undefined) result", async () => {
+    const result = await measureWithTimeout(async () => undefined, 1_000);
+    expect(result).toEqual({ timedOut: false, motion: undefined });
+  });
+
+  it("reports a timeout when the measurement never resolves", async () => {
+    const result = await measureWithTimeout(
+      () => new Promise<PictureMotion | undefined>(() => {}),
+      10,
+    );
+    expect(result).toEqual({ timedOut: true });
   });
 });
 

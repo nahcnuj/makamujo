@@ -220,6 +220,16 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 - 観測周期の tick は例外を外へ漏らさない（`tick` の else で `log.error` して
   finally で続行）。漏らすと以降の周期が静かに止まり、回復の機会が失われる
   （issue #931）。
+- 1 周期の測定にも上限を置く（`BROADCAST_FREEZE_MEASUREMENT_TIMEOUT_MS`）。
+  例外は握れても、レンダラが固まったときの `page.evaluate` は解決せず、
+  tick が `ticking` のまま残ると以降の周期がすべて素通りして回復が永久に
+  走らなくなる。外からの健康チェックだけが停止を検知し続け、最深ラングに
+  届いた後も回復しない。上限を超えた周期は測定不能 (`unknown`) として捨てて
+  streak をリセットし、次の周期へ進む。`composition/chromiumWatchPageBrowser.ts`
+  側でもセレクタ注入・広告確認・`<video>` 状態の読み取りを個別に打ち切る。
+- 最深ラングの再起動順は 表示 (`makamujo-xvfb.service`) → ブラウザ → OBS →
+  配信サーバ。ブラウザ / OBS / 配信サーバは `DISPLAY=:10` に描くので、Xorg を
+  後から落とすと再起動したブラウザが表示を失ったまま残り、静止が回復しない。
 
 ### モジュールと配線
 
@@ -244,6 +254,7 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 | 変数 | 既定 | 意味 |
 |------|------|------|
 | `BROADCAST_FREEZE_CHECK_INTERVAL_MS` | `60000` | 観測周期 |
+| `BROADCAST_FREEZE_MEASUREMENT_TIMEOUT_MS` | `180000` | 1 周期の測定の上限。超えたら測定不能として次へ進む |
 | `BROADCAST_FREEZE_CYCLES` | `3` | 回復を打つまでに必要な `still` の連続周期 |
 | `BROADCAST_FREEZE_RECOVERY_COOLDOWN_MS` | `60000` | 二つの回復の最短間隔 |
 
