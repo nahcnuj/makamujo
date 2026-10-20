@@ -2,11 +2,22 @@ import { describe, expect, it } from "bun:test";
 import {
   COMPOSITE_FREEZE_DEFAULT_CONFIG,
   COMPOSITE_FREEZE_RECOVERIES,
+  type CompositeFreezeConfig,
   type CompositeFreezeCycle,
   type CompositeFreezeState,
   createCompositeFreezeState,
   observeCompositeFreezeCycle,
 } from "./CompositeFreezePolicy";
+
+/**
+ * The tests pin the streak length explicitly so the behaviour of the ladder
+ * and the cooldown stays characterized independently of the default. The
+ * default itself is one window (see `COMPOSITE_FREEZE_DEFAULT_CONFIG`).
+ */
+const THREE_CYCLES: CompositeFreezeConfig = {
+  cyclesRequired: 3,
+  recoveryCooldownMs: 60_000,
+};
 
 const stepMs = (cycles: number): number => 60_000 * cycles;
 
@@ -20,21 +31,37 @@ const stillStreak = (
   state: CompositeFreezeState,
   startCycle: number,
   count: number,
+  config: CompositeFreezeConfig = THREE_CYCLES,
 ): ReturnType<typeof observeCompositeFreezeCycle> => {
   let decision = observeCompositeFreezeCycle(
     state,
     cycle("still", stepMs(startCycle)),
+    config,
   );
   for (let offset = 1; offset < count; offset++) {
     decision = observeCompositeFreezeCycle(
       decision.state,
       cycle("still", stepMs(startCycle + offset)),
+      config,
     );
   }
   return decision;
 };
 
 describe("observeCompositeFreezeCycle", () => {
+  it("keeps the documented default streak at a single still cycle", () => {
+    // The measurement window (3s) is far shorter than the check cycle, and the
+    // program keeps moving unless the composite stalled, so one zero-fps
+    // window is a stall. Requiring several cycles only delayed the recovery
+    // while the scheduled health check kept raising the issue (issue #989).
+    expect(COMPOSITE_FREEZE_DEFAULT_CONFIG.cyclesRequired).toBe(1);
+
+    const first = stillStreak(createCompositeFreezeState(), 0, 1, {
+      ...COMPOSITE_FREEZE_DEFAULT_CONFIG,
+    });
+    expect(first.action).toBe("obs");
+  });
+
   it("requires consecutive still cycles before any recovery runs", () => {
     const first = stillStreak(createCompositeFreezeState(), 0, 2);
     expect(first.action).toBeUndefined();
@@ -42,6 +69,7 @@ describe("observeCompositeFreezeCycle", () => {
     const third = observeCompositeFreezeCycle(
       first.state,
       cycle("still", stepMs(2)),
+      THREE_CYCLES,
     );
     expect(third.action).toBe("obs");
   });
@@ -61,6 +89,7 @@ describe("observeCompositeFreezeCycle", () => {
     const moved = observeCompositeFreezeCycle(
       recovered.state,
       cycle("moving", stepMs(20)),
+      THREE_CYCLES,
     );
     expect(moved.state.recoveryIndex).toBe(0);
     expect(moved.action).toBeUndefined();
@@ -80,6 +109,7 @@ describe("observeCompositeFreezeCycle", () => {
     const oneCycleLater = observeCompositeFreezeCycle(
       first.state,
       cycle("still", stepMs(3)),
+      THREE_CYCLES,
     );
     expect(oneCycleLater.action).toBeUndefined();
     expect(oneCycleLater.state.recoveryIndex).toBe(1);
@@ -90,8 +120,10 @@ describe("observeCompositeFreezeCycle", () => {
       observeCompositeFreezeCycle(
         oneCycleLater.state,
         cycle("still", stepMs(11)),
+        THREE_CYCLES,
       ).state,
       cycle("still", stepMs(12)),
+      THREE_CYCLES,
     );
     expect(afterCooldown.action).toBe("xorgAndObs");
   });
@@ -120,6 +152,7 @@ describe("observeCompositeFreezeCycle", () => {
     const unknown = observeCompositeFreezeCycle(
       first.state,
       cycle("unknown", stepMs(2)),
+      THREE_CYCLES,
     );
     expect(unknown.state.stillCycles).toBe(0);
     expect(unknown.action).toBeUndefined();
@@ -143,6 +176,7 @@ describe("observeCompositeFreezeCycle", () => {
       const decision = observeCompositeFreezeCycle(
         observed,
         cycle("unknown", stepMs(offset)),
+        THREE_CYCLES,
       );
       observed = decision.state;
       expect(decision.action).toBeUndefined();
@@ -157,13 +191,67 @@ describe("observeCompositeFreezeCycle", () => {
     expect(escalated.action).toBe("xorgAndObs");
   });
 
-  it("exposes the default configuration and the recovery ladder", () => {
+  it("walks the ladder with the single-cycle default", () => {
+    // One still window per rung; each rung runs immediately (no cooldown).
+    const first = stillStreak(createCompositeFreezeState(), 0, 1, {
+      cyclesRequired: 1,
+      recoveryCooldownMs: 0,
+    });
+    expect(first.action).toBe("obs");
+
+    const second = stillStreak(first.state, 1, 1, {
+      cyclesRequired: 1,
+      recoveryCooldownMs: 0,
+    });
+    expect(second.action).toBe("xorgAndObs");
+
+    const third = stillStreak(second.state, 2, 1, {
+      cyclesRequired: 1,
+      recoveryCooldownMs: 0,
+    });
+    expect(third.action).toBe("browserAndBroadcastStack");
+  });
+
+  it("does not advance the ladder before the cooldown with the single-cycle default", () => {
+    // With the default single-cycle streak the cooldown is what spaces the
+    // rungs: the picture can be still for a run of cycles and only the one at
+    // or after the cooldown shakes off the next rung.
+    const first = observeCompositeFreezeCycle(
+      createCompositeFreezeState(),
+      cycle("still", stepMs(0)),
+      COMPOSITE_FREEZE_DEFAULT_CONFIG,
+    );
+    expect(first.action).toBe("obs");
+    expect(first.state.recoveryIndex).toBe(1);
+    expect(first.state.lastRecoveryAtMs).toBe(stepMs(0));
+
+    // Still two minutes later: the cooldown (60s) has elapsed since the first
+    // recovery, so the second rung runs.
+    const second = observeCompositeFreezeCycle(
+      first.state,
+      cycle("still", stepMs(2)),
+      COMPOSITE_FREEZE_DEFAULT_CONFIG,
+    );
+    expect(second.action).toBe("xorgAndObs");
+
+    // Still short after the second recovery: inside its cooldown, so no rung
+    // runs (and the anchor does not move).
+    const tooSoon = observeCompositeFreezeCycle(
+      second.state,
+      cycle("still", stepMs(2) + 30_000),
+      COMPOSITE_FREEZE_DEFAULT_CONFIG,
+    );
+    expect(tooSoon.action).toBeUndefined();
+    expect(tooSoon.state.recoveryIndex).toBe(2);
+    expect(tooSoon.state.lastRecoveryAtMs).toBe(stepMs(2));
+  });
+
+  it("exposes the recovery ladder", () => {
     expect(COMPOSITE_FREEZE_RECOVERIES).toEqual([
       "obs",
       "xorgAndObs",
       "browserAndBroadcastStack",
     ]);
-    expect(COMPOSITE_FREEZE_DEFAULT_CONFIG.cyclesRequired).toBe(3);
     expect(COMPOSITE_FREEZE_DEFAULT_CONFIG.recoveryCooldownMs).toBe(60_000);
   });
 });

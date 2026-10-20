@@ -68,7 +68,14 @@ export interface CompositeFreezeConfig {
 }
 
 export const COMPOSITE_FREEZE_DEFAULT_CONFIG: CompositeFreezeConfig = {
-  cyclesRequired: 3,
+  // One cycle below 1 fps is already a dead picture: the delivered program
+  // keeps its motion unless the composite output stalled, so a single measured
+  // zero-fps window is a stall ([2026-10-21 08:22:54 JST] videoMinFps=0,
+  // videoAvgFps=0.1). The former 3-cycle default held the recovery back for
+  // minutes while the scheduled health check raised the issue every hour, and
+  // a legitimately still stretch is excluded upstream by `isOnAirFromClock`
+  // (its media clock does not advance), not by the streak length.
+  cyclesRequired: 1,
   recoveryCooldownMs: 60_000,
 };
 
@@ -98,10 +105,13 @@ const resetState = (): CompositeFreezeState => createCompositeFreezeState();
  * the deepest rungs would stay unreachable for exactly the freezes they exist
  * for.
  *
- * A `still` streak accumulates; once it reaches `cyclesRequired` and the
+ * A `still` streak accumulates; `cyclesRequired` (`1` by default) is reached
+ * after that many consecutive still cycles. Once it is reached and the
  * cooldown has elapsed, the next rung of the ladder runs and the streak
  * restarts from the following cycle, with the ladder position advanced for the
- * next time.
+ * next time. While the cooldown has not elapsed the streak is kept — it does
+ * not build toward the next rung — so the next still cycle after the cooldown
+ * takes that rung.
  */
 export const observeCompositeFreezeCycle = (
   state: CompositeFreezeState,
