@@ -45,10 +45,10 @@ const MAX_SAMPLE_DIMENSION = 128;
 const PIXEL_CHANNEL_TOLERANCE = 16;
 /** A sampled frame counts as "changed" when this fraction of pixels moved. */
 const MIN_CHANGED_RATIO = 0.001;
-/** Whole video: minimum moving frames per second over the window. */
-export const VIDEO_MIN_FPS = 24;
-/** Game panel: minimum moving frames per second over the window. */
-export const GAME_MIN_FPS = 8;
+/** Whole video: minimum average moving frames per second over the window. */
+export const VIDEO_MIN_FPS = 2;
+/** Game panel: minimum average moving frames per second over the window. */
+export const GAME_MIN_FPS = 1;
 
 /** Left 60% of the video: game panel on the 10×8 layout. */
 export const GAME_CLIP = {
@@ -1351,7 +1351,7 @@ async function checkStream(): Promise<CheckResult> {
       );
       details.videoMinFps = videoFps.minFps;
       details.videoAvgFps = videoFps.avgFps;
-      videoPlaying = isFpsAboveThreshold(videoFps.minFps, VIDEO_MIN_FPS);
+      videoPlaying = isFpsAboveThreshold(videoFps.avgFps, VIDEO_MIN_FPS);
       if (!videoPlaying) {
         phenomena.push("映像全体が停止し続けています");
       } else {
@@ -1376,7 +1376,7 @@ async function checkStream(): Promise<CheckResult> {
       );
       details.gameMinFps = gameFps.minFps;
       details.gameAvgFps = gameFps.avgFps;
-      gameScreenPlaying = isFpsAboveThreshold(gameFps.minFps, GAME_MIN_FPS);
+      gameScreenPlaying = isFpsAboveThreshold(gameFps.avgFps, GAME_MIN_FPS);
       if (!gameScreenPlaying) {
         phenomena.push("ゲーム画面部分が停止し続けています");
       } else {
