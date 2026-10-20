@@ -141,6 +141,16 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
   `waitForAdvertisementEnd` で流れる広告が終わるのを待つ（`check-stream.ts`
   の `waitForAdvertisementEnd` と同じ考え方。上限まで待っても流れていたら
   測定を続行し、その窓は判定不能として破棄される）。
+- 広告かどうかは「プレイヤーを占拠しているか」で決める
+  （`composition/watchPageBrowser.ts` の `isPlayerAdvertisement`）。配信ページは
+  プレイヤーの外側に `___ad-sticky-video___` の常設広告面を持ち、そこでは
+  クロスオリジンの広告動画がページを開いている間ずっと再生され続ける
+  （2026-10-20 に 95 秒以上の連続再生を実測）。クロスオリジンというだけで
+  広告と数えると、統計用ブラウザの測定は毎窓 `sawAdvertisement` になり、全ての
+  窓が判定不能になって streak が永久に伸びず、合成出力が固まっていても回復
+  ラングが一度も走らない（issue #946）。広告面の中にある要素は番組を止めない
+  ので数えない。プリロール / 中割り広告はプレイヤー側に差し込まれて広告面の
+  外に出るので、従来どおり広告として扱う。
 - 測定は機会良く（開いたままのページがあるときだけ）。ページを作り直さない。
 - 純ポリシー `lib/domain/broadcasting/CompositeFreezePolicy.ts` が、周期ごとの
   観測（`still` / `moving` / `unknown`）を折りたたむ:

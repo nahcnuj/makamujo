@@ -1,7 +1,10 @@
 import { describe, expect, it } from "bun:test";
+import { isCapturableMediaSource } from "../scripts/check-stream";
 import {
   CLOCK_ADVANCE_MIN_SECONDS,
+  isAnyPlayerAdvertisementPlaying,
   isOnAirFromClock,
+  isPlayerAdvertisement,
   isWatchPageReadable,
   judgePictureMotion,
   type PictureMotion,
@@ -9,6 +12,7 @@ import {
   startVideoPlayback,
   toDisplayedStatistics,
   type WatchPageRawReading,
+  type WatchPageVideoState,
   waitForAdvertisementEnd,
 } from "./watchPageBrowser";
 
@@ -201,6 +205,132 @@ describe("startVideoPlayback", () => {
 
   it("accepts an empty collection", () => {
     expect(() => startVideoPlayback([])).not.toThrow();
+  });
+});
+
+describe("isPlayerAdvertisement", () => {
+  const origin = "https://live.nicovideo.jp";
+  /** 2026-10-20 の実測で、配信ページの広告面に出ていたクロスオリジンの広告。 */
+  const adSource = "https://gcdn.2mdn.net/videoplayback/id/21b88b";
+  const programSource = "blob:https://live.nicovideo.jp/44230e76-2c6d";
+  const state = (
+    overrides: Partial<WatchPageVideoState> = {},
+  ): WatchPageVideoState => ({
+    source: adSource,
+    playing: true,
+    sized: true,
+    inAdContainer: false,
+    ...overrides,
+  });
+
+  it("counts a cross-origin advertisement that took over the player", () => {
+    // プリロール / 中割り広告はプレイヤー側に差し込まれ、配信映像を止める。
+    expect(
+      isPlayerAdvertisement(state(), origin, isCapturableMediaSource),
+    ).toBe(true);
+  });
+
+  it("does not count the sticky advertisement beside the player", () => {
+    // `___ad-sticky-video___` の常設広告は、ページを開いている間ずっと再生され
+    // 続ける（2026-10-20 に 95 秒以上の連続再生を実測）。これを広告と数えると
+    // 測定は毎窓 `sawAdvertisement` になり、回復ラングが一度も走らない
+    // （issue #946）。
+    expect(
+      isPlayerAdvertisement(
+        state({ inAdContainer: true }),
+        origin,
+        isCapturableMediaSource,
+      ),
+    ).toBe(false);
+  });
+
+  it("does not count the program video", () => {
+    expect(
+      isPlayerAdvertisement(
+        state({ source: programSource }),
+        origin,
+        isCapturableMediaSource,
+      ),
+    ).toBe(false);
+    expect(
+      isPlayerAdvertisement(
+        state({ source: "", inAdContainer: true }),
+        origin,
+        isCapturableMediaSource,
+      ),
+    ).toBe(false);
+  });
+
+  it("does not count a paused or unsized element", () => {
+    expect(
+      isPlayerAdvertisement(
+        state({ playing: false }),
+        origin,
+        isCapturableMediaSource,
+      ),
+    ).toBe(false);
+    expect(
+      isPlayerAdvertisement(
+        state({ sized: false }),
+        origin,
+        isCapturableMediaSource,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("isAnyPlayerAdvertisementPlaying", () => {
+  const origin = "https://live.nicovideo.jp";
+  const program = (): WatchPageVideoState => ({
+    source: "blob:https://live.nicovideo.jp/44230e76-2c6d",
+    playing: true,
+    sized: true,
+    inAdContainer: false,
+  });
+  const stickyAd = (): WatchPageVideoState => ({
+    source: "https://gcdn.2mdn.net/videoplayback/id/21b88b",
+    playing: true,
+    sized: true,
+    inAdContainer: true,
+  });
+
+  it("ignores the sticky advertisement while the program plays", () => {
+    // 実際のページの並び（常設広告 + 配信中継）を再現する。
+    expect(
+      isAnyPlayerAdvertisementPlaying(
+        [stickyAd(), program()],
+        origin,
+        isCapturableMediaSource,
+      ),
+    ).toBe(false);
+  });
+
+  it("detects a pre-roll that replaced the player", () => {
+    expect(
+      isAnyPlayerAdvertisementPlaying(
+        [
+          stickyAd(),
+          {
+            source: "https://example.com/preroll.mp4",
+            playing: true,
+            sized: true,
+            inAdContainer: false,
+          },
+        ],
+        origin,
+        isCapturableMediaSource,
+      ),
+    ).toBe(true);
+  });
+
+  it("reports nothing for a page with only the program", () => {
+    expect(
+      isAnyPlayerAdvertisementPlaying(
+        [program()],
+        origin,
+        isCapturableMediaSource,
+      ),
+    ).toBe(false);
   });
 });
 
