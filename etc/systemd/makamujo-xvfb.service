@@ -1,0 +1,21 @@
+[Unit]
+Description=Makamujo streaming display :10 (2560x1440)
+After=network.target
+# Keep in sync with the unit 0_desktop.yml deploys.
+# The streaming display :10 is what the XSHM capture, the game browser and
+# x11vnc all draw on. If Xvfb dies, restarting only on failure gave up whenever
+# it exited cleanly (e.g. a reset left a stale lock) and the recovery ladder's
+# `systemctl restart` could not bring it back, so the composite output stayed
+# frozen and the health check kept firing (2026-10-20/21). Restart
+# unconditionally; the rate limiter is off so a flapping Xvfb is reported but
+# never permanently abandoned.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/Xvfb :10 -screen 0 2560x1440x24 -ac +extension GLX +render -noreset
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

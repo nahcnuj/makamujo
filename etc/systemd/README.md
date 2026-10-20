@@ -16,6 +16,12 @@
   本番の `:10` は ansible が導入する `makamujo-xvfb.service` で、`makamujo.service`
   はそちらを `Wants=` する。回復ラング（`composition/broadcastFreezeWatchdog.ts`）も
   `makamujo-xvfb.service` を再起動する。
+- `makamujo-xvfb.service` — 本番の `:10` の定義（正本は `0_desktop.yml` が
+  `/etc/systemd/system/` に置く内容。ここは `tests/makamujo-pipewire.test.ts` が
+  同期を検証するための写し）。Xvfb は `Restart=always` +
+  `StartLimitIntervalSec=0` で自己回復する。Xorg `:10` が落ちると XSHM キャプチャ・
+  ゲームブラウザ・x11vnc が描画先を失って配信画面が固まるため、正常終了でも
+  再起動され、レート制限で永久に放棄されないことが要る（2026-10-20/21 の異常検知）。
 
 ローカル開発では従来どおり `bin/start` / `bin/stop` も利用できます。
 

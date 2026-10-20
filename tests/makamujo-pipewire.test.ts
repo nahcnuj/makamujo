@@ -26,13 +26,13 @@ const functionBody = (name: string): string => {
 };
 
 /** Returns the unit block the desktop playbook writes to /etc/systemd/system. */
-const readDeployedUnit = (): string => {
+const readDeployedUnit = (
+  dest = "/etc/systemd/system/makamujo-pipewire.service",
+): string => {
   const lines = readFileSync("ansible/playbooks/0_desktop.yml", "utf-8").split(
     "\n",
   );
-  const destIndex = lines.findIndex((line) =>
-    line.includes("dest: /etc/systemd/system/makamujo-pipewire.service"),
-  );
+  const destIndex = lines.findIndex((line) => line.includes(`dest: ${dest}`));
   expect(destIndex).toBeGreaterThanOrEqual(0);
 
   const contentIndex = lines.findIndex(
@@ -210,5 +210,30 @@ describe("makamujo-pipewire systemd unit", () => {
 
   it("stays in sync with the copy the desktop playbook deploys", () => {
     expect(toDirectives(readDeployedUnit())).toEqual(toDirectives(unit));
+  });
+});
+
+describe("makamujo-xvfb systemd unit", () => {
+  const xvfbUnit = readFileSync("etc/systemd/makamujo-xvfb.service", "utf-8");
+
+  it("always restarts the streaming display so a dead Xvfb comes back", () => {
+    // 2026-10-20/21 の停止: Xorg :10 が死ぬと、XSHM キャプチャ・ゲーム
+    // ブラウザ・x11vnc がすべて描画先を失い、配信画面が固まる。on-failure
+    // だと正常終了した Xvfb が再起動されず、回復ラングの systemctl restart も
+    // 効かなかった。
+    expect(xvfbUnit).toContain("Restart=always");
+    expect(xvfbUnit).not.toContain("Restart=on-failure");
+  });
+
+  it("disables the restart rate limiter so the display is never abandoned", () => {
+    expect(xvfbUnit).toContain("StartLimitIntervalSec=0");
+  });
+
+  it("stays in sync with the copy the desktop playbook deploys", () => {
+    expect(
+      toDirectives(
+        readDeployedUnit("/etc/systemd/system/makamujo-xvfb.service"),
+      ),
+    ).toEqual(toDirectives(xvfbUnit));
   });
 });

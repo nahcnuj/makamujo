@@ -176,11 +176,16 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
     プロセス再起動後の最初の周期）ではラングが `obs` のまま進まず、
     OBS を繰り返し落とすだけで合成出力が回復しなかった（issue #889）。
   - 回復の間隔は `recoveryCooldownMs`（既定 60 秒）。連続回復を防ぐ。
-  - ラングは `obs` → `xorgAndObs` → `browserAndBroadcastStack` の順に深くなり
-    最深で留まる。やることは systemd restart:
-    `composition/broadcastFreezeWatchdog.ts` の `RECOVERY_SERVICES`。
-    配信画面 `:10` の実体は ansible が導入する `makamujo-xvfb.service` を指す
-    （リポジトリ同梱の `xorg10.service` は本番に無い。誤るとラングが進まない）。
+   - ラングは `obs` → `xorgAndObs` → `browserAndBroadcastStack` の順に深くなり
+     最深で留まる。やることは systemd restart:
+     `composition/broadcastFreezeWatchdog.ts` の `RECOVERY_SERVICES`。
+     配信画面 `:10` の実体は ansible が導入する `makamujo-xvfb.service` を指す
+     （リポジトリ同梱の `xorg10.service` は本番に無い。誤るとラングが進まない）。
+     その `makamujo-xvfb.service` は `Restart=always` + `StartLimitIntervalSec=0`
+     で自己回復する。Xorg `:10` が落ちると XSHM キャプチャ・ゲームブラウザ・
+     x11vnc がすべて描画先を失い配信画面が固まるが、Xvfb が正常終了した場合は
+     再起動されず、回復ラングの `systemctl restart` も効かずに停止が続いた
+     （2026-10-20/21 の異常検知）。
 - ポリシーの状態は `var/broadcast-freeze-state.json` に残して引き継ぐ
   （`lib/application/compositeFreezeStateStore.ts`）。サーバーは cron に
   11 分ごとに殺され start されるので、メモリだけの状態では最深のラングに
