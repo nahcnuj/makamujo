@@ -198,13 +198,6 @@ const SELECT_VIDEO_INIT_SCRIPT = `
 
 export interface CheckResult {
   ok: boolean;
-  /**
-   * Set when the run gathered no evidence about the program because every
-   * measurement window was contaminated by an advertisement rather than by a
-   * stream fault. The caller exits successfully then, so the hourly check does
-   * not raise a stream-anomaly issue from a run it could not judge.
-   */
-  inconclusive?: boolean;
   timestampJst: string;
   phenomena: string[];
   details: {
@@ -563,7 +556,7 @@ export interface PlaybackStartOutcome {
  * merely queued another pre-roll and reproduced the failure on a healthy
  * stream (issue #919). While an advertisement plays the playback deadline is
  * suspended, and the wait only gives up when an advertisement alone exceeds its
- * own bound, reporting that so the caller can treat the run as inconclusive.
+ * own bound, reporting that so the caller can treat the run as unhealthy.
  */
 export async function waitForPlaybackStart({
   probe,
@@ -991,35 +984,23 @@ export function measurementFailurePhenomenon(
   return "映像全体のフレームを取得できませんでした";
 }
 
-/**
- * True when a run that never obtained a judgeable window should be reported as
- * inconclusive instead of as a stream anomaly.
- */
-export function isInconclusiveMeasurement(
-  _reason: MeasurementRetryReason | null,
-): boolean {
-  return false;
-}
-
 /** How the check treats the measurement it ended up with. */
 export type MeasurementClassification =
   | { kind: "judgeable"; measurement: PlaybackMeasurement }
-  | { kind: "inconclusive" }
   | { kind: "anomaly"; phenomenon: string };
 
 /**
- * Decide, from a run's final measurement, whether the stream can be judged,
- * the run is inconclusive, or a stream anomaly should be raised.
+ * Decide, from a run's final measurement, whether the stream can be judged or
+ * a stream anomaly should be raised.
  *
  * A run that spent its whole retry budget without capturing a judgeable
- * window observed the player, not the program, so
- * {@link isInconclusiveMeasurement} decides that case. The `null` measurement
- * (the video element disappeared before every closing probe) must flow
- * through the same policy: it used to shortcut straight to an anomaly, which
- * filed a stream-anomaly issue on a healthy stream whenever every reload left
- * the player unmeasurable (issue #921 at 04:21 JST). Only a judgeable window
- * reaches the audio/FPS judgement; a terminal reason that survives the
- * inconclusive policy carries its user-facing phenomenon.
+ * window observed the player, not the program. The `null` measurement (the
+ * video element disappeared before every closing probe) flows through the
+ * same policy. Neither case excuses the check: an hourly run that could not
+ * judge anything still has to report, otherwise a broken player hides behind
+ * silent success (issues #921, #953, #955). Only a judgeable window reaches
+ * the audio/FPS judgement; a terminal reason carries its user-facing
+ * phenomenon.
  */
 export function classifyMeasurement(
   measurement: PlaybackMeasurement | null,
@@ -1029,9 +1010,6 @@ export function classifyMeasurement(
     return { kind: "judgeable", measurement };
   }
   const terminalReason = reason ?? "video-disappeared";
-  if (isInconclusiveMeasurement(terminalReason)) {
-    return { kind: "inconclusive" };
-  }
   return {
     kind: "anomaly",
     phenomenon: measurementFailurePhenomenon(terminalReason, measurement),
@@ -1207,20 +1185,16 @@ async function checkStream(): Promise<CheckResult> {
     }
     if (!playback.started) {
       if (playback.advertisementPlaying) {
-        // Advertisements alone kept the player from starting. An ad only plays
-        // while the broadcast is live, so the run holds no evidence of a
-        // stream fault and reporting an anomaly would be a false positive
-        // (issue #919).
+        // Advertisements alone kept the player from starting, so the run
+        // holds no direct evidence about the program. It still holds evidence
+        // that the check could not observe the stream for its whole startup
+        // window, and a silent success would hide a broken player (issue
+        // #955), so it reports the observation failure as an anomaly.
         console.log(
-          "[INFO] An advertisement blocked the player for the whole startup window; the check is inconclusive",
+          "[INFO] An advertisement blocked the player for the whole startup window",
         );
-        return {
-          ok: false,
-          inconclusive: true,
-          timestampJst,
-          phenomena,
-          details,
-        };
+        phenomena.push("広告が終了せず配信画面を確認できませんでした");
+        return { ok: false, timestampJst, phenomena, details };
       }
       phenomena.push("映像の再生が始まりませんでした");
       return { ok: false, timestampJst, phenomena, details };
@@ -1263,15 +1237,10 @@ async function checkStream(): Promise<CheckResult> {
       if (!recovery.started) {
         if (recovery.advertisementPlaying) {
           console.log(
-            "[INFO] An advertisement blocked the player after the reload; the check is inconclusive",
+            "[INFO] An advertisement blocked the player after the reload",
           );
-          return {
-            ok: false,
-            inconclusive: true,
-            timestampJst,
-            phenomena,
-            details,
-          };
+          phenomena.push("広告が終了せず配信画面を確認できませんでした");
+          return { ok: false, timestampJst, phenomena, details };
         }
         phenomena.push("映像の再生が始まりませんでした");
         return { ok: false, timestampJst, phenomena, details };
@@ -1279,22 +1248,6 @@ async function checkStream(): Promise<CheckResult> {
       measurement = await measureAfterAdvertisements(page);
     }
     const classification = classifyMeasurement(measurement);
-    if (classification.kind === "inconclusive") {
-      // No window in the retry budget could be judged — the video element
-      // kept disappearing, or every window sat behind an advertisement — so
-      // the run observed the player, not the program. Report it as
-      // inconclusive instead of raising a false anomaly issue.
-      console.log(
-        "[INFO] No measurement window could be judged; the check is inconclusive",
-      );
-      return {
-        ok: false,
-        inconclusive: true,
-        timestampJst,
-        phenomena,
-        details,
-      };
-    }
     if (classification.kind === "anomaly") {
       phenomena.push(classification.phenomenon);
       return { ok: false, timestampJst, phenomena, details };
@@ -1425,18 +1378,13 @@ async function main() {
   }
 
   console.log(`[RESULT] ok=${result.ok}`);
-  console.log(`[RESULT] inconclusive=${result.inconclusive === true}`);
   console.log(`[RESULT] timestampJst=${result.timestampJst}`);
   console.log(`[RESULT] phenomena=${JSON.stringify(result.phenomena)}`);
   console.log(`[RESULT] details=${JSON.stringify(result.details)}`);
 
   writeResult(result);
 
-  if (result.inconclusive === true) {
-    console.log(
-      "[INFO] The check is inconclusive; not reporting a stream anomaly",
-    );
-  } else if (!result.ok) {
+  if (!result.ok) {
     process.exitCode = 1;
   }
 }
