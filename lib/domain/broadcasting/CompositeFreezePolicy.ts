@@ -69,7 +69,7 @@ export interface CompositeFreezeConfig {
 
 export const COMPOSITE_FREEZE_DEFAULT_CONFIG: CompositeFreezeConfig = {
   cyclesRequired: 3,
-  recoveryCooldownMs: 300_000,
+  recoveryCooldownMs: 60_000,
 };
 
 export type CompositeFreezeDecision = {
