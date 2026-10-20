@@ -9,7 +9,6 @@ import {
   isCapturableMediaSource,
   isFpsAboveThreshold,
   isInAdContainer,
-  isInconclusiveMeasurement,
   isMeasurementUnusable,
   isOverallOk,
   isVideoReady,
@@ -972,15 +971,6 @@ describe("measurementRetryReason", () => {
         measurementOf(motionOf(false, twoSamples), 0, 100),
       ),
     ).toBeNull();
-  });
-});
-
-describe("isInconclusiveMeasurement", () => {
-  it("treats non-judgeable runs as unhealthy", () => {
-    expect(isInconclusiveMeasurement("advertisement")).toBe(false);
-    expect(isInconclusiveMeasurement("video-disappeared")).toBe(false);
-    expect(isInconclusiveMeasurement("unusable")).toBe(false);
-    expect(isInconclusiveMeasurement(null)).toBe(false);
   });
 });
 
