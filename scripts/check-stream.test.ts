@@ -976,16 +976,10 @@ describe("measurementRetryReason", () => {
 });
 
 describe("isInconclusiveMeasurement", () => {
-  it("treats an advertisement-only exhaustion as inconclusive", () => {
-    // Every window was frozen behind an ad, so the run has no measurement of
-    // the program; an ad playing also proves the broadcast is live. Raising an
-    // anomaly from that is a false positive.
-    expect(isInconclusiveMeasurement("advertisement")).toBe(true);
-  });
-
-  it("treats any non-judgeable run as inconclusive", () => {
-    expect(isInconclusiveMeasurement("video-disappeared")).toBe(true);
-    expect(isInconclusiveMeasurement("unusable")).toBe(true);
+  it("treats non-judgeable runs as unhealthy", () => {
+    expect(isInconclusiveMeasurement("advertisement")).toBe(false);
+    expect(isInconclusiveMeasurement("video-disappeared")).toBe(false);
+    expect(isInconclusiveMeasurement("unusable")).toBe(false);
     expect(isInconclusiveMeasurement(null)).toBe(false);
   });
 });
@@ -1038,25 +1032,30 @@ describe("classifyMeasurement", () => {
     });
   });
 
-  it("reports a run whose video never became capturable as inconclusive", () => {
-    // Observed in issue #921: every reload left the closing probe without a
-    // capturable video, and the old shortcut past the inconclusive policy
-    // raised a stream-anomaly issue on a healthy stream.
-    expect(classifyMeasurement(null)).toEqual({ kind: "inconclusive" });
+  it("reports a run whose video never became capturable as unhealthy", () => {
+    expect(classifyMeasurement(null)).toEqual({
+      kind: "anomaly",
+      phenomenon: "チェック中にビデオ要素が消失しました",
+    });
   });
 
-  it("reports advertisement-exhausted runs as inconclusive", () => {
+  it("reports advertisement-exhausted runs as unhealthy", () => {
     expect(
       classifyMeasurement(measurementOf({ sawAdvertisement: true })),
-    ).toEqual({ kind: "inconclusive" });
+    ).toEqual({
+      kind: "anomaly",
+      phenomenon: "広告の再生中に測定されました",
+    });
   });
 
-  it("reports unusable-window runs as inconclusive", () => {
+  it("reports unusable-window runs as unhealthy", () => {
     expect(classifyMeasurement(measurementOf({ samples: [] }))).toEqual({
-      kind: "inconclusive",
+      kind: "anomaly",
+      phenomenon: "映像全体のフレームを取得できませんでした",
     });
     expect(classifyMeasurement(measurementOf({ tainted: true }))).toEqual({
-      kind: "inconclusive",
+      kind: "anomaly",
+      phenomenon: "映像全体のフレームを取得できませんでした",
     });
     expect(
       classifyMeasurement(
@@ -1065,12 +1064,18 @@ describe("classifyMeasurement", () => {
           decodedAudioBytesEnd: 7690,
         }),
       ),
-    ).toEqual({ kind: "inconclusive" });
+    ).toEqual({
+      kind: "anomaly",
+      phenomenon: "測定中にプレイヤーのメディア要素が置き換わりました",
+    });
     expect(
       classifyMeasurement(
         measurementOf({ currentTimeStart: 120, currentTimeEnd: 120.05 }),
       ),
-    ).toEqual({ kind: "inconclusive" });
+    ).toEqual({
+      kind: "anomaly",
+      phenomenon: "プレイヤーの再生位置が進みませんでした",
+    });
   });
 });
 
