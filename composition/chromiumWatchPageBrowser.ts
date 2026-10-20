@@ -122,11 +122,15 @@ const sampleMotionWindow = async ({
     windowMs: 0,
     tainted: false,
     sawAdvertisement: false,
+    clockAdvancedSeconds: 0,
   });
   const startProbe = window.__mmjSelectCapturableVideo?.();
   if (!startProbe?.videoWidth || !startProbe.videoHeight) {
     return unmoving();
   }
+  // media clock の前進は「放映中か」の根拠になる（`isOnAirFromClock`）。合成
+  // 出力が固まっていても hls.js はセグメントを再生し続けるので clock は進む。
+  const startClock = startProbe.currentTime;
   const scale = Math.min(
     1,
     maxDimension / Math.max(startProbe.videoWidth, startProbe.videoHeight),
@@ -143,6 +147,7 @@ const sampleMotionWindow = async ({
   let changedFrames = 0;
   let tainted = false;
   let sawAdvertisement = false;
+  let lastClock = startClock;
   const start = performance.now();
   try {
     await new Promise<void>((resolve) => {
@@ -162,6 +167,7 @@ const sampleMotionWindow = async ({
           const video = window.__mmjSelectCapturableVideo?.();
           // 再構築の途中で要素が消えうる。比較対象を落とさず待つ。
           if (video?.videoWidth && video.videoHeight) {
+            lastClock = video.currentTime;
             context.drawImage(video, 0, 0, width, height);
             const current = context.getImageData(0, 0, width, height).data;
             if (previous) {
@@ -211,6 +217,7 @@ const sampleMotionWindow = async ({
       windowMs: performance.now() - start,
       tainted: true,
       sawAdvertisement,
+      clockAdvancedSeconds: lastClock - startClock,
     };
   }
   return {
@@ -219,6 +226,7 @@ const sampleMotionWindow = async ({
     windowMs: performance.now() - start,
     tainted,
     sawAdvertisement,
+    clockAdvancedSeconds: lastClock - startClock,
   };
 };
 
@@ -367,6 +375,7 @@ export const createChromiumWatchPageBrowser =
               windowMs: 0,
               tainted: false,
               sawAdvertisement: false,
+              clockAdvancedSeconds: 0,
             }),
           ),
         ]);
