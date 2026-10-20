@@ -75,10 +75,50 @@ export interface PictureMotion {
   tainted: boolean;
   /** 窓の間に広告が流れた。測れた動きは番組のものではない。 */
   sawAdvertisement: boolean;
+  /**
+   * 窓の間に対象 `<video>` の media clock（`currentTime`）が進んだ秒数。
+   * 配信が放映中なら `0` より大きい。番組が終わって一枚絵が提示されている /
+   * `<video>` が無い / paused のままなら `0`。
+   */
+  clockAdvancedSeconds: number;
 }
 
 /** この changed fps 未満で配信画面を「静止」とみなす。 */
 export const PICTURE_STILL_FPS_THRESHOLD = 2;
+
+/**
+ * この秒数より media clock が進んでいれば「放映中」とみなす。判定は
+ * `clockAdvancedSeconds > CLOCK_ADVANCE_MIN_SECONDS`（厳密に超える）。
+ * media clock は hls.js がセグメントを再生している限り進むので、合成出力が
+ * 固まっていても放映中と分かる。
+ */
+export const CLOCK_ADVANCE_MIN_SECONDS = 1;
+
+/**
+ * 測定から「番組が放映中か」を導く。
+ *
+ * 従来はわんコメの `POST /api/meta` が張ったセッション（`streamState`）を
+ * 放映中の根拠にしていたが、サーバーは cron に 11 分ごとに殺され start され、
+ * 起動直後は `streamState` が undefined のうえ、わんコメの接続が切れている /
+ * セッションが失効していると一度も定義されない。その間 watchdog は毎周期を
+ * 放映外とみなして測定すら行わず、本物の合成出力の停止を放置する（issue
+ * #929: 音声も media clock も進み、外からの健康チェックだけが停止を検知）。
+ *
+ * そこで放映中の根拠を、監視対象そのものである配信ページの `<video>` の
+ * media clock の前進に置き換える。番組が終わって一枚絵になると clock は
+ * 進まないので、放映外の静止は従来どおり回復の対象にならない。
+ *
+ * `undefined`（測定不能・広告・tainted）は放映中か判断できないため
+ * `undefined` を返し、呼び出し側は `unknown` として扱う。
+ */
+export const isOnAirFromClock = (
+  motion: PictureMotion | undefined,
+): boolean | undefined => {
+  if (motion === undefined) {
+    return undefined;
+  }
+  return motion.clockAdvancedSeconds > CLOCK_ADVANCE_MIN_SECONDS;
+};
 
 /**
  * 測定を静止 / 動き / 判定不能に分ける。

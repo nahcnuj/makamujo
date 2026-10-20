@@ -828,9 +828,11 @@ const broadcastFreezeStatePath = resolve(
   COMPOSITE_FREEZE_STATE_BASENAME,
 );
 startBroadcastFreezeWatchdog({
+  // 放映中かは配信ページの `<video>` の media clock の前進から導く
+  // （`isOnAirFromClock`）。わんコメのセッション（streamState）を根拠にすると、
+  // cron の再起動直後やわんコメ切断時に毎周期を放映外とみなし、本物の停止を
+  // 放置する（issue #929）。
   measurePictureMotion: () => watchPageStatisticsSource.measurePictureMotion(),
-  // SoundPolicy と同じ基準: エージェントのセッションが番組に張れているか。
-  isStreamLive: () => streamer.streamState !== undefined,
   stateStore: {
     load: () => loadCompositeFreezeState(broadcastFreezeStatePath),
     save: (state) => saveCompositeFreezeState(broadcastFreezeStatePath, state),
