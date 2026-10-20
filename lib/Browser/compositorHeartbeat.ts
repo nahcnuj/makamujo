@@ -39,7 +39,11 @@ export const compositorHeartbeatProbe = (): Promise<boolean> =>
       resolve(frameProduced);
     };
     requestAnimationFrame(() => finish(true));
-    setTimeout(() => finish(false), COMPOSITOR_HEARTBEAT_PROBE_BUDGET_MS);
+    // Budget is a literal on purpose: `browser.evaluate` re-creates this
+    // function from its source string inside the page, where a module-scope
+    // reference like `COMPOSITOR_HEARTBEAT_PROBE_BUDGET_MS` is a
+    // ReferenceError. Keep the value in step with the exported constant.
+    setTimeout(() => finish(false), 3_000);
   });
 
 export interface CompositorHeartbeatObservation {
