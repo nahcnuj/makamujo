@@ -77,12 +77,22 @@ describe("resolveBroadcastFreezeWatchdogEnv", () => {
   it("honors the environment overrides", () => {
     const resolved = resolveBroadcastFreezeWatchdogEnv({
       BROADCAST_FREEZE_CHECK_INTERVAL_MS: "10000",
+      BROADCAST_FREEZE_MEASUREMENT_TIMEOUT_MS: "5000",
       BROADCAST_FREEZE_CYCLES: "5",
       BROADCAST_FREEZE_RECOVERY_COOLDOWN_MS: "30000",
     });
     expect(resolved.intervalMs).toBe(10_000);
+    expect(resolved.measurementTimeoutMs).toBe(5_000);
     expect(resolved.config.cyclesRequired).toBe(5);
     expect(resolved.config.recoveryCooldownMs).toBe(30_000);
+  });
+
+  it("allows the measurement more time than one advertisement wait", () => {
+    // 広告待ち (90s) + 計測可能な <video> 待ち (30s) + 窓 (3s) より短いと、
+    // 正常な測定まで打ち切って streak が永久に伸びない。
+    expect(resolveBroadcastFreezeWatchdogEnv({}).measurementTimeoutMs).toBe(
+      180_000,
+    );
   });
 });
 
@@ -295,6 +305,34 @@ describe("startBroadcastFreezeWatchdog", () => {
     expect(calls).toBeGreaterThan(1);
   });
 
+  it("times out a measurement that never resolves and keeps recovering", async () => {
+    // レンダラが固まると page.evaluate はいつまでも帰らない。上限が無いと
+    // tick が `ticking` のまま残り、以降の周期がすべて素通りして回復が永久に
+    // 走らない（外からの健康チェックだけが停止を検知し続ける）。
+    const warnings: string[] = [];
+    let calls = 0;
+    const options = createWatcherOptions([], {
+      measurePictureMotion: () => {
+        calls += 1;
+        if (calls === 1) {
+          return new Promise<PictureMotion | undefined>(() => {});
+        }
+        return Promise.resolve(still);
+      },
+      measurementTimeoutMs: 25,
+      intervalMs: 5,
+      config: { cyclesRequired: 3, recoveryCooldownMs: 60_000 },
+      log: { ...silentLog, warn: (...args) => warnings.push(args.join(" ")) },
+    });
+    const watchdog = startBroadcastFreezeWatchdog(options);
+    await Bun.sleep(120);
+    watchdog.stop();
+
+    expect(calls).toBeGreaterThan(1);
+    expect(warnings.some((line) => line.includes("did not finish"))).toBe(true);
+    expect(options.recoveries).toEqual(["obs"]);
+  });
+
   it("maps each recovery rung to the systemd units it restarts", () => {
     // :10 の実体は ansible が導入する makamujo-xvfb.service。ここを
     // リポジトリ同梱の xorg10.service にすると本番に unit が無く、
@@ -309,9 +347,11 @@ describe("startBroadcastFreezeWatchdog", () => {
     // 合成出力の静止が回復しない。watchdog 自身がこの unit のプロセスの中で
     // 動くので、再起動すると残りの unit に届かなくなる。リストの最後に置く
     // ことで、他の unit の再起動が済んでから自プロセスが落ちる。
+    // 表示 (xvfb) はブラウザ / OBS / 配信サーバより先に戻す: 後から Xorg を
+    // 落とすと、再起動したブラウザが表示を失ったまま残って静止が続く。
     expect(RECOVERY_SERVICES.browserAndBroadcastStack).toEqual([
-      "makamujo-browser.service",
       "makamujo-xvfb.service",
+      "makamujo-browser.service",
       "makamujo-obs.service",
       // リストの最後: 再起動すると watchdog 自身のプロセスが落ちる。
       "makamujo-screen.service",

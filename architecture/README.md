@@ -189,7 +189,10 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
     自身がこの unit のプロセス（`bun start`）の中で動くので、再起動すると
     自プロセスが落ちて残りの unit に届かない。リストの最後に置いて、他の unit
     の再起動が済んでから触る（ポリシー状態は recover の前に永続化してあるので、
-    次に起動したプロセスは最深のラングから観測を再開できる）。
+    次に起動したプロセスは最深のラングから観測を再開できる）。表示
+    (`makamujo-xvfb.service`) はブラウザ / OBS / 配信サーバより先に再起動する:
+    後から Xorg を落とすと、再起動したブラウザが表示を失ったまま残り、静止が
+    続く（2026-10-21 04:23 の停止も、最深ラングに届いても回復しなかった）。
 - ポリシーの状態は `var/broadcast-freeze-state.json` に残して引き継ぐ
   （`lib/application/compositeFreezeStateStore.ts`）。サーバーは cron に
   11 分ごとに殺され start されるので、メモリだけの状態では最深のラングに
@@ -209,6 +212,14 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 - 観測周期の tick は例外を外へ漏らさない（`tick` の else で `log.error` して
   finally で続行）。漏らすと以降の周期が静かに止まり、回復の機会が失われる
   （issue #931）。
+- 1 周期の測定にも上限を置く（`BROADCAST_FREEZE_MEASUREMENT_TIMEOUT_MS`）。
+  例外は握れても、レンダラが固まったときの `page.evaluate` は解決せず、
+  tick が `ticking` のまま残ると以降の周期がすべて素通りして回復が永久に
+  走らなくなる。外からの健康チェックだけが停止を検知し続け、最深ラングに
+  届いた後も回復しない（2026-10-21 04:23 の停止）。上限を超えた周期は測定
+  不能 (`unknown`) として捨てて streak をリセットし、次の周期へ進む。
+  `composition/chromiumWatchPageBrowser.ts` 側でもセレクタ注入・広告確認・
+  `<video>` 状態の読み取りを個別に打ち切る。
 
 ### モジュールと配線
 
@@ -233,6 +244,7 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 | 変数 | 既定 | 意味 |
 |------|------|------|
 | `BROADCAST_FREEZE_CHECK_INTERVAL_MS` | `60000` | 観測周期 |
+| `BROADCAST_FREEZE_MEASUREMENT_TIMEOUT_MS` | `180000` | 1 周期の測定の上限。超えたら測定不能として次へ進む |
 | `BROADCAST_FREEZE_CYCLES` | `3` | 回復を打つまでに必要な `still` の連続周期 |
 | `BROADCAST_FREEZE_RECOVERY_COOLDOWN_MS` | `60000` | 二つの回復の最短間隔 |
 
