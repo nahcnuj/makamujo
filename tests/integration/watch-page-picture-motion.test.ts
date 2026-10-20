@@ -3,6 +3,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { createChromiumWatchPageBrowser } from "../../composition/chromiumWatchPageBrowser";
 import {
+  isOnAirFromClock,
   judgePictureMotion,
   type PictureMotion,
   type WatchPageBrowser,
@@ -110,5 +111,8 @@ test.skipIf(!chromiumAvailable)(
     expect(motion.comparedFrames).toBeGreaterThanOrEqual(5);
     expect(motion.changedFrames).toBeGreaterThan(0);
     expect(judgePictureMotion(motion)).toBe("moving");
+    // 再生中の `<video>` は media clock が進む。放映中の根拠はこの前進で取る。
+    expect(motion.clockAdvancedSeconds).toBeGreaterThan(1);
+    expect(isOnAirFromClock(motion)).toBe(true);
   },
 );
