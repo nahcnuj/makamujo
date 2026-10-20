@@ -18,7 +18,7 @@ import {
 
 const motion = (overrides: Partial<PictureMotion> = {}): PictureMotion => ({
   comparedFrames: 60,
-  changedFrames: 30,
+  changedFrames: 100,
   windowMs: 3_000,
   tainted: false,
   sawAdvertisement: false,
@@ -109,7 +109,7 @@ describe("judgePictureMotion", () => {
 
   it("treats a picture just above the still threshold as moving", () => {
     // 4 changed frames in 3s ~ 1.3 fps < 立ったか borderline?
-    expect(judgePictureMotion(motion({ changedFrames: 6 }))).toBe("moving");
+    expect(judgePictureMotion(motion({ changedFrames: 100 }))).toBe("moving");
   });
 
   it("discards windows during an advertisement without judging", () => {

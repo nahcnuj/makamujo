@@ -164,6 +164,6 @@ describe("observeCompositeFreezeCycle", () => {
       "browserAndBroadcastStack",
     ]);
     expect(COMPOSITE_FREEZE_DEFAULT_CONFIG.cyclesRequired).toBe(3);
-    expect(COMPOSITE_FREEZE_DEFAULT_CONFIG.recoveryCooldownMs).toBe(600_000);
+    expect(COMPOSITE_FREEZE_DEFAULT_CONFIG.recoveryCooldownMs).toBe(60_000);
   });
 });

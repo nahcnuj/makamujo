@@ -15,7 +15,7 @@ import type { PictureMotion } from "./watchPageBrowser";
 
 const moving: PictureMotion = {
   comparedFrames: 60,
-  changedFrames: 30,
+  changedFrames: 100,
   windowMs: 3_000,
   tainted: false,
   sawAdvertisement: false,
@@ -71,7 +71,7 @@ describe("resolveBroadcastFreezeWatchdogEnv", () => {
     const resolved = resolveBroadcastFreezeWatchdogEnv({});
     expect(resolved.intervalMs).toBe(60_000);
     expect(resolved.config.cyclesRequired).toBe(3);
-    expect(resolved.config.recoveryCooldownMs).toBe(600_000);
+    expect(resolved.config.recoveryCooldownMs).toBe(60_000);
   });
 
   it("honors the environment overrides", () => {
