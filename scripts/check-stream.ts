@@ -992,32 +992,11 @@ export function measurementFailurePhenomenon(
 /**
  * True when a run that never obtained a judgeable window should be reported as
  * inconclusive instead of as a stream anomaly.
- *
- * A signed-out viewer is served advertisements, and nicovideo freezes the live
- * picture for the whole of each one. When every window in the retry budget is
- * discarded for that reason, the run holds no measurement of the program at
- * all: an advertisement only plays while the broadcast is live, so the failed
- * measurement is not evidence that the stream stopped. Raising an anomaly issue
- * from it is a false positive — a run of back-to-back mid-roll ads (observed at
- * 22:30 and during other prime-time slots) is enough to exhaust the budget on a
- * perfectly healthy stream. The caller reports the run as inconclusive, leaves
- * the exit code at zero, and lets the next scheduled check try again.
- *
- * The policy is deliberately broad: every terminal reason means the run never
- * obtained a judgeable window, and a run that watched only the player — a
- * vanished video element, a rebuilt media element, frames that could not be
- * captured — is evidence about the observer, not about the broadcast. An
- * hourly check cannot fix the observer, so it leaves the exit code at zero
- * and lets the next scheduled run try again.
  */
 export function isInconclusiveMeasurement(
-  reason: MeasurementRetryReason | null,
+  _reason: MeasurementRetryReason | null,
 ): boolean {
-  // Any run that never obtained a judgeable window cannot say anything about
-  // the stream: the broadcast is (at least) live enough for nicovideo to serve
-  // it, so reporting an anomaly is a false positive. Treat every terminal
-  // reason as inconclusive so the hourly check stops crying wolf.
-  return reason !== null;
+  return false;
 }
 
 /** How the check treats the measurement it ended up with. */
