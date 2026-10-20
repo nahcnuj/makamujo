@@ -1421,6 +1421,7 @@ export function toErrorResult(
   const message = error instanceof Error ? error.message : String(error);
   return {
     ok: false,
+    inconclusive: true,
     timestampJst,
     phenomena: [`チェック中に想定外のエラーが発生しました: ${message}`],
     details: {
