@@ -13,6 +13,8 @@ import {
   isInAdContainer,
 } from "../scripts/check-stream";
 import {
+  isAnyPlayerAdvertisementPlaying,
+  isPlayerAdvertisement,
   isWatchPageReadable,
   type PictureMotion,
   startVideoPlayback,
@@ -59,12 +61,17 @@ const ADVERTISEMENT_POLL_MS = 500;
  * ページ側の動画選別ヘルパーと再生開始ヘルパーを置く。navigation で消えるの
  * で毎回入れ、置いたついでに全 `<video>` の再生を促す。再生していない要素は
  * `__mmjSelectCapturableVideo` に選ばれず、測定が永久に `unknown` になる。
+ *
+ * 文字列化して注入するので、ヘルパー同士の参照は注入後のページスコープの名前で
+ * 解決される（`isAnyPlayerAdvertisement` は `isPlayerAdvertisement` を呼ぶ）。
  */
 const installVideoSelectors = (page: import("playwright").Page) =>
   page.evaluate(`
 (() => {
   const isCapturable = ${isCapturableMediaSource.toString()};
   const isInAd = ${isInAdContainer.toString()};
+  const isPlayerAdvertisement = ${isPlayerAdvertisement.toString()};
+  const isAnyPlayerAdvertisement = ${isAnyPlayerAdvertisementPlaying.toString()};
   const startPlayback = ${startVideoPlayback.toString()};
   const origin = location.origin;
   const isSized = (v) => v.videoWidth > 0 && v.readyState >= 2;
@@ -90,8 +97,15 @@ const installVideoSelectors = (page: import("playwright").Page) =>
     );
   };
   window.__mmjIsAdvertisementPlaying = () =>
-    Array.from(document.querySelectorAll("video")).some(
-      (v) => !isCapturable(v.currentSrc || v.src || "", origin) && v.paused === false && isSized(v),
+    isAnyPlayerAdvertisement(
+      Array.from(document.querySelectorAll("video")).map((v) => ({
+        source: v.currentSrc || v.src || "",
+        playing: v.paused === false,
+        sized: isSized(v),
+        inAdContainer: inAdContainer(v),
+      })),
+      origin,
+      isCapturable,
     );
   window.__mmjStartPlayback = () =>
     startPlayback(Array.from(document.querySelectorAll("video")));
