@@ -318,6 +318,11 @@ export const startBroadcastFreezeWatchdog = (
           );
         }
       }
+    } catch (error) {
+      log.error(
+        "[ERROR] broadcast freeze watchdog tick failed:",
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
       ticking = false;
     }
