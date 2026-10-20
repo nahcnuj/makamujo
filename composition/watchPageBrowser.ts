@@ -140,8 +140,64 @@ export const judgePictureMotion = (
   return changedFps < PICTURE_STILL_FPS_THRESHOLD ? "still" : "moving";
 };
 
+/** 広告かどうかの判定に要る、ページ上の 1 つの `<video>` の状態。 */
+export interface WatchPageVideoState {
+  /** `currentSrc`（空なら `src`）。 */
+  source: string;
+  /** 再生中（`paused === false`）。 */
+  playing: boolean;
+  /** 描画できる大きさがある（`videoWidth > 0 && readyState >= 2`）。 */
+  sized: boolean;
+  /** 広告面（`___ad-sticky-video___` 等）の中にある。 */
+  inAdContainer: boolean;
+}
+
+/**
+ * この `<video>` が「番組のプレイヤーを占拠している広告」か。
+ *
+ * 放映中かどうかの判定に効くのは、**番組のプレイヤーを奪って配信映像を
+ * 止める**広告だけ。ニコニコの配信ページはプレイヤーの外側にも
+ * `___ad-sticky-video___` の広告面を常設し、そこでは広告動画（同一オリジンの
+ * `blob:` と `gcdn.2mdn.net` などのクロスオリジン）が **ページを開いている間
+ * ずっと** 再生され続ける（2026-10-20 に実測: 95 秒以上連続で再生）。
+ *
+ * これを広告と数えると、統計用ブラウザの測定は毎窓 `sawAdvertisement` になり、
+ * `judgePictureMotion` がすべての窓を判定不能として捨てる。ストリークは永久に
+ * 伸びず、合成出力が固まっていても回復ラングは一度も走らない。測定の前の
+ * `waitForAdvertisementEnd` も、終わらない広告を上限（90 秒）まで待ってから
+ * 同じ窓を捨てるので、観測自体が 90 秒周期に落ちる。外からの健康チェックだけが
+ * 停止を検知し続けた（issue #946）。
+ *
+ * 広告面の中にあるものは番組を止めないので数えない。クロスオリジンという
+ * だけでは足りない（常設広告もクロスオリジン）。プリロール / 中割り広告は
+ * プレイヤー側に差し込まれ広告面の外に出るので、従来どおり広告として扱う。
+ */
+export const isPlayerAdvertisement = (
+  video: WatchPageVideoState,
+  origin: string,
+  isCapturable: (source: string, origin: string) => boolean,
+): boolean =>
+  video.playing &&
+  video.sized &&
+  !video.inAdContainer &&
+  !isCapturable(video.source, origin);
+
+/** ページ上の動画のうち 1 つでもプレイヤーを占拠する広告が再生中か。 */
+export const isAnyPlayerAdvertisementPlaying = (
+  videos: Iterable<WatchPageVideoState>,
+  origin: string,
+  isCapturable: (source: string, origin: string) => boolean,
+): boolean => {
+  for (const video of videos) {
+    if (isPlayerAdvertisement(video, origin, isCapturable)) {
+      return true;
+    }
+  }
+  return false;
+};
+
 export interface AdvertisementWaitOptions {
-  /** True while a cross-origin (advertisement) video is actively playing. */
+  /** True while an advertisement occupying the program player is playing. */
   isAdvertisementPlaying: () => Promise<boolean>;
   /** Give up after this long; the caller decides whether to measure anyway. */
   timeoutMs: number;
