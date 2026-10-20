@@ -165,8 +165,15 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 - 測定は機会良く（開いたままのページがあるときだけ）。ページを作り直さない。
 - 純ポリシー `lib/domain/broadcasting/CompositeFreezePolicy.ts` が、周期ごとの
   観測（`still` / `moving` / `unknown`）を折りたたむ:
-  - `still` が `cyclesRequired`（既定 3）周期連続したら、回復ラングを打つ。
-    番組の一枚絵（フリートークの結果画面）は 1 周期で終わるので誤検知しない。
+  - `still` が `cyclesRequired`（既定 1）周期連続したら、回復ラングを打つ。
+    測定の 1 窓（3 秒）は観測周期よりずっと短く、番組は止まっていなければ
+    24 fps 以上で動く。`videoMinFps=0` の窓が 1 つ出た時点で合成出力は
+    止まっている（2026-10-21 08:22:54 の停止: `videoMinFps=0` /
+    `videoAvgFps=0.1` が 1 時間ごとの外部検知に繰り返し捉えられた）。
+    既定 3 のときは回復を分単位で遅らせるだけで、その間に外部検知が
+    issue を作り続けた。放映外の静止（番組終了の一枚絵）は media clock が
+    進まないので `isOnAirFromClock` が上映外として先に除き、長さの
+    ガードにはならない。よって streak は 1 周期で足りる。
   - `moving` は streak・ラング・クールダウンをすべてリセットする。映像が動いた
     以上、合成出力は回復しており、次の停止は最初のラングから始まる。
   - `unknown` は streak のみリセットする。測れなかった周期は「止まっていない」
@@ -255,7 +262,7 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 |------|------|------|
 | `BROADCAST_FREEZE_CHECK_INTERVAL_MS` | `60000` | 観測周期 |
 | `BROADCAST_FREEZE_MEASUREMENT_TIMEOUT_MS` | `180000` | 1 周期の測定の上限。超えたら測定不能として次へ進む |
-| `BROADCAST_FREEZE_CYCLES` | `3` | 回復を打つまでに必要な `still` の連続周期 |
+| `BROADCAST_FREEZE_CYCLES` | `1` | 回復を打つまでに必要な `still` の連続周期 |
 | `BROADCAST_FREEZE_RECOVERY_COOLDOWN_MS` | `60000` | 二つの回復の最短間隔 |
 
 ## 実装マップ

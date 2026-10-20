@@ -33,6 +33,11 @@
  * みなして測定すら行わず、本物の合成出力の停止を放置する（issue #929/#933:
  * 音声と media clock は進み続け、外からの健康チェックだけが停止を繰り返し
  * 検知していた）。
+ *
+ * 測定の窓そのものが短い: 合図の 1 窓（`MOTION_WINDOW_MS=3s`）で静止を判定
+ * できるので、`cyclesRequired` は既定 1。cron の採取周期は起動直後の 1 窓を
+ * 初回 `tick` で測る。`/var` の状態に `stillCycles` を残しても、次のプロセスは
+ * さらに深いラングから測り直すだけである（issue #989）。
  */
 
 import { execFile } from "node:child_process";

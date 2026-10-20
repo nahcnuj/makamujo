@@ -73,7 +73,9 @@ describe("resolveBroadcastFreezeWatchdogEnv", () => {
     const resolved = resolveBroadcastFreezeWatchdogEnv({});
     expect(resolved.intervalMs).toBe(60_000);
     expect(resolved.measurementTimeoutMs).toBe(180_000);
-    expect(resolved.config.cyclesRequired).toBe(3);
+    // One zero-fps window already proves the composite stalled; waiting for
+    // more cycles only delayed the recovery (issue #989).
+    expect(resolved.config.cyclesRequired).toBe(1);
     expect(resolved.config.recoveryCooldownMs).toBe(60_000);
   });
 
@@ -100,14 +102,31 @@ describe("resolveBroadcastFreezeWatchdogEnv", () => {
 });
 
 describe("startBroadcastFreezeWatchdog", () => {
-  it("recovers once the picture measured still for the required cycles", async () => {
-    const options = createWatcherOptions([moving, still, still, still], {
+  it("recovers the moment a single window measures still", async () => {
+    // The measurement window (3s) is far shorter than the check cycle, and the
+    // program keeps moving unless the composite stalled, so one still window
+    // is a stall — not a transient that needs several cycles to confirm.
+    const options = createWatcherOptions([moving, still], {
       intervalMs: 5,
-      config: { cyclesRequired: 3, recoveryCooldownMs: 60_000 },
+      config: { cyclesRequired: 1, recoveryCooldownMs: 60_000 },
     });
     const watchdog = startBroadcastFreezeWatchdog(options);
     await waitTick();
     await waitTick();
+    await waitTick();
+    watchdog.stop();
+
+    expect(options.recoveries).toEqual(["obs"]);
+  });
+
+  it("recovers on the first still cycle with the default config", async () => {
+    // Guards the default itself: leaving `cyclesRequired` at its old 3 held the
+    // recovery back for minutes while the scheduled health check kept raising
+    // the issue (issue #989).
+    const options = createWatcherOptions([still, moving, moving], {
+      intervalMs: 5,
+    });
+    const watchdog = startBroadcastFreezeWatchdog(options);
     await waitTick();
     await waitTick();
     watchdog.stop();
