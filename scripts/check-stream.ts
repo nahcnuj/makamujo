@@ -189,7 +189,9 @@ const SELECT_VIDEO_INIT_SCRIPT = `
   window.__mmjIsAdvertisementPlaying = () =>
     Array.from(document.querySelectorAll("video")).some(
       (v) =>
-        !isCapturable(v.currentSrc || v.src || "", origin) && isActive(v),
+        !isCapturable(v.currentSrc || v.src || "", origin) &&
+        isActive(v) &&
+        !inAdContainer(v),
     );
 })();
 `;
