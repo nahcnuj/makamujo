@@ -116,7 +116,18 @@ export const isOnAirFromClock = (
   if (motion === undefined) {
     return undefined;
   }
-  return motion.clockAdvancedSeconds > CLOCK_ADVANCE_MIN_SECONDS;
+  if (motion.clockAdvancedSeconds > CLOCK_ADVANCE_MIN_SECONDS) {
+    return true;
+  }
+  // A totally frozen picture (no changed frames at all) counts as on-air even
+  // when the media clock stopped advancing (e.g. the HLS stalled behind the
+  // freeze): otherwise the recovery streak never accumulates for exactly the
+  // freezes that need it. A picture with any motion is still gated by the
+  // clock so legitimate still screens stay excluded.
+  if (motion.comparedFrames > 0 && motion.changedFrames === 0) {
+    return true;
+  }
+  return false;
 };
 
 /**
