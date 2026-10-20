@@ -304,10 +304,17 @@ describe("startBroadcastFreezeWatchdog", () => {
       "makamujo-xvfb.service",
       "makamujo-obs.service",
     ]);
+    // 最深ラングは ansible が束ねるアプリ三連（screen / browser / obs）+
+    // xvfb。配信サーバ makamujo-screen.service を落とさないと、そこで起因する
+    // 合成出力の静止が回復しない。watchdog 自身がこの unit のプロセスの中で
+    // 動くので、再起動すると残りの unit に届かなくなる。リストの最後に置く
+    // ことで、他の unit の再起動が済んでから自プロセスが落ちる。
     expect(RECOVERY_SERVICES.browserAndBroadcastStack).toEqual([
       "makamujo-browser.service",
       "makamujo-xvfb.service",
       "makamujo-obs.service",
+      // リストの最後: 再起動すると watchdog 自身のプロセスが落ちる。
+      "makamujo-screen.service",
     ]);
   });
 });

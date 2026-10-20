@@ -181,6 +181,15 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
     `composition/broadcastFreezeWatchdog.ts` の `RECOVERY_SERVICES`。
     配信画面 `:10` の実体は ansible が導入する `makamujo-xvfb.service` を指す
     （リポジトリ同梱の `xorg10.service` は本番に無い。誤るとラングが進まない）。
+    最深ラングは ansible が束ねるアプリ三連（`makamujo-screen.service` /
+    `makamujo-browser.service` / `makamujo-obs.service`）+ xvfb。画面を生成する
+    配信サーバ（`makamujo-screen.service`）を落とさないと、そこで起因する静止は
+    最深ラングでも回復しない（2026-10-21 03:31 の停止: 音声と media clock は
+    進み続け、映像全体が 0 fps のまま外部検知に繰り返し捉えられた）。watchdog
+    自身がこの unit のプロセス（`bun start`）の中で動くので、再起動すると
+    自プロセスが落ちて残りの unit に届かない。リストの最後に置いて、他の unit
+    の再起動が済んでから触る（ポリシー状態は recover の前に永続化してあるので、
+    次に起動したプロセスは最深のラングから観測を再開できる）。
 - ポリシーの状態は `var/broadcast-freeze-state.json` に残して引き継ぐ
   （`lib/application/compositeFreezeStateStore.ts`）。サーバーは cron に
   11 分ごとに殺され start されるので、メモリだけの状態では最深のラングに
