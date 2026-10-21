@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { Action, type State } from "automated-gameplay-transmitter";
 import { type GameName, ServerGames as Games } from "../Agent/games/server";
-import { createReceiver } from "../Browser/socket";
+import { createReceiver as createSocketReceiver } from "../Browser/socket";
 import {
   type GameActivityState,
   initialGameActivityState,
@@ -28,6 +28,16 @@ import type { SpeechPort } from "./types";
 const VIGILANT_FIESTA_HIGHSCORE_PATH = "./var/vigilant-fiesta-highscore.json";
 
 /**
+ * ブラウザ IPC の受信器。差し替え口（テスト用）。
+ *
+ * 既定は unix ソケットの受信器（`lib/Browser/socket.ts`）。テストでは受け取った
+ * `solve` を直接呼んで、ブラウザセッションからの状態を流し込む。
+ */
+export type GameStateReceiver = (
+  solve: (state: State) => Action.Action,
+) => void | Promise<void>;
+
+/**
  * Game IPC / solver loop over shared AgentSession.
  */
 export class GameplayApplicationService {
@@ -39,6 +49,7 @@ export class GameplayApplicationService {
   #vigilantStored: StoredHighscores | undefined;
   #vigilantSlotKey: string | undefined;
   #onGameSight?: (sightState: Record<string, unknown>) => void;
+  #createReceiver: GameStateReceiver;
 
   constructor(
     session: AgentSession,
@@ -46,12 +57,14 @@ export class GameplayApplicationService {
     notifyGameStateChange: () => void,
     speech?: SpeechPort,
     onGameSight?: (sightState: Record<string, unknown>) => void,
+    createReceiver: GameStateReceiver = createSocketReceiver,
   ) {
     this.#session = session;
     this.#isSpeechable = isSpeechable;
     this.#notifyGameStateChange = notifyGameStateChange;
     this.#speech = speech;
     this.#onGameSight = onGameSight;
+    this.#createReceiver = createReceiver;
   }
 
   play(name: GameName, data?: string): void {
@@ -79,7 +92,7 @@ export class GameplayApplicationService {
     let activity: GameActivityState = initialGameActivityState();
     const activityTimeoutMs = resolveGameActivityTimeoutMs();
     try {
-      createReceiver((state: State) => {
+      this.#createReceiver((state: State) => {
         this.#session.browserState = state;
         console.debug(
           "[DEBUG]",
@@ -91,6 +104,35 @@ export class GameplayApplicationService {
           this.#session.playing = undefined;
           this.#notifyGameStateChange();
           return Action.noop;
+        }
+
+        if (state.name === "initialized") {
+          // ブラウザセッションが（再）接続した。
+          //
+          // セッションは再起動するたびに開いていたページを失う
+          // （bin/x/browser.ts の自動再起動、停止監視からのセッション終了、
+          // 合成出力の凍結.watchdog による makamujo-browser.service の
+          // 再起動）。そのままソルバを使い回すと "initialized" は通常の
+          // sight として扱われ、鍵を押すだけになってゲームは戻らない:
+          // 表示は空のまま、配信映像は静止したままになる（issue #993）。
+          //
+          // なので毎回ラウンドを最初から開き直す。ソルバを作り直した直後の
+          // 最初の action は "open"（game の home URL）: ジェネレータは最初
+          // の next() ではイベントを捨てて最初の action を返すので、開き
+          // 直しの入口は必ず "open" になる。
+          solver = createSolver();
+          const { done, value } = solver.next(state);
+          if (done) {
+            this.#session.playing = undefined;
+            this.#notifyGameStateChange();
+            return Action.noop;
+          }
+          console.debug(
+            "[DEBUG]",
+            "browser session (re)connected; reopening the round",
+            JSON.stringify(value, null, 0),
+          );
+          return value;
         }
 
         if (state.name === "idle") {
