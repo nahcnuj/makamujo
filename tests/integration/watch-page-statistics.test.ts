@@ -133,7 +133,7 @@ const chromiumAvailable = await (async (): Promise<boolean> => {
     const { chromium } = await import("playwright-extra");
     const browser = await chromium.launch({
       headless: true,
-      timeout: 60_000,
+      timeout: 15_000,
       args: ["--no-sandbox", "--disable-dev-shm-usage"],
     });
     await browser.close();
