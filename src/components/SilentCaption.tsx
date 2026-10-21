@@ -1,8 +1,6 @@
 import { useEffect, useRef } from "hono/jsx/dom";
 
-const HOLD_MS = 800;
 const MOVE_MS = 1200;
-const PAUSE_MS = 1500;
 
 function randomTranslate() {
   const reachX = Math.max(80, window.innerWidth * 0.25);
@@ -139,14 +137,18 @@ export function SilentCaption({ text }: { text: string }) {
     const loop = async () => {
       try {
         el.style.transform = IDENTITY;
-        await sleep(PAUSE_MS, signal);
         while (!signal.aborted) {
+          // 静止したフレームを作らない: 出口 → 定位置を連続で往復し、間に
+          // 待ちを挟まない。コメント待ちの間もオーバーレイが止まっていると、
+          // ゲームが結果画面で静止しているときに配信映像が全フレーム同一に
+          // なり、外からの異常検知に停止とみなされる（issue #995）。
           syncPos();
           const outbound = randomOutboundTransform();
           await animateTo(el, outbound.transform, outbound.ms, signal);
-          await sleep(HOLD_MS, signal);
           await animateTo(el, IDENTITY, outbound.ms, signal);
-          await sleep(PAUSE_MS, signal);
+          // マイクロタスクだけで回すとイベントループを枯渇させるので 1 tick
+          // 譲る（アニメーションが即時解決するテスト環境対策も兼ねる）。
+          await sleep(0, signal);
         }
       } catch {
         // abort
