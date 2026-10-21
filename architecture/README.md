@@ -121,6 +121,14 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 左 60% にも帯が掛かるため、ゲームが静止していても「配信が生きている」こと
 が映像で示せる。**静止した時間帯を作らないこと。**
 
+要件は **`videoAvgFps >= 24` かつ `videoMinFps >= 24`**（owner 契約）で、
+帯は**画面の中に 1vh 以上を常に残す**。完全に画面外へ出ている瞬間は出力の
+絵が静止し、1 秒バケットの移動フレーム数が 24 枚を下回って停止と誤検知
+される（`-12vh` → `112vh` のままでは minFps = 19 になる）。白芯は不透明に
+保ち、OBS の Color Key（key = 黒）に消されても差分が出るようにする。
+`src/components/BroadcastHeartbeat.liveness.test.ts` が帯の CSS を読んで
+検知側の `summarizeFps` / `isFpsAboveThreshold` と同じ計算で確かめる。
+
 ### 判定の契約
 
 - 配信ページを描画する統計用ブラウザが、開いたままのページで 1 窓だけ
