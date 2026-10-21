@@ -1,8 +1,6 @@
 import { useEffect, useRef } from "hono/jsx/dom";
 
-const HOLD_MS = 800;
 const MOVE_MS = 1200;
-const PAUSE_MS = 1500;
 
 function randomTranslate() {
   const reachX = Math.max(80, window.innerWidth * 0.25);
@@ -39,31 +37,13 @@ function randomOutboundTransform() {
   return { transform, ms };
 }
 
-function sleep(ms: number, signal: AbortSignal) {
-  return new Promise<void>((resolve, reject) => {
-    if (signal.aborted) {
-      reject(new DOMException("aborted", "AbortError"));
-      return;
-    }
-    const t = window.setTimeout(resolve, ms);
-    signal.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(t);
-        reject(new DOMException("aborted", "AbortError"));
-      },
-      { once: true },
-    );
-  });
-}
-
 async function animateTo(
   el: HTMLElement,
   transform: string,
   ms: number,
   signal: AbortSignal,
 ) {
-  if (signal.aborted) throw new DOMException("aborted", "AbortError");
+  if (signal.aborted) throw abortError();
   const from = getComputedStyle(el).transform;
   const anim = el.animate(
     [{ transform: from === "none" ? "none" : from }, { transform }],
@@ -73,16 +53,36 @@ async function animateTo(
       fill: "forwards",
     },
   );
-  const onAbort = () => anim.cancel();
-  signal.addEventListener("abort", onAbort, { once: true });
+  signal.addEventListener("abort", () => anim.cancel(), { once: true });
   try {
-    await anim.finished;
+    // anim.finished が abort しても解決しない実装（テスト環境の DOM 置き換え
+    // など）があるため、abort をもう一方の選手として常に上書きして待つ。
+    await abortable(anim.finished, signal);
     el.style.transform = transform;
   } catch {
-    throw new DOMException("aborted", "AbortError");
-  } finally {
-    signal.removeEventListener("abort", onAbort);
+    throw abortError();
   }
+}
+
+function abortError(): DOMException {
+  return new DOMException("aborted", "AbortError");
+}
+
+function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(abortError());
+      return;
+    }
+    promise.then(resolve, () => reject(abortError()));
+    signal.addEventListener(
+      "abort",
+      () => {
+        reject(abortError());
+      },
+      { once: true },
+    );
+  });
 }
 
 const IDENTITY = "translate(0px, 0px) rotate(0deg) scale(1)";
@@ -136,17 +136,23 @@ export function SilentCaption({ text }: { text: string }) {
     window.addEventListener("resize", syncPos);
     window.addEventListener("scroll", syncPos, true);
 
+    // 提示画面が静止画にならないよう、視覚の休み（止まったフレーム）を挟まず、
+    // 出口 → 定位置 → 出口の往復を連続で動かし続ける。合成出力の静止は配信の
+    // 不調として検知されるので、静止した時間帯を作らない（issue #982）。
     const loop = async () => {
       try {
         el.style.transform = IDENTITY;
-        await sleep(PAUSE_MS, signal);
         while (!signal.aborted) {
+          // マイクロタスクだけで回すと（アニメーションが即時解決する環境で）
+          // イベントループが枯渇するため、各往復の間にイベントループへ譲る。
+          await new Promise<void>((resolve) => {
+            window.setTimeout(resolve, 0);
+          });
+          if (signal.aborted) break;
           syncPos();
           const outbound = randomOutboundTransform();
           await animateTo(el, outbound.transform, outbound.ms, signal);
-          await sleep(HOLD_MS, signal);
           await animateTo(el, IDENTITY, outbound.ms, signal);
-          await sleep(PAUSE_MS, signal);
         }
       } catch {
         // abort

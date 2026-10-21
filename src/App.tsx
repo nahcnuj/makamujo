@@ -71,6 +71,7 @@ export function App() {
         <Container>
           <StreamerPanel />
         </Container>
+        <div className="broadcast-pulse-sweep" aria-hidden="true" />
       </Layout>
     </AgentProvider>
   );

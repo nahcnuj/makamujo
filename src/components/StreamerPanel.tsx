@@ -163,7 +163,7 @@ export function StreamerPanel() {
         >
           <Container>
             <div className="w-full h-full text-3xl/9 break-all overflow-hidden">
-              {silent ? (
+              {silent || displayLines.length === 0 ? (
                 <SilentCaption
                   text={
                     "\uFF08\u30B3\u30E1\u30F3\u30C8\u3057\u3066\u306D\uFF09"
