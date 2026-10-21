@@ -12,6 +12,15 @@
     <link rel="stylesheet" href="/index.css" />
   </head>
   <body>
+    <!--
+      配信映像の鼓動。CSS だけで動く静的な帯で、アプリ（frontend.js）の
+      JS を経由しない。アプリのマウントに失敗しても、帯だけは動き続ける。
+    -->
+    <div
+      id="broadcast-heartbeat"
+      class="broadcast-heartbeat"
+      aria-hidden="true"
+    ></div>
     <div id="root"></div>
     <script type="module" src="./frontend.tsx"></script>
   </body>

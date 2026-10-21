@@ -34,17 +34,33 @@
  * 変化したフレームを要求する（`scripts/check-stream.ts` の VIDEO_MIN_FPS）。
  * ゲームが結果画面やフリートークで止まっている間も、全幅の帯はゲーム部分
  * として切り出す左 60% を必ず横切るので、合成出力は「動いている」と判定
- * される。`alternate` の折り返しや待ちを入れると、その間のバケットが 0 枚に
- * なって停止と数えられるため、`linear infinite` で回し続ける。
- * 1 フレームの移動量が 128px へ縮小した標本で 1 行を超えるよう、2.4 秒で
- * 画面 1 往復させている（これより遅いと標本行を跨がないフレームが出る）。
+ * される。
+ *
+ * 帯は 3 つの契約を守る（issue #1005: 映像全体とゲーム画面が数時間止まった
+ * まま外からの検知だけが残った）:
+ *
+ * - 帯は掃引のどこでも画面内に残る。`-12vh` から `112vh` の掃引は両端で帯が
+ *   完全に画面外へ出るため、その瞬間を含む 1 秒バケットの変化フレームが 24 枚
+ *   を下回り、「映像全体が停止している」と判定される（実測で videoMinFps 16）。
+ *   `0vh` から `94vh` なら 6vh の帯は常に画面内に収まる。
+ * - 帯は待ちなく動き続ける。`alternate` は折り返すだけで速度は変わらないので
+ *   止まる瞬間は生まない（帯が画面外へ出ると停止が成立する）。
+ * - 帯の芯は不透明。OBS 側は Comment browser_source に黒色の Color Key
+ *   （`obs-studio/basic/scenes/Makamujo.json`）を掛けているため、半透明の
+ *   帯はキー後の合成で薄まり差分に出ないことがある。不透明な白は消されず、
+ *   背景の色（ゲーム画面）によらず強い差分になる。
+ *
+ * 1 フレームの移動量が 128px へ縮小した標本の 1 行を超えるよう、1 フレーム
+ * あたり 12.5px（720px 時の 1.25 行）動かしている。この帯の速さは
+ * `tests/integration/broadcast-heartbeat-band.test.ts` が実ブラウザで
+ * 検知側と同じ計算で確かめている。
  */
 @keyframes broadcast-heartbeat-sweep {
   from {
-    transform: translateY(-12vh);
+    transform: translateY(0vh);
   }
   to {
-    transform: translateY(112vh);
+    transform: translateY(94vh);
   }
 }
 
@@ -59,11 +75,12 @@
   background: linear-gradient(
     to bottom,
     rgba(16, 185, 129, 0) 0%,
-    rgba(16, 185, 129, 0.55) 38%,
-    rgba(255, 255, 255, 0.6) 50%,
-    rgba(16, 185, 129, 0.55) 62%,
+    rgba(16, 185, 129, 0.55) 30%,
+    rgba(255, 255, 255, 1) 42%,
+    rgba(255, 255, 255, 1) 58%,
+    rgba(16, 185, 129, 0.55) 70%,
     rgba(16, 185, 129, 0) 100%
   );
-  animation: broadcast-heartbeat-sweep 2.4s linear infinite;
+  animation: broadcast-heartbeat-sweep 1.8s linear infinite alternate;
   will-change: transform;
 }

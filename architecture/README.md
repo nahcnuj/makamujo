@@ -114,12 +114,41 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 いる間は、コメントも発話も無いとオーバーレイまで静止し、合成出力が**本当に**
 全フレーム同一になる（2026-10-21 22:27 の停止は音声と media clock が進んだ
 まま `videoMinFps` / `gameMinFps` が 0 だった）。これは合成経路の故障では
-ないので再起動では直らない。そこで配信オーバーレイ（`src/App.tsx`）は、
-全幅の帯を待ち無しで流し続ける鼓動（`src/components/BroadcastHeartbeat.tsx`
-と `src/index.css` の `broadcast-heartbeat-sweep`）を常に重ね、発話が無い間も
-浮遊キャプション（`SilentCaption`）を止めない。ゲーム部分として切り出す
-左 60% にも帯が掛かるため、ゲームが静止していても「配信が生きている」こと
-が映像で示せる。**静止した時間帯を作らないこと。**
+ないので再起動では直らない。そこで配信ページは、全幅の帯を待ち無しで流し続ける
+鼓動を常に重ね、発話が無い間も浮遊キャプション（`SilentCaption`）を止めない。
+ゲーム部分として切り出す左 60% にも帯が掛かるため、ゲームが静止していても
+「配信が生きている」ことが映像で示せる。**静止した時間帯を作らないこと。**
+
+### 鼓動帯の契約
+
+鼓動帯は**配信ページの静的 HTML**（`src/index.html` の
+`#broadcast-heartbeat`）と CSS（`src/index.css` の
+`broadcast-heartbeat-sweep`）だけで描く。アプリの React ツリーには置かない。
+アプリの JS（`frontend.js`）が評価に失敗しても帯は動き続けなければならない
+（描画落ちでオーバーレイごと絵が止まるのが issue #1005 の形）。帯の仕様は CSS
+から読む: `lib/domain/broadcasting/broadcastHeartbeatBand.ts` の
+`parseHeartbeatBandSpec` が帯の高さ・振れ幅・片道の長さ・色を読み、
+`minVisibleBandHeightVh` / `movementPxPerFrame` /
+`bandKeepsPictureMoving` が「検知側の要件を満たすか」を純関数で判定する。
+
+- **帯は画面内に留まり続ける。** 帯が画面外に出た瞬間を含む 1 秒バケットは
+  映像全体の移動フレームが 24 fps を下回り、「映像全体が停止している」と
+  外から判定される（旧設計の `-12vh → 112vh` は実測で `videoMinFps` 16）。
+  帯の高さ 6vh に対して `0vh → 94vh` を往復する。
+- **1 フレームの移動は標本行より速い。** 検知側は絵を 128x72 に落とすので
+  720px の絵の標本行は 10px。30 fps なら 1 フレームで 10px 以上動く必要が
+  ある（片道 1.8 秒 / 94vh なら 1 フレーム 12.5px）。
+- **芯は不透明。** OBS の Comment browser source には黒の Color Key が
+  掛かっている（`obs-studio/basic/scenes/Makamujo.json`）。半透明の帯は key
+  されて薄まるので、芯は `rgba(255,255,255,1)` で塗り、肩だけを半透明にする。
+  背景色（黒でもゲーム画面でも）によらず同じ判定が成立する。
+
+検証: `lib/domain/broadcasting/broadcastHeartbeatBand.test.ts`（CSS から
+読み取った仕様と純粋な判定）と
+`tests/integration/broadcast-heartbeat-band.test.ts`（実ブラウザで
+1280x720 を描き、検知側と同じ比較で 1 秒バケットの移動フレーム数を出す。
+黒背景と明るい背景の両方で `videoMinFps` / `videoAvgFps` が 24 超、ゲーム
+部分が 8 超、帯が常に画面内であることを確かめる）。
 
 ### 判定の契約
 
@@ -267,6 +296,7 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 | モジュール | 層 | 役割 |
 |------------|----|------|
 | `lib/domain/broadcasting/CompositeFreezePolicy.ts` | domain（純関数） | 周期観測 → 回復ラングの決定 |
+| `lib/domain/broadcasting/broadcastHeartbeatBand.ts` | domain（純関数） | CSS からの鼓動帯の仕様読み取りと、検知側の要件を満たすかの判定 |
 | `composition/watchPageBrowser.ts` | composition | 映像の動きの型と判定（Playwright 非依存） |
 | `composition/chromiumWatchPageBrowser.ts` | composition | 1 窓の映像の動きを測る実装。rAF が来ない環境でも上限で帰る |
 | `composition/watchPageStatisticsSource.ts` | composition | 開いたままのページでの測定の代理。無効時 / 未オープン時は `undefined` |
@@ -299,6 +329,7 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 | AgentSession + services | `lib/application/` | 済 |
 | 統計のブラウザ読み取り | `composition/watchPageBrowser.ts`, `composition/chromiumWatchPageBrowser.ts`, `composition/watchPageStatisticsSource.ts` | 済 |
 | 配信画面の停止回復 | `lib/domain/broadcasting/CompositeFreezePolicy.ts`, `composition/broadcastFreezeWatchdog.ts` | 済 |
+| 鼓動帯（映像を動かし続ける） | `lib/domain/broadcasting/broadcastHeartbeatBand.ts`, `src/index.html`, `src/index.css` | 済 |
 | Console access / status plan / SSE frames | `lib/domain/console/` | 済（Basic auth 純関数含む） |
 | systemd / make install（main から port） | `Makefile`, `etc/systemd/` | 済 |
 | Outer console WS bridge | `composition/consoleOuterWebSocket.ts` | 済 |
