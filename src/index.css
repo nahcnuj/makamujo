@@ -36,15 +36,16 @@
  * として切り出す左 60% を必ず横切るので、合成出力は「動いている」と判定
  * される。`alternate` の折り返しや待ちを入れると、その間のバケットが 0 枚に
  * なって停止と数えられるため、`linear infinite` で回し続ける。
- * 1 フレームの移動量が 128px へ縮小した標本で 1 行を超えるよう、2.4 秒で
- * 画面 1 往復させている（これより遅いと標本行を跨がないフレームが出る）。
+ * 帯が画面外へ完全に出てしまうと、その間のフレームが 1 枚も変わらず
+ * 1 秒バケットが 0 枚になって停止と数えられるため、帯は常に画面内に
+ * 収まる 0vh..94vh の範囲だけを動かす（画面外の時間帯を作らない）。
  */
 @keyframes broadcast-heartbeat-sweep {
   from {
-    transform: translateY(-12vh);
+    transform: translateY(0vh);
   }
   to {
-    transform: translateY(112vh);
+    transform: translateY(94vh);
   }
 }
 
