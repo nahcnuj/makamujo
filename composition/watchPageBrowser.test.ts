@@ -153,11 +153,19 @@ describe("isOnAirFromClock", () => {
     expect(isOnAirFromClock(motion({ clockAdvancedSeconds: 0 }))).toBe(false);
   });
 
-  it("reads a still picture with a trickle of motion as on air even when the clock stopped", () => {
-    // 合成出力が固まって trickle の動きしか残らない freeze も放映中と判断する。
+  it("reads a totally frozen picture as on air even when the clock stopped", () => {
+    // 完全に静止した (changedFrames === 0) 絵だけは放映中とみなす (HLS が
+    // 停止の背後で止まった freeze の回復のため)。trickle の動き (~0.1 fps)
+    // は放映中とみなさない (review: 静止画をオンエア扱いしない)。
+    expect(
+      isOnAirFromClock(motion({ changedFrames: 0, clockAdvancedSeconds: 0 })),
+    ).toBe(true);
+  });
+
+  it("reads a trickle-motion picture as off air when the clock stopped", () => {
     expect(
       isOnAirFromClock(motion({ changedFrames: 1, clockAdvancedSeconds: 0 })),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("requires the clock to clear the minimum advance", () => {
