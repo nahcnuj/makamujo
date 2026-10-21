@@ -1,4 +1,5 @@
 import { Box, Container, Layout } from "./agt-compat";
+import { BroadcastLivenessSweep } from "./components/BroadcastLivenessSweep";
 import { GamePanel } from "./components/GamePanel";
 import { StreamerPanel } from "./components/StreamerPanel";
 import { AgentProvider } from "./contexts/AgentContext";
@@ -71,7 +72,7 @@ export function App() {
         <Container>
           <StreamerPanel />
         </Container>
-        <div className="broadcast-pulse-sweep" aria-hidden="true" />
+        <BroadcastLivenessSweep />
       </Layout>
     </AgentProvider>
   );

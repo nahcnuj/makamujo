@@ -27,33 +27,15 @@
   }
 }
 
-@keyframes broadcast-pulse-sweep {
-  from {
-    transform: translateY(-7vh);
-  }
-  to {
-    transform: translateY(100vh);
-  }
-}
-
-/* 配信画面に常時入る薄い帯。静止した時間帯をなくすことで、合成出力の
-   完全停止（issue #982 の videoMinFps = 0、「静止画」となる配信）を防ぐ。 */
-.broadcast-pulse-sweep {
+/* 配信画面に常時動く帯を敷く (issue #982)。
+   背景が何色でも差分が出るように、帯の中で色が変化する不透明な線状グラデーションを
+   使用する。帯は画面全幅に敷き、ゲーム画面（左 60%）も覆っている。 */
+.broadcast-liveness-sweep {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: 3vh;
   pointer-events: none;
   z-index: 5;
-  background: linear-gradient(
-    to bottom,
-    rgba(255, 190, 240, 0) 0%,
-    rgba(255, 190, 240, 0.25) 20%,
-    rgba(255, 255, 255, 0.35) 50%,
-    rgba(255, 190, 240, 0.25) 80%,
-    rgba(255, 190, 240, 0) 100%
-  );
-  animation: broadcast-pulse-sweep 4s linear infinite alternate;
   will-change: transform;
 }
