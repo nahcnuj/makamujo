@@ -115,11 +115,44 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 全フレーム同一になる（2026-10-21 22:27 の停止は音声と media clock が進んだ
 まま `videoMinFps` / `gameMinFps` が 0 だった）。これは合成経路の故障では
 ないので再起動では直らない。そこで配信オーバーレイ（`src/App.tsx`）は、
-全幅の帯を待ち無しで流し続ける鼓動（`src/components/BroadcastHeartbeat.tsx`
-と `src/index.css` の `broadcast-heartbeat-sweep`）を常に重ね、発話が無い間も
+全幅の帯を待ち無しで流し続ける鼓動（`src/index.html` の静的要素と
+`src/index.css` の `broadcast-heartbeat-sweep`）を常に重ね、発話が無い間も
 浮遊キャプション（`SilentCaption`）を止めない。ゲーム部分として切り出す
 左 60% にも帯が掛かるため、ゲームが静止していても「配信が生きている」こと
 が映像で示せる。**静止した時間帯を作らないこと。**
+
+2026-10-22 06:25 の停止（issue #1009）では、この帯が 2 つの理由で検知を
+無効にしていたため、帯の形を直した。
+1. 帯がアプリ（`src/App.tsx` → `src/components/BroadcastHeartbeat.tsx`）で
+   描かれていたため、アプリが落ちれば帯ごとオーバーレイが静止した。帯は
+   **静的要素**（`src/index.html` の `#root` の外）に置き、アプリが落ちても
+   動き続けるようにする。
+2. 帯が `-12vh` から `112vh` へ 2.4 秒かけて掃く形だったため、周期の一部
+   （実測 24.2%）で帯が画面の外へ出てしまい、検知の 1 秒バケットは
+   「動いていない」ものになった。帯は 1 秒周期で `0vh` から `92vh` まで掃き
+   （画面の高さの 8%、下端が画面外に出ない）、**画面内に居る時間を増える**
+   （常時 100%）。
+
+### 鼓動の契約
+
+- 帯の定義は `lib/domain/broadcasting/broadcastHeartbeatLiveness.ts` が持つ。
+  このモジュールは純関数で、帯の形（高さ・掃く距離・周期・色）と、帯が作る
+  映像を検知と同じ手順で測ったとき的后果（画面外に出る時間、標本の何行分が
+  動くか、1 秒バケットあたりの変化フレーム数）を計算する。
+- 帯は OBS の browser source（1280x720 @30fps）に載る。Color Key（黒）が
+  暗い画素を消すため、中核は不透明（`rgba(52, 211, 153, 1)` と白）にして
+  ある。ゲーム画面の背景は #0f1419 なので中核はキーから消えない。
+- 検知の閾値（標本 128px、差 16、0.1% の差分、1 秒バケットのうち**最も悪い**
+  バケットで判定、ゲーム部分は左 60%）は `scripts/check-stream.ts` と同じ
+  値をこのモジュールが持ち、`VIDEO_MIN_FPS = 24` / `GAME_MIN_FPS = 8` を
+  下回らないことを帯の形から証明する。
+- 検証は 2 段。`src/broadcastHeartbeat.test.ts` は `src/index.html` の静的
+  要素と `src/index.css` の定義が仕様と一致すること（CSS が仕様からずれ
+  たら落ちる）を確かめる。`tests/integration/broadcast-heartbeat-motion.test.ts`
+  は実ブラウザで `src/index.html` と `src/index.css` をそのまま描画し、
+  本番の測定（`WatchPageBrowser.measurePictureMotion`）が「動いている」と
+  判定することと、検知と同じ閾値で 1 秒バケットごとに全体 24 枚以上・ゲーム
+  部分 8 枚以上が変わっていることを確かめる。
 
 ### 判定の契約
 
