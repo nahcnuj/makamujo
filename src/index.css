@@ -36,24 +36,24 @@
  * として切り出す左 60% を必ず横切るので、合成出力は「動いている」と判定
  * される。`alternate` の折り返しや待ちを入れると、その間のバケットが 0 枚に
  * なって停止と数えられるため、`linear infinite` で回し続ける。
- * 1 フレームの移動量が 128px へ縮小した標本で 1 行を超えるよう、1.2 秒で
+ * 1 フレームの移動量が 128px へ縮小した標本で 1 行を超えるよう、0.9 秒で
  * 画面 1 往復させている（これより遅いと標本行を跨がないフレームが出る）。
  *
- * 帯は**画面の中に 1vh 以上を常に残す**。完全に画面外へ出ている間は、
- * その一瞬も出力の絵が完全に静止し、1 秒バケットの移動フレーム数が 24 枚を
- * 下回って「停止」と誤検知される。端の 1vh だけが画面に残るように移動させる。
+ * 帯は**画面の中に常に残す**。完全に画面外へ出ている間は、その一瞬も出力の
+ * 絵が完全に静止し、1 秒バケットの移動フレーム数が 24 枚を下回って「停止」
+ * と誤検知される。高さ 12vh で -2vh→92vh を動かし、端でも帯が画面内に残る。
  *
  * 白芯は完全に不透明 (1.0) にする。OBS の Color Key（key = 黒）に消された
  * 画素はゲーム画面が透けるので、半透明の帯は検知側の差分が出ない。白の
  * 停留区間を広くしてエンコード圧縮やフィルタに耐えられる信号量を確保。
- * 2026-10-22 強化: 白芯 100% 不透明 + 広い白領域。
+ * 2026-10-22 強化: 白芯 100% 不透明 + 広い白領域 + 0.9s 周期。
  */
 @keyframes broadcast-heartbeat-sweep {
   from {
-    transform: translateY(-5vh);
+    transform: translateY(-2vh);
   }
   to {
-    transform: translateY(99vh);
+    transform: translateY(92vh);
   }
 }
 
@@ -62,18 +62,18 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 10vh;
+  height: 12vh;
   pointer-events: none;
   z-index: 50;
   background: linear-gradient(
     to bottom,
-    rgba(16, 185, 129, 0) 0%,
-    rgba(16, 185, 129, 0.6) 20%,
-    rgba(255, 255, 255, 1) 35%,
-    rgba(255, 255, 255, 1) 65%,
-    rgba(16, 185, 129, 0.6) 80%,
-    rgba(16, 185, 129, 0) 100%
+    rgba(16, 185, 129, 0.1) 0%,
+    rgba(16, 185, 129, 0.7) 15%,
+    rgba(255, 255, 255, 1) 30%,
+    rgba(255, 255, 255, 1) 70%,
+    rgba(16, 185, 129, 0.7) 85%,
+    rgba(16, 185, 129, 0.1) 100%
   );
-  animation: broadcast-heartbeat-sweep 1.2s linear infinite;
+  animation: broadcast-heartbeat-sweep 0.9s linear infinite;
   will-change: transform;
 }

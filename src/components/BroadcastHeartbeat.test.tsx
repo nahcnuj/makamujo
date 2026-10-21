@@ -23,7 +23,7 @@ describe("BroadcastHeartbeat", () => {
     // `infinite` で待ちなく回す。`alternate` や一時停止があると、その間の
     // バケットが 0 枚になり外からの検知に停止と数えられる。
     expect(css).toMatch(
-      /animation:\s*broadcast-heartbeat-sweep\s+1\.2s\s+linear\s+infinite/,
+      /animation:\s*broadcast-heartbeat-sweep\s+0\.9s\s+linear\s+infinite/,
     );
     expect(css).not.toContain("animation-play-state");
   });
