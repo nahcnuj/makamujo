@@ -126,12 +126,17 @@ export const observeCompositeFreezeCycle = (
   }
 
   const stillCycles = state.stillCycles + 1;
-  if (
-    stillCycles < config.cyclesRequired ||
-    (state.lastRecoveryAtMs !== undefined &&
-      cycle.nowMs - state.lastRecoveryAtMs < config.recoveryCooldownMs)
-  ) {
+  const cooldownActive =
+    state.lastRecoveryAtMs !== undefined &&
+    cycle.nowMs - state.lastRecoveryAtMs < config.recoveryCooldownMs;
+  if (stillCycles < config.cyclesRequired) {
     return { state: frozenState(state), action: undefined };
+  }
+  if (cooldownActive) {
+    // The cooldown spaces recoveries; a still cycle observed inside it does
+    // not count toward the next rung, so the streak stays as it is instead
+    // of building up while the previous recovery is still settling.
+    return { state, action: undefined };
   }
 
   const rungIndex = Math.min(
