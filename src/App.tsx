@@ -1,4 +1,5 @@
 import { Box, Container, Layout } from "./agt-compat";
+import { BroadcastHeartbeat } from "./components/BroadcastHeartbeat";
 import { GamePanel } from "./components/GamePanel";
 import { StreamerPanel } from "./components/StreamerPanel";
 import { AgentProvider } from "./contexts/AgentContext";
@@ -72,6 +73,7 @@ export function App() {
           <StreamerPanel />
         </Container>
       </Layout>
+      <BroadcastHeartbeat />
     </AgentProvider>
   );
 }

@@ -109,6 +109,18 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
  セッション内監視（gameStall / compositorHeartbeat / Aw, Snap! watchdog は
  Chromium 内しか見えない）の管轄外にあたる。
 
+外からの検知は「配信映像が 1 秒間まったく変わらない」ことを停止とみなす
+（`videoMinFps` / `gameMinFps`）。ゲームが結果画面やフリートークで止まって
+いる間は、コメントも発話も無いとオーバーレイまで静止し、合成出力が**本当に**
+全フレーム同一になる（2026-10-21 22:27 の停止は音声と media clock が進んだ
+まま `videoMinFps` / `gameMinFps` が 0 だった）。これは合成経路の故障では
+ないので再起動では直らない。そこで配信オーバーレイ（`src/App.tsx`）は、
+全幅の帯を待ち無しで流し続ける鼓動（`src/components/BroadcastHeartbeat.tsx`
+と `src/index.css` の `broadcast-heartbeat-sweep`）を常に重ね、発話が無い間も
+浮遊キャプション（`SilentCaption`）を止めない。ゲーム部分として切り出す
+左 60% にも帯が掛かるため、ゲームが静止していても「配信が生きている」こと
+が映像で示せる。**静止した時間帯を作らないこと。**
+
 ### 判定の契約
 
 - 配信ページを描画する統計用ブラウザが、開いたままのページで 1 窓だけ
