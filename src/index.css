@@ -38,13 +38,18 @@
  * なって停止と数えられるため、`linear infinite` で回し続ける。
  * 1 フレームの移動量が 128px へ縮小した標本で 1 行を超えるよう、2.4 秒で
  * 画面 1 往復させている（これより遅いと標本行を跨がないフレームが出る）。
+ *
+ * 端は帯の高さぶん内側に置く（`-5vh` → `99vh`）。上端 `-12vh` / 下端
+ * `112vh` だと往復の継ぎ目で帯が完全に画面外へ抜け、その約 0.35 秒は
+ * 他に動くものが無いと再び「全フレーム同一」の窓ができる。常に少なくとも
+ * 1 辺り 1vh は画面内に残すことで、静止した瞬間を作らない。
  */
 @keyframes broadcast-heartbeat-sweep {
   from {
-    transform: translateY(-12vh);
+    transform: translateY(-5vh);
   }
   to {
-    transform: translateY(112vh);
+    transform: translateY(99vh);
   }
 }
 
