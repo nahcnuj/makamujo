@@ -119,6 +119,12 @@ export const isOnAirFromClock = (
   if (motion.clockAdvancedSeconds > CLOCK_ADVANCE_MIN_SECONDS) {
     return true;
   }
+  // A still picture counts as on-air even when the media clock stopped
+  // advancing (e.g. the HLS stalled behind the freeze): otherwise the
+  // recovery streak never accumulates for exactly the freezes that need it.
+  // Judging the picture (not just a zero changed-frame count) keeps a
+  // freeze with a trickle of motion (videoAvgFps ~ 0.1) on-air while a
+  // genuinely moving picture stays gated by the clock.
   // A totally frozen picture (no changed frames at all) counts as on-air even
   // when the media clock stopped advancing (e.g. the HLS stalled behind the
   // freeze): otherwise the recovery streak never accumulates for exactly the
@@ -144,7 +150,13 @@ export const judgePictureMotion = (
     return undefined;
   }
   const windowSeconds = motion.windowMs / 1000;
-  if (windowSeconds < 1 || motion.comparedFrames < 5) {
+  if (windowSeconds < 1) {
+    return undefined;
+  }
+  if (motion.comparedFrames < 1) {
+    return undefined;
+  }
+  if (motion.changedFrames !== 0 && motion.comparedFrames < 5) {
     return undefined;
   }
   const changedFps = motion.changedFrames / windowSeconds;
