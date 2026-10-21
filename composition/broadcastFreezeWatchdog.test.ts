@@ -38,7 +38,7 @@ const still: PictureMotion = {
  * 静止として数えない（`isOnAirFromClock` が false）。
  */
 const offAirStill: PictureMotion = {
-  ...still,
+  ...moving,
   clockAdvancedSeconds: 0,
 };
 
