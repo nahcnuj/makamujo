@@ -50,10 +50,10 @@
  */
 @keyframes broadcast-heartbeat-sweep {
   from {
-    transform: translateY(-4vh);
+    transform: translateY(-5vh);
   }
   to {
-    transform: translateY(98vh);
+    transform: translateY(99vh);
   }
 }
 
@@ -62,7 +62,7 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 6vh;
+  height: 10vh;
   pointer-events: none;
   z-index: 50;
   background: linear-gradient(
