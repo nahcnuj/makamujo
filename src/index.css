@@ -51,10 +51,10 @@
  */
 @keyframes broadcast-heartbeat-sweep {
   from {
-    transform: translateY(-5vh);
+    transform: translateY(-4vh);
   }
   to {
-    transform: translateY(99vh);
+    transform: translateY(98vh);
   }
 }
 
