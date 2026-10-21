@@ -114,12 +114,32 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 いる間は、コメントも発話も無いとオーバーレイまで静止し、合成出力が**本当に**
 全フレーム同一になる（2026-10-21 22:27 の停止は音声と media clock が進んだ
 まま `videoMinFps` / `gameMinFps` が 0 だった）。これは合成経路の故障では
-ないので再起動では直らない。そこで配信オーバーレイ（`src/App.tsx`）は、
-全幅の帯を待ち無しで流し続ける鼓動（`src/components/BroadcastHeartbeat.tsx`
-と `src/index.css` の `broadcast-heartbeat-sweep`）を常に重ね、発話が無い間も
+ないので再起動では直らない。そこで配信オーバーレイは、全幅の帯を待ち無しで
+流し続ける鼓動（`src/index.html` の静的な div ×
+`src/index.css` の `broadcast-heartbeat-sweep`）を常に重ね、発話が無い間も
 浮遊キャプション（`SilentCaption`）を止めない。ゲーム部分として切り出す
 左 60% にも帯が掛かるため、ゲームが静止していても「配信が生きている」こと
-が映像で示せる。**静止した時間帯を作らないこと。**
+が映像で示せる。
+
+帯には 2 つの契約がある（2026-10-22 には毎時の健康検知が連発: 音声と media
+clock は進んだまま `videoAvgFps` / `videoMinFps` / `gameMinFps` が 0 になり
+続けた。issue #997 / #998 / #999 / #1001）。
+
+- **帯は JS に依らない。** アプリ配下に置くと、アプリのマウント / 再描画が
+  例外で落ちた時点でオーバーレイごと静止する（`videoAvgFps = 0` の根拠）。
+  だから鼓動は `src/index.html` の静的な div で、`frontend.js` が読めなくても
+  CSS アニメーションだけで動き続ける。アプリは
+  `src/frontendRoot.tsx` の `AppBoundary`（hono/jsx/dom の `ErrorBoundary`）で
+  包み、描画が落ちてもページを空白にしない。
+- **帯は掃引のどこでも画面内に残す。** `-12vh` から `112vh` の掃引は両端で帯
+  を完全に画面外に出し、その瞬間を含む 1 秒バケットの変化フレームが
+  `VIDEO_MIN_FPS` を割った。掃引は `-2vh` から `92vh` にして、はみ出しを
+  作らない（不変条件は `lib/domain/broadcasting/broadcastHeartbeatSweep.ts`
+  の `sweepsWithoutLeavingViewport`、参照は `src/heartbeatBand.test.ts`）。
+  白芯は不透明にして、Comment browser_source に掛かっている OBS の黒色
+  Color Key（`obs-studio/basic/scenes/Makamujo.json`）で消されないようにする。
+
+**静止した時間帯を作らないこと。**
 
 ### 判定の契約
 

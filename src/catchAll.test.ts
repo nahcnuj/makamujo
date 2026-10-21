@@ -25,4 +25,9 @@ test("serves index.html for navigation requests", async () => {
   expect(ct).toMatch(/text\/html/);
   const body = await res.text();
   expect(body).toContain('<div id="root"></div>');
+  // 鼓動の帯はアプリの JS に依らず動く。HTML に静的に置かれていること。
+  expect(body).toContain('<div id="broadcast-heartbeat"');
+  expect(body.indexOf("broadcast-heartbeat")).toBeLessThan(
+    body.indexOf('<div id="root"'),
+  );
 });

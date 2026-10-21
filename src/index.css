@@ -38,13 +38,26 @@
  * なって停止と数えられるため、`linear infinite` で回し続ける。
  * 1 フレームの移動量が 128px へ縮小した標本で 1 行を超えるよう、2.4 秒で
  * 画面 1 往復させている（これより遅いと標本行を跨がないフレームが出る）。
+ *
+ * さらに 2 つの契約（issue #1001: 音声と media clock は進んだまま
+ * videoAvgFps / videoMinFps / gameMinFps が 0 になり続けた）:
+ * - 帯は掃引のどこでも画面内に残す（`-2vh` から `92vh`）。従来の
+ *   `-12vh` から `112vh` は両端で帯が完全に画面外になり、瞬間を含む
+ *   1 秒バケットの変化フレームが足りなくなった。
+ * - 帯は JS を経由しない。`src/index.html` に静的な div として置き、
+ *   アプリ（`frontend.js`）がマウントに失敗しても CSS アニメーション
+ *   だけで動き続ける。鼓動をアプリ配下に置くと、アプリの描画が例外で
+ *   落ちた時点でオーバーレイごと静止してしまう。
+ * 白芯は不透明。OBS 側で Comment browser_source に黒色の Color Key
+ * （`obs-studio/basic/scenes/Makamujo.json`）が掛かっており、半透明の
+ * 映像は暗くなる。不透明な白は消されず、鼓動の芯として標本でも残る。
  */
 @keyframes broadcast-heartbeat-sweep {
   from {
-    transform: translateY(-12vh);
+    transform: translateY(-2vh);
   }
   to {
-    transform: translateY(112vh);
+    transform: translateY(92vh);
   }
 }
 
@@ -59,9 +72,10 @@
   background: linear-gradient(
     to bottom,
     rgba(16, 185, 129, 0) 0%,
-    rgba(16, 185, 129, 0.55) 38%,
-    rgba(255, 255, 255, 0.6) 50%,
-    rgba(16, 185, 129, 0.55) 62%,
+    rgba(16, 185, 129, 0.55) 30%,
+    rgba(255, 255, 255, 1) 42%,
+    rgba(255, 255, 255, 1) 58%,
+    rgba(16, 185, 129, 0.55) 70%,
     rgba(16, 185, 129, 0) 100%
   );
   animation: broadcast-heartbeat-sweep 2.4s linear infinite;

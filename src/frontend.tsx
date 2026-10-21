@@ -4,13 +4,13 @@
  *
  * It is included in `src/index.html`.
  */
-import { App } from "./App";
+import { FrontendRoot } from "./frontendRoot";
 import { mount } from "./mount";
 
 function start() {
   const el = document.getElementById("root");
   if (!el) throw new Error("root element not found");
-  mount(<App />, el);
+  mount(<FrontendRoot />, el);
 }
 
 if (document.readyState === "loading") {
