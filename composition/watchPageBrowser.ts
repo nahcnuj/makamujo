@@ -119,16 +119,11 @@ export const isOnAirFromClock = (
   if (motion.clockAdvancedSeconds > CLOCK_ADVANCE_MIN_SECONDS) {
     return true;
   }
-  // A still picture counts as on-air even when the media clock stopped
-  // advancing (e.g. the HLS stalled behind the freeze): otherwise the
-  // recovery streak never accumulates for exactly the freezes that need it.
-  // Judging the picture (not just a zero changed-frame count) keeps a
-  // freeze with a trickle of motion (videoAvgFps ~ 0.1) on-air while a
-  // genuinely moving picture stays gated by the clock.
-  // A still picture (including one with a trickle of motion, videoAvgFps ~ 0.1)
-  // counts as on-air even when the media clock stopped advancing, while a
-  // genuinely moving picture stays gated by the clock so legitimate screens
-  // stay excluded.
+  // A still picture (changed fps below 24, including a trickle of motion at
+  // ~0.1 fps) counts as on-air even when the media clock stopped advancing,
+  // so a freeze whose HLS also stalled still accumulates a recovery streak.
+  // A genuinely moving picture stays gated by the clock, keeping legitimate
+  // screens (including a program that is actually playing) excluded.
   if (judgePictureMotion(motion) === "still") {
     return true;
   }
