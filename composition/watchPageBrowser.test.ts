@@ -153,6 +153,13 @@ describe("isOnAirFromClock", () => {
     expect(isOnAirFromClock(motion({ clockAdvancedSeconds: 0 }))).toBe(false);
   });
 
+  it("reads a still picture with a trickle of motion as on air even when the clock stopped", () => {
+    // 合成出力が固まって trickle の動きしか残らない freeze も放映中と判断する。
+    expect(
+      isOnAirFromClock(motion({ changedFrames: 1, clockAdvancedSeconds: 0 })),
+    ).toBe(true);
+  });
+
   it("requires the clock to clear the minimum advance", () => {
     expect(
       isOnAirFromClock(
