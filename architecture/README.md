@@ -114,12 +114,52 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 いる間は、コメントも発話も無いとオーバーレイまで静止し、合成出力が**本当に**
 全フレーム同一になる（2026-10-21 22:27 の停止は音声と media clock が進んだ
 まま `videoMinFps` / `gameMinFps` が 0 だった）。これは合成経路の故障では
-ないので再起動では直らない。そこで配信オーバーレイ（`src/App.tsx`）は、
-全幅の帯を待ち無しで流し続ける鼓動（`src/components/BroadcastHeartbeat.tsx`
-と `src/index.css` の `broadcast-heartbeat-sweep`）を常に重ね、発話が無い間も
+ないので再起動では直らない。そこで配信オーバーレイは、全幅の帯を待ち無しで
+流し続ける鼓動（`src/index.html` の静的な div ×
+`src/index.css` の `broadcast-heartbeat-sweep`）を常に重ね、発話が無い間も
 浮遊キャプション（`SilentCaption`）を止めない。ゲーム部分として切り出す
 左 60% にも帯が掛かるため、ゲームが静止していても「配信が生きている」こと
-が映像で示せる。**静止した時間帯を作らないこと。**
+が映像で示せる。
+
+帯には 3 つの契約がある（2026-10-22 には毎時の健康検知が連発: 音声と media
+clock は進んだまま `videoAvgFps` / `videoMinFps` / `gameMinFps` が 0 になり
+続けた。issue #997 / #998 / #999 / #1001 / #1003）。
+
+- **帯は JS に依らない。** アプリ配下に置くと、アプリのマウント / 再描画が
+  例外で落ちた時点でオーバーレイごと静止する（`videoAvgFps = 0` の根拠）。
+  だから鼓動は `src/index.html` の静的な div で、`frontend.js` が読めなくても
+  CSS アニメーションだけで動き続ける。アプリは
+  `src/frontendRoot.tsx` の `AppBoundary`（hono/jsx/dom の `ErrorBoundary`）で
+  包み、描画が落ちてもページを空白にしない。
+- **帯は掃引のどこでも画面内に残す。** `-12vh` から `112vh` の掃引は両端で帯
+  を完全に画面外に出し、その瞬間を含む 1 秒バケットの変化フレームが
+  `VIDEO_MIN_FPS` を割った。掃引は `-2vh` から `92vh` にして、はみ出しを
+  作らない（不変条件は `lib/domain/broadcasting/broadcastHeartbeatSweep.ts`
+  の `sweepsWithoutLeavingViewport`、参照は `src/heartbeatBand.test.ts`）。
+  白芯は不透明にして、Comment browser_source に掛かっている OBS の黒色
+  Color Key（`obs-studio/basic/scenes/Makamujo.json`）で消されないようにする。
+- **帯は外からの検知の閾値を超える。** 帯が画面内に残っていても、帯 1 本
+  だけでは映像全体とゲーム領域（左 60%）が `VIDEO_MIN_FPS`（24 fps）と
+  `GAME_MIN_FPS`（8 fps）を満たさないことがある。帯の太さ・不透明さ・掃引の
+  速さは、検知側と同じ計算で確かめる（128x72 へ縮小し、channel 差 16 を超える
+  画素の割合が 0.001 を超えるフレームを数える）。
+  - 帯の仕様は CSS から読む（`lib/domain/broadcasting/broadcastHeartbeatLiveness.ts`
+    の `parseHeartbeatBandSpec`）。見た目の印象ではなく、検知側へ実際に
+    出る絵で判定できる。
+  - 判定には検知側の関数（`scripts/check-stream.ts` の `summarizeFps` /
+    `isFpsAboveThreshold` と `VIDEO_MIN_FPS` / `GAME_MIN_FPS`）を使うので、
+    複製したロジックとずれない。`scripts/check-stream.ts` は改変しない
+    （owner 契約 #807）なので、ピクセル差の閾値だけは定数を写し、
+    検知側が動いた時に検証が気づけるようにしている。
+  - OBS の黒色 Color Key を掛けた状態でも閾値を超えることを確かめる
+    （半透明の帯は key で消えると「止まった」判定になる）。
+  - 実 Chromium で描画した帯を 128x72 へ縮小して測る検証もある
+    （`broadcastHeartbeatLiveness.browser.test.ts`）。Chromium が無い
+    環境では skip する。
+  - 修正前の掃引（`-12vh`〜`112vh`、白芯が半透明）はこの計算で 24 fps を
+    下回り「停止」と判定される。回帰の根拠になっている。
+
+**静止した時間帯を作らないこと。**
 
 ### 判定の契約
 
