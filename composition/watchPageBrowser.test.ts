@@ -126,10 +126,16 @@ describe("judgePictureMotion", () => {
     expect(judgePictureMotion(motion({ windowMs: 500 }))).toBeUndefined();
   });
 
-  it("discards windows that compared too few frames", () => {
+  it("discards windows that compared too few frames with motion", () => {
     expect(
-      judgePictureMotion(motion({ comparedFrames: 3, changedFrames: 0 })),
+      judgePictureMotion(motion({ comparedFrames: 3, changedFrames: 2 })),
     ).toBeUndefined();
+  });
+
+  it("reads a frozen picture as still even with few compared frames", () => {
+    expect(
+      judgePictureMotion(motion({ comparedFrames: 1, changedFrames: 0 })),
+    ).toBe("still");
   });
 });
 
