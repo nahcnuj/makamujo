@@ -13,7 +13,7 @@
  * 帯は全幅なので、ゲーム部分として切り出す画面の左 60% にも必ず掛かる。
  * 動きは `src/index.css` の `broadcast-heartbeat-sweep`（待ち無しの
  * `infinite`）。止まる時間帯を作らないこと。2026-10-22 強化: 白芯を
- * 完全に不透明にし、帯を常時画面内に残し、0.9s 周期でエンコード後でも
+ * 完全に不透明にし、帯を常時画面内に残し、0.6s 周期でエンコード後でも
  * minFps >= 24 を保証。
  */
 export function BroadcastHeartbeat() {
