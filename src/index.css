@@ -38,13 +38,23 @@
  * なって停止と数えられるため、`linear infinite` で回し続ける。
  * 1 フレームの移動量が 128px へ縮小した標本で 1 行を超えるよう、2.4 秒で
  * 画面 1 往復させている（これより遅いと標本行を跨がないフレームが出る）。
+ *
+ * 帯は常に画面の中に 1vh 以上を残す。外れている間は合成出力の 1 枚が完全に
+ * 静止し、1 秒バケットの移動フレーム数が 24 枚を下回って「停止」と誤検知
+ * される（`lib/domain/broadcasting/broadcastHeartbeatLiveness.ts` が検知側と
+ * 同じ計算で検証する）。端の 1vh だけが画面に残るように移動させ、折り返しで
+ * 帯が完全に消える瞬間を作らない。
+ *
+ * 白い芯は不透明に保つ。OBS の Color Key（key = 黒）に消された画素は
+ * ゲーム画面が透けるので、帯が半透明だと検知側の差分に出ない。検知側で
+ * 128px へ縮小しても残る太さの白芯を保つ。
  */
 @keyframes broadcast-heartbeat-sweep {
   from {
-    transform: translateY(-12vh);
+    transform: translateY(-5vh);
   }
   to {
-    transform: translateY(112vh);
+    transform: translateY(99vh);
   }
 }
 
@@ -59,9 +69,10 @@
   background: linear-gradient(
     to bottom,
     rgba(16, 185, 129, 0) 0%,
-    rgba(16, 185, 129, 0.55) 38%,
-    rgba(255, 255, 255, 0.6) 50%,
-    rgba(16, 185, 129, 0.55) 62%,
+    rgba(16, 185, 129, 0.6) 25%,
+    rgba(255, 255, 255, 0.95) 40%,
+    rgba(255, 255, 255, 0.95) 60%,
+    rgba(16, 185, 129, 0.6) 75%,
     rgba(16, 185, 129, 0) 100%
   );
   animation: broadcast-heartbeat-sweep 2.4s linear infinite;

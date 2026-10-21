@@ -13,6 +13,9 @@
  * 帯は全幅なので、ゲーム部分として切り出す画面の左 60% にも必ず掛かる。
  * 動きは `src/index.css` の `broadcast-heartbeat-sweep`（待ち無しの
  * `infinite`）。止まる時間帯を作らないこと。
+ *
+ * この帯はアプリと同じ root に描かず、`src/frontendMount.tsx` で別の root
+ * （`broadcast-heartbeat`）に描く。アプリの描画が失敗しても帯は残る。
  */
 export function BroadcastHeartbeat() {
   return <div className="broadcast-heartbeat" aria-hidden="true" />;
