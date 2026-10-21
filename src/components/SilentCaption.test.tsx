@@ -89,4 +89,27 @@ describe("SilentCaption portal lifecycle", () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(document.body.textContent).not.toContain(CAPTION_TEXT);
   });
+
+  it("keeps animating without a static hold", async () => {
+    // 旧実装は PAUSE_MS (1500ms) / HOLD_MS (800ms) の待ちを挟んでいた。
+    // 待ちの間は合成出力が完全に静止するので、外からの異常検知に停止と
+    // みなされる (issue #995)。動き続けることだけを確かめる。
+    const prototype = dom.window.Element.prototype;
+    const originalAnimate = prototype.animate;
+    let animations = 0;
+    prototype.animate = function (
+      this: Element,
+      ...args: Parameters<typeof originalAnimate>
+    ): Animation {
+      animations += 1;
+      return originalAnimate.apply(this, args);
+    };
+
+    const root = mount(<SilentCaption text={CAPTION_TEXT} />, container);
+    await new Promise((r) => setTimeout(r, 150));
+    root.unmount();
+    prototype.animate = originalAnimate;
+
+    expect(animations).toBeGreaterThan(4);
+  });
 });

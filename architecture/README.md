@@ -109,6 +109,26 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
  セッション内監視（gameStall / compositorHeartbeat / Aw, Snap! watchdog は
  Chromium 内しか見えない）の管轄外にあたる。
 
+外からの検知は「配信映像が 1 秒間まったく変わらない」ことを停止とみなす
+（`videoMinFps` / `gameMinFps`）。ゲームが結果画面やフリートークで止まって
+いる間は、コメントも発話も無いとオーバーレイまで静止し、合成出力が**本当に**
+全フレーム同一になる（2026-10-21 22:27 の停止は音声と media clock が進んだ
+まま `videoMinFps` / `gameMinFps` が 0 だった）。これは合成経路の故障では
+ないので再起動では直らない。そこで配信オーバーレイ（`src/App.tsx`）は、
+全幅の帯を待ち無しで流し続ける鼓動（`src/components/BroadcastHeartbeat.tsx`
+と `src/index.css` の `broadcast-heartbeat-sweep`）を常に重ね、発話が無い間も
+浮遊キャプション（`SilentCaption`）を止めない。ゲーム部分として切り出す
+左 60% にも帯が掛かるため、ゲームが静止していても「配信が生きている」こと
+が映像で示せる。**静止した時間帯を作らないこと。**
+
+要件は **`videoAvgFps >= 24` かつ `videoMinFps >= 24`**（owner 契約）で、
+帯は**画面の中に 1vh 以上を常に残す**。完全に画面外へ出ている瞬間は出力の
+絵が静止し、1 秒バケットの移動フレーム数が 24 枚を下回って停止と誤検知
+される（`-12vh` → `112vh` のままでは minFps = 19 になる）。白芯は不透明に
+保ち、OBS の Color Key（key = 黒）に消されても差分が出るようにする。
+`src/components/BroadcastHeartbeat.liveness.test.ts` が帯の CSS を読んで
+検知側の `summarizeFps` / `isFpsAboveThreshold` と同じ計算で確かめる。
+
 ### 判定の契約
 
 - 配信ページを描画する統計用ブラウザが、開いたままのページで 1 窓だけ
@@ -123,7 +143,12 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
   秒数 `clockAdvancedSeconds` も返す。放映中かはこの前進（
   `CLOCK_ADVANCE_MIN_SECONDS` 超）で判断する（`isOnAirFromClock`）。合成出力が
   固まっていても hls.js はセグメントを再生し続けるので clock は進むため、
-  「配信画面は静止しているのに放映中」を検知できる。わんコメの
+  「配信画面は静止しているのに放映中」を検知できる。clock が止まっていても
+  絵が静止している間は放映中とみなす。合成出力の停止では hls.js 側の
+  セグメント再生も止まるため、clock だけを根拠にすると本物の停止を回復
+  対象から外してしまう。0.1 fps ほどの微かな動きだけの停止も「静止」として
+  同じ扱いにする（要件は `videoAvgFps >= 24` であり、0.1 fps を健康と
+  みなす意味ではない）。わんコメの
   `POST /api/meta` が張ったセッション（`streamState`）を放映中の根拠には
   しない: cron の再起動直後は undefined で、わんコメの接続が切れていると
   一度も定義されず、その間 watchdog が毎周期を放映外とみなして測定すら行わず、

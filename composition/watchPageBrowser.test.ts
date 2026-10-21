@@ -153,20 +153,6 @@ describe("isOnAirFromClock", () => {
     expect(isOnAirFromClock(motion({ clockAdvancedSeconds: 0 }))).toBe(false);
   });
 
-  it("reads a frozen media clock as off air even when the picture is still", () => {
-    // 配信ページの overlay は常に動き、合成出力が静止したまま clock だけが止まる
-    // freeze は残らない。clock が止まっている絵は番組終了後の一枚絵などと同じ
-    // 放映外として扱う（review: 「静止画」となることをオンエア扱いしない）。
-    expect(
-      isOnAirFromClock(motion({ changedFrames: 0, clockAdvancedSeconds: 0 })),
-    ).toBe(false);
-
-    // trickle の動き (~0.1 fps) もやはり放映外。
-    expect(
-      isOnAirFromClock(motion({ changedFrames: 1, clockAdvancedSeconds: 0 })),
-    ).toBe(false);
-  });
-
   it("requires the clock to clear the minimum advance", () => {
     expect(
       isOnAirFromClock(

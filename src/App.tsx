@@ -1,5 +1,5 @@
 import { Box, Container, Layout } from "./agt-compat";
-import { BroadcastLivenessSweep } from "./components/BroadcastLivenessSweep";
+import { BroadcastHeartbeat } from "./components/BroadcastHeartbeat";
 import { GamePanel } from "./components/GamePanel";
 import { StreamerPanel } from "./components/StreamerPanel";
 import { AgentProvider } from "./contexts/AgentContext";
@@ -72,8 +72,8 @@ export function App() {
         <Container>
           <StreamerPanel />
         </Container>
-        <BroadcastLivenessSweep />
       </Layout>
+      <BroadcastHeartbeat />
     </AgentProvider>
   );
 }
