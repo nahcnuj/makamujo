@@ -325,7 +325,7 @@ export const create = async (
 ): Promise<
   Browser & {
     reload: () => Promise<void>;
-    /** PNG bytes of the current viewport, used by the game-stall watchdog. */
+    /** JPEG bytes of the current viewport (quality 100), used by the game-stall watchdog. */
     screenshot: () => Promise<Uint8Array>;
   }
 > => {
@@ -551,7 +551,7 @@ export const create = async (
     // it like `evaluate` so the watchdog sees a catchable error instead.
     screenshot: async () =>
       await withTimeout(
-        page.screenshot(),
+        page.screenshot({ type: "jpeg", quality: 100 }),
         evaluateTimeoutMs,
         "browser.screenshot",
       ),

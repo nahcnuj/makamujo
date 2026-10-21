@@ -6,8 +6,8 @@
  * servicing `evaluate` but whose canvas stopped updating is reported as
  * healthy — yet the stream shows a still picture (the health checker flags it
  * as "映像全体 / ゲーム画面部分が停止し続けています" while audio keeps playing).
- * Comparing successive screenshots of the page is the one signal available
- * inside the session that catches that state.
+ * Comparing successive JPEG screenshots of the page (quality 100) is the one
+ * signal available inside the session that catches that state.
  */
 
 /** True when both probes are present and byte-identical. */
