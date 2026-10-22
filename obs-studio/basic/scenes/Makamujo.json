@@ -87,7 +87,13 @@
           "versioned_id": "color_key_filter_v2",
           "settings": {
             "key_color": 4278190080,
-            "key_color_type": "custom"
+            "key_color_type": "custom",
+            "opacity": 100,
+            "similarity": 400,
+            "smoothness": 80,
+            "contrast": 0,
+            "brightness": 0,
+            "gamma": 0
           },
           "mixers": 0,
           "sync": 0,
