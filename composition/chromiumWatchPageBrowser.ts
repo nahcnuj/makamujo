@@ -422,6 +422,8 @@ export const createChromiumWatchPageBrowser =
     const page = await context.newPage();
     console.log("[INFO] chromium launched for the niconama watch page");
     let lastReadLog: string | undefined;
+    /** 過去に計測可能な `<video>` を観測したことがあるか。レンダラ固着検知に使う。 */
+    let hasEverBeenMeasurable = false;
 
     return {
       open: async (watchPageUrl) => {
@@ -517,6 +519,9 @@ export const createChromiumWatchPageBrowser =
           requireAdvanceSeconds: MEASURABLE_VIDEO_ADVANCE_SECONDS,
         });
         const wasMeasurable = isVideoReady(measurable);
+        if (wasMeasurable) {
+          hasEverBeenMeasurable = true;
+        }
         if (!wasMeasurable) {
           console.log(
             "[INFO] the watch page video was not measurable; measuring the window anyway",
@@ -525,25 +530,38 @@ export const createChromiumWatchPageBrowser =
         // レンダラが固まっていると evaluate が帰らない可能性がある。待ちの
         // 上限を置いて、帰らなければ「測れなかった」に落とす。
         //
-        // ただし `waitForMeasurableVideo` が成功していた（映像が計測可能で時計が
-        // 進んでいた）のにその後の測定がタイムアウトした場合、レンダラの固まり
-        // （合成出力の停止）が疑われる。このとき「判定不能」ではなく「静止」を
-        // 返すことで `CompositeFreezePolicy` が連続静止として検知し、回復を
-        // 走らせられるようにする（外部の健康チェックは毎時検知するが、内部の
-        // watchdog が検知できないと回復が走らない issue #982 対策）。
+        // ただし過去に計測可能な `<video>` を観測していた（映像が流れていた）のに
+        // 今回の測定がタイムアウトした場合、レンダラの固まり（合成出力の停止）が
+        // 疑われる。このとき「判定不能」ではなく「静止」を返すことで
+        // `CompositeFreezePolicy` が連続静止として検知し、回復を走らせられるように
+        // する（外部の健康チェックは毎時検知するが、内部の watchdog が検知できないと
+        // 回復が走らない issue #982 対策）。
         //
         // page.evaluate がエラーで reject することもある（ページクラッシュ等）。
         // その場合も timeout と同じ fallback を返すように catch する。
         const timeoutPromise = new Promise<PictureMotion>((resolve) => {
           globalThis.setTimeout(() => {
-            resolve({
-              comparedFrames: 1,
-              changedFrames: 0,
-              windowMs: MOTION_WINDOW_MS,
-              tainted: false,
-              sawAdvertisement: false,
-              clockAdvancedSeconds: MEASURABLE_VIDEO_ADVANCE_SECONDS,
-            });
+            if (hasEverBeenMeasurable) {
+              // 過去に計測可能だったなら、今回のタイムアウトはレンダラ固着＝静止とみなす
+              resolve({
+                comparedFrames: 1,
+                changedFrames: 0,
+                windowMs: MOTION_WINDOW_MS,
+                tainted: false,
+                sawAdvertisement: false,
+                clockAdvancedSeconds: MEASURABLE_VIDEO_ADVANCE_SECONDS,
+              });
+            } else {
+              // まだ一度も計測可能になっていない（初回の立ち上げ遅れ等）なら判定不能
+              resolve({
+                comparedFrames: 0,
+                changedFrames: 0,
+                windowMs: 0,
+                tainted: true,
+                sawAdvertisement: false,
+                clockAdvancedSeconds: 0,
+              });
+            }
           }, MOTION_EVALUATE_TIMEOUT_MS);
         });
         try {
@@ -558,15 +576,25 @@ export const createChromiumWatchPageBrowser =
           ]);
           return motion;
         } catch {
+          if (hasEverBeenMeasurable) {
+            // 過去に計測可能だったなら、例外もレンダラ固着＝静止とみなす
+            return {
+              comparedFrames: 1,
+              changedFrames: 0,
+              windowMs: MOTION_WINDOW_MS,
+              tainted: true,
+              sawAdvertisement: false,
+              clockAdvancedSeconds: MEASURABLE_VIDEO_ADVANCE_SECONDS,
+            };
+          }
+          // まだ一度も計測可能になっていないなら判定不能
           return {
-            comparedFrames: wasMeasurable ? 1 : 0,
+            comparedFrames: 0,
             changedFrames: 0,
-            windowMs: wasMeasurable ? MOTION_WINDOW_MS : 0,
+            windowMs: 0,
             tainted: true,
             sawAdvertisement: false,
-            clockAdvancedSeconds: wasMeasurable
-              ? MEASURABLE_VIDEO_ADVANCE_SECONDS
-              : 0,
+            clockAdvancedSeconds: 0,
           };
         }
       },
