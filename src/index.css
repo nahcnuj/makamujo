@@ -41,7 +41,8 @@
  *
  * 帯は**画面の中に常に残す**。完全に画面外へ出ている間は、その一瞬も出力の
  * 絵が完全に静止し、1 秒バケットの移動フレーム数が 24 枚を下回って「停止」
- * と誤検知される。高さ 12vh で -2vh→92vh を動かし、端でも帯が画面内に残る。
+ * と誤検知される。高さ 12vh で 0vh→94vh を動かし、端でも帯が画面内に残る
+ * （main 側が 0vh→94vh へ直した「画面外へ出ない範囲」を採用する）。
  *
  * 白芯は完全に不透明 (1.0) にする。OBS の Color Key（key = 黒）に消された
  * 画素はゲーム画面が透けるので、半透明の帯は検知側の差分が出ない。白の
@@ -62,10 +63,10 @@
  */
 @keyframes broadcast-heartbeat-sweep {
   from {
-    transform: translateY(-2vh);
+    transform: translateY(0vh);
   }
   to {
-    transform: translateY(92vh);
+    transform: translateY(94vh);
   }
 }
 
