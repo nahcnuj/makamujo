@@ -14,6 +14,7 @@
 | [console-domain-model.md](./console-domain-model.md) | **管理コンソール BC**（Access / Status plan）。UI は `console/src`、純関数は `lib/domain/console` |
 | [統計の読み取り](#統計の読み取り) | 配信ページを描画して統計行を読む。視聴者数 / コメント数 / ニコニコ広告ポイント / ギフトポイント |
 | [配信画面の停止回復](#配信画面の停止回復) | 配信ページの描画した映像の動きを測り、複数周期静止し続けた合成出力を systemd 再起動で回復する |
+| [オーバーレイの生存検知](#オーバーレイの生存検知と-obs-回復) | OBS の browser source が配信ページを描画しなくなった（オーバーレイが映像に一フレームも寄与しない）をサーバー側で検知し、OBS を再起動する |
 | `legacy` vs `main` | orphan main の差分整理と取り込み方針は本 README の実装マップで追跡する（個別文書は持たない） |
 | [legacy-vs-main-integration.md](./legacy-vs-main-integration.md) | **`legacy` vs `main` 差分整理と取り込み方針**（orphan main、port 済み/未着手） |
 | [markov-cli.md](./markov-cli.md) | **markov CLI**（`tools/markov/`）。git `parse-options` と同じ「1 コマンド 1 ファイル、そのコマンドのオプション表だけ解析する」形。表は `--help` の出力（[表の確認方法](./markov-cli.md#表の確認方法)） |
@@ -289,6 +290,98 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 | `BROADCAST_FREEZE_CYCLES` | `1` | 回復を打つまでに必要な `still` の連続周期 |
 | `BROADCAST_FREEZE_RECOVERY_COOLDOWN_MS` | `60000` | 二つの回復の最短間隔 |
 
+## オーバーレイの生存検知と OBS 回復
+
+配信オーバーレイ（`src/App.tsx`）は OBS の browser source として
+`http://127.0.0.1:7777/` を開いている。ゲームが静止しているあいだも映像を
+動かし続けるため、鼓動の帯（`src/components/BroadcastHeartbeat.tsx` と
+`src/index.css` の `broadcast-heartbeat-sweep`）を全幅に流している。この帯は
+**browser source がページを描画しているあいだだけ**映像に載る。CEF の
+renderer が居なくなれば（OBS の cgroup のメモリ圧で殺された / 落ちた /
+配信サーバがまだページを配信していないうちに OBS が起動して読み込み失敗した）、
+browser source は最後の絵を保持したまま動かず、オーバーレイは合成出力に
+一フレームも寄与しない。
+
+### 症状の見分け方
+
+- 映像全体とゲーム部分の数値が**完全に一致**するなら、オーバーレイは映像に
+  寄与していない（2026-10-22 14:27 JST: `videoMinFps` = `gameMinFps` = 14、
+  `videoAvgFps` = `gameAvgFps` = 18.3）。帯は全幅なのでゲーム部分（左 60%）
+  にも掛かるはずで、両者が一致するのは帯が届いていないことしか説明できない。
+- 映像の停止回復の watchdog（`composition/broadcastFreezeWatchdog.ts`）は
+  この故障を**検出できない**。合成出力全体を見る判定なので、ゲームが
+  動いているあいだは「動いている」としか観測できず、帯が無くても回復の
+  ラングは上がらない。
+- 帯の速度は原因ではない。帯を実測で忠実再現すると changedFps 29.9〜30 が
+  出る（#1008 / #1016 / #1022 の速度変更は意味を持たない）。
+- Color Key フィルタも原因ではない。OBS の Color Key（`color_key_filter_v2`）
+  は key 色との距離を alpha に変換するが、キー色が黒（`0xFF000000`）なら
+  白い帯芯（距離 1.732）と緑の縁（un-premultiply 後の距離 約 1.174）は
+  どちらも閾値（similarity 0.8 / smoothness 0.13）を大きく超えるので alpha
+  は保存される。帯は Key 済みでも消えない（#983 の説は反証済み）。
+
+### 判定の契約
+
+- オーバーレイは 5 秒ごとに自分の存在をサーバに知らせる
+  （`src/components/OverlayBeacon.tsx` → `GET /api/overlay-beacon` → 204）。
+  ページは WebSocket を使わず unix socket 経由で `/api/speech` 等を poll する
+  だけなので（メインサーバを経由しない）、この beacon だけが「ページは生きて
+  いる」という証拠になる。この beacon は DOM に何も描画しない。
+- サーバは beacon を受け取った時刻を覚える（`createOverlayBeaconTracker`）。
+  監視は 30 秒周期。
+- 沈黙が閾値（既定 60 秒）を超えたら OBS を再起動する（systemd の
+  `makamujo-obs.service`）。判断は純ポリシー
+  `lib/domain/broadcasting/OverlayLivenessPolicy.ts`。
+- 一度も beacon を届けていないページは**放置する**。OBS が無い / 配信して
+  いない環境ではノイズになるため。beacon が来ていたのに沈黙した場合だけが
+  対象。
+- 回復のクールダウンは既定 10 分。beacon が再開したらクールダウンは解除される
+  （故障が終わるので、次の故障ではすぐ動く）。
+- 状態は `var/overlay-liveness-state.json` に残す
+  （`lib/application/overlayLivenessStateStore.ts`、原子書換え。壊れたファイル
+  は新規扱い）。サーバーは cron で 11 分ごとに殺されるので、前プロセスの
+  beacon を引き継ぐ。ただし**引き継いだ beacon は、プロセスが閾値（既定 60
+  秒）以上動いた後**にしか「死んだページ」の証拠として使わない。直後に使うと
+  cron での再起動のたびに OBS を再起動してしまう（ページが最初の beacon を
+  送る前に判定が走ってしまう）。
+- tick は例外を外へ漏らさない。回復の失敗も握って次の周期へ進む
+  （漏らすと以降の周期が静かに止まり、回復の機会が失われる）。
+
+### 起動順とメモリの修正
+
+- `etc/systemd/makamujo-obs.service` の `MemoryHigh=32M` / `MemoryMax=256M`
+  は、OBS 本体 + x264 + **CEF の browser source subprocess**
+  （`KillMode=control-group` で同じ cgroup に入る）を収めるには狭かった。
+  browser unit と同じ 1G / 1.5G へ緩めた。メモリ圧で殺されるのは
+  同じ cgroup に入る CEF の renderer である。
+- browser source は配信サーバ（`makamujo-screen.service`）のページを読むので、
+  OBS の起動を `After=makamujo-screen.service` にした（画面が無いとページが
+  読めず、browser source は真っ黒のまま）。Xvfb / screen とは `Wants=` で
+  繋ぐ（`Requires=` だと明示的な restart が下流に伝播して、watchdog 自身の
+  再起動に巻き込まれる）。
+
+### モジュールと配線
+
+| モジュール | 層 | 役割 |
+|------------|----|------|
+| `lib/domain/broadcasting/OverlayLivenessPolicy.ts` | domain（純関数） | 沈黙の観測 → 回復の決定 |
+| `composition/overlayLivenessMonitor.ts` | composition | beacon の記録、監視の周期、systemd 回復の実行口 |
+| `lib/application/overlayLivenessStateStore.ts` | application | ポリシー状態の `var/` への永続化（壊れたファイルは新規扱い） |
+| `src/components/OverlayBeacon.tsx` | 配信ページ | 5 秒ごとに自分の存在を知らせる beacon |
+
+`index.ts` が `/api/overlay-beacon` の route と監視の起動を 1 回だけ配線する。
+回復口は `NODE_ENV=production` のときだけ systemd に触り、それ以外は dry run
+（ログだけ）にする。停止回復の watchdog と同じ `createSystemdRecovery` を
+使い、dry run / 本番の扱いとログの出し方を揃える。
+
+### 環境変数
+
+| 変数 | 既定 | 意味 |
+|------|------|------|
+| `OVERLAY_LIVENESS_CHECK_INTERVAL_MS` | `30000` | 監視の周期 |
+| `OVERLAY_LIVENESS_SILENCE_THRESHOLD_MS` | `60000` | 沈黙を「死んだページ」とみなすまでの時間 |
+| `OVERLAY_LIVENESS_RECOVERY_COOLDOWN_MS` | `600000` | 二つの回復の最短間隔 |
+
 ## 実装マップ
 
 | 領域 | パス | 状態 |
@@ -299,6 +392,7 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 | AgentSession + services | `lib/application/` | 済 |
 | 統計のブラウザ読み取り | `composition/watchPageBrowser.ts`, `composition/chromiumWatchPageBrowser.ts`, `composition/watchPageStatisticsSource.ts` | 済 |
 | 配信画面の停止回復 | `lib/domain/broadcasting/CompositeFreezePolicy.ts`, `composition/broadcastFreezeWatchdog.ts` | 済 |
+| オーバーレイの生存検知 | `lib/domain/broadcasting/OverlayLivenessPolicy.ts`, `composition/overlayLivenessMonitor.ts`, `src/components/OverlayBeacon.tsx` | 済 |
 | Console access / status plan / SSE frames | `lib/domain/console/` | 済（Basic auth 純関数含む） |
 | systemd / make install（main から port） | `Makefile`, `etc/systemd/` | 済 |
 | Outer console WS bridge | `composition/consoleOuterWebSocket.ts` | 済 |

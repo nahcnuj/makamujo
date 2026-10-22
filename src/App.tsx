@@ -1,6 +1,7 @@
 import { Box, Container, Layout } from "./agt-compat";
 import { BroadcastHeartbeat } from "./components/BroadcastHeartbeat";
 import { GamePanel } from "./components/GamePanel";
+import { OverlayBeacon } from "./components/OverlayBeacon";
 import { StreamerPanel } from "./components/StreamerPanel";
 import { AgentProvider } from "./contexts/AgentContext";
 
@@ -74,6 +75,7 @@ export function App() {
         </Container>
       </Layout>
       <BroadcastHeartbeat />
+      <OverlayBeacon />
     </AgentProvider>
   );
 }

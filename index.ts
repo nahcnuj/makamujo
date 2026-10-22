@@ -30,6 +30,11 @@ import {
   startBroadcastFreezeWatchdog,
 } from "./composition/broadcastFreezeWatchdog";
 import { startIdleSpeechTimer } from "./composition/idleSpeechTimer";
+import {
+  createOverlayBeaconTracker,
+  OVERLAY_BEACON_PATH,
+  startOverlayLivenessMonitor,
+} from "./composition/overlayLivenessMonitor";
 import { startWatchPageStatisticsSource } from "./composition/watchPageStatisticsSource";
 import { startConsoleServer } from "./console/index";
 import {
@@ -37,6 +42,11 @@ import {
   loadCompositeFreezeState,
   saveCompositeFreezeState,
 } from "./lib/application/compositeFreezeStateStore";
+import {
+  loadOverlayLivenessState,
+  OVERLAY_LIVENESS_STATE_BASENAME,
+  saveOverlayLivenessState,
+} from "./lib/application/overlayLivenessStateStore";
 import type { StreamBaseline } from "./lib/application/streamBaselineStore";
 import {
   loadStreamBaselineWithRecovery,
@@ -619,6 +629,14 @@ const getMainServer = (): Bun.Server<WsData> => {
   return mainServer;
 };
 
+/**
+ * Remembers when the overlay page of the OBS browser source last reported
+ * itself. The page is served by this server and loaded by the browser source,
+ * so its beacons are the only in-process evidence that the overlay is still
+ * rendered into the delivered picture.
+ */
+const overlayBeaconTracker = createOverlayBeaconTracker();
+
 const mainApp = new Hono()
   // Static assets from the public directory
   .get(
@@ -666,6 +684,14 @@ const mainApp = new Hono()
   .get("/console/api/ws", (c) =>
     makeStreamHandler("/console/api/ws")(c.req.raw),
   )
+  // The overlay page of the OBS browser source reports itself here. The
+  // server restarts OBS when the reports stop, because a dead browser source
+  // takes the heartbeat band with it and the delivered picture then stands
+  // still whenever the game stands still.
+  .get(OVERLAY_BEACON_PATH, (c) => {
+    overlayBeaconTracker.record();
+    return c.body(null, 204);
+  })
   .get("/index.css", async (c) => {
     const css = await compileTailwindCss("src/index.css");
     return createCssResponse(css, c.req.raw);
@@ -827,6 +853,11 @@ const broadcastFreezeStatePath = resolve(
   "var",
   COMPOSITE_FREEZE_STATE_BASENAME,
 );
+// systemd のある本番以外では dry run にして観測だけ残す（開発 / CI は
+// 統計の読み取り自体を無効化しているので、そもそも観測も測れない）。
+const systemdRecovery = createSystemdRecovery({
+  dryRun: process.env.NODE_ENV !== "production",
+});
 startBroadcastFreezeWatchdog({
   // 放映中かは配信ページの `<video>` の media clock の前進から導く
   // （`isOnAirFromClock`）。わんコメのセッション（streamState）を根拠にすると、
@@ -837,11 +868,35 @@ startBroadcastFreezeWatchdog({
     load: () => loadCompositeFreezeState(broadcastFreezeStatePath),
     save: (state) => saveCompositeFreezeState(broadcastFreezeStatePath, state),
   },
-  // systemd のある本番以外では dry run にして観測だけ残す（開発 / CI は
-  // 統計の読み取り自体を無効化しているので、そもそも観測も測れない）。
-  recover: createSystemdRecovery({
-    dryRun: process.env.NODE_ENV !== "production",
-  }),
+  recover: systemdRecovery,
+});
+
+// 配信オーバーレイ（OBS の browser source が読むページ）が死んでいると、
+// 合成出力からオーバーレイごと消える。鼓動の帯も一緒に消えるので、ゲームが
+// 止まるたびに配信映像が全フレーム同一になり、外からの異常検知は帯が無い
+// ときと同じ「停止」として報告する（2026-10-22 15:43: 音声と media clock
+// は進むまま videoMinFps = gameMinFps = 0）。上の watchdog は見分けられない:
+// 映像全体が動いている限り「停止」に当たらないため、同じ周期の数値が
+// ゲーム部分と一致してしまう（2026-10-22 14:27: 両方 14 / 18.3）。
+//
+// そこでオーバーレイ自身が生存を報告し、報告が途切れたら OBS を再起動して
+// browser source を作り直す。判断は composition/overlayLivenessMonitor.ts、
+// 本体は lib/domain/broadcasting/OverlayLivenessPolicy.ts にある。
+const overlayLivenessStatePath = resolve(
+  process.cwd(),
+  "var",
+  OVERLAY_LIVENESS_STATE_BASENAME,
+);
+startOverlayLivenessMonitor({
+  tracker: overlayBeaconTracker,
+  stateStore: {
+    load: () => loadOverlayLivenessState(overlayLivenessStatePath),
+    save: (state) => saveOverlayLivenessState(overlayLivenessStatePath, state),
+  },
+  // 回復は OBS の再起動だけ（browser source を作り直す）。
+  recover: async () => {
+    await systemdRecovery("obs");
+  },
 });
 
 /**

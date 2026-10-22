@@ -1,8 +1,18 @@
 [Unit]
 Description=Makamujo OBS Studio (Flatpak)
-After=makamujo-xvfb.service makamujo-pipewire.service
+# The browser source loads the overlay page from the broadcasting server, so
+# the server has to be serving it before OBS opens the source. Without the
+# ordering OBS may start first; the browser source then keeps its "cannot
+# connect" page (it is never reloaded: `restart_when_active` is false), and
+# the delivered picture loses the overlay — the heartbeat band included — for
+# the rest of the run.
+After=makamujo-xvfb.service makamujo-pipewire.service makamujo-screen.service
 Requires=makamujo-pipewire.service
-Wants=makamujo-xvfb.service
+# `Wants=` and not `Requires=`: systemd propagates an explicit restart of a
+# required unit to the requiring unit, and the recovery ladder
+# (composition/broadcastFreezeWatchdog.ts) restarts `makamujo-screen.service`
+# on its own schedule. The ordering is what matters here, not the coupling.
+Wants=makamujo-xvfb.service makamujo-screen.service
 PartOf=makamujo-pipewire.service
 
 [Service]
@@ -29,8 +39,19 @@ RestartSec=5
 KillMode=control-group
 TimeoutStopSec=30
 MemoryAccounting=yes
-MemoryHigh=32M
-MemoryMax=256M
+# This cgroup holds the OBS process, the x264 encoder and the CEF subprocess
+# of the browser source (the overlay page) at once: `KillMode=control-group`
+# keeps them together, so the memory limits below bound all of them.
+#
+# 32M/256M was far below what that actually needs. The kernel starts
+# reclaiming and throttling at `MemoryHigh`, and the encoder then re-encodes
+# the same picture over and over, while the CEF renderer is the first victim
+# of the pressure: the browser source keeps its last frame and the delivered
+# picture loses the overlay (the heartbeat band included) even though the
+# game is still moving. The game browser unit (`makamujo-browser.service`)
+# runs a whole Chromium with 1G/1.5G; give OBS the same headroom.
+MemoryHigh=1G
+MemoryMax=1.5G
 CPUAccounting=yes
 CPUQuota=200%
 TasksMax=256
