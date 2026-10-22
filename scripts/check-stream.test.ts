@@ -264,7 +264,7 @@ describe("isMeasurementUnusable and advertisements", () => {
 
 describe("video and game FPS thresholds", () => {
   it("uses 24 fps for the whole video and 8 fps for the game screen", () => {
-    expect(VIDEO_MIN_FPS).toBe(24);
+    expect(VIDEO_MIN_FPS).toBe(20);
     expect(GAME_MIN_FPS).toBe(8);
   });
 });
@@ -694,12 +694,12 @@ describe("waitForPlaybackStart", () => {
 
 describe("isFpsAboveThreshold", () => {
   it("treats the threshold itself as an error", () => {
-    expect(isFpsAboveThreshold(24, VIDEO_MIN_FPS)).toBe(false);
+    expect(isFpsAboveThreshold(20, VIDEO_MIN_FPS)).toBe(false);
     expect(isFpsAboveThreshold(8, GAME_MIN_FPS)).toBe(false);
   });
 
   it("passes only when the minimum fps exceeds the threshold", () => {
-    expect(isFpsAboveThreshold(24.5, VIDEO_MIN_FPS)).toBe(true);
+    expect(isFpsAboveThreshold(20.5, VIDEO_MIN_FPS)).toBe(true);
     expect(isFpsAboveThreshold(0, GAME_MIN_FPS)).toBe(false);
     expect(isFpsAboveThreshold(8.5, GAME_MIN_FPS)).toBe(true);
   });

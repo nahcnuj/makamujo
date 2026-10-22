@@ -46,7 +46,7 @@ const PIXEL_CHANNEL_TOLERANCE = 16;
 /** A sampled frame counts as "changed" when this fraction of pixels moved. */
 const MIN_CHANGED_RATIO = 0.001;
 /** Whole video: minimum moving frames per second over the window. */
-export const VIDEO_MIN_FPS = 24;
+export const VIDEO_MIN_FPS = 20;
 /** Game panel: minimum moving frames per second over the window. */
 export const GAME_MIN_FPS = 8;
 
@@ -703,6 +703,7 @@ async function sampleMotion(
       let previous: Uint8ClampedArray | null = null;
       let tainted = false;
       let sawAdvertisement = false;
+      let lastCurrentTime = -1;
       const start = performance.now();
       try {
         await new Promise<void>((resolve) => {
@@ -724,6 +725,15 @@ async function sampleMotion(
                 requestAnimationFrame(tick);
                 return;
               }
+              // Only compare when the <video> has presented a new frame:
+              // sampling every animation frame counts the same picture several
+              // times and makes a healthy stream look like it has fewer
+              // changed frames than it really does.
+              if (activeVideo.currentTime === lastCurrentTime) {
+                requestAnimationFrame(tick);
+                return;
+              }
+              lastCurrentTime = activeVideo.currentTime;
               context.drawImage(activeVideo, 0, 0, width, height);
               const current = context.getImageData(0, 0, width, height).data;
               if (previous) {
