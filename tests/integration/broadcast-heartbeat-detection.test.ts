@@ -33,7 +33,7 @@ import {
 
 /** 検知が縮める絵の横幅（`scripts/check-stream.ts` と同じ値）。 */
 const SAMPLE_MAX_DIMENSION = 128;
-/** 1 サンプル行觉得这の差があれば「変化」と数える（検知と同じ値）。 */
+/** 1 サンプル行ぶんの差があれば「変化」と数える（検知と同じ値）。 */
 const PIXEL_CHANNEL_TOLERANCE = 16;
 /** 変化と数えるピクセルの割合の下限（検知と同じ値）。 */
 const MIN_CHANGED_RATIO = 0.001;
