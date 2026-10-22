@@ -534,32 +534,41 @@ export const createChromiumWatchPageBrowser =
         //
         // page.evaluate がエラーで reject することもある（ページクラッシュ等）。
         // その場合も timeout と同じ fallback を返すように catch する。
-        const fallbackMotion: PictureMotion = {
-          comparedFrames: wasMeasurable ? 1 : 0,
-          changedFrames: 0,
-          windowMs: wasMeasurable ? MOTION_WINDOW_MS : 0,
-          tainted: false,
-          sawAdvertisement: false,
-          clockAdvancedSeconds: wasMeasurable
-            ? MEASURABLE_VIDEO_ADVANCE_SECONDS
-            : 0,
-        };
-        const measurementPromise = page
-          .evaluate(sampleMotionWindow, {
-            durationMs: MOTION_WINDOW_MS,
-            maxDimension: MOTION_MAX_DIMENSION,
-            channelTolerance: MOTION_CHANNEL_TOLERANCE,
-            minChangedRatio: MOTION_MIN_CHANGED_RATIO,
-          })
-          .catch(() => fallbackMotion);
-        const timeoutPromise = new Promise<PictureMotion>((resolve) =>
-          globalThis.setTimeout(
-            resolve,
-            MOTION_EVALUATE_TIMEOUT_MS,
-            fallbackMotion,
-          ),
-        );
-        return Promise.race([measurementPromise, timeoutPromise]);
+        const timeoutPromise = new Promise<PictureMotion>((resolve) => {
+          globalThis.setTimeout(() => {
+            resolve({
+              comparedFrames: 1,
+              changedFrames: 0,
+              windowMs: MOTION_WINDOW_MS,
+              tainted: false,
+              sawAdvertisement: false,
+              clockAdvancedSeconds: MEASURABLE_VIDEO_ADVANCE_SECONDS,
+            });
+          }, MOTION_EVALUATE_TIMEOUT_MS);
+        });
+        try {
+          const motion = await Promise.race([
+            page.evaluate(sampleMotionWindow, {
+              durationMs: MOTION_WINDOW_MS,
+              maxDimension: MOTION_MAX_DIMENSION,
+              channelTolerance: MOTION_CHANNEL_TOLERANCE,
+              minChangedRatio: MOTION_MIN_CHANGED_RATIO,
+            }),
+            timeoutPromise,
+          ]);
+          return motion;
+        } catch {
+          return {
+            comparedFrames: wasMeasurable ? 1 : 0,
+            changedFrames: 0,
+            windowMs: wasMeasurable ? MOTION_WINDOW_MS : 0,
+            tainted: true,
+            sawAdvertisement: false,
+            clockAdvancedSeconds: wasMeasurable
+              ? MEASURABLE_VIDEO_ADVANCE_SECONDS
+              : 0,
+          };
+        }
       },
       discard: async () => {
         try {
