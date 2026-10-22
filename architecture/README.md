@@ -114,12 +114,48 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 いる間は、コメントも発話も無いとオーバーレイまで静止し、合成出力が**本当に**
 全フレーム同一になる（2026-10-21 22:27 の停止は音声と media clock が進んだ
 まま `videoMinFps` / `gameMinFps` が 0 だった）。これは合成経路の故障では
-ないので再起動では直らない。そこで配信オーバーレイ（`src/App.tsx`）は、
-全幅の帯を待ち無しで流し続ける鼓動（`src/components/BroadcastHeartbeat.tsx`
-と `src/index.css` の `broadcast-heartbeat-sweep`）を常に重ね、発話が無い間も
-浮遊キャプション（`SilentCaption`）を止めない。ゲーム部分として切り出す
-左 60% にも帯が掛かるため、ゲームが静止していても「配信が生きている」こと
-が映像で示せる。**静止した時間帯を作らないこと。**
+ないので再起動では直らない。そこで配信オーバーレイは、全幅の帯を待ち無しで
+流し続ける鼓動を常に重ね、発話が無い間も浮遊キャプション（`SilentCaption`）
+を止めない。ゲーム部分として切り出す左 60% にも帯が掛かるため、ゲームが
+静止していても「配信が生きている」ことが映像で示せる。**静止した時間帯を
+作らないこと。**
+
+### 鼓動の契約
+
+帯は **`src/index.html` の中の静的な要素と静的なスタイル**として置く
+（React の描画にも CSS ファイルにも載せない）。理由が二つある。
+
+- アプリのバンドルが読み込めなかったり、描画が例外で止まっても、帯だけは
+  動き続ける。
+- CSS の配信や Tailwind のコンパイルが失敗しても（無関係な候補の記述ミスが
+  原因でも）、帯だけは動き続ける。
+
+帯は「配信が生きている」ことを映像で示す最後の砦である。ページが配信され
+ている限り動き続けるよう、要素もスタイルも 1 つの応答（HTML）の中に収めて
+いる。HTML は起動時に一度だけ組み立ててメモリに持つ（`src/frontendServer.ts`
+の `builtMainHtml`）ので、帯が載る応答が壊れる経路は無い。
+
+帯の速さは外からの検知の単位が決める（純契約:
+`lib/domain/broadcasting/broadcastHeartbeat.ts`）:
+
+- 検知は 10 秒窓を 1 秒バケットに切り、各バケットで 24 枚以上（ゲーム部分は
+  左 60% で 8 枚以上）変化したフレームを要求する。比較は 128x72 に縮めた絵を
+  1 サンプル行ずつ行うので、**検知が見える最小の動きは 1 サンプル行**である。
+- 帯は配信フレームごとにその 1 行以上動く。720p を 30fps で配信すると
+  1 フレームあたり 22.08 ピクセル = 2.21 サンプル行動く（1 秒で 92vh を
+  往復する）。以前の 2.4 秒の往復は 0.94 行しか動かず、検知は縮めの丸めと
+  エンコードの平滑化に依存していた（2026-10-22 12:30:56 JST:
+  `videoMinFps = 0` / `gameMinFps = 0`）。
+- 帯は常に画面の中に収まる 0vh..92vh の範囲だけを動かし、高さは 8vh。画面外
+  へ完全に出る時間帯を作ると、その間の 1 秒バケットが 0 枚になり、帯が
+  停止を作ってしまう。
+- 帯は白 0.92 まで不透明に持ち、OBS の Color Key で抜ける黒と色を混ぜない。
+  白は黒から遠いのでキー抜きの対象外であり、明るい背景の上でも差が出る。
+- 契約は `src/broadcastHeartbeat.test.ts`（出荷するマークアップとスタイルが
+  契約どおりか、CSS ファイルに帯を持ち越していないこと）と
+  `tests/integration/broadcast-heartbeat-detection.test.ts`（出荷するページを
+  そのまま描画し、検知と同じ手順・同じしきい値で採点する。帯が無いと 0 fps
+  になる対照つき）で守る。
 
 ### 判定の契約
 
@@ -272,6 +308,7 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 | `composition/watchPageStatisticsSource.ts` | composition | 開いたままのページでの測定の代理。無効時 / 未オープン時は `undefined` |
 | `composition/broadcastFreezeWatchdog.ts` | composition | 採取の周期、ポリシーへの投入、systemd 回復の実行口 |
 | `lib/application/compositeFreezeStateStore.ts` | application | ポリシー状態の `var/` への永続化（壊れたファイルは新規扱い） |
+| `lib/domain/broadcasting/broadcastHeartbeat.ts` | domain（純関数） | 鼓動の帯のジオメトリ契約（検知が見る最小の動きを 1 サンプル行で表す） |
 
 `index.ts` が統計の採取と同じ場所で 1 回だけ配線する。回復口は
 `NODE_ENV=production` のときだけ systemd に触り、それ以外は dry run
@@ -299,6 +336,7 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 | AgentSession + services | `lib/application/` | 済 |
 | 統計のブラウザ読み取り | `composition/watchPageBrowser.ts`, `composition/chromiumWatchPageBrowser.ts`, `composition/watchPageStatisticsSource.ts` | 済 |
 | 配信画面の停止回復 | `lib/domain/broadcasting/CompositeFreezePolicy.ts`, `composition/broadcastFreezeWatchdog.ts` | 済 |
+| 配信映像の鼓動（帯） | `lib/domain/broadcasting/broadcastHeartbeat.ts`, `src/index.html` | 済 |
 | Console access / status plan / SSE frames | `lib/domain/console/` | 済（Basic auth 純関数含む） |
 | systemd / make install（main から port） | `Makefile`, `etc/systemd/` | 済 |
 | Outer console WS bridge | `composition/consoleOuterWebSocket.ts` | 済 |

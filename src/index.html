@@ -10,9 +10,66 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/index.css" />
+    <!--
+      配信映像の鼓動。静的な要素と静的なスタイルで、HTML の中だけに置く
+      （React の描画にも CSS ファイルにも載せない）。
+
+      帯は「配信が生きている」ことを映像で示す最後の砦である。外からの異常
+      検知（`scripts/check-stream.ts` の VIDEO_MIN_FPS / GAME_MIN_FPS）は 1 秒
+      窓で 24 枚以上の変化を要求し、帯が無いとゲームが静止したときに合成
+      出力の全フレームが同一になって停止と報告される（2026-10-22 12:30:56
+      JST: 音声と media clock が進んだまま `videoMinFps = 0` /
+      `gameMinFps = 0`）。そのため、帯は次のようにする:
+
+      - React の描画に載せない。バンドルが読み込めなかったり描画が例外で
+        止まっても、帯だけは動き続ける。
+      - CSS ファイルにも載せない。CSS の配信や Tailwind のコンパイルが
+        失敗しても、帯だけは動き続ける。
+
+      速さは検知の見え方で決まる（純契約:
+      `lib/domain/broadcasting/broadcastHeartbeat.ts`）。検知は 128x72 に
+      縮めた絵を 1 サンプル行ずつ比べるので、帯は配信フレームごとにその
+      1 行以上動く。1 秒で 92vh を往復すると 720p 30fps で 1 フレーム
+      あたり 22.08 ピクセル = 2.21 サンプル行動く。帯は常に画面の中に
+      収まる 0vh..92vh の範囲だけを動かし、高さは 8vh。画面外へ完全に
+      出る時間帯を作ると、その間の 1 秒バケットが 0 枚になって停止を
+      作ってしまう。色は白 0.92 まで不透明に持ち、OBS の Color Key で
+      抜ける黒と色を混ぜない。
+    -->
+    <style>
+      @keyframes broadcast-heartbeat-sweep {
+        from {
+          transform: translateY(0vh);
+        }
+        to {
+          transform: translateY(92vh);
+        }
+      }
+
+      .broadcast-heartbeat {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 8vh;
+        pointer-events: none;
+        z-index: 50;
+        background: linear-gradient(
+          to bottom,
+          rgba(16, 185, 129, 0) 0%,
+          rgba(16, 185, 129, 0.7) 34%,
+          rgba(255, 255, 255, 0.92) 50%,
+          rgba(16, 185, 129, 0.7) 66%,
+          rgba(16, 185, 129, 0) 100%
+        );
+        animation: broadcast-heartbeat-sweep 1s linear infinite;
+        will-change: transform;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <div class="broadcast-heartbeat" aria-hidden="true"></div>
     <script type="module" src="./frontend.tsx"></script>
   </body>
 </html>
