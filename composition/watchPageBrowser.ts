@@ -155,7 +155,7 @@ export const judgePictureMotion = (
     return undefined;
   }
   const changedFps = motion.changedFrames / windowSeconds;
-  return changedFps < PICTURE_STILL_FPS_THRESHOLD ? "still" : "moving";
+  return changedFps <= PICTURE_STILL_FPS_THRESHOLD ? "still" : "moving";
 };
 
 /** 広告かどうかの判定に要る、ページ上の 1 つの `<video>` の状態。 */
