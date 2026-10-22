@@ -13,6 +13,14 @@
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      配信映像の鼓動。全幅の帯を待ち無しで流し続ける（`src/index.css` の
+      `broadcast-heartbeat-sweep`）。外からの異常検知は映像が 1 秒間まったく
+      変わらないと停止とみなすため、ゲームが静止している間も合成出力を
+      動かせないといけない。アプリの JS に依存しない静的な要素として置く:
+      描画の失敗やバンドルの読み込み失敗が起きても帯は動き続ける。
+    -->
+    <div class="broadcast-heartbeat" aria-hidden="true"></div>
     <script type="module" src="./frontend.tsx"></script>
   </body>
 </html>

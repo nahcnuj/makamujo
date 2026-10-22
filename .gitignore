@@ -160,3 +160,4 @@ dist/
 # Driver commit message artifact (never commit)
 .commit-msg
 .c.commit-msg
+.branch-name

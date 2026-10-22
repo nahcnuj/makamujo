@@ -39,6 +39,17 @@
  * 帯が画面外へ完全に出てしまうと、その間のフレームが 1 枚も変わらず
  * 1 秒バケットが 0 枚になって停止と数えられるため、帯は常に画面内に
  * 収まる 0vh..94vh の範囲だけを動かす（画面外の時間帯を作らない）。
+ *
+ * 速さも条件になる。検知側は映像を 128x72 の標本へ落とすので、720px の
+ * 画面では標本 1 行 = 10px。帯が 1 配信フレーム（30fps）で 1 行を動かさない
+ * と、落とした標本では変わるのは帯の縁の 1 行ぶんに限られ、非可逆圧縮を
+ * 1 往復しただけでは差が消える（余裕がなくなる）。ここでは 1.5 秒に 94vh を
+ * 進め、1 フレーム 15.0px = 標本 1 行の 1.5 行ぶん動かす。契約は
+ * `lib/domain/broadcasting/broadcastHeartbeat.ts` に純関数として置いてある。
+ *
+ * 色は白を core に置く。OBS の browser source には黒の Color Key が
+ * 掛かっていて、黒に近い画素は抜かれる。黒と遠い緑と白で塗れば、core は
+ * 抜けずに残り、背景が明るくても暗くても帯と背景が区別できる。
  */
 @keyframes broadcast-heartbeat-sweep {
   from {
@@ -60,11 +71,11 @@
   background: linear-gradient(
     to bottom,
     rgba(16, 185, 129, 0) 0%,
-    rgba(16, 185, 129, 0.55) 38%,
-    rgba(255, 255, 255, 0.6) 50%,
-    rgba(16, 185, 129, 0.55) 62%,
+    rgba(16, 185, 129, 0.5) 30%,
+    rgba(255, 255, 255, 0.92) 50%,
+    rgba(16, 185, 129, 0.5) 70%,
     rgba(16, 185, 129, 0) 100%
   );
-  animation: broadcast-heartbeat-sweep 2.4s linear infinite;
+  animation: broadcast-heartbeat-sweep 1.5s linear infinite;
   will-change: transform;
 }
