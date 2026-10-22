@@ -516,31 +516,40 @@ export const createChromiumWatchPageBrowser =
             new Promise<void>((resolve) => globalThis.setTimeout(resolve, ms)),
           requireAdvanceSeconds: MEASURABLE_VIDEO_ADVANCE_SECONDS,
         });
-        if (!isVideoReady(measurable)) {
+        const wasMeasurable = isVideoReady(measurable);
+        if (!wasMeasurable) {
           console.log(
             "[INFO] the watch page video was not measurable; measuring the window anyway",
           );
         }
         // レンダラが固まっていると evaluate が帰らない可能性がある。待ちの
         // 上限を置いて、帰らなければ「測れなかった」に落とす。
-        return Promise.race([
-          page.evaluate(sampleMotionWindow, {
-            durationMs: MOTION_WINDOW_MS,
-            maxDimension: MOTION_MAX_DIMENSION,
-            channelTolerance: MOTION_CHANNEL_TOLERANCE,
-            minChangedRatio: MOTION_MIN_CHANGED_RATIO,
+        //
+        // ただし `waitForMeasurableVideo` が成功していた（映像が計測可能で時計が
+        // 進んでいた）のにその後の測定がタイムアウトした場合、レンダラの固まり
+        // （合成出力の停止）が疑われる。このとき「判定不能」ではなく「静止」を
+        // 返すことで `CompositeFreezePolicy` が連続静止として検知し、回復を
+        // 走らせられるようにする（外部の健康チェックは毎時検知するが、内部の
+        // watchdog が検知できないと回復が走らない issue #982 対策）。
+        const measurementPromise = page.evaluate(sampleMotionWindow, {
+          durationMs: MOTION_WINDOW_MS,
+          maxDimension: MOTION_MAX_DIMENSION,
+          channelTolerance: MOTION_CHANNEL_TOLERANCE,
+          minChangedRatio: MOTION_MIN_CHANGED_RATIO,
+        });
+        const timeoutPromise = new Promise<PictureMotion>((resolve) =>
+          globalThis.setTimeout(resolve, MOTION_EVALUATE_TIMEOUT_MS, {
+            comparedFrames: wasMeasurable ? 1 : 0,
+            changedFrames: 0,
+            windowMs: wasMeasurable ? MOTION_WINDOW_MS : 0,
+            tainted: false,
+            sawAdvertisement: false,
+            clockAdvancedSeconds: wasMeasurable
+              ? MEASURABLE_VIDEO_ADVANCE_SECONDS
+              : 0,
           }),
-          new Promise<PictureMotion>((resolve) =>
-            globalThis.setTimeout(resolve, MOTION_EVALUATE_TIMEOUT_MS, {
-              comparedFrames: 0,
-              changedFrames: 0,
-              windowMs: 0,
-              tainted: false,
-              sawAdvertisement: false,
-              clockAdvancedSeconds: 0,
-            }),
-          ),
-        ]);
+        );
+        return Promise.race([measurementPromise, timeoutPromise]);
       },
       discard: async () => {
         try {
