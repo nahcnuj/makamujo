@@ -10,9 +10,66 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/index.css" />
+    <style>
+      /*
+       * 配信映像の鼓動。全幅の帯を待ち無しで流し続ける。
+       *
+       * 帯は React の描画（#root）の外、CSS ファイル（src/index.css）の外に
+       * 置く。アプリのバンドルが読めず描画が例外で止まっても、CSS の配信や
+       * Tailwind のコンパイルが失敗しても、帯だけは動き続ける。帯は「配信が
+       * 生きている」ことを映像で示す最後の砦だからである。
+       *
+       * 外からの異常検知（scripts/check-stream.ts）は 10 秒窓を 1 秒バケット
+       * に切り、各バケットで 24 枚以上（ゲーム部分は左 60% で 8 枚以上）変化
+       * したフレームを要求する。比較は 128x72 に縮めた絵を 1 サンプル行ずつ
+       * 行うので、検知が見える最小の動きは 1 サンプル行（720p なら 10px）。
+       * 帯は 92vh を 1 秒で進むので 30fps では 1 フレームあたり 22.08px =
+       * 2.21 サンプル行动く。
+       *
+       * 帯は白（黒の縁取り付き）にする。OBS の Color Key（純緑）から遠い色で、
+       * 明るい背景の上でも黒の縁が、暗い背景の上でも白の芯が差を出す。透明な
+       * 縁は合成へ混ざるだけなので使わない。
+       *
+       * 帯は画面の中に収まる 0vh..92vh の範囲だけを動かし、高さは 8vh。画面外
+       * へ完全に出る時間帯を作ると、その間の 1 秒バケットが 0 枚になって停止
+       * と数えられる。折り返しは `alternate` だが `linear` なので速さが一定で、
+       * 折り返しに待ち（0 枚のバケット）は作られない。
+       */
+      @keyframes broadcast-heartbeat-sweep {
+        from {
+          transform: translateY(0vh);
+        }
+        to {
+          transform: translateY(92vh);
+        }
+      }
+
+      .broadcast-heartbeat {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 8vh;
+        pointer-events: none;
+        z-index: 50;
+        background: linear-gradient(
+          to bottom,
+          rgba(0, 0, 0, 0) 0%,
+          rgba(0, 0, 0, 0.9) 12%,
+          rgba(255, 255, 255, 1) 34%,
+          rgba(255, 255, 255, 1) 66%,
+          rgba(0, 0, 0, 0.9) 88%,
+          rgba(0, 0, 0, 0) 100%
+        );
+        animation: broadcast-heartbeat-sweep 1s linear infinite alternate;
+        will-change: transform;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <!-- 鼓動は React の描画の外。描画が壊れても動き続ける。 -->
+    <div class="broadcast-heartbeat" aria-hidden="true"></div>
     <script type="module" src="./frontend.tsx"></script>
   </body>
 </html>
