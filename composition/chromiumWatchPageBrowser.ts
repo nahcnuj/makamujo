@@ -531,23 +531,33 @@ export const createChromiumWatchPageBrowser =
         // 返すことで `CompositeFreezePolicy` が連続静止として検知し、回復を
         // 走らせられるようにする（外部の健康チェックは毎時検知するが、内部の
         // watchdog が検知できないと回復が走らない issue #982 対策）。
-        const measurementPromise = page.evaluate(sampleMotionWindow, {
-          durationMs: MOTION_WINDOW_MS,
-          maxDimension: MOTION_MAX_DIMENSION,
-          channelTolerance: MOTION_CHANNEL_TOLERANCE,
-          minChangedRatio: MOTION_MIN_CHANGED_RATIO,
-        });
+        //
+        // page.evaluate がエラーで reject することもある（ページクラッシュ等）。
+        // その場合も timeout と同じ fallback を返すように catch する。
+        const fallbackMotion: PictureMotion = {
+          comparedFrames: wasMeasurable ? 1 : 0,
+          changedFrames: 0,
+          windowMs: wasMeasurable ? MOTION_WINDOW_MS : 0,
+          tainted: false,
+          sawAdvertisement: false,
+          clockAdvancedSeconds: wasMeasurable
+            ? MEASURABLE_VIDEO_ADVANCE_SECONDS
+            : 0,
+        };
+        const measurementPromise = page
+          .evaluate(sampleMotionWindow, {
+            durationMs: MOTION_WINDOW_MS,
+            maxDimension: MOTION_MAX_DIMENSION,
+            channelTolerance: MOTION_CHANNEL_TOLERANCE,
+            minChangedRatio: MOTION_MIN_CHANGED_RATIO,
+          })
+          .catch(() => fallbackMotion);
         const timeoutPromise = new Promise<PictureMotion>((resolve) =>
-          globalThis.setTimeout(resolve, MOTION_EVALUATE_TIMEOUT_MS, {
-            comparedFrames: wasMeasurable ? 1 : 0,
-            changedFrames: 0,
-            windowMs: wasMeasurable ? MOTION_WINDOW_MS : 0,
-            tainted: false,
-            sawAdvertisement: false,
-            clockAdvancedSeconds: wasMeasurable
-              ? MEASURABLE_VIDEO_ADVANCE_SECONDS
-              : 0,
-          }),
+          globalThis.setTimeout(
+            resolve,
+            MOTION_EVALUATE_TIMEOUT_MS,
+            fallbackMotion,
+          ),
         );
         return Promise.race([measurementPromise, timeoutPromise]);
       },
