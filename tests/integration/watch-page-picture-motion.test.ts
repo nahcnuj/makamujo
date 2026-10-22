@@ -174,7 +174,7 @@ const chromiumAvailable = await (async (): Promise<boolean> => {
     const { chromium } = await import("playwright");
     const probe = await chromium.launch({
       headless: true,
-      timeout: 60_000,
+      timeout: 15_000,
       args: ["--no-sandbox", "--disable-dev-shm-usage"],
     });
     await probe.close();

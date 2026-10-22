@@ -207,7 +207,7 @@ const sampleMotionWindow = async ({
   try {
     await new Promise<void>((resolve) => {
       const deadline = start + durationMs;
-      const safety = setTimeout(resolve, durationMs + 2_000);
+      const safety = setTimeout(resolve, durationMs + 10_000);
       const tick = () => {
         const now = performance.now();
         if (now >= deadline) {
@@ -422,6 +422,8 @@ export const createChromiumWatchPageBrowser =
     const page = await context.newPage();
     console.log("[INFO] chromium launched for the niconama watch page");
     let lastReadLog: string | undefined;
+    /** 過去に計測可能な `<video>` を観測したことがあるか。レンダラ固着検知に使う。 */
+    let hasEverBeenMeasurable = false;
 
     return {
       open: async (watchPageUrl) => {
@@ -516,31 +518,87 @@ export const createChromiumWatchPageBrowser =
             new Promise<void>((resolve) => globalThis.setTimeout(resolve, ms)),
           requireAdvanceSeconds: MEASURABLE_VIDEO_ADVANCE_SECONDS,
         });
-        if (!isVideoReady(measurable)) {
+        const wasMeasurable = isVideoReady(measurable);
+        if (wasMeasurable) {
+          hasEverBeenMeasurable = true;
+        }
+        if (!wasMeasurable) {
           console.log(
             "[INFO] the watch page video was not measurable; measuring the window anyway",
           );
         }
         // レンダラが固まっていると evaluate が帰らない可能性がある。待ちの
         // 上限を置いて、帰らなければ「測れなかった」に落とす。
-        return Promise.race([
-          page.evaluate(sampleMotionWindow, {
-            durationMs: MOTION_WINDOW_MS,
-            maxDimension: MOTION_MAX_DIMENSION,
-            channelTolerance: MOTION_CHANNEL_TOLERANCE,
-            minChangedRatio: MOTION_MIN_CHANGED_RATIO,
-          }),
-          new Promise<PictureMotion>((resolve) =>
-            globalThis.setTimeout(resolve, MOTION_EVALUATE_TIMEOUT_MS, {
-              comparedFrames: 0,
+        //
+        // ただし過去に計測可能な `<video>` を観測していた（映像が流れていた）のに
+        // 今回の測定がタイムアウトした場合、レンダラの固まり（合成出力の停止）が
+        // 疑われる。このとき「判定不能」ではなく「静止」を返すことで
+        // `CompositeFreezePolicy` が連続静止として検知し、回復を走らせられるように
+        // する（外部の健康チェックは毎時検知するが、内部の watchdog が検知できないと
+        // 回復が走らない issue #982 対策）。
+        //
+        // page.evaluate がエラーで reject することもある（ページクラッシュ等）。
+        // その場合も timeout と同じ fallback を返すように catch する。
+        const timeoutPromise = new Promise<PictureMotion>((resolve) => {
+          globalThis.setTimeout(() => {
+            if (hasEverBeenMeasurable) {
+              // 過去に計測可能だったなら、今回のタイムアウトはレンダラ固着＝静止とみなす
+              resolve({
+                comparedFrames: 1,
+                changedFrames: 0,
+                windowMs: MOTION_WINDOW_MS,
+                tainted: false,
+                sawAdvertisement: false,
+                clockAdvancedSeconds: MEASURABLE_VIDEO_ADVANCE_SECONDS,
+              });
+            } else {
+              // まだ一度も計測可能になっていない（初回の立ち上げ遅れ等）なら判定不能
+              resolve({
+                comparedFrames: 0,
+                changedFrames: 0,
+                windowMs: 0,
+                tainted: true,
+                sawAdvertisement: false,
+                clockAdvancedSeconds: 0,
+              });
+            }
+          }, MOTION_EVALUATE_TIMEOUT_MS);
+        });
+        try {
+          const motion = await Promise.race([
+            page.evaluate(sampleMotionWindow, {
+              durationMs: MOTION_WINDOW_MS,
+              maxDimension: MOTION_MAX_DIMENSION,
+              channelTolerance: MOTION_CHANNEL_TOLERANCE,
+              minChangedRatio: MOTION_MIN_CHANGED_RATIO,
+            }),
+            timeoutPromise,
+          ]);
+          return motion;
+        } catch {
+          if (hasEverBeenMeasurable) {
+            // 過去に計測可能だったなら、例外もレンダラ固着＝静止とみなす
+            // tainted: false にして judgePictureMotion が "still" と判定できるようにする
+            // (tainted: true だと判定不能になり streak が伸びない)
+            return {
+              comparedFrames: 1,
               changedFrames: 0,
-              windowMs: 0,
+              windowMs: MOTION_WINDOW_MS,
               tainted: false,
               sawAdvertisement: false,
-              clockAdvancedSeconds: 0,
-            }),
-          ),
-        ]);
+              clockAdvancedSeconds: MEASURABLE_VIDEO_ADVANCE_SECONDS,
+            };
+          }
+          // まだ一度も計測可能になっていないなら判定不能
+          return {
+            comparedFrames: 0,
+            changedFrames: 0,
+            windowMs: 0,
+            tainted: true,
+            sawAdvertisement: false,
+            clockAdvancedSeconds: 0,
+          };
+        }
       },
       discard: async () => {
         try {

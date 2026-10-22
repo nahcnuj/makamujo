@@ -1,4 +1,12 @@
-import { beforeEach, describe, expect, it, jest, mock } from "bun:test";
+import {
+  afterAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  jest,
+  mock,
+} from "bun:test";
 import {
   MakaMujo,
   SILENCE_THRESHOLD_MS,
@@ -6,6 +14,8 @@ import {
   type TalkModelGenerateResult,
   type TTS,
 } from ".";
+import * as RealCookieClicker from "./games/org.dashnet.orteil/cookieclicker/server";
+import * as RealVigilantFiesta from "./games/work.nahcnuj.www/vigilant-fiesta/server";
 
 // Variables starting with "mock" are available in mock.module factory closures
 // even after hoisting (following the same convention as jest.mock).
@@ -44,6 +54,20 @@ mock.module("./games/server", () => ({
     },
   },
 }));
+
+// mock.module はプロセス全体に効いて、このファイルが終わっても解除されない。
+// 差し替えはこのファイル内の MakaMujo を動かすためだけのものなので、末尾で
+// 本物のゲームレジストリを再登録する。これをしないと、このファイルより後に
+// 走るテスト（`GameplayApplicationService.test.ts` など）が差し替え後の
+// solver を掴んで、最初の action がいつまでも noop になる。
+afterAll(() => {
+  mock.module("./games/server", () => ({
+    ServerGames: {
+      CookieClicker: RealCookieClicker,
+      VigilantFiesta: RealVigilantFiesta,
+    },
+  }));
+});
 
 const stubTalkModel: TalkModel = {
   generate: () => "",

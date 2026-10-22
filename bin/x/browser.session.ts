@@ -28,6 +28,30 @@ import {
 } from "../../lib/Browser/gameStall";
 import { createRetrySender } from "../../lib/Browser/socket";
 
+/** Default timeout for watchdog probes to avoid hanging on a wedged renderer. */
+const WATCHDOG_PROBE_TIMEOUT_MS = 10_000;
+
+/**
+ * Wrap a probe promise with a timeout. If the probe does not resolve in time,
+ * return the fallback value. This prevents a hung renderer from blocking the
+ * watchdog interval indefinitely (Playwright's default timeout is 30s).
+ */
+function withProbeTimeout<T>(
+  probe: Promise<T>,
+  fallback: T,
+  timeoutMs: number = WATCHDOG_PROBE_TIMEOUT_MS,
+): Promise<T> {
+  let timer: ReturnType<typeof globalThis.setTimeout> | undefined;
+  const timeout = new Promise<T>((resolve) => {
+    timer = globalThis.setTimeout(resolve, timeoutMs, fallback);
+  });
+  return Promise.race([probe.catch(() => fallback), timeout]).finally(() => {
+    if (timer !== undefined) {
+      globalThis.clearTimeout(timer);
+    }
+  });
+}
+
 const AW_SNAP_CHECK_MS = 5_000;
 /** Reloads that did not restore the picture before restarting the session. */
 const MAX_CONSECUTIVE_STALLS = 3;
@@ -233,11 +257,11 @@ const stallTimer = setInterval(() => {
     try {
       const { sight } = Games.VigilantFiesta;
       const [frame, screen] = await Promise.all([
-        browser.screenshot(),
-        browser
-          .evaluate(sight)
-          .then((state) => state?.screen)
-          .catch(() => undefined),
+        withProbeTimeout(browser.screenshot(), new Uint8Array(0)),
+        withProbeTimeout(
+          browser.evaluate(sight).then((state) => state?.screen),
+          undefined,
+        ),
       ]);
       const decision = observeGameFrame(
         stallState,
@@ -307,11 +331,14 @@ const compositorHeartbeatTimer = setInterval(() => {
     try {
       const { sight } = Games.VigilantFiesta;
       const [produced, screen] = await Promise.all([
-        browser.evaluate(compositorHeartbeatProbe).catch(() => undefined),
-        browser
-          .evaluate(sight)
-          .then((state) => state?.screen)
-          .catch(() => undefined),
+        withProbeTimeout(
+          browser.evaluate(compositorHeartbeatProbe).catch(() => undefined),
+          undefined,
+        ),
+        withProbeTimeout(
+          browser.evaluate(sight).then((state) => state?.screen),
+          undefined,
+        ),
       ]);
       // `Browser.evaluate` types the probe's promise without flattening it;
       // Playwright flattens it at runtime, so unwrap once more here.
