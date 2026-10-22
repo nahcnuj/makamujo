@@ -23,6 +23,19 @@ import {
  * 128x72 へ縮めた標本を作り、検知と**同じ**判定関数
  * (`summarizeFps` / `isFpsAboveThreshold`) で判定する。CSS を変えたらこの
  * テストが落ちる。
+ *
+ * 標本を作る時は、配信映像が立つまでの経路をなぞる。
+ *
+ * 1. ページ。`:root` の `bg-black` が canvas に伝播するので、帯の外は
+ *    不透明な黒に Layout の `bg-emerald-950/30` が重なった暗い背景になる。
+ * 2. OBS の Color Key（key = 黒）。この暗い背景は消えて、游戏画面が透ける。
+ *    key 色の許容範囲は環境と設定で変わるので、帯は key 色から十分離れた
+ *    画素を**不透明に**残しておかないと「帯が残っている」保証が立たない。
+ * 3. ゲーム画面（XSHM のキャプチャ）を背後に合成した絵が、公開される絵。
+ * 4. 検知側は requestAnimationFrame（≒60Hz）ごとに標本を比較する。公開
+ *    映像は 30fps なので、同じフレームを 2 回ずつ拾う。観測できる変化
+ *    フレームは 1 秒あたり 30 枚が上限で、公開フレームが 1 枚でも重な
+ *    ればそのバケットは 29 枚になる。
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -34,10 +47,30 @@ const PIXEL_CHANNEL_TOLERANCE = 16;
 const MIN_CHANGED_RATIO = 0.001;
 /** OBS の出力 fps（`obs-studio/basic/profiles/Makamujo/basic.ini` の FPSNum）。 */
 const DELIVERED_FPS = 30;
+/** 検知側のサンプリング間隔（requestAnimationFrame ≒ 60Hz）。 */
+const SAMPLER_FPS = 60;
 /** 検知側の窓（`CHECK_DURATION_MS`）。 */
 const WINDOW_MS = 10_000;
 /** 検知側のバケット幅（`FPS_BUCKET_MS`）。 */
 const BUCKET_MS = 1_000;
+/**
+ * Color Key（key = 黒）が残す画素の下限。
+ *
+ * key 色に近い画素は消える。similarity / smoothness の設定と配信環境によって
+ * 消される範囲は変わるので、帯は key 色から**十分離れた**画素を不透明に
+ * 確保する。帯の半透明な部分は暗い背景と混ざって key 色寄りになり、
+ * 消されたときは白背景の上でも黒背景の上でも見えなくなる。
+ */
+const KEY_BRIGHTNESS_FLOOR = 160;
+/**
+ * 帯のうち「Color Key に消されず、どのゲーム画面でも見える」領域が
+ * 少なくとも持つべき割合。
+ *
+ * 白だけの帯は白背景の上で消える。緑は黒背景でも白背景でもゲーム画面と
+ * 十分に横に伸びるが、半透明だと暗いページ背景と混ざって key 色寄りに
+ * なり得る。不透明な緑の領域を厚く残すのがこの条件の中身。
+ */
+const MIN_DETECTABLE_BAND_RATIO = 0.08;
 
 type Rgba = { r: number; g: number; b: number; a: number };
 
@@ -54,6 +87,11 @@ type BandGeometry = {
   /** 帯の縦の配色。 */
   stops: GradientStop[];
 };
+
+/** 帯の外のページ。canvas は `:root` の `bg-black` に伝播した不透明白。 */
+const PAGE_CANVAS: Rgba = { r: 0, g: 0, b: 0, a: 1 };
+/** Layout の `bg-emerald-950/30`（tailwind の emerald-950）。 */
+const PAGE_BACKGROUND: Rgba = { r: 6, g: 78, b: 59, a: 0.3 };
 
 const requireGroup = (
   pattern: RegExp,
@@ -155,42 +193,104 @@ const colorAt = (stops: GradientStop[], ratio: number): Rgba => {
   return last.color;
 };
 
+/** 色を premultiplied alpha にする。 */
+const premultiply = (color: Rgba): Rgba => ({
+  r: color.r * color.a,
+  g: color.g * color.a,
+  b: color.b * color.a,
+  a: color.a,
+});
+
+/** premultiplied の合成（上を下へ）。 */
+const over = (top: Rgba, bottom: Rgba): Rgba => ({
+  r: top.r + bottom.r * (1 - top.a),
+  g: top.g + bottom.g * (1 - top.a),
+  b: top.b + bottom.b * (1 - top.a),
+  a: top.a + bottom.a * (1 - top.a),
+});
+
 /**
  * 配信された 1 フレームを、検知側の標本（128x72）として作る。
  *
  * 帯は `position: fixed` で画面の上から `translateY` だけ動かした全幅の矩形。
  * 標本は 72px = 100vh なので 1vh は 0.72px。
+ *
+ * ページ → Color Key → ゲーム画面、の順に合成する。
  */
 const renderSample = (
   band: BandGeometry,
   bandTopVh: number,
-  background: { r: number; g: number; b: number },
+  game: Rgba,
 ): Uint8ClampedArray => {
   const width = MAX_SAMPLE_DIMENSION;
   const height = Math.round((MAX_SAMPLE_DIMENSION * 9) / 16);
   const pixels = new Uint8ClampedArray(width * height * 4);
   const bandTopPx = bandTopVh * (height / 100);
   const bandHeightPx = band.heightVh * (height / 100);
+  const page = over(premultiply(PAGE_BACKGROUND), premultiply(PAGE_CANVAS));
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const offset = (y * width + x) * 4;
-      let { r, g, b } = background;
+      let pagePixel = page;
       if (y + 0.5 >= bandTopPx && y + 0.5 < bandTopPx + bandHeightPx) {
         const overlay = colorAt(
           band.stops,
           (y + 0.5 - bandTopPx) / bandHeightPx,
         );
-        r = overlay.r * overlay.a + r * (1 - overlay.a);
-        g = overlay.g * overlay.a + g * (1 - overlay.a);
-        b = overlay.b * overlay.a + b * (1 - overlay.a);
+        pagePixel = over(premultiply(overlay), page);
       }
-      pixels[offset] = r;
-      pixels[offset + 1] = g;
-      pixels[offset + 2] = b;
-      pixels[offset + 3] = 255;
+      // OBS の Color Key（key = 黒）。key 色から遠い画素だけが残る。
+      const keyed =
+        Math.max(pagePixel.r, pagePixel.g, pagePixel.b) >= KEY_BRIGHTNESS_FLOOR
+          ? pagePixel
+          : { r: 0, g: 0, b: 0, a: 0 };
+      // ゲーム画面（XSHM のキャプチャ）を背後に合成する。
+      const published = over(keyed, premultiply(game));
+      pixels[offset] = published.r;
+      pixels[offset + 1] = published.g;
+      pixels[offset + 2] = published.b;
+      pixels[offset + 3] = published.a * 255;
     }
   }
   return pixels;
+};
+
+/**
+ * 「Color Key に消されず、どのゲーム画面でも見える」帯の割合を測る。
+ *
+ * その条件を満たすのは、
+ * - 不透明（半透明だと暗いページ背景と混ざって key 色寄りになる）
+ * - key 色（黒）から十分離れている
+ * - 黒背景にも白背景にも、検知側の差分しきい値を超える差になる
+ * 画素帯。帯は上下 2 つの緑の領域を持つので、その合計を測る。
+ */
+const detectableBandRatio = (band: BandGeometry): number => {
+  const visibleOn = (color: Rgba, background: Rgba): boolean => {
+    const diff = Math.max(
+      Math.abs(color.r - background.r),
+      Math.abs(color.g - background.g),
+      Math.abs(color.b - background.b),
+    );
+    return diff > PIXEL_CHANNEL_TOLERANCE;
+  };
+  const isDetectable = (color: Rgba): boolean => {
+    if (color.a < 1) return false;
+    if (Math.max(color.r, color.g, color.b) < KEY_BRIGHTNESS_FLOOR)
+      return false;
+    return (
+      visibleOn(color, { r: 0, g: 0, b: 0, a: 1 }) &&
+      visibleOn(color, { r: 240, g: 240, b: 240, a: 1 })
+    );
+  };
+  let ratio = 0;
+  for (let index = 0; index < band.stops.length - 1; index += 1) {
+    const current = band.stops[index];
+    const next = band.stops[index + 1];
+    if (!current || !next) continue;
+    if (!isDetectable(current.color) || !isDetectable(next.color)) continue;
+    ratio += next.at - current.at;
+  }
+  return ratio;
 };
 
 /** 検知側と同じ差分判定。差分率とゲーム部分の差分率を返す。 */
@@ -238,41 +338,63 @@ const changedRatios = (
 /**
  * 帯だけを合成した配信映像を、検知側と同じ手順でサンプルする。
  *
- * 映像は 30fps（OBS の出力 fps）で、検知側は requestAnimationFrame ごとに
- * 標本を比較する。1 フレームにつき 1 回だけ「変化した」サンプルが立つ。
+ * 公開映像は 30fps（OBS の出力 fps）で、検知側は requestAnimationFrame
+ * （≒60Hz）ごとに標本を比較する。公開フレームが変わるまでは同じ絵が
+ * 見えているので、変化として数えられるのは公開フレームが変わる時だけ。
  */
 const sampleDeliveredPicture = (
   band: BandGeometry,
-  background: { r: number; g: number; b: number },
-): { samples: MotionSample[]; minRatio: number } => {
+  game: Rgba,
+): { samples: MotionSample[]; minPublishedRatio: number } => {
   const width = MAX_SAMPLE_DIMENSION;
   const height = Math.round((MAX_SAMPLE_DIMENSION * 9) / 16);
-  const frameMs = 1000 / DELIVERED_FPS;
-  const frames = Math.round(WINDOW_MS / frameMs);
+  const samplerStepMs = 1000 / SAMPLER_FPS;
+  const publishedStepMs = 1000 / DELIVERED_FPS;
+  const sampleCount = Math.round(WINDOW_MS / samplerStepMs);
   const samples: MotionSample[] = [];
-  let previous: Uint8ClampedArray | null = null;
-  let minRatio = 1;
-  for (let frame = 0; frame < frames; frame += 1) {
-    const elapsedMs = frame * frameMs;
-    const cycle = (elapsedMs / 1000 / band.durationSeconds) % 1;
+  let previousSample: Uint8ClampedArray | null = null;
+  let previousPublished: Uint8ClampedArray | null = null;
+  let publishedIndex = -1;
+  let minPublishedRatio = 1;
+  for (let sample = 0; sample < sampleCount; sample += 1) {
+    const elapsedMs = sample * samplerStepMs;
+    const index = Math.floor(elapsedMs / publishedStepMs);
+    // 公開フレームは 30fps ごとに切り替わるので、絵はその時刻で固定される。
+    const publishedMs = index * publishedStepMs;
+    const cycle = (publishedMs / 1000 / band.durationSeconds) % 1;
     const bandTopVh = band.fromVh + (band.toVh - band.fromVh) * cycle;
-    const current = renderSample(band, bandTopVh, background);
-    if (previous) {
-      const ratios = changedRatios(previous, current, width, height);
-      minRatio = Math.min(minRatio, ratios.whole, ratios.game);
+    const current = renderSample(band, bandTopVh, game);
+    if (index !== publishedIndex) {
+      if (previousPublished) {
+        const ratios = changedRatios(previousPublished, current, width, height);
+        minPublishedRatio = Math.min(
+          minPublishedRatio,
+          ratios.whole,
+          ratios.game,
+        );
+      }
+      previousPublished = current;
+      publishedIndex = index;
+    }
+    if (previousSample) {
+      const ratios = changedRatios(previousSample, current, width, height);
       samples.push({
         elapsedMs,
         wholeChanged: ratios.whole > MIN_CHANGED_RATIO,
         gameChanged: ratios.game > MIN_CHANGED_RATIO,
       });
     }
-    previous = current;
+    previousSample = current;
   }
-  return { samples, minRatio };
+  return { samples, minPublishedRatio };
 };
 
 describe("the heartbeat band keeps the delivered picture moving", () => {
   const band = readBandGeometry();
+  const backgrounds = [
+    { name: "a dark game screen", color: { r: 16, g: 20, b: 28, a: 1 } },
+    { name: "a bright game screen", color: { r: 240, g: 240, b: 240, a: 1 } },
+  ];
 
   it("keeps a part of the band on screen at every moment", () => {
     // 帯が完全に画面外へ出ている瞬間は映像が完全静止し、1 秒バケットの移動
@@ -287,12 +409,33 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
     }
   });
 
+  it("keeps a region that survives the color key on any game screen", () => {
+    // OBS の Color Key（key = 黒）は key 色から遠い画素しか残さない。帯が
+    // 白だけだと白背景の上で消えてしまい、帯が半透明だと暗いページ背景と
+    // 混ざって key 色寄りになる。不透明な緑の領域を厚く残す。
+    expect(detectableBandRatio(band)).toBeGreaterThanOrEqual(
+      MIN_DETECTABLE_BAND_RATIO,
+    );
+  });
+
+  it("keeps every published frame different", () => {
+    // 公開フレームが 1 枚でも重なると、その 1 秒バケットは 29 枚になる。
+    // 帯は Color Key で消された後でも、公開フレームごとに絵が変わる。
+    for (const background of backgrounds) {
+      const { minPublishedRatio } = sampleDeliveredPicture(
+        band,
+        background.color,
+      );
+      expect(
+        minPublishedRatio,
+        `the published frames must differ against ${background.name}`,
+      ).toBeGreaterThan(MIN_CHANGED_RATIO);
+    }
+  });
+
   it("passes the health check's frame rate requirement", () => {
-    for (const background of [
-      { name: "a dark game screen", r: 16, g: 20, b: 28 },
-      { name: "a bright game screen", r: 240, g: 240, b: 240 },
-    ]) {
-      const { samples, minRatio } = sampleDeliveredPicture(band, background);
+    for (const background of backgrounds) {
+      const { samples } = sampleDeliveredPicture(band, background.color);
       const whole = summarizeFps(
         samples,
         (sample) => sample.wholeChanged,
@@ -313,8 +456,6 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
         isFpsAboveThreshold(game.minFps, VIDEO_MIN_FPS),
         `the game panel must keep ${VIDEO_MIN_FPS} fps against ${background.name}`,
       ).toBe(true);
-      // 差分率がしきい値を下回ると「動いていない」フレームとして数えられる。
-      expect(minRatio).toBeGreaterThan(MIN_CHANGED_RATIO);
     }
   });
 });

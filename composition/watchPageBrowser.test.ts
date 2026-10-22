@@ -166,6 +166,46 @@ describe("isOnAirFromClock", () => {
     ).toBe(true);
   });
 
+  it("reads a totally frozen picture as on air even when the clock stopped", () => {
+    // HLS が固まったときは clock も止まる。1 枚も動いていなければ合成出力
+    // の停止なので、回復のために放送中とみなす。
+    expect(
+      isOnAirFromClock(
+        motion({
+          changedFrames: 0,
+          comparedFrames: 60,
+          clockAdvancedSeconds: 0,
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not read a picture with a trickle of motion as on air when the clock stopped", () => {
+    // 0.1fps くらいの微動は結果画面やフリートークなので、clock が止まって
+    // いるときは放送中とみなさない（停止の判定は watchdog 側に任せる）。
+    expect(
+      isOnAirFromClock(
+        motion({
+          changedFrames: 1,
+          comparedFrames: 60,
+          clockAdvancedSeconds: 0,
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("cannot judge a picture that was never compared", () => {
+    expect(
+      isOnAirFromClock(
+        motion({
+          changedFrames: 0,
+          comparedFrames: 0,
+          clockAdvancedSeconds: 0,
+        }),
+      ),
+    ).toBe(false);
+  });
+
   it("cannot judge a measurement that is missing", () => {
     expect(isOnAirFromClock(undefined)).toBeUndefined();
   });
