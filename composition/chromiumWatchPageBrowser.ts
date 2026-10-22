@@ -578,11 +578,13 @@ export const createChromiumWatchPageBrowser =
         } catch {
           if (hasEverBeenMeasurable) {
             // 過去に計測可能だったなら、例外もレンダラ固着＝静止とみなす
+            // tainted: false にして judgePictureMotion が "still" と判定できるようにする
+            // (tainted: true だと判定不能になり streak が伸びない)
             return {
               comparedFrames: 1,
               changedFrames: 0,
               windowMs: MOTION_WINDOW_MS,
-              tainted: true,
+              tainted: false,
               sawAdvertisement: false,
               clockAdvancedSeconds: MEASURABLE_VIDEO_ADVANCE_SECONDS,
             };
