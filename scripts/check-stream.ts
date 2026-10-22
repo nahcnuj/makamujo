@@ -716,7 +716,7 @@ async function sampleMotion(
       try {
         await new Promise<void>((resolve) => {
           const deadline = start + durationMs;
-          const safety = setTimeout(resolve, durationMs + 2_000);
+          const safety = setTimeout(resolve, durationMs + 10_000);
           const tick = () => {
             const now = performance.now();
             if (now >= deadline) {
