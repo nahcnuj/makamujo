@@ -39,6 +39,16 @@
  * 帯が画面外へ完全に出てしまうと、その間のフレームが 1 枚も変わらず
  * 1 秒バケットが 0 枚になって停止と数えられるため、帯は常に画面内に
  * 収まる 0vh..94vh の範囲だけを動かす（画面外の時間帯を作らない）。
+ *
+ * 速さも条件になる。検知は映像を最大 128px（16:9 なら 128x72）へ縮めて
+ * 隣接フレームを比べるので、可視な動きの最小単位は標本 1 行（720p なら
+ * 10px）。帯が 1 提示フレーム（30fps）で 1 行以上動かないと、隣接フレームが
+ * 標本の同じ行に重なって差が消え、変化フレームが 24 枚を割る。2.4 秒で
+ * 94vh を走っていたときは 1 フレーム 0.94 行で、2026-10-22 16:38 の検知は
+ * videoMinFps=21 / videoAvgFps=24.4（issue #1025）、2026-10-23 05:28 は
+ * videoMinFps=23 / videoAvgFps=26.6（issue #1037）だった。1.5 秒で 94vh
+ * （1 フレーム 1.5 行）にすれば、すべての提示フレームが標本の 1 行以上を
+ * 動かす。
  */
 @keyframes broadcast-heartbeat-sweep {
   from {
@@ -65,6 +75,6 @@
     rgba(16, 185, 129, 0.55) 62%,
     rgba(16, 185, 129, 0) 100%
   );
-  animation: broadcast-heartbeat-sweep 2.4s linear infinite;
+  animation: broadcast-heartbeat-sweep 1.5s linear infinite;
   will-change: transform;
 }

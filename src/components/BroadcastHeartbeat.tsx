@@ -13,6 +13,12 @@
  * 帯は全幅なので、ゲーム部分として切り出す画面の左 60% にも必ず掛かる。
  * 動きは `src/index.css` の `broadcast-heartbeat-sweep`（待ち無しの
  * `infinite`）。止まる時間帯を作らないこと。
+ *
+ * 速さも検知の一部: 外部の検知は映像を 128x72 へ縮めて隣接フレームを比べる
+ * ため、帯は 1 提示フレーム（30fps）で標本 1 行以上を動かす必要がある。
+ * 2.4 秒で 94vh を走らせていたときは 1 フレーム 0.94 行で、変化フレームが
+ * 24 枚を割った（2026-10-23 05:28 の `videoMinFps=23` / `videoAvgFps=26.6`、
+ * issue #1037）。1.5 秒で 94vh（1 フレーム 1.5 行）にしている。
  */
 export function BroadcastHeartbeat() {
   return <div className="broadcast-heartbeat" aria-hidden="true" />;
