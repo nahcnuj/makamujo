@@ -27,7 +27,10 @@ import {
  * 帯は全幅ではなく、左端の細い縦帯である（issue #1030: 全幅の帯が配信映像に
  * CRT の走査線のように見え続けた）。検知が見るのは左 60% のゲーム部分なので、
  * 左端の帯でも毎フレーム動いていれば足りる。ゲームの絵を隠す面積を最小に
- * するため、幅は 0.5vw に留める。
+ * するため、幅は 2vw に留める。0.5vw x 7vh まで縮めたときは、縮小・
+ * エンコードで差が消えるフレームが出て実際の minFps が 18 まで落ちた
+ * （#1056 / #1142）。24fps の下限にすれすれで合わせず、公開 30fps の全
+ * フレームが変わる余裕をこのテストで確かめる。
  *
  * 標本を作る時は、配信映像が立つまでの経路をなぞる。
  *
@@ -50,6 +53,12 @@ const css = readFileSync(join(here, "..", "index.css"), "utf8");
 const MAX_SAMPLE_DIMENSION = 128;
 const PIXEL_CHANNEL_TOLERANCE = 16;
 const MIN_CHANGED_RATIO = 0.001;
+/**
+ * 実運用で目指す下限。検知の下限（24fps）にすれすれで合わせず、縮小・
+ * エンコードで数フレーム落ちても下回らない余裕を持たせる。0.5vw x 7vh まで
+ * 縮めた帯はモデル上は通っても実測で minFps=18 まで落ちた（#1056 / #1142）。
+ */
+const TARGET_MIN_FPS = 28;
 /** OBS の出力 fps（`obs-studio/basic/profiles/Makamujo/basic.ini` の FPSNum）。 */
 const DELIVERED_FPS = 30;
 /** 検知側のサンプリング間隔（requestAnimationFrame ≒ 60Hz）。 */
@@ -480,7 +489,7 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
       expect(
         minPublishedRatio,
         `the published frames must differ against ${background.name}`,
-      ).toBeGreaterThan(MIN_CHANGED_RATIO);
+      ).toBeGreaterThan(MIN_CHANGED_RATIO * 2);
     }
   });
 
@@ -507,6 +516,15 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
         isFpsAboveThreshold(game.minFps, VIDEO_MIN_FPS),
         `the game panel must keep ${VIDEO_MIN_FPS} fps against ${background.name}`,
       ).toBe(true);
+      // 下限ちょうどではなく、公開 30fps のほぼ全フレームが変わる余裕を持つ。
+      expect(
+        whole.minFps,
+        `the whole picture must keep ${TARGET_MIN_FPS} fps against ${background.name}`,
+      ).toBeGreaterThanOrEqual(TARGET_MIN_FPS);
+      expect(
+        game.minFps,
+        `the game panel must keep ${TARGET_MIN_FPS} fps against ${background.name}`,
+      ).toBeGreaterThanOrEqual(TARGET_MIN_FPS);
     }
   });
 });
