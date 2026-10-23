@@ -26,8 +26,10 @@ import {
  *
  * 帯は全幅ではなく、左端の細い縦帯である（issue #1030: 全幅の帯が配信映像に
  * CRT の走査線のように見え続けた）。検知が見るのは左 60% のゲーム部分なので、
- * 左端の帯でも毎フレーム動いていれば足りる。ゲームの絵を隠す面積を最小に
- * するため、幅は 0.5vw に留める。
+ * 左端の帯でも毎フレーム動いていれば足りる。ただし幅 0.5vw は標本 128x72 で
+ * 0.64px にしかならず、H.264 エンコードと縮小で動きが落ちると配信が動いて
+ * いても fps が 0 に張り付いた（2026-10-24 05:25）。ゲームの絵を隠す面積を
+ * 最小にしつつ、縮小後も 2 列以上を保つ幅 2vw にする。
  *
  * 標本を作る時は、配信映像が立つまでの経路をなぞる。
  *
@@ -84,6 +86,15 @@ const MIN_DETECTABLE_BAND_RATIO = 0.08;
  * 最小限にする。
  */
 const MAX_BAND_WIDTH_VW = 2;
+/**
+ * 帯の幅 (vw) の下限。
+ *
+ * 幅 0.5vw は 128x72 の標本で 1 列に満たず、理想的な標本では通っても
+ * H.264 エンコードと縮小で動きが落ちると `videoAvgFps` が 0 になった
+ * （2026-10-24 05:25）。標本で 2 列以上（≒2vw）を確保して、エンコード後も
+ * 差分が残るようにする。
+ */
+const MIN_BAND_WIDTH_VW = 2;
 
 type Rgba = { r: number; g: number; b: number; a: number };
 
@@ -439,6 +450,9 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
     // issue #1030: 全幅の帯は走査線として見え続けた。左端の細い帯に留め、
     // ゲーム部分（左 60%）の中でも大部分の絵を隠さない。
     expect(band.widthVw).toBeLessThanOrEqual(MAX_BAND_WIDTH_VW);
+    // 0.5vw は縮小後 1 列未満になり、エンコードで動きが消えると停止と
+    // 誤検知される（2026-10-24 05:25）。標本で 2 列以上を保つ。
+    expect(band.widthVw).toBeGreaterThanOrEqual(MIN_BAND_WIDTH_VW);
     expect(band.leftVw).toBeGreaterThanOrEqual(0);
     expect(band.leftVw + band.widthVw).toBeLessThanOrEqual(
       GAME_CLIP.widthRatio * 100,
