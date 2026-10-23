@@ -14,7 +14,7 @@ import {
  * 鼓動の帯が「外からの異常検知」を満たすことを、検知側と同じ計算で確かめる。
  *
  * 検知 (`scripts/check-stream.ts`) は配信された映像を 128x72 に縮めて 1 フレーム
- * ごとの差分を見、10 秒窓を 1 秒バケットに切って **全バケット** で 24 枚超の
+ * ごとの差分を見、10 秒窓を 1 秒バケットに切って **全バケット** で 24 枚以上の
  * 移動フレームを要求する（`VIDEO_MIN_FPS`）。帯が画面の外へ完全に出ている
  * 瞬間は映像が完全に静止し、そのバケットは 24 枚を下回って「映像全体が
  * 停止し続けています」と誤検知される（issue #982）。
@@ -26,8 +26,10 @@ import {
  *
  * 帯は全幅ではなく、左端の細い縦帯である（issue #1030: 全幅の帯が配信映像に
  * CRT の走査線のように見え続けた）。検知が見るのは左 60% のゲーム部分なので、
- * 左端の帯でも毎フレーム動いていれば足りる。ゲームの絵を隠す面積を最小に
- * するため、幅は 0.5vw に留める。
+ * 左端の帯でも毎フレーム動いていれば足りる。ゲームの絵を隠す面積は
+ * 2vw x 12vh = 画面の 0.24% に留める。0.5vw の最小構成は差分画素が
+ * しきい値ぎりぎりで、実測 min fps 23 / 0 fps まで落ちたため（issue #1068 /
+ * 2026-10-24 01:28）、差分に余裕を持たせた幅にしている。
  *
  * 標本を作る時は、配信映像が立つまでの経路をなぞる。
  *
@@ -481,6 +483,24 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
         minPublishedRatio,
         `the published frames must differ against ${background.name}`,
       ).toBeGreaterThan(MIN_CHANGED_RATIO);
+    }
+  });
+
+  it("keeps a safety margin over the pixel-difference threshold", () => {
+    // 幅 0.5vw の最小構成は差分画素がしきい値をわずかに上回るだけで、
+    // エンコーダや縮小のばらつきで 1 秒バケットが 24 枚を割った
+    // （issue #1068: min 23 / 0 fps）。差分がしきい値の 2 倍を保つことを
+    // 要求し、これ以上の細幅化・低速化を弾く。
+    const requiredRatio = MIN_CHANGED_RATIO * 2;
+    for (const background of backgrounds) {
+      const { minPublishedRatio } = sampleDeliveredPicture(
+        band,
+        background.color,
+      );
+      expect(
+        minPublishedRatio,
+        `the moved pixels must exceed ${requiredRatio} against ${background.name}`,
+      ).toBeGreaterThan(requiredRatio);
     }
   });
 
