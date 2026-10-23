@@ -84,6 +84,16 @@ const MIN_DETECTABLE_BAND_RATIO = 0.08;
  * 最小限にする。
  */
 const MAX_BAND_WIDTH_VW = 2;
+/**
+ * 公開フレームの差分が検知しきい値に持つべき最低限の余裕（倍率）。
+ *
+ * OBS の出力フレームと CSS アニメーションの位相は同期しない。位相がずれて
+ * 帯が標本行に半端に掛かると、隣り合う公開フレームの帯が 1 行重なり、
+ * 変化画素が減る。実際に 2026-10-23 19:24 と 19:30 の検知では、音声と media
+ * clock が進んでいるのに `videoMinFps` が 21 / 18 まで落ちた（issue #1052,
+ * #1053）。しきい値ちょうどでは位相次第で下回るので、2 倍の余裕を要求する。
+ */
+const MIN_PUBLISHED_CHANGE_MARGIN = 2;
 
 type Rgba = { r: number; g: number; b: number; a: number };
 
@@ -384,6 +394,7 @@ const changedRatios = (
 const sampleDeliveredPicture = (
   band: BandGeometry,
   game: Rgba,
+  phaseMs = 0,
 ): { samples: MotionSample[]; minPublishedRatio: number } => {
   const width = MAX_SAMPLE_DIMENSION;
   const height = Math.round((MAX_SAMPLE_DIMENSION * 9) / 16);
@@ -399,8 +410,9 @@ const sampleDeliveredPicture = (
     const elapsedMs = sample * samplerStepMs;
     const index = Math.floor(elapsedMs / publishedStepMs);
     // 公開フレームは 30fps ごとに切り替わるので、絵はその時刻で固定される。
-    const publishedMs = index * publishedStepMs;
-    const cycle = (publishedMs / 1000 / band.durationSeconds) % 1;
+    // `phaseMs` は OBS の出力フレームとアニメーション開始のずれを表す。
+    const publishedMs = index * publishedStepMs + phaseMs;
+    const cycle = (((publishedMs / 1000 / band.durationSeconds) % 1) + 1) % 1;
     const bandTopVh = band.fromVh + (band.toVh - band.fromVh) * cycle;
     const current = renderSample(band, bandTopVh, game);
     if (index !== publishedIndex) {
@@ -426,6 +438,38 @@ const sampleDeliveredPicture = (
     previousSample = current;
   }
   return { samples, minPublishedRatio };
+};
+
+/**
+ * 公開フレームだけを並べて、隣り合うフレームの最小変化率を返す。
+ *
+ * 位相ごとの確認では rAF の重複サンプルは不要なので、公開フレーム
+ * （30fps）だけを描いて速く回す。`sampleDeliveredPicture` と同じ
+ * `renderSample` / `changedRatios` を使う。
+ */
+const minPublishedChangeRatio = (
+  band: BandGeometry,
+  game: Rgba,
+  phaseMs = 0,
+): number => {
+  const width = MAX_SAMPLE_DIMENSION;
+  const height = Math.round((MAX_SAMPLE_DIMENSION * 9) / 16);
+  const publishedStepMs = 1000 / DELIVERED_FPS;
+  const frameCount = Math.round(WINDOW_MS / publishedStepMs);
+  let previous: Uint8ClampedArray | null = null;
+  let minRatio = 1;
+  for (let index = 0; index <= frameCount; index += 1) {
+    const publishedMs = index * publishedStepMs + phaseMs;
+    const cycle = (((publishedMs / 1000 / band.durationSeconds) % 1) + 1) % 1;
+    const bandTopVh = band.fromVh + (band.toVh - band.fromVh) * cycle;
+    const current = renderSample(band, bandTopVh, game);
+    if (previous) {
+      const ratios = changedRatios(previous, current, width, height);
+      minRatio = Math.min(minRatio, ratios.whole, ratios.game);
+    }
+    previous = current;
+  }
+  return minRatio;
 };
 
 describe("the heartbeat band keeps the delivered picture moving", () => {
@@ -469,9 +513,10 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
     );
   });
 
-  it("keeps every published frame different", () => {
+  it("keeps every published frame different with margin", () => {
     // 公開フレームが 1 枚でも重なると、その 1 秒バケットは 29 枚になる。
     // 帯は Color Key で消された後でも、公開フレームごとに絵が変わる。
+    // しきい値ちょうどでは位相のずれで下回るので、2 倍の余裕を要求する。
     for (const background of backgrounds) {
       const { minPublishedRatio } = sampleDeliveredPicture(
         band,
@@ -480,7 +525,30 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
       expect(
         minPublishedRatio,
         `the published frames must differ against ${background.name}`,
-      ).toBeGreaterThan(MIN_CHANGED_RATIO);
+      ).toBeGreaterThan(MIN_CHANGED_RATIO * MIN_PUBLISHED_CHANGE_MARGIN);
+    }
+  });
+
+  it("keeps the margin at any published-frame phase", () => {
+    // OBS の出力フレームは CSS アニメーションの開始と同期しない。帯が標本の
+    // 行に半端に掛かる位相でも差分がしきい値を上回ることを確かめる。
+    const phaseStepMs = 1000 / DELIVERED_FPS / 8;
+    for (
+      let phaseMs = 0;
+      phaseMs < 1000 / DELIVERED_FPS;
+      phaseMs += phaseStepMs
+    ) {
+      for (const background of backgrounds) {
+        const minRatio = minPublishedChangeRatio(
+          band,
+          background.color,
+          phaseMs,
+        );
+        expect(
+          minRatio,
+          `the published frames must differ at phase ${phaseMs.toFixed(1)}ms against ${background.name}`,
+        ).toBeGreaterThan(MIN_CHANGED_RATIO * MIN_PUBLISHED_CHANGE_MARGIN);
+      }
     }
   });
 
