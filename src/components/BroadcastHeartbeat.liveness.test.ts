@@ -94,7 +94,7 @@ const MAX_BAND_WIDTH_VW = 2;
  * 「映像全体が停止」と誤検知される（2026-10-24）。検知できる最小の幅を
  * 下回らないよう固定する。
  */
-const MIN_BAND_WIDTH_VW = 1;
+const MIN_BAND_WIDTH_VW = 2;
 
 type Rgba = { r: number; g: number; b: number; a: number };
 
@@ -463,7 +463,7 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
     // 標本 128px 幅で 1 列未満だと、縮小・エンコードで平均化されたときに
     // 差分がしきい値を下回り、停止と誤検知される（2026-10-24）。
     const sampleColumnPx = (band.widthVw / 100) * MAX_SAMPLE_DIMENSION;
-    expect(sampleColumnPx).toBeGreaterThanOrEqual(1);
+    expect(sampleColumnPx).toBeGreaterThanOrEqual(2);
   });
 
   it("keeps a part of the band on screen at every moment", () => {
