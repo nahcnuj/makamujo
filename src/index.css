@@ -45,8 +45,8 @@
  *
  * 2026-10-22 までは全幅の帯を流していたが、配信を見た人には CRT の走査線の
  * ように見え続けた（issue #1030）。検知に必要なのは「左 60% の中で毎フレーム
- * 動く画素」だけなので、全幅をやめて左端の最小の帯にした。幅 0.5vw・高さ 7vh
- * は標本 128x72 で 1 列 x 5 行にあたり、1 フレームの移動で差分しきい値を
+ * 動く画素」だけなので、全幅をやめて左端の帯にした。幅 2vw・高さ 7vh
+ * は標本 128x72 で複数列 x 5 行にあたり、1 フレームの移動で差分しきい値を
  * 超える最小の面積。これ以上小さくすると検知できない。
  *
  * 帯は**不透明**にする。OBS の Color Key（key = 黒）は暗い画素を消すので、
@@ -71,15 +71,15 @@
   position: fixed;
   top: 0;
   left: 0vw;
-  width: 0.5vw;
+  width: 2vw;
   height: 7vh;
   pointer-events: none;
   z-index: 10000;
   border-radius: 0 9999px 9999px 0;
   background: linear-gradient(
     to bottom,
-    rgba(16, 165, 129, 1) 0%,
-    rgba(16, 165, 129, 1) 100%
+    rgba(16, 220, 160, 1) 0%,
+    rgba(16, 220, 160, 1) 100%
   );
   animation: broadcast-heartbeat-sweep 0.4s linear infinite;
   will-change: transform;
