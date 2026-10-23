@@ -24,10 +24,15 @@ import {
  * (`summarizeFps` / `isFpsAboveThreshold`) で判定する。CSS を変えたらこの
  * テストが落ちる。
  *
- * 帯は全幅ではなく、左端の細い縦帯である（issue #1030: 全幅の帯が配信映像に
+ * 帯は全幅ではなく、左端の縦帯である（issue #1030: 全幅の帯が配信映像に
  * CRT の走査線のように見え続けた）。検知が見るのは左 60% のゲーム部分なので、
- * 左端の帯でも毎フレーム動いていれば足りる。ゲームの絵を隠す面積を最小に
- * するため、幅は 0.5vw に留める。
+ * 左端の帯でも毎フレーム動いていれば足りる。細くしすぎるとエンコードで
+ * 落ちて 2026-10-23 22:03 に videoMinFps=19 まで下がったため、幅 2vw・
+ * 高さ 12vh に広げた（画面の 0.24% だけを覆う）。
+ *
+ * 帯は**60fps で設計する**（owner レビュー: PR #1057）。このテストは
+ * 60Hz の各標本が前の標本と検知できる差を持つことと、OBS が 30fps に
+ * 間引いても全バケットが 24 枚を余裕をもって超えることを確かめる。
  *
  * 標本を作る時は、配信映像が立つまでの経路をなぞる。
  *
@@ -38,9 +43,9 @@ import {
  *    画素を**不透明に**残しておかないと「帯が残っている」保証が立たない。
  * 3. ゲーム画面（XSHM のキャプチャ）を背後に合成した絵が、公開される絵。
  * 4. 検知側は requestAnimationFrame（≒60Hz）ごとに標本を比較する。公開
- *    映像は 30fps なので、同じフレームを 2 回ずつ拾う。観測できる変化
- *    フレームは 1 秒あたり 30 枚が上限で、公開フレームが 1 枚でも重な
- *    ればそのバケットは 29 枚になる。
+ *    映像が 30fps なら同じフレームを 2 回ずつ拾い、変化フレームは 1 秒
+ *    あたり 30 枚が上限になる。60fps なら毎標本が別フレームになる。
+ *    どちらでも 24 枚を余裕をもって超えることを下のテストで確かめる。
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -54,6 +59,22 @@ const MIN_CHANGED_RATIO = 0.001;
 const DELIVERED_FPS = 30;
 /** 検知側のサンプリング間隔（requestAnimationFrame ≒ 60Hz）。 */
 const SAMPLER_FPS = 60;
+/**
+ * 帯を設計する更新レート。
+ *
+ * owner レビュー（PR #1057）の「アニメーションを 60FPS で設計したら？」を
+ * そのまま検証する。検知側のサンプリングと同じ 60Hz で隣り合う標本が
+ * 検知できる差を持つことを要求する。
+ */
+const ANIMATION_FPS = SAMPLER_FPS;
+/**
+ * 判定に必要な 24fps からさらに確保する余裕。
+ *
+ * 実配信ではエンコードやフレーム落ちで数枚が比較から抜ける。24 ちょうどを
+ * 狙うと少しの取りこぼしで「停止」になるため、全バケットが 28fps を
+ * 超えることを要求する（2026-10-23 22:03 は minFps=19 / avgFps=23.4）。
+ */
+const FPS_MARGIN = 4;
 /** 検知側の窓（`CHECK_DURATION_MS`）。 */
 const WINDOW_MS = 10_000;
 /** 検知側のバケット幅（`FPS_BUCKET_MS`）。 */
@@ -377,18 +398,21 @@ const changedRatios = (
 /**
  * 帯だけを合成した配信映像を、検知側と同じ手順でサンプルする。
  *
- * 公開映像は 30fps（OBS の出力 fps）で、検知側は requestAnimationFrame
- * （≒60Hz）ごとに標本を比較する。公開フレームが変わるまでは同じ絵が
- * 見えているので、変化として数えられるのは公開フレームが変わる時だけ。
+ * 公開映像は既定で 30fps（OBS の出力 fps）だが、`deliveredFps` に 60 を
+ * 渡すと「帯を 60fps で設計できているか」を同じ計算で確かめられる。
+ * 検知側は requestAnimationFrame（≒60Hz）ごとに標本を比較する。公開
+ * フレームが変わるまでは同じ絵が見えているので、変化として数えられるのは
+ * 公開フレームが変わる時だけ。
  */
 const sampleDeliveredPicture = (
   band: BandGeometry,
   game: Rgba,
+  deliveredFps: number = DELIVERED_FPS,
 ): { samples: MotionSample[]; minPublishedRatio: number } => {
   const width = MAX_SAMPLE_DIMENSION;
   const height = Math.round((MAX_SAMPLE_DIMENSION * 9) / 16);
   const samplerStepMs = 1000 / SAMPLER_FPS;
-  const publishedStepMs = 1000 / DELIVERED_FPS;
+  const publishedStepMs = 1000 / deliveredFps;
   const sampleCount = Math.round(WINDOW_MS / samplerStepMs);
   const samples: MotionSample[] = [];
   let previousSample: Uint8ClampedArray | null = null;
@@ -398,7 +422,7 @@ const sampleDeliveredPicture = (
   for (let sample = 0; sample < sampleCount; sample += 1) {
     const elapsedMs = sample * samplerStepMs;
     const index = Math.floor(elapsedMs / publishedStepMs);
-    // 公開フレームは 30fps ごとに切り替わるので、絵はその時刻で固定される。
+    // 公開フレームは deliveredFps ごとに切り替わるので、絵はその時刻で固定される。
     const publishedMs = index * publishedStepMs;
     const cycle = (publishedMs / 1000 / band.durationSeconds) % 1;
     const bandTopVh = band.fromVh + (band.toVh - band.fromVh) * cycle;
@@ -469,7 +493,7 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
     );
   });
 
-  it("keeps every published frame different", () => {
+  it("keeps every delivered frame different", () => {
     // 公開フレームが 1 枚でも重なると、その 1 秒バケットは 29 枚になる。
     // 帯は Color Key で消された後でも、公開フレームごとに絵が変わる。
     for (const background of backgrounds) {
@@ -484,7 +508,44 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
     }
   });
 
-  it("passes the health check's frame rate requirement", () => {
+  it("is designed for 60fps sampling", () => {
+    // owner レビュー（PR #1057）: アニメーションを 60FPS で設計する。
+    // 60Hz の隣り合う標本が検知できる差を持てば、OBS が 30fps に間引いて
+    // も各バケットは 24 枚を余裕をもって超える。
+    for (const background of backgrounds) {
+      const { minPublishedRatio, samples } = sampleDeliveredPicture(
+        band,
+        background.color,
+        ANIMATION_FPS,
+      );
+      expect(
+        minPublishedRatio,
+        `the 60fps frames must differ against ${background.name}`,
+      ).toBeGreaterThan(MIN_CHANGED_RATIO);
+      const whole = summarizeFps(
+        samples,
+        (sample) => sample.wholeChanged,
+        BUCKET_MS,
+        WINDOW_MS,
+      );
+      const game = summarizeFps(
+        samples,
+        (sample) => sample.gameChanged,
+        BUCKET_MS,
+        WINDOW_MS,
+      );
+      expect(
+        isFpsAboveThreshold(whole.minFps, VIDEO_MIN_FPS + FPS_MARGIN),
+        `the 60fps whole picture must keep ${VIDEO_MIN_FPS + FPS_MARGIN} fps against ${background.name}`,
+      ).toBe(true);
+      expect(
+        isFpsAboveThreshold(game.minFps, VIDEO_MIN_FPS + FPS_MARGIN),
+        `the 60fps game panel must keep ${VIDEO_MIN_FPS + FPS_MARGIN} fps against ${background.name}`,
+      ).toBe(true);
+    }
+  });
+
+  it("passes the health check's frame rate requirement with margin", () => {
     for (const background of backgrounds) {
       const { samples } = sampleDeliveredPicture(band, background.color);
       const whole = summarizeFps(
@@ -500,12 +561,20 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
         WINDOW_MS,
       );
       expect(
-        isFpsAboveThreshold(whole.minFps, VIDEO_MIN_FPS),
-        `the whole picture must keep ${VIDEO_MIN_FPS} fps against ${background.name}`,
+        isFpsAboveThreshold(whole.minFps, VIDEO_MIN_FPS + FPS_MARGIN),
+        `the whole picture must keep ${VIDEO_MIN_FPS + FPS_MARGIN} fps against ${background.name}`,
       ).toBe(true);
       expect(
-        isFpsAboveThreshold(game.minFps, VIDEO_MIN_FPS),
-        `the game panel must keep ${VIDEO_MIN_FPS} fps against ${background.name}`,
+        isFpsAboveThreshold(whole.avgFps, VIDEO_MIN_FPS + FPS_MARGIN),
+        `the whole picture average must keep ${VIDEO_MIN_FPS + FPS_MARGIN} fps against ${background.name}`,
+      ).toBe(true);
+      expect(
+        isFpsAboveThreshold(game.minFps, VIDEO_MIN_FPS + FPS_MARGIN),
+        `the game panel must keep ${VIDEO_MIN_FPS + FPS_MARGIN} fps against ${background.name}`,
+      ).toBe(true);
+      expect(
+        isFpsAboveThreshold(game.avgFps, VIDEO_MIN_FPS + FPS_MARGIN),
+        `the game panel average must keep ${VIDEO_MIN_FPS + FPS_MARGIN} fps against ${background.name}`,
       ).toBe(true);
     }
   });
