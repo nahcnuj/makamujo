@@ -7,7 +7,7 @@ on:
     branches:
       - main
     paths:
-      - 'scripts/**.js'
+      - 'scripts/**'
       - '.github/workflows/stream-health-check.yml'
   workflow_dispatch:  # Allow manual trigger for testing
 
