@@ -26,8 +26,10 @@ import {
  *
  * 帯は全幅ではなく、左端の細い縦帯である（issue #1030: 全幅の帯が配信映像に
  * CRT の走査線のように見え続けた）。検知が見るのは左 60% のゲーム部分なので、
- * 左端の帯でも毎フレーム動いていれば足りる。ゲームの絵を隠す面積を最小に
- * するため、幅は 0.5vw に留める。
+ * 左端の帯でも毎フレーム動いていれば足りる。ただし細くしすぎると標本で
+ * 1 列しか残らず、エンコード後の実配信で差分がしきい値を下回る（2026-10-24
+ * の「映像全体 / ゲーム画面部分が停止」）。合成標本でもしきい値の 2 倍の
+ * 余裕を要求する。
  *
  * 標本を作る時は、配信映像が立つまでの経路をなぞる。
  *
@@ -50,6 +52,15 @@ const css = readFileSync(join(here, "..", "index.css"), "utf8");
 const MAX_SAMPLE_DIMENSION = 128;
 const PIXEL_CHANNEL_TOLERANCE = 16;
 const MIN_CHANGED_RATIO = 0.001;
+/**
+ * 検知しきい値に対して標本が持つべき余裕。
+ *
+ * 標本は縮小・公開フレームの量子化・エンコード後のぼけを模していない。
+ * しきい値ちょうどの帯は実配信で下回り、健全な配信を停止と誤検知する
+ * （2026-10-24: 幅 0.5vw の帯は 1 列 x 5 行で、差分 10px がしきい値
+ * 9.2px にわずかに届くだけだった）。2 倍を要求して再発を防ぐ。
+ */
+const MIN_DETECTION_MARGIN = 2;
 /** OBS の出力 fps（`obs-studio/basic/profiles/Makamujo/basic.ini` の FPSNum）。 */
 const DELIVERED_FPS = 30;
 /** 検知側のサンプリング間隔（requestAnimationFrame ≒ 60Hz）。 */
@@ -469,9 +480,10 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
     );
   });
 
-  it("keeps every published frame different", () => {
+  it("keeps every published frame different with a detection margin", () => {
     // 公開フレームが 1 枚でも重なると、その 1 秒バケットは 29 枚になる。
-    // 帯は Color Key で消された後でも、公開フレームごとに絵が変わる。
+    // 帯は Color Key で消された後でも、公開フレームごとに絵が変わり、
+    // しかも実配信のエンコードで痩せてもしきい値を超える余裕を持つ。
     for (const background of backgrounds) {
       const { minPublishedRatio } = sampleDeliveredPicture(
         band,
@@ -480,7 +492,7 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
       expect(
         minPublishedRatio,
         `the published frames must differ against ${background.name}`,
-      ).toBeGreaterThan(MIN_CHANGED_RATIO);
+      ).toBeGreaterThan(MIN_CHANGED_RATIO * MIN_DETECTION_MARGIN);
     }
   });
 
