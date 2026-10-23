@@ -1,5 +1,11 @@
 name: Stream Health Check
 
+# This check measures the stream that is currently deployed, not the code in a
+# pull request. Running the measurement on pull_request made every PR fail
+# while the deployment was unhealthy, and every failure created an issue that
+# drove another PR whose check failed the same way (issue #1093 and the cascade
+# before it). The trigger stays so the workflow runs on PRs, but only scheduled
+# and manual runs actually measure the stream.
 on:
   schedule:
     - cron: "15 * * * *"  # Every hour at minute 15 (avoid exact hour boundaries)
@@ -27,22 +33,32 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
+      - name: Skip live-stream measurement on pull requests
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "This check measures the deployed stream, not the pull request."
+          echo "Skipping the measurement so an unhealthy deployment cannot fail every PR."
+
       - name: Install dependencies
+        if: github.event_name != 'pull_request'
         run: bun ci
 
       - name: Install Playwright Chromium
+        if: github.event_name != 'pull_request'
         run: bunx playwright install chromium
 
       - name: Install Japanese fonts
+        if: github.event_name != 'pull_request'
         run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
 
       - name: Run stream health check
         id: stream-check
+        if: github.event_name != 'pull_request'
         run: bun run scripts/check-stream.ts
 
       - name: Create issue if check failed
         id: create-issue
-        if: failure()
+        if: failure() && github.event_name != 'pull_request'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
