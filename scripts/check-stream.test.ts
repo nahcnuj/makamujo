@@ -701,6 +701,7 @@ describe("isFpsAboveThreshold", () => {
   it("fails only when the minimum fps is below the threshold", () => {
     expect(isFpsAboveThreshold(23.9, VIDEO_MIN_FPS)).toBe(false);
     expect(isFpsAboveThreshold(0, GAME_MIN_FPS)).toBe(false);
+    expect(isFpsAboveThreshold(7.9, GAME_MIN_FPS)).toBe(false);
     expect(isFpsAboveThreshold(8.5, GAME_MIN_FPS)).toBe(true);
   });
 });
