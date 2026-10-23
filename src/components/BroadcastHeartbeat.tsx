@@ -18,7 +18,7 @@
  * 幅 2vw・高さ 12vh にして差分 pixel に約 4 倍の余白を持たせる。動きは
  * `src/index.css` の `broadcast-heartbeat-sweep`（待ち無しの `infinite`）。
  * 止まる時間帯を作らないこと。2026-10-23 強化: 帯を不透明・角丸なしにして
- * Color Key で消えないようにし、常時画面内で 0.3s 周期に動かして
+ * Color Key で消えないようにし、常時画面内で 0.2s 周期に動かして
  * エンコード後でも minFps > 24 を保証。
  */
 export function BroadcastHeartbeat() {
