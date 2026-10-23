@@ -6,6 +6,9 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - 'scripts/**.js'
+      - '.github/workflows/stream-health-check.yml'
   workflow_dispatch:  # Allow manual trigger for testing
 
 permissions:
