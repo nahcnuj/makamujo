@@ -27,7 +27,9 @@ import {
  * 帯は全幅ではなく、左端の細い縦帯である（issue #1030: 全幅の帯が配信映像に
  * CRT の走査線のように見え続けた）。検知が見るのは左 60% のゲーム部分なので、
  * 左端の帯でも毎フレーム動いていれば足りる。ゲームの絵を隠す面積を最小に
- * するため、幅は 0.5vw に留める。
+ * するため、幅は 2vw に留める。幅 0.5vw では公開フレーム間の差分が
+ * しきい値の 1.08 倍しかなく、エンコードで数フレーム落ちると検知に失敗した
+ * （issue #1058）。2vw でも画面に占める面積は 0.14% に収まる。
  *
  * 標本を作る時は、配信映像が立つまでの経路をなぞる。
  *
@@ -50,6 +52,8 @@ const css = readFileSync(join(here, "..", "index.css"), "utf8");
 const MAX_SAMPLE_DIMENSION = 128;
 const PIXEL_CHANNEL_TOLERANCE = 16;
 const MIN_CHANGED_RATIO = 0.001;
+/** エンコードで数フレーム落ちても検知できるだけの差分の余裕。 */
+const MIN_PUBLISHED_FRAME_MARGIN = 3;
 /** OBS の出力 fps（`obs-studio/basic/profiles/Makamujo/basic.ini` の FPSNum）。 */
 const DELIVERED_FPS = 30;
 /** 検知側のサンプリング間隔（requestAnimationFrame ≒ 60Hz）。 */
@@ -480,7 +484,7 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
       expect(
         minPublishedRatio,
         `the published frames must differ against ${background.name}`,
-      ).toBeGreaterThan(MIN_CHANGED_RATIO);
+      ).toBeGreaterThanOrEqual(MIN_CHANGED_RATIO * MIN_PUBLISHED_FRAME_MARGIN);
     }
   });
 
