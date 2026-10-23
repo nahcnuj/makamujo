@@ -303,13 +303,14 @@ export function shouldReMeasure(
 
 /**
  * A picture counts as moving only when its slowest one-second bucket keeps
- * enough changed frames. A threshold of N means "N FPS or below is an error".
+ * enough changed frames. The threshold is the accepted lower bound (owner
+ * contract, issue #1056): minFps >= thresholdFps is healthy.
  */
 export function isFpsAboveThreshold(
   minFps: number,
   thresholdFps: number,
 ): boolean {
-  return minFps > thresholdFps;
+  return minFps >= thresholdFps;
 }
 
 export function isOverallOk(
