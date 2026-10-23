@@ -27,7 +27,9 @@ import {
  * 帯は全幅ではなく、左端の細い縦帯である（issue #1030: 全幅の帯が配信映像に
  * CRT の走査線のように見え続けた）。検知が見るのは左 60% のゲーム部分なので、
  * 左端の帯でも毎フレーム動いていれば足りる。ゲームの絵を隠す面積を最小に
- * するため、幅は 0.5vw に留める。
+ * するため、幅は 2vw に留める。幅 0.5vw は標本上 1 列未満 (0.64px) で、
+ * 縮小やエンコードの平均化で差分が消え、「映像全体が停止」と誤検知された
+ * （2026-10-24）。
  *
  * 標本を作る時は、配信映像が立つまでの経路をなぞる。
  *
@@ -84,6 +86,22 @@ const MIN_DETECTABLE_BAND_RATIO = 0.08;
  * 最小限にする。
  */
 const MAX_BAND_WIDTH_VW = 2;
+/**
+ * 帯の幅が検知側の標本（128px 幅）で保つ最小の列数。
+ *
+ * 幅 0.5vw は標本上 1 列未満 (0.64px) で、縮小やエンコードの平均化で差分が
+ * 消えて「映像全体が停止」と誤検知された（2026-10-24）。幅 2vw は約 2.6 列
+ * あり、公開フレームごとの差分がしきい値を安定して超える。
+ */
+const MIN_SAMPLE_BAND_COLUMNS = 2;
+/**
+ * 公開フレーム間の差分率が、検知側のしきい値に対して持つべき余裕（倍）。
+ *
+ * 幅 0.5vw の帯は差分率がしきい値の 1.08 倍しかなく、縮小・エンコードの
+ * わずかな差で「停止」に落ちた（2026-10-24）。しきい値ぎりぎりではなく、
+ * 2 倍以上の余裕を保つ。
+ */
+const MIN_PUBLISHED_RATIO_MARGIN = 2;
 
 type Rgba = { r: number; g: number; b: number; a: number };
 
@@ -438,6 +456,8 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
   it("stays a narrow edge strip instead of a full-width scanline", () => {
     // issue #1030: 全幅の帯は走査線として見え続けた。左端の細い帯に留め、
     // ゲーム部分（左 60%）の中でも大部分の絵を隠さない。
+    const sampleColumnPx = (band.widthVw / 100) * MAX_SAMPLE_DIMENSION;
+    expect(sampleColumnPx).toBeGreaterThanOrEqual(MIN_SAMPLE_BAND_COLUMNS);
     expect(band.widthVw).toBeLessThanOrEqual(MAX_BAND_WIDTH_VW);
     expect(band.leftVw).toBeGreaterThanOrEqual(0);
     expect(band.leftVw + band.widthVw).toBeLessThanOrEqual(
@@ -480,7 +500,7 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
       expect(
         minPublishedRatio,
         `the published frames must differ against ${background.name}`,
-      ).toBeGreaterThan(MIN_CHANGED_RATIO);
+      ).toBeGreaterThanOrEqual(MIN_CHANGED_RATIO * MIN_PUBLISHED_RATIO_MARGIN);
     }
   });
 
