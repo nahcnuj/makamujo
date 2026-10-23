@@ -392,6 +392,41 @@ const changedRatios = (
   };
 };
 
+const boxBlur = (
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+  radius: number,
+): Uint8ClampedArray => {
+  const blurred = new Uint8ClampedArray(pixels);
+  const accum = { red: 0, green: 0, blue: 0, count: 0 };
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      accum.red = 0;
+      accum.green = 0;
+      accum.blue = 0;
+      accum.count = 0;
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        const sourceY = Math.min(height - 1, Math.max(0, y + dy));
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          const sourceX = Math.min(width - 1, Math.max(0, x + dx));
+          const sourceOffset = (sourceY * width + sourceX) * 4;
+          accum.red += pixels[sourceOffset] ?? 0;
+          accum.green += pixels[sourceOffset + 1] ?? 0;
+          accum.blue += pixels[sourceOffset + 2] ?? 0;
+          accum.count += 1;
+        }
+      }
+      const offset = (y * width + x) * 4;
+      blurred[offset] = accum.red / accum.count;
+      blurred[offset + 1] = accum.green / accum.count;
+      blurred[offset + 2] = accum.blue / accum.count;
+      blurred[offset + 3] = pixels[offset + 3] ?? 1;
+    }
+  }
+  return blurred;
+};
+
 /**
  * 帯だけを合成した配信映像を、検知側と同じ手順でサンプルする。
  *
@@ -402,13 +437,18 @@ const changedRatios = (
 const sampleDeliveredPicture = (
   band: BandGeometry,
   game: Rgba,
-): { samples: MotionSample[]; minPublishedRatio: number } => {
+): {
+  samples: MotionSample[];
+  minPublishedRatio: number;
+  frames: Uint8ClampedArray[];
+} => {
   const width = MAX_SAMPLE_DIMENSION;
   const height = Math.round((MAX_SAMPLE_DIMENSION * 9) / 16);
   const samplerStepMs = 1000 / SAMPLER_FPS;
   const publishedStepMs = 1000 / DELIVERED_FPS;
   const sampleCount = Math.round(WINDOW_MS / samplerStepMs);
   const samples: MotionSample[] = [];
+  const frames: Uint8ClampedArray[] = [];
   let previousSample: Uint8ClampedArray | null = null;
   let previousPublished: Uint8ClampedArray | null = null;
   let publishedIndex = -1;
@@ -422,6 +462,7 @@ const sampleDeliveredPicture = (
     const bandTopVh = band.fromVh + (band.toVh - band.fromVh) * cycle;
     const current = renderSample(band, bandTopVh, game);
     if (index !== publishedIndex) {
+      frames.push(current);
       if (previousPublished) {
         const ratios = changedRatios(previousPublished, current, width, height);
         minPublishedRatio = Math.min(
@@ -443,7 +484,7 @@ const sampleDeliveredPicture = (
     }
     previousSample = current;
   }
-  return { samples, minPublishedRatio };
+  return { samples, minPublishedRatio, frames };
 };
 
 describe("the heartbeat band keeps the delivered picture moving", () => {
@@ -502,6 +543,41 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
         `the published frames must differ against ${background.name}`,
       ).toBeGreaterThanOrEqual(MIN_CHANGED_RATIO * MIN_PUBLISHED_RATIO_MARGIN);
     }
+  });
+
+  it("keeps detecting motion after encoding blurs consecutive frames", () => {
+    const blurRadiusPx = 1;
+    const height = Math.round((MAX_SAMPLE_DIMENSION * 9) / 16);
+    let blurredMinRatio = 1;
+    for (const background of backgrounds) {
+      const { frames } = sampleDeliveredPicture(band, background.color);
+      let previous: Uint8ClampedArray | null = null;
+      for (const frame of frames) {
+        const blurred = boxBlur(
+          frame,
+          MAX_SAMPLE_DIMENSION,
+          height,
+          blurRadiusPx,
+        );
+        if (previous) {
+          const ratios = changedRatios(
+            previous,
+            blurred,
+            MAX_SAMPLE_DIMENSION,
+            height,
+          );
+          blurredMinRatio = Math.min(
+            blurredMinRatio,
+            ratios.whole,
+            ratios.game,
+          );
+        }
+        previous = blurred;
+      }
+    }
+    expect(blurredMinRatio).toBeGreaterThanOrEqual(
+      MIN_CHANGED_RATIO * MIN_PUBLISHED_RATIO_MARGIN,
+    );
   });
 
   it("passes the health check's frame rate requirement", () => {
