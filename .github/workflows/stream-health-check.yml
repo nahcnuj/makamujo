@@ -3,9 +3,12 @@ name: Stream Health Check
 on:
   schedule:
     - cron: "15 * * * *"  # Every hour at minute 15 (avoid exact hour boundaries)
-  pull_request:
-    branches:
-      - main
+  # この検査は本番の配信を外部から測るため、PR の内容ではなく production の
+  # 状態を判定する。pull_request で起動すると、配信が止まっている間は必ず
+  # 失敗し、その失敗が新しい issue と auto-drive の PR を生み、次の PR の
+  # 検査もまた失敗する循環になる（2026-10-24 に issue/PR が連鎖した）。
+  # 修正 PR を止めてしまうので PR では起動しない。検知コード自体の確認は
+  # workflow_dispatch で手動実行する。
   workflow_dispatch:  # Allow manual trigger for testing
 
 permissions:
