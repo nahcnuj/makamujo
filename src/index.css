@@ -72,7 +72,7 @@
   top: 0;
   left: 0vw;
   width: 2vw;
-  height: 10vh;
+  height: 12vh;
   pointer-events: none;
   z-index: 10000;
   border-radius: 0 4px 4px 0;
@@ -81,6 +81,6 @@
     rgba(0, 255, 120, 1) 0%,
     rgba(0, 255, 120, 1) 100%
   );
-  animation: broadcast-heartbeat-sweep 0.1s linear infinite;
+  animation: broadcast-heartbeat-sweep 0.08s linear infinite;
   will-change: transform;
 }
