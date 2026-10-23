@@ -1315,7 +1315,7 @@ async function checkStream(): Promise<CheckResult> {
       );
       details.videoMinFps = videoFps.minFps;
       details.videoAvgFps = videoFps.avgFps;
-      videoPlaying = isFpsAboveThreshold(videoFps.avgFps, VIDEO_MIN_FPS);
+      videoPlaying = isFpsAboveThreshold(videoFps.minFps, VIDEO_MIN_FPS);
       if (!videoPlaying) {
         phenomena.push("映像全体が停止し続けています");
       } else {
@@ -1340,7 +1340,7 @@ async function checkStream(): Promise<CheckResult> {
       );
       details.gameMinFps = gameFps.minFps;
       details.gameAvgFps = gameFps.avgFps;
-      gameScreenPlaying = isFpsAboveThreshold(gameFps.avgFps, GAME_MIN_FPS);
+      gameScreenPlaying = isFpsAboveThreshold(gameFps.minFps, VIDEO_MIN_FPS);
       if (!gameScreenPlaying) {
         phenomena.push("ゲーム画面部分が停止し続けています");
       } else {
