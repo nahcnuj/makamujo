@@ -27,7 +27,7 @@ import {
  * 帯は全幅ではなく、左端の細い縦帯である（issue #1030: 全幅の帯が配信映像に
  * CRT の走査線のように見え続けた）。検知が見るのは左 60% のゲーム部分なので、
  * 左端の帯でも毎フレーム動いていれば足りる。ゲームの絵を隠す面積を最小に
- * するため、幅は 2vw に留める。
+ * するため、幅は 0.5vw に留める。
  *
  * 標本を作る時は、配信映像が立つまでの経路をなぞる。
  *
@@ -444,7 +444,7 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
       GAME_CLIP.widthRatio * 100,
     );
     const areaRatio = (band.widthVw / 100) * (band.heightVh / 100);
-    expect(areaRatio).toBeLessThan(0.015);
+    expect(areaRatio).toBeLessThan(0.01);
   });
 
   it("keeps a part of the band on screen at every moment", () => {
