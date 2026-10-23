@@ -116,6 +116,9 @@ export const isOnAirFromClock = (
   if (motion === undefined) {
     return undefined;
   }
+  if (motion.tainted || motion.sawAdvertisement) {
+    return undefined;
+  }
   if (motion.clockAdvancedSeconds > CLOCK_ADVANCE_MIN_SECONDS) {
     return true;
   }
