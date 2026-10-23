@@ -19,10 +19,15 @@ import {
  * 瞬間は映像が完全に静止し、そのバケットは 24 枚を下回って「映像全体が
  * 停止し続けています」と誤検知される（issue #982）。
  *
- * ここでは帯の CSS（位置・高さ・周期・配色）を読み取って、配信された絵を
+ * ここでは帯の CSS（位置・幅・高さ・周期・配色）を読み取って、配信された絵を
  * 128x72 へ縮めた標本を作り、検知と**同じ**判定関数
  * (`summarizeFps` / `isFpsAboveThreshold`) で判定する。CSS を変えたらこの
  * テストが落ちる。
+ *
+ * 帯は全幅ではなく、左端の細い縦帯である（issue #1030: 全幅の帯が配信映像に
+ * CRT の走査線のように見え続けた）。検知が見るのは左 60% のゲーム部分なので、
+ * 左端の帯でも毎フレーム動いていれば足りる。ゲームの絵を隠す面積を最小に
+ * するため、幅は 0.5vw に留める。
  *
  * 標本を作る時は、配信映像が立つまでの経路をなぞる。
  *
@@ -67,10 +72,18 @@ const KEY_BRIGHTNESS_FLOOR = 160;
  * 少なくとも持つべき割合。
  *
  * 白だけの帯は白背景の上で消える。緑は黒背景でも白背景でもゲーム画面と
- * 十分に横に伸びるが、半透明だと暗いページ背景と混ざって key 色寄りに
- * なり得る。不透明な緑の領域を厚く残すのがこの条件の中身。
+ * 十分に差が出るが、半透明だと暗いページ背景と混ざって key 色寄りに
+ * なり得る。帯を不透明な緑一色にするのがこの条件の中身。
  */
 const MIN_DETECTABLE_BAND_RATIO = 0.08;
+/**
+ * 帯の幅 (vw) の上限。
+ *
+ * 全幅の帯は配信映像に CRT の走査線のように見え続けた（issue #1030）。
+ * 検知に必要な動きは左端の細い帯でも足りるので、ゲームの絵を覆う面積を
+ * 最小限にする。
+ */
+const MAX_BAND_WIDTH_VW = 2;
 
 type Rgba = { r: number; g: number; b: number; a: number };
 
@@ -80,6 +93,10 @@ type BandGeometry = {
   /** 帯の上端の移動範囲 (vh)。 */
   fromVh: number;
   toVh: number;
+  /** 帯の左端 (vw)。 */
+  leftVw: number;
+  /** 帯の幅 (vw)。 */
+  widthVw: number;
   /** 帯の高さ (vh)。 */
   heightVh: number;
   /** 1 往復にかかる時間 (秒)。 */
@@ -143,6 +160,12 @@ const readBandGeometry = (): BandGeometry => {
       "the end position",
     ),
   );
+  const leftVw = Number.parseFloat(
+    requireGroup(/left:\s*(-?[\d.]+)vw/, rule, "the band left"),
+  );
+  const widthVw = Number.parseFloat(
+    requireGroup(/width:\s*([\d.]+)vw/, rule, "the band width"),
+  );
   const heightVh = Number.parseFloat(
     requireGroup(/height:\s*([\d.]+)vh/, rule, "the band height"),
   );
@@ -167,7 +190,15 @@ const readBandGeometry = (): BandGeometry => {
   if (stops.length < 2) {
     throw new Error("the heartbeat band CSS has no readable gradient stops");
   }
-  return { fromVh, toVh, heightVh, durationSeconds, stops };
+  return {
+    fromVh,
+    toVh,
+    leftVw,
+    widthVw,
+    heightVh,
+    durationSeconds,
+    stops,
+  };
 };
 
 const colorAt = (stops: GradientStop[], ratio: number): Rgba => {
@@ -212,8 +243,9 @@ const over = (top: Rgba, bottom: Rgba): Rgba => ({
 /**
  * 配信された 1 フレームを、検知側の標本（128x72）として作る。
  *
- * 帯は `position: fixed` で画面の上から `translateY` だけ動かした全幅の矩形。
- * 標本は 72px = 100vh なので 1vh は 0.72px。
+ * 帯は `position: fixed` で画面の上から `translateY` だけ動かした矩形。
+ * 標本は 72px = 100vh なので 1vh は 0.72px、128px = 100vw なので
+ * 1vw は 1.28px。左端の細い帯も、この縮小で 1〜2 列の差分として残る。
  *
  * ページ → Color Key → ゲーム画面、の順に合成する。
  */
@@ -227,12 +259,19 @@ const renderSample = (
   const pixels = new Uint8ClampedArray(width * height * 4);
   const bandTopPx = bandTopVh * (height / 100);
   const bandHeightPx = band.heightVh * (height / 100);
+  const bandLeftPx = band.leftVw * (width / 100);
+  const bandWidthPx = band.widthVw * (width / 100);
   const page = over(premultiply(PAGE_BACKGROUND), premultiply(PAGE_CANVAS));
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const offset = (y * width + x) * 4;
       let pagePixel = page;
-      if (y + 0.5 >= bandTopPx && y + 0.5 < bandTopPx + bandHeightPx) {
+      if (
+        y + 0.5 >= bandTopPx &&
+        y + 0.5 < bandTopPx + bandHeightPx &&
+        x + 0.5 >= bandLeftPx &&
+        x + 0.5 < bandLeftPx + bandWidthPx
+      ) {
         const overlay = colorAt(
           band.stops,
           (y + 0.5 - bandTopPx) / bandHeightPx,
@@ -262,7 +301,7 @@ const renderSample = (
  * - 不透明（半透明だと暗いページ背景と混ざって key 色寄りになる）
  * - key 色（黒）から十分離れている
  * - 黒背景にも白背景にも、検知側の差分しきい値を超える差になる
- * 画素帯。帯は上下 2 つの緑の領域を持つので、その合計を測る。
+ * 画素帯。帯は不透明な緑一色なので、その区間の合計を測る。
  */
 const detectableBandRatio = (band: BandGeometry): number => {
   const visibleOn = (color: Rgba, background: Rgba): boolean => {
@@ -396,6 +435,18 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
     { name: "a bright game screen", color: { r: 240, g: 240, b: 240, a: 1 } },
   ];
 
+  it("stays a narrow edge strip instead of a full-width scanline", () => {
+    // issue #1030: 全幅の帯は走査線として見え続けた。左端の細い帯に留め、
+    // ゲーム部分（左 60%）の中でも大部分の絵を隠さない。
+    expect(band.widthVw).toBeLessThanOrEqual(MAX_BAND_WIDTH_VW);
+    expect(band.leftVw).toBeGreaterThanOrEqual(0);
+    expect(band.leftVw + band.widthVw).toBeLessThanOrEqual(
+      GAME_CLIP.widthRatio * 100,
+    );
+    const areaRatio = (band.widthVw / 100) * (band.heightVh / 100);
+    expect(areaRatio).toBeLessThan(0.01);
+  });
+
   it("keeps a part of the band on screen at every moment", () => {
     // 帯が完全に画面外へ出ている瞬間は映像が完全静止し、1 秒バケットの移動
     // フレーム数が 24 枚を下回って「停止」と誤検知される。
@@ -412,7 +463,7 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
   it("keeps a region that survives the color key on any game screen", () => {
     // OBS の Color Key（key = 黒）は key 色から遠い画素しか残さない。帯が
     // 白だけだと白背景の上で消えてしまい、帯が半透明だと暗いページ背景と
-    // 混ざって key 色寄りになる。不透明な緑の領域を厚く残す。
+    // 混ざって key 色寄りになる。不透明な緑一色にする。
     expect(detectableBandRatio(band)).toBeGreaterThanOrEqual(
       MIN_DETECTABLE_BAND_RATIO,
     );
