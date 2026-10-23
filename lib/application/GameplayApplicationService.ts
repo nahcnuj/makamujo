@@ -102,11 +102,15 @@ export class GameplayApplicationService {
 
         if (state.name === "closed") {
           this.#session.playing = undefined;
+          activity = initialGameActivityState();
           this.#notifyGameStateChange();
           return Action.noop;
         }
 
         if (state.name === "initialized") {
+          this.#session.playing = undefined;
+          activity = initialGameActivityState();
+          this.#notifyGameStateChange();
           // ブラウザセッションが（再）接続した。
           //
           // セッションは再起動するたびに開いていたページを失う
@@ -182,6 +186,9 @@ export class GameplayApplicationService {
               console.warn(
                 "[WARN] game stayed off the playing screen; restarting the round",
               );
+              this.#session.playing = undefined;
+              activity = initialGameActivityState();
+              this.#notifyGameStateChange();
               solver = createSolver();
             }
           }
