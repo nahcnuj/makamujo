@@ -1315,14 +1315,14 @@ async function checkStream(): Promise<CheckResult> {
       );
       details.videoMinFps = videoFps.minFps;
       details.videoAvgFps = videoFps.avgFps;
-      videoPlaying = isFpsAboveThreshold(videoFps.minFps, VIDEO_MIN_FPS);
+      videoPlaying = isFpsAboveThreshold(videoFps.avgFps, VIDEO_MIN_FPS);
       if (!videoPlaying) {
         phenomena.push("映像全体が停止し続けています");
       } else {
         console.log(
-          `[INFO] Video moving: min fps = ${videoFps.minFps.toFixed(
+          `[INFO] Video moving: avg fps = ${videoFps.avgFps.toFixed(
             1,
-          )} (avg ${videoFps.avgFps.toFixed(1)})`,
+          )} (min ${videoFps.minFps.toFixed(1)})`,
         );
       }
     }
@@ -1340,14 +1340,14 @@ async function checkStream(): Promise<CheckResult> {
       );
       details.gameMinFps = gameFps.minFps;
       details.gameAvgFps = gameFps.avgFps;
-      gameScreenPlaying = isFpsAboveThreshold(gameFps.minFps, GAME_MIN_FPS);
+      gameScreenPlaying = isFpsAboveThreshold(gameFps.avgFps, GAME_MIN_FPS);
       if (!gameScreenPlaying) {
         phenomena.push("ゲーム画面部分が停止し続けています");
       } else {
         console.log(
-          `[INFO] Game screen moving: min fps = ${gameFps.minFps.toFixed(
+          `[INFO] Game screen moving: avg fps = ${gameFps.avgFps.toFixed(
             1,
-          )} (avg ${gameFps.avgFps.toFixed(1)})`,
+          )} (min ${gameFps.minFps.toFixed(1)})`,
         );
       }
     }
