@@ -68,7 +68,7 @@
     transform: translateY(0vh);
   }
   to {
-    transform: translateY(88vh);
+    transform: translateY(75vh);
   }
 }
 
@@ -76,8 +76,8 @@
   position: fixed;
   top: 0;
   left: 0vw;
-  width: 1.5vw;
-  height: 8vh;
+  width: 2vw;
+  height: 25vh;
   pointer-events: none;
   z-index: 10000;
   background: linear-gradient(
@@ -85,6 +85,6 @@
     rgba(16, 185, 129, 1) 0%,
     rgba(16, 185, 129, 1) 100%
   );
-  animation: broadcast-heartbeat-sweep 0.35s linear infinite;
+  animation: broadcast-heartbeat-sweep 0.05s linear infinite;
   will-change: transform;
 }
