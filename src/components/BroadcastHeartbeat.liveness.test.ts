@@ -26,8 +26,10 @@ import {
  *
  * 帯は全幅ではなく、左端の細い縦帯である（issue #1030: 全幅の帯が配信映像に
  * CRT の走査線のように見え続けた）。検知が見るのは左 60% のゲーム部分なので、
- * 左端の帯でも毎フレーム動いていれば足りる。ゲームの絵を隠す面積を最小に
- * するため、幅は 0.5vw に留める。
+ * 左端の帯でも毎フレーム動いていれば足りる。ゲームの絵を隠す面積は
+ * 2vw x 12vh = 画面の 0.24% に留める。0.5vw の最小構成は差分 pixel が
+ * しきい値ぎりぎりで、実測 min fps 21 まで落ちたため（2026-10-23 23:56）、
+ * 差分に余裕を持たせた幅にしている。
  *
  * 標本を作る時は、配信映像が立つまでの経路をなぞる。
  *
@@ -481,6 +483,24 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
         minPublishedRatio,
         `the published frames must differ against ${background.name}`,
       ).toBeGreaterThan(MIN_CHANGED_RATIO);
+    }
+  });
+
+  it("keeps a safety margin over the pixel-difference threshold", () => {
+    // 幅 0.5vw の最小構成は差分 pixel がしきい値をわずかに上回るだけで、
+    // エンコーダや標本間隔のばらつきで 1 秒バケットが 24 枚を割った
+    // （2026-10-23 23:56 の実測: min 21 / avg 25）。差分がしきい値の 2 倍を
+    // 保つことを要求し、これ以上の細幅化・低速化を弾く。
+    const requiredRatio = MIN_CHANGED_RATIO * 2;
+    for (const background of backgrounds) {
+      const { minPublishedRatio } = sampleDeliveredPicture(
+        band,
+        background.color,
+      );
+      expect(
+        minPublishedRatio,
+        `the moved pixels must exceed ${requiredRatio} against ${background.name}`,
+      ).toBeGreaterThan(requiredRatio);
     }
   });
 
