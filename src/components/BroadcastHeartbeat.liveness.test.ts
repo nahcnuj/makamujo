@@ -444,7 +444,7 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
       GAME_CLIP.widthRatio * 100,
     );
     const areaRatio = (band.widthVw / 100) * (band.heightVh / 100);
-    expect(areaRatio).toBeLessThan(0.02);
+    expect(areaRatio).toBeLessThan(0.01);
   });
 
   it("keeps a part of the band on screen at every moment", () => {
