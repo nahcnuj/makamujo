@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   GAME_CLIP,
+  GAME_MIN_FPS,
   isFpsAboveThreshold,
   type MotionSample,
   summarizeFps,
@@ -504,8 +505,8 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
         `the whole picture must keep ${VIDEO_MIN_FPS} fps against ${background.name}`,
       ).toBe(true);
       expect(
-        isFpsAboveThreshold(game.minFps, game.avgFps, VIDEO_MIN_FPS),
-        `the game panel must keep ${VIDEO_MIN_FPS} fps against ${background.name}`,
+        isFpsAboveThreshold(game.minFps, game.avgFps, GAME_MIN_FPS),
+        `the game panel must keep ${GAME_MIN_FPS} fps against ${background.name}`,
       ).toBe(true);
     }
   });
