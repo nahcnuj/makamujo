@@ -3,9 +3,11 @@ name: Stream Health Check
 on:
   schedule:
     - cron: "15 * * * *"  # Every hour at minute 15 (avoid exact hour boundaries)
-  pull_request:
-    branches:
-      - main
+  # This check measures the stream that is currently deployed, not the code in a
+  # pull request. Running it on pull_request made every PR fail while the
+  # deployment was unhealthy, and each failure created another issue whose
+  # auto-drive PR failed the same way (the 2026-10-24 cascade, issue #1131).
+  # Only scheduled and manual runs may measure the live stream.
   workflow_dispatch:  # Allow manual trigger for testing
 
 permissions:
