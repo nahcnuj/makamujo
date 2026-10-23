@@ -698,9 +698,16 @@ async function sampleMotion(
       const width = Math.max(1, Math.round(video.videoWidth * scale));
       const height = Math.max(1, Math.round(video.videoHeight * scale));
       const gameWidth = Math.max(1, Math.floor(width * gameWidthRatio));
-      const canvas = new OffscreenCanvas(width, height);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.style.position = "fixed";
+      canvas.style.left = "-9999px";
+      canvas.style.top = "-9999px";
+      document.body.appendChild(canvas);
       const context = canvas.getContext("2d", { willReadFrequently: true });
       if (!context) {
+        canvas.remove();
         return {
           samples: [],
           elapsedMs: 0,
@@ -788,6 +795,7 @@ async function sampleMotion(
           sawAdvertisement,
         };
       }
+      canvas.remove();
       return {
         samples,
         elapsedMs: performance.now() - start,
