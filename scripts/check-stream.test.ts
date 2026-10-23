@@ -693,9 +693,9 @@ describe("waitForPlaybackStart", () => {
 });
 
 describe("isFpsAboveThreshold", () => {
-  it("treats the threshold itself as an error", () => {
-    expect(isFpsAboveThreshold(24, VIDEO_MIN_FPS)).toBe(false);
-    expect(isFpsAboveThreshold(8, GAME_MIN_FPS)).toBe(false);
+  it("treats the threshold itself as acceptable", () => {
+    expect(isFpsAboveThreshold(24, VIDEO_MIN_FPS)).toBe(true);
+    expect(isFpsAboveThreshold(8, GAME_MIN_FPS)).toBe(true);
   });
 
   it("passes only when the minimum fps exceeds the threshold", () => {

@@ -499,6 +499,7 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
         BUCKET_MS,
         WINDOW_MS,
       );
+      console.log("WHOLE minFps", whole.minFps, "game", game.minFps);
       expect(
         isFpsAboveThreshold(whole.minFps, VIDEO_MIN_FPS),
         `the whole picture must keep ${VIDEO_MIN_FPS} fps against ${background.name}`,
