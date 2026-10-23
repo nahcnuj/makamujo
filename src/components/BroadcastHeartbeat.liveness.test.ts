@@ -14,7 +14,7 @@ import {
  * 鼓動の帯が「外からの異常検知」を満たすことを、検知側と同じ計算で確かめる。
  *
  * 検知 (`scripts/check-stream.ts`) は配信された映像を 128x72 に縮めて 1 フレーム
- * ごとの差分を見、10 秒窓を 1 秒バケットに切って **全バケット** で 24 枚超の
+ * ごとの差分を見、10 秒窓を 1 秒バケットに切って **全バケット** で 24 枚以上の
  * 移動フレームを要求する（`VIDEO_MIN_FPS`）。帯が画面の外へ完全に出ている
  * 瞬間は映像が完全に静止し、そのバケットは 24 枚を下回って「映像全体が
  * 停止し続けています」と誤検知される（issue #982）。
@@ -26,9 +26,10 @@ import {
  *
  * 帯は全幅ではなく、左端の細い縦帯である（issue #1030: 全幅の帯が配信映像に
  * CRT の走査線のように見え続けた）。検知が見るのは左 60% のゲーム部分なので、
- * 左端の帯でも毎フレーム動いていれば足りる。幅 0.5vw では 128x72 の標本で
- * 1 列しか覆わず、実際の縮小（平滑化）後の差分がしきい値すれすれになった
- * （issue #1112）。幅 2vw で 3 列に広げ、縮小後も余裕を残す。
+ * 左端の帯でも毎フレーム動いていれば足りる。ゲームの絵を隠す面積は
+ * 2vw x 12vh = 画面の 0.24% に留める。0.5vw の最小構成は差分画素が
+ * しきい値ぎりぎりで、実測 min fps 23 / 0 fps まで落ちたため（issue #1112 /
+ * 2026-10-24 01:15）、差分に余裕を持たせた幅にしている。
  *
  * 標本を作る時は、配信映像が立つまでの経路をなぞる。
  *
@@ -51,16 +52,6 @@ const css = readFileSync(join(here, "..", "index.css"), "utf8");
 const MAX_SAMPLE_DIMENSION = 128;
 const PIXEL_CHANNEL_TOLERANCE = 16;
 const MIN_CHANGED_RATIO = 0.001;
-/**
- * 公開フレームごとの変化に要求する、検知しきい値に対する余裕。
- *
- * このテストは帯を標本解像度で直接描くので、実際の配信経路にある縮小
- * （1280x720 → 128x72）の平滑化を含まない。平滑化は帯の端の画素差を
- * 弱めるため、しきい値ちょうどの設計では本番で「変化なし」と数えられる
- * （issue #1112）。モデルが楽観側に振れても検知できるよう、2 倍の余裕を
- * 要求する。
- */
-const PUBLISHED_CHANGE_SAFETY_MARGIN = 2;
 /** OBS の出力 fps（`obs-studio/basic/profiles/Makamujo/basic.ini` の FPSNum）。 */
 const DELIVERED_FPS = 30;
 /** 検知側のサンプリング間隔（requestAnimationFrame ≒ 60Hz）。 */
@@ -483,7 +474,6 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
   it("keeps every published frame different", () => {
     // 公開フレームが 1 枚でも重なると、その 1 秒バケットは 29 枚になる。
     // 帯は Color Key で消された後でも、公開フレームごとに絵が変わる。
-    // 実際の縮小の平滑化を見込んだ余裕も要求する（issue #1112）。
     for (const background of backgrounds) {
       const { minPublishedRatio } = sampleDeliveredPicture(
         band,
@@ -491,10 +481,26 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
       );
       expect(
         minPublishedRatio,
-        `the published frames must differ by at least ${PUBLISHED_CHANGE_SAFETY_MARGIN}x the detection threshold against ${background.name}`,
-      ).toBeGreaterThanOrEqual(
-        MIN_CHANGED_RATIO * PUBLISHED_CHANGE_SAFETY_MARGIN,
+        `the published frames must differ against ${background.name}`,
+      ).toBeGreaterThan(MIN_CHANGED_RATIO);
+    }
+  });
+
+  it("keeps a safety margin over the pixel-difference threshold", () => {
+    // 幅 0.5vw の最小構成は差分画素がしきい値をわずかに上回るだけで、
+    // エンコーダや縮小のばらつきで 1 秒バケットが 24 枚を割った
+    // （issue #1112: min 23 / 0 fps）。差分がしきい値の 2 倍を保つことを
+    // 要求し、これ以上の細幅化・低速化を弾く。
+    const requiredRatio = MIN_CHANGED_RATIO * 2;
+    for (const background of backgrounds) {
+      const { minPublishedRatio } = sampleDeliveredPicture(
+        band,
+        background.color,
       );
+      expect(
+        minPublishedRatio,
+        `the moved pixels must exceed ${requiredRatio} against ${background.name}`,
+      ).toBeGreaterThan(requiredRatio);
     }
   });
 
