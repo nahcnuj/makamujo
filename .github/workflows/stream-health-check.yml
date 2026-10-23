@@ -3,9 +3,15 @@ name: Stream Health Check
 on:
   schedule:
     - cron: "15 * * * *"  # Every hour at minute 15 (avoid exact hour boundaries)
-  pull_request:
-    branches:
-      - main
+  # pull_request トリガーは置かない。`scripts/check-stream.ts` は本番の
+  # ニコニコ生放送ページを Playwright で計測するもので、PR のコードは
+  # 配信側に展開されていないため PR の妥当性は検証できない。PR 上で走らせると
+  # 生放送が本当に止まっているときに PR の「Check Stream Health」が失敗して
+  # マージ可能状態が unstable になり、修正 PR をマージできなくなる
+  # （issue #1126: 映像が停止し続けている)。さらに `create-issue` が
+  # pull_request 実行でも発火するため「PR 失敗 → 新 issue → 自動運転 →
+  # 新 PR → また PR 実行で失敗 → …」と issue が自己増殖する。
+  # 本チェックは schedule / workflow_dispatch でのみ走らせる。
   workflow_dispatch:  # Allow manual trigger for testing
 
 permissions:
