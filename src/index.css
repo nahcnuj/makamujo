@@ -52,8 +52,8 @@
  * のばらつきで 1 秒バケットが 24 fps を下回った
  * （issue #1068: min 23, #1087: min 22）。
  * 高さを伸ばしても移動量未満では差分が増えないので、幅を検知側が許容する
- * 上限の 2vw（`MAX_BAND_WIDTH_VW`）にして差分 pixel を約 3 倍にし、余裕を
- * 作る。面積は画面の 0.14% で、走査線には見えない細さ。
+ * 上限の 3vw（`MAX_BAND_WIDTH_VW`）にして差分 pixel を約 4 倍にし、余裕を
+ * 作る。面積は画面の 0.21% で、走査線には見えない細さ。
  *
  * 帯は**不透明**にする。OBS の Color Key（key = 黒）は暗い画素を消すので、
  * 半透明の帯は暗いページ背景と混ざって消される可能性がある。不透明な緑は
@@ -77,7 +77,7 @@
   position: fixed;
   top: 0;
   left: 0vw;
-  width: 2vw;
+  width: 3vw;
   height: 7vh;
   pointer-events: none;
   z-index: 10000;
@@ -87,6 +87,6 @@
     rgba(16, 165, 129, 1) 0%,
     rgba(16, 165, 129, 1) 100%
   );
-  animation: broadcast-heartbeat-sweep 0.4s linear infinite;
+  animation: broadcast-heartbeat-sweep 0.3s linear infinite;
   will-change: transform;
 }

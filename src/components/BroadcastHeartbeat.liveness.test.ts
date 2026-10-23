@@ -85,7 +85,7 @@ const MIN_DETECTABLE_BAND_RATIO = 0.08;
  * 検知に必要な動きは左端の細い帯でも足りるので、ゲームの絵を覆う面積を
  * 最小限にする。
  */
-const MAX_BAND_WIDTH_VW = 2;
+const MAX_BAND_WIDTH_VW = 3;
 
 type Rgba = { r: number; g: number; b: number; a: number };
 
