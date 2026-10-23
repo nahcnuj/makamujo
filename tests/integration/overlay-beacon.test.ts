@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import {
   allocateFreePort,
   killProcessTree,
@@ -16,14 +16,15 @@ let server: SpawnedServer | null = null;
 let broadcastingBaseUrl = "";
 
 beforeAll(async () => {
-  if (!existsSync("./var/cookieclicker.txt")) {
-    try {
-      mkdirSync("./var", { recursive: true });
-    } catch {
-      /* ignore */
-    }
-    writeFileSync("./var/cookieclicker.txt", "");
+  // The file only marks that the game exists; write it unconditionally so the
+  // setup never depends on a check-then-write race (CodeQL js/file-system-race
+  // flags the old `existsSync` + `writeFileSync` pattern).
+  try {
+    mkdirSync("./var", { recursive: true });
+  } catch {
+    /* ignore */
   }
+  writeFileSync("./var/cookieclicker.txt", "");
   // The liveness state is kept in var/ and would otherwise survive into the
   // next run.
   try {
