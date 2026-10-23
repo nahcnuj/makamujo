@@ -1,5 +1,10 @@
 name: Stream Health Check
 
+# この検査は本番で動いている配信を外部から測るため、PR の内容ではなく
+# production の状態を判定する。pull_request でも実行すると、修正がデプロイ
+# される前の配信を測って必ず失敗し、その失敗が新しい issue と auto-drive の
+# PR を生み、次の PR の検査もまた失敗する循環になる。PR では live の測定を
+# スキップし、スケジュール実行と workflow_dispatch だけで測定する。
 on:
   schedule:
     - cron: "15 * * * *"  # Every hour at minute 15 (avoid exact hour boundaries)
@@ -27,22 +32,30 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
+      - name: Skip live-stream measurement on pull requests
+        if: github.event_name == 'pull_request'
+        run: echo "This check measures the deployed stream, not the pull request."
+
       - name: Install dependencies
+        if: github.event_name != 'pull_request'
         run: bun ci
 
       - name: Install Playwright Chromium
+        if: github.event_name != 'pull_request'
         run: bunx playwright install chromium
 
       - name: Install Japanese fonts
+        if: github.event_name != 'pull_request'
         run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
 
       - name: Run stream health check
         id: stream-check
+        if: github.event_name != 'pull_request'
         run: bun run scripts/check-stream.ts
 
       - name: Create issue if check failed
         id: create-issue
-        if: failure()
+        if: failure() && github.event_name != 'pull_request'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
@@ -84,7 +97,7 @@ jobs:
   auto-drive:
     name: Auto-drive fix
     needs: check-stream
-    if: failure() && needs.check-stream.result == 'failure' && needs.check-stream.outputs.issue-number != ''
+    if: failure() && github.event_name != 'pull_request' && needs.check-stream.result == 'failure' && needs.check-stream.outputs.issue-number != ''
     # Reusable workflow call jobs cannot declare a job-level `environment`;
     # it is passed as an input below so the App secrets are resolved from
     # makamujo's `conahcnuj` environment inside the reusable workflow.

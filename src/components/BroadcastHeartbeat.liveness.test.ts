@@ -26,14 +26,16 @@ import {
  *
  * 帯は全幅ではなく、左端の細い縦帯である（issue #1030: 全幅の帯が配信映像に
  * CRT の走査線のように見え続けた）。検知が見るのは左 60% のゲーム部分なので、
- * 左端の帯でも毎フレーム動いていれば足りる。ゲームの絵を隠す面積を最小に
- * するため、幅は 0.5vw に留める。
+ * 左端の帯でも毎フレーム動いていれば足りる。ゲームの絵を隠す面積は
+ * 2vw x 12vh = 画面の 0.24% に留める。幅 0.5vw の最小構成は差分 pixel が
+ * しきい値ぎりぎりで、エンコード後に 1 秒バケットが 24 枚を割ったため、
+ * 差分に余裕を持たせた幅にしている。
  *
  * 標本を作る時は、配信映像が立つまでの経路をなぞる。
  *
  * 1. ページ。`:root` の `bg-black` が canvas に伝播するので、帯の外は
  *    不透明な黒に Layout の `bg-emerald-950/30` が重なった暗い背景になる。
- * 2. OBS の Color Key（key = 黒）。この暗い背景は消えて、游戏画面が透ける。
+ * 2. OBS の Color Key（key = 黒）。この暗い背景は消えて、ゲーム画面が透ける。
  *    key 色の許容範囲は環境と設定で変わるので、帯は key 色から十分離れた
  *    画素を**不透明に**残しておかないと「帯が残っている」保証が立たない。
  * 3. ゲーム画面（XSHM のキャプチャ）を背後に合成した絵が、公開される絵。
@@ -481,6 +483,23 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
         minPublishedRatio,
         `the published frames must differ against ${background.name}`,
       ).toBeGreaterThan(MIN_CHANGED_RATIO);
+    }
+  });
+
+  it("keeps a safety margin over the pixel-difference threshold", () => {
+    // 幅 0.5vw の最小構成は差分 pixel がしきい値をわずかに上回るだけで、
+    // エンコーダや標本間隔のばらつきで 1 秒バケットが 24 枚を割った。
+    // 差分がしきい値の 2 倍を保つことを要求し、これ以上の細幅化・低速化を弾く。
+    const requiredRatio = MIN_CHANGED_RATIO * 2;
+    for (const background of backgrounds) {
+      const { minPublishedRatio } = sampleDeliveredPicture(
+        band,
+        background.color,
+      );
+      expect(
+        minPublishedRatio,
+        `the moved pixels must exceed ${requiredRatio} against ${background.name}`,
+      ).toBeGreaterThan(requiredRatio);
     }
   });
 
