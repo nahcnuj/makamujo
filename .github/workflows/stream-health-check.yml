@@ -1,11 +1,13 @@
 name: Stream Health Check
 
+# このチェックは「本番で動いている配信」を測る。pull_request でも走らせると、
+# 修正がマージ・デプロイされる前の配信を測るため、修正内容にかかわらず失敗する。
+# さらに失敗のたびに issue が作られ、それが auto-drive の新しい PR を生み、その
+# PR のチェックがまた失敗する連鎖になる（2026-10-23 に issue #1074〜#1094 が
+# 乱立）。合否の判定はスケジュール実行と手動実行だけに任せ、PR では走らせない。
 on:
   schedule:
     - cron: "15 * * * *"  # Every hour at minute 15 (avoid exact hour boundaries)
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:  # Allow manual trigger for testing
 
 permissions:
