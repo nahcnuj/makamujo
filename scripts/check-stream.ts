@@ -303,7 +303,8 @@ export function shouldReMeasure(
 
 /**
  * A picture counts as moving only when its slowest one-second bucket keeps
- * enough changed frames. A threshold of N means "N FPS or below is an error".
+ * enough changed frames. The lower bound is inclusive: N FPS passes, and only
+ * a bucket below N FPS is an error.
  */
 export function isFpsAboveThreshold(
   minFps: number,
