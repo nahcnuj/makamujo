@@ -36,17 +36,15 @@
  * 切り出す左 60% の中を動くので、合成出力は「動いている」と判定される。
  * `alternate` の折り返しや待ちを入れると、その間のバケットが 0 枚になって
  * 停止と数えられるため、`linear infinite` で回し続ける。
- * 公開フレーム 1 枚ごとに十分な移動量になるよう、0.3 秒で
- * 88vh 動かしている（これより遅いと検出が不十分になり得る）。
+ * 公開フレーム 1 枚ごとに十分な移動量になるよう、0.25 秒で
+ * 90vh 動かしている。
  *
  * 帯は**画面の中に常に残す**。完全に画面外へ出ている間は、その一瞬も出力の
  * 絵が完全に静止し、 1 秒バケットの移動フレーム数が 24 枚を下回って「停止」
- * と誤検知される。高さ 7vh で 0vh→88vh を動かし、端でも帯が画面内に残る。
+ * と誤検知される。高さ 10vh で 0vh→90vh を動かし、端でも帯が画面内に残る。
  *
- * 2026-10-22 までは全幅の帯を流していたが、配信を見た人には CRT の走査線の
- * ように見え続けた（issue #1030）。検知に必要なのは「左 60% の中で毎フレーム
- * 動く画素」だけなので、全幅をやめて左端の帯にした。幅 1vw・高さ 7vh
- * で検知に十分な差分を確保する。
+ * 検知に必要なのは「左 60% の中で毎フレーム動く画素」だけなので、全幅をやめて
+ * 左端の帯にした。幅 2vw・高さ 10vh で検知に十分な差分を確保する。
  *
  * 帯は**不透明**にする。OBS の Color Key（key = 黒）は暗い画素を消すので、
  * 半透明の帯は暗いページ背景と混ざって消される可能性がある。不透明な緑は
@@ -62,7 +60,7 @@
     transform: translateY(0vh);
   }
   to {
-    transform: translateY(88vh);
+    transform: translateY(90vh);
   }
 }
 
@@ -70,16 +68,16 @@
   position: fixed;
   top: 0;
   left: 0vw;
-  width: 1vw;
-  height: 7vh;
+  width: 2vw;
+  height: 10vh;
   pointer-events: none;
   z-index: 10000;
   border-radius: 0 9999px 9999px 0;
   background: linear-gradient(
     to bottom,
-    rgba(0, 220, 80, 1) 0%,
-    rgba(0, 220, 80, 1) 100%
+    rgba(0, 255, 0, 1) 0%,
+    rgba(0, 255, 0, 1) 100%
   );
-  animation: broadcast-heartbeat-sweep 0.3s linear infinite;
+  animation: broadcast-heartbeat-sweep 0.25s linear infinite;
   will-change: transform;
 }
