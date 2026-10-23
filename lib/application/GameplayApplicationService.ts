@@ -102,6 +102,7 @@ export class GameplayApplicationService {
 
         if (state.name === "closed") {
           this.#session.playing = undefined;
+          activity = initialGameActivityState();
           this.#notifyGameStateChange();
           return Action.noop;
         }
@@ -121,6 +122,12 @@ export class GameplayApplicationService {
           // の next() ではイベントを捨てて最初の action を返すので、開き
           // 直しの入口は必ず "open" になる。
           solver = createSolver();
+          activity = initialGameActivityState();
+          // ブラウザセッションが（再）接続した直後は、前のラウンドの状態を
+          // 画面に残さない（空ページに古いゲームを描画し続けると静止と
+          // 誤検知される）。
+          this.#session.playing = undefined;
+          this.#notifyGameStateChange();
           const { done, value } = solver.next(state);
           if (done) {
             this.#session.playing = undefined;
