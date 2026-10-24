@@ -501,11 +501,11 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
         WINDOW_MS,
       );
       expect(
-        isFpsAboveThreshold(whole.minFps, whole.avgFps, VIDEO_MIN_FPS),
+        isFpsAboveThreshold(whole.minFps, VIDEO_MIN_FPS),
         `the whole picture must keep ${VIDEO_MIN_FPS} fps against ${background.name}`,
       ).toBe(true);
       expect(
-        isFpsAboveThreshold(game.minFps, game.avgFps, GAME_MIN_FPS),
+        isFpsAboveThreshold(game.minFps, GAME_MIN_FPS),
         `the game panel must keep ${GAME_MIN_FPS} fps against ${background.name}`,
       ).toBe(true);
     }

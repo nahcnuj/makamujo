@@ -9,15 +9,6 @@ const NAVIGATION_TIMEOUT_MS = 60_000;
 /** The player loads asynchronously; sampling before it does yields no frames. */
 const PLAYBACK_READY_TIMEOUT_MS = 30_000;
 const PLAYBACK_READY_POLL_MS = 250;
-/**
- * Timeout for the in-page motion sampler evaluate call.
- *
- * When the renderer is wedged (compositor not producing frames), the
- * requestAnimationFrame callbacks never fire and the evaluate hangs
- * indefinitely. This timeout ensures the check reports a frozen picture
- * instead of hanging the entire job (issue #982).
- */
-const MOTION_EVALUATE_TIMEOUT_MS = CHECK_DURATION_MS + 5_000;
 /** Playback has to advance this far before the startup frames are skipped. */
 const PLAYBACK_WARMUP_SECONDS = 2;
 /**
@@ -304,16 +295,12 @@ export function shouldReMeasure(
 /**
  * A picture counts as moving only when its slowest one-second bucket keeps
  * enough changed frames. A threshold of N means "N FPS or below is an error".
- *
- * 24 FPS is the acceptable lower limit for both min and avg. There is no upper
- * limit. Both must meet or exceed the threshold.
  */
 export function isFpsAboveThreshold(
   minFps: number,
-  avgFps: number,
   thresholdFps: number,
 ): boolean {
-  return minFps >= thresholdFps && avgFps >= thresholdFps;
+  return minFps > thresholdFps;
 }
 
 export function isOverallOk(
@@ -676,7 +663,7 @@ async function sampleMotion(
   channelTolerance: number,
   minChangedRatio: number,
 ): Promise<MotionSamples> {
-  const evaluatePromise = page.evaluate(
+  return page.evaluate(
     async ({
       durationMs,
       gameWidthRatio,
@@ -720,7 +707,7 @@ async function sampleMotion(
       try {
         await new Promise<void>((resolve) => {
           const deadline = start + durationMs;
-          const safety = setTimeout(resolve, durationMs + 10_000);
+          const safety = setTimeout(resolve, durationMs + 2_000);
           const tick = () => {
             const now = performance.now();
             if (now >= deadline) {
@@ -807,27 +794,6 @@ async function sampleMotion(
       minChangedRatio,
     },
   );
-
-  const timeoutPromise = new Promise<MotionSamples>((resolve) => {
-    setTimeout(() => {
-      const fallbackSamples: MotionSample[] = Array.from(
-        { length: Math.max(2, Math.ceil(durationMs / 1000)) },
-        (_, i) => ({
-          elapsedMs: i * 1000,
-          wholeChanged: false,
-          gameChanged: false,
-        }),
-      );
-      resolve({
-        samples: fallbackSamples,
-        elapsedMs: durationMs,
-        tainted: false,
-        sawAdvertisement: false,
-      });
-    }, MOTION_EVALUATE_TIMEOUT_MS);
-  });
-
-  return Promise.race([evaluatePromise, timeoutPromise]);
 }
 
 /**
@@ -1319,18 +1285,14 @@ async function checkStream(): Promise<CheckResult> {
       );
       details.videoMinFps = videoFps.minFps;
       details.videoAvgFps = videoFps.avgFps;
-      videoPlaying = isFpsAboveThreshold(
-        videoFps.minFps,
-        videoFps.avgFps,
-        VIDEO_MIN_FPS,
-      );
+      videoPlaying = isFpsAboveThreshold(videoFps.minFps, VIDEO_MIN_FPS);
       if (!videoPlaying) {
         phenomena.push("映像全体が停止し続けています");
       } else {
         console.log(
-          `[INFO] Video moving: avg fps = ${videoFps.avgFps.toFixed(
+          `[INFO] Video moving: min fps = ${videoFps.minFps.toFixed(
             1,
-          )} (min ${videoFps.minFps.toFixed(1)})`,
+          )} (avg ${videoFps.avgFps.toFixed(1)})`,
         );
       }
     }
@@ -1348,18 +1310,14 @@ async function checkStream(): Promise<CheckResult> {
       );
       details.gameMinFps = gameFps.minFps;
       details.gameAvgFps = gameFps.avgFps;
-      gameScreenPlaying = isFpsAboveThreshold(
-        gameFps.minFps,
-        gameFps.avgFps,
-        GAME_MIN_FPS,
-      );
+      gameScreenPlaying = isFpsAboveThreshold(gameFps.minFps, GAME_MIN_FPS);
       if (!gameScreenPlaying) {
         phenomena.push("ゲーム画面部分が停止し続けています");
       } else {
         console.log(
-          `[INFO] Game screen moving: avg fps = ${gameFps.avgFps.toFixed(
+          `[INFO] Game screen moving: min fps = ${gameFps.minFps.toFixed(
             1,
-          )} (min ${gameFps.minFps.toFixed(1)})`,
+          )} (avg ${gameFps.avgFps.toFixed(1)})`,
         );
       }
     }

@@ -693,28 +693,15 @@ describe("waitForPlaybackStart", () => {
 });
 
 describe("isFpsAboveThreshold", () => {
-  it("passes when both min and avg fps meet or exceed the threshold", () => {
-    expect(isFpsAboveThreshold(24, 24, VIDEO_MIN_FPS)).toBe(true);
-    expect(isFpsAboveThreshold(8, 8, GAME_MIN_FPS)).toBe(true);
-    expect(isFpsAboveThreshold(24.5, 25, VIDEO_MIN_FPS)).toBe(true);
-    expect(isFpsAboveThreshold(8.5, 9, GAME_MIN_FPS)).toBe(true);
-    expect(isFpsAboveThreshold(30, 30, VIDEO_MIN_FPS)).toBe(true);
-    expect(isFpsAboveThreshold(60, 50, VIDEO_MIN_FPS)).toBe(true);
+  it("treats the threshold itself as an error", () => {
+    expect(isFpsAboveThreshold(24, VIDEO_MIN_FPS)).toBe(false);
+    expect(isFpsAboveThreshold(8, GAME_MIN_FPS)).toBe(false);
   });
 
-  it("fails when min fps is below the threshold", () => {
-    expect(isFpsAboveThreshold(23.9, 30, VIDEO_MIN_FPS)).toBe(false);
-    expect(isFpsAboveThreshold(7.9, 10, GAME_MIN_FPS)).toBe(false);
-  });
-
-  it("fails when avg fps is below the threshold", () => {
-    expect(isFpsAboveThreshold(30, 23.9, VIDEO_MIN_FPS)).toBe(false);
-    expect(isFpsAboveThreshold(10, 7.9, GAME_MIN_FPS)).toBe(false);
-  });
-
-  it("fails when both min and avg fps are below the threshold", () => {
-    expect(isFpsAboveThreshold(20, 20, VIDEO_MIN_FPS)).toBe(false);
-    expect(isFpsAboveThreshold(5, 5, GAME_MIN_FPS)).toBe(false);
+  it("passes only when the minimum fps exceeds the threshold", () => {
+    expect(isFpsAboveThreshold(24.5, VIDEO_MIN_FPS)).toBe(true);
+    expect(isFpsAboveThreshold(0, GAME_MIN_FPS)).toBe(false);
+    expect(isFpsAboveThreshold(8.5, GAME_MIN_FPS)).toBe(true);
   });
 });
 
