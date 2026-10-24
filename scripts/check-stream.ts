@@ -691,27 +691,16 @@ async function sampleMotion(
           sawAdvertisement: false,
         };
       }
-      const scale = Math.min(
-        1,
-        maxDimension / Math.max(video.videoWidth, video.videoHeight),
-      );
-      const width = Math.max(1, Math.round(video.videoWidth * scale));
-      const height = Math.max(1, Math.round(video.videoHeight * scale));
-      const gameWidth = Math.max(1, Math.floor(width * gameWidthRatio));
-      const canvas = new OffscreenCanvas(width, height);
-      const context = canvas.getContext("2d", { willReadFrequently: true });
-      if (!context) {
-        return {
-          samples: [],
-          elapsedMs: 0,
-          tainted: false,
-          sawAdvertisement: false,
-        };
-      }
       const samples: MotionSample[] = [];
       let previous: Uint8ClampedArray | null = null;
       let tainted = false;
       let sawAdvertisement = false;
+      let sampledVideo: HTMLVideoElement | null = null;
+      let width = 0;
+      let height = 0;
+      let gameWidth = 0;
+      let canvas: OffscreenCanvas | null = null;
+      let drawContext: OffscreenCanvasRenderingContext2D | null = null;
       const start = performance.now();
       try {
         await new Promise<void>((resolve) => {
@@ -733,9 +722,41 @@ async function sampleMotion(
                 requestAnimationFrame(tick);
                 return;
               }
-              context.drawImage(activeVideo, 0, 0, width, height);
-              const current = context.getImageData(0, 0, width, height).data;
-              if (previous) {
+              if (activeVideo !== sampledVideo) {
+                sampledVideo = activeVideo;
+                const nextScale = Math.min(
+                  1,
+                  maxDimension / Math.max(activeVideo.videoWidth, activeVideo.videoHeight),
+                );
+                const nextWidth = Math.max(1, Math.round(activeVideo.videoWidth * nextScale));
+                const nextHeight = Math.max(1, Math.round(activeVideo.videoHeight * nextScale));
+                if (nextWidth !== width || nextHeight !== height) {
+                  previous = null;
+                  canvas = null;
+                  drawContext = null;
+                  width = 0;
+                  height = 0;
+                  gameWidth = 0;
+                }
+              }
+              if (!drawContext || !canvas) {
+                const scale = Math.min(
+                  1,
+                  maxDimension / Math.max(activeVideo.videoWidth, activeVideo.videoHeight),
+                );
+                width = Math.max(1, Math.round(activeVideo.videoWidth * scale));
+                height = Math.max(1, Math.round(activeVideo.videoHeight * scale));
+                gameWidth = Math.max(1, Math.floor(width * gameWidthRatio));
+                canvas = new OffscreenCanvas(width, height);
+                drawContext = canvas.getContext("2d", { willReadFrequently: true });
+              }
+              if (!drawContext) {
+                requestAnimationFrame(tick);
+                return;
+              }
+              drawContext.drawImage(activeVideo, 0, 0, width, height);
+              const current = drawContext.getImageData(0, 0, width, height).data;
+              if (previous && width > 0 && height > 0) {
                 let wholeDiff = 0;
                 let gameDiff = 0;
                 const total = width * height;
