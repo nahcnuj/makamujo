@@ -84,6 +84,6 @@
     rgba(16, 255, 129, 0.2) 0%,
     rgba(16, 255, 129, 0.2) 100%
   );
-  animation: broadcast-heartbeat-sweep 2.5s linear infinite;
+  animation: broadcast-heartbeat-sweep 2s linear infinite;
   will-change: transform;
 }
