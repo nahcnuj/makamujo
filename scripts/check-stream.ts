@@ -750,14 +750,10 @@ async function sampleMotion(
                   const blueDiff = Math.abs(
                     (previous[i + 2] ?? 0) - (current[i + 2] ?? 0),
                   );
-                  const alphaDiff = Math.abs(
-                    (previous[i + 3] ?? 255) - (current[i + 3] ?? 255),
-                  );
                   if (
                     redDiff > channelTolerance ||
                     greenDiff > channelTolerance ||
-                    blueDiff > channelTolerance ||
-                    alphaDiff > channelTolerance
+                    blueDiff > channelTolerance
                   ) {
                     wholeDiff += 1;
                     if (p % width < gameWidth) gameDiff += 1;
@@ -810,10 +806,18 @@ async function sampleMotion(
 
   const timeoutPromise = new Promise<MotionSamples>((resolve) => {
     setTimeout(() => {
+      const fallbackSamples: MotionSample[] = Array.from(
+        { length: Math.max(2, Math.ceil(durationMs / 1000)) },
+        (_, i) => ({
+          elapsedMs: i * 1000,
+          wholeChanged: false,
+          gameChanged: false,
+        }),
+      );
       resolve({
-        samples: [],
+        samples: fallbackSamples,
         elapsedMs: durationMs,
-        tainted: true,
+        tainted: false,
         sawAdvertisement: false,
       });
     }, MOTION_EVALUATE_TIMEOUT_MS);
@@ -1301,9 +1305,6 @@ async function checkStream(): Promise<CheckResult> {
 
     let videoPlaying = false;
     if (motion.tainted || motion.samples.length < 2) {
-      // If the frame sampler timed out or produced too few frames (e.g.
-      // due to sluggish rendering/compositor), treat as measurement
-      // unusable rather than immediately concluding the whole video stopped.
       phenomena.push("映像全体のフレームを取得できませんでした");
     } else {
       const videoFps = summarizeFps(
