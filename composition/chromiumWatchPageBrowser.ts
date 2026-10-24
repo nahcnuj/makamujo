@@ -223,6 +223,16 @@ const sampleMotionWindow = async ({
           // 再構築の途中で要素が消えうる。比較対象を落とさず待つ。
           if (video?.videoWidth && video.videoHeight) {
             if (video !== sampledVideo) {
+              // 別の要素に切り替わる直前までに進んだ分を足し上げてから基準を
+              // 切り替える。巻き戻る currentTime でも放映中の根拠を失わない
+              // （作り直しのたびに最後の端数を捨てると、頻繁な再構築で
+              // clockAdvancedSeconds が 1 秒に届かず放映外と誤判定される）。
+              if (sampledVideo !== null) {
+                const previousAdvanced = sampledVideo.currentTime - lastClock;
+                if (previousAdvanced > 0) {
+                  clockAdvancedSeconds += previousAdvanced;
+                }
+              }
               // 別の要素のタイムラインなので時計の基準は切り替える。絵の比較は
               // 寸法が同じなら引き継ぐ: 再構築のたびに比較対象を捨てると、頻繁
               // な再構築で comparedFrames が 0 になり、本物の停止が判定不能
