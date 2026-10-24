@@ -180,9 +180,9 @@ describe("isOnAirFromClock", () => {
     ).toBe(true);
   });
 
-  it("does not read a picture with a trickle of motion as on air when the clock stopped", () => {
-    // 0.1fps くらいの微動は結果画面やフリートークなので、clock が止まって
-    // いるときは放送中とみなさない（停止の判定は watchdog 側に任せる）。
+  it("reads a picture with a trickle of motion as on air when the clock stopped", () => {
+    // 合成出力が固まっていても、わずかな微動があっても still と判定される
+    // 絵は放映中の停止として扱う（issue #992 の再適用）。
     expect(
       isOnAirFromClock(
         motion({
@@ -191,7 +191,7 @@ describe("isOnAirFromClock", () => {
           clockAdvancedSeconds: 0,
         }),
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("cannot judge a picture that was never compared", () => {
