@@ -9,6 +9,15 @@ const NAVIGATION_TIMEOUT_MS = 60_000;
 /** The player loads asynchronously; sampling before it does yields no frames. */
 const PLAYBACK_READY_TIMEOUT_MS = 30_000;
 const PLAYBACK_READY_POLL_MS = 250;
+/**
+ * Timeout for the in-page motion sampler evaluate call.
+ *
+ * When the renderer is wedged (compositor not producing frames), the
+ * requestAnimationFrame callbacks never fire and the evaluate hangs
+ * indefinitely. This timeout ensures the check reports a frozen picture
+ * instead of hanging the entire job (issue #982).
+ */
+const MOTION_EVALUATE_TIMEOUT_MS = CHECK_DURATION_MS + 5_000;
 /** Playback has to advance this far before the startup frames are skipped. */
 const PLAYBACK_WARMUP_SECONDS = 2;
 /**
@@ -663,7 +672,7 @@ async function sampleMotion(
   channelTolerance: number,
   minChangedRatio: number,
 ): Promise<MotionSamples> {
-  return page.evaluate(
+  const evaluatePromise = page.evaluate(
     async ({
       durationMs,
       gameWidthRatio,
@@ -707,7 +716,7 @@ async function sampleMotion(
       try {
         await new Promise<void>((resolve) => {
           const deadline = start + durationMs;
-          const safety = setTimeout(resolve, durationMs + 2_000);
+          const safety = setTimeout(resolve, durationMs + 10_000);
           const tick = () => {
             const now = performance.now();
             if (now >= deadline) {
@@ -794,6 +803,27 @@ async function sampleMotion(
       minChangedRatio,
     },
   );
+
+  const timeoutPromise = new Promise<MotionSamples>((resolve) => {
+    setTimeout(() => {
+      const fallbackSamples: MotionSample[] = Array.from(
+        { length: Math.max(2, Math.ceil(durationMs / 1000)) },
+        (_, i) => ({
+          elapsedMs: i * 1000,
+          wholeChanged: false,
+          gameChanged: false,
+        }),
+      );
+      resolve({
+        samples: fallbackSamples,
+        elapsedMs: durationMs,
+        tainted: false,
+        sawAdvertisement: false,
+      });
+    }, MOTION_EVALUATE_TIMEOUT_MS);
+  });
+
+  return Promise.race([evaluatePromise, timeoutPromise]);
 }
 
 /**
