@@ -529,7 +529,7 @@ export const createChromiumWatchPageBrowser =
           requireAdvanceSeconds: MEASURABLE_VIDEO_ADVANCE_SECONDS,
         });
         const wasMeasurable = isVideoReady(measurable);
-        if (wasMeasurable) {
+        if (wasMeasurable || (measurable.found && measurable.videoWidth > 0)) {
           hasEverBeenMeasurable = true;
         }
         if (!wasMeasurable) {
