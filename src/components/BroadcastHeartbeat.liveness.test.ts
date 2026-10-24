@@ -27,8 +27,10 @@ import {
  *
  * 帯は全幅ではなく、左端の細い縦帯である（issue #1030: 全幅の帯が配信映像に
  * CRT の走査線のように見え続けた）。検知が見るのは左 60% のゲーム部分なので、
- * 左端の帯でも毎フレーム動いていれば足りる。ゲームの絵を隠す面積を最小に
- * するため、幅は 0.5vw に留める。
+ * 左端の帯でも毎フレーム動いていれば足りる。幅 0.5vw では標本 128x72 で
+ * 1 列 x 5 行しか動かず、差分しきい値の 1.08 倍しか余裕がなかった（配信の
+ * 圧縮で 18fps まで落ちた）。左端から 1vw 内側に置いた幅 1vw の帯なら
+ * 2 列 x 5 行になり、しきい値の 2 倍以上を動かせる。
  *
  * 標本を作る時は、配信映像が立つまでの経路をなぞる。
  *
@@ -482,6 +484,22 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
         minPublishedRatio,
         `the published frames must differ against ${background.name}`,
       ).toBeGreaterThan(MIN_CHANGED_RATIO);
+    }
+  });
+
+  it("keeps a safety margin over the detection threshold", () => {
+    // 検知は差分率が 0.001 を超えたフレームだけを「動いた」と数える。幅
+    // 0.5vw の帯は 1.08 倍しか余裕がなく、配信の圧縮で 18fps まで落ちた。
+    // エンコードで片方の列が潰れても残るよう、2 倍の余裕を要求する。
+    for (const background of backgrounds) {
+      const { minPublishedRatio } = sampleDeliveredPicture(
+        band,
+        background.color,
+      );
+      expect(
+        minPublishedRatio,
+        `the moving pixels must keep a 2x margin against ${background.name}`,
+      ).toBeGreaterThan(MIN_CHANGED_RATIO * 2);
     }
   });
 
