@@ -73,8 +73,8 @@
 .broadcast-heartbeat {
   position: fixed;
   top: 0;
-  left: 1vw;
-  width: 1vw;
+  left: 0.5vw;
+  width: 2vw;
   height: 7vh;
   pointer-events: none;
   z-index: 10000;
@@ -84,6 +84,6 @@
     rgba(16, 255, 129, 1) 0%,
     rgba(16, 255, 129, 1) 100%
   );
-  animation: broadcast-heartbeat-sweep 0.4s linear infinite;
+  animation: broadcast-heartbeat-sweep 0.3s linear infinite;
   will-change: transform;
 }
