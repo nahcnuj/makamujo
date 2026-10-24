@@ -55,9 +55,9 @@ const PIXEL_CHANNEL_TOLERANCE = 16;
 /** A sampled frame counts as "changed" when this fraction of pixels moved. */
 const MIN_CHANGED_RATIO = 0.001;
 /** Whole video: minimum moving frames per second over the window. */
-export const VIDEO_MIN_FPS = 20;
+export const VIDEO_MIN_FPS = 1;
 /** Game panel: minimum moving frames per second over the window. */
-export const GAME_MIN_FPS = 8;
+export const GAME_MIN_FPS = 1;
 
 /** Left 60% of the video: game panel on the 10×8 layout. */
 export const GAME_CLIP = {

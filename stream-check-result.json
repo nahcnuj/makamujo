@@ -1,20 +1,20 @@
 {
-  "ok": true,
-  "timestampJst": "2026-10-24 10:37:39",
-  "phenomena": [],
+  "ok": false,
+  "timestampJst": "2026-10-24 10:53:46",
+  "phenomena": ["映像全体が停止し続けています"],
   "details": {
     "audioPlaying": true,
-    "videoPlaying": true,
+    "videoPlaying": false,
     "gameScreenPlaying": true,
     "pageTitle": "滅茶苦茶な落ち物パズル実況 - 2026/10/24(土) 0:00開始 - ニコニコ生放送",
     "pageUrl": "https://live.nicovideo.jp/watch/user/14171889",
-    "decodedAudioBytesStart": 59823,
-    "decodedAudioBytesEnd": 173047,
-    "videoCurrentTimeStart": 21.529934,
-    "videoCurrentTimeEnd": 31.562674,
-    "videoMinFps": 28,
-    "videoAvgFps": 29.6,
-    "gameMinFps": 28,
-    "gameAvgFps": 29.6
+    "decodedAudioBytesStart": 79394,
+    "decodedAudioBytesEnd": 216614,
+    "videoCurrentTimeStart": 21.781837,
+    "videoCurrentTimeEnd": 31.798034,
+    "videoMinFps": 20,
+    "videoAvgFps": 24.8,
+    "gameMinFps": 20,
+    "gameAvgFps": 24.8
   }
 }

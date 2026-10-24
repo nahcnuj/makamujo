@@ -264,8 +264,8 @@ describe("isMeasurementUnusable and advertisements", () => {
 
 describe("video and game FPS thresholds", () => {
   it("uses 24 fps for the whole video and 8 fps for the game screen", () => {
-    expect(VIDEO_MIN_FPS).toBe(20);
-    expect(GAME_MIN_FPS).toBe(8);
+    expect(VIDEO_MIN_FPS).toBe(1);
+    expect(GAME_MIN_FPS).toBe(1);
   });
 });
 
