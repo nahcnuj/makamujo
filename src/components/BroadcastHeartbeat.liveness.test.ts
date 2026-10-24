@@ -12,33 +12,32 @@ import {
 } from "../../scripts/check-stream";
 
 /**
- * 鼓動の帯が「外からの異常検知」を満たすことを、検知側と同じ計算で確かめる。
+ * 鼓動の走査線が「外からの異常検知」を満たすことを、検知側と同じ計算で確かめる。
  *
  * 検知 (`scripts/check-stream.ts`) は配信された映像を 128x72 に縮めて 1 フレーム
  * ごとの差分を見、10 秒窓を 1 秒バケットに切って **全バケット** で 24 枚超の
- * 移動フレームを要求する（`VIDEO_MIN_FPS`）。帯が画面の外へ完全に出ている
+ * 移動フレームを要求する（`VIDEO_MIN_FPS`）。走査線が画面の外へ完全に出ている
  * 瞬間は映像が完全に静止し、そのバケットは 24 枚を下回って「映像全体が
  * 停止し続けています」と誤検知される（issue #982）。
  *
- * ここでは帯の CSS（位置・幅・高さ・周期・配色）を読み取って、配信された絵を
- * 128x72 へ縮めた標本を作り、検知と**同じ**判定関数
+ * ここでは走査線の CSS（位置・幅・高さ・周期・配色）を読み取って、配信された
+ * 絵を 128x72 へ縮めた標本を作り、検知と**同じ**判定関数
  * (`summarizeFps` / `isFpsAboveThreshold`) で判定する。CSS を変えたらこの
  * テストが落ちる。
  *
- * 帯は全幅ではなく、左端の細い縦帯である（issue #1030: 全幅の帯が配信映像に
- * CRT の走査線のように見え続けた）。検知が見るのは左 60% のゲーム部分なので、
- * 左端の帯でも毎フレーム動いていれば足りる。幅 0.5vw では標本 128x72 で
- * 1 列 x 5 行しか動かず、差分しきい値の 1.08 倍しか余裕がなかった（配信の
- * 圧縮で 18fps まで落ちた）。左端から 1vw 内側に置いた幅 1vw の帯なら
- * 2 列 x 5 行になり、しきい値の 2 倍以上を動かせる。
+ * 走査線は画面を横切る薄い水平線である。issue #1030 / #1197 のとおり、CRT の
+ * 走査線として許容できるのは「ごくごく透明なテーマカラーで、高さ 1vh 程度」
+ * まで。現状は高さ 1vh・不透明度 0.2 のエメラルドで、2.5 秒かけて
+ * 0vh→99vh を流す。1 フレームの移動量は標本でおよそ 1 行あり、公開フレーム
+ * 30 枚すべてが差分しきい値（0.1% ≈ 9.2px）を超える。
  *
  * 標本を作る時は、配信映像が立つまでの経路をなぞる。
  *
- * 1. ページ。`:root` の `bg-black` が canvas に伝播するので、帯の外は
+ * 1. ページ。`:root` の `bg-black` が canvas に伝播するので、走査線の外は
  *    不透明な黒に Layout の `bg-emerald-950/30` が重なった暗い背景になる。
- * 2. OBS の Color Key（key = 黒）。この暗い背景は消えて、游戏画面が透ける。
- *    key 色の許容範囲は環境と設定で変わるので、帯は key 色から十分離れた
- *    画素を**不透明に**残しておかないと「帯が残っている」保証が立たない。
+ * 2. OBS の Color Key（key = 黒）。scene の `color_key_filter_v2` は既定の
+ *    similarity 0.08 / smoothness 0.05 で、黒から十分離れた画素だけを残す。
+ *    暗い背景は消えてゲーム画面が透け、走査線は距離 0.22 で残る。
  * 3. ゲーム画面（XSHM のキャプチャ）を背後に合成した絵が、公開される絵。
  * 4. 検知側は requestAnimationFrame（≒60Hz）ごとに標本を比較する。公開
  *    映像は 30fps なので、同じフレームを 2 回ずつ拾う。観測できる変化
@@ -62,31 +61,31 @@ const WINDOW_MS = 10_000;
 /** 検知側のバケット幅（`FPS_BUCKET_MS`）。 */
 const BUCKET_MS = 1_000;
 /**
- * Color Key（key = 黒）が残す画素の下限。
+ * OBS の Color Key（`color_key_filter_v2`, key = 黒）の既定値。
  *
- * key 色に近い画素は消える。similarity / smoothness の設定と配信環境によって
- * 消される範囲は変わるので、帯は key 色から**十分離れた**画素を不透明に
- * 確保する。帯の半透明な部分は暗い背景と混ざって key 色寄りになり、
- * 消されたときは白背景の上でも黒背景の上でも見えなくなる。
+ * scene のフィルタ設定は key 色しか指定していないので、OBS の既定
+ * `similarity = 80/1000`, `smoothness = 50/1000` が使われる。key 色からの
+ * 距離が similarity 以下なら透明、similarity + smoothness 以上なら不透明に
+ * なる（`color_key_filter_v2.effect` の `ProcessColorKey`）。
  */
-const KEY_BRIGHTNESS_FLOOR = 160;
+const COLOR_KEY_SIMILARITY = 80 / 1000;
+const COLOR_KEY_SMOOTHNESS = 50 / 1000;
 /**
- * 帯のうち「Color Key に消されず、どのゲーム画面でも見える」領域が
+ * 走査線のうち「Color Key に消されず、どのゲーム画面でも見える」領域が
  * 少なくとも持つべき割合。
  *
- * 白だけの帯は白背景の上で消える。緑は黒背景でも白背景でもゲーム画面と
- * 十分に差が出るが、半透明だと暗いページ背景と混ざって key 色寄りに
- * なり得る。帯を不透明な緑一色にするのがこの条件の中身。
+ * 白だけの線は白背景の上で消える。緑は黒背景でも白背景でもゲーム画面と
+ * 十分に差が出るが、薄くしすぎると Color Key の距離が similarity を下回って
+ * 消える。走査線は一様な緑一色なので、全区間が残ることを要求する。
  */
-const MIN_DETECTABLE_BAND_RATIO = 0.08;
+const MIN_DETECTABLE_BAND_RATIO = 0.9;
 /**
- * 帯の幅 (vw) の上限。
+ * 走査線の高さ (vh) の上限。
  *
- * 全幅の帯は配信映像に CRT の走査線のように見え続けた（issue #1030）。
- * 検知に必要な動きは左端の細い帯でも足りるので、ゲームの絵を覆う面積を
- * 最小限にする。
+ * issue #1030 / #1197: 高さ 1vh 程度までの走査線なら CRT の解釈として許容
+ * される。それより太い帯は配信映像で目立ち続ける。
  */
-const MAX_BAND_WIDTH_VW = 2;
+const MAX_BAND_HEIGHT_VH = 1;
 
 type Rgba = { r: number; g: number; b: number; a: number };
 
@@ -244,13 +243,56 @@ const over = (top: Rgba, bottom: Rgba): Rgba => ({
 });
 
 /**
+ * OBS の Color Key（key = 黒）を 1 画素に適用する。
+ *
+ * `color_key_filter_v2.effect` の `ProcessColorKey` と同じ計算。距離は
+ * 直線（unpremultiplied）の RGB で測り、similarity 以下なら alpha 0、
+ * similarity + smoothness 以上なら元の alpha のまま残す。
+ */
+const applyColorKey = (color: Rgba): Rgba => {
+  const distance =
+    Math.sqrt(color.r * color.r + color.g * color.g + color.b * color.b) / 255;
+  const factor = Math.min(
+    1,
+    Math.max(0, (distance - COLOR_KEY_SIMILARITY) / COLOR_KEY_SMOOTHNESS),
+  );
+  return { ...color, a: color.a * factor };
+};
+
+/** premultiplied の画素を直線の RGB に戻す（alpha 0 なら黒）。 */
+const unpremultiply = (color: Rgba): Rgba =>
+  color.a > 0
+    ? {
+        r: color.r / color.a,
+        g: color.g / color.a,
+        b: color.b / color.a,
+        a: color.a,
+      }
+    : { r: 0, g: 0, b: 0, a: 0 };
+
+/**
+ * ページ → Color Key → ゲーム画面、の順に 1 画素を合成する。
+ *
+ * `coverage` は走査線がその標本画素を覆う割合（0〜1）。標本は 128x72 に
+ * 縮小されるので、高さ 1vh の線は 1 行に満たない。面積で按分しないと
+ * 線が行の間に落ちたフレームを「変化なし」と誤判定してしまう。
+ */
+const renderPixel = (overlay: Rgba, coverage: number, game: Rgba): Rgba => {
+  const page = over(premultiply(PAGE_BACKGROUND), premultiply(PAGE_CANVAS));
+  const withBand = over(
+    premultiply({ ...overlay, a: overlay.a * coverage }),
+    page,
+  );
+  const keyed = applyColorKey(unpremultiply(withBand));
+  return over(premultiply(keyed), premultiply(game));
+};
+
+/**
  * 配信された 1 フレームを、検知側の標本（128x72）として作る。
  *
- * 帯は `position: fixed` で画面の上から `translateY` だけ動かした矩形。
+ * 走査線は `position: fixed` で画面の上から `translateY` だけ動かした矩形。
  * 標本は 72px = 100vh なので 1vh は 0.72px、128px = 100vw なので
- * 1vw は 1.28px。左端の細い帯も、この縮小で 1〜2 列の差分として残る。
- *
- * ページ → Color Key → ゲーム画面、の順に合成する。
+ * 1vw は 1.28px。行・列ごとに面積の重なりを求めて按分する。
  */
 const renderSample = (
   band: BandGeometry,
@@ -264,30 +306,25 @@ const renderSample = (
   const bandHeightPx = band.heightVh * (height / 100);
   const bandLeftPx = band.leftVw * (width / 100);
   const bandWidthPx = band.widthVw * (width / 100);
-  const page = over(premultiply(PAGE_BACKGROUND), premultiply(PAGE_CANVAS));
   for (let y = 0; y < height; y += 1) {
+    const verticalOverlap =
+      Math.min(y + 1, bandTopPx + bandHeightPx) - Math.max(y, bandTopPx);
+    const verticalCoverage = Math.min(1, Math.max(0, verticalOverlap));
+    const gradientRatio =
+      bandHeightPx > 0
+        ? Math.min(1, Math.max(0, (y + 0.5 - bandTopPx) / bandHeightPx))
+        : 0;
+    const overlay = colorAt(band.stops, gradientRatio);
     for (let x = 0; x < width; x += 1) {
       const offset = (y * width + x) * 4;
-      let pagePixel = page;
-      if (
-        y + 0.5 >= bandTopPx &&
-        y + 0.5 < bandTopPx + bandHeightPx &&
-        x + 0.5 >= bandLeftPx &&
-        x + 0.5 < bandLeftPx + bandWidthPx
-      ) {
-        const overlay = colorAt(
-          band.stops,
-          (y + 0.5 - bandTopPx) / bandHeightPx,
-        );
-        pagePixel = over(premultiply(overlay), page);
-      }
-      // OBS の Color Key（key = 黒）。key 色から遠い画素だけが残る。
-      const keyed =
-        Math.max(pagePixel.r, pagePixel.g, pagePixel.b) >= KEY_BRIGHTNESS_FLOOR
-          ? pagePixel
-          : { r: 0, g: 0, b: 0, a: 0 };
-      // ゲーム画面（XSHM のキャプチャ）を背後に合成する。
-      const published = over(keyed, premultiply(game));
+      const horizontalOverlap =
+        Math.min(x + 1, bandLeftPx + bandWidthPx) - Math.max(x, bandLeftPx);
+      const horizontalCoverage = Math.min(1, Math.max(0, horizontalOverlap));
+      const published = renderPixel(
+        overlay,
+        verticalCoverage * horizontalCoverage,
+        game,
+      );
       pixels[offset] = published.r;
       pixels[offset + 1] = published.g;
       pixels[offset + 2] = published.b;
@@ -298,15 +335,17 @@ const renderSample = (
 };
 
 /**
- * 「Color Key に消されず、どのゲーム画面でも見える」帯の割合を測る。
+ * 「Color Key に消されず、どのゲーム画面でも見える」走査線の割合を測る。
  *
  * その条件を満たすのは、
- * - 不透明（半透明だと暗いページ背景と混ざって key 色寄りになる）
- * - key 色（黒）から十分離れている
+ * - Color Key で alpha が 0 にならない（key 色から十分離れている）
  * - 黒背景にも白背景にも、検知側の差分しきい値を超える差になる
- * 画素帯。帯は不透明な緑一色なので、その区間の合計を測る。
+ * 画素。走査線は一様な緑一色なので、その区間の合計を測る。
  */
 const detectableBandRatio = (band: BandGeometry): number => {
+  const page = over(premultiply(PAGE_BACKGROUND), premultiply(PAGE_CANVAS));
+  const pageOver = (game: Rgba): Rgba =>
+    over(premultiply(applyColorKey(unpremultiply(page))), premultiply(game));
   const visibleOn = (color: Rgba, background: Rgba): boolean => {
     const diff = Math.max(
       Math.abs(color.r - background.r),
@@ -316,13 +355,17 @@ const detectableBandRatio = (band: BandGeometry): number => {
     return diff > PIXEL_CHANNEL_TOLERANCE;
   };
   const isDetectable = (color: Rgba): boolean => {
-    if (color.a < 1) return false;
-    if (Math.max(color.r, color.g, color.b) < KEY_BRIGHTNESS_FLOOR)
-      return false;
-    return (
-      visibleOn(color, { r: 0, g: 0, b: 0, a: 1 }) &&
-      visibleOn(color, { r: 240, g: 240, b: 240, a: 1 })
-    );
+    const black = pageOver({ r: 0, g: 0, b: 0, a: 1 });
+    const white = pageOver({ r: 240, g: 240, b: 240, a: 1 });
+    const withBand = renderPixel(color, 1, { r: 0, g: 0, b: 0, a: 1 });
+    const withBandWhite = renderPixel(color, 1, {
+      r: 240,
+      g: 240,
+      b: 240,
+      a: 1,
+    });
+    if (withBand.a <= 0 && withBandWhite.a <= 0) return false;
+    return visibleOn(withBand, black) && visibleOn(withBandWhite, white);
   };
   let ratio = 0;
   for (let index = 0; index < band.stops.length - 1; index += 1) {
@@ -438,16 +481,14 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
     { name: "a bright game screen", color: { r: 240, g: 240, b: 240, a: 1 } },
   ];
 
-  it("stays a narrow edge strip instead of a full-width scanline", () => {
-    // issue #1030: 全幅の帯は走査線として見え続けた。左端の細い帯に留め、
-    // ゲーム部分（左 60%）の中でも大部分の絵を隠さない。
-    expect(band.widthVw).toBeLessThanOrEqual(MAX_BAND_WIDTH_VW);
+  it("stays a thin horizontal scanline", () => {
+    // issue #1030 / #1197: 走査線として許容できるのは高さ 1vh 程度まで。
+    // 画面を横切る線にして、ゲームの絵を覆う面積を最小限にする。
+    expect(band.heightVh).toBeLessThanOrEqual(MAX_BAND_HEIGHT_VH);
     expect(band.leftVw).toBeGreaterThanOrEqual(0);
-    expect(band.leftVw + band.widthVw).toBeLessThanOrEqual(
-      GAME_CLIP.widthRatio * 100,
-    );
+    expect(band.widthVw).toBeGreaterThanOrEqual(GAME_CLIP.widthRatio * 100);
     const areaRatio = (band.widthVw / 100) * (band.heightVh / 100);
-    expect(areaRatio).toBeLessThan(0.01);
+    expect(areaRatio).toBeLessThanOrEqual(0.01);
   });
 
   it("keeps a part of the band on screen at every moment", () => {
