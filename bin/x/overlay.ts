@@ -52,6 +52,9 @@ const context = await chromium
       "--disable-features=Translate,TranslateUI,TranslateScript,OptimizationHints",
       "--disable-translate",
       "--lang=ja",
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
       `--app=${url}`,
     ],
   })
