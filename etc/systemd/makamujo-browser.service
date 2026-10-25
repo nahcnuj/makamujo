@@ -23,9 +23,6 @@ MemoryAccounting=yes
 MemoryHigh=1G
 MemoryMax=1.5G
 CPUAccounting=yes
-# Keep enough headroom for the software-rendered game (three cores), but let
-# OBS win when both compete: a lower CPUWeight and a higher nice value than
-# makamujo-obs.service. CPUQuota is a cap, so spare cores remain usable.
 CPUQuota=300%
 CPUWeight=500
 Nice=-5

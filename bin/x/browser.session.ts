@@ -183,7 +183,7 @@ const executablePath = (browserArg?.toString() ?? "").trim() || undefined;
 
 const browser = await create(executablePath, {
   width: 1280,
-  height: 720, // match the OBS stream crop
+  height: 720, // match stream crop; scale via page zoom
 });
 
 let closed = false;

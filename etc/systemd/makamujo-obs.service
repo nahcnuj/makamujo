@@ -32,9 +32,6 @@ MemoryAccounting=yes
 MemoryHigh=2G
 MemoryMax=3G
 CPUAccounting=yes
-# OBS carries the heaviest load (software x264 encoding, the CEF comment
-# overlay, and X11 capture) and is the process whose output frames must not
-# drop. Give it the larger share and the stronger scheduling preference.
 CPUQuota=400%
 CPUWeight=1000
 Nice=-10
