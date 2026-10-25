@@ -442,7 +442,16 @@ export const create = async (
     void dismissCloseButtons();
   }, 2000);
 
-  const applyZoom = async () => {
+  /**
+   * Keep the captured page at 100% zoom.
+   *
+   * OBS crops a 1280x720 region of the virtual display. The previous 1.25
+   * zoom made Chromium rasterize ~56% more pixels and cropped the playfield,
+   * which is pure overhead for the software-rendered browser. Re-apply after
+   * every load because navigation discards inline styles, and override any
+   * zoom the game page may set for itself.
+   */
+  const resetGamePageZoom = async () => {
     try {
       await page.evaluate(() => {
         document.documentElement.style.zoom = "1.0";
@@ -452,9 +461,9 @@ export const create = async (
       /* page may not be ready */
     }
   };
-  await applyZoom();
+  await resetGamePageZoom();
   page.on("load", () => {
-    void applyZoom();
+    void resetGamePageZoom();
   });
 
   page.on(

@@ -32,7 +32,7 @@ jobs:
     # makamujo's `conahcnuj` environment inside the reusable workflow.
     # Call the conahcnuj reusable workflow directly (pin to a commit so an
     # upstream change cannot alter this repository's CI without a review).
-    uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@21a32d266c37f96cc12d07d97fe53dbbc86c4515
+    uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@0a36d938b6f10a65dbdc0030ce2628f5acc76aea
     with:
       # fromJSON not needed: issue number from event is already a number
       number: ${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.number }}
