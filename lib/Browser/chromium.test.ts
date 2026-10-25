@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { removeTemporaryDirectory } from "../temporaryDirectory";
 import {
+  applyGameScreenZoom,
   cleanupChromiumLockFiles,
   createClickByElementId,
   createPopupPageHandler,
@@ -325,5 +326,18 @@ describe("resolveEvaluateTimeoutMs", () => {
     expect(
       resolveEvaluateTimeoutMs({ BROWSER_EVALUATE_TIMEOUT_MS: "abc" }),
     ).toBe(DEFAULT_EVALUATE_TIMEOUT_MS);
+  });
+});
+
+describe("applyGameScreenZoom", () => {
+  it("calls page.evaluate to apply the game-screen zoom", async () => {
+    let called = false;
+    const page = {
+      evaluate: async () => {
+        called = true;
+      },
+    };
+    await applyGameScreenZoom(page);
+    expect(called).toBeTrue();
   });
 });

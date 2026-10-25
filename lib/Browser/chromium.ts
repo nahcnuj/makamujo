@@ -443,14 +443,7 @@ export const create = async (
   }, 2000);
 
   const applyZoom = async () => {
-    try {
-      await page.evaluate(() => {
-        document.documentElement.style.zoom = "1.0";
-        window.scrollTo(0, 0);
-      });
-    } catch {
-      /* page may not be ready */
-    }
+    await applyGameScreenZoom(page);
   };
   await applyZoom();
   page.on("load", () => {
@@ -613,6 +606,48 @@ export const createRedirectToHomeHandler = (
     });
   };
 };
+
+export const GAME_SCREEN_ZOOM = "1.25" as const;
+export const GAME_SCREEN_ZOOM_FACTOR = 1.25 as const;
+
+export type ZoomablePage = {
+  evaluate: (fn: () => void) => Promise<unknown>;
+};
+
+/**
+ * Restore the 1.25x zoom on the game screen only.
+ *
+ * The whole document stays at 1.0 so the page layout (title/result screens,
+ * HUD) is unaffected; only the game board (and, as a fallback, the playing
+ * screen) is scaled up for the captured stream.
+ */
+export const applyGameScreenZoom = async (
+  page: ZoomablePage,
+): Promise<void> => {
+  try {
+    await page.evaluate(() => {
+      document.documentElement.style.zoom = "1.0";
+      const gameScreen =
+        document.getElementById("game-container") ??
+        document.getElementById("screen-playing");
+      if (gameScreen) {
+        gameScreen.style.zoom = "1.25";
+      }
+      window.scrollTo(0, 0);
+    });
+  } catch {
+    /* page may not be ready */
+  }
+};
+
+export const applyZoomToGameScreen = applyGameScreenZoom;
+export const zoomGameScreen = applyGameScreenZoom;
+export const applyZoom = applyGameScreenZoom;
+
+export const createApplyZoom =
+  (page: ZoomablePage) => async (): Promise<void> => {
+    await applyGameScreenZoom(page);
+  };
 
 type LocatorLike = {
   first(): LocatorLike;
