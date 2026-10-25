@@ -2,7 +2,7 @@ name: Stream Health Check
 
 on:
   schedule:
-    - cron: "15 * * * *"  # Every hour at minute 15 (avoid exact hour boundaries)
+    - cron: "5/15 * * * *"  # Every hour at minute 15 (avoid exact hour boundaries)
   pull_request:
     branches:
       - main
