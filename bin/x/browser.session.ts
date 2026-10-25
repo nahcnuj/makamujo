@@ -181,10 +181,17 @@ if (xauthority) {
 const timeout = Number.parseInt(timeoutStr, 10);
 const executablePath = (browserArg?.toString() ?? "").trim() || undefined;
 
-const browser = await create(executablePath, {
-  width: 1280,
-  height: 720, // match stream crop; scale via page zoom
-});
+const browser = await create(
+  executablePath,
+  {
+    width: 1280,
+    height: 720, // match stream crop; scale via page zoom
+  },
+  {
+    // The game Agent owns how its board is scaled; the browser only applies it.
+    gameScreenZoom: Games.VigilantFiesta.GAME_SCREEN_ZOOM_FACTOR,
+  },
+);
 
 let closed = false;
 const closeBrowser = async () => {

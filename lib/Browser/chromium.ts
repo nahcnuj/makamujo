@@ -316,13 +316,18 @@ export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
   "--disable-renderer-backgrounding",
 ] as const;
 
+export type BrowserCreateOptions = {
+  /** Magnification for the Agent's game board; false/undefined disables it. */
+  gameScreenZoom?: number | string | false;
+};
+
 export const create = async (
   executablePath?: string,
   viewport: ViewportSize = {
     width: 1280,
     height: 720,
   },
-  gameScreenZoomFactor: number = GAME_SCREEN_ZOOM_FACTOR,
+  options: BrowserCreateOptions = {},
 ): Promise<
   Browser & {
     reload: () => Promise<void>;
@@ -443,9 +448,14 @@ export const create = async (
     void dismissCloseButtons();
   }, 2000);
 
-  const applyZoom = async (factor: number) => {
-    if (isVigilantFiestaGameUrl(page.url())) {
-      await applyGameScreenZoom(page, factor);
+  const applyZoom = async () => {
+    const zoom = options.gameScreenZoom;
+    if (
+      zoom !== undefined &&
+      zoom !== false &&
+      page.url().startsWith(gameHomeUrl)
+    ) {
+      await applyGameScreenZoom(page, zoom);
       return;
     }
     try {
@@ -457,9 +467,9 @@ export const create = async (
       /* page may not be ready */
     }
   };
-  await applyZoom(gameScreenZoomFactor);
+  await applyZoom();
   page.on("load", () => {
-    void applyZoom(gameScreenZoomFactor);
+    void applyZoom();
   });
 
   page.on(
@@ -619,46 +629,43 @@ export const createRedirectToHomeHandler = (
   };
 };
 
-export const GAME_SCREEN_ZOOM = "1.25" as const;
-export const GAME_SCREEN_ZOOM_FACTOR = 1.25 as const;
-
 export type ZoomablePage = {
   evaluate: (
-    fn: (zoom?: number | string) => void,
-    zoom?: number | string,
+    fn: (zoom: number | string) => void,
+    zoom: number | string,
   ) => Promise<unknown>;
 };
 
-const resolveGameScreenZoomValue = (zoom: number | string): number | string => {
-  if (typeof zoom === "number" && Number.isFinite(zoom)) {
-    return zoom;
+const resolveGameScreenZoomValue = (
+  zoom: number | string,
+): number | string | undefined => {
+  if (typeof zoom === "number") {
+    return Number.isFinite(zoom) ? zoom : undefined;
   }
-  if (typeof zoom === "string" && zoom.trim().length > 0) {
-    return zoom.trim();
-  }
-  return GAME_SCREEN_ZOOM_FACTOR;
+  const trimmed = zoom.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 };
 
 /**
- * Restore the 1.25x zoom on the game screen only.
+ * Apply the Agent-provided magnification to the game screen only.
  *
  * The whole document stays at 1.0 so the page layout (title/result screens,
  * HUD) is unaffected; only the game board (and, as a fallback, the playing
  * screen) is scaled up for the captured stream.
- *
- * `zoom` overrides the magnification applied to the game screen (defaults to
- * 1.25). Pass `false` to skip zooming entirely.
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
-  zoom: number | string | false = GAME_SCREEN_ZOOM_FACTOR,
+  zoom: number | string | false,
 ): Promise<void> => {
   if (zoom === false) {
     return;
   }
   const zoomValue = resolveGameScreenZoomValue(zoom);
+  if (zoomValue === undefined) {
+    return;
+  }
   try {
-    await page.evaluate((value: number | string = GAME_SCREEN_ZOOM_FACTOR) => {
+    await page.evaluate((value: number | string) => {
       document.documentElement.style.zoom = "1.0";
       const gameScreen =
         document.getElementById("game-container") ??
@@ -678,16 +685,10 @@ export const zoomGameScreen = applyGameScreenZoom;
 export const applyZoom = applyGameScreenZoom;
 
 export const createApplyZoom =
-  (
-    page: ZoomablePage,
-    zoom: number | string | false = GAME_SCREEN_ZOOM_FACTOR,
-  ) =>
+  (page: ZoomablePage, zoom: number | string | false) =>
   async (): Promise<void> => {
     await applyGameScreenZoom(page, zoom);
   };
-
-export const isVigilantFiestaGameUrl = (url: string): boolean =>
-  /vigilant-fiesta/i.test(url);
 
 type LocatorLike = {
   first(): LocatorLike;
