@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-type Ini = Record<string, Record<string, string>>;
+type Ini = Map<string, Map<string, string>>;
 
 function parseIni(path: string): Ini {
-  const ini: Ini = {};
+  const ini: Ini = new Map();
   let section = "";
 
   for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
@@ -16,7 +16,7 @@ function parseIni(path: string): Ini {
     const sectionMatch = /^\[(.+)\]$/.exec(trimmed);
     if (sectionMatch !== null) {
       section = sectionMatch[1] ?? "";
-      ini[section] ??= {};
+      if (!ini.has(section)) ini.set(section, new Map());
       continue;
     }
 
@@ -25,12 +25,12 @@ function parseIni(path: string): Ini {
 
     const key = trimmed.slice(0, separator).trim();
     const value = trimmed.slice(separator + 1).trim();
-    let target = ini[section];
+    let target = ini.get(section);
     if (target === undefined) {
-      target = {};
-      ini[section] = target;
+      target = new Map();
+      ini.set(section, target);
     }
-    target[key] = value;
+    target.set(key, value);
   }
 
   return ini;
@@ -70,25 +70,25 @@ function readServiceValue(content: string, key: string): string | undefined {
 describe("OBS encoding load", () => {
   test("keeps the lightest x264 preset for stable 30 fps encoding", () => {
     const profile = parseIni("obs-studio/basic/profiles/Makamujo/basic.ini");
-    const output = profile.SimpleOutput ?? {};
+    const output = profile.get("SimpleOutput");
 
-    expect(output.Preset).toBe("ultrafast");
-    expect(output.StreamEncoder).toBe("x264");
+    expect(output?.get("Preset")).toBe("ultrafast");
+    expect(output?.get("StreamEncoder")).toBe("x264");
   });
 
   test("streams at 30 fps so an isolated dropped frame stays above 24 fps", () => {
     const profile = parseIni("obs-studio/basic/profiles/Makamujo/basic.ini");
-    const video = profile.Video ?? {};
+    const video = profile.get("Video");
 
-    expect(Number(video.FPSCommon)).toBeGreaterThanOrEqual(24);
-    expect(video.FPSCommon).toBe("30");
-    expect(video.OutputCX).toBe("1280");
-    expect(video.OutputCY).toBe("720");
+    expect(Number(video?.get("FPSCommon"))).toBeGreaterThanOrEqual(24);
+    expect(video?.get("FPSCommon")).toBe("30");
+    expect(video?.get("OutputCX")).toBe("1280");
+    expect(video?.get("OutputCY")).toBe("720");
   });
 
   test("does not spend CPU rendering a software preview nobody watches", () => {
     const user = parseIni("obs-studio/user.ini");
-    expect(user.BasicWindow?.PreviewEnabled).toBe("false");
+    expect(user.get("BasicWindow")?.get("PreviewEnabled")).toBe("false");
   });
 
   test("lets the browser source produce every output frame", () => {
