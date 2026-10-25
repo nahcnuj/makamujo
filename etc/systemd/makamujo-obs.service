@@ -29,11 +29,13 @@ RestartSec=5
 KillMode=control-group
 TimeoutStopSec=30
 MemoryAccounting=yes
-MemoryHigh=32M
-MemoryMax=256M
+MemoryHigh=1G
+MemoryMax=1536M
 CPUAccounting=yes
-CPUQuota=200%
-TasksMax=256
+CPUQuota=300%
+CPUWeight=1000
+Nice=-5
+TasksMax=512
 OOMPolicy=continue
 OOMScoreAdjust=-1000
 
