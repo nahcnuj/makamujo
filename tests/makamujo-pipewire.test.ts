@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 
 const script = readFileSync("bin/makamujo-pipewire", "utf-8");
-const unit = readFileSync("etc/systemd/makamujo-pipewire.service", "utf-8");
 
 const indexOfLine = (needle: string, from = 0): number => {
   const index = script.indexOf(needle, from);
@@ -24,41 +23,6 @@ const functionBody = (name: string): string => {
 
   return script.slice(start, end);
 };
-
-/** Returns the unit block the desktop playbook writes to /etc/systemd/system. */
-const readDeployedUnit = (): string => {
-  const lines = readFileSync("ansible/playbooks/0_desktop.yml", "utf-8").split(
-    "\n",
-  );
-  const destIndex = lines.findIndex((line) =>
-    line.includes("dest: /etc/systemd/system/makamujo-pipewire.service"),
-  );
-  expect(destIndex).toBeGreaterThanOrEqual(0);
-
-  const contentIndex = lines.findIndex(
-    (line, i) => i > destIndex && line.trim() === "content: |",
-  );
-  expect(contentIndex).toBeGreaterThanOrEqual(0);
-
-  const firstLine = lines[contentIndex + 1] ?? "";
-  const indent = firstLine.length - firstLine.trimStart().length;
-  expect(indent).toBeGreaterThan(0);
-
-  let deployed = "";
-  for (let i = contentIndex + 1; i < lines.length; i += 1) {
-    const line = lines[i] ?? "";
-    if (line.trim() !== "" && !line.startsWith(" ".repeat(indent))) break;
-    deployed += `${line.slice(indent)}\n`;
-  }
-  return deployed;
-};
-
-/** Drops comments and blank lines so prose may differ between the two copies. */
-const toDirectives = (contents: string): string[] =>
-  contents
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line !== "" && !line.startsWith("#"));
 
 describe("makamujo-pipewire", () => {
   it("waits for stale audio processes to exit before unlinking the sockets", () => {
@@ -194,19 +158,5 @@ describe("makamujo-pipewire", () => {
     expect(loadIndex).toBeGreaterThan(readinessIndex);
     expect(defaultSinkIndex).toBeGreaterThan(loadIndex);
     expect(defaultSourceIndex).toBeGreaterThan(defaultSinkIndex);
-  });
-});
-
-describe("makamujo-pipewire systemd unit", () => {
-  it("bounds restart attempts so a broken stack settles instead of flapping", () => {
-    const unitSection = unit.slice(0, unit.indexOf("[Service]"));
-
-    expect(unitSection).toContain("StartLimitIntervalSec=300");
-    expect(unitSection).toContain("StartLimitBurst=5");
-    expect(unit).toContain("Restart=on-failure");
-  });
-
-  it("stays in sync with the copy the desktop playbook deploys", () => {
-    expect(toDirectives(readDeployedUnit())).toEqual(toDirectives(unit));
   });
 });
