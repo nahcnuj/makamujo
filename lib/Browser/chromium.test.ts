@@ -23,6 +23,7 @@ describe("GAME_BROWSER_ANTI_THROTTLE_FLAGS", () => {
       "--disable-background-timer-throttling",
       "--disable-backgrounding-occluded-windows",
       "--disable-renderer-backgrounding",
+      "--disable-frame-rate-limit",
     ]);
   });
 });
