@@ -73,13 +73,26 @@ jobs:
               "*このIssueは自動生成されました (GitHub Actions: Stream Health Check)*",
             ].join("\n");
 
-            const { data: issue } = await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title,
-              body,
-              labels: ['bug', 'self-improvement'],
-            });
+            let issue;
+            try {
+              const res = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['bug', 'self-improvement'],
+              });
+              issue = res.data;
+            } catch (e) {
+              console.log('Failed to create issue with labels, retrying without labels:', e.message);
+              const res = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+              });
+              issue = res.data;
+            }
 
             console.log(`Created issue #${issue.number}: ${issue.html_url}`);
             core.setOutput('issue-number', String(issue.number));
