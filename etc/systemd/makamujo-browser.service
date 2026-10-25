@@ -22,6 +22,11 @@ RestartSec=5s
 MemoryAccounting=yes
 MemoryHigh=1G
 MemoryMax=1.5G
+CPUAccounting=yes
+CPUQuota=200%
+CPUWeight=500
+Nice=-5
+TasksMax=512
 
 [Install]
 WantedBy=multi-user.target
