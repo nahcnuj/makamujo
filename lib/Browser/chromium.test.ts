@@ -332,42 +332,14 @@ describe("resolveEvaluateTimeoutMs", () => {
 
 describe("applyGameScreenZoom", () => {
   it("passes the Agent-provided magnification to page.evaluate", async () => {
-    let received: number | string | undefined;
+    let received: number | undefined;
     const page = {
-      evaluate: async (
-        _fn: (zoom: number | string) => void,
-        zoom: number | string,
-      ) => {
+      evaluate: async (_fn: (zoom: number) => void, zoom: number) => {
         received = zoom;
       },
     };
     await applyGameScreenZoom(page, 1.5);
     expect(received).toBe(1.5);
-  });
-
-  it("trims a string magnification", async () => {
-    let received: number | string | undefined;
-    const page = {
-      evaluate: async (
-        _fn: (zoom: number | string) => void,
-        zoom: number | string,
-      ) => {
-        received = zoom;
-      },
-    };
-    await applyGameScreenZoom(page, " 125% ");
-    expect(received).toBe("125%");
-  });
-
-  it("skips page.evaluate when zooming is disabled", async () => {
-    let called = false;
-    const page = {
-      evaluate: async () => {
-        called = true;
-      },
-    };
-    await applyGameScreenZoom(page, false);
-    expect(called).toBeFalse();
   });
 
   it("skips page.evaluate for an invalid magnification", async () => {
@@ -396,16 +368,13 @@ describe("isVigilantFiestaGameUrl", () => {
 
 describe("applyGameScreenZoom default", () => {
   it("applies the default magnification when none is given", async () => {
-    let received: number | string | undefined;
+    let received: number | undefined;
     const page = {
-      evaluate: async (
-        _fn: (zoom: number | string) => void,
-        zoom: number | string,
-      ) => {
+      evaluate: async (_fn: (zoom: number) => void, zoom: number) => {
         received = zoom;
       },
     };
     await applyGameScreenZoom(page);
-    expect(received).toBe(1.25);
+    expect(received).toBe(1);
   });
 });

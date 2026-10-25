@@ -320,8 +320,8 @@ export const GAME_SCREEN_ZOOM = "1.25" as const;
 export const GAME_SCREEN_ZOOM_FACTOR = 1.25 as const;
 
 export type BrowserCreateOptions = {
-  /** Magnification for the Agent's game board; false/undefined disables it. */
-  gameScreenZoom?: number | string | false;
+  /** Magnification for the Agent's game board. */
+  gameScreenZoom?: number;
 };
 
 export const create = async (
@@ -330,7 +330,7 @@ export const create = async (
     width: 1280,
     height: 720,
   },
-  options: BrowserCreateOptions = {},
+  options: BrowserCreateOptions = { gameScreenZoom: 1 },
 ): Promise<
   Browser & {
     reload: () => Promise<void>;
@@ -451,12 +451,8 @@ export const create = async (
     void dismissCloseButtons();
   }, 2000);
 
-  const applyZoom = async (factor: number | string | false | undefined) => {
-    if (
-      factor !== undefined &&
-      factor !== false &&
-      isVigilantFiestaGameUrl(page.url())
-    ) {
+  const applyZoom = async (factor: number) => {
+    if (isVigilantFiestaGameUrl(page.url())) {
       await applyGameScreenZoom(page, factor);
       return;
     }
@@ -469,9 +465,9 @@ export const create = async (
       /* page may not be ready */
     }
   };
-  await applyZoom(options.gameScreenZoom);
+  await applyZoom(options.gameScreenZoom ?? 1);
   page.on("load", () => {
-    void applyZoom(options.gameScreenZoom);
+    void applyZoom(options.gameScreenZoom ?? 1);
   });
 
   page.on(
@@ -632,20 +628,11 @@ export const createRedirectToHomeHandler = (
 };
 
 export type ZoomablePage = {
-  evaluate: (
-    fn: (zoom: number | string) => void,
-    zoom: number | string,
-  ) => Promise<unknown>;
+  evaluate: (fn: (zoom: number) => void, zoom: number) => Promise<unknown>;
 };
 
-const resolveGameScreenZoomValue = (
-  zoom: number | string,
-): number | string | undefined => {
-  if (typeof zoom === "number") {
-    return Number.isFinite(zoom) ? zoom : undefined;
-  }
-  const trimmed = zoom.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
+  return Number.isFinite(zoom) ? zoom : undefined;
 };
 
 /**
@@ -657,17 +644,14 @@ const resolveGameScreenZoomValue = (
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
-  zoom: number | string | false = GAME_SCREEN_ZOOM_FACTOR,
+  zoom: number = 1,
 ): Promise<void> => {
-  if (zoom === false) {
-    return;
-  }
   const zoomValue = resolveGameScreenZoomValue(zoom);
   if (zoomValue === undefined) {
     return;
   }
   try {
-    await page.evaluate((value: number | string) => {
+    await page.evaluate((value: number) => {
       document.documentElement.style.zoom = "1.0";
       const gameScreen =
         document.getElementById("game-container") ??
@@ -687,10 +671,7 @@ export const zoomGameScreen = applyGameScreenZoom;
 export const applyZoom = applyGameScreenZoom;
 
 export const createApplyZoom =
-  (
-    page: ZoomablePage,
-    zoom: number | string | false = GAME_SCREEN_ZOOM_FACTOR,
-  ) =>
+  (page: ZoomablePage, zoom: number = 1) =>
   async (): Promise<void> => {
     await applyGameScreenZoom(page, zoom);
   };
