@@ -1136,3 +1136,94 @@ describe("measurementFailurePhenomenon", () => {
     );
   });
 });
+
+describe("normalized stream (issue resolution)", () => {
+  const probe = (decodedAudioBytes: number, currentTime = 0): VideoState => ({
+    found: true,
+    videoWidth: 640,
+    readyState: 2,
+    paused: false,
+    currentTime,
+    decodedAudioBytes,
+  });
+
+  /** 30 fpsで動く画面のサンプル（10秒間、300フレーム） */
+  const healthySamples: MotionSample[] = Array.from(
+    { length: 300 },
+    (_, i) => ({
+      elapsedMs: i * 33,
+      wholeChanged: true,
+      gameChanged: true,
+    }),
+  );
+
+  const healthyMeasurement: PlaybackMeasurement = {
+    startProbe: probe(0, 0),
+    motion: {
+      tainted: false,
+      elapsedMs: 10_000,
+      samples: healthySamples,
+      sawAdvertisement: false,
+    },
+    endProbe: probe(50_000, 10),
+  };
+
+  it("classifies a healthy stream as judgeable", () => {
+    expect(classifyMeasurement(healthyMeasurement)).toEqual({
+      kind: "judgeable",
+      measurement: healthyMeasurement,
+    });
+  });
+
+  it("reports audio playing when decoded bytes increase", () => {
+    const { startProbe, endProbe } = healthyMeasurement;
+    expect(
+      isAudioPlaying(startProbe.decodedAudioBytes, endProbe.decodedAudioBytes),
+    ).toBe(true);
+  });
+
+  it("reports video FPS above threshold for a moving picture", () => {
+    const videoFps = summarizeFps(
+      healthyMeasurement.motion.samples,
+      (s) => s.wholeChanged,
+      1_000,
+      10_000,
+    );
+    expect(isFpsAboveThreshold(videoFps.minFps, VIDEO_MIN_FPS)).toBe(true);
+  });
+
+  it("reports game FPS above threshold for a moving game screen", () => {
+    const gameFps = summarizeFps(
+      healthyMeasurement.motion.samples,
+      (s) => s.gameChanged,
+      1_000,
+      10_000,
+    );
+    expect(isFpsAboveThreshold(gameFps.minFps, GAME_MIN_FPS)).toBe(true);
+  });
+
+  it("reports overall ok when all three checks pass", () => {
+    const { startProbe, motion, endProbe } = healthyMeasurement;
+    const audioPlaying = isAudioPlaying(
+      startProbe.decodedAudioBytes,
+      endProbe.decodedAudioBytes,
+    );
+    const videoFps = summarizeFps(
+      motion.samples,
+      (s) => s.wholeChanged,
+      1_000,
+      10_000,
+    );
+    const gameFps = summarizeFps(
+      motion.samples,
+      (s) => s.gameChanged,
+      1_000,
+      10_000,
+    );
+    const videoPlaying = isFpsAboveThreshold(videoFps.minFps, VIDEO_MIN_FPS);
+    const gameScreenPlaying = isFpsAboveThreshold(gameFps.minFps, GAME_MIN_FPS);
+    expect(isOverallOk(audioPlaying, videoPlaying, gameScreenPlaying)).toBe(
+      true,
+    );
+  });
+});

@@ -55,7 +55,6 @@ const context = await chromium
       "--disable-background-timer-throttling",
       "--disable-backgrounding-occluded-windows",
       "--disable-renderer-backgrounding",
-      "--disable-frame-rate-limit",
       `--app=${url}`,
     ],
   })
