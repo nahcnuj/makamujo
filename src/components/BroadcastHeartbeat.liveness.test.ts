@@ -53,7 +53,7 @@ const MAX_SAMPLE_DIMENSION = 128;
 const PIXEL_CHANNEL_TOLERANCE = 16;
 const MIN_CHANGED_RATIO = 0.001;
 /** OBS の出力 fps（`obs-studio/basic/profiles/Makamujo/basic.ini` の FPSNum）。 */
-const DELIVERED_FPS = 30;
+const DELIVERED_FPS = 60;
 /** 検知側のサンプリング間隔（requestAnimationFrame ≒ 60Hz）。 */
 const SAMPLER_FPS = 60;
 /** 検知側の窓（`CHECK_DURATION_MS`）。 */
@@ -423,7 +423,7 @@ const changedRatios = (
 /**
  * 帯だけを合成した配信映像を、検知側と同じ手順でサンプルする。
  *
- * 公開映像は 30fps（OBS の出力 fps）で、検知側は requestAnimationFrame
+ * 公開映像は 60fps（OBS の出力 fps）で、検知側は requestAnimationFrame
  * （≒60Hz）ごとに標本を比較する。公開フレームが変わるまでは同じ絵が
  * 見えているので、変化として数えられるのは公開フレームが変わる時だけ。
  */
@@ -444,7 +444,7 @@ const sampleDeliveredPicture = (
   for (let sample = 0; sample < sampleCount; sample += 1) {
     const elapsedMs = sample * samplerStepMs;
     const index = Math.floor(elapsedMs / publishedStepMs);
-    // 公開フレームは 30fps ごとに切り替わるので、絵はその時刻で固定される。
+    // 公開フレームは 60fps ごとに切り替わるので、絵はその時刻で固定される。
     const publishedMs = index * publishedStepMs;
     const cycle = (publishedMs / 1000 / band.durationSeconds) % 1;
     const bandTopVh = band.fromVh + (band.toVh - band.fromVh) * cycle;
