@@ -445,7 +445,7 @@ export const create = async (
   const applyZoom = async () => {
     try {
       await page.evaluate(() => {
-        document.documentElement.style.zoom = "1.25";
+        document.documentElement.style.zoom = "1.0";
         window.scrollTo(0, 0);
       });
     } catch {
