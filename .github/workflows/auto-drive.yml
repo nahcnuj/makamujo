@@ -1,0 +1,44 @@
+name: Auto-drive
+
+# When an issue is opened or reopened, or a pull request review is
+# submitted, edited, or dismissed in this repository, call the conahcnuj
+# reusable issue-driver workflow to attempt to resolve it.
+# This replaces the inline auto-drive job that was previously in
+# stream-health-check.yml, making auto-drive available for any issue.
+
+on:
+  issues:
+    types: [opened, reopened]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  workflow_dispatch:
+    inputs:
+      number:
+        description: Issue or pull request number to drive
+        required: true
+        type: number
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  auto-drive:
+    name: Auto-drive issue
+    # Reusable workflow call jobs cannot declare a job-level `environment`;
+    # it is passed as an input below so the App secrets are resolved from
+    # makamujo's `conahcnuj` environment inside the reusable workflow.
+    # Call the conahcnuj reusable workflow directly (pin to a commit so an
+    # upstream change cannot alter this repository's CI without a review).
+    uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@7c39b13439cecfd7fa2a10e2ae4b75b2d9ddd778
+    with:
+      # fromJSON not needed: issue number from event is already a number
+      number: ${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.number }}
+      # The caller's repository owns the issue; the reusable workflow's
+      # default would drive conahcnuj instead.
+      repository: ${{ github.repository }}
+      # Same environment as the job above: it holds the App secrets and
+      # wins over the inherited ones.
+      environment: conahcnuj
+    secrets: inherit

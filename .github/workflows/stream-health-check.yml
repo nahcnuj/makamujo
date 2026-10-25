@@ -83,25 +83,3 @@ jobs:
 
             console.log(`Created issue #${issue.number}: ${issue.html_url}`);
             core.setOutput('issue-number', String(issue.number));
-
-  auto-drive:
-    name: Auto-drive fix
-    needs: check-stream
-    if: failure() && needs.check-stream.result == 'failure' && needs.check-stream.outputs.issue-number != ''
-    # Reusable workflow call jobs cannot declare a job-level `environment`;
-    # it is passed as an input below so the App secrets are resolved from
-    # makamujo's `conahcnuj` environment inside the reusable workflow.
-    # Call the conahcnuj reusable workflow directly (pin to a commit so an
-    # upstream change cannot alter this repository's CI without a review).
-    uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@7c39b13439cecfd7fa2a10e2ae4b75b2d9ddd778
-    with:
-      # fromJSON: step outputs are strings, but the reusable workflow's
-      # `number` input is typed as a number.
-      number: ${{ fromJSON(needs.check-stream.outputs.issue-number) }}
-      # The caller's repository owns the issue; the reusable workflow's
-      # default would drive conahcnuj instead.
-      repository: ${{ github.repository }}
-      # Same environment as the job above: it holds the App secrets and
-      # wins over the inherited ones.
-      environment: conahcnuj
-    secrets: inherit
