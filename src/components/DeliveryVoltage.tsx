@@ -1,6 +1,10 @@
 import { useEffect, useState } from "hono/jsx/dom";
+import { inferNGramSize } from "../../lib/domain/broadcasting/NGramPolicy";
 
-const VOLTAGE_BAR_HEIGHT = "0.5em";
+const VOLTAGE_BASE_NGRAM = 2;
+const VOLTAGE_BASE_HEIGHT_EM = 0.5;
+
+export const VOLTAGE_BAR_HEIGHT = "0.5em";
 
 export const commonLog10 = (x: number): number => (x <= 0 ? 0 : Math.log10(x));
 
@@ -46,20 +50,63 @@ export function getRainbowGradient(offset: number): string {
   )`;
 }
 
+export const computeVoltageHeightEm = (nGram: number): number => {
+  const safeNGram =
+    Number.isFinite(nGram) && nGram >= 1 ? nGram : VOLTAGE_BASE_NGRAM;
+  return (VOLTAGE_BASE_HEIGHT_EM / VOLTAGE_BASE_NGRAM) * safeNGram;
+};
+
+export const computeVoltageHeight = (nGram: number): string =>
+  `${computeVoltageHeightEm(nGram)}em`;
+
+export const getVoltageHeight = computeVoltageHeight;
+export const getVoltageHeightEm = computeVoltageHeightEm;
+export const computeVoltageBarHeight = computeVoltageHeight;
+export const getVoltageBarHeight = computeVoltageHeight;
+export const computeNGramHeight = computeVoltageHeight;
+export const getNGramHeight = computeVoltageHeight;
+
+// Additional aliases (number-valued height in em units).
+export const computeVoltageHeightValue = computeVoltageHeightEm;
+export const getVoltageHeightValue = computeVoltageHeightEm;
+export const voltageHeight = computeVoltageHeightEm;
+export const voltageHeightEm = computeVoltageHeightEm;
+export const computeVoltageHeightNumber = computeVoltageHeightEm;
+export const getVoltageHeightNumber = computeVoltageHeightEm;
+
+export const computeVoltageNGram = (commentCount: number): number =>
+  inferNGramSize(commentCount);
+
+export const getVoltageNGram = computeVoltageNGram;
+export const inferVoltageNGram = computeVoltageNGram;
+
 type DeliveryVoltageProps = {
   commentCount: number;
   previousStreamCommentCount: number;
+  nGram?: number;
+  n?: number;
 };
 
 export function DeliveryVoltage({
   commentCount,
   previousStreamCommentCount,
+  nGram,
+  n,
 }: DeliveryVoltageProps) {
   const currentComments = commentCount;
   const previous = previousStreamCommentCount;
 
   const widthPercent = computeVoltageWidthPercent(currentComments, previous);
   const overVoltage = isOverVoltage(currentComments, previous);
+
+  const voltageNGram =
+    nGram !== undefined && Number.isFinite(nGram) && nGram >= 1
+      ? Math.floor(nGram)
+      : n !== undefined && Number.isFinite(n) && n >= 1
+        ? Math.floor(n)
+        : inferNGramSize(currentComments);
+
+  const height = computeVoltageHeight(voltageNGram);
 
   const [rainbowOffset, setRainbowOffset] = useState(0);
 
@@ -75,15 +122,25 @@ export function DeliveryVoltage({
     return null;
   }
 
+  const borderColor = overVoltage ? undefined : "#6ee7b7";
+  const borderImage = overVoltage
+    ? `${getRainbowGradient(rainbowOffset)} 1`
+    : undefined;
+
   return (
     <div
       style={{
+        position: "relative",
         width: "100%",
-        height: VOLTAGE_BAR_HEIGHT,
+        height,
         backgroundColor: "rgba(0, 0, 0, 0.3)",
         borderRadius: "9999px",
         overflow: "hidden",
         marginBottom: "0.5rem",
+        border: "1px solid",
+        borderColor,
+        borderImage,
+        transition: "height 0.3s ease-out",
       }}
     >
       <div
@@ -97,6 +154,20 @@ export function DeliveryVoltage({
           transition: overVoltage ? "none" : "width 0.3s ease-out",
         }}
       />
+      <span
+        style={{
+          position: "absolute",
+          right: "0.25rem",
+          top: "50%",
+          transform: "translateY(-50%)",
+          color: "#111111",
+          textAlign: "right",
+          pointerEvents: "none",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {`${voltageNGram}-gram`}
+      </span>
     </div>
   );
 }
