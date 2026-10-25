@@ -322,6 +322,7 @@ export const create = async (
     width: 1280,
     height: 720,
   },
+  gameScreenZoomFactor: number = GAME_SCREEN_ZOOM_FACTOR,
 ): Promise<
   Browser & {
     reload: () => Promise<void>;
@@ -442,9 +443,9 @@ export const create = async (
     void dismissCloseButtons();
   }, 2000);
 
-  const applyZoom = async () => {
+  const applyZoom = async (factor: number) => {
     if (isVigilantFiestaGameUrl(page.url())) {
-      await applyGameScreenZoom(page, GAME_SCREEN_ZOOM_FACTOR);
+      await applyGameScreenZoom(page, factor);
       return;
     }
     try {
@@ -456,9 +457,9 @@ export const create = async (
       /* page may not be ready */
     }
   };
-  await applyZoom();
+  await applyZoom(gameScreenZoomFactor);
   page.on("load", () => {
-    void applyZoom();
+    void applyZoom(gameScreenZoomFactor);
   });
 
   page.on(
