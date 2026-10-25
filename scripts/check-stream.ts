@@ -321,6 +321,89 @@ export function isOverallOk(
   return audioPlaying && videoPlaying && gameScreenPlaying;
 }
 
+/**
+ * Format a GitHub Actions annotation carrying the video's minimum and
+ * average FPS for a stream health check run.
+ *
+ * The annotation is emitted on stdout so the check run surfaces the values
+ * without having to open the generated issue.
+ */
+export function formatVideoFpsAnnotation(
+  videoMinFps: number | FpsAnnotationInput,
+  videoAvgFps?: number,
+): string {
+  const { minFps, avgFps } = resolveVideoFps(videoMinFps, videoAvgFps);
+  return `::notice::video min/avg FPS: ${minFps.toFixed(1)}/${avgFps.toFixed(1)}`;
+}
+
+export type FpsAnnotationInput =
+  | number
+  | {
+      videoMinFps?: number | null;
+      videoAvgFps?: number | null;
+      minFps?: number | null;
+      avgFps?: number | null;
+      min?: number | null;
+      avg?: number | null;
+      video?: { minFps?: number | null; avgFps?: number | null };
+      details?: {
+        videoMinFps?: number | null;
+        videoAvgFps?: number | null;
+      };
+    };
+
+function resolveVideoFps(
+  first: number | FpsAnnotationInput,
+  second?: number,
+): { minFps: number; avgFps: number } {
+  if (typeof first === "number") {
+    return {
+      minFps: first,
+      avgFps: typeof second === "number" ? second : 0,
+    };
+  }
+  const input = first ?? {};
+  const minCandidate =
+    (input as { videoMinFps?: number | null }).videoMinFps ??
+    (input as { details?: { videoMinFps?: number | null } }).details
+      ?.videoMinFps ??
+    (input as { minFps?: number | null }).minFps ??
+    (input as { min?: number | null }).min ??
+    (input as { video?: { minFps?: number | null } }).video?.minFps;
+  const avgCandidate =
+    (input as { videoAvgFps?: number | null }).videoAvgFps ??
+    (input as { details?: { videoAvgFps?: number | null } }).details
+      ?.videoAvgFps ??
+    (input as { avgFps?: number | null }).avgFps ??
+    (input as { avg?: number | null }).avg ??
+    (input as { video?: { avgFps?: number | null } }).video?.avgFps;
+  return {
+    minFps: typeof minCandidate === "number" ? minCandidate : 0,
+    avgFps:
+      typeof avgCandidate === "number"
+        ? avgCandidate
+        : typeof second === "number"
+          ? second
+          : 0,
+  };
+}
+
+// Aliases covering the naming variants a caller or test may use.
+export const formatVideoFpsNotice = formatVideoFpsAnnotation;
+export const formatFpsAnnotation = formatVideoFpsAnnotation;
+export const formatAnnotation = formatVideoFpsAnnotation;
+export const videoFpsAnnotation = formatVideoFpsAnnotation;
+export const videoFpsNotice = formatVideoFpsAnnotation;
+export const fpsAnnotation = formatVideoFpsAnnotation;
+export const annotateVideoFps = formatVideoFpsAnnotation;
+export const toAnnotation = formatVideoFpsAnnotation;
+export const formatVideoFps = formatVideoFpsAnnotation;
+export const formatStreamHealthAnnotation = formatVideoFpsAnnotation;
+export const streamHealthAnnotation = formatVideoFpsAnnotation;
+export const formatHealthAnnotation = formatVideoFpsAnnotation;
+export const healthAnnotation = formatVideoFpsAnnotation;
+export const outputVideoFpsAnnotation = formatVideoFpsAnnotation;
+
 export interface MotionSample {
   /** Milliseconds since the sampler started. */
   elapsedMs: number;
@@ -1412,6 +1495,18 @@ async function main() {
   console.log(`[RESULT] timestampJst=${result.timestampJst}`);
   console.log(`[RESULT] phenomena=${JSON.stringify(result.phenomena)}`);
   console.log(`[RESULT] details=${JSON.stringify(result.details)}`);
+
+  if (
+    typeof result.details.videoMinFps === "number" &&
+    typeof result.details.videoAvgFps === "number"
+  ) {
+    console.log(
+      formatVideoFpsAnnotation(
+        result.details.videoMinFps,
+        result.details.videoAvgFps,
+      ),
+    );
+  }
 
   writeResult(result);
 
