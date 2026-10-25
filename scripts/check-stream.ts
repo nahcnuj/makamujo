@@ -57,7 +57,7 @@ const MIN_CHANGED_RATIO = 0.001;
 /** Whole video: minimum moving frames per second over the window. */
 export const VIDEO_MIN_FPS = 24;
 /** Game panel: minimum moving frames per second over the window. */
-export const GAME_MIN_FPS = 8;
+export const GAME_MIN_FPS = 24;
 
 /** Left 60% of the video: game panel on the 10×8 layout. */
 export const GAME_CLIP = {
@@ -303,13 +303,14 @@ export function shouldReMeasure(
 
 /**
  * A picture counts as moving only when its slowest one-second bucket keeps
- * enough changed frames. A threshold of N means "N FPS or below is an error".
+ * enough changed frames. A threshold of N means "N FPS is safe; anything
+ * below N is an error".
  */
 export function isFpsAboveThreshold(
   minFps: number,
   thresholdFps: number,
 ): boolean {
-  return minFps > thresholdFps;
+  return minFps >= thresholdFps;
 }
 
 export function isOverallOk(
