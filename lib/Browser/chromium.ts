@@ -443,7 +443,18 @@ export const create = async (
   }, 2000);
 
   const applyZoom = async () => {
-    await applyGameScreenZoom(page);
+    if (isVigilantFiestaGameUrl(page.url())) {
+      await applyGameScreenZoom(page, GAME_SCREEN_ZOOM_FACTOR);
+      return;
+    }
+    try {
+      await page.evaluate(() => {
+        document.documentElement.style.zoom = "1.0";
+        window.scrollTo(0, 0);
+      });
+    } catch {
+      /* page may not be ready */
+    }
   };
   await applyZoom();
   page.on("load", () => {
@@ -611,7 +622,20 @@ export const GAME_SCREEN_ZOOM = "1.25" as const;
 export const GAME_SCREEN_ZOOM_FACTOR = 1.25 as const;
 
 export type ZoomablePage = {
-  evaluate: (fn: () => void) => Promise<unknown>;
+  evaluate: (
+    fn: (zoom?: number | string) => void,
+    zoom?: number | string,
+  ) => Promise<unknown>;
+};
+
+const resolveGameScreenZoomValue = (zoom: number | string): number | string => {
+  if (typeof zoom === "number" && Number.isFinite(zoom)) {
+    return zoom;
+  }
+  if (typeof zoom === "string" && zoom.trim().length > 0) {
+    return zoom.trim();
+  }
+  return GAME_SCREEN_ZOOM_FACTOR;
 };
 
 /**
@@ -620,21 +644,29 @@ export type ZoomablePage = {
  * The whole document stays at 1.0 so the page layout (title/result screens,
  * HUD) is unaffected; only the game board (and, as a fallback, the playing
  * screen) is scaled up for the captured stream.
+ *
+ * `zoom` overrides the magnification applied to the game screen (defaults to
+ * 1.25). Pass `false` to skip zooming entirely.
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
+  zoom: number | string | false = GAME_SCREEN_ZOOM_FACTOR,
 ): Promise<void> => {
+  if (zoom === false) {
+    return;
+  }
+  const zoomValue = resolveGameScreenZoomValue(zoom);
   try {
-    await page.evaluate(() => {
+    await page.evaluate((value: number | string = GAME_SCREEN_ZOOM_FACTOR) => {
       document.documentElement.style.zoom = "1.0";
       const gameScreen =
         document.getElementById("game-container") ??
         document.getElementById("screen-playing");
       if (gameScreen) {
-        gameScreen.style.zoom = "1.25";
+        gameScreen.style.zoom = String(value);
       }
       window.scrollTo(0, 0);
-    });
+    }, zoomValue);
   } catch {
     /* page may not be ready */
   }
@@ -645,9 +677,16 @@ export const zoomGameScreen = applyGameScreenZoom;
 export const applyZoom = applyGameScreenZoom;
 
 export const createApplyZoom =
-  (page: ZoomablePage) => async (): Promise<void> => {
-    await applyGameScreenZoom(page);
+  (
+    page: ZoomablePage,
+    zoom: number | string | false = GAME_SCREEN_ZOOM_FACTOR,
+  ) =>
+  async (): Promise<void> => {
+    await applyGameScreenZoom(page, zoom);
   };
+
+export const isVigilantFiestaGameUrl = (url: string): boolean =>
+  /vigilant-fiesta/i.test(url);
 
 type LocatorLike = {
   first(): LocatorLike;
