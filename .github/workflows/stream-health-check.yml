@@ -78,7 +78,7 @@ jobs:
               repo: context.repo.repo,
               title,
               body,
-              labels: ['bug']
+              labels: ['bug', 'self-improvement'],
             });
 
             console.log(`Created issue #${issue.number}: ${issue.html_url}`);
