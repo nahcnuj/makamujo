@@ -8,6 +8,7 @@
 <h2>
 <a href="https://live.nicovideo.jp/watch/user/14171889" target="_blank" rel="noopener">24/7 Live Streaming at NicoNico</a>
 </h2>
+
 [![Stream Health Check](https://github.com/nahcnuj/makamujo/actions/workflows/stream-health-check.yml/badge.svg?event=schedule)](https://github.com/nahcnuj/makamujo/actions/workflows/stream-health-check.yml)
 
 [![CI](https://github.com/nahcnuj/makamujo/actions/workflows/ci.yml/badge.svg)](https://github.com/nahcnuj/makamujo/actions/workflows/ci.yml)
