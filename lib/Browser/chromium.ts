@@ -442,7 +442,15 @@ export const create = async (
     void dismissCloseButtons();
   }, 2000);
 
-  const applyZoom = async () => {
+  /**
+   * Keep the captured page at 100% zoom.
+   *
+   * The viewport already matches the 1280x720 OBS crop, so any zoom only adds
+   * rasterization work for the software-rendered browser. Re-apply after every
+   * load because navigation discards inline styles and the game page may set
+   * its own zoom.
+   */
+  const resetGamePageZoom = async () => {
     try {
       await page.evaluate(() => {
         document.documentElement.style.zoom = "1.0";
@@ -452,9 +460,9 @@ export const create = async (
       /* page may not be ready */
     }
   };
-  await applyZoom();
+  await resetGamePageZoom();
   page.on("load", () => {
-    void applyZoom();
+    void resetGamePageZoom();
   });
 
   page.on(
