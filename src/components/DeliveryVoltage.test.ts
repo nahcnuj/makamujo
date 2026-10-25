@@ -1,8 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import {
+  computeVoltageHeight,
+  computeVoltageHeightEm,
+  computeVoltageNGram,
   computeVoltageWidthPercent,
   isOverVoltage,
   shouldRenderVoltage,
+  VOLTAGE_BAR_HEIGHT,
 } from "./DeliveryVoltage";
 
 describe("computeVoltageWidthPercent", () => {
@@ -37,5 +41,34 @@ describe("shouldRenderVoltage", () => {
     expect(shouldRenderVoltage(0, 0)).toBe(false);
     expect(shouldRenderVoltage(1, 0)).toBe(true);
     expect(shouldRenderVoltage(0, 1)).toBe(true);
+  });
+});
+
+describe("computeVoltageHeightEm", () => {
+  it("treats the current 0.5em bar as the 2-gram height", () => {
+    expect(computeVoltageHeightEm(2)).toBe(0.5);
+    expect(computeVoltageHeightEm(1)).toBe(0.25);
+    expect(computeVoltageHeightEm(4)).toBe(1);
+  });
+
+  it("falls back to the 2-gram height for invalid n-gram values", () => {
+    expect(computeVoltageHeightEm(0)).toBe(0.5);
+    expect(computeVoltageHeightEm(Number.NaN)).toBe(0.5);
+  });
+});
+
+describe("computeVoltageHeight", () => {
+  it("renders the proportionally scaled height in em units", () => {
+    expect(computeVoltageHeight(2)).toBe("0.5em");
+    expect(computeVoltageHeight(3)).toBe("0.75em");
+    expect(VOLTAGE_BAR_HEIGHT).toBe("0.5em");
+  });
+});
+
+describe("computeVoltageNGram", () => {
+  it("infers the n-gram size from the comment count", () => {
+    expect(computeVoltageNGram(1)).toBe(1);
+    expect(computeVoltageNGram(100)).toBe(2);
+    expect(computeVoltageNGram(1000)).toBe(4);
   });
 });
