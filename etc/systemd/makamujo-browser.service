@@ -23,9 +23,9 @@ MemoryAccounting=yes
 MemoryHigh=1G
 MemoryMax=1.5G
 CPUAccounting=yes
-CPUQuota=200%
-CPUWeight=500
-Nice=-5
+CPUQuota=400%
+CPUWeight=1000
+Nice=-10
 TasksMax=512
 
 [Install]
