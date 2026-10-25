@@ -11,6 +11,7 @@ import {
   createRedirectToHomeHandler,
   DEFAULT_EVALUATE_TIMEOUT_MS,
   EvaluateTimeoutError,
+  isVigilantFiestaGameUrl,
   resolveEvaluateTimeoutMs,
   withTimeout,
 } from "./chromium";
@@ -378,5 +379,33 @@ describe("applyGameScreenZoom", () => {
     };
     await applyGameScreenZoom(page, Number.NaN);
     expect(called).toBeFalse();
+  });
+});
+
+describe("isVigilantFiestaGameUrl", () => {
+  it("accepts the vigilant-fiesta home URL", () => {
+    expect(isVigilantFiestaGameUrl(HOME_URL)).toBeTrue();
+  });
+
+  it("rejects the Cookie Clicker URL", () => {
+    expect(
+      isVigilantFiestaGameUrl("https://orteil.dashnet.org/cookieclicker/"),
+    ).toBeFalse();
+  });
+});
+
+describe("applyGameScreenZoom default", () => {
+  it("applies the default magnification when none is given", async () => {
+    let received: number | string | undefined;
+    const page = {
+      evaluate: async (
+        _fn: (zoom: number | string) => void,
+        zoom: number | string,
+      ) => {
+        received = zoom;
+      },
+    };
+    await applyGameScreenZoom(page);
+    expect(received).toBe(1.25);
   });
 });

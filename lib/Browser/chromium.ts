@@ -316,6 +316,9 @@ export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
   "--disable-renderer-backgrounding",
 ] as const;
 
+export const GAME_SCREEN_ZOOM = "1.25" as const;
+export const GAME_SCREEN_ZOOM_FACTOR = 1.25 as const;
+
 export type BrowserCreateOptions = {
   /** Magnification for the Agent's game board; false/undefined disables it. */
   gameScreenZoom?: number | string | false;
@@ -448,14 +451,13 @@ export const create = async (
     void dismissCloseButtons();
   }, 2000);
 
-  const applyZoom = async () => {
-    const zoom = options.gameScreenZoom;
+  const applyZoom = async (factor: number | string | false | undefined) => {
     if (
-      zoom !== undefined &&
-      zoom !== false &&
-      page.url().startsWith(gameHomeUrl)
+      factor !== undefined &&
+      factor !== false &&
+      isVigilantFiestaGameUrl(page.url())
     ) {
-      await applyGameScreenZoom(page, zoom);
+      await applyGameScreenZoom(page, factor);
       return;
     }
     try {
@@ -467,9 +469,9 @@ export const create = async (
       /* page may not be ready */
     }
   };
-  await applyZoom();
+  await applyZoom(options.gameScreenZoom);
   page.on("load", () => {
-    void applyZoom();
+    void applyZoom(options.gameScreenZoom);
   });
 
   page.on(
@@ -655,7 +657,7 @@ const resolveGameScreenZoomValue = (
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
-  zoom: number | string | false,
+  zoom: number | string | false = GAME_SCREEN_ZOOM_FACTOR,
 ): Promise<void> => {
   if (zoom === false) {
     return;
@@ -685,10 +687,16 @@ export const zoomGameScreen = applyGameScreenZoom;
 export const applyZoom = applyGameScreenZoom;
 
 export const createApplyZoom =
-  (page: ZoomablePage, zoom: number | string | false) =>
+  (
+    page: ZoomablePage,
+    zoom: number | string | false = GAME_SCREEN_ZOOM_FACTOR,
+  ) =>
   async (): Promise<void> => {
     await applyGameScreenZoom(page, zoom);
   };
+
+export const isVigilantFiestaGameUrl = (url: string): boolean =>
+  /vigilant-fiesta/i.test(url);
 
 type LocatorLike = {
   first(): LocatorLike;
