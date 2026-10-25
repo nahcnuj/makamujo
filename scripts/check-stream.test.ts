@@ -800,6 +800,50 @@ describe("summarizeFps", () => {
   });
 });
 
+describe("30 fps delivery drop tolerance", () => {
+  // The streaming profile publishes 30 fps, and the health check requires at
+  // least 24 changed frames in every one-second bucket. That leaves room for
+  // six dropped frames per second, which is the margin the environment tuning
+  // protects: isolated misses stay healthy, while sustained drops still fail.
+  const delivery = (droppedPerSecond: number): MotionSample[] => {
+    const framesPerSecond = 30;
+    const samples: MotionSample[] = [];
+    for (let second = 0; second < 10; second += 1) {
+      for (let frame = 0; frame < framesPerSecond; frame += 1) {
+        const changed = frame >= droppedPerSecond;
+        samples.push({
+          elapsedMs: second * 1000 + (frame * 1000) / framesPerSecond,
+          wholeChanged: changed,
+          gameChanged: changed,
+        });
+      }
+    }
+    return samples;
+  };
+
+  it("keeps a 30 fps broadcast healthy when six frames per second drop", () => {
+    const summary = summarizeFps(
+      delivery(6),
+      (s) => s.wholeChanged,
+      1000,
+      10000,
+    );
+    expect(summary.minFps).toBe(24);
+    expect(isFpsAboveThreshold(summary.minFps, VIDEO_MIN_FPS)).toBe(true);
+  });
+
+  it("reports a 30 fps broadcast that loses seven frames per second", () => {
+    const summary = summarizeFps(
+      delivery(7),
+      (s) => s.wholeChanged,
+      1000,
+      10000,
+    );
+    expect(summary.minFps).toBe(23);
+    expect(isFpsAboveThreshold(summary.minFps, VIDEO_MIN_FPS)).toBe(false);
+  });
+});
+
 describe("isCapturableMediaSource", () => {
   const origin = "https://live.nicovideo.jp";
 
