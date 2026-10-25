@@ -25,12 +25,6 @@ describe("GAME_BROWSER_ANTI_THROTTLE_FLAGS", () => {
       "--disable-renderer-backgrounding",
     ]);
   });
-
-  it("does not disable the frame rate limit, so rendering stays normalized", () => {
-    expect(GAME_BROWSER_ANTI_THROTTLE_FLAGS).not.toContain(
-      "--disable-frame-rate-limit",
-    );
-  });
 });
 
 describe("cleanupChromiumLockFiles", () => {

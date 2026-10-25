@@ -52,6 +52,8 @@ const context = await chromium
       "--disable-features=Translate,TranslateUI,TranslateScript,OptimizationHints,AudioServiceOutOfProcess,CalculateNativeWinOcclusion",
       "--disable-translate",
       "--lang=ja",
+      // Keep the renderer capped to vsync: do not add --disable-frame-rate-limit,
+      // which would let Chromium render uncapped and destabilise frame pacing.
       "--disable-background-timer-throttling",
       "--disable-backgrounding-occluded-windows",
       "--disable-renderer-backgrounding",

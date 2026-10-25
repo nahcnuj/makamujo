@@ -309,6 +309,13 @@ export async function launchPersistentContext(
  * two per second, so the game renders at a crawl and the stream's picture
  * looks frozen even though the page keeps answering. These flags pin the
  * renderer to full speed regardless of window visibility.
+ *
+ * `--disable-frame-rate-limit` is deliberately NOT included. With it, Chromium
+ * stops capping the renderer to the display refresh rate and renders as fast
+ * as it can, which overloads the compositor and destabilises the stream's
+ * frame pacing (the delivered picture stops looking like a normal 30 fps
+ * broadcast). Without it, rendering stays capped to vsync and the stream's
+ * picture stays normalized.
  */
 export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
   "--disable-background-timer-throttling",
