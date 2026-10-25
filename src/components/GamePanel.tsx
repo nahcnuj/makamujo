@@ -51,8 +51,13 @@ type SelectedGameComponent = (props: {
 }) => HonoReturn;
 
 export function GamePanel() {
-  const { playing, streamState, commentCount, previousStreamCommentCount } =
-    useAgentContext();
+  const {
+    playing,
+    streamState,
+    commentCount,
+    previousStreamCommentCount,
+    nGram,
+  } = useAgentContext();
 
   // console.log(playing);
   const Component: SelectedGameComponent = playing
@@ -68,6 +73,7 @@ export function GamePanel() {
         <DeliveryVoltage
           commentCount={commentCount ?? 0}
           previousStreamCommentCount={previousStreamCommentCount ?? 0}
+          nGram={nGram}
         />
         <div className="flex">
           <div className="flex-1 text-right">

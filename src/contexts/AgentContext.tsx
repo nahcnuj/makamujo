@@ -19,6 +19,7 @@ type Data = {
   streamState?: AgentState;
   commentCount?: number;
   previousStreamCommentCount?: number;
+  nGram?: number;
 };
 
 const AgentContext = createContext<Data>({
@@ -55,10 +56,12 @@ export const setStreamStateFromMetaApiResponse = (
     niconama?: AgentState;
     commentCount?: number;
     previousStreamCommentCount?: number;
+    nGram?: number;
   } | null,
   setStreamState: (state: AgentState | undefined) => void,
   setCommentCount: (count: number | undefined) => void,
   setPreviousStreamCommentCount: (count: number | undefined) => void,
+  setNGram?: (nGram: number | undefined) => void,
 ): void => {
   if (res === null) {
     return;
@@ -66,6 +69,7 @@ export const setStreamStateFromMetaApiResponse = (
   setStreamState(res.niconama);
   setCommentCount(res.commentCount);
   setPreviousStreamCommentCount(res.previousStreamCommentCount);
+  setNGram?.(res.nGram);
 };
 
 export const AgentProvider = ({ children }: PropsWithChildren) => {
@@ -76,6 +80,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
   const [commentCount, setCommentCount] = useState<number>();
   const [previousStreamCommentCount, setPreviousStreamCommentCount] =
     useState<number>();
+  const [nGram, setNGram] = useState<number>();
 
   useInterval(100, async () => {
     const res = await fetch("/api/speech", { unix: "./var/api-speech.sock" })
@@ -113,6 +118,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
       setStreamState,
       setCommentCount,
       setPreviousStreamCommentCount,
+      setNGram,
     );
   });
 
@@ -124,6 +130,7 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
         streamState,
         commentCount,
         previousStreamCommentCount,
+        nGram,
         playing,
       }}
     >

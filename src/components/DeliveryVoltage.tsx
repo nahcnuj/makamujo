@@ -1,6 +1,11 @@
 import { useEffect, useState } from "hono/jsx/dom";
+import { inferNGramSize } from "../../lib/domain/broadcasting/NGramPolicy";
 
-const VOLTAGE_BAR_HEIGHT = "0.5em";
+export const VOLTAGE_BASE_NGRAM = 2;
+export const VOLTAGE_BASE_HEIGHT_EM = 0.5;
+export const VOLTAGE_COLOR = "#6ee7b7";
+
+export const VOLTAGE_BAR_HEIGHT = `${VOLTAGE_BASE_HEIGHT_EM}em`;
 
 export const commonLog10 = (x: number): number => (x <= 0 ? 0 : Math.log10(x));
 
@@ -46,20 +51,41 @@ export function getRainbowGradient(offset: number): string {
   )`;
 }
 
+export const computeVoltageHeightEm = (nGram: number): number => {
+  const safeNGram =
+    Number.isFinite(nGram) && nGram >= 1 ? nGram : VOLTAGE_BASE_NGRAM;
+  return (VOLTAGE_BASE_HEIGHT_EM / VOLTAGE_BASE_NGRAM) * safeNGram;
+};
+
+export const computeVoltageHeight = (nGram: number): string =>
+  `${computeVoltageHeightEm(nGram)}em`;
+
+export const computeVoltageNGram = (commentCount: number): number =>
+  inferNGramSize(commentCount);
+
 type DeliveryVoltageProps = {
   commentCount: number;
   previousStreamCommentCount: number;
+  nGram?: number;
 };
 
 export function DeliveryVoltage({
   commentCount,
   previousStreamCommentCount,
+  nGram = 1,
 }: DeliveryVoltageProps) {
   const currentComments = commentCount;
   const previous = previousStreamCommentCount;
 
   const widthPercent = computeVoltageWidthPercent(currentComments, previous);
   const overVoltage = isOverVoltage(currentComments, previous);
+
+  const voltageNGram =
+    Number.isFinite(nGram) && nGram >= 1
+      ? Math.floor(nGram)
+      : VOLTAGE_BASE_NGRAM;
+
+  const height = computeVoltageHeight(voltageNGram);
 
   const [rainbowOffset, setRainbowOffset] = useState(0);
 
@@ -75,28 +101,51 @@ export function DeliveryVoltage({
     return null;
   }
 
+  const rainbowGradient = getRainbowGradient(rainbowOffset);
+  const borderColor = overVoltage ? undefined : VOLTAGE_COLOR;
+  const borderImage = overVoltage ? `${rainbowGradient} 1` : undefined;
+
   return (
     <div
       style={{
+        position: "relative",
         width: "100%",
-        height: VOLTAGE_BAR_HEIGHT,
+        height,
         backgroundColor: "rgba(0, 0, 0, 0.3)",
         borderRadius: "9999px",
         overflow: "hidden",
         marginBottom: "0.5rem",
+        border: "1px solid",
+        borderColor,
+        borderImage,
+        textAlign: "right",
+        lineHeight: height,
+        transition: "height 0.3s ease-out, line-height 0.3s ease-out",
       }}
     >
       <div
-        className="bg-emerald-300"
         style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
           width: `${widthPercent}%`,
           height: "100%",
-          ...(overVoltage
-            ? { background: getRainbowGradient(rainbowOffset) }
-            : {}),
+          backgroundColor: overVoltage ? undefined : VOLTAGE_COLOR,
+          ...(overVoltage ? { background: rainbowGradient } : {}),
           transition: overVoltage ? "none" : "width 0.3s ease-out",
         }}
       />
+      <span
+        style={{
+          paddingRight: "0.25rem",
+          color: "#111111",
+          fontSize: "0.4em",
+          pointerEvents: "none",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {`${voltageNGram}-gram`}
+      </span>
     </div>
   );
 }
