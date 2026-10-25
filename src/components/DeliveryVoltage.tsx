@@ -140,6 +140,7 @@ export function DeliveryVoltage({
         border: "1px solid",
         borderColor,
         borderImage,
+        textAlign: "right",
         transition: "height 0.3s ease-out",
       }}
     >
