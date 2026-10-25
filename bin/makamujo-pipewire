@@ -106,9 +106,9 @@ configure_pulse_defaults() {
     sleep 0.25
   done
   pactl info >/dev/null 2>&1 || return 1
-  pactl load-module module-null-sink sink_name=makamujo_out sink_properties=device.description=MakamujoOut 2>/dev/null || true
-  pactl set-default-sink makamujo_out 2>/dev/null || true
-  pactl set-default-source makamujo_out.monitor 2>/dev/null || true
+  pactl load-module module-null-sink sink_name=makamujo_out sink_properties=device.description=MakamujoOut >/dev/null 2>&1 || true
+  pactl set-default-sink makamujo_out >/dev/null 2>&1 || true
+  pactl set-default-source makamujo_out.monitor >/dev/null 2>&1 || true
 }
 
 start_audio_stack() {

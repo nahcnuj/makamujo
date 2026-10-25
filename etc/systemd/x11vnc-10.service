@@ -11,6 +11,8 @@ Environment=DISPLAY=:10
 ExecStart=/opt/makamujo/bin/x11vnc-10
 Restart=always
 RestartSec=5
+# x11vnc exits 2 on SIGTERM, which would otherwise show as "failed"
+SuccessExitStatus=2 SIGTERM
 
 [Install]
 WantedBy=multi-user.target
