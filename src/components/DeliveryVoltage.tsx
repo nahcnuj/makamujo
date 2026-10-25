@@ -3,7 +3,6 @@ import { inferNGramSize } from "../../lib/domain/broadcasting/NGramPolicy";
 
 export const VOLTAGE_BASE_NGRAM = 2;
 export const VOLTAGE_BASE_HEIGHT_EM = 0.5;
-export const VOLTAGE_COLOR = "#6ee7b7";
 
 export const VOLTAGE_BAR_HEIGHT = `${VOLTAGE_BASE_HEIGHT_EM}em`;
 
@@ -123,7 +122,7 @@ export function DeliveryVoltage({
     return null;
   }
 
-  const borderColor = overVoltage ? undefined : VOLTAGE_COLOR;
+  const borderColor = overVoltage ? undefined : "#6ee7b7";
   const borderImage = overVoltage
     ? `${getRainbowGradient(rainbowOffset)} 1`
     : undefined;
@@ -141,15 +140,14 @@ export function DeliveryVoltage({
         border: "1px solid",
         borderColor,
         borderImage,
-        textAlign: "right",
         transition: "height 0.3s ease-out",
       }}
     >
       <div
+        className="bg-emerald-300"
         style={{
           width: `${widthPercent}%`,
           height: "100%",
-          backgroundColor: overVoltage ? undefined : VOLTAGE_COLOR,
           ...(overVoltage
             ? { background: getRainbowGradient(rainbowOffset) }
             : {}),
@@ -159,11 +157,13 @@ export function DeliveryVoltage({
       <span
         style={{
           position: "absolute",
+          left: 0,
           right: "0.25rem",
           top: "50%",
           transform: "translateY(-50%)",
           color: "#111111",
-          fontSize: "0.4em",
+          fontSize: "0.7em",
+          textAlign: "right",
           pointerEvents: "none",
           whiteSpace: "nowrap",
         }}
