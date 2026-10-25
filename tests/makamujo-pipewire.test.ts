@@ -182,9 +182,7 @@ describe("makamujo-pipewire", () => {
   it("re-applies the pulse defaults whenever the stack is replaced", () => {
     const body = functionBody("configure_pulse_defaults");
 
-    const readinessIndex = body.indexOf(
-      "pactl info >/dev/null 2>&1 || return 1",
-    );
+    const readinessIndex = body.indexOf("pactl info >/dev/null || return 1");
     const loadIndex = body.indexOf("pactl load-module module-null-sink");
     const defaultSinkIndex = body.indexOf(
       "pactl set-default-sink makamujo_out",
