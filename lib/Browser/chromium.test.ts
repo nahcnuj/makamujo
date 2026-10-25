@@ -4,12 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { removeTemporaryDirectory } from "../temporaryDirectory";
 import {
+  applyGameScreenZoom,
   cleanupChromiumLockFiles,
   createClickByElementId,
   createPopupPageHandler,
   createRedirectToHomeHandler,
   DEFAULT_EVALUATE_TIMEOUT_MS,
   EvaluateTimeoutError,
+  isVigilantFiestaGameUrl,
   resolveEvaluateTimeoutMs,
   withTimeout,
 } from "./chromium";
@@ -325,5 +327,54 @@ describe("resolveEvaluateTimeoutMs", () => {
     expect(
       resolveEvaluateTimeoutMs({ BROWSER_EVALUATE_TIMEOUT_MS: "abc" }),
     ).toBe(DEFAULT_EVALUATE_TIMEOUT_MS);
+  });
+});
+
+describe("applyGameScreenZoom", () => {
+  it("passes the Agent-provided magnification to page.evaluate", async () => {
+    let received: number | undefined;
+    const page = {
+      evaluate: async (_fn: (zoom: number) => void, zoom: number) => {
+        received = zoom;
+      },
+    };
+    await applyGameScreenZoom(page, 1.5);
+    expect(received).toBe(1.5);
+  });
+
+  it("skips page.evaluate for an invalid magnification", async () => {
+    let called = false;
+    const page = {
+      evaluate: async () => {
+        called = true;
+      },
+    };
+    await applyGameScreenZoom(page, Number.NaN);
+    expect(called).toBeFalse();
+  });
+});
+
+describe("isVigilantFiestaGameUrl", () => {
+  it("accepts the vigilant-fiesta home URL", () => {
+    expect(isVigilantFiestaGameUrl(HOME_URL)).toBeTrue();
+  });
+
+  it("rejects the Cookie Clicker URL", () => {
+    expect(
+      isVigilantFiestaGameUrl("https://orteil.dashnet.org/cookieclicker/"),
+    ).toBeFalse();
+  });
+});
+
+describe("applyGameScreenZoom default", () => {
+  it("applies the default magnification when none is given", async () => {
+    let received: number | undefined;
+    const page = {
+      evaluate: async (_fn: (zoom: number) => void, zoom: number) => {
+        received = zoom;
+      },
+    };
+    await applyGameScreenZoom(page);
+    expect(received).toBe(1);
   });
 });
