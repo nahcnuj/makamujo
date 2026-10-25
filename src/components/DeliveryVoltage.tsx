@@ -4,7 +4,7 @@ import { inferNGramSize } from "../../lib/domain/broadcasting/NGramPolicy";
 const VOLTAGE_BASE_NGRAM = 2;
 const VOLTAGE_BASE_HEIGHT_EM = 0.5;
 
-export const VOLTAGE_BAR_HEIGHT = "0.5em";
+export const VOLTAGE_BAR_HEIGHT = `${VOLTAGE_BASE_HEIGHT_EM}em`;
 
 export const commonLog10 = (x: number): number => (x <= 0 ? 0 : Math.log10(x));
 
@@ -161,6 +161,7 @@ export function DeliveryVoltage({
           top: "50%",
           transform: "translateY(-50%)",
           color: "#111111",
+          fontSize: "0.7em",
           textAlign: "right",
           pointerEvents: "none",
           whiteSpace: "nowrap",
