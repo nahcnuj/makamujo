@@ -41,11 +41,12 @@ jobs:
 
       - name: Run stream health check
         id: stream-check
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: bun run scripts/check-stream.ts
 
       - name: Create issue if check failed
         id: create-issue
-        if: failure()
+        if: steps.stream-check.outcome == 'failure'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
