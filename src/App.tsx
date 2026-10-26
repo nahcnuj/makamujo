@@ -10,7 +10,7 @@ export function App() {
       <Layout
         count={10}
         span={8}
-        className="text-emerald-50 font-[Noto_Sans_CJK_JP] font-bold"
+        className="bg-emerald-950/30 text-emerald-50 font-[Noto_Sans_CJK_JP] font-bold"
       >
         <Container>
           <div className="text-xs opacity-25">
