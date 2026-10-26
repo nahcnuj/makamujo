@@ -845,13 +845,49 @@ startBroadcastFreezeWatchdog({
 });
 
 /**
+ * Upper bound on how long shutdown waits for the watch page browser to close.
+ * systemd's `TimeoutStopSec` is 30s; a wedged Chromium must still exit well
+ * before that so the profile can be removed and the unit restarts promptly.
+ */
+const WATCH_PAGE_SHUTDOWN_TIMEOUT_MS = 10_000;
+
+let stoppingWatchPageStatistics: Promise<void> | undefined;
+
+/**
+ * Close the watch page statistics browser before the process exits.
+ *
+ * Playwright creates a `playwright_chromiumdev_profile-*` directory for
+ * `chromium.launch()` and only removes it on a graceful `browser.close()`.
+ * The server is restarted by cron/systemd with SIGTERM every few minutes, so
+ * without this the profiles pile up in the OS temp dir until it fills and the
+ * host runs short of memory. Idempotent: the signal and exit paths may both
+ * call it.
+ */
+function stopWatchPageStatistics(): Promise<void> {
+  stoppingWatchPageStatistics ??= (async () => {
+    try {
+      await watchPageStatisticsSource.stop();
+    } catch (err) {
+      console.warn(
+        "[WARN] failed to stop the watch page statistics source:",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  })();
+  return stoppingWatchPageStatistics;
+}
+
+let runtimeCleanedUp = false;
+
+/**
  * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}
  */
 function exitHandler(
   options: { cleanup: true; exit?: never } | { cleanup?: never; exit: true },
   exitCode?: number,
 ) {
-  if (options.cleanup) {
+  if ((options.cleanup || options.exit) && !runtimeCleanedUp) {
+    runtimeCleanedUp = true;
     console.log("[INFO]", "server stopping...");
     // Use mainServer (let) rather than const `server` to avoid TDZ when serve() fails before assignment.
     try {
@@ -876,6 +912,9 @@ function exitHandler(
     } catch {
       /* ignore cleanup failures during crash paths */
     }
+    // Start the asynchronous browser close now; `process.exit()` below waits
+    // for it. The `exit` event path cannot await, so this is best-effort there.
+    void stopWatchPageStatistics();
   }
 
   if (typeof exitCode === "number") {
@@ -883,7 +922,14 @@ function exitHandler(
   }
 
   if (options.exit) {
-    process.exit();
+    // Wait for the browser to close (and Playwright to remove its profile)
+    // before exiting. A wedged browser must not hold shutdown forever.
+    const forceExit = setTimeout(
+      () => process.exit(),
+      WATCH_PAGE_SHUTDOWN_TIMEOUT_MS,
+    );
+    forceExit.unref?.();
+    void stopWatchPageStatistics().finally(() => process.exit());
   }
 }
 

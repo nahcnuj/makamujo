@@ -95,6 +95,21 @@ describe("temporary directory ownership", () => {
     );
   });
 
+  test("the server closes the watch page browser before it exits", () => {
+    const entry = read("index.ts");
+
+    // chromium.launch() (composition/chromiumWatchPageBrowser.ts) creates a
+    // playwright_chromiumdev_profile-* directory that only browser.close()
+    // removes. The server is restarted with SIGTERM every few minutes, so
+    // skipping the close leaks one profile per restart until the 2 GB temp
+    // filesystem (and so the host) runs out of memory.
+    expect(entry).toContain("await watchPageStatisticsSource.stop();");
+    expect(entry).toContain("WATCH_PAGE_SHUTDOWN_TIMEOUT_MS");
+    expect(entry).toContain(
+      "void stopWatchPageStatistics().finally(() => process.exit());",
+    );
+  });
+
   test("make install ships the temp sweep that bin/stop shells out to", () => {
     const makefile = read("Makefile");
 
