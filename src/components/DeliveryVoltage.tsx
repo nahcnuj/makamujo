@@ -113,7 +113,7 @@ export function DeliveryVoltage({
         height,
         backgroundColor: "rgba(0, 0, 0, 0.3)",
         borderRadius: "9999px",
-        overflow: "hidden",
+        overflow: "visible",
         marginBottom: "0.5rem",
         border: "1px solid",
         borderColor,
@@ -126,22 +126,38 @@ export function DeliveryVoltage({
       <div
         style={{
           position: "absolute",
-          top: 0,
-          left: 0,
-          width: `${widthPercent}%`,
-          height: "100%",
-          backgroundColor: overVoltage ? undefined : VOLTAGE_COLOR,
-          ...(overVoltage ? { background: rainbowGradient } : {}),
-          transition: overVoltage ? "none" : "width 0.3s ease-out",
+          inset: 0,
+          overflow: "hidden",
+          borderRadius: "9999px",
+          pointerEvents: "none",
         }}
-      />
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: `${widthPercent}%`,
+            height: "100%",
+            backgroundColor: overVoltage ? undefined : VOLTAGE_COLOR,
+            ...(overVoltage ? { background: rainbowGradient } : {}),
+            transition: overVoltage ? "none" : "width 0.3s ease-out",
+          }}
+        />
+      </div>
       <span
         style={{
-          paddingRight: "0.25rem",
+          position: "absolute",
+          right: "0.25rem",
+          top: "50%",
+          transform: "translateY(-50%)",
           color: "#111111",
           fontSize: "0.4em",
+          lineHeight: 1,
           pointerEvents: "none",
           whiteSpace: "nowrap",
+          textShadow: "0 0 2px rgba(0, 0, 0, 0.9)",
+          zIndex: 1,
         }}
       >
         {`${voltageNGram}-gram`}
