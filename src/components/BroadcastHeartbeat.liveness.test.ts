@@ -27,17 +27,17 @@ import {
  *
  * 走査線は画面を横切る薄い水平線である。issue #1030 / #1197 のとおり、CRT の
  * 走査線として許容できるのは「ごくごく透明なテーマカラーで、高さ 1vh 程度」
- * まで。現状は高さ 1vh・不透明度 0.2 のエメラルドで、2.5 秒かけて
+ * まで。現状は高さ 1vh・不透明度 0.3 のエメラルドで、2.5 秒かけて
  * 0vh→99vh を流す。1 フレームの移動量は標本でおよそ 1 行あり、公開フレーム
  * 30 枚すべてが差分しきい値（0.1% ≈ 9.2px）を超える。
  *
  * 標本を作る時は、配信映像が立つまでの経路をなぞる。
  *
- * 1. ページ。`:root` の `bg-black` が canvas に伝播するので、走査線の外は
- *    不透明な黒に Layout の `bg-emerald-950/30` が重なった暗い背景になる。
+ * 1. ページ。ゲーム画面の `#000000` 背景は OBS の Color Key で透過し、
+ *    ゲーム画面の外も普通に透明なので、走査線の外は透明になる。
  * 2. OBS の Color Key（key = 黒）。scene の `color_key_filter_v2` は既定の
  *    similarity 0.08 / smoothness 0.05 で、黒から十分離れた画素だけを残す。
- *    暗い背景は消えてゲーム画面が透け、走査線は距離 0.22 で残る。
+ *    走査線は黒から十分離れたエメラルドなので、そのまま残る。
  * 3. ゲーム画面（XSHM のキャプチャ）を背後に合成した絵が、公開される絵。
  * 4. 検知側は requestAnimationFrame（≒60Hz）ごとに標本を比較する。公開
  *    映像は 30fps なので、同じフレームを 2 回ずつ拾う。観測できる変化
@@ -107,10 +107,10 @@ type BandGeometry = {
   stops: GradientStop[];
 };
 
-/** 帯の外のページ。canvas は `:root` の `bg-black` に伝播した不透明白。 */
-const PAGE_CANVAS: Rgba = { r: 0, g: 0, b: 0, a: 1 };
-/** Layout の `bg-emerald-950/30`（tailwind の emerald-950）。 */
-const PAGE_BACKGROUND: Rgba = { r: 6, g: 78, b: 59, a: 0.3 };
+/** 帯の外のページ。ゲーム画面の黒は Color Key で透過し、外も透明。 */
+const PAGE_CANVAS: Rgba = { r: 0, g: 0, b: 0, a: 0 };
+/** Layout の背景も透明（ゲーム画面外は普通に透明）。 */
+const PAGE_BACKGROUND: Rgba = { r: 0, g: 0, b: 0, a: 0 };
 
 const requireGroup = (
   pattern: RegExp,
