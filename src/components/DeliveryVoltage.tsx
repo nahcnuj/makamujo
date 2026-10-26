@@ -153,6 +153,7 @@ export function DeliveryVoltage({
           transform: "translateY(-50%)",
           color: "#111111",
           fontSize: "0.4em",
+          fontWeight: "normal",
           lineHeight: 1,
           pointerEvents: "none",
           whiteSpace: "nowrap",
