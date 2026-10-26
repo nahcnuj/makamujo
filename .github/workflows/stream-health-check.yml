@@ -52,7 +52,7 @@ jobs:
             const fs = require('fs');
             const result = JSON.parse(fs.readFileSync('stream-check-result.json', 'utf8'));
             const timestamp = result.timestampJst;
-            const phenomena = result.phenomena.join('\\n- ');
+            const phenomena = result.phenomena.join('\n- ');
             const details = JSON.stringify(result.details, null, 2);
 
             const logBody = [
@@ -65,7 +65,7 @@ jobs:
               "```json",
               details,
               "```",
-            ].join("\\n");
+            ].join("\n");
 
             const commentBody = [
               "## 配信異常検知ログ",
@@ -74,7 +74,7 @@ jobs:
               "",
               "---",
               "*このコメントは自動生成されました (GitHub Actions: Stream Health Check)*",
-            ].join("\\n");
+            ].join("\n");
 
             // At most one open "配信異常検知" issue: reuse an existing one if present.
             const { data: openIssues } = await github.rest.issues.listForRepo({
@@ -106,7 +106,7 @@ jobs:
                 "",
                 "---",
                 "*このIssueは自動生成されました (GitHub Actions: Stream Health Check)*",
-              ].join("\\n");
+              ].join("\n");
 
               const { data: issue } = await github.rest.issues.create({
                 owner: context.repo.owner,
