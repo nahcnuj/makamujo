@@ -45,7 +45,7 @@ jobs:
 
       - name: Create issue if check failed
         id: create-issue
-        if: failure()
+        if: steps.stream-check.outcome == 'failure'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
@@ -55,10 +55,7 @@ jobs:
             const phenomena = result.phenomena.join('\n- ');
             const details = JSON.stringify(result.details, null, 2);
 
-            const title = `[Stream Health] 配信異常検知: ${timestamp} (JST)`;
-            const body = [
-              "## 配信状況チェックで異常を検知しました",
-              "",
+            const logBody = [
               `**確認時刻 (JST):** ${timestamp}`,
               "",
               "**発生事象:**",
@@ -68,18 +65,66 @@ jobs:
               "```json",
               details,
               "```",
-              "",
-              "---",
-              "*このIssueは自動生成されました (GitHub Actions: Stream Health Check)*",
             ].join("\n");
 
-            const { data: issue } = await github.rest.issues.create({
+            const commentBody = [
+              "## 配信異常検知ログ",
+              "",
+              logBody,
+              "",
+              "---",
+              "*このコメントは自動生成されました (GitHub Actions: Stream Health Check)*",
+            ].join("\n");
+
+            // At most one open "配信異常検知" issue: reuse an existing one if present.
+            const { data: openIssues } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title,
-              body,
-              labels: ['bug', 'self-improvement'],
+              state: 'open',
+              per_page: 100,
             });
+            const existing = openIssues.find(
+              (issue) => !issue.pull_request && issue.title.includes('配信異常検知'),
+            );
 
-            console.log(`Created issue #${issue.number}: ${issue.html_url}`);
-            core.setOutput('issue-number', String(issue.number));
+            let issueNumber;
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: commentBody,
+              });
+              issueNumber = existing.number;
+              console.log(`Commented on existing issue #${existing.number}: ${existing.html_url}`);
+            } else {
+              const title = `[Stream Health] 配信異常検知`;
+              const body = [
+                "## 配信状況チェックで異常を検知しました",
+                "",
+                "詳細はコメントを参照してください。",
+                "",
+                "---",
+                "*このIssueは自動生成されました (GitHub Actions: Stream Health Check)*",
+              ].join("\n");
+
+              const { data: issue } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['bug', 'self-improvement'],
+              });
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: commentBody,
+              });
+
+              issueNumber = issue.number;
+              console.log(`Created issue #${issue.number}: ${issue.html_url}`);
+            }
+
+            core.setOutput('issue-number', String(issueNumber));
