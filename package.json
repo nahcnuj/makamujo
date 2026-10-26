@@ -31,7 +31,7 @@
   "dependencies": {
     "@playwright/browser-chromium": "^1.63.0",
     "automated-gameplay-transmitter": "^0.6.4",
-    "bun": "^1.4.3",
+    "bun": "^1.4.4",
     "bun-plugin-tailwind": "^0.1.2",
     "hono": "4.13.13",
     "playwright": "^1.63.0",
