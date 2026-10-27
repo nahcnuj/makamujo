@@ -118,6 +118,11 @@ export interface SystemdRecoveryOptions {
  * systemctl restart で回復を実行する口。dry run のときは何もせず、触る予定の
  * unit をログに残すだけ。
  */
+/** The unit this watchdog runs inside. Restarting it kills the process, so it
+ *  cannot be awaited like the others: systemctl would report a failure (the
+ *  caller died mid-command) even though the restart itself succeeds. */
+const HOST_SERVICE = "makamujo-screen.service";
+
 export const createSystemdRecovery =
   (options: SystemdRecoveryOptions = {}) =>
   async (recovery: CompositeFreezeRecovery): Promise<void> => {
@@ -129,12 +134,43 @@ export const createSystemdRecovery =
       );
       return;
     }
-    await restartServices(
-      services,
-      (service) => restartService(service, recovery, log),
-      RESTART_SETTLE_MS,
-      (ms) => Bun.sleep(ms),
+    const externalServices = services.filter(
+      (service) => service !== HOST_SERVICE,
     );
+    const restartsSelf = services.includes(HOST_SERVICE);
+    if (externalServices.length > 0) {
+      await restartServices(
+        externalServices,
+        (service) => restartService(service, recovery, log),
+        RESTART_SETTLE_MS,
+        (ms) => Bun.sleep(ms),
+      );
+    }
+    if (restartsSelf) {
+      // The host service is the last rung step and restarts this very process.
+      // Issue the restart without blocking: awaiting it would always report a
+      // failure because the process is terminated before systemctl returns.
+      // `--no-block` returns as soon as systemd has queued the job.
+      if (externalServices.length > 0) {
+        await Bun.sleep(RESTART_SETTLE_MS);
+      }
+      log.log(`[INFO] restarting ${HOST_SERVICE} (recovery "${recovery}")...`);
+      try {
+        const child = Bun.spawn(
+          ["systemctl", "restart", "--no-block", HOST_SERVICE],
+          {
+            stdout: "ignore",
+            stderr: "ignore",
+          },
+        );
+        child.unref?.();
+      } catch (error) {
+        log.warn(
+          `[WARN] failed to request restart of ${HOST_SERVICE}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
   };
 
 /**
