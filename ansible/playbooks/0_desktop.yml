@@ -82,6 +82,14 @@
           ExecStart=/usr/bin/Xvfb :10 -screen 0 2560x1440x24 -ac +extension GLX +render -noreset
           Restart=on-failure
           RestartSec=2
+          # 単一スレッドの X サーバーは、ゲームブラウザの描画転送と OBS の
+          # XSHM キャプチャを直列に処理する。既定の Nice 0 では llvmpipe の
+          # ワーカースレッド（OBS -10 / ブラウザ -5）より後に回され、キャプチャ
+          # 要求が 30fps の周期に間に合わず OBS が同じ絵を二度出すことがある。
+          # OBS と同じ優先度・重みにして、取り込みを定刻に返す。
+          Nice=-10
+          CPUAccounting=yes
+          CPUWeight=1000
 
           [Install]
           WantedBy=multi-user.target
