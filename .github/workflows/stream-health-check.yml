@@ -113,7 +113,7 @@ jobs:
                 repo: context.repo.repo,
                 title,
                 body,
-                labels: ['bug', 'self-improvement'],
+                labels: ['bug'],
               });
 
               await github.rest.issues.createComment({
