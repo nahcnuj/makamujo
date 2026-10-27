@@ -112,6 +112,8 @@ export interface SystemdRecoveryOptions {
   /** systemd の無い環境（開発 / CI）では dry run にして、予定の再起動をログに残すだけにする。 */
   dryRun?: boolean;
   log?: Pick<Console, "log" | "warn" | "error">;
+  /** 自プロセスを落として systemd に再起動させる口。既定は `process.exit`。 */
+  exit?: (code?: number) => void;
 }
 
 /**
@@ -121,7 +123,7 @@ export interface SystemdRecoveryOptions {
 /** The unit this watchdog runs inside. Restarting it kills the process, so it
  *  cannot be awaited like the others: systemctl would report a failure (the
  *  caller died mid-command) even though the restart itself succeeds. */
-const HOST_SERVICE = "makamujo-screen.service";
+export const HOST_SERVICE = "makamujo-screen.service";
 
 export const createSystemdRecovery =
   (options: SystemdRecoveryOptions = {}) =>
@@ -138,6 +140,7 @@ export const createSystemdRecovery =
       (service) => service !== HOST_SERVICE,
     );
     const restartsSelf = services.includes(HOST_SERVICE);
+    const exit = options.exit ?? ((code?: number) => process.exit(code));
     if (externalServices.length > 0) {
       await restartServices(
         externalServices,
@@ -147,29 +150,19 @@ export const createSystemdRecovery =
       );
     }
     if (restartsSelf) {
-      // The host service is the last rung step and restarts this very process.
-      // Issue the restart without blocking: awaiting it would always report a
-      // failure because the process is terminated before systemctl returns.
-      // `--no-block` returns as soon as systemd has queued the job.
+      // 自分自身 (makamujo-screen.service) を `systemctl restart` で再起動すると、
+      // 自プロセスが SIGTERM で落ちる途中でコマンドが失敗扱いになり
+      // `[ERROR] recovery ... failed` が出る (issue #1378)。サービスファイルに
+      // `Restart=on-failure` が入っているので、ここでは systemctl を呼ばず、
+      // 外部 unit の再起動が済んだあとに自プロセスを異常終了させて systemd に
+      // 再起動させる。状態は recover の前に永続化済み。
       if (externalServices.length > 0) {
         await Bun.sleep(RESTART_SETTLE_MS);
       }
-      log.log(`[INFO] restarting ${HOST_SERVICE} (recovery "${recovery}")...`);
-      try {
-        const child = Bun.spawn(
-          ["systemctl", "restart", "--no-block", HOST_SERVICE],
-          {
-            stdout: "ignore",
-            stderr: "ignore",
-          },
-        );
-        child.unref?.();
-      } catch (error) {
-        log.warn(
-          `[WARN] failed to request restart of ${HOST_SERVICE}:`,
-          error instanceof Error ? error.message : String(error),
-        );
-      }
+      log.log(
+        `[INFO] exiting ${HOST_SERVICE} so systemd can restart it (recovery "${recovery}")...`,
+      );
+      exit(1);
     }
   };
 
