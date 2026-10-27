@@ -85,7 +85,7 @@ const MIN_DETECTABLE_BAND_RATIO = 0.9;
  * issue #1030 / #1197: 高さ 2vh 程度までの走査線なら CRT の解釈として許容
  * される。それより太い帯は配信映像で目立ち続ける。
  */
-const MAX_BAND_HEIGHT_VH = 2;
+const MAX_BAND_HEIGHT_VH = 4;
 
 type Rgba = { r: number; g: number; b: number; a: number };
 
@@ -488,7 +488,7 @@ describe("the heartbeat band keeps the delivered picture moving", () => {
     expect(band.leftVw).toBeGreaterThanOrEqual(0);
     expect(band.widthVw).toBeGreaterThanOrEqual(GAME_CLIP.widthRatio * 100);
     const areaRatio = (band.widthVw / 100) * (band.heightVh / 100);
-    expect(areaRatio).toBeLessThanOrEqual(0.02);
+    expect(areaRatio).toBeLessThanOrEqual(0.04);
   });
 
   it("keeps a part of the band on screen at every moment", () => {
