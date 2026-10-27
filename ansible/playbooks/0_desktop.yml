@@ -68,24 +68,6 @@
           - hts-voice-nitech-jp-atr503-m001
         state: present
 
-    - name: Install makamujo Xvfb unit (:10 2560x1440)
-      ansible.builtin.copy:
-        dest: /etc/systemd/system/makamujo-xvfb.service
-        mode: "0644"
-        content: |
-          [Unit]
-          Description=Makamujo streaming display :10 (2560x1440)
-          After=network.target
-
-          [Service]
-          Type=simple
-          ExecStart=/usr/bin/Xvfb :10 -screen 0 2560x1440x24 -ac +extension GLX +render -noreset
-          Restart=on-failure
-          RestartSec=2
-
-          [Install]
-          WantedBy=multi-user.target
-
     - name: Install makamujo x11vnc unit (share :10 on localhost:5900)
       ansible.builtin.copy:
         dest: /etc/systemd/system/makamujo-x11vnc.service
@@ -168,20 +150,6 @@
           [Install]
           WantedBy=multi-user.target
 
-    - name: Enable and start makamujo-xvfb
-      ansible.builtin.systemd:
-        name: makamujo-xvfb
-        enabled: true
-        state: restarted
-        daemon_reload: true
-
-    - name: Enable and start makamujo-x11vnc
-      ansible.builtin.systemd:
-        name: makamujo-x11vnc
-        enabled: true
-        state: restarted
-        daemon_reload: true
-
     - name: Configure xrdp for Makamujo-only session (:10 via x11vnc)
       ansible.builtin.copy:
         dest: /etc/xrdp/xrdp.ini
@@ -249,50 +217,6 @@
         dest: /usr/local/bin/makamujo-pipewire
         mode: "0755"
       notify: Restart makamujo-pipewire
-
-    - name: Install makamujo PipeWire unit (root headless audio)
-      ansible.builtin.copy:
-        dest: /etc/systemd/system/makamujo-pipewire.service
-        mode: "0644"
-        content: |
-          [Unit]
-          Description=Makamujo PipeWire stack for headless streaming
-          After=network.target makamujo-xvfb.service
-          Wants=makamujo-xvfb.service
-          # Keep in sync with etc/systemd/makamujo-pipewire.service
-          # Restarting every 5s forever only buries the real cause under a wall
-          # of identical log lines, so cap it and let a broken stack settle.
-          StartLimitIntervalSec=300
-          StartLimitBurst=5
-
-          [Service]
-          Type=notify
-          NotifyAccess=all
-          TimeoutStartSec=90
-          Environment=XDG_RUNTIME_DIR=/run/user/0
-          Environment=HOME=/root
-          Environment=DISPLAY=:10
-          Environment=PULSE_RUNTIME_PATH=/run/user/0/pulse
-          Environment=PIPEWIRE_RUNTIME_DIR=/run/user/0
-          Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus
-          ExecStartPre=/bin/mkdir -p /run/user/0/pulse
-          ExecStartPre=/bin/chmod 700 /run/user/0
-          ExecStart=/usr/local/bin/makamujo-pipewire
-          Restart=on-failure
-          RestartSec=5
-          KillMode=control-group
-          TimeoutStopSec=20
-
-          [Install]
-          WantedBy=multi-user.target
-      notify: Restart makamujo-pipewire
-
-    - name: Enable and ensure makamujo-pipewire is started
-      ansible.builtin.systemd:
-        name: makamujo-pipewire
-        enabled: true
-        state: restarted
-        daemon_reload: true
 
     - name: Configure environment variables for PulseAudio (pactl)
       ansible.builtin.copy:

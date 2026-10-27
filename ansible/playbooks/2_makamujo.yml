@@ -126,6 +126,13 @@
           --env=XDG_RUNTIME_DIR=/run/user/0
       changed_when: true
 
+    - name: Install makamujo-xvfb unit from repo
+      ansible.builtin.copy:
+        src: "{{ makamujo_src }}/etc/systemd/makamujo-xvfb.service"
+        dest: /etc/systemd/system/makamujo-xvfb.service
+        remote_src: true
+        mode: "0644"
+
     - name: Restart streaming infra
       ansible.builtin.systemd:
         name: "{{ item }}"
@@ -170,6 +177,7 @@
         remote_src: true
         mode: "0644"
       loop:
+        - makamujo-xvfb.service
         - makamujo-screen.service
         - makamujo-browser.service
         - makamujo-obs.service
@@ -181,6 +189,7 @@
         state: restarted
         daemon_reload: true
       loop:
+        - makamujo-xvfb.service
         - makamujo-screen.service
         - makamujo-browser.service
         - makamujo-obs.service
