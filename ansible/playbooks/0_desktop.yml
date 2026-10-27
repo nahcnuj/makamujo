@@ -82,9 +82,6 @@
           ExecStart=/usr/bin/Xvfb :10 -screen 0 2560x1440x24 -ac +extension GLX +render -noreset
           Restart=on-failure
           RestartSec=2
-          Nice=-10
-          CPUAccounting=yes
-          CPUWeight=1000
 
           [Install]
           WantedBy=multi-user.target
