@@ -27,19 +27,9 @@ permissions:
 jobs:
   auto-drive:
     name: Auto-drive issue
-    # Reusable workflow call jobs cannot declare a job-level `environment`;
-    # it is passed as an input below so the App secrets are resolved from
-    # makamujo's `conahcnuj` environment inside the reusable workflow.
-    # Call the conahcnuj reusable workflow directly (pin to a commit so an
-    # upstream change cannot alter this repository's CI without a review).
-    uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@0a36d938b6f10a65dbdc0030ce2628f5acc76aea
+    uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@53799a9a3d7c251371cac85fd7de95ad1833c591
     with:
-      # fromJSON not needed: issue number from event is already a number
       number: ${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.number }}
-      # The caller's repository owns the issue; the reusable workflow's
-      # default would drive conahcnuj instead.
       repository: ${{ github.repository }}
-      # Same environment as the job above: it holds the App secrets and
-      # wins over the inherited ones.
       environment: conahcnuj
     secrets: inherit
