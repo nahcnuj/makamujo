@@ -114,6 +114,8 @@ export interface SystemdRecoveryOptions {
   log?: Pick<Console, "log" | "warn" | "error">;
   /** 自プロセスを落として systemd に再起動させる口。既定は `process.exit`。 */
   exit?: (code?: number) => void;
+  /** unit 間および自プロセスを落とす前の待機口。既定は `Bun.sleep`（テスト用差し替え）。 */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -141,12 +143,13 @@ export const createSystemdRecovery =
     );
     const restartsSelf = services.includes(HOST_SERVICE);
     const exit = options.exit ?? ((code?: number) => process.exit(code));
+    const sleep = options.sleep ?? ((ms: number) => Bun.sleep(ms));
     if (externalServices.length > 0) {
       await restartServices(
         externalServices,
         (service) => restartService(service, recovery, log),
         RESTART_SETTLE_MS,
-        (ms) => Bun.sleep(ms),
+        sleep,
       );
     }
     if (restartsSelf) {
@@ -157,7 +160,7 @@ export const createSystemdRecovery =
       // 外部 unit の再起動が済んだあとに自プロセスを異常終了させて systemd に
       // 再起動させる。状態は recover の前に永続化済み。
       if (externalServices.length > 0) {
-        await Bun.sleep(RESTART_SETTLE_MS);
+        await sleep(RESTART_SETTLE_MS);
       }
       log.log(
         `[INFO] exiting ${HOST_SERVICE} so systemd can restart it (recovery "${recovery}")...`,
