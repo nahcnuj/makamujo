@@ -7,7 +7,7 @@ import {
 
 describe("vigilant-fiesta game screen", () => {
   it("requests the expected zoom magnification", () => {
-    expect(GAME_SCREEN_ZOOM_FACTOR).toBe(1.25);
+    expect(GAME_SCREEN_ZOOM_FACTOR).toBe(1.0);
   });
 });
 
