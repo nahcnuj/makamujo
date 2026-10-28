@@ -161,6 +161,8 @@ jobs:
           key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - name: Install Playwright Chromium
         run: bunx playwright install chromium
+      - name: Install Playwright system dependencies (VRT, Debian)
+        run: bunx playwright install-deps chromium
       - name: Install Japanese fonts (VRT, Debian)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
       - name: Run VRT tests
