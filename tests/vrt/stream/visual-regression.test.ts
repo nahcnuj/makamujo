@@ -163,7 +163,7 @@ async function renderBroadcastScreen(
 }
 
 test.describe("stream visual regression", () => {
-  test("renders the overlay at the OBS output resolution of 1280x720", async ({
+  test("renders the OBS preview at the output resolution of 1280x720", async ({
     page,
   }) => {
     await renderBroadcastScreen(page, 1280, 720);

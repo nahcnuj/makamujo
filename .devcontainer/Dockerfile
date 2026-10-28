@@ -10,12 +10,19 @@ RUN apt-get update \
         curl \
         ca-certificates \
         libcap2-bin \
+        python3 \
+        python3-pip \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Bun system-wide.
 RUN curl -fsSL https://bun.sh/install | bash \
     && chmod +x /usr/local/bin/bun
+
+# Provision the VRT environment (fonts etc.) via Ansible.
+COPY ansible/ ansible/
+RUN pip install --no-cache-dir -r ansible/requirements.txt \
+    && ansible-playbook -i localhost, -c local ansible/playbooks/vrt.yml
 
 USER ${USERNAME}
 

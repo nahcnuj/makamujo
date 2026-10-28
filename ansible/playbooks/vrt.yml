@@ -1,0 +1,10 @@
+- name: Provision VRT environment (Debian)
+  hosts: all
+  become: true
+  tasks:
+    - name: Install Japanese fonts for VRT
+      ansible.builtin.apt:
+        name:
+          - fonts-noto-cjk
+        state: present
+        update_cache: true

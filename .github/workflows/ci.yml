@@ -165,8 +165,10 @@ jobs:
         run: bunx playwright install chromium
       - name: Install Playwright system dependencies (VRT, Debian)
         run: bunx playwright install-deps chromium
-      - name: Install Japanese fonts (VRT, Debian)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
+      - name: Install Ansible
+        run: pip install -r ansible/requirements.txt
+      - name: Provision VRT environment with Ansible
+        run: ansible-playbook -i localhost, -c local ansible/playbooks/vrt.yml
       - name: Run VRT tests
         run: bun run test:vrt
       - name: Save Playwright browsers cache
