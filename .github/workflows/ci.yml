@@ -143,6 +143,7 @@ jobs:
   vrt:
     needs: [setup, lint]
     runs-on: ubuntu-latest
+    container: mcr.microsoft.com/devcontainers/base:2.2-debian12
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -160,7 +161,7 @@ jobs:
           key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - name: Install Playwright Chromium
         run: bunx playwright install chromium
-      - name: Install Japanese fonts (VRT)
+      - name: Install Japanese fonts (VRT, Debian)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
       - name: Run VRT tests
         run: bun run test:vrt

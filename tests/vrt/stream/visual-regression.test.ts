@@ -4,6 +4,7 @@ import { expect, type Page, test } from "@playwright/test";
 
 const PORT = 17779;
 const BASE_URL = `http://localhost:${PORT}`;
+const GAME_PAGE_URL = "https://www.nahcnuj.work/vigilant-fiesta/";
 const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 
 let server: ReturnType<typeof spawn> | null = null;
@@ -79,6 +80,13 @@ test.afterAll(() => {
 const FIXED_CLOCK_MS = new Date("2026-10-28T23:59:59+09:00").getTime();
 
 async function mockApis(page: Page) {
+  await page.route(GAME_PAGE_URL, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: '<!doctype html><html><body style="margin:0;background:#111;color:#eee;font-family:sans-serif;display:grid;place-items:center;height:100vh">vigilant-fiesta game screen</body></html>',
+    });
+  });
   await page.route("**/api/speech", async (route) => {
     await route.fulfill({
       status: 200,
@@ -132,6 +140,15 @@ async function renderBroadcastScreen(
   await page.clock.install({ time: new Date(FIXED_CLOCK_MS) });
   await page.clock.resume();
   await mockApis(page);
+  await page.addInitScript(() => {
+    window.addEventListener("DOMContentLoaded", () => {
+      const frame = document.createElement("iframe");
+      frame.src = "https://www.nahcnuj.work/vigilant-fiesta/";
+      frame.style.cssText =
+        "position:fixed;top:0;left:0;width:1280px;height:720px;border:0;z-index:-1;";
+      document.body.prepend(frame);
+    });
+  });
   await page.goto(BASE_URL, {
     waitUntil: "domcontentloaded",
     timeout: 20_000,
