@@ -41,6 +41,10 @@ jobs:
 
       - name: Run stream health check
         id: stream-check
+        # A PR only changes code; the production stream is not affected by it,
+        # so a red stream must not block merging. Scheduled runs keep failing
+        # so the outage stays visible and an issue is still created.
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: bun run scripts/check-stream.ts
 
       - name: Create issue if check failed
