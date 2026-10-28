@@ -144,13 +144,24 @@ export const createSystemdRecovery =
     const restartsSelf = services.includes(HOST_SERVICE);
     const exit = options.exit ?? ((code?: number) => process.exit(code));
     const sleep = options.sleep ?? ((ms: number) => Bun.sleep(ms));
+    let externalFailure: unknown;
     if (externalServices.length > 0) {
-      await restartServices(
-        externalServices,
-        (service) => restartService(service, recovery, log),
-        RESTART_SETTLE_MS,
-        sleep,
-      );
+      try {
+        await restartServices(
+          externalServices,
+          (service) => restartService(service, recovery, log),
+          RESTART_SETTLE_MS,
+          sleep,
+        );
+      } catch (error) {
+        // 外部 unit の再起動に失敗しても、自プロセスの再起動まで諦めると
+        // 配信は復旧しない。失敗は記録し、最後に呼び出し側へ伝える。
+        externalFailure = error;
+        log.error(
+          `[ERROR] recovery "${recovery}" external unit restart failed:`,
+          error instanceof Error ? error.message : String(error),
+        );
+      }
     }
     if (restartsSelf) {
       // 自分自身 (makamujo-screen.service) を `systemctl restart` で再起動すると、
@@ -166,6 +177,11 @@ export const createSystemdRecovery =
         `[INFO] exiting ${HOST_SERVICE} so systemd can restart it (recovery "${recovery}")...`,
       );
       exit(1);
+    }
+    if (externalFailure !== undefined) {
+      throw externalFailure instanceof Error
+        ? externalFailure
+        : new Error(String(externalFailure));
     }
   };
 
