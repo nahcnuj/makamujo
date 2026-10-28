@@ -122,6 +122,9 @@ jobs:
       - name: Install Playwright Chromium (integration / e2e)
         if: matrix.suite.label == 'integration' || matrix.suite.label == 'e2e'
         run: bunx playwright install chromium
+      - name: Install Japanese fonts (e2e VRT)
+        if: matrix.suite.label == 'e2e'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
       - name: Install openssh-server (bin) for honeypot-hold test
         if: matrix.suite.label == 'bin'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends openssh-server
