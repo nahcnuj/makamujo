@@ -278,8 +278,8 @@ const renderPixel = (overlay: Rgba, coverage: number, game: Rgba): Rgba => {
     premultiply({ ...overlay, a: overlay.a * coverage }),
     page,
   );
-  const keyed = applyColorKey(unpremultiply(withBand));
-  return over(premultiply(keyed), premultiply(game));
+  const keyed = applyColorKey(withBand);
+  return over(keyed, premultiply(game));
 };
 
 /**
