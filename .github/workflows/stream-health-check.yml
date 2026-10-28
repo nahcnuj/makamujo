@@ -8,6 +8,7 @@ on:
       - main
     paths:
       - 'scripts/**'
+      - 'src/components/BroadcastHeartbeat.liveness.test.ts'
       - '.github/workflows/stream-health-check.yml'
   workflow_dispatch:  # Allow manual trigger for testing
 
