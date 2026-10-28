@@ -39,7 +39,7 @@
  *
  * 2026-10 の issue #1030 / #1197 / #1353 / #1374: 以前の全幅 12vh・0.6 秒の帯は
  * 配信映像に CRT の走査線として出すぎた（濃すぎ・太すぎ・速すぎ）。不透明度を
- * 0.3 に保つことで OBS の Color Key（key = 黒）に premul で消されず、
+ * 1.0 に保つことで OBS の Color Key（key = 黒）に premul で消されず、
  * 走査周期は 1.3 秒にして公開フレームごとの差を保つ。許容できるのは 1 フレーム
  * あたり約 2 行ぶん動き、公開フレーム 30 枚すべてが検知側の差分しきい値
  * （0.1% ≈ 9.2px）を上回る。これより遅いと公開フレームの一部が同じ絵のまま
@@ -79,8 +79,8 @@
   z-index: 10000;
   background: linear-gradient(
     to bottom,
-    rgba(16, 255, 129, 0.5) 0%,
-    rgba(16, 255, 129, 0.5) 100%
+    rgba(16, 255, 129, 1) 0%,
+    rgba(16, 255, 129, 1) 100%
   );
   animation: broadcast-heartbeat-sweep 1.3s linear infinite;
   will-change: transform;
