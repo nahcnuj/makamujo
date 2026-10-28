@@ -177,6 +177,7 @@ export const createSystemdRecovery =
         `[INFO] exiting ${HOST_SERVICE} so systemd can restart it (recovery "${recovery}")...`,
       );
       exit(1);
+      return;
     }
     if (externalFailure !== undefined) {
       throw externalFailure instanceof Error
