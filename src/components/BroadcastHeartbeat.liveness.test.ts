@@ -246,7 +246,11 @@ const over = (top: Rgba, bottom: Rgba): Rgba => ({
  */
 const applyColorKey = (color: Rgba): Rgba => {
   const distance =
-    Math.sqrt(color.r * color.r + color.g * color.g + color.b * color.b) / 255;
+    Math.sqrt(
+      color.r * color.a * (color.r * color.a) +
+        color.g * color.a * (color.g * color.a) +
+        color.b * color.a * (color.b * color.a),
+    ) / 255;
   const factor = Math.min(
     1,
     Math.max(0, (distance - COLOR_KEY_SIMILARITY) / COLOR_KEY_SMOOTHNESS),
