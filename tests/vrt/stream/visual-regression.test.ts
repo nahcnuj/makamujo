@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process";
-import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 
@@ -48,11 +47,6 @@ const waitForServerReady = async (): Promise<void> => {
 };
 
 test.beforeAll(async () => {
-  try {
-    writeFileSync("./var/cookieclicker.txt", "", { flag: "wx" });
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
-  }
   const randomId =
     Date.now().toString(36) + Math.random().toString(36).slice(2);
   const ipcPath =
