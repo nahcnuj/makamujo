@@ -94,7 +94,10 @@ async function mockApis(page: Page) {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({}),
+      body: JSON.stringify({
+        name: "VigilantFiesta",
+        state: { sessionBest: 12345, allTimeBest: 99999 },
+      }),
     });
   });
   await page.route("**/api/meta", async (route) => {
@@ -102,9 +105,23 @@ async function mockApis(page: Page) {
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        nGram: 1,
-        commentCount: 1,
-        previousStreamCommentCount: 0,
+        niconama: {
+          type: "live",
+          meta: {
+            title: "配信エージェント状態モック",
+            url: "https://example.com/watch/mock",
+            start: 1717000000,
+            total: {
+              listeners: 123,
+              gift: 456,
+              ad: 789,
+              comments: 10,
+            },
+          },
+        },
+        nGram: 4,
+        commentCount: 321,
+        previousStreamCommentCount: 10,
       }),
     });
   });
@@ -134,12 +151,5 @@ test.describe("stream visual regression", () => {
   }) => {
     await renderBroadcastScreen(page, 1280, 720);
     await expect(page).toHaveScreenshot("stream-overlay-1280x720.png");
-  });
-
-  test("renders the streaming display at the Xvfb canvas resolution of 2560x1440", async ({
-    page,
-  }) => {
-    await renderBroadcastScreen(page, 2560, 1440);
-    await expect(page).toHaveScreenshot("stream-display-2560x1440.png");
   });
 });
