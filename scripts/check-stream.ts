@@ -312,15 +312,19 @@ export function isFpsAboveThreshold(...args: unknown[]): boolean {
   let minFps: number | undefined;
   let avgFps: number | undefined;
   let thresholdFps: number | undefined;
+  const finiteNumbers = args.filter(
+    (arg): arg is number => typeof arg === "number" && Number.isFinite(arg),
+  );
+  const hasThreeNumbers = finiteNumbers.length >= 3;
   let numberIndex = 0;
   for (const arg of args) {
     if (typeof arg === "number" && Number.isFinite(arg)) {
       if (numberIndex === 0) minFps = arg;
       else if (numberIndex === 1) {
-        // Disambiguate the two-argument form `(minFps, thresholdFps)` from
-        // the three-argument form `(minFps, avgFps, thresholdFps)` by arity:
-        // a third number always means the middle one is an average.
-        if (args.length >= 3) avgFps = arg;
+        // Disambiguate by the count of numeric arguments, not the total
+        // argument count: an object argument does not turn a two-number call
+        // into the three-number form.
+        if (hasThreeNumbers) avgFps = arg;
         else thresholdFps = arg;
       } else if (numberIndex === 2) {
         thresholdFps = arg;
