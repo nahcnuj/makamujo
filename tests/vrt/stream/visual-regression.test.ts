@@ -150,8 +150,8 @@ async function renderBroadcastScreen(
   await speechLocator.waitFor({ state: "visible", timeout: 10_000 });
   await page
     .frameLocator(`iframe[src="${GAME_PAGE_URL}"]`)
-    .locator("#btn-start")
-    .waitFor({ state: "visible", timeout: 20_000 });
+    .getByText("落ち物パズルゲーム・蘇")
+    .waitFor({ state: "visible", timeout: 10_000 });
   await page.clock.pauseAt(new Date(FIXED_CLOCK_MS + 60_000));
 }
 

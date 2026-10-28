@@ -2,9 +2,11 @@
   hosts: all
   become: true
   tasks:
-    - name: Install Japanese fonts for VRT
+    - name: Install Japanese fonts for VRT (VPS-equivalent)
       ansible.builtin.apt:
         name:
           - fonts-noto-cjk
+          - fonts-ipafont-gothic
+          - fonts-ipafont-mincho
         state: present
         update_cache: true
