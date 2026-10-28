@@ -126,10 +126,12 @@
           --env=XDG_RUNTIME_DIR=/run/user/0
       changed_when: true
 
-    - name: Install makamujo-xvfb unit from repo via systemctl
-      ansible.builtin.command:
-        cmd: systemctl link --force {{ makamujo_src }}/etc/systemd/makamujo-xvfb.service
-      changed_when: true
+    - name: Install makamujo-xvfb unit from repo
+      ansible.builtin.copy:
+        src: "{{ makamujo_src }}/etc/systemd/makamujo-xvfb.service"
+        dest: /etc/systemd/system/makamujo-xvfb.service
+        remote_src: true
+        mode: "0644"
 
     - name: Restart streaming infra
       ansible.builtin.systemd:
