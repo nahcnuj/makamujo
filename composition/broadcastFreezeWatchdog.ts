@@ -108,10 +108,16 @@ const RESTART_SETTLE_MS = 3_000;
 /** systemctl コマンドひとつぶんの上限。 */
 const RESTART_COMMAND_TIMEOUT_MS = 60_000;
 
+export const HOST_SERVICE = "makamujo-screen.service";
+
 export interface SystemdRecoveryOptions {
   /** systemd の無い環境（開発 / CI）では dry run にして、予定の再起動をログに残すだけにする。 */
   dryRun?: boolean;
   log?: Pick<Console, "log" | "warn" | "error">;
+  /** 自プロセスを落として systemd に再起動させる口。既定は `process.exit`。 */
+  exit?: (code?: number) => void;
+  /** unit 間の settle 待ち。既定は `Bun.sleep`。 */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -122,6 +128,8 @@ export const createSystemdRecovery =
   (options: SystemdRecoveryOptions = {}) =>
   async (recovery: CompositeFreezeRecovery): Promise<void> => {
     const log = options.log ?? console;
+    const exit = options.exit ?? ((code?: number) => process.exit(code));
+    const sleep = options.sleep ?? ((ms: number) => Bun.sleep(ms));
     const services = RECOVERY_SERVICES[recovery];
     if (options.dryRun) {
       log.log(
@@ -129,12 +137,37 @@ export const createSystemdRecovery =
       );
       return;
     }
-    await restartServices(
-      services,
-      (service) => restartService(service, recovery, log),
-      RESTART_SETTLE_MS,
-      (ms) => Bun.sleep(ms),
+    const externalServices = services.filter(
+      (service) => service !== HOST_SERVICE,
     );
+    const isHostRecovery = services.includes(HOST_SERVICE);
+    let externalFailure: unknown;
+    try {
+      await restartServices(
+        externalServices,
+        (service) => restartService(service, recovery, log),
+        RESTART_SETTLE_MS,
+        sleep,
+      );
+    } catch (error) {
+      externalFailure = error;
+      log.error(
+        `[ERROR] recovery "${recovery}" failed:`,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    if (isHostRecovery) {
+      log.log(
+        `[INFO] exiting ${HOST_SERVICE} so systemd can restart it (recovery "${recovery}")...`,
+      );
+      exit(1);
+      return;
+    }
+    if (externalFailure !== undefined) {
+      throw externalFailure instanceof Error
+        ? externalFailure
+        : new Error(String(externalFailure));
+    }
   };
 
 /**
