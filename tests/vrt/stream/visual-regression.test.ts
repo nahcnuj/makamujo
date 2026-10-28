@@ -80,13 +80,6 @@ test.afterAll(() => {
 const FIXED_CLOCK_MS = new Date("2026-10-28T23:59:59+09:00").getTime();
 
 async function mockApis(page: Page) {
-  await page.route(GAME_PAGE_URL, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "text/html",
-      body: '<!doctype html><html><body style="margin:0;background:#111;color:#eee;font-family:sans-serif;display:grid;place-items:center;height:100vh">vigilant-fiesta game screen</body></html>',
-    });
-  });
   await page.route("**/api/speech", async (route) => {
     await route.fulfill({
       status: 200,
@@ -157,8 +150,8 @@ async function renderBroadcastScreen(
   await speechLocator.waitFor({ state: "visible", timeout: 10_000 });
   await page
     .frameLocator(`iframe[src="${GAME_PAGE_URL}"]`)
-    .getByText("vigilant-fiesta game screen")
-    .waitFor({ state: "visible", timeout: 10_000 });
+    .locator("#btn-start")
+    .waitFor({ state: "visible", timeout: 20_000 });
   await page.clock.pauseAt(new Date(FIXED_CLOCK_MS + 60_000));
 }
 
