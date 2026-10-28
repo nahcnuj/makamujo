@@ -397,7 +397,7 @@ export function isBlackScreen(...args: unknown[]): boolean {
           const whole =
             sample.wholeChanged ?? sample.videoChanged ?? sample.changed;
           const game = sample.gameChanged ?? sample.gameScreenChanged;
-          return whole === false && (game === undefined || game === false);
+          return whole === false && game === false;
         });
         if (allStill) {
           videoMinFps = 0;
@@ -476,7 +476,7 @@ export function isBlackScreen(...args: unknown[]): boolean {
           const whole =
             sample.wholeChanged ?? sample.videoChanged ?? sample.changed;
           const game = sample.gameChanged ?? sample.gameScreenChanged;
-          return whole === false && (game === undefined || game === false);
+          return whole === false && game === false;
         });
         if (allStill) {
           videoMinFps = 0;
