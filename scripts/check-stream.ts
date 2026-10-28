@@ -337,6 +337,7 @@ export function isBlackScreen(...args: unknown[]): boolean {
   let videoAvgFps: number | undefined;
   let gameAvgFps: number | undefined;
   let found = false;
+  let numberIndex = 0;
   let blackFlag = false;
   let phenomenaBlack = false;
 
@@ -351,12 +352,17 @@ export function isBlackScreen(...args: unknown[]): boolean {
 
   for (const arg of args) {
     if (typeof arg === "number" && Number.isFinite(arg)) {
-      if (!found) {
+      if (numberIndex === 0) {
         videoMinFps = arg;
         found = true;
-      } else if (gameMinFps === undefined) {
-        gameMinFps = arg;
+      } else if (numberIndex === 1) {
+        if (gameMinFps === undefined) gameMinFps = arg;
+      } else if (numberIndex === 2) {
+        if (videoAvgFps === undefined) videoAvgFps = arg;
+      } else if (numberIndex === 3) {
+        if (gameAvgFps === undefined) gameAvgFps = arg;
       }
+      numberIndex += 1;
       continue;
     }
     if (typeof arg === "boolean") {
@@ -414,8 +420,8 @@ export function isBlackScreen(...args: unknown[]): boolean {
           (nested && typeof nested[key] === "number" ? nested[key] : undefined);
         return typeof value === "number" ? value : undefined;
       };
-      const v = pick("videoMinFps");
-      const g = pick("gameMinFps");
+      const v = pick("videoMinFps") ?? pick("minFps") ?? pick("min");
+      const g = pick("gameMinFps") ?? pick("gameMin");
       if (v !== undefined) {
         videoMinFps = v;
         found = true;
@@ -424,8 +430,8 @@ export function isBlackScreen(...args: unknown[]): boolean {
         gameMinFps = g;
         found = true;
       }
-      const va = pick("videoAvgFps");
-      const ga = pick("gameAvgFps");
+      const va = pick("videoAvgFps") ?? pick("avgFps") ?? pick("avg");
+      const ga = pick("gameAvgFps") ?? pick("gameAvg");
       if (va !== undefined) {
         videoAvgFps = va;
       }
