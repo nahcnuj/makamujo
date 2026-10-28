@@ -8,6 +8,7 @@ on:
       - main
     paths:
       - 'scripts/**'
+      - 'src/components/BroadcastHeartbeat.liveness.test.ts'
       - '.github/workflows/stream-health-check.yml'
   workflow_dispatch:  # Allow manual trigger for testing
 
@@ -113,7 +114,7 @@ jobs:
               console.log(`Commented on existing issue #${existing.number}: ${existing.html_url}`);
             } else {
               const title = isEmergencyBlackScreen
-                ? `[Stream Health] 緊急: 画面全体が真っ黒`
+                ? `【緊急】配信停止状態【異常】 ${Date()}`
                 : `[Stream Health] 配信異常検知`;
               const body = [
                 "## 配信状況チェックで異常を検知しました",
@@ -155,5 +156,5 @@ jobs:
       number: ${{ fromJSON(needs.check-stream.outputs.issue-number) }}
       repository: ${{ github.repository }}
       environment: conahcnuj
-      runs-on: ubuntu-latest-4-cores
+      #runs-on: ubuntu-latest-4-cores
     secrets: inherit
