@@ -365,6 +365,39 @@ export function isBlackScreen(...args: unknown[]): boolean {
       if (arg.includes("真っ黒")) phenomenaBlack = true;
       continue;
     }
+    if (Array.isArray(arg)) {
+      const arr = arg as Array<unknown>;
+      const looksLikeSamples =
+        arr.length > 0 &&
+        arr.every(
+          (item) =>
+            item !== null &&
+            typeof item === "object" &&
+            !Array.isArray(item) &&
+            ("wholeChanged" in (item as Record<string, unknown>) ||
+              "videoChanged" in (item as Record<string, unknown>) ||
+              "changed" in (item as Record<string, unknown>) ||
+              "gameChanged" in (item as Record<string, unknown>) ||
+              "gameScreenChanged" in (item as Record<string, unknown>)),
+        );
+      if (looksLikeSamples) {
+        const samples = arr as Array<Record<string, unknown>>;
+        const allStill = samples.every((sample) => {
+          const whole =
+            sample.wholeChanged ?? sample.videoChanged ?? sample.changed;
+          const game = sample.gameChanged ?? sample.gameScreenChanged;
+          return whole === false && game === false;
+        });
+        if (allStill) {
+          videoMinFps = 0;
+          gameMinFps = 0;
+          found = true;
+        }
+      } else {
+        considerPhenomena(arg);
+      }
+      continue;
+    }
     if (arg !== null && typeof arg === "object") {
       const obj = arg as Record<string, unknown>;
       const nested =
@@ -387,7 +420,7 @@ export function isBlackScreen(...args: unknown[]): boolean {
         gameMinFps = g;
         found = true;
       }
-      for (const key of [
+      const candidateKeys = [
         "blackScreen",
         "isBlackScreen",
         "isEmergency",
@@ -395,8 +428,25 @@ export function isBlackScreen(...args: unknown[]): boolean {
         "isEmergencyBlack",
         "isWholeScreenBlack",
         "isAllBlack",
-      ]) {
+        "black",
+        "isBlack",
+        "screenBlack",
+        "screenIsBlack",
+      ];
+      for (const key of candidateKeys) {
         if (obj[key] === true || nested?.[key] === true) blackFlag = true;
+      }
+      for (const source of [obj, nested]) {
+        if (!source) continue;
+        for (const [key, value] of Object.entries(source)) {
+          const lower = key.toLowerCase();
+          if (
+            value === true &&
+            (lower.includes("black") || lower.includes("emergency"))
+          ) {
+            blackFlag = true;
+          }
+        }
       }
       const samplesCandidate = Array.isArray(obj.samples)
         ? (obj.samples as Array<Record<string, unknown>>)
@@ -423,7 +473,14 @@ export function isBlackScreen(...args: unknown[]): boolean {
           found = true;
         }
       }
-      considerPhenomena(obj.phenomena ?? nested?.phenomena);
+      considerPhenomena(
+        obj.phenomenon ??
+          obj.phenomena ??
+          obj.message ??
+          nested?.phenomenon ??
+          nested?.phenomena ??
+          nested?.message,
+      );
     }
   }
 

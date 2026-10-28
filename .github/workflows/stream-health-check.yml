@@ -129,7 +129,7 @@ jobs:
                 repo: context.repo.repo,
                 title,
                 body,
-                labels: ['bug'],
+                labels: isEmergencyBlackScreen ? ['bug', 'EMERGENCY'] : ['bug'],
               });
 
               await github.rest.issues.createComment({
