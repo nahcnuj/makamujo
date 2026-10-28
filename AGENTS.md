@@ -19,6 +19,7 @@
 | `bun run test:integration` | `bun test tests/integration/` |
 | `bun run test:bin` | `tests/bin/*.sh` のシェルテスト（bash 必需） |
 | `bun run test:e2e` | Playwright E2E（要 `pretest:e2e`、HTTPS 443） |
+| `bun run test:vrt` | VRT（Playwright、`tests/vrt/`） |
 
 その他スクリプト（`browser` / `generate-ogp` / `screenshot:console-agent-status` / `markov` 等）は `package.json` 参照。
 

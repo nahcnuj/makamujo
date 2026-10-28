@@ -26,7 +26,8 @@
     "screenshot:console-agent-status": "bun run scripts/capture-console-agent-status.ts",
     "markov": "bun run tools/markov/cli.ts",
     "format": "biome check --write . || true",
-    "lint": "biome check --error-on-warnings ."
+    "lint": "biome check --error-on-warnings .",
+    "test:vrt": "playwright test tests/vrt --timeout=60000"
   },
   "dependencies": {
     "@playwright/browser-chromium": "^1.64.1",
