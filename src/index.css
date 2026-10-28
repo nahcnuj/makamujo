@@ -65,7 +65,7 @@
     transform: translateY(0vh);
   }
   to {
-    transform: translateY(99vh);
+    transform: translateY(96vh);
   }
 }
 
@@ -79,8 +79,8 @@
   z-index: 10000;
   background: linear-gradient(
     to bottom,
-    rgba(16, 255, 129, 0.075) 0%,
-    rgba(16, 255, 129, 0.075) 100%
+    rgba(16, 255, 129, 0.3) 0%,
+    rgba(16, 255, 129, 0.3) 100%
   );
   animation: broadcast-heartbeat-sweep 1.3s linear infinite;
   will-change: transform;
