@@ -102,8 +102,7 @@ export function DeliveryVoltage({
   }
 
   const rainbowGradient = getRainbowGradient(rainbowOffset);
-  const borderColor = overVoltage ? undefined : VOLTAGE_COLOR;
-  const borderImage = overVoltage ? `${rainbowGradient} 1` : undefined;
+  const trackBackground = "rgba(0, 0, 0, 0.3)";
 
   return (
     <div
@@ -111,16 +110,24 @@ export function DeliveryVoltage({
         position: "relative",
         width: "100%",
         height,
-        backgroundColor: "rgba(0, 0, 0, 0.3)",
         borderRadius: "9999px",
         overflow: "visible",
         marginBottom: "0.5rem",
-        border: "1px solid",
-        borderColor,
-        borderImage,
         textAlign: "right",
         lineHeight: height,
         transition: "height 0.3s ease-out, line-height 0.3s ease-out",
+        ...(overVoltage
+          ? {
+              border: "1px solid transparent",
+              backgroundImage: `linear-gradient(${trackBackground}, ${trackBackground}), ${rainbowGradient}`,
+              backgroundOrigin: "padding-box, border-box",
+              backgroundClip: "padding-box, border-box",
+            }
+          : {
+              backgroundColor: trackBackground,
+              border: "1px solid",
+              borderColor: VOLTAGE_COLOR,
+            }),
       }}
     >
       <div
