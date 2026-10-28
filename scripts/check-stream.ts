@@ -334,6 +334,8 @@ export function isOverallOk(
 export function isBlackScreen(...args: unknown[]): boolean {
   let videoMinFps: number | undefined;
   let gameMinFps: number | undefined;
+  let videoAvgFps: number | undefined;
+  let gameAvgFps: number | undefined;
   let found = false;
   let blackFlag = false;
   let phenomenaBlack = false;
@@ -391,6 +393,8 @@ export function isBlackScreen(...args: unknown[]): boolean {
         if (allStill) {
           videoMinFps = 0;
           gameMinFps = 0;
+          videoAvgFps = 0;
+          gameAvgFps = 0;
           found = true;
         }
       } else {
@@ -419,6 +423,14 @@ export function isBlackScreen(...args: unknown[]): boolean {
       if (g !== undefined) {
         gameMinFps = g;
         found = true;
+      }
+      const va = pick("videoAvgFps");
+      const ga = pick("gameAvgFps");
+      if (va !== undefined) {
+        videoAvgFps = va;
+      }
+      if (ga !== undefined) {
+        gameAvgFps = ga;
       }
       const candidateKeys = [
         "blackScreen",
@@ -470,6 +482,8 @@ export function isBlackScreen(...args: unknown[]): boolean {
         if (allStill) {
           videoMinFps = 0;
           gameMinFps = 0;
+          videoAvgFps = 0;
+          gameAvgFps = 0;
           found = true;
         }
       }
@@ -484,7 +498,26 @@ export function isBlackScreen(...args: unknown[]): boolean {
     }
   }
 
+  const hasAvg = videoAvgFps !== undefined || gameAvgFps !== undefined;
+  const vAvg = videoAvgFps ?? 0;
+  const gAvg = gameAvgFps ?? 0;
+
+  // An average FPS above zero means the picture did move during the window, so
+  // it is not a completely black screen even when one 1-second bucket happened
+  // to contain no changed frames. This takes precedence over a stale explicit
+  // black-screen flag carried by an older check result.
+  if (hasAvg && (vAvg > 0 || gAvg > 0)) return false;
+
   if (blackFlag || phenomenaBlack) return true;
+
+  if (hasAvg) {
+    if (videoMinFps === undefined && gameMinFps === undefined) {
+      videoMinFps = 0;
+      gameMinFps = 0;
+      found = true;
+    }
+  }
+
   if (!found) return false;
   if (gameMinFps === undefined) gameMinFps = videoMinFps;
   return videoMinFps === 0 && gameMinFps === 0;
@@ -1625,7 +1658,11 @@ async function checkStream(): Promise<CheckResult> {
     }
     details.gameScreenPlaying = gameScreenPlaying;
 
-    const blackScreen = details.videoMinFps === 0 && details.gameMinFps === 0;
+    const blackScreen =
+      details.videoMinFps === 0 &&
+      details.gameMinFps === 0 &&
+      details.videoAvgFps === 0 &&
+      details.gameAvgFps === 0;
     details.blackScreen = blackScreen;
     if (blackScreen) {
       phenomena.push("画面全体が真っ黒になっています");
