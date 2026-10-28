@@ -375,6 +375,17 @@ export function isBlackScreen(...args: unknown[]): boolean {
     }
     if (Array.isArray(arg)) {
       const arr = arg as Array<unknown>;
+      if (
+        arr.length > 0 &&
+        arr.every((item) => typeof item === "number" && Number.isFinite(item))
+      ) {
+        const nums = arr as Array<number>;
+        videoMinFps = nums[0];
+        found = true;
+        if (nums.length > 1) gameMinFps = nums[1];
+        else gameMinFps = nums[0];
+        continue;
+      }
       const looksLikeSamples =
         arr.length > 0 &&
         arr.every(

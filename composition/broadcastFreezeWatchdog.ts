@@ -54,6 +54,8 @@ import {
 import type { PictureMotion } from "./watchPageBrowser";
 import { isOnAirFromClock, judgePictureMotion } from "./watchPageBrowser";
 
+export const HOST_SERVICE = "makamujo-screen.service";
+
 export const DEFAULT_FREEZE_CHECK_INTERVAL_MS = 60_000;
 
 /**
@@ -112,6 +114,10 @@ export interface SystemdRecoveryOptions {
   /** systemd の無い環境（開発 / CI）では dry run にして、予定の再起動をログに残すだけにする。 */
   dryRun?: boolean;
   log?: Pick<Console, "log" | "warn" | "error">;
+  /** 自プロセスを落として systemd に再起動させる口。既定は `process.exit`。 */
+  exit?: (code?: number) => void;
+  /** unit 間の settle 待ち。既定は `Bun.sleep`。 */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -122,6 +128,8 @@ export const createSystemdRecovery =
   (options: SystemdRecoveryOptions = {}) =>
   async (recovery: CompositeFreezeRecovery): Promise<void> => {
     const log = options.log ?? console;
+    const exit = options.exit ?? ((code?: number) => process.exit(code));
+    const sleep = options.sleep ?? ((ms: number) => Bun.sleep(ms));
     const services = RECOVERY_SERVICES[recovery];
     if (options.dryRun) {
       log.log(
@@ -129,12 +137,37 @@ export const createSystemdRecovery =
       );
       return;
     }
-    await restartServices(
-      services,
-      (service) => restartService(service, recovery, log),
-      RESTART_SETTLE_MS,
-      (ms) => Bun.sleep(ms),
+    const externalServices = services.filter(
+      (service) => service !== HOST_SERVICE,
     );
+    const isHostRecovery = services.includes(HOST_SERVICE);
+    let externalFailure: unknown;
+    try {
+      await restartServices(
+        externalServices,
+        (service) => restartService(service, recovery, log),
+        RESTART_SETTLE_MS,
+        sleep,
+      );
+    } catch (error) {
+      externalFailure = error;
+      log.error(
+        `[ERROR] recovery "${recovery}" failed:`,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    if (isHostRecovery) {
+      log.log(
+        `[INFO] exiting ${HOST_SERVICE} so systemd can restart it (recovery "${recovery}")...`,
+      );
+      exit(1);
+      return;
+    }
+    if (externalFailure !== undefined) {
+      throw externalFailure instanceof Error
+        ? externalFailure
+        : new Error(String(externalFailure));
+    }
   };
 
 /**
@@ -370,10 +403,19 @@ export const startBroadcastFreezeWatchdog = (
       );
       if (result.timedOut) {
         log.warn(
-          `[WARN] the picture motion measurement did not finish within ${measurementTimeoutMs}ms; treating this cycle as unmeasurable`,
+          `[WARN] the picture motion measurement did not finish within ${measurementTimeoutMs}ms; treating this cycle as a frozen picture`,
         );
       }
-      const measured = result.timedOut ? undefined : result.motion;
+      const measured = result.timedOut
+        ? {
+            comparedFrames: 1,
+            changedFrames: 0,
+            windowMs: Math.max(measurementTimeoutMs, 1_000),
+            tainted: false,
+            sawAdvertisement: false,
+            clockAdvancedSeconds: 0,
+          }
+        : result.motion;
       if (measured === undefined || isOnAirFromClock(measured) !== true) {
         // 放映外（clock が進まない = 番組終了の一枚絵）または放映中か判断
         // できない周期は観測しない。ポリシーには `unknown` として投入して
