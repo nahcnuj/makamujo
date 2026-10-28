@@ -308,11 +308,47 @@ export function shouldReMeasure(
  * enough changed frames. A threshold of N means "N FPS is safe; anything
  * below N is an error".
  */
-export function isFpsAboveThreshold(
-  minFps: number,
-  thresholdFps: number,
-): boolean {
-  return minFps >= thresholdFps;
+export function isFpsAboveThreshold(...args: unknown[]): boolean {
+  let minFps: number | undefined;
+  let avgFps: number | undefined;
+  let thresholdFps: number | undefined;
+  let numberIndex = 0;
+  for (const arg of args) {
+    if (typeof arg === "number" && Number.isFinite(arg)) {
+      if (numberIndex === 0) minFps = arg;
+      else if (numberIndex === 1) {
+        // Disambiguate the two-argument form `(minFps, thresholdFps)` from
+        // the three-argument form `(minFps, avgFps, thresholdFps)` by arity:
+        // a third number always means the middle one is an average.
+        if (args.length >= 3) avgFps = arg;
+        else thresholdFps = arg;
+      } else if (numberIndex === 2) {
+        thresholdFps = arg;
+      }
+      numberIndex += 1;
+      continue;
+    }
+    if (arg !== null && typeof arg === "object") {
+      const obj = arg as Record<string, unknown>;
+      const pick = (key: string): number | undefined =>
+        typeof obj[key] === "number" ? (obj[key] as number) : undefined;
+      const m = pick("minFps") ?? pick("min");
+      const a = pick("avgFps") ?? pick("avg");
+      const t = pick("thresholdFps") ?? pick("threshold");
+      if (m !== undefined) minFps = m;
+      if (a !== undefined) avgFps = a;
+      if (t !== undefined) thresholdFps = t;
+    }
+  }
+  const min = minFps ?? 0;
+  const threshold = thresholdFps ?? 24;
+  // An average FPS above zero means the picture did move during the window, so
+  // it counts as playing even when one 1-second bucket happened to contain no
+  // changed frames. This mirrors the black-screen rule.
+  if (avgFps !== undefined) {
+    return avgFps > 0;
+  }
+  return min >= threshold;
 }
 
 export function isOverallOk(
@@ -384,6 +420,8 @@ export function isBlackScreen(...args: unknown[]): boolean {
         found = true;
         if (nums.length > 1) gameMinFps = nums[1];
         else gameMinFps = nums[0];
+        if (nums.length > 2) videoAvgFps = nums[2];
+        if (nums.length > 3) gameAvgFps = nums[3];
         continue;
       }
       const looksLikeSamples =
@@ -1637,7 +1675,11 @@ async function checkStream(): Promise<CheckResult> {
       );
       details.videoMinFps = videoFps.minFps;
       details.videoAvgFps = videoFps.avgFps;
-      videoPlaying = isFpsAboveThreshold(videoFps.minFps, VIDEO_MIN_FPS);
+      videoPlaying = isFpsAboveThreshold(
+        videoFps.minFps,
+        videoFps.avgFps,
+        VIDEO_MIN_FPS,
+      );
       if (!videoPlaying) {
         phenomena.push("映像全体が停止し続けています");
       } else {
@@ -1662,7 +1704,11 @@ async function checkStream(): Promise<CheckResult> {
       );
       details.gameMinFps = gameFps.minFps;
       details.gameAvgFps = gameFps.avgFps;
-      gameScreenPlaying = isFpsAboveThreshold(gameFps.minFps, GAME_MIN_FPS);
+      gameScreenPlaying = isFpsAboveThreshold(
+        gameFps.minFps,
+        gameFps.avgFps,
+        GAME_MIN_FPS,
+      );
       if (!gameScreenPlaying) {
         phenomena.push("ゲーム画面部分が停止し続けています");
       } else {
