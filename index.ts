@@ -837,11 +837,7 @@ startBroadcastFreezeWatchdog({
     load: () => loadCompositeFreezeState(broadcastFreezeStatePath),
     save: (state) => saveCompositeFreezeState(broadcastFreezeStatePath, state),
   },
-  // systemd のある本番以外では dry run にして観測だけ残す（開発 / CI は
-  // 統計の読み取り自体を無効化しているので、そもそも観測も測れない）。
-  recover: createSystemdRecovery({
-    dryRun: process.env.NODE_ENV !== "production",
-  }),
+  recover: createSystemdRecovery(),
 });
 
 /**

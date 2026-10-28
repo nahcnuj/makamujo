@@ -109,8 +109,6 @@ const RESTART_SETTLE_MS = 3_000;
 const RESTART_COMMAND_TIMEOUT_MS = 60_000;
 
 export interface SystemdRecoveryOptions {
-  /** systemd の無い環境（開発 / CI）では dry run にして、予定の再起動をログに残すだけにする。 */
-  dryRun?: boolean;
   log?: Pick<Console, "log" | "warn" | "error">;
   /** 自プロセスを落として systemd に再起動させる口。既定は `process.exit`。 */
   exit?: (code?: number) => void;
@@ -132,12 +130,6 @@ export const createSystemdRecovery =
   async (recovery: CompositeFreezeRecovery): Promise<void> => {
     const log = options.log ?? console;
     const services = RECOVERY_SERVICES[recovery];
-    if (options.dryRun) {
-      log.log(
-        `[INFO] dry run: restarting ${services.join(" + ")} skipped (recovery "${recovery}")`,
-      );
-      return;
-    }
     const externalServices = services.filter(
       (service) => service !== HOST_SERVICE,
     );

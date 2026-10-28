@@ -37,24 +37,9 @@ describe("createSystemdRecovery", () => {
     rmSync(tmp, { recursive: true, force: true });
   });
 
-  it("dry run touches no unit and exits nothing", async () => {
-    const exits: number[] = [];
-    const recovery = createSystemdRecovery({
-      dryRun: true,
-      exit: (code?: number) => exits.push(code ?? -1),
-      sleep: async () => {},
-      log: silentLog,
-    });
-
-    await recovery("browserAndBroadcastStack");
-
-    expect(exits).toEqual([]);
-  });
-
   it("restarts only the external units for obs recovery", async () => {
     const exits: number[] = [];
     const recovery = createSystemdRecovery({
-      dryRun: false,
       exit: (code?: number) => exits.push(code ?? -1),
       sleep: async () => {},
       log: silentLog,
@@ -70,7 +55,6 @@ describe("createSystemdRecovery", () => {
   it("restarts external units then exits 1 for the host recovery", async () => {
     const exits: number[] = [];
     const recovery = createSystemdRecovery({
-      dryRun: false,
       exit: (code?: number) => exits.push(code ?? -1),
       sleep: async () => {},
       log: silentLog,
@@ -99,7 +83,6 @@ describe("createSystemdRecovery", () => {
     process.env.PATH = `${fakeBin}:${process.env.PATH ?? ""}`;
     const exits: number[] = [];
     const recovery = createSystemdRecovery({
-      dryRun: false,
       exit: (code?: number) => exits.push(code ?? -1),
       sleep: async () => {},
       log: silentLog,
