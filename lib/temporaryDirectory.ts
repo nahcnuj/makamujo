@@ -35,13 +35,6 @@ export const BROWSER_TEMPORARY_DIRECTORY_PREFIXES = [
   PLAYWRIGHT_FALLBACK_TEMPORARY_DIRECTORY_PREFIX,
   // playwright-core creates this scratch dir on every launch.
   "playwright-artifacts-",
-  // playwright-core creates these on demand (downloads, video recording, tracing,
-  // show-report). A crashed/ SIGKILLed run never removes them, so sweep them
-  // alongside the other browser-owned prefixes.
-  "playwright-download-",
-  "playwright-recordings-",
-  "playwright-tracing-",
-  "playwright-show-report-",
   // ...and this Chromium profile when no userDataDir is passed, as the watch
   // page browser (composition/chromiumWatchPageBrowser.ts) does. Only a
   // graceful browser.close() removes it, which never happens when the server
@@ -99,7 +92,6 @@ export const isOwnedTemporaryDirectoryName = (
  */
 export const removeStaleBrowserTemporaryDirectories = (
   root: string = tmpdir(),
-  prefixes: readonly string[] = BROWSER_TEMPORARY_DIRECTORY_PREFIXES,
 ): string[] => {
   const resolvedRoot = resolve(root);
   const tempRoot = resolve(tmpdir());
@@ -130,7 +122,7 @@ export const removeStaleBrowserTemporaryDirectories = (
     }
 
     for (const entry of entries) {
-      if (!isOwnedTemporaryDirectoryName(entry, prefixes)) continue;
+      if (!isOwnedTemporaryDirectoryName(entry)) continue;
       const resolved = resolve(join(resolvedRoot, entry));
       // Guard the path handed to the FS APIs itself (CodeQL barrier).
       if (resolved.startsWith(tempRootPrefix)) {

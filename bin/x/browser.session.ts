@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { ActionResult } from "automated-gameplay-transmitter";
@@ -28,10 +27,6 @@ import {
   shouldRestartGameSession,
 } from "../../lib/Browser/gameStall";
 import { createRetrySender } from "../../lib/Browser/socket";
-import {
-  GAME_BROWSER_TEMPORARY_DIRECTORY_PREFIX,
-  removeStaleBrowserTemporaryDirectories,
-} from "../../lib/temporaryDirectory";
 
 /** Default timeout for watchdog probes to avoid hanging on a wedged renderer. */
 const WATCHDOG_PROBE_TIMEOUT_MS = 10_000;
@@ -185,15 +180,6 @@ if (xauthority) {
 
 const timeout = Number.parseInt(timeoutStr, 10);
 const executablePath = (browserArg?.toString() ?? "").trim() || undefined;
-
-// A previous session that was SIGKILLed (crash / OOM) cannot clean up its own
-// Chromium profile, and the browser service auto-restarts without running
-// `bin/stop`, so stale profiles would otherwise accumulate until the 2 GB temp
-// filesystem fills (memory pressure). Sweep only this service's own prefix so a
-// concurrently running process is never touched.
-removeStaleBrowserTemporaryDirectories(tmpdir(), [
-  GAME_BROWSER_TEMPORARY_DIRECTORY_PREFIX,
-]);
 
 const browser = await create(
   executablePath,

@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 import { mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 /**
  * Overlay browser for OBS "Comment" (XSHM left crop).
@@ -11,18 +10,12 @@ import { chromium } from "playwright";
 import {
   createTemporaryDirectory,
   OVERLAY_TEMPORARY_DIRECTORY_PREFIX,
-  removeStaleBrowserTemporaryDirectories,
   removeTemporaryDirectory,
 } from "../../lib/temporaryDirectory";
 
 process.env.DISPLAY = process.env.DISPLAY || ":10";
 
 const url = process.env.OVERLAY_URL || "http://127.0.0.1:7777/";
-// Sweep profiles left by a previous SIGKILLed instance before creating a new one.
-removeStaleBrowserTemporaryDirectories(tmpdir(), [
-  OVERLAY_TEMPORARY_DIRECTORY_PREFIX,
-]);
-
 const userDataDir = createTemporaryDirectory(
   OVERLAY_TEMPORARY_DIRECTORY_PREFIX,
 );
