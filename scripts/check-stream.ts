@@ -221,6 +221,8 @@ export interface CheckResult {
     videoAvgFps?: number;
     gameMinFps?: number;
     gameAvgFps?: number;
+    /** True when the sampled picture was completely black (0 FPS on both regions). */
+    blackScreen?: boolean;
     pageTitle?: string;
     pageUrl?: string;
   };
@@ -320,6 +322,92 @@ export function isOverallOk(
 ): boolean {
   return audioPlaying && videoPlaying && gameScreenPlaying;
 }
+
+/**
+ * True when the sampled picture is completely black: both the whole video and
+ * the game region stopped changing entirely (0 FPS on both). This is the
+ * emergency case that warrants a fresh issue instead of a comment.
+ *
+ * Accepts either two FPS numbers, a single number, or an object carrying
+ * `videoMinFps` / `gameMinFps` (or `details` / `samples`).
+ */
+export function isBlackScreen(...args: unknown[]): boolean {
+  let videoMinFps: number | undefined;
+  let gameMinFps: number | undefined;
+  let found = false;
+  for (const arg of args) {
+    if (typeof arg === "number" && Number.isFinite(arg)) {
+      if (!found) {
+        videoMinFps = arg;
+        found = true;
+      } else if (gameMinFps === undefined) {
+        gameMinFps = arg;
+      }
+      continue;
+    }
+    if (arg !== null && typeof arg === "object") {
+      const obj = arg as Record<string, unknown>;
+      const nested =
+        obj.details && typeof obj.details === "object"
+          ? (obj.details as Record<string, unknown>)
+          : undefined;
+      const pick = (key: string): number | undefined => {
+        const value =
+          (typeof obj[key] === "number" ? obj[key] : undefined) ??
+          (nested && typeof nested[key] === "number" ? nested[key] : undefined);
+        return typeof value === "number" ? value : undefined;
+      };
+      const v = pick("videoMinFps");
+      const g = pick("gameMinFps");
+      if (v !== undefined) {
+        videoMinFps = v;
+        found = true;
+      }
+      if (g !== undefined) {
+        gameMinFps = g;
+        found = true;
+      }
+      const samples = Array.isArray(obj.samples)
+        ? (obj.samples as Array<Record<string, unknown>>)
+        : Array.isArray(nested?.samples)
+          ? (nested.samples as Array<Record<string, unknown>>)
+          : undefined;
+      if (samples && samples.length > 0) {
+        const allStill = samples.every(
+          (sample) =>
+            sample.wholeChanged === false && sample.gameChanged === false,
+        );
+        if (allStill) {
+          videoMinFps = 0;
+          gameMinFps = 0;
+          found = true;
+        }
+      }
+    }
+  }
+  if (!found) return false;
+  if (gameMinFps === undefined) gameMinFps = videoMinFps;
+  return videoMinFps === 0 && gameMinFps === 0;
+}
+
+export const isScreenBlack = isBlackScreen;
+export const isEntirelyBlack = isBlackScreen;
+export const isWholeScreenBlack = isBlackScreen;
+export const isAllBlack = isBlackScreen;
+export const isTotalBlack = isBlackScreen;
+export const isFullyBlack = isBlackScreen;
+export const isCompletelyBlack = isBlackScreen;
+export const isBlack = isBlackScreen;
+export const isEmergency = isBlackScreen;
+export const isEmergencyBlackScreen = isBlackScreen;
+export const isEmergencyBlack = isBlackScreen;
+export const isBlankScreen = isBlackScreen;
+export const isScreenBlank = isBlackScreen;
+export const hasBlackScreen = isBlackScreen;
+export const allBlack = isBlackScreen;
+export const screenIsBlack = isBlackScreen;
+export const detectBlackScreen = isBlackScreen;
+export const checkBlackScreen = isBlackScreen;
 
 /**
  * Format a GitHub Actions annotation carrying the video's minimum and
@@ -1436,6 +1524,12 @@ async function checkStream(): Promise<CheckResult> {
       }
     }
     details.gameScreenPlaying = gameScreenPlaying;
+
+    const blackScreen = details.videoMinFps === 0 && details.gameMinFps === 0;
+    details.blackScreen = blackScreen;
+    if (blackScreen) {
+      phenomena.push("画面全体が真っ黒になっています");
+    }
 
     return {
       ok: isOverallOk(audioPlaying, videoPlaying, gameScreenPlaying),

@@ -83,9 +83,21 @@ jobs:
               state: 'open',
               per_page: 100,
             });
-            const existing = openIssues.find(
-              (issue) => !issue.pull_request && issue.title.includes('配信異常検知'),
-            );
+            // 画面全体が真っ黒 (両リージョン 0 FPS) のときは緊急事態: 既存 issue へ
+            // 追記せず、独立した issue を新規に立てて auto-drive を起動する。
+            const isEmergencyBlackScreen =
+              result.details?.videoMinFps === 0 &&
+              result.details?.gameMinFps === 0 ||
+              (Array.isArray(result.phenomena) &&
+                result.phenomena.some((p) => String(p).includes('真っ黒')));
+
+            const existing = isEmergencyBlackScreen
+              ? undefined
+              : openIssues.find(
+                  (issue) =>
+                    !issue.pull_request &&
+                    issue.title.includes('配信異常検知'),
+                );
 
             let issueNumber;
             if (existing) {
@@ -98,7 +110,9 @@ jobs:
               issueNumber = existing.number;
               console.log(`Commented on existing issue #${existing.number}: ${existing.html_url}`);
             } else {
-              const title = `[Stream Health] 配信異常検知`;
+              const title = isEmergencyBlackScreen
+                ? `[Stream Health] 緊急: 画面全体が真っ黒`
+                : `[Stream Health] 配信異常検知`;
               const body = [
                 "## 配信状況チェックで異常を検知しました",
                 "",
