@@ -23,6 +23,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       issue-number: ${{ steps.create-issue.outputs.issue-number }}
+      emergency: ${{ steps.create-issue.outputs.emergency }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -86,8 +87,9 @@ jobs:
             // 画面全体が真っ黒 (両リージョン 0 FPS) のときは緊急事態: 既存 issue へ
             // 追記せず、独立した issue を新規に立てて auto-drive を起動する。
             const isEmergencyBlackScreen =
-              result.details?.videoMinFps === 0 &&
-              result.details?.gameMinFps === 0 ||
+              result.details?.blackScreen === true ||
+              (result.details?.videoMinFps === 0 &&
+                result.details?.gameMinFps === 0) ||
               (Array.isArray(result.phenomena) &&
                 result.phenomena.some((p) => String(p).includes('真っ黒')));
 
@@ -141,4 +143,16 @@ jobs:
               console.log(`Created issue #${issue.number}: ${issue.html_url}`);
             }
 
+            core.setOutput('emergency', String(isEmergencyBlackScreen));
             core.setOutput('issue-number', String(issueNumber));
+
+  auto-drive:
+    name: Auto-drive emergency fix
+    needs: check-stream
+    if: failure() && needs.check-stream.result == 'failure' && needs.check-stream.outputs.issue-number != '' && needs.check-stream.outputs.emergency == 'true'
+    uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@53799a9a3d7c251371cac85fd7de95ad1833c591
+    with:
+      number: ${{ fromJSON(needs.check-stream.outputs.issue-number) }}
+      repository: ${{ github.repository }}
+      environment: conahcnuj
+    secrets: inherit

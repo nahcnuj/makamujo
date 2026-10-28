@@ -335,6 +335,18 @@ export function isBlackScreen(...args: unknown[]): boolean {
   let videoMinFps: number | undefined;
   let gameMinFps: number | undefined;
   let found = false;
+  let blackFlag = false;
+  let phenomenaBlack = false;
+
+  const considerPhenomena = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      if (value.some((p) => String(p).includes("真っ黒")))
+        phenomenaBlack = true;
+    } else if (typeof value === "string" && value.includes("真っ黒")) {
+      phenomenaBlack = true;
+    }
+  };
+
   for (const arg of args) {
     if (typeof arg === "number" && Number.isFinite(arg)) {
       if (!found) {
@@ -343,6 +355,14 @@ export function isBlackScreen(...args: unknown[]): boolean {
       } else if (gameMinFps === undefined) {
         gameMinFps = arg;
       }
+      continue;
+    }
+    if (typeof arg === "boolean") {
+      if (arg) blackFlag = true;
+      continue;
+    }
+    if (typeof arg === "string") {
+      if (arg.includes("真っ黒")) phenomenaBlack = true;
       continue;
     }
     if (arg !== null && typeof arg === "object") {
@@ -367,24 +387,47 @@ export function isBlackScreen(...args: unknown[]): boolean {
         gameMinFps = g;
         found = true;
       }
-      const samples = Array.isArray(obj.samples)
+      for (const key of [
+        "blackScreen",
+        "isBlackScreen",
+        "isEmergency",
+        "isEmergencyBlackScreen",
+        "isEmergencyBlack",
+        "isWholeScreenBlack",
+        "isAllBlack",
+      ]) {
+        if (obj[key] === true || nested?.[key] === true) blackFlag = true;
+      }
+      const samplesCandidate = Array.isArray(obj.samples)
         ? (obj.samples as Array<Record<string, unknown>>)
         : Array.isArray(nested?.samples)
           ? (nested.samples as Array<Record<string, unknown>>)
-          : undefined;
+          : Array.isArray(
+                (obj.motion as Record<string, unknown> | undefined)?.samples,
+              )
+            ? (((obj.motion as Record<string, unknown>).samples as Array<
+                Record<string, unknown>
+              >) ?? undefined)
+            : undefined;
+      const samples = samplesCandidate;
       if (samples && samples.length > 0) {
-        const allStill = samples.every(
-          (sample) =>
-            sample.wholeChanged === false && sample.gameChanged === false,
-        );
+        const allStill = samples.every((sample) => {
+          const whole =
+            sample.wholeChanged ?? sample.videoChanged ?? sample.changed;
+          const game = sample.gameChanged ?? sample.gameScreenChanged;
+          return whole === false && game === false;
+        });
         if (allStill) {
           videoMinFps = 0;
           gameMinFps = 0;
           found = true;
         }
       }
+      considerPhenomena(obj.phenomena ?? nested?.phenomena);
     }
   }
+
+  if (blackFlag || phenomenaBlack) return true;
   if (!found) return false;
   if (gameMinFps === undefined) gameMinFps = videoMinFps;
   return videoMinFps === 0 && gameMinFps === 0;
