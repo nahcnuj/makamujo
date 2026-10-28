@@ -155,6 +155,10 @@ async function renderBroadcastScreen(
   });
   const speechLocator = page.getByText("こんにちは世界").first();
   await speechLocator.waitFor({ state: "visible", timeout: 10_000 });
+  await page
+    .frameLocator(`iframe[src="${GAME_PAGE_URL}"]`)
+    .getByText("vigilant-fiesta game screen")
+    .waitFor({ state: "visible", timeout: 10_000 });
   await page.clock.pauseAt(new Date(FIXED_CLOCK_MS + 60_000));
 }
 
