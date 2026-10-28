@@ -63,6 +63,10 @@ import * as index from "./routes/index";
 import { handleCatchAll } from "./src/frontendServer";
 
 let runtimeCleanedUp = false;
+const WATCH_PAGE_SHUTDOWN_TIMEOUT_MS = 10_000;
+let stoppingWatchPageStatistics: Promise<void> | undefined;
+let mainServer: Bun.Server<WsData> | undefined;
+let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 
 process.on("exit", exitHandler.bind(null, { cleanup: true }));
 process.on("SIGINT", signalHandler.bind(null, { exit: true }));
@@ -599,10 +603,7 @@ const makeStreamHandler =
 // yields), so mainServer is always defined by the time a handler executes.
 // The non-null assertion (!) is therefore safe; the runtime check below
 // provides an extra guard for unexpected scenarios.
-/** Initialized after serve(); optional so crash-path exitHandler avoids TDZ. */
-let mainServer: Bun.Server<WsData> | undefined;
-/** Hoisted for exitHandler safety if startup fails mid-module. */
-let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
+/* mainServer / consoleServer are hoisted to the top of the module for exitHandler safety. */
 
 const getMainServer = (): Bun.Server<WsData> => {
   if (!mainServer) throw new Error("Server not yet initialized");
@@ -833,15 +834,6 @@ startBroadcastFreezeWatchdog({
     dryRun: process.env.NODE_ENV !== "production",
   }),
 });
-
-/**
- * Upper bound on how long shutdown waits for the watch page browser to close.
- * systemd's `TimeoutStopSec` is 30s; a wedged Chromium must still exit well
- * before that so the profile can be removed and the unit restarts promptly.
- */
-const WATCH_PAGE_SHUTDOWN_TIMEOUT_MS = 10_000;
-
-let stoppingWatchPageStatistics: Promise<void> | undefined;
 
 /**
  * Close the watch page statistics browser before the process exits.
