@@ -62,6 +62,7 @@ import * as speechHistoryRoute from "./routes/api/speech-history";
 import * as index from "./routes/index";
 import { handleCatchAll } from "./src/frontendServer";
 
+let runtimeCleanedUp = false;
 process.on("exit", exitHandler.bind(null, { cleanup: true }));
 process.on("SIGINT", signalHandler.bind(null, { exit: true }));
 // systemd stops makamujo-screen.service with SIGTERM, and an unhandled signal
@@ -760,7 +761,7 @@ try {
   console.error(
     `[ERROR] CONSOLE_STARTUP_FAILED ${JSON.stringify(consoleStartupError)}`,
   );
-  process.exit(1);
+  consoleServer = null;
 }
 
 // Start the stream playback after servers are listening so startup is
@@ -864,8 +865,6 @@ function stopWatchPageStatistics(): Promise<void> {
   })();
   return stoppingWatchPageStatistics;
 }
-
-let runtimeCleanedUp = false;
 
 /**
  * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}
