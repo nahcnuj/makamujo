@@ -29,7 +29,7 @@ jobs:
     name: Auto-drive issue
     uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@53799a9a3d7c251371cac85fd7de95ad1833c591
     with:
-      number: ${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.number }}
+      number: ${{ github.event.pull_request.number || github.event.issue.number || (github.event.inputs.number && fromJSON(github.event.inputs.number)) }}
       repository: ${{ github.repository }}
       environment: conahcnuj
     secrets: inherit
