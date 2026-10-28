@@ -71,18 +71,6 @@ process.on("SIGTERM", signalHandler.bind(null, { exit: true }));
 process.on("SIGHUP", signalHandler.bind(null, { exit: true }));
 process.on("SIGUSR1", signalHandler.bind(null, { exit: true }));
 process.on("SIGUSR2", signalHandler.bind(null, { exit: true }));
-// Log uncaught exceptions for better diagnostics before invoking the
-// existing exit handler which terminates the process.
-process.on("uncaughtException", (err) => {
-  try {
-    console.error(
-      "[UNCAUGHT_EXCEPTION]",
-      err instanceof Error ? (err.stack ?? err.message) : String(err),
-    );
-  } catch {
-    // ignore logging failures
-  }
-});
 process.on("unhandledRejection", (reason) => {
   try {
     console.error(
