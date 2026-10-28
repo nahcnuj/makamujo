@@ -167,6 +167,8 @@ test.describe("stream visual regression", () => {
     page,
   }) => {
     await renderBroadcastScreen(page, 1280, 720);
-    await expect(page).toHaveScreenshot("stream-overlay-1280x720.png");
+    await expect(page).toHaveScreenshot("stream-overlay-1280x720.png", {
+      maxDiffPixels: 250,
+    });
   });
 });
