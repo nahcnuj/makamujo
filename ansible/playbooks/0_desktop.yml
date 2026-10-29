@@ -1,5 +1,5 @@
 - name: Install X11 desktop, streaming display :10, and RDP to same display
-  hosts: vps
+  hosts: all
   become: true
   tasks:
 
