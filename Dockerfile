@@ -1,4 +1,4 @@
-FROM debian:bookworm
+FROM debian:bookworm-20261027
 
 WORKDIR /workspace
 
