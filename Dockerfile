@@ -2,6 +2,8 @@ FROM python:3.12-bookworm
 
 WORKDIR /workspace
 
+ENV ANSIBLE_CONFIG=/workspace/ansible/ansible.cfg
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
@@ -11,12 +13,10 @@ RUN apt-get update \
 
 COPY ansible/ ansible/
 COPY bin/makamujo-pipewire bin/makamujo-audio.sh bin/
-RUN pip install --no-cache-dir --break-system-packages -r ansible/requirements.txt \
-    && ANSIBLE_CONFIG=/workspace/ansible/ansible.cfg \
-       ansible-playbook -i 'vps,' -c local -e ansible_become=false \
+RUN pip install --no-cache-dir -r ansible/requirements.txt \
+    && ansible-playbook -i 'vps,' -c local -e ansible_become=false \
        ansible/playbooks/0_desktop.yml --tags vrt \
-    && ANSIBLE_CONFIG=/workspace/ansible/ansible.cfg \
-       ansible-playbook -i 'vps,' -c local -e ansible_become=false \
+    && ansible-playbook -i 'vps,' -c local -e ansible_become=false \
        ansible/playbooks/1_bun.yml
 
 ENV PATH="/root/.bun/bin:${PATH}"
