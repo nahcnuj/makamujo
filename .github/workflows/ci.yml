@@ -140,13 +140,12 @@ jobs:
   vrt:
     needs: [setup, lint]
     runs-on: ubuntu-latest
-    continue-on-error: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
-          python-version: "3.12"
+          python-version-file: ansible/.python-version
       - name: Install Ansible
         run: pip install --no-cache-dir -r ansible/requirements.txt
       - name: Build Debian VPS-equivalent VRT image
@@ -162,6 +161,7 @@ jobs:
         run: docker exec vrt bun run test:stream
       - name: Stop VRT container
         if: always()
+        continue-on-error: true
         run: 'docker rm -f vrt || :'
 
   ansible-syntax:
