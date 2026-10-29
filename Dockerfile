@@ -2,8 +2,6 @@ FROM python:3.12-bookworm
 
 WORKDIR /workspace
 
-ENV ANSIBLE_CONFIG=/workspace/ansible/ansible.cfg
-
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
@@ -16,14 +14,16 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-COPY . .
-
+COPY ansible/requirements.txt ansible/requirements.txt
 RUN pip install --no-cache-dir -r ansible/requirements.txt
 
 RUN curl -fsSL https://bun.sh/install | bash
 
 ENV PATH="/root/.bun/bin:${PATH}"
 
+COPY package.json bun.lock ./
 RUN bun ci
+
+COPY . .
 
 RUN bunx playwright install --with-deps chromium

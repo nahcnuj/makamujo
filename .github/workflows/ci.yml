@@ -159,7 +159,7 @@ jobs:
           ansible-playbook -i ansible/inventory/hosts.yml --limit docker -e ansible_become=false ansible/playbooks/1_bun.yml
           ansible-playbook -i ansible/inventory/hosts.yml --limit docker -e ansible_become=false ansible/playbooks/2_makamujo.yml
       - name: Run VRT in Debian VPS-equivalent container
-        run: docker exec docker bash -lc 'cd /workspace && bun run test:stream'
+        run: docker exec docker bash -lc 'bun run test:stream'
       - name: Stop VRT container
         if: always()
         run: docker rm -f docker
