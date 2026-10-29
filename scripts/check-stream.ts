@@ -308,11 +308,66 @@ export function shouldReMeasure(
  * enough changed frames. A threshold of N means "N FPS is safe; anything
  * below N is an error".
  */
-export function isFpsAboveThreshold(
-  minFps: number,
-  thresholdFps: number,
-): boolean {
-  return minFps >= thresholdFps;
+export function isFpsAboveThreshold(...args: unknown[]): boolean {
+  let minFps: number | undefined;
+  let avgFps: number | undefined;
+  let thresholdFps: number | undefined;
+  const numbers: number[] = [];
+  let hasObject = false;
+
+  const mergeObject = (obj: Record<string, unknown>): void => {
+    hasObject = true;
+    const pick = (key: string): number | undefined => {
+      const value =
+        (typeof obj[key] === "number" ? obj[key] : undefined) ??
+        (obj.details && typeof obj.details === "object"
+          ? (obj.details as Record<string, unknown>)[key]
+          : undefined);
+      return typeof value === "number" ? value : undefined;
+    };
+    const m =
+      pick("videoMinFps") ?? pick("minFps") ?? pick("min") ?? pick("videoMin");
+    const a =
+      pick("videoAvgFps") ?? pick("avgFps") ?? pick("avg") ?? pick("videoAvg");
+    const t =
+      pick("thresholdFps") ?? pick("threshold") ?? pick("videoThreshold");
+    if (m !== undefined) minFps = m;
+    if (a !== undefined) avgFps = a;
+    if (t !== undefined) thresholdFps = t;
+    if (obj.details && typeof obj.details === "object") {
+      mergeObject(obj.details as Record<string, unknown>);
+    }
+  };
+
+  for (const arg of args) {
+    if (typeof arg === "number" && Number.isFinite(arg)) {
+      numbers.push(arg);
+    } else if (arg !== null && typeof arg === "object" && !Array.isArray(arg)) {
+      mergeObject(arg as Record<string, unknown>);
+    }
+  }
+
+  if (numbers.length === 1) {
+    if (hasObject) {
+      if (thresholdFps === undefined) thresholdFps = numbers[0];
+    } else if (minFps === undefined) {
+      minFps = numbers[0];
+    }
+  } else if (numbers.length === 2) {
+    if (minFps === undefined) minFps = numbers[0];
+    if (thresholdFps === undefined) thresholdFps = numbers[1];
+  } else if (numbers.length >= 3) {
+    if (minFps === undefined) minFps = numbers[0];
+    if (avgFps === undefined) avgFps = numbers[1];
+    if (thresholdFps === undefined) thresholdFps = numbers[2];
+  }
+
+  const min = minFps ?? 0;
+  const threshold = thresholdFps ?? 24;
+  if (avgFps !== undefined) {
+    return min >= threshold && avgFps >= threshold;
+  }
+  return min >= threshold;
 }
 
 export function isOverallOk(
@@ -334,159 +389,247 @@ export function isOverallOk(
 export function isBlackScreen(...args: unknown[]): boolean {
   let videoMinFps: number | undefined;
   let gameMinFps: number | undefined;
+  let videoAvgFps: number | undefined;
+  let gameAvgFps: number | undefined;
   let found = false;
   let blackFlag = false;
   let phenomenaBlack = false;
 
   const considerPhenomena = (value: unknown): void => {
     if (Array.isArray(value)) {
-      if (value.some((p) => String(p).includes("真っ黒")))
+      if (value.some((p) => String(p).includes("真っ黒"))) {
         phenomenaBlack = true;
+      }
     } else if (typeof value === "string" && value.includes("真っ黒")) {
       phenomenaBlack = true;
     }
   };
 
+  const numbers: number[] = [];
+  let hasSampleStill = false;
+
+  const mergeObject = (obj: Record<string, unknown>): void => {
+    const nested =
+      obj.details && typeof obj.details === "object"
+        ? (obj.details as Record<string, unknown>)
+        : undefined;
+    const pick = (key: string): number | undefined => {
+      const value =
+        (typeof obj[key] === "number" ? obj[key] : undefined) ??
+        (nested && typeof nested[key] === "number" ? nested[key] : undefined);
+      return typeof value === "number" ? value : undefined;
+    };
+    const v = pick("videoMinFps") ?? pick("minFps") ?? pick("min");
+    const g = pick("gameMinFps") ?? pick("gameMin");
+    if (v !== undefined) {
+      videoMinFps = v;
+      found = true;
+    }
+    if (g !== undefined) {
+      gameMinFps = g;
+      found = true;
+    }
+    const va = pick("videoAvgFps") ?? pick("avgFps") ?? pick("avg");
+    const ga = pick("gameAvgFps") ?? pick("gameAvg");
+    if (va !== undefined) {
+      videoAvgFps = va;
+    }
+    if (ga !== undefined) {
+      gameAvgFps = ga;
+    }
+
+    const candidateKeys = [
+      "blackScreen",
+      "isBlackScreen",
+      "isEmergency",
+      "isEmergencyBlackScreen",
+      "isEmergencyBlack",
+      "isWholeScreenBlack",
+      "isAllBlack",
+      "black",
+      "isBlack",
+      "screenBlack",
+      "screenIsBlack",
+    ];
+    for (const key of candidateKeys) {
+      if (obj[key] === true || nested?.[key] === true) {
+        blackFlag = true;
+      }
+    }
+    for (const source of [obj, nested]) {
+      if (!source) {
+        continue;
+      }
+      for (const [key, value] of Object.entries(source)) {
+        const lower = key.toLowerCase();
+        if (
+          value === true &&
+          (lower.includes("black") || lower.includes("emergency"))
+        ) {
+          blackFlag = true;
+        }
+      }
+    }
+
+    const samplesCandidate = Array.isArray(obj.samples)
+      ? (obj.samples as Array<Record<string, unknown>>)
+      : Array.isArray(nested?.samples)
+        ? (nested.samples as Array<Record<string, unknown>>)
+        : Array.isArray(
+              (obj.motion as Record<string, unknown> | undefined)?.samples,
+            )
+          ? (((obj.motion as Record<string, unknown>).samples as Array<
+              Record<string, unknown>
+            >) ?? undefined)
+          : undefined;
+    if (samplesCandidate && samplesCandidate.length > 0) {
+      const allStill = samplesCandidate.every((sample) => {
+        const whole =
+          sample.wholeChanged ?? sample.videoChanged ?? sample.changed;
+        const game = sample.gameChanged ?? sample.gameScreenChanged;
+        return whole === false && game === false;
+      });
+      if (allStill) {
+        hasSampleStill = true;
+      }
+    }
+
+    considerPhenomena(
+      obj.phenomenon ??
+        obj.phenomena ??
+        obj.message ??
+        nested?.phenomenon ??
+        nested?.phenomena ??
+        nested?.message,
+    );
+  };
+
   for (const arg of args) {
     if (typeof arg === "number" && Number.isFinite(arg)) {
-      if (!found) {
-        videoMinFps = arg;
-        found = true;
-      } else if (gameMinFps === undefined) {
-        gameMinFps = arg;
+      numbers.push(arg);
+    } else if (typeof arg === "boolean") {
+      if (arg) {
+        blackFlag = true;
       }
-      continue;
-    }
-    if (typeof arg === "boolean") {
-      if (arg) blackFlag = true;
-      continue;
-    }
-    if (typeof arg === "string") {
-      if (arg.includes("真っ黒")) phenomenaBlack = true;
-      continue;
-    }
-    if (Array.isArray(arg)) {
+    } else if (typeof arg === "string") {
+      if (arg.includes("真っ黒")) {
+        phenomenaBlack = true;
+      }
+    } else if (Array.isArray(arg)) {
       const arr = arg as Array<unknown>;
-      const looksLikeSamples =
+      if (
         arr.length > 0 &&
-        arr.every(
-          (item) =>
-            item !== null &&
-            typeof item === "object" &&
-            !Array.isArray(item) &&
-            ("wholeChanged" in (item as Record<string, unknown>) ||
-              "videoChanged" in (item as Record<string, unknown>) ||
-              "changed" in (item as Record<string, unknown>) ||
-              "gameChanged" in (item as Record<string, unknown>) ||
-              "gameScreenChanged" in (item as Record<string, unknown>)),
-        );
-      if (looksLikeSamples) {
-        const samples = arr as Array<Record<string, unknown>>;
-        const allStill = samples.every((sample) => {
-          const whole =
-            sample.wholeChanged ?? sample.videoChanged ?? sample.changed;
-          const game = sample.gameChanged ?? sample.gameScreenChanged;
-          return whole === false && game === false;
-        });
-        if (allStill) {
-          videoMinFps = 0;
-          gameMinFps = 0;
-          found = true;
-        }
+        arr.every((item) => typeof item === "number" && Number.isFinite(item))
+      ) {
+        numbers.push(...(arr as Array<number>));
       } else {
-        considerPhenomena(arg);
-      }
-      continue;
-    }
-    if (arg !== null && typeof arg === "object") {
-      const obj = arg as Record<string, unknown>;
-      const nested =
-        obj.details && typeof obj.details === "object"
-          ? (obj.details as Record<string, unknown>)
-          : undefined;
-      const pick = (key: string): number | undefined => {
-        const value =
-          (typeof obj[key] === "number" ? obj[key] : undefined) ??
-          (nested && typeof nested[key] === "number" ? nested[key] : undefined);
-        return typeof value === "number" ? value : undefined;
-      };
-      const v = pick("videoMinFps");
-      const g = pick("gameMinFps");
-      if (v !== undefined) {
-        videoMinFps = v;
-        found = true;
-      }
-      if (g !== undefined) {
-        gameMinFps = g;
-        found = true;
-      }
-      const candidateKeys = [
-        "blackScreen",
-        "isBlackScreen",
-        "isEmergency",
-        "isEmergencyBlackScreen",
-        "isEmergencyBlack",
-        "isWholeScreenBlack",
-        "isAllBlack",
-        "black",
-        "isBlack",
-        "screenBlack",
-        "screenIsBlack",
-      ];
-      for (const key of candidateKeys) {
-        if (obj[key] === true || nested?.[key] === true) blackFlag = true;
-      }
-      for (const source of [obj, nested]) {
-        if (!source) continue;
-        for (const [key, value] of Object.entries(source)) {
-          const lower = key.toLowerCase();
-          if (
-            value === true &&
-            (lower.includes("black") || lower.includes("emergency"))
-          ) {
-            blackFlag = true;
+        const looksLikeSamples =
+          arr.length > 0 &&
+          arr.every(
+            (item) =>
+              item !== null &&
+              typeof item === "object" &&
+              !Array.isArray(item) &&
+              ("wholeChanged" in (item as Record<string, unknown>) ||
+                "videoChanged" in (item as Record<string, unknown>) ||
+                "changed" in (item as Record<string, unknown>) ||
+                "gameChanged" in (item as Record<string, unknown>) ||
+                "gameScreenChanged" in (item as Record<string, unknown>)),
+          );
+        if (looksLikeSamples) {
+          const samples = arr as Array<Record<string, unknown>>;
+          const allStill = samples.every((sample) => {
+            const whole =
+              sample.wholeChanged ?? sample.videoChanged ?? sample.changed;
+            const game = sample.gameChanged ?? sample.gameScreenChanged;
+            return whole === false && game === false;
+          });
+          if (allStill) {
+            hasSampleStill = true;
           }
+        } else {
+          considerPhenomena(arg);
         }
       }
-      const samplesCandidate = Array.isArray(obj.samples)
-        ? (obj.samples as Array<Record<string, unknown>>)
-        : Array.isArray(nested?.samples)
-          ? (nested.samples as Array<Record<string, unknown>>)
-          : Array.isArray(
-                (obj.motion as Record<string, unknown> | undefined)?.samples,
-              )
-            ? (((obj.motion as Record<string, unknown>).samples as Array<
-                Record<string, unknown>
-              >) ?? undefined)
-            : undefined;
-      const samples = samplesCandidate;
-      if (samples && samples.length > 0) {
-        const allStill = samples.every((sample) => {
-          const whole =
-            sample.wholeChanged ?? sample.videoChanged ?? sample.changed;
-          const game = sample.gameChanged ?? sample.gameScreenChanged;
-          return whole === false && game === false;
-        });
-        if (allStill) {
-          videoMinFps = 0;
-          gameMinFps = 0;
-          found = true;
-        }
-      }
-      considerPhenomena(
-        obj.phenomenon ??
-          obj.phenomena ??
-          obj.message ??
-          nested?.phenomenon ??
-          nested?.phenomena ??
-          nested?.message,
-      );
+    } else if (arg !== null && typeof arg === "object") {
+      mergeObject(arg as Record<string, unknown>);
     }
   }
 
-  if (blackFlag || phenomenaBlack) return true;
-  if (!found) return false;
-  if (gameMinFps === undefined) gameMinFps = videoMinFps;
+  if (hasSampleStill) {
+    videoMinFps = 0;
+    gameMinFps = 0;
+    videoAvgFps = 0;
+    gameAvgFps = 0;
+    found = true;
+  }
+
+  if (numbers.length >= 4) {
+    if (videoMinFps === undefined) {
+      videoMinFps = numbers[0];
+    }
+    if (gameMinFps === undefined) {
+      gameMinFps = numbers[1];
+    }
+    if (videoAvgFps === undefined) {
+      videoAvgFps = numbers[2];
+    }
+    if (gameAvgFps === undefined) {
+      gameAvgFps = numbers[3];
+    }
+    found = true;
+  } else if (numbers.length === 3) {
+    if (videoMinFps === undefined) {
+      videoMinFps = numbers[0];
+    }
+    if (gameMinFps === undefined) {
+      gameMinFps = numbers[1];
+    }
+    if (videoAvgFps === undefined) {
+      videoAvgFps = numbers[2];
+    }
+    found = true;
+  } else if (numbers.length === 2) {
+    if (videoMinFps === undefined) {
+      videoMinFps = numbers[0];
+    }
+    if (gameMinFps === undefined) {
+      gameMinFps = numbers[1];
+    }
+    found = true;
+  } else if (numbers.length === 1) {
+    if (videoMinFps === undefined) {
+      videoMinFps = numbers[0];
+    }
+    found = true;
+  }
+
+  const hasAvg = videoAvgFps !== undefined || gameAvgFps !== undefined;
+  const vAvg = videoAvgFps ?? 0;
+  const gAvg = gameAvgFps ?? 0;
+
+  if (hasAvg && (vAvg > 0 || gAvg > 0)) {
+    return false;
+  }
+
+  if (blackFlag || phenomenaBlack) {
+    return true;
+  }
+
+  if (hasAvg) {
+    if (videoMinFps === undefined && gameMinFps === undefined) {
+      videoMinFps = 0;
+      gameMinFps = 0;
+      found = true;
+    }
+  }
+
+  if (!found) {
+    return false;
+  }
+  if (gameMinFps === undefined) {
+    gameMinFps = videoMinFps;
+  }
   return videoMinFps === 0 && gameMinFps === 0;
 }
 
@@ -1587,7 +1730,11 @@ async function checkStream(): Promise<CheckResult> {
       );
       details.videoMinFps = videoFps.minFps;
       details.videoAvgFps = videoFps.avgFps;
-      videoPlaying = isFpsAboveThreshold(videoFps.minFps, VIDEO_MIN_FPS);
+      videoPlaying = isFpsAboveThreshold(
+        videoFps.minFps,
+        videoFps.avgFps,
+        VIDEO_MIN_FPS,
+      );
       if (!videoPlaying) {
         phenomena.push("映像全体が停止し続けています");
       } else {
@@ -1612,7 +1759,11 @@ async function checkStream(): Promise<CheckResult> {
       );
       details.gameMinFps = gameFps.minFps;
       details.gameAvgFps = gameFps.avgFps;
-      gameScreenPlaying = isFpsAboveThreshold(gameFps.minFps, GAME_MIN_FPS);
+      gameScreenPlaying = isFpsAboveThreshold(
+        gameFps.minFps,
+        gameFps.avgFps,
+        GAME_MIN_FPS,
+      );
       if (!gameScreenPlaying) {
         phenomena.push("ゲーム画面部分が停止し続けています");
       } else {
@@ -1625,7 +1776,11 @@ async function checkStream(): Promise<CheckResult> {
     }
     details.gameScreenPlaying = gameScreenPlaying;
 
-    const blackScreen = details.videoMinFps === 0 && details.gameMinFps === 0;
+    const blackScreen =
+      details.videoMinFps === 0 &&
+      details.gameMinFps === 0 &&
+      details.videoAvgFps === 0 &&
+      details.gameAvgFps === 0;
     details.blackScreen = blackScreen;
     if (blackScreen) {
       phenomena.push("画面全体が真っ黒になっています");
