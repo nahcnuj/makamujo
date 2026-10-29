@@ -100,6 +100,7 @@ export const isOwnedTemporaryDirectoryName = (
 export const removeStaleBrowserTemporaryDirectories = (
   root: string = tmpdir(),
   prefixes: readonly string[] = BROWSER_TEMPORARY_DIRECTORY_PREFIXES,
+  minAgeMs: number = 0,
 ): string[] => {
   const resolvedRoot = resolve(root);
   const tempRoot = resolve(tmpdir());
@@ -134,9 +135,17 @@ export const removeStaleBrowserTemporaryDirectories = (
       const resolved = resolve(join(resolvedRoot, entry));
       // Guard the path handed to the FS APIs itself (CodeQL barrier).
       if (resolved.startsWith(tempRootPrefix)) {
+        let stats: ReturnType<typeof lstatSync>;
         try {
           // Symlinks are skipped: only real directories are ours to delete.
-          if (!lstatSync(resolved).isDirectory()) continue;
+          stats = lstatSync(resolved);
+          if (!stats.isDirectory()) continue;
+          // When a minimum age is requested, skip directories that are too
+          // fresh: a concurrently running (or just-started) browser still owns
+          // them, and deleting them mid-flight crashes the session (issue #1477).
+          if (minAgeMs > 0 && Date.now() - stats.mtimeMs < minAgeMs) {
+            continue;
+          }
         } catch {
           // Vanished between readdir and lstat (or unreadable): nothing to do.
           continue;

@@ -19,9 +19,11 @@ process.env.DISPLAY = process.env.DISPLAY || ":10";
 
 const url = process.env.OVERLAY_URL || "http://127.0.0.1:7777/";
 // Sweep profiles left by a previous SIGKILLed instance before creating a new one.
-removeStaleBrowserTemporaryDirectories(tmpdir(), [
-  OVERLAY_TEMPORARY_DIRECTORY_PREFIX,
-]);
+removeStaleBrowserTemporaryDirectories(
+  tmpdir(),
+  [OVERLAY_TEMPORARY_DIRECTORY_PREFIX],
+  5 * 60 * 1000,
+);
 
 const userDataDir = createTemporaryDirectory(
   OVERLAY_TEMPORARY_DIRECTORY_PREFIX,

@@ -191,9 +191,11 @@ const executablePath = (browserArg?.toString() ?? "").trim() || undefined;
 // `bin/stop`, so stale profiles would otherwise accumulate until the 2 GB temp
 // filesystem fills (memory pressure). Sweep only this service's own prefix so a
 // concurrently running process is never touched.
-removeStaleBrowserTemporaryDirectories(tmpdir(), [
-  GAME_BROWSER_TEMPORARY_DIRECTORY_PREFIX,
-]);
+removeStaleBrowserTemporaryDirectories(
+  tmpdir(),
+  [GAME_BROWSER_TEMPORARY_DIRECTORY_PREFIX],
+  5 * 60 * 1000,
+);
 
 const browser = await create(
   executablePath,
