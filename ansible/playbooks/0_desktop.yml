@@ -52,7 +52,7 @@
         state: present
 
     - name: Install browser and fonts
-      tags: [vrt]  # WHY: headless VRT needs only Chromium + CJK fonts, not the full desktop/X11 stack.
+      tags: [vrt]
       ansible.builtin.apt:
         name:
           - chromium
