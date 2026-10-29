@@ -5,4 +5,4 @@ var
 test-results
 playwright-report
 *.log
-ansible/inventory/group_vars/all/vault.yml
+ansible/inventory/group_vars/production/vault.yml
