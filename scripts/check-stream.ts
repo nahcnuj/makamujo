@@ -1158,18 +1158,10 @@ async function sampleMotion(
 
   const timeoutPromise = new Promise<MotionSamples>((resolve) => {
     setTimeout(() => {
-      const fallbackSamples: MotionSample[] = Array.from(
-        { length: Math.max(2, Math.ceil(durationMs / 1000)) },
-        (_, i) => ({
-          elapsedMs: i * 1000,
-          wholeChanged: false,
-          gameChanged: false,
-        }),
-      );
       resolve({
-        samples: fallbackSamples,
+        samples: [],
         elapsedMs: durationMs,
-        tainted: false,
+        tainted: true,
         sawAdvertisement: false,
       });
     }, MOTION_EVALUATE_TIMEOUT_MS);
