@@ -403,10 +403,19 @@ export const startBroadcastFreezeWatchdog = (
       );
       if (result.timedOut) {
         log.warn(
-          `[WARN] the picture motion measurement did not finish within ${measurementTimeoutMs}ms; treating this cycle as unmeasurable`,
+          `[WARN] the picture motion measurement did not finish within ${measurementTimeoutMs}ms; treating this cycle as a frozen picture`,
         );
       }
-      const measured = result.timedOut ? undefined : result.motion;
+      const measured = result.timedOut
+        ? {
+            comparedFrames: 1,
+            changedFrames: 0,
+            windowMs: Math.max(measurementTimeoutMs, 1_000),
+            tainted: false,
+            sawAdvertisement: false,
+            clockAdvancedSeconds: 0,
+          }
+        : result.motion;
       if (measured === undefined || isOnAirFromClock(measured) !== true) {
         // 放映外（clock が進まない = 番組終了の一枚絵）または放映中か判断
         // できない周期は観測しない。ポリシーには `unknown` として投入して
