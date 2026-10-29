@@ -1,4 +1,4 @@
-FROM python:3.12-bookworm
+FROM debian:bookworm
 
 WORKDIR /workspace
 
@@ -6,12 +6,10 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
         ca-certificates \
+        python3 \
         unzip \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-
-COPY ansible/requirements.txt ansible/
-RUN pip install --no-cache-dir -r ansible/requirements.txt
 
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"
