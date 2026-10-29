@@ -151,16 +151,15 @@ jobs:
         run: pip install --no-cache-dir -r ansible/requirements.txt
       - name: Build Debian VPS-equivalent VRT image
         run: docker build -t makamujo-vrt .
-      - name: Start VRT container with source mounted
-        run: docker run -d --name docker --ipc=host -v "$PWD:/workspace" -w /workspace makamujo-vrt sleep infinity
+      - name: Start VRT container
+        run: docker run -d --name docker --ipc=host makamujo-vrt sleep infinity
       - name: Provision VRT container via Ansible
         run: |
           ansible-playbook -i ansible/inventory/hosts.yml --limit docker -e ansible_become=false ansible/playbooks/0_desktop.yml --tags vrt
           ansible-playbook -i ansible/inventory/hosts.yml --limit docker -e ansible_become=false ansible/playbooks/1_bun.yml
           ansible-playbook -i ansible/inventory/hosts.yml --limit docker -e ansible_become=false ansible/playbooks/2_makamujo.yml
-      # WHY: bun ci / Playwright install run at runtime because the source tree is mounted at runtime and the Dockerfile stays a minimal base image.
       - name: Run VRT in Debian VPS-equivalent container
-        run: docker exec docker bash -lc 'cd /workspace && bun ci && bunx playwright install --with-deps chromium && bun run test:stream'
+        run: docker exec docker bash -lc 'cd /workspace && bun run test:stream'
       - name: Stop VRT container
         if: always()
         run: docker rm -f docker
