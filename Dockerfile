@@ -10,7 +10,7 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-COPY ansible/requirements.txt ansible/requirements.txt
+COPY ansible/requirements.txt ansible/
 RUN pip install --no-cache-dir -r ansible/requirements.txt
 
 RUN curl -fsSL https://bun.sh/install | bash
