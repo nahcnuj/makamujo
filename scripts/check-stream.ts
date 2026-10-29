@@ -310,7 +310,6 @@ export function shouldReMeasure(
  */
 export function isFpsAboveThreshold(...args: unknown[]): boolean {
   let minFps: number | undefined;
-  let avgFps: number | undefined;
   let thresholdFps: number | undefined;
   const finiteNumbers = args.filter(
     (arg): arg is number => typeof arg === "number" && Number.isFinite(arg),
@@ -323,9 +322,9 @@ export function isFpsAboveThreshold(...args: unknown[]): boolean {
       else if (numberIndex === 1) {
         // Disambiguate by the count of numeric arguments, not the total
         // argument count: an object argument does not turn a two-number call
-        // into the three-number form.
-        if (hasThreeNumbers) avgFps = arg;
-        else thresholdFps = arg;
+        // into the three-number form. A third number means the middle one is
+        // an average, which is not part of the threshold decision.
+        if (!hasThreeNumbers) thresholdFps = arg;
       } else if (numberIndex === 2) {
         thresholdFps = arg;
       }
@@ -337,21 +336,17 @@ export function isFpsAboveThreshold(...args: unknown[]): boolean {
       const pick = (key: string): number | undefined =>
         typeof obj[key] === "number" ? (obj[key] as number) : undefined;
       const m = pick("minFps") ?? pick("min");
-      const a = pick("avgFps") ?? pick("avg");
       const t = pick("thresholdFps") ?? pick("threshold");
       if (m !== undefined) minFps = m;
-      if (a !== undefined) avgFps = a;
       if (t !== undefined) thresholdFps = t;
     }
   }
   const min = minFps ?? 0;
   const threshold = thresholdFps ?? 24;
-  // An average FPS above zero means the picture did move during the window, so
-  // it counts as playing even when one 1-second bucket happened to contain no
-  // changed frames. This mirrors the black-screen rule.
-  if (avgFps !== undefined) {
-    return avgFps > 0;
-  }
+  // A picture counts as playing only when its slowest one-second bucket keeps
+  // enough changed frames. An average above zero is not enough: a single frozen
+  // second (or a trickle at a few fps) must not be reported as a healthy
+  // stream, even though it keeps the picture from being completely black.
   return min >= threshold;
 }
 
