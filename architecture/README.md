@@ -145,7 +145,7 @@ requestAnimationFrame（≒60Hz）で標本を比較するので、同じ公開�
 重ねられない）。
 
 走査線は OBS の Color Key（key = 黒、`color_key_filter_v2` の既定
-similarity 0.08 / smoothness 0.05）に消されない明るさで塗る。白芯だけだと
+similarity 0.4 / smoothness 0.08）に消されない明るさで塗る。白芯だけだと
 白背景（白のゲーム画面）の上で消える。緑は透明なページの上でも、黒背景でも
 白背景でもゲーム画面と十分に差が出る。
 

@@ -65,8 +65,8 @@ const BUCKET_MS = 1_000;
  * 距離が similarity 以下なら透明、similarity + smoothness 以上なら不透明に
  * なる（`color_key_filter_v2.effect` の `ProcessColorKey`）。
  */
-const COLOR_KEY_SIMILARITY = 80 / 1000;
-const COLOR_KEY_SMOOTHNESS = 50 / 1000;
+const COLOR_KEY_SIMILARITY = 400 / 1000;
+const COLOR_KEY_SMOOTHNESS = 80 / 1000;
 /**
  * 走査線のうち「Color Key に消されず、どのゲーム画面でも見える」領域が
  * 少なくとも持つべき割合。
