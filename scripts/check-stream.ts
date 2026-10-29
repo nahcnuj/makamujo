@@ -243,6 +243,18 @@ export function formatJst(date: Date): string {
     .replace(/\//g, "-");
 }
 
+/**
+ * True when the watch page is the gate for a program that has not started.
+ *
+ * A gate page's title carries the future start date and time (for example
+ * `滅茶苦茶な落ち物パズル実況 - 2026/10/30(金) 0:00開始 - ニコニコ生放送`).
+ * There is no live picture to judge then, so the run must not report a stream
+ * anomaly (the program is simply not on air yet).
+ */
+export function isProgramNotStarted(pageTitle: string): boolean {
+  return /開始/.test(pageTitle) && /20\d{2}\//.test(pageTitle);
+}
+
 export function isAudioPlaying(
   decodedBytesStart: number,
   decodedBytesEnd: number,
@@ -1569,6 +1581,14 @@ async function checkStream(): Promise<CheckResult> {
 
     details.pageTitle = await page.title().catch(() => "");
     details.pageUrl = page.url();
+
+    // The watch page is a gate for a program that has not started yet (its
+    // title carries a future start time). There is no live picture to judge,
+    // so this is not a stream anomaly.
+    if (isProgramNotStarted(details.pageTitle)) {
+      console.log("[INFO] Program has not started yet; skipping health check");
+      return { ok: true, timestampJst, phenomena, details };
+    }
 
     await page.waitForSelector("video", { timeout: 30_000 });
 

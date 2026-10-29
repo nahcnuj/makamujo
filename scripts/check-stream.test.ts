@@ -11,6 +11,7 @@ import {
   isInAdContainer,
   isMeasurementUnusable,
   isOverallOk,
+  isProgramNotStarted,
   isVideoReady,
   type MotionSample,
   type MotionSamples,
@@ -38,6 +39,28 @@ describe("formatJst", () => {
     const date = new Date("2024-12-25T00:00:00.000Z");
     const result = formatJst(date);
     expect(result).toBe("2024-12-25 09:00:00");
+  });
+});
+
+describe("isProgramNotStarted", () => {
+  it("detects the gate page of a scheduled program", () => {
+    expect(
+      isProgramNotStarted(
+        "滅茶苦茶な落ち物パズル実況 - 2026/10/30(金) 0:00開始 - ニコニコ生放送",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not treat a live program title as not started", () => {
+    expect(
+      isProgramNotStarted("滅茶苦茶な落ち物パズル実況 - ニコニコ生放送"),
+    ).toBe(false);
+    expect(isProgramNotStarted("")).toBe(false);
+  });
+
+  it("requires both the date and the start marker", () => {
+    expect(isProgramNotStarted("2026/10/30 配信")).toBe(false);
+    expect(isProgramNotStarted("0:00開始")).toBe(false);
   });
 });
 
