@@ -309,7 +309,7 @@ export const resolveBroadcastFreezeWatchdogEnv = (
 /**
  * 測定を上限つきで待つ。`measure` が解決しないとき（レンダラ停止中の
  * `page.evaluate` など）に `tick` を永久に塞がない。返り値の `timedOut` が
- * true のとき、測定は破棄して `unknown` として扱う。
+ * true のとき、測定は破棄せず、静止した映像として扱う。
  */
 export const measureWithTimeout = async (
   measure: () => Promise<PictureMotion | undefined>,
