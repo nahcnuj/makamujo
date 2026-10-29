@@ -312,15 +312,16 @@ export function isFpsAboveThreshold(...args: unknown[]): boolean {
   let minFps: number | undefined;
   let avgFps: number | undefined;
   let thresholdFps: number | undefined;
+  const numericArgs = args.filter(
+    (arg): arg is number => typeof arg === "number" && Number.isFinite(arg),
+  );
+  const hasAverage = numericArgs.length >= 3;
   let numberIndex = 0;
   for (const arg of args) {
     if (typeof arg === "number" && Number.isFinite(arg)) {
       if (numberIndex === 0) minFps = arg;
       else if (numberIndex === 1) {
-        // Disambiguate the two-argument form `(minFps, thresholdFps)` from
-        // the three-argument form `(minFps, avgFps, thresholdFps)` by arity:
-        // a third number always means the middle one is an average.
-        if (args.length >= 3) avgFps = arg;
+        if (hasAverage) avgFps = arg;
         else thresholdFps = arg;
       } else if (numberIndex === 2) {
         thresholdFps = arg;
@@ -342,12 +343,10 @@ export function isFpsAboveThreshold(...args: unknown[]): boolean {
   }
   const min = minFps ?? 0;
   const threshold = thresholdFps ?? 24;
-  // Owner contract: a picture counts as moving only when BOTH its slowest
-  // one-second bucket and its window average keep at least `threshold` changed
-  // frames per second. An average above zero is not enough (a trickle of motion
-  // in a mostly frozen picture must still be treated as stopped).
-  if (avgFps !== undefined) {
-    return min >= threshold && avgFps >= threshold;
+  if (avgFps !== undefined || hasAverage) {
+    const avg = avgFps ?? 0;
+    if (avgFps === undefined) return min >= threshold;
+    return min >= threshold && avg >= threshold;
   }
   return min >= threshold;
 }
