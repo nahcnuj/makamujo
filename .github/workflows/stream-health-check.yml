@@ -3,11 +3,12 @@ name: Stream Health Check
 on:
   schedule:
     - cron: "5/15 * * * *"  # Every hour at minute 15 (avoid exact hour boundaries)
-  pull_request:
+  pull_request: # DO NOT REMOVE TO ENSURE CHECK SCRIPT VALIDITY
     branches:
       - main
     paths:
       - 'scripts/**'
+      - 'src/components/BroadcastHeartbeat.liveness.test.ts'
       - '.github/workflows/stream-health-check.yml'
   workflow_dispatch:  # Allow manual trigger for testing
 
@@ -23,6 +24,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       issue-number: ${{ steps.create-issue.outputs.issue-number }}
+      emergency: ${{ steps.create-issue.outputs.emergency }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -83,9 +85,22 @@ jobs:
               state: 'open',
               per_page: 100,
             });
-            const existing = openIssues.find(
-              (issue) => !issue.pull_request && issue.title.includes('配信異常検知'),
-            );
+            // 画面全体が真っ黒 (両リージョン 0 FPS) のときは緊急事態: 既存 issue へ
+            // 追記せず、独立した issue を新規に立てて auto-drive を起動する。
+            const isEmergencyBlackScreen =
+              result.details?.blackScreen === true ||
+              (result.details?.videoMinFps === 0 &&
+                result.details?.gameMinFps === 0) ||
+              (Array.isArray(result.phenomena) &&
+                result.phenomena.some((p) => String(p).includes('真っ黒')));
+
+            const existing = isEmergencyBlackScreen
+              ? undefined
+              : openIssues.find(
+                  (issue) =>
+                    !issue.pull_request &&
+                    issue.title.includes('配信異常検知'),
+                );
 
             let issueNumber;
             if (existing) {
@@ -98,7 +113,9 @@ jobs:
               issueNumber = existing.number;
               console.log(`Commented on existing issue #${existing.number}: ${existing.html_url}`);
             } else {
-              const title = `[Stream Health] 配信異常検知`;
+              const title = isEmergencyBlackScreen
+                ? `【緊急】配信停止状態【異常】 ${Date()}`
+                : `[Stream Health] 配信異常検知`;
               const body = [
                 "## 配信状況チェックで異常を検知しました",
                 "",
@@ -113,7 +130,7 @@ jobs:
                 repo: context.repo.repo,
                 title,
                 body,
-                labels: ['bug'],
+                labels: isEmergencyBlackScreen ? ['bug', 'EMERGENCY'] : ['bug'],
               });
 
               await github.rest.issues.createComment({
@@ -127,4 +144,17 @@ jobs:
               console.log(`Created issue #${issue.number}: ${issue.html_url}`);
             }
 
+            core.setOutput('emergency', String(isEmergencyBlackScreen));
             core.setOutput('issue-number', String(issueNumber));
+
+  auto-drive:
+    name: Auto-drive emergency fix
+    needs: check-stream
+    if: failure() && needs.check-stream.result == 'failure' && needs.check-stream.outputs.issue-number != '' && needs.check-stream.outputs.emergency == 'true'
+    uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@8523b76253fb404a115e045b4b77d071772236a5
+    with:
+      number: ${{ fromJSON(needs.check-stream.outputs.issue-number) }}
+      repository: ${{ github.repository }}
+      environment: conahcnuj
+      runs-on: ubuntu-latest-4-cores
+    secrets: inherit
