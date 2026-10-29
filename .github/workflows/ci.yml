@@ -162,7 +162,7 @@ jobs:
         run: docker exec vrt bun run test:stream
       - name: Stop VRT container
         if: always()
-        run: docker rm -f vrt || :
+        run: 'docker rm -f vrt || :'
 
   ansible-syntax:
     runs-on: ubuntu-latest
