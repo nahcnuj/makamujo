@@ -11,17 +11,16 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-COPY ansible/ ansible/
-COPY bin/makamujo-pipewire bin/makamujo-audio.sh bin/
-RUN pip install --no-cache-dir -r ansible/requirements.txt \
-    && ANSIBLE="ansible-playbook -i ansible/inventory/hosts.yml --limit vrt -e ansible_become=false" \
+COPY . .
+
+RUN pip install --no-cache-dir -r ansible/requirements.txt
+
+RUN ANSIBLE="ansible-playbook -i ansible/inventory/hosts.yml --limit vrt -e ansible_become=false" \
     && $ANSIBLE ansible/playbooks/0_desktop.yml --tags vrt \
     && $ANSIBLE ansible/playbooks/1_bun.yml
 
 ENV PATH="/root/.bun/bin:${PATH}"
 
-COPY package.json bun.lock ./
 RUN bun ci
-RUN bunx playwright install --with-deps chromium
 
-COPY . .
+RUN bunx playwright install --with-deps chromium
