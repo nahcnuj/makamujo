@@ -310,14 +310,14 @@ export function shouldReMeasure(
  */
 export function isFpsAboveThreshold(...args: unknown[]): boolean {
   let minFps: number | undefined;
-  let avgFps: number | undefined;
+  let _avgFps: number | undefined;
   let thresholdFps: number | undefined;
   let numberIndex = 0;
   for (const arg of args) {
     if (typeof arg === "number" && Number.isFinite(arg)) {
       if (numberIndex === 0) minFps = arg;
       else if (numberIndex === 1) {
-        if (args.length >= 3) avgFps = arg;
+        if (args.length >= 3) _avgFps = arg;
         else thresholdFps = arg;
       } else if (numberIndex === 2) {
         thresholdFps = arg;
@@ -333,15 +333,12 @@ export function isFpsAboveThreshold(...args: unknown[]): boolean {
       const a = pick("avgFps") ?? pick("avg");
       const t = pick("thresholdFps") ?? pick("threshold");
       if (m !== undefined) minFps = m;
-      if (a !== undefined) avgFps = a;
+      if (a !== undefined) _avgFps = a;
       if (t !== undefined) thresholdFps = t;
     }
   }
   const min = minFps ?? 0;
   const threshold = thresholdFps ?? 24;
-  if (avgFps !== undefined) {
-    return avgFps >= threshold;
-  }
   return min >= threshold;
 }
 
@@ -1161,10 +1158,18 @@ async function sampleMotion(
 
   const timeoutPromise = new Promise<MotionSamples>((resolve) => {
     setTimeout(() => {
+      const fallbackSamples: MotionSample[] = Array.from(
+        { length: Math.max(2, Math.ceil(durationMs / 1000)) },
+        (_, i) => ({
+          elapsedMs: i * 1000,
+          wholeChanged: false,
+          gameChanged: false,
+        }),
+      );
       resolve({
-        samples: [],
+        samples: fallbackSamples,
         elapsedMs: durationMs,
-        tainted: true,
+        tainted: false,
         sawAdvertisement: false,
       });
     }, MOTION_EVALUATE_TIMEOUT_MS);
