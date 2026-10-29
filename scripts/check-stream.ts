@@ -312,20 +312,10 @@ export function isFpsAboveThreshold(...args: unknown[]): boolean {
   let minFps: number | undefined;
   let avgFps: number | undefined;
   let thresholdFps: number | undefined;
-  let numberIndex = 0;
+  const collectedNumbers: number[] = [];
   for (const arg of args) {
     if (typeof arg === "number" && Number.isFinite(arg)) {
-      if (numberIndex === 0) minFps = arg;
-      else if (numberIndex === 1) {
-        // Disambiguate the two-argument form `(minFps, thresholdFps)` from
-        // the three-argument form `(minFps, avgFps, thresholdFps)` by arity:
-        // a third number always means the middle one is an average.
-        if (args.length >= 3) avgFps = arg;
-        else thresholdFps = arg;
-      } else if (numberIndex === 2) {
-        thresholdFps = arg;
-      }
-      numberIndex += 1;
+      collectedNumbers.push(arg);
       continue;
     }
     if (
@@ -333,14 +323,7 @@ export function isFpsAboveThreshold(...args: unknown[]): boolean {
       arg.length > 0 &&
       arg.every((item) => typeof item === "number" && Number.isFinite(item))
     ) {
-      const nums = arg as Array<number>;
-      minFps = nums[0];
-      if (nums.length >= 3) {
-        avgFps = nums[1];
-        thresholdFps = nums[2];
-      } else if (nums.length === 2) {
-        thresholdFps = nums[1];
-      }
+      collectedNumbers.push(...(arg as Array<number>));
       continue;
     }
     if (arg !== null && typeof arg === "object") {
@@ -350,9 +333,25 @@ export function isFpsAboveThreshold(...args: unknown[]): boolean {
       const m = pick("minFps") ?? pick("min");
       const a = pick("avgFps") ?? pick("avg");
       const t = pick("thresholdFps") ?? pick("threshold");
-      if (m !== undefined) minFps = m;
-      if (a !== undefined) avgFps = a;
-      if (t !== undefined) thresholdFps = t;
+      if (m !== undefined && minFps === undefined) minFps = m;
+      if (a !== undefined && avgFps === undefined) avgFps = a;
+      if (t !== undefined && thresholdFps === undefined) thresholdFps = t;
+    }
+  }
+  if (minFps === undefined && collectedNumbers.length > 0) {
+    minFps = collectedNumbers[0];
+  }
+  // Disambiguate the two-argument form `(minFps, thresholdFps)` from the
+  // three-argument form `(minFps, avgFps, thresholdFps)` by count: a third
+  // number always means the middle one is an average.
+  if (collectedNumbers.length >= 3 && avgFps === undefined) {
+    avgFps = collectedNumbers[1];
+  }
+  if (thresholdFps === undefined) {
+    if (collectedNumbers.length >= 3) {
+      thresholdFps = collectedNumbers[2];
+    } else if (collectedNumbers.length === 2) {
+      thresholdFps = collectedNumbers[1];
     }
   }
   const min = minFps ?? 0;
