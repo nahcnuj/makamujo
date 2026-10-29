@@ -1,5 +1,5 @@
 - name: Install Bun on VPS
-  hosts: vps
+  hosts: vps_servers,docker_servers
   become: true
   tasks:
     - name: Install unzip (required by Bun installer)
