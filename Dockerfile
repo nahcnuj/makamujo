@@ -14,7 +14,6 @@ COPY ansible/requirements.txt ansible/
 RUN pip install --no-cache-dir -r ansible/requirements.txt
 
 RUN curl -fsSL https://bun.sh/install | bash
-
 ENV PATH="/root/.bun/bin:${PATH}"
 
 COPY package.json bun.lock ./
