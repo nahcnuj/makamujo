@@ -7,10 +7,6 @@ RUN apt-get update \
         curl \
         ca-certificates \
         unzip \
-        chromium \
-        fonts-noto-cjk \
-        fonts-ipafont-gothic \
-        fonts-ipafont-mincho \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

@@ -152,17 +152,17 @@ jobs:
       - name: Build Debian VPS-equivalent VRT image
         run: docker build -t makamujo-vrt .
       - name: Start VRT container
-        run: docker run -d --name docker --ipc=host -v $PWD:/workspace -v /workspace/node_modules makamujo-vrt
+        run: docker run -d --name vrt --ipc=host -v $PWD:/workspace -v /workspace/node_modules makamujo-vrt
       - name: Provision VRT container via Ansible
         run: |
-          ansible-playbook -i ansible/inventory/hosts.yml --limit docker -e ansible_become=false ansible/playbooks/0_desktop.yml --tags vrt
-          ansible-playbook -i ansible/inventory/hosts.yml --limit docker -e ansible_become=false ansible/playbooks/1_bun.yml
-          ansible-playbook -i ansible/inventory/hosts.yml --limit docker -e ansible_become=false ansible/playbooks/2_makamujo.yml
+          ansible-playbook -i ansible/inventory/hosts.yml --limit vrt -e ansible_become=false ansible/playbooks/0_desktop.yml --tags vrt
+          ansible-playbook -i ansible/inventory/hosts.yml --limit vrt -e ansible_become=false ansible/playbooks/1_bun.yml
+          ansible-playbook -i ansible/inventory/hosts.yml --limit vrt -e ansible_become=false ansible/playbooks/2_makamujo.yml
       - name: Run VRT in Debian VPS-equivalent container
-        run: docker exec docker bun run test:stream
+        run: docker exec vrt bun run test:stream
       - name: Stop VRT container
         if: always()
-        run: docker rm -f docker
+        run: docker rm -f vrt
 
   ansible-syntax:
     runs-on: ubuntu-latest
