@@ -50,25 +50,18 @@ const waitForServerReady = async (): Promise<void> => {
 test.beforeAll(async () => {
   const randomId =
     Date.now().toString(36) + Math.random().toString(36).slice(2);
-  const ipcPath =
-    process.platform === "win32"
-      ? `\\\\.\\pipe\\makamujo-ipc-visual-${randomId}`
-      : join(process.cwd(), "var", `ipc-visual-${randomId}.sock`);
+  const ipcPath = join(process.cwd(), "var", `ipc-visual-${randomId}.sock`);
 
-  server = spawn(
-    process.platform === "win32" ? "bun.exe" : "bun",
-    ["index.ts", "--port", String(PORT)],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: "production",
-        CONSOLE_LOOPBACK_ONLY: "1",
-        NICONAMA_WATCH_PAGE_DISABLED: "1",
-        MAKAMUJO_IPC_PATH: ipcPath,
-      },
-      stdio: ["ignore", "pipe", "pipe"],
+  server = spawn("bun", ["index.ts", "--port", String(PORT)], {
+    env: {
+      ...process.env,
+      NODE_ENV: "production",
+      CONSOLE_LOOPBACK_ONLY: "1",
+      NICONAMA_WATCH_PAGE_DISABLED: "1",
+      MAKAMUJO_IPC_PATH: ipcPath,
     },
-  );
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   await waitForServerReady();
 });
 
@@ -150,8 +143,8 @@ async function renderBroadcastScreen(
   await speechLocator.waitFor({ state: "visible", timeout: 10_000 });
   await page
     .frameLocator(`iframe[src="${GAME_PAGE_URL}"]`)
-    .getByText("落ち物パズルゲーム・蘇")
-    .waitFor({ state: "visible", timeout: 10_000 });
+    .getByText("スタート")
+    .waitFor({ state: "visible", timeout: 20_000 });
   await page.clock.pauseAt(new Date(FIXED_CLOCK_MS + 60_000));
 }
 

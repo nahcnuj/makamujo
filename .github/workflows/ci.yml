@@ -143,7 +143,6 @@ jobs:
   vrt:
     needs: [setup, lint]
     runs-on: ubuntu-latest
-    container: mcr.microsoft.com/devcontainers/base:2.2-debian12
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
