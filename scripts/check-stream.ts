@@ -551,13 +551,13 @@ export function isBlackScreen(...args: unknown[]): boolean {
     }
   }
 
-  if (blackFlag || phenomenaBlack) return true;
-
   const hasAvg = videoAvgFps !== undefined || gameAvgFps !== undefined;
   const vAvg = videoAvgFps ?? 0;
   const gAvg = gameAvgFps ?? 0;
 
   if (hasAvg && (vAvg > 0 || gAvg > 0)) return false;
+
+  if (blackFlag || phenomenaBlack) return true;
 
   if (hasAvg) {
     if (videoMinFps === undefined && gameMinFps === undefined) {
@@ -1709,10 +1709,10 @@ async function checkStream(): Promise<CheckResult> {
     details.gameScreenPlaying = gameScreenPlaying;
 
     const blackScreen =
-      details.videoMinFps === 0 &&
-      details.gameMinFps === 0 &&
-      details.videoAvgFps === 0 &&
-      details.gameAvgFps === 0;
+      (details.videoMinFps ?? 0) === 0 &&
+      (details.gameMinFps ?? 0) === 0 &&
+      (details.videoAvgFps ?? 0) === 0 &&
+      (details.gameAvgFps ?? 0) === 0;
     details.blackScreen = blackScreen;
     if (blackScreen) {
       phenomena.push("画面全体が真っ黒になっています");
