@@ -122,9 +122,6 @@ jobs:
       - name: Install Playwright Chromium (integration / e2e)
         if: matrix.suite.label == 'integration' || matrix.suite.label == 'e2e'
         run: bunx playwright install chromium
-      - name: Install Japanese fonts (e2e VRT)
-        if: matrix.suite.label == 'e2e'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
       - name: Install openssh-server (bin) for honeypot-hold test
         if: matrix.suite.label == 'bin'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends openssh-server
@@ -143,38 +140,13 @@ jobs:
   vrt:
     needs: [setup, lint]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-      - name: Restore node_modules from cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: node_modules
-          key: node-modules-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-      - name: Install dependencies
-        run: bun ci
-      - name: Restore Playwright browsers cache (if available)
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-      - name: Install Playwright Chromium
-        run: bunx playwright install chromium
-      - name: Install Playwright system dependencies (VRT, Debian)
-        run: bunx playwright install-deps chromium
-      - name: Install Ansible
-        run: pip install -r ansible/requirements.txt
-      - name: Provision VRT environment with Ansible
-        run: ansible-playbook -i localhost, -c local ansible/playbooks/vrt.yml
-      - name: Run VRT tests
-        run: bun run test:vrt
-      - name: Save Playwright browsers cache
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+      - name: Build Debian VPS-equivalent VRT image
+        run: docker build -t makamujo-vrt .
+      - name: Run VRT in Debian VPS-equivalent container
+        run: docker run --rm --ipc=host makamujo-vrt bun run test:vrt
 
   ansible-syntax:
     runs-on: ubuntu-latest

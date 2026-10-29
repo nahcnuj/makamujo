@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/base:2.2-debian12
+FROM python:3.12-bookworm
 
 WORKDIR /workspace
 
@@ -12,7 +12,19 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY ansible/ ansible/
-RUN pip install --no-cache-dir -r ansible/requirements.txt
-RUN ansible-playbook -i localhost, -c local ansible/playbooks/vrt.yml
+COPY bin/makamujo-pipewire bin/makamujo-audio.sh bin/
+RUN pip install --no-cache-dir --break-system-packages -r ansible/requirements.txt \
+    && ANSIBLE_CONFIG=/workspace/ansible/ansible.cfg \
+       ansible-playbook -i 'vps,' -c local -e ansible_become=false \
+       ansible/playbooks/0_desktop.yml --tags vrt \
+    && ANSIBLE_CONFIG=/workspace/ansible/ansible.cfg \
+       ansible-playbook -i 'vps,' -c local -e ansible_become=false \
+       ansible/playbooks/1_bun.yml
+
+ENV PATH="/root/.bun/bin:${PATH}"
+
+COPY package.json bun.lock ./
+RUN bun ci
+RUN bunx playwright install --with-deps chromium
 
 COPY . .

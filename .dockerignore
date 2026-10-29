@@ -1,0 +1,7 @@
+.git
+.agent.md
+node_modules
+var
+test-results
+playwright-report
+*.log

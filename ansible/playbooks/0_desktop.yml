@@ -52,6 +52,7 @@
         state: present
 
     - name: Install browser and fonts
+      tags: [vrt]
       ansible.builtin.apt:
         name:
           - chromium
