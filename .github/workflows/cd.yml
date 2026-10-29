@@ -89,7 +89,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install Ansible
-        run: pip install -r ansible/requirements.txt
+        run: pip install --no-cache-dir -r ansible/requirements.txt
 
       - name: Require deploy secrets
         env:
