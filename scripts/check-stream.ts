@@ -342,11 +342,12 @@ export function isFpsAboveThreshold(...args: unknown[]): boolean {
   }
   const min = minFps ?? 0;
   const threshold = thresholdFps ?? 24;
-  // An average FPS above zero means the picture did move during the window, so
-  // it counts as playing even when one 1-second bucket happened to contain no
-  // changed frames. This mirrors the black-screen rule.
+  // Owner contract: a picture counts as moving only when BOTH its slowest
+  // one-second bucket and its window average keep at least `threshold` changed
+  // frames per second. An average above zero is not enough (a trickle of motion
+  // in a mostly frozen picture must still be treated as stopped).
   if (avgFps !== undefined) {
-    return avgFps > 0;
+    return min >= threshold && avgFps >= threshold;
   }
   return min >= threshold;
 }
