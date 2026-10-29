@@ -1,0 +1,40 @@
+name: Provision via Ansible
+description: Run the Ansible playbooks against a target host (VPS or container)
+inputs:
+  limit:
+    description: Ansible --limit target
+    required: false
+    default: vrt
+  become:
+    description: ansible_become value passed via -e
+    required: false
+    default: 'false'
+  vault_password_file:
+    description: Path to an Ansible vault password file (optional)
+    required: false
+    default: ''
+  extra_args:
+    description: Extra arguments appended to each ansible-playbook invocation
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Provision via Ansible
+      shell: bash
+      run: |
+        extra=()
+        if [ -n "${{ inputs.vault_password_file }}" ]; then
+          extra+=(--vault-password-file "${{ inputs.vault_password_file }}")
+        fi
+        if [ -n "${{ inputs.extra_args }}" ]; then
+          # shellcheck disable=SC2206
+          extra+=(${{ inputs.extra_args }})
+        fi
+        for playbook in ansible/playbooks/*.yml; do
+          tags=()
+          if [ "$(basename "$playbook")" = "0_desktop.yml" ]; then
+            tags=(--tags vrt)
+          fi
+          ansible-playbook -i ansible/inventory/hosts.yml --limit "${{ inputs.limit }}" -e "ansible_become=${{ inputs.become }}" "${extra[@]}" "$playbook" "${tags[@]}"
+        done
