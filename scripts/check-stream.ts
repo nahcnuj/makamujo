@@ -309,20 +309,13 @@ export function shouldReMeasure(
  * below N is an error".
  */
 export function isFpsAboveThreshold(...args: unknown[]): boolean {
+  const numbers: number[] = [];
   let minFps: number | undefined;
   let avgFps: number | undefined;
   let thresholdFps: number | undefined;
-  let numberIndex = 0;
   for (const arg of args) {
     if (typeof arg === "number" && Number.isFinite(arg)) {
-      if (numberIndex === 0) minFps = arg;
-      else if (numberIndex === 1) {
-        if (args.length >= 3) avgFps = arg;
-        else thresholdFps = arg;
-      } else if (numberIndex === 2) {
-        thresholdFps = arg;
-      }
-      numberIndex += 1;
+      numbers.push(arg);
       continue;
     }
     if (arg !== null && typeof arg === "object") {
@@ -336,6 +329,17 @@ export function isFpsAboveThreshold(...args: unknown[]): boolean {
       if (a !== undefined) avgFps = a;
       if (t !== undefined) thresholdFps = t;
     }
+  }
+  if (minFps === undefined) {
+    if (numbers.length >= 3) minFps = numbers[0];
+    else if (numbers.length >= 1) minFps = numbers[0];
+  }
+  if (avgFps === undefined && numbers.length >= 3) {
+    avgFps = numbers[1];
+  }
+  if (thresholdFps === undefined) {
+    if (numbers.length >= 3) thresholdFps = numbers[2];
+    else if (numbers.length === 2) thresholdFps = numbers[1];
   }
   const min = minFps ?? 0;
   const threshold = thresholdFps ?? 24;
@@ -547,13 +551,13 @@ export function isBlackScreen(...args: unknown[]): boolean {
     }
   }
 
+  if (blackFlag || phenomenaBlack) return true;
+
   const hasAvg = videoAvgFps !== undefined || gameAvgFps !== undefined;
   const vAvg = videoAvgFps ?? 0;
   const gAvg = gameAvgFps ?? 0;
 
   if (hasAvg && (vAvg > 0 || gAvg > 0)) return false;
-
-  if (blackFlag || phenomenaBlack) return true;
 
   if (hasAvg) {
     if (videoMinFps === undefined && gameMinFps === undefined) {
