@@ -329,9 +329,21 @@ export function isFpsAboveThreshold(...args: unknown[]): boolean {
       const obj = arg as Record<string, unknown>;
       const pick = (key: string): number | undefined =>
         typeof obj[key] === "number" ? (obj[key] as number) : undefined;
-      const m = pick("minFps") ?? pick("min");
-      const a = pick("avgFps") ?? pick("avg");
-      const t = pick("thresholdFps") ?? pick("threshold");
+      const m =
+        pick("minFps") ??
+        pick("min") ??
+        pick("videoMinFps") ??
+        pick("videoMin");
+      const a =
+        pick("avgFps") ??
+        pick("avg") ??
+        pick("videoAvgFps") ??
+        pick("videoAvg");
+      const t =
+        pick("thresholdFps") ??
+        pick("threshold") ??
+        pick("VIDEO_MIN_FPS") ??
+        pick("GAME_MIN_FPS");
       if (m !== undefined) minFps = m;
       if (a !== undefined) avgFps = a;
       if (t !== undefined) thresholdFps = t;
@@ -435,8 +447,16 @@ export function isBlackScreen(...args: unknown[]): boolean {
         const samples = arr as Array<Record<string, unknown>>;
         const allStill = samples.every((sample) => {
           const whole =
-            sample.wholeChanged ?? sample.videoChanged ?? sample.changed;
-          const game = sample.gameChanged ?? sample.gameScreenChanged;
+            sample.wholeChanged ??
+            sample.videoChanged ??
+            sample.video ??
+            sample.changed ??
+            sample.whole;
+          const game =
+            sample.gameChanged ??
+            sample.gameScreenChanged ??
+            sample.game ??
+            sample.gameScreen;
           return whole === false && game === false;
         });
         if (allStill) {
@@ -463,8 +483,12 @@ export function isBlackScreen(...args: unknown[]): boolean {
           (nested && typeof nested[key] === "number" ? nested[key] : undefined);
         return typeof value === "number" ? value : undefined;
       };
-      const v = pick("videoMinFps") ?? pick("minFps") ?? pick("min");
-      const g = pick("gameMinFps") ?? pick("gameMin");
+      const v =
+        pick("videoMinFps") ??
+        pick("minFps") ??
+        pick("min") ??
+        pick("videoMin");
+      const g = pick("gameMinFps") ?? pick("gameMin") ?? pick("gameMinFps");
       if (v !== undefined) {
         videoMinFps = v;
         found = true;
@@ -473,8 +497,12 @@ export function isBlackScreen(...args: unknown[]): boolean {
         gameMinFps = g;
         found = true;
       }
-      const va = pick("videoAvgFps") ?? pick("avgFps") ?? pick("avg");
-      const ga = pick("gameAvgFps") ?? pick("gameAvg");
+      const va =
+        pick("videoAvgFps") ??
+        pick("avgFps") ??
+        pick("avg") ??
+        pick("videoAvg");
+      const ga = pick("gameAvgFps") ?? pick("gameAvg") ?? pick("gameAvgFps");
       if (va !== undefined) {
         videoAvgFps = va;
       }
@@ -524,8 +552,16 @@ export function isBlackScreen(...args: unknown[]): boolean {
       if (samples && samples.length > 0) {
         const allStill = samples.every((sample) => {
           const whole =
-            sample.wholeChanged ?? sample.videoChanged ?? sample.changed;
-          const game = sample.gameChanged ?? sample.gameScreenChanged;
+            sample.wholeChanged ??
+            sample.videoChanged ??
+            sample.video ??
+            sample.changed ??
+            sample.whole;
+          const game =
+            sample.gameChanged ??
+            sample.gameScreenChanged ??
+            sample.game ??
+            sample.gameScreen;
           return whole === false && game === false;
         });
         if (allStill) {

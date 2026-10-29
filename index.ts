@@ -63,6 +63,8 @@ import * as index from "./routes/index";
 import { handleCatchAll } from "./src/frontendServer";
 
 let runtimeCleanedUp = false;
+const WATCH_PAGE_SHUTDOWN_TIMEOUT_MS = 10_000;
+let stoppingWatchPageStatistics: Promise<void> | undefined;
 
 process.on("exit", exitHandler.bind(null, { cleanup: true }));
 process.on("SIGINT", signalHandler.bind(null, { exit: true }));
@@ -839,10 +841,6 @@ startBroadcastFreezeWatchdog({
  * systemd's `TimeoutStopSec` is 30s; a wedged Chromium must still exit well
  * before that so the profile can be removed and the unit restarts promptly.
  */
-const WATCH_PAGE_SHUTDOWN_TIMEOUT_MS = 10_000;
-
-let stoppingWatchPageStatistics: Promise<void> | undefined;
-
 /**
  * Close the watch page statistics browser before the process exits.
  *
