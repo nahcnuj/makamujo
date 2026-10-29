@@ -14,10 +14,9 @@ RUN apt-get update \
 COPY ansible/ ansible/
 COPY bin/makamujo-pipewire bin/makamujo-audio.sh bin/
 RUN pip install --no-cache-dir -r ansible/requirements.txt \
-    && ansible-playbook -i ansible/inventory/hosts.yml --limit vrt -e ansible_become=false \
-       ansible/playbooks/0_desktop.yml --tags vrt \
-    && ansible-playbook -i ansible/inventory/hosts.yml --limit vrt -e ansible_become=false \
-       ansible/playbooks/1_bun.yml
+    && ANSIBLE="ansible-playbook -i ansible/inventory/hosts.yml --limit vrt -e ansible_become=false" \
+    && $ANSIBLE ansible/playbooks/0_desktop.yml --tags vrt \
+    && $ANSIBLE ansible/playbooks/1_bun.yml
 
 ENV PATH="/root/.bun/bin:${PATH}"
 
