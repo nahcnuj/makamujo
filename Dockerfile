@@ -24,6 +24,8 @@ ENV PATH="/root/.bun/bin:${PATH}"
 COPY package.json bun.lock ./
 RUN bun ci
 
-COPY . .
 
 RUN bunx playwright install --with-deps chromium
+
+ENTRYPOINT ["bash"]
+CMD ["-c", "sleep infinity"]
