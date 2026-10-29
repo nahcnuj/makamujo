@@ -600,6 +600,7 @@ const makeStreamHandler =
 /** Initialized after serve(); optional so crash-path exitHandler avoids TDZ. */
 let mainServer: Bun.Server<WsData> | undefined;
 /** Hoisted for exitHandler safety if startup fails mid-module. */
+let runtimeCleanedUp = false;
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
 
 const getMainServer = (): Bun.Server<WsData> => {
@@ -760,7 +761,7 @@ try {
   console.error(
     `[ERROR] CONSOLE_STARTUP_FAILED ${JSON.stringify(consoleStartupError)}`,
   );
-  process.exit(1);
+  consoleServer = null;
 }
 
 // Start the stream playback after servers are listening so startup is
@@ -864,8 +865,6 @@ function stopWatchPageStatistics(): Promise<void> {
   })();
   return stoppingWatchPageStatistics;
 }
-
-let runtimeCleanedUp = false;
 
 /**
  * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}
