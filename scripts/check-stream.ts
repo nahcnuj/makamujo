@@ -328,6 +328,21 @@ export function isFpsAboveThreshold(...args: unknown[]): boolean {
       numberIndex += 1;
       continue;
     }
+    if (
+      Array.isArray(arg) &&
+      arg.length > 0 &&
+      arg.every((item) => typeof item === "number" && Number.isFinite(item))
+    ) {
+      const nums = arg as Array<number>;
+      minFps = nums[0];
+      if (nums.length >= 3) {
+        avgFps = nums[1];
+        thresholdFps = nums[2];
+      } else if (nums.length === 2) {
+        thresholdFps = nums[1];
+      }
+      continue;
+    }
     if (arg !== null && typeof arg === "object") {
       const obj = arg as Record<string, unknown>;
       const pick = (key: string): number | undefined =>
