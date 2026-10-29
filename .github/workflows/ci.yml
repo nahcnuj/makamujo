@@ -162,7 +162,8 @@ jobs:
       - name: Stop VRT container
         if: always()
         continue-on-error: true
-        run: 'docker rm -f vrt || :'
+        run: |
+          docker rm -f vrt || true
 
   ansible-syntax:
     runs-on: ubuntu-latest
