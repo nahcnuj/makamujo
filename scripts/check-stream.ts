@@ -340,7 +340,7 @@ export function isFpsAboveThreshold(...args: unknown[]): boolean {
   const min = minFps ?? 0;
   const threshold = thresholdFps ?? 24;
   if (avgFps !== undefined) {
-    return min >= threshold && avgFps >= threshold;
+    return avgFps >= threshold;
   }
   return min >= threshold;
 }
