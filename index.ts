@@ -601,6 +601,12 @@ const makeStreamHandler =
 let mainServer: Bun.Server<WsData> | undefined;
 /** Hoisted for exitHandler safety if startup fails mid-module. */
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
+/** Hoisted for exitHandler safety if startup fails mid-module. */
+let runtimeCleanedUp = false;
+/** Hoisted for exitHandler safety if startup fails mid-module. */
+const WATCH_PAGE_SHUTDOWN_TIMEOUT_MS = 10_000;
+/** Hoisted for exitHandler safety if startup fails mid-module. */
+let stoppingWatchPageStatistics: Promise<void> | undefined;
 
 const getMainServer = (): Bun.Server<WsData> => {
   if (!mainServer) throw new Error("Server not yet initialized");
@@ -760,7 +766,10 @@ try {
   console.error(
     `[ERROR] CONSOLE_STARTUP_FAILED ${JSON.stringify(consoleStartupError)}`,
   );
-  process.exit(1);
+  consoleServer = null;
+  console.warn(
+    "[WARN] continuing without the console server; the broadcast stream stays up",
+  );
 }
 
 // Start the stream playback after servers are listening so startup is
@@ -833,15 +842,6 @@ startBroadcastFreezeWatchdog({
 });
 
 /**
- * Upper bound on how long shutdown waits for the watch page browser to close.
- * systemd's `TimeoutStopSec` is 30s; a wedged Chromium must still exit well
- * before that so the profile can be removed and the unit restarts promptly.
- */
-const WATCH_PAGE_SHUTDOWN_TIMEOUT_MS = 10_000;
-
-let stoppingWatchPageStatistics: Promise<void> | undefined;
-
-/**
  * Close the watch page statistics browser before the process exits.
  *
  * Playwright creates a `playwright_chromiumdev_profile-*` directory for
@@ -864,8 +864,6 @@ function stopWatchPageStatistics(): Promise<void> {
   })();
   return stoppingWatchPageStatistics;
 }
-
-let runtimeCleanedUp = false;
 
 /**
  * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}
