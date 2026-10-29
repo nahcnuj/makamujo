@@ -143,10 +143,25 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12"
+      - name: Install Ansible
+        run: pip install --no-cache-dir -r ansible/requirements.txt
       - name: Build Debian VPS-equivalent VRT image
         run: docker build -t makamujo-vrt .
+      - name: Start VRT container with source mounted
+        run: docker run -d --name vrt --ipc=host -v "$PWD:/workspace" -w /workspace makamujo-vrt sleep infinity
+      - name: Provision VRT container via Ansible
+        run: |
+          ansible-playbook -i ansible/inventory/hosts.yml --limit vrt -e ansible_become=false ansible/playbooks/0_desktop.yml --tags vrt
+          ansible-playbook -i ansible/inventory/hosts.yml --limit vrt -e ansible_become=false ansible/playbooks/1_bun.yml
       - name: Run VRT in Debian VPS-equivalent container
-        run: docker run --rm --ipc=host makamujo-vrt bun run test:stream
+        run: docker exec vrt bash -lc 'export PATH=/root/.bun/bin:$PATH; cd /workspace && bun ci && bunx playwright install --with-deps chromium && bun run test:stream'
+      - name: Stop VRT container
+        if: always()
+        run: docker rm -f vrt
 
   ansible-syntax:
     runs-on: ubuntu-latest
