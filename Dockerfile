@@ -1,5 +1,5 @@
 FROM python:3.12-bookworm
-# Minimal Debian/Python base: Ansible runs on the CI host; the container only needs its interpreter.
+# WHY: Ansible runs on the CI host (installed via pip); this image stays a minimal Debian/Python base.
 
 WORKDIR /workspace
 
