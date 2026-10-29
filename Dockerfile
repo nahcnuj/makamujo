@@ -18,10 +18,8 @@ RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"
 
 COPY package.json bun.lock ./
-RUN bun ci
-
-
-RUN bunx playwright install --with-deps chromium
+RUN bun ci && \
+    bunx playwright install --with-deps chromium
 
 ENTRYPOINT ["bash"]
 CMD ["-c", "sleep infinity"]
