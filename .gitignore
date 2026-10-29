@@ -160,3 +160,6 @@ dist/
 # Driver commit message artifact (never commit)
 .commit-msg
 .c.commit-msg
+
+# Stream health check result (generated)
+stream-check-result.json
