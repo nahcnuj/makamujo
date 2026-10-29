@@ -156,5 +156,5 @@ jobs:
       number: ${{ fromJSON(needs.check-stream.outputs.issue-number) }}
       repository: ${{ github.repository }}
       environment: conahcnuj
-      runs-on: ubuntu-latest-4-cores
+      #runs-on: ubuntu-latest-4-cores
     secrets: inherit
