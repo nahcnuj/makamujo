@@ -146,7 +146,7 @@ jobs:
       - name: Build Debian VPS-equivalent VRT image
         run: docker build -t makamujo-vrt .
       - name: Run VRT in Debian VPS-equivalent container
-        run: docker run --rm --ipc=host makamujo-vrt bun run test:vrt
+        run: docker run --rm --ipc=host makamujo-vrt bun run test:stream
 
   ansible-syntax:
     runs-on: ubuntu-latest
