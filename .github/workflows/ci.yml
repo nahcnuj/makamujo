@@ -160,7 +160,7 @@ jobs:
           ansible-playbook -i ansible/inventory/hosts.yml --limit docker -e ansible_become=false ansible/playbooks/2_makamujo.yml
       # WHY: bun ci / Playwright install run at runtime because the source tree is mounted at runtime and the Dockerfile stays a minimal base image.
       - name: Run VRT in Debian VPS-equivalent container
-        run: docker exec docker bash -lc 'export PATH=/root/.bun/bin:$PATH; cd /workspace && bun ci && bunx playwright install --with-deps chromium && bun run test:stream'
+        run: docker exec docker bash -lc 'cd /workspace && bun ci && bunx playwright install --with-deps chromium && bun run test:stream'
       - name: Stop VRT container
         if: always()
         run: docker rm -f docker
