@@ -88,9 +88,11 @@ jobs:
             // 画面全体が真っ黒 (両リージョン 0 FPS) のときは緊急事態: 既存 issue へ
             // 追記せず、独立した issue を新規に立てて auto-drive を起動する。
             const isEmergencyBlackScreen =
-              result.details?.blackScreen === true ||
-              (result.details?.videoMinFps === 0 &&
-                result.details?.gameMinFps === 0) ||
+               result.details?.blackScreen === true ||
+               (result.details?.videoMinFps === 0 &&
+                 result.details?.gameMinFps === 0 &&
+                 result.details?.videoAvgFps === 0 &&
+                 result.details?.gameAvgFps === 0) ||
               (Array.isArray(result.phenomena) &&
                 result.phenomena.some((p) => String(p).includes('真っ黒')));
 
