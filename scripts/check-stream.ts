@@ -317,16 +317,38 @@ export function isFpsAboveThreshold(...args: unknown[]): boolean {
 
   const mergeObject = (obj: Record<string, unknown>): void => {
     hasObject = true;
-    const pick = (key: string): number | undefined =>
-      typeof obj[key] === "number" ? (obj[key] as number) : undefined;
-    const m = pick("minFps") ?? pick("min");
-    const a = pick("avgFps") ?? pick("avg");
-    const t = pick("thresholdFps") ?? pick("threshold");
+    const nested =
+      obj.details && typeof obj.details === "object"
+        ? (obj.details as Record<string, unknown>)
+        : undefined;
+    const nestedPick = (key: string): number | undefined => {
+      const value =
+        (typeof obj[key] === "number" ? obj[key] : undefined) ??
+        (nested && typeof nested[key] === "number" ? nested[key] : undefined);
+      return typeof value === "number" ? value : undefined;
+    };
+    const m =
+      nestedPick("videoMinFps") ??
+      nestedPick("gameMinFps") ??
+      nestedPick("minFps") ??
+      nestedPick("min");
+    const a =
+      nestedPick("videoAvgFps") ??
+      nestedPick("gameAvgFps") ??
+      nestedPick("avgFps") ??
+      nestedPick("avg");
+    const t = nestedPick("thresholdFps") ?? nestedPick("threshold");
     if (m !== undefined) minFps = m;
     if (a !== undefined) avgFps = a;
     if (t !== undefined) thresholdFps = t;
-    if (obj.details && typeof obj.details === "object") {
-      mergeObject(obj.details as Record<string, unknown>);
+    if (nested) {
+      mergeObject(nested);
+    }
+    if (obj.video && typeof obj.video === "object") {
+      mergeObject(obj.video as Record<string, unknown>);
+    }
+    if (obj.game && typeof obj.game === "object") {
+      mergeObject(obj.game as Record<string, unknown>);
     }
   };
 
@@ -485,6 +507,12 @@ export function isBlackScreen(...args: unknown[]): boolean {
       }
     }
 
+    if (obj.video && typeof obj.video === "object") {
+      mergeObject(obj.video as Record<string, unknown>);
+    }
+    if (obj.game && typeof obj.game === "object") {
+      mergeObject(obj.game as Record<string, unknown>);
+    }
     considerPhenomena(
       obj.phenomenon ??
         obj.phenomena ??
