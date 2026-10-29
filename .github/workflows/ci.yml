@@ -153,14 +153,10 @@ jobs:
       - name: Start VRT container
         run: docker run -d --name vrt --ipc=host -v $PWD:/workspace -v /workspace/node_modules makamujo-vrt
       - name: Provision VRT container via Ansible
-        run: |
-          for playbook in ansible/playbooks/*.yml; do
-            tags=()
-            if [ "$(basename "$playbook")" = "0_desktop.yml" ]; then
-              tags=(--tags vrt)
-            fi
-            ansible-playbook -i ansible/inventory/hosts.yml --limit vrt -e ansible_become=false "$playbook" "${tags[@]}"
-          done
+        uses: ./.github/actions/provision-vrt
+        with:
+          limit: vrt
+          become: 'false'
       - name: Run VRT in Debian VPS-equivalent container
         run: docker exec vrt bun run test:stream
       - name: Stop VRT container
