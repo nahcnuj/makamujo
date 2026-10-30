@@ -43,3 +43,7 @@ The image installs Playwright Chromium and its system dependencies, starts Xvfb
 on `DISPLAY=:99`, and configures PipeWire/Pulse. Chromium is launched with
 root-safe flags (`--no-sandbox`, `--disable-dev-shm-usage`, `--disable-gpu`,
 `--disable-software-rasterizer`).
+
+Note: the container image installs the same systemd unit files as production for parity,
+but its entrypoint starts Xvfb, PipeWire, and the server directly so it runs without a
+privileged systemd PID 1.
