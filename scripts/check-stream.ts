@@ -1441,6 +1441,8 @@ async function checkStream(): Promise<CheckResult> {
     args: [
       "--no-sandbox",
       "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--disable-software-rasterizer",
       "--autoplay-policy=no-user-gesture-required",
     ],
   });

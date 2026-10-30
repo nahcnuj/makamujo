@@ -134,7 +134,12 @@ const chromiumAvailable = await (async (): Promise<boolean> => {
     const browser = await chromium.launch({
       headless: true,
       timeout: 15_000,
-      args: ["--no-sandbox", "--disable-dev-shm-usage"],
+      args: [
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-software-rasterizer",
+      ],
     });
     await browser.close();
     return true;

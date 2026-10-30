@@ -90,7 +90,12 @@ await startNoVnc();
 
 const launchOptions = {
   ...(executablePath ? { executablePath } : {}),
-  args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+  args: [
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--disable-software-rasterizer",
+  ],
 };
 
 let ctx = await launchPersistentContext(userDataDir, {

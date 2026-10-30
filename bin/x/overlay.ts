@@ -53,6 +53,7 @@ const context = await chromium
       "--no-sandbox",
       "--disable-dev-shm-usage",
       "--disable-gpu",
+      "--disable-software-rasterizer",
       "--window-size=1280,720",
       "--window-position=0,40",
       "--class=MakamujoComment",

@@ -43,7 +43,14 @@ const ensureJapaneseFonts = () => {
 };
 
 const captureScreenshot = async (url: string, outputPath: string) => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({
+    args: [
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--disable-software-rasterizer",
+    ],
+  });
   const page = await browser.newPage({
     ignoreHTTPSErrors: true,
     viewport: SCREENSHOT_VIEWPORT,

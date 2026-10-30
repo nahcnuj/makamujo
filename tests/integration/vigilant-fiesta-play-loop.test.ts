@@ -33,7 +33,12 @@ try {
   browser = await Promise.race([
     chromium.launch({
       headless: true,
-      args: ["--no-sandbox", "--disable-dev-shm-usage"],
+      args: [
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-software-rasterizer",
+      ],
     }),
     delay(15_000).then(() => {
       throw new Error("chromium.launch timed out after 15s");

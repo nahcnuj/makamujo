@@ -138,7 +138,14 @@ const html = `\
 </body>
 </html>`;
 
-const browser = await chromium.launch();
+const browser = await chromium.launch({
+  args: [
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--disable-software-rasterizer",
+  ],
+});
 const page = await browser.newPage();
 await page.setViewportSize({ width: WIDTH, height: HEIGHT });
 await page.setContent(html, { waitUntil: "networkidle" });
