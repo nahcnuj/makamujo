@@ -45,8 +45,6 @@ test.beforeAll(async () => {
     Date.now().toString(36) + Math.random().toString(36).slice(2);
   const ipcPath = join(process.cwd(), "var", `ipc-visual-${randomId}.sock`);
 
-  process.env.CONSOLE_LOOPBACK_ONLY ??= "1";
-  process.env.NICONAMA_WATCH_PAGE_DISABLED ??= "1";
   process.env.LANG ??= "ja_JP.UTF-8";
   process.env.LC_ALL ??= "ja_JP.UTF-8";
   process.env.LANGUAGE ??= "ja_JP:ja";
