@@ -1,5 +1,5 @@
 - name: Install X11 desktop, streaming display :10, and RDP to same display
-  hosts: vps
+  hosts: production,local
   become: true
   tasks:
 
@@ -52,6 +52,7 @@
         state: present
 
     - name: Install browser and fonts
+      tags: [vrt]
       ansible.builtin.apt:
         name:
           - chromium

@@ -42,22 +42,22 @@ Vault (niconama_stream_key)
 cd ansible
 source .venv/bin/activate
 
-cp inventory/group_vars/all/vault.yml.example inventory/group_vars/all/vault.yml
+cp inventory/group_vars/production/vault.yml.example inventory/group_vars/production/vault.yml
 # niconama_stream_key を実キーに編集
 
-ansible-vault encrypt inventory/group_vars/all/vault.yml
+ansible-vault encrypt inventory/group_vars/production/vault.yml
 
 # 任意: パスワードファイル（git に入れない）
 echo 'your-vault-passphrase' > .vault_pass
 chmod 600 .vault_pass
 ```
 
-`inventory/group_vars/all/vault.yml` は **暗号化済みなら commit してよい**。
+`inventory/group_vars/production/vault.yml` は **暗号化済みなら commit してよい**。
 
 ### キー更新 / 適用
 
 ```sh
-ansible-vault edit inventory/group_vars/all/vault.yml --ask-vault-pass
+ansible-vault edit inventory/group_vars/production/vault.yml --ask-vault-pass
 ansible-playbook playbooks/0_secrets.yml --ask-vault-pass
 ```
 
@@ -105,7 +105,7 @@ push イベント経由では CI の push run を待ちます。**その run が
 |--------|------|------|
 | `VPS_SSH_PRIVATE_KEY` | yes | VPS に入る SSH 秘密鍵 |
 | `VPS_SSH_HOST` | yes | SSH 先（IP またはホスト名）。inventory の `makamujo` エイリアスは runner では使わない |
-| `ANSIBLE_VAULT_PASSWORD` | yes | `inventory/group_vars/all/vault.yml` の復号パスワード |
+| `ANSIBLE_VAULT_PASSWORD` | yes | `inventory/group_vars/production/vault.yml` の復号パスワード |
 | `VPS_SSH_USER` | no | SSH ユーザー。省略時 `root` |
 | `VPS_SSH_KNOWN_HOSTS` | no | `ssh-keyscan` 形式の known_hosts。未設定時は実行時に `ssh-keyscan` |
 

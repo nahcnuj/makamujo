@@ -137,6 +137,34 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
 
+  vrt:
+    needs: [setup, lint]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version-file: ansible/.python-version
+      - name: Install Ansible
+        run: pip install --no-cache-dir -r ansible/requirements.txt
+      - name: Build Debian VPS-equivalent VRT image
+        run: docker build -t makamujo-vrt .
+      - name: Start VRT container
+        run: docker run -d --name vrt --ipc=host -v $PWD:/workspace -v /workspace/node_modules makamujo-vrt
+      - name: Provision VRT container via Ansible
+        uses: ./.github/actions/provision
+        with:
+          limit: vrt
+          become: 'false'
+      - name: Run VRT in Debian VPS-equivalent container
+        run: docker exec vrt bun run test:stream
+      - name: Stop VRT container
+        if: always()
+        continue-on-error: true
+        run: |
+          docker rm -f vrt || true
+
   ansible-syntax:
     runs-on: ubuntu-latest
     steps:
@@ -144,9 +172,9 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
-          python-version: "3.12"
-      - name: Install ansible-core
-        run: pip install "ansible-core>=2.16,<2.19"
+          python-version-file: ansible/.python-version
+      - name: Install Ansible
+        run: pip install --no-cache-dir -r ansible/requirements.txt
       - name: Syntax-check playbooks
         working-directory: ansible
         # Avoid real inventory (vault). localhost inventory loads no group_vars vault.

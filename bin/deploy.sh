@@ -22,6 +22,7 @@ cd "${ansible_dir}"
 
 exec ansible-playbook "${playbook}" \
   -i "${ansible_dir}/inventory/hosts.yml" \
+  --limit vps \
   --vault-password-file "${ansible_dir}/.vault_pass" \
   -e "ansible_host=${VPS_SSH_HOST}" \
   -e "ansible_user=${ansible_user}" \
