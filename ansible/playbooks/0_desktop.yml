@@ -62,6 +62,34 @@
         state: present
         update_cache: true
 
+    - name: Prefer Japanese fonts over WenQuanYi for browser rendering
+      tags: [vrt]
+      ansible.builtin.copy:
+        dest: /etc/fonts/conf.d/99-makamujo-ja.conf
+        mode: "0644"
+        content: |
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+          <fontconfig>
+            <match target="pattern">
+              <test name="family"><string>sans-serif</string></test>
+              <edit name="family" mode="prepend" binding="strong">
+                <string>Noto Sans CJK JP</string>
+              </edit>
+            </match>
+            <match target="pattern">
+              <test name="family"><string>sans-serif</string></test>
+              <edit name="family" mode="prepend" binding="strong">
+                <string>IPAGothic</string>
+              </edit>
+            </match>
+          </fontconfig>
+
+    - name: Rebuild font cache after Japanese font preference
+      tags: [vrt]
+      ansible.builtin.command: fc-cache -f
+      changed_when: true
+
     - name: Install TTS packages
       ansible.builtin.apt:
         name:
