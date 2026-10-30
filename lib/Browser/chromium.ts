@@ -230,6 +230,7 @@ export async function launchPersistentContext(
     "--no-sandbox",
     "--disable-dev-shm-usage",
     "--disable-gpu",
+    "--disable-software-rasterizer",
   ]) {
     if (!existingArgs.includes(flag)) {
       existingArgs.push(flag);
@@ -391,6 +392,8 @@ export const create = async (
       "--lang=ja",
       "--no-sandbox",
       "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--disable-software-rasterizer",
       ...GAME_BROWSER_ANTI_THROTTLE_FLAGS,
       `--app=${gameHomeUrl}`,
     ],

@@ -419,6 +419,8 @@ export const createChromiumWatchPageBrowser =
       args: [
         "--no-sandbox",
         "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-software-rasterizer",
         // 配信映像の動きを測るには `<video>` が再生している必要がある。
         // unmuted 自動再生を許して、映像が止まっていないかを見られるようにする。
         "--autoplay-policy=no-user-gesture-required",
