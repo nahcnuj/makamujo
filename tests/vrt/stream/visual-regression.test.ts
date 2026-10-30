@@ -52,17 +52,18 @@ test.beforeAll(async () => {
     Date.now().toString(36) + Math.random().toString(36).slice(2);
   const ipcPath = join(process.cwd(), "var", `ipc-visual-${randomId}.sock`);
 
+  process.env.CONSOLE_LOOPBACK_ONLY ??= "1";
+  process.env.NICONAMA_WATCH_PAGE_DISABLED ??= "1";
+  process.env.LANG ??= "ja_JP.UTF-8";
+  process.env.LC_ALL ??= "ja_JP.UTF-8";
+  process.env.LANGUAGE ??= "ja_JP:ja";
+  process.env.TZ ??= "Asia/Tokyo";
+
   server = spawn("bun", ["index.ts", "--port", String(PORT)], {
     env: {
       ...process.env,
       NODE_ENV: "production",
-      CONSOLE_LOOPBACK_ONLY: "1",
-      NICONAMA_WATCH_PAGE_DISABLED: "1",
       MAKAMUJO_IPC_PATH: ipcPath,
-      LANG: "ja_JP.UTF-8",
-      LC_ALL: "ja_JP.UTF-8",
-      LANGUAGE: "ja_JP:ja",
-      TZ: "Asia/Tokyo",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

@@ -15,6 +15,7 @@ RUN apt-get update \
         unzip \
     && sed -i 's/^# *ja_JP.UTF-8 UTF-8/ja_JP.UTF-8 UTF-8/' /etc/locale.gen \
     && locale-gen \
+    && update-locale LANG=ja_JP.UTF-8 LANGUAGE=ja_JP:ja LC_ALL=ja_JP.UTF-8 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
