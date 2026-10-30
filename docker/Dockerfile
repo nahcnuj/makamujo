@@ -12,6 +12,9 @@ RUN apt-get update \
       ca-certificates \
       curl \
       git \
+      systemd \
+      systemd-sysv \
+      dbus \
       xvfb \
       libnss3 \
       libgtk-3-0 \

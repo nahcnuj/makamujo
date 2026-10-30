@@ -30,7 +30,8 @@
 
 ## Docker (VPS reproduction)
 
-Reproduce the production VPS (Debian 13) in Docker for Visual Regression Testing.
+Fully reproduce the production VPS (Debian 13) in Docker, including its systemd service
+startup contract, for Visual Regression Testing.
 The container is provisioned with Ansible exactly like production:
 
 ```sh

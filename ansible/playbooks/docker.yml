@@ -26,6 +26,9 @@
           - git
           - unzip
           - openssl
+          - systemd
+          - systemd-sysv
+          - dbus
           - python3
           - xvfb
           - x11vnc
@@ -182,6 +185,26 @@
           [Install]
           WantedBy=multi-user.target
 
+    - name: Install makamujo x11vnc unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/makamujo-x11vnc.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Makamujo x11vnc on :99
+          After=makamujo-xvfb.service
+          Requires=makamujo-xvfb.service
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/x11vnc -display :99 -forever -shared -rfbport 5900 -localhost -nopw -xkb
+          Restart=on-failure
+          RestartSec=2
+          SuccessExitStatus=2 SIGTERM
+
+          [Install]
+          WantedBy=multi-user.target
+
     - name: Install makamujo pipewire unit
       ansible.builtin.copy:
         src: "{{ makamujo_src }}/etc/systemd/makamujo-pipewire.service"
@@ -207,6 +230,13 @@
       ansible.builtin.copy:
         src: "{{ makamujo_src }}/etc/systemd/makamujo-obs.service"
         dest: /etc/systemd/system/makamujo-obs.service
+        remote_src: true
+        mode: "0644"
+
+    - name: Install makamujo service unit
+      ansible.builtin.copy:
+        src: "{{ makamujo_src }}/etc/systemd/makamujo.service"
+        dest: /etc/systemd/system/makamujo.service
         remote_src: true
         mode: "0644"
 
@@ -237,6 +267,7 @@
         regexp: "DISPLAY=:10"
         replace: "DISPLAY=:99"
       loop:
+        - makamujo.service
         - makamujo-pipewire.service
         - makamujo-screen.service
         - makamujo-browser.service
