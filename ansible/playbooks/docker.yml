@@ -27,6 +27,15 @@
           - unzip
           - openssl
           - python3
+          - xvfb
+          - libnss3
+          - libgtk-3-0
+          - libxss1
+          - libasound2
+          - libdrm2
+          - libxrandr2
+          - libgbm1
+          - libxshmfence1
         state: present
 
     - name: Check whether bun is already installed
@@ -92,8 +101,12 @@
           - xvfb
           - libnss3
           - libgtk-3-0
+          - libxss1
+          - libasound2
           - libdrm2
           - libxrandr2
+          - libgbm1
+          - libxshmfence1
         state: present
 
     - name: Set browser runtime flags for container

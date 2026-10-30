@@ -5,7 +5,12 @@ export default defineConfig({
   use: {
     ignoreHTTPSErrors: true,
     launchOptions: {
-      args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+      args: [
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-software-rasterizer",
+      ],
     },
   },
 });

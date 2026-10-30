@@ -12,6 +12,15 @@ RUN apt-get update \
       ca-certificates \
       curl \
       git \
+      xvfb \
+      libnss3 \
+      libgtk-3-0 \
+      libxss1 \
+      libasound2 \
+      libdrm2 \
+      libxrandr2 \
+      libgbm1 \
+      libxshmfence1 \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/src/makamujo
@@ -37,4 +46,4 @@ ENV PATH="/root/.bun/bin:${PATH}"
 
 EXPOSE 7777
 
-CMD ["sh", "-c", "Xvfb :99 -screen 0 1280x720x24 & export DISPLAY=:99; exec bun index.ts --port 7777"]
+CMD ["sh", "-lc", "Xvfb :99 -screen 0 1280x720x24 >/tmp/xvfb.log 2>&1 & exec bun index.ts --port 7777"]
