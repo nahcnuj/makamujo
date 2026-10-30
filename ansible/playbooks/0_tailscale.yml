@@ -16,7 +16,13 @@
         executable: /bin/bash
 
     - name: Bring Tailscale up with SSH enabled
-      ansible.builtin.command: "tailscale up --ssh --authkey={{ tailscale_authkey }}"
+      ansible.builtin.command:
+        argv:
+          - tailscale
+          - up
+          - --ssh
+      environment:
+        TS_AUTHKEY: "{{ tailscale_authkey }}"
       when: tailscale_authkey | length > 0
       register: tailscale_up
       changed_when: tailscale_up.rc == 0
