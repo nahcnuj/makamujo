@@ -1,1 +1,1 @@
-docker.yml
+- import_playbook: docker.yml
