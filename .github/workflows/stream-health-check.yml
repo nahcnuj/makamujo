@@ -151,7 +151,7 @@ jobs:
     name: Auto-drive emergency fix
     needs: check-stream
     if: failure() && needs.check-stream.result == 'failure' && needs.check-stream.outputs.issue-number != '' && needs.check-stream.outputs.emergency == 'true'
-    uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@2f7b6f4e6b31f7f75b200ffaeed3e764595a5474
+    uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@300e95b36860fe36c6473e604eddaa7513dc4531
     with:
       number: ${{ fromJSON(needs.check-stream.outputs.issue-number) }}
       repository: ${{ github.repository }}
