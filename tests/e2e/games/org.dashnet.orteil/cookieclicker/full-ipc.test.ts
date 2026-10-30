@@ -1,11 +1,5 @@
 import { spawn } from "node:child_process";
-import {
-  createWriteStream,
-  existsSync,
-  mkdirSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 
@@ -26,11 +20,6 @@ test.describe("Full IPC operation", () => {
 
     if (process.platform !== "win32" && existsSync(ipcPath)) {
       unlinkSync(ipcPath);
-    }
-
-    // The server requires this file to exist to read the initial game save data.
-    if (!existsSync("./var/cookieclicker.txt")) {
-      writeFileSync("./var/cookieclicker.txt", "");
     }
 
     let serverProcess: ReturnType<typeof spawn> | null = null;

@@ -143,6 +143,11 @@ async function renderBroadcastScreen(
     waitUntil: "domcontentloaded",
     timeout: 20_000,
   });
+  // Simulate OBS color-key (key=black): make black surfaces transparent so the
+  // game capture behind the browser source shows through, matching OBS output.
+  await page.addStyleTag({
+    content: ".bg-black { background-color: transparent !important; }",
+  });
   const speechLocator = page.getByText("こんにちは世界").first();
   await speechLocator.waitFor({ state: "visible", timeout: 10_000 });
   await page
