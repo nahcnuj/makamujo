@@ -172,7 +172,7 @@ start_audio_stack || {
 }
 
 echo "Pulse ready: ${PULSE_SOCKET}"
-systemd-notify --ready
+systemd-notify --ready 2>/dev/null || true
 echo "systemd-notify ready"
 
 # The watchdog only fails the unit after a sustained loss. makamujo-screen,
