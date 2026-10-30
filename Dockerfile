@@ -1,24 +1,21 @@
-FROM debian:bookworm-20261027
+FROM python:3.12-bookworm
 
 WORKDIR /workspace
 
 ENV LANG=ja_JP.UTF-8
 ENV LANGUAGE=ja_JP:ja
 ENV LC_ALL=ja_JP.UTF-8
+ENV ANSIBLE_CONFIG=/workspace/ansible/ansible.cfg
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
         ca-certificates \
         locales \
-        python3 \
         unzip \
     && sed -i 's/^# *ja_JP.UTF-8 UTF-8/ja_JP.UTF-8 UTF-8/' /etc/locale.gen \
     && locale-gen \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get update \
     && apt-get install -y --no-install-recommends nodejs \
     && apt-get clean \
