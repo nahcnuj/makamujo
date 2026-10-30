@@ -80,5 +80,9 @@ describe("docs/index.html", () => {
       (c) => c[0] === "event" && c[1] === "tw-ov0j6-rdexl",
     );
     expect(specificEvents.length).toBe(1);
+    expect(specificEvents[0]?.[2]).toEqual({
+      value: 5.0,
+      currency: "USD",
+    });
   });
 });
