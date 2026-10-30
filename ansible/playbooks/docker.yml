@@ -10,7 +10,7 @@
   environment:
     PATH: "/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     DEBIAN_FRONTEND: noninteractive
-    DISPLAY: ":99"
+    DISPLAY: :99
     PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
   tasks:
     - name: Update apt cache
@@ -101,7 +101,7 @@
         cmd: /bin/true
       environment:
         PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
-        DISPLAY: ":99"
+        DISPLAY: :99
 
     - name: Ensure TLS directory exists
       ansible.builtin.file:
