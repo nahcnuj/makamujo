@@ -226,8 +226,14 @@ export async function launchPersistentContext(
   const existingArgs = Array.isArray(baseOptions.args)
     ? [...(baseOptions.args as string[])]
     : [];
-  if (!existingArgs.includes("--disable-gpu")) {
-    existingArgs.push("--disable-gpu");
+  for (const flag of [
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+  ]) {
+    if (!existingArgs.includes(flag)) {
+      existingArgs.push(flag);
+    }
   }
   baseOptions.args = existingArgs;
 
