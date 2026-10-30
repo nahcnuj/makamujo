@@ -10,6 +10,8 @@
   environment:
     PATH: "/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     DEBIAN_FRONTEND: noninteractive
+    DISPLAY: ":99"
+    PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
   tasks:
     - name: Update apt cache
       ansible.builtin.apt:
@@ -69,6 +71,37 @@
       ansible.builtin.command:
         cmd: bun install --production
         chdir: "{{ makamujo_src }}"
+
+    - name: Install Playwright Chromium browser
+      ansible.builtin.command:
+        cmd: bunx playwright install chromium
+        chdir: "{{ makamujo_src }}"
+      environment:
+        PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+
+    - name: Install Playwright system dependencies
+      ansible.builtin.command:
+        cmd: bunx playwright install-deps chromium
+        chdir: "{{ makamujo_src }}"
+      environment:
+        PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+
+    - name: Install Xvfb for display
+      ansible.builtin.apt:
+        name:
+          - xvfb
+          - libnss3
+          - libgtk-3-0
+          - libdrm2
+          - libxrandr2
+        state: present
+
+    - name: Set browser runtime flags for container
+      ansible.builtin.command:
+        cmd: /bin/true
+      environment:
+        PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+        DISPLAY: ":99"
 
     - name: Ensure TLS directory exists
       ansible.builtin.file:

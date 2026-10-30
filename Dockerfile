@@ -28,11 +28,13 @@ RUN cd /opt/src/makamujo/ansible \
 ENV NODE_ENV=production \
     CONSOLE_LOOPBACK_ONLY=1 \
     NICONAMA_WATCH_PAGE_DISABLED=1 \
-    PORT=7777
+    PORT=7777 \
+    DISPLAY=:99 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # Bun is installed by Ansible under /root/.bun.
 ENV PATH="/root/.bun/bin:${PATH}"
 
 EXPOSE 7777
 
-CMD ["bun", "index.ts", "--port", "7777"]
+CMD ["sh", "-c", "Xvfb :99 -screen 0 1280x720x24 & export DISPLAY=:99; exec bun index.ts --port 7777"]
