@@ -4,8 +4,6 @@ import { expect, type Page, test } from "@playwright/test";
 
 const PORT = 17779;
 const BASE_URL = `http://localhost:${PORT}`;
-const GAME_PAGE_URL = "https://www.nahcnuj.work/vigilant-fiesta/";
-const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 
 let server: ReturnType<typeof spawn> | null = null;
 
@@ -18,7 +16,7 @@ const waitForServerReady = async (): Promise<void> => {
 
     const timeout = setTimeout(
       () => reject(new Error("Server startup timed out")),
-      SERVER_STARTUP_TIMEOUT_MS,
+      15_000,
     );
 
     let buffer = "";
@@ -152,7 +150,7 @@ async function renderBroadcastScreen(
   const speechLocator = page.getByText("こんにちは世界").first();
   await speechLocator.waitFor({ state: "visible", timeout: 10_000 });
   await page
-    .frameLocator(`iframe[src="${GAME_PAGE_URL}"]`)
+    .frameLocator(`iframe[src="https://www.nahcnuj.work/vigilant-fiesta/"]`)
     .getByText("スタート")
     .waitFor({ state: "visible", timeout: 20_000 });
   await page.clock.pauseAt(new Date(FIXED_CLOCK_MS + 60_000));
