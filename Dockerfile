@@ -5,7 +5,6 @@ WORKDIR /workspace
 ENV LANG=ja_JP.UTF-8
 ENV LANGUAGE=ja_JP:ja
 ENV LC_ALL=ja_JP.UTF-8
-ENV ANSIBLE_CONFIG=/workspace/ansible/ansible.cfg
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
