@@ -37,11 +37,6 @@ const waitForServerReady = async (): Promise<void> => {
       clearTimeout(timeout);
       reject(new Error(`Server process exited early with code ${code}`));
     });
-
-    server.stderr.on("data", (_chunk) => {
-      // optionally log server stderr for diagnosis
-      // console.error("server stderr:", chunk);
-    });
   });
 };
 
