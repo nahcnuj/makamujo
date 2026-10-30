@@ -1,0 +1,29 @@
+---
+# Install and configure Tailscale on the VPS, including Tailscale SSH.
+#
+#   ansible-playbook playbooks/0_tailscale.yml
+- name: Install and configure Tailscale
+  hosts: vps
+  become: true
+  vars:
+    tailscale_authkey: "{{ tailscale_authkey | default('') }}"
+  tasks:
+    - name: Install Tailscale
+      ansible.builtin.shell: |
+        set -euo pipefail
+        curl -fsSL https://tailscale.com/install.sh | sh
+      args:
+        executable: /bin/bash
+
+    - name: Bring Tailscale up with SSH enabled
+      ansible.builtin.command: "tailscale up --ssh --authkey={{ tailscale_authkey }}"
+      when: tailscale_authkey | length > 0
+      register: tailscale_up
+      changed_when: tailscale_up.rc == 0
+      failed_when: tailscale_up.rc != 0
+
+    - name: Enable Tailscale SSH
+      ansible.builtin.command: tailscale set --ssh
+      register: tailscale_ssh
+      changed_when: tailscale_ssh.rc == 0
+      failed_when: tailscale_ssh.rc != 0
