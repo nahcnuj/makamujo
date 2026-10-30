@@ -3,7 +3,7 @@ set -euo pipefail
 
 export XDG_RUNTIME_DIR=/run/user/0
 export HOME=/root
-export DISPLAY=:10
+export DISPLAY="${DISPLAY:-:10}"
 export PULSE_RUNTIME_PATH=/run/user/0/pulse
 export PIPEWIRE_RUNTIME_DIR=/run/user/0
 export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus
