@@ -1,0 +1,100 @@
+---
+# Reproduce the VPS streaming server inside a Docker container (Debian 13)
+# for Visual Regression Testing. The container is provisioned with Ansible,
+# the same way the production VPS is.
+- name: Deploy makamujo streaming server in Docker (Debian 13)
+  hosts: vps
+  become: true
+  vars:
+    makamujo_src: /opt/src/makamujo
+  environment:
+    PATH: "/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    DEBIAN_FRONTEND: noninteractive
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install base packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - git
+          - unzip
+          - openssl
+          - python3
+        state: present
+
+    - name: Check whether bun is already installed
+      ansible.builtin.command: bun --version
+      register: bun_version
+      changed_when: false
+      failed_when: false
+
+    - name: Install Bun via official installer
+      ansible.builtin.shell: |
+        set -euo pipefail
+        curl -fsSL https://bun.sh/install | bash
+      args:
+        executable: /bin/bash
+      when: bun_version.rc != 0
+
+    - name: Ensure Bun is on PATH for login shells
+      ansible.builtin.blockinfile:
+        path: /root/.bashrc
+        marker: "# {mark} ANSIBLE MANAGED BUN PATH"
+        block: |
+          export BUN_INSTALL="$HOME/.bun"
+          export PATH="$BUN_INSTALL/bin:$PATH"
+        create: true
+
+    - name: Verify bun works with explicit path
+      ansible.builtin.command: /root/.bun/bin/bun --version
+      register: bun_verify
+      changed_when: false
+
+    - name: Show bun version
+      ansible.builtin.debug:
+        var: bun_verify.stdout
+
+    - name: Ensure source directory exists
+      ansible.builtin.file:
+        path: "{{ makamujo_src }}"
+        state: directory
+        mode: "0755"
+
+    - name: Install production dependencies with Bun
+      ansible.builtin.command:
+        cmd: bun install --production
+        chdir: "{{ makamujo_src }}"
+
+    - name: Ensure TLS directory exists
+      ansible.builtin.file:
+        path: "{{ makamujo_src }}/var/tls"
+        state: directory
+        mode: "0755"
+
+    - name: Generate self-signed certificate if missing
+      ansible.builtin.command:
+        cmd: >
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048
+          -keyout {{ makamujo_src }}/var/tls/privkey.pem
+          -out {{ makamujo_src }}/var/tls/fullchain.pem
+          -subj /CN=127.0.0.1
+      args:
+        creates: "{{ makamujo_src }}/var/tls/fullchain.pem"
+
+    - name: Restrict private key permissions
+      ansible.builtin.file:
+        path: "{{ makamujo_src }}/var/tls/privkey.pem"
+        mode: "0600"
+
+    - name: Write console TLS env file
+      ansible.builtin.copy:
+        dest: "{{ makamujo_src }}/var/console-tls.env"
+        mode: "0644"
+        content: |
+          CONSOLE_TLS_CERT={{ makamujo_src }}/var/tls/fullchain.pem
+          CONSOLE_TLS_KEY={{ makamujo_src }}/var/tls/privkey.pem
