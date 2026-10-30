@@ -231,6 +231,17 @@
         path: "{{ makamujo_src }}/var/tls/privkey.pem"
         mode: "0600"
 
+    - name: Adjust display number in copied service units for Docker
+      ansible.builtin.replace:
+        path: "/etc/systemd/system/{{ item }}"
+        regexp: "DISPLAY=:10"
+        replace: "DISPLAY=:99"
+      loop:
+        - makamujo-pipewire.service
+        - makamujo-screen.service
+        - makamujo-browser.service
+        - makamujo-obs.service
+
     - name: Write console TLS env file
       ansible.builtin.copy:
         dest: "{{ makamujo_src }}/var/console-tls.env"
