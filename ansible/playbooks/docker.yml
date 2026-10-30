@@ -61,6 +61,14 @@
           export PATH="$BUN_INSTALL/bin:$PATH"
         create: true
 
+    - name: Ensure Bun is on PATH for all login shells
+      ansible.builtin.copy:
+        dest: /etc/profile.d/makamujo-bun.sh
+        mode: "0644"
+        content: |
+          export BUN_INSTALL="/root/.bun"
+          export PATH="/root/.bun/bin:${PATH}"
+
     - name: Verify bun works with explicit path
       ansible.builtin.command: /root/.bun/bin/bun --version
       register: bun_verify
