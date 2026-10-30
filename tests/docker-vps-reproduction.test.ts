@@ -42,3 +42,38 @@ test("PipeWire startup script honors the DISPLAY environment", () => {
   const tail = "$" + "{DISPLAY:-:10}" + '"';
   expect(content).toContain(needle + tail);
 });
+
+const chromiumAvailable = await (async (): Promise<boolean> => {
+  try {
+    const { chromium } = await import("playwright");
+    const browser = await chromium.launch({
+      args: [
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-software-rasterizer",
+      ],
+    });
+    await browser.close();
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+test.skipIf(!chromiumAvailable)(
+  "Playwright Chromium launches with root-safe flags in this environment",
+  async () => {
+    const { chromium } = await import("playwright");
+    const browser = await chromium.launch({
+      args: [
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-software-rasterizer",
+      ],
+    });
+    expect(browser.version()).toBeTruthy();
+    await browser.close();
+  },
+);
