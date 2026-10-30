@@ -59,6 +59,10 @@ test.beforeAll(async () => {
       CONSOLE_LOOPBACK_ONLY: "1",
       NICONAMA_WATCH_PAGE_DISABLED: "1",
       MAKAMUJO_IPC_PATH: ipcPath,
+      LANG: "ja_JP.UTF-8",
+      LC_ALL: "ja_JP.UTF-8",
+      LANGUAGE: "ja_JP:ja",
+      TZ: "Asia/Tokyo",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
