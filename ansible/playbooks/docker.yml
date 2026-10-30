@@ -1,7 +1,4 @@
 ---
-# Reproduce the VPS streaming server inside a Docker container (Debian 13)
-# for Visual Regression Testing. The container is provisioned with Ansible,
-# the same way the production VPS is.
 - name: Deploy makamujo streaming server in Docker (Debian 13)
   hosts: vps
   become: true
@@ -12,6 +9,9 @@
     DEBIAN_FRONTEND: noninteractive
     DISPLAY: :99
     PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    XDG_RUNTIME_DIR: /run/user/0
+    PULSE_SERVER: "unix:/run/user/0/pulse/native"
+    PULSE_RUNTIME_PATH: /run/user/0/pulse
   tasks:
     - name: Update apt cache
       ansible.builtin.apt:
@@ -28,6 +28,17 @@
           - openssl
           - python3
           - xvfb
+          - x11vnc
+          - xorg
+          - xdotool
+          - x11-xserver-utils
+          - dbus-x11
+          - pipewire
+          - pipewire-audio
+          - pipewire-pulse
+          - wireplumber
+          - pulseaudio-utils
+          - alsa-utils
           - libnss3
           - libgtk-3-0
           - libxss1
@@ -36,6 +47,9 @@
           - libxrandr2
           - libgbm1
           - libxshmfence1
+          - fonts-ipafont-gothic
+          - fonts-ipafont-mincho
+          - fonts-noto-cjk
         state: present
 
     - name: Check whether bun is already installed
@@ -123,6 +137,78 @@
       environment:
         PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
         DISPLAY: :99
+
+    - name: Ensure runtime directory exists
+      ansible.builtin.file:
+        path: /run/user/0
+        state: directory
+        mode: "0700"
+
+    - name: Route ALSA default to Pulse
+      ansible.builtin.copy:
+        dest: /etc/asound.conf
+        mode: "0644"
+        content: |
+          pcm.!default { type pulse }
+          ctl.!default { type pulse }
+
+    - name: Configure environment variables for PulseAudio (pactl)
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../bin/makamujo-audio.sh"
+        dest: /etc/profile.d/makamujo-audio.sh
+        mode: "0644"
+
+    - name: Install makamujo-pipewire start script
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../bin/makamujo-pipewire"
+        dest: /usr/local/bin/makamujo-pipewire
+        mode: "0755"
+
+    - name: Install makamujo Xvfb unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/makamujo-xvfb.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Makamujo streaming display :99 (Docker VRT)
+          After=network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/Xvfb :99 -screen 0 1280x720x24 -ac +extension GLX +render -noreset
+          Restart=on-failure
+          RestartSec=2
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Install makamujo pipewire unit
+      ansible.builtin.copy:
+        src: "{{ makamujo_src }}/etc/systemd/makamujo-pipewire.service"
+        dest: /etc/systemd/system/makamujo-pipewire.service
+        remote_src: true
+        mode: "0644"
+
+    - name: Install makamujo screen unit
+      ansible.builtin.copy:
+        src: "{{ makamujo_src }}/etc/systemd/makamujo-screen.service"
+        dest: /etc/systemd/system/makamujo-screen.service
+        remote_src: true
+        mode: "0644"
+
+    - name: Install makamujo browser unit
+      ansible.builtin.copy:
+        src: "{{ makamujo_src }}/etc/systemd/makamujo-browser.service"
+        dest: /etc/systemd/system/makamujo-browser.service
+        remote_src: true
+        mode: "0644"
+
+    - name: Install makamujo obs unit
+      ansible.builtin.copy:
+        src: "{{ makamujo_src }}/etc/systemd/makamujo-obs.service"
+        dest: /etc/systemd/system/makamujo-obs.service
+        remote_src: true
+        mode: "0644"
 
     - name: Ensure TLS directory exists
       ansible.builtin.file:

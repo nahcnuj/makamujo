@@ -39,11 +39,14 @@ ENV NODE_ENV=production \
     NICONAMA_WATCH_PAGE_DISABLED=1 \
     PORT=7777 \
     DISPLAY=:99 \
-    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    XDG_RUNTIME_DIR=/run/user/0 \
+    PULSE_SERVER=unix:/run/user/0/pulse/native \
+    PULSE_RUNTIME_PATH=/run/user/0/pulse
 
 # Bun is installed by Ansible under /root/.bun.
 ENV PATH="/root/.bun/bin:${PATH}"
 
 EXPOSE 7777
 
-CMD ["sh", "-lc", "Xvfb :99 -screen 0 1280x720x24 >/tmp/xvfb.log 2>&1 & exec bun index.ts --port 7777"]
+CMD ["sh", "-lc", "mkdir -p /run/user/0/pulse && chmod 700 /run/user/0 && Xvfb :99 -screen 0 1280x720x24 >/tmp/xvfb.log 2>&1 & if [ -x /usr/local/bin/makamujo-pipewire ]; then /usr/local/bin/makamujo-pipewire >/tmp/pipewire.log 2>&1 & fi; exec bun index.ts --port 7777"]
