@@ -1,0 +1,13 @@
+[Unit]
+Description=Makamujo noVNC on :11 (on-demand)
+After=makamujo-login-x11vnc.service
+Requires=makamujo-login-x11vnc.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/websockify --web /usr/share/novnc 127.0.0.1:6080 127.0.0.1:5901
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

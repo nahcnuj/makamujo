@@ -1,0 +1,15 @@
+[Unit]
+Description=Makamujo x11vnc on :10
+After=makamujo-xvfb.service
+Requires=makamujo-xvfb.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/x11vnc -display :10 -forever -shared -rfbport 5900 -localhost -nopw -xkb
+Restart=on-failure
+RestartSec=2
+# x11vnc exits 2 on SIGTERM, which would otherwise show as "failed"
+SuccessExitStatus=2 SIGTERM
+
+[Install]
+WantedBy=multi-user.target

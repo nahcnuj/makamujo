@@ -70,117 +70,40 @@
 
     - name: Install makamujo Xvfb unit (:10 2560x1440)
       ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../etc/systemd/makamujo-xvfb.service"
         dest: /etc/systemd/system/makamujo-xvfb.service
         mode: "0644"
-        content: |
-          [Unit]
-          Description=Makamujo streaming display :10 (2560x1440)
-          After=network.target
-
-          [Service]
-          Type=simple
-          ExecStart=/usr/bin/Xvfb :10 -screen 0 2560x1440x24 -ac +extension GLX +render -noreset
-          Restart=on-failure
-          RestartSec=2
-
-          [Install]
-          WantedBy=multi-user.target
 
     - name: Install makamujo x11vnc unit (share :10 on localhost:5900)
       ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../etc/systemd/makamujo-x11vnc.service"
         dest: /etc/systemd/system/makamujo-x11vnc.service
         mode: "0644"
-        content: |
-          [Unit]
-          Description=Makamujo x11vnc on :10
-          After=makamujo-xvfb.service
-          Requires=makamujo-xvfb.service
 
-          [Service]
-          Type=simple
-          ExecStart=/usr/bin/x11vnc -display :10 -forever -shared -rfbport 5900 -localhost -nopw -xkb
-          Restart=on-failure
-          RestartSec=2
-          # x11vnc exits 2 on SIGTERM, which would otherwise show as "failed"
-          SuccessExitStatus=2 SIGTERM
-
-          [Install]
-          WantedBy=multi-user.target
+    - name: Install makamujo PipeWire unit (root headless audio)
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../etc/systemd/makamujo-pipewire.service"
+        dest: /etc/systemd/system/makamujo-pipewire.service
+        mode: "0644"
+      notify: Restart makamujo-pipewire
 
     - name: Install makamujo login Xvfb unit (:11 1280x1024, on-demand)
       ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../etc/systemd/makamujo-login-xvfb.service"
         dest: /etc/systemd/system/makamujo-login-xvfb.service
         mode: "0644"
-        content: |
-          [Unit]
-          Description=Makamujo Niconico sign-in display :11 (on-demand)
-          After=network.target
-          PartOf=makamujo-novnc.service
-
-          [Service]
-          Type=simple
-          ExecStart=/usr/bin/Xvfb :11 -screen 0 1280x1024x24 -ac +extension GLX +render -noreset
-          Restart=on-failure
-          RestartSec=2
-
-          [Install]
-          WantedBy=multi-user.target
 
     - name: Install makamujo login x11vnc unit (share :11 on localhost:5901)
       ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../etc/systemd/makamujo-login-x11vnc.service"
         dest: /etc/systemd/system/makamujo-login-x11vnc.service
         mode: "0644"
-        content: |
-          [Unit]
-          Description=Makamujo x11vnc on :11 (on-demand)
-          After=makamujo-login-xvfb.service
-          Requires=makamujo-login-xvfb.service
-          PartOf=makamujo-novnc.service
-
-          [Service]
-          Type=simple
-          ExecStart=/usr/bin/x11vnc -display :11 -forever -shared -rfbport 5901 -localhost -nopw -xkb
-          Restart=on-failure
-          RestartSec=2
-          # x11vnc exits 2 on SIGTERM, which would otherwise show as "failed"
-          # every time reserve.ts stops the sign-in display.
-          SuccessExitStatus=2 SIGTERM
-
-          [Install]
-          WantedBy=multi-user.target
 
     - name: Install makamujo noVNC unit (on-demand, started by bin/x/reserve.ts only)
       ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../etc/systemd/makamujo-novnc.service"
         dest: /etc/systemd/system/makamujo-novnc.service
         mode: "0644"
-        content: |
-          [Unit]
-          Description=Makamujo noVNC on :11 (on-demand)
-          After=makamujo-login-x11vnc.service
-          Requires=makamujo-login-x11vnc.service
-
-          [Service]
-          Type=simple
-          ExecStart=/usr/bin/websockify --web /usr/share/novnc 127.0.0.1:6080 127.0.0.1:5901
-          Restart=on-failure
-          RestartSec=2
-
-          [Install]
-          WantedBy=multi-user.target
-
-    - name: Enable and start makamujo-xvfb
-      ansible.builtin.systemd:
-        name: makamujo-xvfb
-        enabled: true
-        state: restarted
-        daemon_reload: true
-
-    - name: Enable and start makamujo-x11vnc
-      ansible.builtin.systemd:
-        name: makamujo-x11vnc
-        enabled: true
-        state: restarted
-        daemon_reload: true
 
     - name: Configure xrdp for Makamujo-only session (:10 via x11vnc)
       ansible.builtin.copy:
@@ -250,42 +173,19 @@
         mode: "0755"
       notify: Restart makamujo-pipewire
 
-    - name: Install makamujo PipeWire unit (root headless audio)
-      ansible.builtin.copy:
-        dest: /etc/systemd/system/makamujo-pipewire.service
-        mode: "0644"
-        content: |
-          [Unit]
-          Description=Makamujo PipeWire stack for headless streaming
-          After=network.target makamujo-xvfb.service
-          Wants=makamujo-xvfb.service
-          # Keep in sync with etc/systemd/makamujo-pipewire.service
-          # Restarting every 5s forever only buries the real cause under a wall
-          # of identical log lines, so cap it and let a broken stack settle.
-          StartLimitIntervalSec=300
-          StartLimitBurst=5
+    - name: Enable and start makamujo-xvfb
+      ansible.builtin.systemd:
+        name: makamujo-xvfb
+        enabled: true
+        state: restarted
+        daemon_reload: true
 
-          [Service]
-          Type=notify
-          NotifyAccess=all
-          TimeoutStartSec=90
-          Environment=XDG_RUNTIME_DIR=/run/user/0
-          Environment=HOME=/root
-          Environment=DISPLAY=:10
-          Environment=PULSE_RUNTIME_PATH=/run/user/0/pulse
-          Environment=PIPEWIRE_RUNTIME_DIR=/run/user/0
-          Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus
-          ExecStartPre=/bin/mkdir -p /run/user/0/pulse
-          ExecStartPre=/bin/chmod 700 /run/user/0
-          ExecStart=/usr/local/bin/makamujo-pipewire
-          Restart=on-failure
-          RestartSec=5
-          KillMode=control-group
-          TimeoutStopSec=20
-
-          [Install]
-          WantedBy=multi-user.target
-      notify: Restart makamujo-pipewire
+    - name: Enable and start makamujo-x11vnc
+      ansible.builtin.systemd:
+        name: makamujo-x11vnc
+        enabled: true
+        state: restarted
+        daemon_reload: true
 
     - name: Enable and ensure makamujo-pipewire is started
       ansible.builtin.systemd:

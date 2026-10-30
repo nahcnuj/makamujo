@@ -1,0 +1,13 @@
+[Unit]
+Description=Makamujo Niconico sign-in display :11 (on-demand)
+After=network.target
+PartOf=makamujo-novnc.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/Xvfb :11 -screen 0 1280x1024x24 -ac +extension GLX +render -noreset
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
