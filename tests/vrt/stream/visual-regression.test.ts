@@ -122,10 +122,11 @@ async function renderBroadcastScreen(
   await mockApis(page);
   await page.addInitScript(() => {
     window.addEventListener("DOMContentLoaded", () => {
-      const backdrop = document.createElement("div");
-      backdrop.style.cssText =
-        "position:fixed;top:0;left:0;width:1280px;height:720px;background:#000;z-index:-1;";
-      document.body.prepend(backdrop);
+      const frame = document.createElement("iframe");
+      frame.src = "https://www.nahcnuj.work/vigilant-fiesta/";
+      frame.style.cssText =
+        "position:fixed;top:0;left:0;width:1280px;height:720px;border:0;z-index:-1;";
+      document.body.prepend(frame);
     });
   });
   await page.goto(BASE_URL, {
@@ -139,6 +140,10 @@ async function renderBroadcastScreen(
   });
   const speechLocator = page.getByText("こんにちは世界").first();
   await speechLocator.waitFor({ state: "visible", timeout: 10_000 });
+  await page
+    .frameLocator('iframe[src="https://www.nahcnuj.work/vigilant-fiesta/"]')
+    .getByText("スタート")
+    .waitFor({ state: "visible", timeout: 30_000 });
 
   await page.clock.pauseAt(new Date(FIXED_CLOCK_MS + 60_000));
 }
