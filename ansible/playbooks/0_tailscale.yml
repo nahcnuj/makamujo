@@ -21,6 +21,7 @@
       register: tailscale_up
       changed_when: tailscale_up.rc == 0
       failed_when: tailscale_up.rc != 0
+      no_log: true
 
     - name: Enable Tailscale SSH
       ansible.builtin.command: tailscale set --ssh
