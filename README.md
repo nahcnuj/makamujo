@@ -27,3 +27,18 @@
 ## Dependencies
 
 - **[automated-gameplay-transmitter](https://github.com/nahcnuj/automated-gameplay-transmitter)**: browser automation helpers, IPC utilities, and shared React components/contexts used by the UI.
+
+## Docker (VPS reproduction)
+
+Reproduce the production VPS (Debian 13) in Docker for Visual Regression Testing.
+The container is provisioned with Ansible exactly like production:
+
+```sh
+docker build -t makamujo-vps -f Dockerfile .
+docker run --rm -p 7777:7777 makamujo-vps
+```
+
+The image installs Playwright Chromium and its system dependencies, starts Xvfb
+on `DISPLAY=:99`, and configures PipeWire/Pulse. Chromium is launched with
+root-safe flags (`--no-sandbox`, `--disable-dev-shm-usage`, `--disable-gpu`,
+`--disable-software-rasterizer`).
