@@ -182,25 +182,23 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Build Debian 13 container
-        run: docker build -t makamujo/debian13 -f docker/Dockerfile .
+      - name: Start Debian 13 and streaming-server stack
+        run: docker compose up -d --build
 
-      - name: Start Debian 13 container
+      - name: Wait for Debian 13 container to become healthy
         run: |
           set -euo pipefail
-          docker run -d --name makamujo-debian13 \
-            --privileged \
-            -p 2222:22 \
-            -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
-            makamujo/debian13
+          for i in $(seq 1 60); do
+            status="$(docker inspect --format='{{.State.Health.Status}}' makamujo-debian13 2>/dev/null || echo starting)"
+            echo "health: $status"
+            [ "$status" = "healthy" ] && break
+            sleep 2
+          done
+          test "$(docker inspect --format='{{.State.Health.Status}}' makamujo-debian13)" = "healthy"
 
       - name: Prepare container and Ansible
         run: |
           set -euo pipefail
-          for i in $(seq 1 30); do
-            if docker exec makamujo-debian13 true; then break; fi
-            sleep 2
-          done
           docker exec makamujo-debian13 cat /etc/os-release
 
           ssh-keygen -t ed25519 -N "" -f /tmp/debian13_key
@@ -238,11 +236,11 @@ jobs:
           set -euo pipefail
           DEPLOY_PLAYBOOK=ansible/playbooks/0_bootstrap.yml bin/deploy.sh
           DEPLOY_PLAYBOOK=ansible/playbooks/1_bun.yml bin/deploy.sh
-          bin/deploy.sh
+          DEPLOY_PLAYBOOK=ansible/playbooks/2_makamujo.yml bin/deploy.sh
 
       - name: Observe outbound RTMPS traffic
         env:
-          RTMPS_URL: rtmps://example.com/live/stream
+          RTMPS_URL: rtmps://streaming-server/live/stream
         run: |
           set -euo pipefail
           docker cp bin/observe-rtmps.sh makamujo-debian13:/usr/local/bin/observe-rtmps.sh
@@ -260,4 +258,4 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: docker rm -f makamujo-debian13 || true
+        run: docker compose down || true

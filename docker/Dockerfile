@@ -29,3 +29,6 @@ CMD ["/lib/systemd/systemd"]
 
 # Enable sshd at boot for Ansible/CD-style provisioning.
 RUN ln -sf /lib/systemd/system/ssh.service /etc/systemd/system/multi-user.target.wants/ssh.service
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=5 \
+  CMD systemctl is-active ssh.service >/dev/null 2>&1 || exit 1
