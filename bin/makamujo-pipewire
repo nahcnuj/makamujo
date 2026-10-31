@@ -29,7 +29,8 @@ cleanup() {
   pkill -u root -x pipewire-pulse 2>/dev/null || true
   pkill -u root -x pipewire 2>/dev/null || true
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap "exit 0" INT TERM
 
 audio_process_alive() {
   pgrep -u root -x wireplumber >/dev/null 2>&1 ||
