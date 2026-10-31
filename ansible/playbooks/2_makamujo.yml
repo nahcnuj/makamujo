@@ -157,9 +157,10 @@
       until: pactl_info.rc == 0
 
     - name: Verify OBS Flatpak can access the Pulse socket
-      # test -S "${PULSE_SERVER#unix:}"
       ansible.builtin.command:
-        cmd: test -S /run/user/0/pulse/native
+        cmd: >-
+          flatpak run --system --command=sh com.obsproject.Studio
+          -c 'test -S "${PULSE_SERVER#unix:}"'
       changed_when: false
 
     - name: Install makamujo units from repo

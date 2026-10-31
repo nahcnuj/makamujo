@@ -2,6 +2,14 @@
   hosts: vps
   become: true
   tasks:
+    - name: Ensure Python is available for Ansible (raw bootstrap)
+      ansible.builtin.raw: |
+        if ! command -v python3 >/dev/null 2>&1; then
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-apt
+        fi
+      changed_when: false
+
     - name: apt update and upgrade
       ansible.builtin.apt:
         update_cache: true
@@ -14,5 +22,14 @@
           - ca-certificates
           - cron
           - curl
+          - dbus
           - git
+          - iproute2
+          - procps
+          - python3
+          - python3-apt
+          - sudo
+          - systemd
+          - systemd-sysv
+          - unzip
         state: present
