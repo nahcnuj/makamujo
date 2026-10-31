@@ -4,7 +4,6 @@ on:
   workflow_run:
     workflows: [CD]
     types: [completed]
-  workflow_dispatch:
 
 permissions:
   contents: read
