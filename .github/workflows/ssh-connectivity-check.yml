@@ -15,22 +15,11 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    continue-on-error: true
     steps:
-      - name: Check Tailscale OAuth secrets
-        id: ts-check
-        run: |
-          set -euo pipefail
-          if [ -n "${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}" ] && [ -n "${{ secrets.TAILSCALE_OAUTH_SECRET }}" ]; then
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - uses: actions/checkout@v7.0.1
-        if: ${{ steps.ts-check.outputs.skip != 'true' }}
 
       - name: Connect to Tailscale
-        if: ${{ steps.ts-check.outputs.skip != 'true' }}
         uses: tailscale/github-action@v2
         with:
           oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
@@ -38,7 +27,6 @@ jobs:
           tags: 'tag:ci'
 
       - name: Prepare SSH key
-        if: ${{ steps.ts-check.outputs.skip != 'true' }}
         env:
           VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
         run: |
@@ -48,7 +36,6 @@ jobs:
           chmod 600 ~/.ssh/id_deploy
 
       - name: Check SSH connectivity
-        if: ${{ steps.ts-check.outputs.skip != 'true' }}
         env:
           VPS_SSH_HOST: ${{ secrets.VPS_SSH_HOST }}
           VPS_SSH_USER: ${{ secrets.VPS_SSH_USER }}
