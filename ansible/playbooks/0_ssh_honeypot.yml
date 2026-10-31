@@ -103,3 +103,4 @@
       ansible.builtin.command:
         cmd: fail2ban-client reload
       changed_when: false
+      failed_when: false
