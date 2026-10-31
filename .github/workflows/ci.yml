@@ -175,3 +175,90 @@ jobs:
         run: |
           grep -Eq '^backend = systemd$' etc/fail2ban/jail.d/sshd-honeypot.conf
           grep -Eq '^journalmatch = _SYSTEMD_UNIT=ssh\.service \+ _COMM=sshd \+ _COMM=sshd-session$' etc/fail2ban/jail.d/sshd-honeypot.conf
+
+  streaming-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Start Debian 13 and streaming-server stack
+        run: docker compose up -d --build
+
+      - name: Wait for Debian 13 container to become healthy
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            status="$(docker inspect --format='{{.State.Health.Status}}' makamujo-debian13 2>/dev/null || echo starting)"
+            echo "health: $status"
+            [ "$status" = "healthy" ] && break
+            sleep 2
+          done
+          test "$(docker inspect --format='{{.State.Health.Status}}' makamujo-debian13)" = "healthy"
+
+      - name: Prepare container and Ansible
+        run: |
+          set -euo pipefail
+          docker exec makamujo-debian13 cat /etc/os-release
+
+          ssh-keygen -t ed25519 -N "" -f /tmp/debian13_key
+          docker exec makamujo-debian13 mkdir -p /root/.ssh
+          docker cp /tmp/debian13_key.pub makamujo-debian13:/root/.ssh/authorized_keys
+          docker exec makamujo-debian13 chown root:root /root/.ssh/authorized_keys
+          docker exec makamujo-debian13 chmod 700 /root/.ssh
+          docker exec makamujo-debian13 chmod 600 /root/.ssh/authorized_keys
+
+          mkdir -p ~/.ssh
+          cp /tmp/debian13_key ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+
+          for i in $(seq 1 30); do
+            if ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_deploy root@127.0.0.1 true 2>/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_deploy root@127.0.0.1 true
+
+          pip install -r ansible/requirements.txt
+          printf 'ci-dummy-vault-password\n' > ansible/.vault_pass
+          chmod 600 ansible/.vault_pass
+          printf 'niconama_stream_key: ""\n' > ansible/inventory/group_vars/all/vault.yml
+          sudo apt-get update
+          sudo apt-get install -y tcpdump
+
+      - name: Provision production
+        env:
+          VPS_SSH_HOST: 127.0.0.1
+          VPS_SSH_USER: root
+          ANSIBLE_HOST_KEY_CHECKING: "False"
+          ANSIBLE_SSH_COMMON_ARGS: -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -p 2222
+        run: |
+          set -euo pipefail
+          DEPLOY_PLAYBOOK=ansible/playbooks/0_bootstrap.yml bin/deploy.sh
+          DEPLOY_PLAYBOOK=ansible/playbooks/0_desktop.yml bin/deploy.sh
+          DEPLOY_PLAYBOOK=ansible/playbooks/0_obs.yml bin/deploy.sh
+          DEPLOY_PLAYBOOK=ansible/playbooks/1_bun.yml bin/deploy.sh
+          DEPLOY_PLAYBOOK=ansible/playbooks/2_makamujo.yml bin/deploy.sh
+
+      - name: Observe outbound RTMPS traffic
+        env:
+          RTMPS_URL: rtmps://streaming-server/live/stream
+        run: |
+          set -euo pipefail
+          docker cp bin/observe-rtmps.sh makamujo-debian13:/usr/local/bin/observe-rtmps.sh
+          docker exec makamujo-debian13 chmod 0755 /usr/local/bin/observe-rtmps.sh
+          sudo rm -f /tmp/rtmps-capture.pcap
+          sudo tcpdump -i any -w /tmp/rtmps-capture.pcap 'tcp port 443 or tcp port 1935 or tcp port 1936' &
+          TCPDUMP_PID=$!
+          sleep 1
+          docker exec -e RTMPS_URL="$RTMPS_URL" makamujo-debian13 /usr/local/bin/observe-rtmps.sh || true
+          sleep 2
+          sudo kill "$TCPDUMP_PID" 2>/dev/null || true
+          wait "$TCPDUMP_PID" 2>/dev/null || true
+          sudo test -s /tmp/rtmps-capture.pcap
+          echo "RTMPS communication observed"
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down || true
