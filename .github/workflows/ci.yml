@@ -224,6 +224,13 @@ jobs:
       - name: Install Ansible on runner
         run: pip install -r ansible/requirements.txt
 
+      - name: Prepare Ansible vault for CI
+        run: |
+          set -euo pipefail
+          printf 'ci-dummy-vault-password\n' > ansible/.vault_pass
+          chmod 600 ansible/.vault_pass
+          printf 'niconama_stream_key: ""\n' > ansible/inventory/group_vars/all/vault.yml
+
       - name: Install capture tools on runner
         run: sudo apt-get update && sudo apt-get install -y tcpdump
 
