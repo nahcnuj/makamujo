@@ -264,13 +264,3 @@ VPS に SSH して直接実行してもよいです:
     cd /opt/src/makamujo && ./bin/stop && ./bin/start
 
 コードがまだ古い場合は、先に `2_makamujo.yml` を流すか、VPS 上で `git fetch` と `git reset --hard origin/main` してから上記を実行します。
-
-## Docker で本番 VPS (Debian 13) を再現
-
-`Dockerfile` (リポジトリルート) は本番 VPS と同じ Debian 13 環境を再現します。
-`bin/deploy-docker.sh` はコンテナを起動し、CD と全く同じく Ansible 経由で
-`0_ssh_honeypot.yml` と `2_makamujo.yml` を適用します。
-
-```sh
-bash bin/deploy-docker.sh
-```
