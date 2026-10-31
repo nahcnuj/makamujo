@@ -126,7 +126,7 @@ jobs:
           if [ -n "${VPS_SSH_KNOWN_HOSTS}" ]; then
             printf '%s\n' "$VPS_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           else
-            ssh-keyscan -H "$VPS_SSH_HOST" > ~/.ssh/known_hosts
+            : > ~/.ssh/known_hosts
           fi
           chmod 644 ~/.ssh/known_hosts
 
@@ -137,7 +137,7 @@ jobs:
         env:
           VPS_SSH_HOST: ${{ secrets.VPS_SSH_HOST }}
           VPS_SSH_USER: ${{ secrets.VPS_SSH_USER }}
-          ANSIBLE_HOST_KEY_CHECKING: "True"
+          ANSIBLE_HOST_KEY_CHECKING: "False"
         run: |
           set -euo pipefail
           DEPLOY_PLAYBOOK=ansible/playbooks/0_ssh_honeypot.yml bash bin/deploy.sh

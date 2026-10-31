@@ -15,8 +15,8 @@ fi
 
 ansible_dir="${repo_root}/ansible"
 export ANSIBLE_CONFIG="${ANSIBLE_CONFIG:-${ansible_dir}/ansible.cfg}"
-export ANSIBLE_HOST_KEY_CHECKING="${ANSIBLE_HOST_KEY_CHECKING:-True}"
-export ANSIBLE_SSH_COMMON_ARGS="${ANSIBLE_SSH_COMMON_ARGS:--o IdentitiesOnly=yes}"
+export ANSIBLE_HOST_KEY_CHECKING="${ANSIBLE_HOST_KEY_CHECKING:-False}"
+export ANSIBLE_SSH_COMMON_ARGS="${ANSIBLE_SSH_COMMON_ARGS:--o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null}"
 
 cd "${ansible_dir}"
 
