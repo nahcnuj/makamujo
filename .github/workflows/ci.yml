@@ -204,6 +204,7 @@ jobs:
           ssh-keygen -t ed25519 -N "" -f /tmp/debian13_key
           docker exec makamujo-debian13 mkdir -p /root/.ssh
           docker cp /tmp/debian13_key.pub makamujo-debian13:/root/.ssh/authorized_keys
+          docker exec makamujo-debian13 chown root:root /root/.ssh/authorized_keys
           docker exec makamujo-debian13 chmod 700 /root/.ssh
           docker exec makamujo-debian13 chmod 600 /root/.ssh/authorized_keys
 
@@ -235,6 +236,8 @@ jobs:
         run: |
           set -euo pipefail
           DEPLOY_PLAYBOOK=ansible/playbooks/0_bootstrap.yml bin/deploy.sh
+          DEPLOY_PLAYBOOK=ansible/playbooks/0_desktop.yml bin/deploy.sh
+          DEPLOY_PLAYBOOK=ansible/playbooks/0_obs.yml bin/deploy.sh
           DEPLOY_PLAYBOOK=ansible/playbooks/1_bun.yml bin/deploy.sh
           DEPLOY_PLAYBOOK=ansible/playbooks/2_makamujo.yml bin/deploy.sh
 

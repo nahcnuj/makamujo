@@ -161,6 +161,8 @@
         cmd: >-
           flatpak run --system --command=sh com.obsproject.Studio
           -c 'test -S "${PULSE_SERVER#unix:}"'
+      environment:
+        XDG_RUNTIME_DIR: /run/user/0
       changed_when: false
 
     - name: Install makamujo units from repo
