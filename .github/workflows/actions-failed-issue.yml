@@ -2,22 +2,10 @@ name: Issue on GitHub Actions failure
 
 # When any GitHub Actions workflow in this repository fails, collect the failed
 # job logs and open an issue (labeled bug, github_actions) so the failure is
-# tracked and can be auto-driven to a fix. Workflows that already file their own
-# issues (CD, Stream Health Check) or drive issues themselves (Auto-drive) are
-# skipped to avoid duplicates.
+# tracked and can be auto-driven to a fix.
 
 on:
   workflow_run:
-    workflows:
-      - Auto-drive
-      - CD
-      - CI
-      - Deploy to GitHub Pages
-      - Owner-approved auto-merge
-      - Rerun failed CD jobs
-      - SSH Connectivity Check
-      - Setup Environment
-      - Stream Health Check
     types: [completed]
 
 permissions:
@@ -26,13 +14,7 @@ permissions:
 
 jobs:
   file-issue:
-    if: >-
-      github.event.workflow_run.conclusion == 'failure' &&
-      github.event.workflow_run.name != 'Issue on GitHub Actions failure' &&
-      github.event.workflow_run.name != 'CD' &&
-      github.event.workflow_run.name != 'Stream Health Check' &&
-      github.event.workflow_run.name != 'Auto-drive' &&
-      github.event.workflow_run.name != 'Owner-approved auto-merge'
+    if: github.event.workflow_run.conclusion == 'failure'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
