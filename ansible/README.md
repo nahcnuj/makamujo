@@ -111,6 +111,8 @@ push イベント経由では CI の push run を待ちます。**その run が
 | `TAILSCALE_OAUTH_CLIENT_ID` | no | SSH 疎通確認ワークフロー用 Tailscale OAuth クライアント ID |
 | `TAILSCALE_OAUTH_SECRET` | no | SSH 疎通確認ワークフロー用 Tailscale OAuth クライアントシークレット |
 
+SSH 疎通確認ワークフローで Tailscale OAuth を使う場合は、OAuth クライアントに `auth_keys` の Write スコープとタグ `tag:ci` を付与すること（未付与だと "OAuth identity empty" で失敗する）。
+
 デプロイ job は Environment `prod` を使う（`main` のみ）。required reviewers を付けると、CI 通過後の実デプロイだけ承認待ちにできます。Environment URL は番組ページ（`https://live.nicovideo.jp/watch/user/14171889`）へのショートカットです。
 
 ## Playbooks（概要）
