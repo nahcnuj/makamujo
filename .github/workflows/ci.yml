@@ -194,7 +194,7 @@ jobs:
             -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
             makamujo/debian13
 
-      - name: Wait for container and configure SSH
+      - name: Prepare container and Ansible
         run: |
           set -euo pipefail
           for i in $(seq 1 30); do
@@ -221,18 +221,12 @@ jobs:
           done
           ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_deploy root@127.0.0.1 true
 
-      - name: Install Ansible on runner
-        run: pip install -r ansible/requirements.txt
-
-      - name: Prepare Ansible vault for CI
-        run: |
-          set -euo pipefail
+          pip install -r ansible/requirements.txt
           printf 'ci-dummy-vault-password\n' > ansible/.vault_pass
           chmod 600 ansible/.vault_pass
           printf 'niconama_stream_key: ""\n' > ansible/inventory/group_vars/all/vault.yml
-
-      - name: Install capture tools on runner
-        run: sudo apt-get update && sudo apt-get install -y tcpdump
+          sudo apt-get update
+          sudo apt-get install -y tcpdump
 
       - name: Provision production
         env:
@@ -246,17 +240,13 @@ jobs:
           DEPLOY_PLAYBOOK=ansible/playbooks/1_bun.yml bin/deploy.sh
           bin/deploy.sh
 
-      - name: Install RTMPS traffic generator
-        run: |
-          set -euo pipefail
-          docker cp bin/observe-rtmps.sh makamujo-debian13:/usr/local/bin/observe-rtmps.sh
-          docker exec makamujo-debian13 chmod 0755 /usr/local/bin/observe-rtmps.sh
-
       - name: Observe outbound RTMPS traffic
         env:
           RTMPS_URL: rtmps://example.com/live/stream
         run: |
           set -euo pipefail
+          docker cp bin/observe-rtmps.sh makamujo-debian13:/usr/local/bin/observe-rtmps.sh
+          docker exec makamujo-debian13 chmod 0755 /usr/local/bin/observe-rtmps.sh
           sudo rm -f /tmp/rtmps-capture.pcap
           sudo tcpdump -i any -w /tmp/rtmps-capture.pcap 'tcp port 443 or tcp port 1935 or tcp port 1936' &
           TCPDUMP_PID=$!
