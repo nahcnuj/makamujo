@@ -33,7 +33,6 @@ on:
       - "X*"
       - "Y*"
       - "Z*"
-      - "!Issue on GitHub Actions failure"
     types: [completed]
 
 permissions:
