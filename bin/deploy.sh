@@ -16,14 +16,23 @@ fi
 ansible_dir="${repo_root}/ansible"
 export ANSIBLE_CONFIG="${ANSIBLE_CONFIG:-${ansible_dir}/ansible.cfg}"
 export ANSIBLE_HOST_KEY_CHECKING="${ANSIBLE_HOST_KEY_CHECKING:-False}"
-export ANSIBLE_SSH_COMMON_ARGS="${ANSIBLE_SSH_COMMON_ARGS:--o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null}"
+export ANSIBLE_SSH_COMMON_ARGS="${ANSIBLE_SSH_COMMON_ARGS:--o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3}"
 
 cd "${ansible_dir}"
 
-exec ansible-playbook "${playbook}" \
+attempt=0
+max_attempts=3
+until ansible-playbook "${playbook}" \
   -i "${ansible_dir}/inventory/hosts.yml" \
   --vault-password-file "${ansible_dir}/.vault_pass" \
   -e "ansible_host=${VPS_SSH_HOST}" \
   -e "ansible_user=${ansible_user}" \
   -e "ansible_ssh_private_key_file=${key_file}" \
   "$@"
+do
+  attempt=$((attempt + 1))
+  if [ "${attempt}" -ge "${max_attempts}" ]; then
+    exit 1
+  fi
+  sleep 10
+done
