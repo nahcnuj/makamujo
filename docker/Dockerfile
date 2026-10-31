@@ -17,7 +17,6 @@ RUN apt-get update \
         lsb-release \
         iproute2 \
         procps \
-        tcpdump \
         ffmpeg \
         openssh-server \
         openssl \

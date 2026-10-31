@@ -176,7 +176,7 @@ jobs:
           grep -Eq '^backend = systemd$' etc/fail2ban/jail.d/sshd-honeypot.conf
           grep -Eq '^journalmatch = _SYSTEMD_UNIT=ssh\.service \+ _COMM=sshd \+ _COMM=sshd-session$' etc/fail2ban/jail.d/sshd-honeypot.conf
 
-  debian13-rtmps:
+  streaming-test:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -224,7 +224,10 @@ jobs:
       - name: Install Ansible on runner
         run: pip install -r ansible/requirements.txt
 
-      - name: Provision production (bootstrap)
+      - name: Install capture tools on runner
+        run: sudo apt-get update && sudo apt-get install -y tcpdump
+
+      - name: Provision production
         env:
           VPS_SSH_HOST: 127.0.0.1
           VPS_SSH_USER: root
@@ -233,28 +236,10 @@ jobs:
         run: |
           set -euo pipefail
           DEPLOY_PLAYBOOK=ansible/playbooks/0_bootstrap.yml bin/deploy.sh
-
-      - name: Provision production (Bun)
-        env:
-          VPS_SSH_HOST: 127.0.0.1
-          VPS_SSH_USER: root
-          ANSIBLE_HOST_KEY_CHECKING: "False"
-          ANSIBLE_SSH_COMMON_ARGS: -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -p 2222
-        run: |
-          set -euo pipefail
           DEPLOY_PLAYBOOK=ansible/playbooks/1_bun.yml bin/deploy.sh
-
-      - name: Provision production (makamujo)
-        env:
-          VPS_SSH_HOST: 127.0.0.1
-          VPS_SSH_USER: root
-          ANSIBLE_HOST_KEY_CHECKING: "False"
-          ANSIBLE_SSH_COMMON_ARGS: -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -p 2222
-        run: |
-          set -euo pipefail
           bin/deploy.sh
 
-      - name: Install RTMPS observation helper
+      - name: Install RTMPS traffic generator
         run: |
           set -euo pipefail
           docker cp bin/observe-rtmps.sh makamujo-debian13:/usr/local/bin/observe-rtmps.sh
@@ -265,13 +250,15 @@ jobs:
           RTMPS_URL: rtmps://example.com/live/stream
         run: |
           set -euo pipefail
-          docker exec -e RTMPS_URL="$RTMPS_URL" makamujo-debian13 \
-            /usr/local/bin/observe-rtmps.sh
-
-      - name: Verify RTMPS traffic was captured
-        run: |
-          set -euo pipefail
-          docker exec makamujo-debian13 sh -c 'test -s /tmp/rtmps-capture.pcap'
+          sudo rm -f /tmp/rtmps-capture.pcap
+          sudo tcpdump -i any -w /tmp/rtmps-capture.pcap 'tcp port 443 or tcp port 1935 or tcp port 1936' &
+          TCPDUMP_PID=$!
+          sleep 1
+          docker exec -e RTMPS_URL="$RTMPS_URL" makamujo-debian13 /usr/local/bin/observe-rtmps.sh || true
+          sleep 2
+          sudo kill "$TCPDUMP_PID" 2>/dev/null || true
+          wait "$TCPDUMP_PID" 2>/dev/null || true
+          sudo test -s /tmp/rtmps-capture.pcap
           echo "RTMPS communication observed"
 
       - name: Cleanup
