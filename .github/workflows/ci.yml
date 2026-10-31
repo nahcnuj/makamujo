@@ -185,17 +185,6 @@ jobs:
       - name: Start Debian 13 and streaming-server stack
         run: docker compose up -d --build --wait
 
-      - name: Wait for Debian 13 container to become healthy
-        run: |
-          set -euo pipefail
-          for i in $(seq 1 60); do
-            status="$(docker inspect --format='{{.State.Health.Status}}' makamujo 2>/dev/null || echo starting)"
-            echo "health: $status"
-            [ "$status" = "healthy" ] && break
-            sleep 2
-          done
-          test "$(docker inspect --format='{{.State.Health.Status}}' makamujo)" = "healthy"
-
       - name: Prepare container and Ansible
         run: |
           set -euo pipefail
@@ -221,9 +210,6 @@ jobs:
           ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_deploy root@127.0.0.1 true
 
           pip install -r ansible/requirements.txt
-          printf 'ci-dummy-vault-password\n' > ansible/.vault_pass
-          chmod 600 ansible/.vault_pass
-          printf 'niconama_stream_key: ""\n' > ansible/inventory/group_vars/all/vault.yml
           sudo apt-get update
           sudo apt-get install -y tcpdump
 

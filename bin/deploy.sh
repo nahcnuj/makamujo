@@ -20,14 +20,21 @@ export ANSIBLE_SSH_COMMON_ARGS="${ANSIBLE_SSH_COMMON_ARGS:--o IdentitiesOnly=yes
 
 cd "${ansible_dir}"
 
+playbook_args=(
+  -i "${ansible_dir}/inventory/hosts.yml"
+  -e "ansible_host=${VPS_SSH_HOST}"
+  -e "ansible_user=${ansible_user}"
+  -e "ansible_ssh_private_key_file=${key_file}"
+)
+vault_pass_file="${ansible_dir}/.vault_pass"
+if [ -f "${vault_pass_file}" ]; then
+  playbook_args+=(--vault-password-file "${vault_pass_file}")
+fi
+
 attempt=0
 max_attempts=3
 until ansible-playbook "${playbook}" \
-  -i "${ansible_dir}/inventory/hosts.yml" \
-  --vault-password-file "${ansible_dir}/.vault_pass" \
-  -e "ansible_host=${VPS_SSH_HOST}" \
-  -e "ansible_user=${ansible_user}" \
-  -e "ansible_ssh_private_key_file=${key_file}" \
+  "${playbook_args[@]}" \
   "$@"
 do
   attempt=$((attempt + 1))
