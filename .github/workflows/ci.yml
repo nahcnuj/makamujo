@@ -183,30 +183,30 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Start Debian 13 and streaming-server stack
-        run: docker compose up -d --build
+        run: docker compose up -d --build --wait
 
       - name: Wait for Debian 13 container to become healthy
         run: |
           set -euo pipefail
           for i in $(seq 1 60); do
-            status="$(docker inspect --format='{{.State.Health.Status}}' makamujo-debian13 2>/dev/null || echo starting)"
+            status="$(docker inspect --format='{{.State.Health.Status}}' makamujo 2>/dev/null || echo starting)"
             echo "health: $status"
             [ "$status" = "healthy" ] && break
             sleep 2
           done
-          test "$(docker inspect --format='{{.State.Health.Status}}' makamujo-debian13)" = "healthy"
+          test "$(docker inspect --format='{{.State.Health.Status}}' makamujo)" = "healthy"
 
       - name: Prepare container and Ansible
         run: |
           set -euo pipefail
-          docker exec makamujo-debian13 cat /etc/os-release
+          docker exec makamujo cat /etc/os-release
 
           ssh-keygen -t ed25519 -N "" -f /tmp/debian13_key
-          docker exec makamujo-debian13 mkdir -p /root/.ssh
-          docker cp /tmp/debian13_key.pub makamujo-debian13:/root/.ssh/authorized_keys
-          docker exec makamujo-debian13 chown root:root /root/.ssh/authorized_keys
-          docker exec makamujo-debian13 chmod 700 /root/.ssh
-          docker exec makamujo-debian13 chmod 600 /root/.ssh/authorized_keys
+          docker exec makamujo mkdir -p /root/.ssh
+          docker cp /tmp/debian13_key.pub makamujo:/root/.ssh/authorized_keys
+          docker exec makamujo chown root:root /root/.ssh/authorized_keys
+          docker exec makamujo chmod 700 /root/.ssh
+          docker exec makamujo chmod 600 /root/.ssh/authorized_keys
 
           mkdir -p ~/.ssh
           cp /tmp/debian13_key ~/.ssh/id_deploy
@@ -246,13 +246,13 @@ jobs:
           RTMPS_URL: rtmps://streaming-server/live/stream
         run: |
           set -euo pipefail
-          docker cp bin/observe-rtmps.sh makamujo-debian13:/usr/local/bin/observe-rtmps.sh
-          docker exec makamujo-debian13 chmod 0755 /usr/local/bin/observe-rtmps.sh
+          docker cp bin/observe-rtmps.sh makamujo:/usr/local/bin/observe-rtmps.sh
+          docker exec makamujo chmod 0755 /usr/local/bin/observe-rtmps.sh
           sudo rm -f /tmp/rtmps-capture.pcap
           sudo tcpdump -i any -w /tmp/rtmps-capture.pcap 'tcp port 443 or tcp port 1935 or tcp port 1936' &
           TCPDUMP_PID=$!
           sleep 1
-          docker exec -e RTMPS_URL="$RTMPS_URL" makamujo-debian13 /usr/local/bin/observe-rtmps.sh || true
+          docker exec -e RTMPS_URL="$RTMPS_URL" makamujo /usr/local/bin/observe-rtmps.sh || true
           sleep 2
           sudo kill "$TCPDUMP_PID" 2>/dev/null || true
           wait "$TCPDUMP_PID" 2>/dev/null || true

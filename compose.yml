@@ -1,9 +1,9 @@
 services:
-  makamujo-debian13:
+  makamujo:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    container_name: makamujo-debian13
+    container_name: makamujo
     privileged: true
     cgroup: host
     ports:
