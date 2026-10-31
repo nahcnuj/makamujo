@@ -7,7 +7,32 @@ name: Issue on GitHub Actions failure
 on:
   workflow_run:
     workflows:
-      - "*"
+      - "A*"
+      - "B*"
+      - "C*"
+      - "D*"
+      - "E*"
+      - "F*"
+      - "G*"
+      - "H*"
+      - "I*"
+      - "J*"
+      - "K*"
+      - "L*"
+      - "M*"
+      - "N*"
+      - "O*"
+      - "P*"
+      - "Q*"
+      - "R*"
+      - "S*"
+      - "T*"
+      - "U*"
+      - "V*"
+      - "W*"
+      - "X*"
+      - "Y*"
+      - "Z*"
       - "!Issue on GitHub Actions failure"
     types: [completed]
 
