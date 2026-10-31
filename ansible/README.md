@@ -110,6 +110,7 @@ push イベント経由では CI の push run を待ちます。**その run が
 | `VPS_SSH_KNOWN_HOSTS` | no | `ssh-keyscan` 形式の known_hosts。未設定時は実行時に `ssh-keyscan` |
 | `TAILSCALE_OAUTH_CLIENT_ID` | no | SSH 疎通確認ワークフロー用 Tailscale OAuth クライアント ID |
 | `TAILSCALE_OAUTH_SECRET` | no | SSH 疎通確認ワークフロー用 Tailscale OAuth クライアントシークレット |
+| `TAILSCALE_OAUTH_TAGS` | no | SSH 疎通確認ワークフローで runner ノードに付与するタグ（例: `tag:ci`）。未設定時は `tag:ci` |
 
 SSH 疎通確認ワークフローで Tailscale OAuth を使う場合は、OAuth クライアントに `auth_keys` の Write スコープとタグ `tag:ci` を付与すること（未付与だと "OAuth identity empty" で失敗する）。
 
