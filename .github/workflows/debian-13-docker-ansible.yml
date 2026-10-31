@@ -1,4 +1,4 @@
-name: Debian 13 Docker Ansible RTMPS
+name: Debian 13 Docker RTMPS
 
 on:
   push:
@@ -11,26 +11,23 @@ permissions:
   contents: read
 
 jobs:
-  debian13-docker-ansible-rtmps:
+  debian13-docker-rtmps:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Build Debian 13 container
-        run: docker build -t makamujo/debian13-ansible -f Dockerfile .
+        run: docker build -t makamujo/debian13 -f docker/Dockerfile .
 
       - name: Start Debian 13 container
         run: |
           set -euo pipefail
           docker run -d --name makamujo-debian13 \
             --privileged \
-            --cgroupns=host \
+            --network host \
             -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
-            makamujo/debian13-ansible
+            makamujo/debian13
 
       - name: Wait for container
         run: |
@@ -41,15 +38,11 @@ jobs:
           done
           docker exec makamujo-debian13 cat /etc/os-release
 
-      - name: Install Ansible on runner
-        run: pip install -r ansible/requirements.txt
-
-      - name: Run Ansible in Debian 13 container
+      - name: Install RTMPS observation helper
         run: |
           set -euo pipefail
-          docker cp . makamujo-debian13:/work
-          docker exec makamujo-debian13 bash -lc \
-            'cd /work && ansible-playbook -i localhost, -c local ansible/playbooks/docker_debian13.yml'
+          docker cp bin/observe-rtmps.sh makamujo-debian13:/usr/local/bin/observe-rtmps.sh
+          docker exec makamujo-debian13 chmod 0755 /usr/local/bin/observe-rtmps.sh
 
       - name: Observe outbound RTMPS traffic
         env:
@@ -57,8 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           docker exec -e RTMPS_URL="$RTMPS_URL" makamujo-debian13 \
-            bash -lc '/usr/local/bin/observe-rtmps.sh'
-          docker exec makamujo-debian13 sh -c 'ls -l /tmp/rtmps-capture.pcap'
+            /usr/local/bin/observe-rtmps.sh
 
       - name: Verify RTMPS traffic was captured
         run: |
