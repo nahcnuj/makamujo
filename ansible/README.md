@@ -108,7 +108,10 @@ push イベント経由では CI の push run を待ちます。**その run が
 | `ANSIBLE_VAULT_PASSWORD` | yes | `inventory/group_vars/all/vault.yml` の復号パスワード |
 | `VPS_SSH_USER` | no | SSH ユーザー。省略時 `root` |
 | `VPS_SSH_KNOWN_HOSTS` | no | `ssh-keyscan` 形式の known_hosts。未設定時は実行時に `ssh-keyscan` |
-| `TAILSCALE_AUTHKEY` | no | Tailscale 接続用の認証キー（SSH 疎通確認ワークフロー用） |
+| `TAILSCALE_AUTHKEY` | no | Tailscale 接続用の認証キー（VPS 側 `0_tailscale.yml` 用、任意） |
+| `TAILSCALE_OAUTH_CLIENT_ID` | no | SSH 疎通確認ワークフロー用 Tailscale OAuth クライアント ID |
+| `TAILSCALE_OAUTH_SECRET` | no | SSH 疎通確認ワークフロー用 Tailscale OAuth クライアントシークレット |
+| `TAILSCALE_OAUTH_TAGS` | no | SSH 疎通確認ワークフローで runner ノードに付与するタグ（例: `tag:ci`） |
 
 デプロイ job は Environment `prod` を使う（`main` のみ）。required reviewers を付けると、CI 通過後の実デプロイだけ承認待ちにできます。Environment URL は番組ページ（`https://live.nicovideo.jp/watch/user/14171889`）へのショートカットです。
 
