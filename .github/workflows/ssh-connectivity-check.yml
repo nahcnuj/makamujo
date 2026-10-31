@@ -10,16 +10,18 @@ permissions:
   contents: read
   actions: read
 
+env:
+  HAS_TS_OAUTH: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID != '' && secrets.TAILSCALE_OAUTH_SECRET != '' }}
+
 jobs:
   ssh-connectivity:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') && env.HAS_TS_OAUTH == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7.0.1
 
       - name: Connect to Tailscale
-        if: ${{ secrets.TAILSCALE_OAUTH_SECRET != '' }}
         uses: tailscale/github-action@v2
         with:
           oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
