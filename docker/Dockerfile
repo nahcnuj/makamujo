@@ -20,9 +20,13 @@ RUN apt-get update \
         tcpdump \
         ffmpeg \
         openssh-server \
+        openssl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 VOLUME ["/sys/fs/cgroup"]
 STOPSIGNAL SIGRTMIN+3
 CMD ["/lib/systemd/systemd"]
+
+# Enable sshd at boot for Ansible/CD-style provisioning.
+RUN ln -sf /lib/systemd/system/ssh.service /etc/systemd/system/multi-user.target.wants/ssh.service
