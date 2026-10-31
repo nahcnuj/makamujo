@@ -93,13 +93,13 @@
         state: started
         daemon_reload: true
 
+    - name: Reload fail2ban jails
+      ansible.builtin.command:
+        cmd: fail2ban-client reload
+      changed_when: false
+
     - name: Clear any previously banned IPs so legitimate clients are not locked out
       ansible.builtin.command:
         cmd: fail2ban-client unban --all
       changed_when: false
       failed_when: false
-
-    - name: Reload fail2ban jails
-      ansible.builtin.command:
-        cmd: fail2ban-client reload
-      changed_when: false
