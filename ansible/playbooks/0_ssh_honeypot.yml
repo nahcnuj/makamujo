@@ -91,6 +91,7 @@
       register: ssh_client_ip
       changed_when: false
       failed_when: false
+      become: false
 
     - name: Add current SSH client IP to fail2ban ignoreip
       ansible.builtin.lineinfile:
@@ -98,6 +99,18 @@
         regexp: '^ignoreip ='
         line: "ignoreip = 127.0.0.1/8 ::1 100.64.0.0/10 fd7a:115c:a1e0::/48 {{ ssh_client_ip.stdout }}"
       when: ssh_client_ip.stdout | length > 0
+
+    - name: Stop fail2ban before clearing stale bans
+      ansible.builtin.systemd:
+        name: fail2ban
+        state: stopped
+      failed_when: false
+
+    - name: Remove persisted fail2ban ban database so stale bans cannot lock out this run
+      ansible.builtin.file:
+        path: /var/lib/fail2ban/fail2ban.sqlite3
+        state: absent
+      failed_when: false
 
     - name: Enable and start fail2ban
       ansible.builtin.systemd:
