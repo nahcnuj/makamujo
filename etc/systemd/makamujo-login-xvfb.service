@@ -5,7 +5,7 @@ PartOf=makamujo-novnc.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/Xvfb :11 -screen 0 1280x1024x24 -ac +extension GLX +render -noreset
+ExecStart=/usr/bin/Xvfb :11 -screen 0 1280x1024x24 -nolisten tcp +extension GLX +render -noreset
 Restart=on-failure
 RestartSec=2
 
