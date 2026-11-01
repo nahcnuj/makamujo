@@ -15,7 +15,6 @@ RUN apt-get update \
         ca-certificates \
         openssh-server \
         openssl \
-        ffmpeg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
