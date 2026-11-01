@@ -201,12 +201,6 @@ jobs:
           cp /tmp/debian13_key ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
 
-          for i in $(seq 1 30); do
-            if ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_deploy root@127.0.0.1 true 2>/dev/null; then
-              break
-            fi
-            sleep 2
-          done
           ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_deploy root@127.0.0.1 true
 
           pip install -r ansible/requirements.txt
