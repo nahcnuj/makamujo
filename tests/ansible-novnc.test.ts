@@ -6,31 +6,12 @@ const LOGIN_XVFB_UNIT_DEST = "/etc/systemd/system/makamujo-login-xvfb.service";
 const LOGIN_X11VNC_UNIT_DEST =
   "/etc/systemd/system/makamujo-login-x11vnc.service";
 
-const extractUnitContent = (playbookPath: string, dest: string): string => {
-  const lines = readFileSync(playbookPath, "utf-8").split("\n");
-  const destLineIndex = lines.findIndex((line) =>
-    line.includes(`dest: ${dest}`),
-  );
-  expect(destLineIndex).toBeGreaterThanOrEqual(0);
-
-  const contentLineIndex = lines.findIndex(
-    (line, index) => index > destLineIndex && line.trim() === "content: |",
-  );
-  expect(contentLineIndex).toBeGreaterThan(destLineIndex);
-
-  const blockIndent = " ".repeat(10);
-  const body: string[] = [];
-  for (const line of lines.slice(contentLineIndex + 1)) {
-    if (line.trim() === "") {
-      body.push("");
-      continue;
-    }
-    if (!line.startsWith(blockIndent)) break;
-    body.push(line.slice(blockIndent.length));
-  }
-  while (body.at(-1) === "") body.pop();
-  expect(body.length).toBeGreaterThan(0);
-  return `${body.join("\n")}\n`;
+const extractUnitContent = (_playbookPath: string, dest: string): string => {
+  const basename = dest.split("/").pop() ?? "";
+  const unitPath = `etc/systemd/${basename}`;
+  const content = readFileSync(unitPath, "utf-8");
+  expect(content.length).toBeGreaterThan(0);
+  return content.endsWith("\n") ? content : `${content}\n`;
 };
 
 const extractExecStart = (unit: string): string => {

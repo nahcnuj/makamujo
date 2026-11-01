@@ -1,0 +1,17 @@
+[Unit]
+Description=Makamujo x11vnc on :11 (on-demand)
+After=makamujo-login-xvfb.service
+Requires=makamujo-login-xvfb.service
+PartOf=makamujo-novnc.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/x11vnc -display :11 -forever -shared -rfbport 5901 -localhost -nopw -xkb
+Restart=on-failure
+RestartSec=2
+# x11vnc exits 2 on SIGTERM, which would otherwise show as "failed"
+# every time reserve.ts stops the sign-in display.
+SuccessExitStatus=2 SIGTERM
+
+[Install]
+WantedBy=multi-user.target

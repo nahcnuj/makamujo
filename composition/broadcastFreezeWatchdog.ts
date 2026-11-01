@@ -109,32 +109,73 @@ const RESTART_SETTLE_MS = 3_000;
 const RESTART_COMMAND_TIMEOUT_MS = 60_000;
 
 export interface SystemdRecoveryOptions {
-  /** systemd の無い環境（開発 / CI）では dry run にして、予定の再起動をログに残すだけにする。 */
-  dryRun?: boolean;
   log?: Pick<Console, "log" | "warn" | "error">;
+  /** 自プロセスを落として systemd に再起動させる口。既定は `process.exit`。 */
+  exit?: (code?: number) => void;
+  /** unit 間および自プロセスを落とす前の待機口。既定は `Bun.sleep`（テスト用差し替え）。 */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /**
  * systemctl restart で回復を実行する口。dry run のときは何もせず、触る予定の
  * unit をログに残すだけ。
  */
+/** The unit this watchdog runs inside. Restarting it kills the process, so it
+ *  cannot be awaited like the others: systemctl would report a failure (the
+ *  caller died mid-command) even though the restart itself succeeds. */
+export const HOST_SERVICE = "makamujo-screen.service";
+
 export const createSystemdRecovery =
   (options: SystemdRecoveryOptions = {}) =>
   async (recovery: CompositeFreezeRecovery): Promise<void> => {
     const log = options.log ?? console;
     const services = RECOVERY_SERVICES[recovery];
-    if (options.dryRun) {
+    const externalServices = services.filter(
+      (service) => service !== HOST_SERVICE,
+    );
+    const restartsSelf = services.includes(HOST_SERVICE);
+    const exit = options.exit ?? ((code?: number) => process.exit(code));
+    const sleep = options.sleep ?? ((ms: number) => Bun.sleep(ms));
+    let externalFailure: unknown;
+    if (externalServices.length > 0) {
+      try {
+        await restartServices(
+          externalServices,
+          (service) => restartService(service, recovery, log),
+          RESTART_SETTLE_MS,
+          sleep,
+        );
+      } catch (error) {
+        // 外部 unit の再起動に失敗しても、自プロセスの再起動まで諦めると
+        // 配信は復旧しない。失敗は記録し、最後に呼び出し側へ伝える。
+        externalFailure = error;
+        log.error(
+          `[ERROR] recovery "${recovery}" external unit restart failed:`,
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
+    if (restartsSelf) {
+      // 自分自身 (makamujo-screen.service) を `systemctl restart` で再起動すると、
+      // 自プロセスが SIGTERM で落ちる途中でコマンドが失敗扱いになり
+      // `[ERROR] recovery ... failed` が出る (issue #1378)。サービスファイルに
+      // `Restart=on-failure` が入っているので、ここでは systemctl を呼ばず、
+      // 外部 unit の再起動が済んだあとに自プロセスを異常終了させて systemd に
+      // 再起動させる。状態は recover の前に永続化済み。
+      if (externalServices.length > 0) {
+        await sleep(RESTART_SETTLE_MS);
+      }
       log.log(
-        `[INFO] dry run: restarting ${services.join(" + ")} skipped (recovery "${recovery}")`,
+        `[INFO] exiting ${HOST_SERVICE} so systemd can restart it (recovery "${recovery}")...`,
       );
+      exit(1);
       return;
     }
-    await restartServices(
-      services,
-      (service) => restartService(service, recovery, log),
-      RESTART_SETTLE_MS,
-      (ms) => Bun.sleep(ms),
-    );
+    if (externalFailure !== undefined) {
+      throw externalFailure instanceof Error
+        ? externalFailure
+        : new Error(String(externalFailure));
+    }
   };
 
 /**
