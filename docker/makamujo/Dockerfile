@@ -1,6 +1,6 @@
 # Debian 13 (Trixie) container that mirrors the production OS for reproduction.
 # Base matches production: Debian 13 (trixie).
-FROM debian:13
+FROM debian:13.7
 
 ENV DEBIAN_FRONTEND=noninteractive
 

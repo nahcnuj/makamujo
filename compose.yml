@@ -18,7 +18,7 @@ services:
       start_period: 30s
 
   rtmp-backend:
-    image: ossrs/srs:5
+    image: ossrs/srs:5.0.225
 
   streaming-server:
     build:
