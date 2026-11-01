@@ -7,15 +7,15 @@ services:
     privileged: true
     cgroup: host
     ports:
-      - "2222:22"
+      - "22:22"
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     healthcheck:
       test: ["CMD-SHELL", "systemctl is-active ssh.service >/dev/null"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 30s
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 10s
 
   rtmp-backend:
     image: ossrs/srs:5.0.225
@@ -26,5 +26,3 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - rtmp-backend
-    ports:
-      - "8443:443"
