@@ -93,9 +93,11 @@
 
 
     - name: Install makamujo-pipewire unit from repo
-      ansible.builtin.command:
-        cmd: systemctl link --force {{ makamujo_src }}/etc/systemd/makamujo-pipewire.service
-      changed_when: true
+      ansible.builtin.copy:
+        src: "{{ makamujo_src }}/etc/systemd/makamujo-pipewire.service"
+        dest: /etc/systemd/system/makamujo-pipewire.service
+        remote_src: true
+        mode: "0644"
     - name: Install makamujo-pipewire start script
       ansible.builtin.copy:
         src: "{{ playbook_dir }}/../../bin/makamujo-pipewire"
@@ -122,11 +124,6 @@
           --system
           --socket=pulseaudio
           --env=XDG_RUNTIME_DIR=/run/user/0
-      changed_when: true
-
-    - name: Install makamujo-xvfb unit from repo
-      ansible.builtin.command:
-        cmd: systemctl link --force {{ makamujo_src }}/etc/systemd/makamujo-xvfb.service
       changed_when: true
 
     - name: Restart streaming infra
@@ -167,14 +164,15 @@
       changed_when: false
 
     - name: Install makamujo units from repo
-      ansible.builtin.command:
-        cmd: systemctl link --force {{ makamujo_src }}/etc/systemd/{{ item }}
+      ansible.builtin.copy:
+        src: "{{ makamujo_src }}/etc/systemd/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
+        remote_src: true
+        mode: "0644"
       loop:
-        - makamujo-x11vnc.service
         - makamujo-screen.service
         - makamujo-browser.service
         - makamujo-obs.service
-      changed_when: true
 
     - name: Enable and start makamujo app units
       ansible.builtin.systemd:
@@ -183,7 +181,6 @@
         state: restarted
         daemon_reload: true
       loop:
-        - makamujo-xvfb.service
         - makamujo-screen.service
         - makamujo-browser.service
         - makamujo-obs.service
