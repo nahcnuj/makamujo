@@ -210,6 +210,9 @@ jobs:
           ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_deploy root@127.0.0.1 true
 
           pip install -r ansible/requirements.txt
+          # CI has no real stream key; provide an empty plaintext vault so the
+          # production playbooks can run without a vault password.
+          printf 'niconama_stream_key: ""\n' > ansible/inventory/group_vars/all/vault.yml
           sudo apt-get update
           sudo apt-get install -y tcpdump
 
