@@ -192,9 +192,9 @@ jobs:
       - name: Generate SSH key pair in the container
         run: |
           set -euo pipefail
-          docker exec makamujo sh -c 'rm -f /tmp/debian13_key /tmp/debian13_key.pub; ssh-keygen -t ed25519 -N "" -f /tmp/debian13_key; mkdir -p /root/.ssh; cp /tmp/debian13_key.pub /root/.ssh/authorized_keys; chmod 700 /root/.ssh; chmod 600 /root/.ssh/authorized_keys; chown root:root /root/.ssh/authorized_keys'
-          docker cp makamujo:/tmp/debian13_key /tmp/debian13_key
-          docker cp makamujo:/tmp/debian13_key.pub /tmp/debian13_key.pub
+          docker exec makamujo sh -c 'rm -f /root/debian13_key /root/debian13_key.pub; ssh-keygen -t ed25519 -N "" -f /root/debian13_key; mkdir -p /root/.ssh; cp /root/debian13_key.pub /root/.ssh/authorized_keys; chmod 700 /root/.ssh; chmod 600 /root/.ssh/authorized_keys; chown root:root /root/.ssh/authorized_keys'
+          docker cp makamujo:/root/debian13_key /tmp/debian13_key
+          docker cp makamujo:/root/debian13_key.pub /tmp/debian13_key.pub
 
           mkdir -p ~/.ssh
           cp /tmp/debian13_key ~/.ssh/id_deploy
