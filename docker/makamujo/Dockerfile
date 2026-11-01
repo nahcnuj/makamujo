@@ -4,7 +4,8 @@ FROM debian:13
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# systemd-enabled container for deployment-target reproduction.
+# Minimal systemd-enabled container for deployment-target reproduction.
+# Remaining packages are installed by Ansible (see ansible/playbooks).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         systemd \
@@ -12,13 +13,9 @@ RUN apt-get update \
         python3 \
         sudo \
         ca-certificates \
-        curl \
-        gnupg \
-        lsb-release \
-        iproute2 \
-        procps \
         openssh-server \
         openssl \
+        ffmpeg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
