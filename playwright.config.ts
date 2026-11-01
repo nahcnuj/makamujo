@@ -5,7 +5,6 @@ export default defineConfig({
   use: {
     ignoreHTTPSErrors: true,
     locale: "ja-JP",
-    timezoneId: "Asia/Tokyo",
     launchOptions: {
       args: ["--lang=ja-JP", "--accept-lang=ja-JP,ja"],
     },

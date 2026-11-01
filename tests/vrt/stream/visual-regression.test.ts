@@ -4,6 +4,8 @@ import { expect, type Page, test } from "@playwright/test";
 
 const PORT = 17779;
 const BASE_URL = `http://localhost:${PORT}`;
+const GAME_PAGE_URL = "https://www.nahcnuj.work/vigilant-fiesta/";
+const SERVER_STARTUP_TIMEOUT_MS = 15_000;
 
 let server: ReturnType<typeof spawn> | null = null;
 
@@ -16,7 +18,7 @@ const waitForServerReady = async (): Promise<void> => {
 
     const timeout = setTimeout(
       () => reject(new Error("Server startup timed out")),
-      15_000,
+      SERVER_STARTUP_TIMEOUT_MS,
     );
 
     let buffer = "";
@@ -37,6 +39,11 @@ const waitForServerReady = async (): Promise<void> => {
       clearTimeout(timeout);
       reject(new Error(`Server process exited early with code ${code}`));
     });
+
+    server.stderr.on("data", (_chunk) => {
+      // optionally log server stderr for diagnosis
+      // console.error("server stderr:", chunk);
+    });
   });
 };
 
@@ -45,14 +52,17 @@ test.beforeAll(async () => {
     Date.now().toString(36) + Math.random().toString(36).slice(2);
   const ipcPath = join(process.cwd(), "var", `ipc-visual-${randomId}.sock`);
 
-  process.env.CONSOLE_LOOPBACK_ONLY ??= "1";
-  process.env.NICONAMA_WATCH_PAGE_DISABLED ??= "1";
-
   server = spawn("bun", ["index.ts", "--port", String(PORT)], {
     env: {
       ...process.env,
       NODE_ENV: "production",
+      CONSOLE_LOOPBACK_ONLY: "1",
+      NICONAMA_WATCH_PAGE_DISABLED: "1",
       MAKAMUJO_IPC_PATH: ipcPath,
+      LANG: "ja_JP.UTF-8",
+      LC_ALL: "ja_JP.UTF-8",
+      LANGUAGE: "ja:en",
+      TZ: "Asia/Tokyo",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -105,7 +115,7 @@ async function mockApis(page: Page) {
         },
         nGram: 4,
         commentCount: 321,
-        previousStreamCommentCount: 1000,
+        previousStreamCommentCount: 10,
       }),
     });
   });
@@ -133,18 +143,12 @@ async function renderBroadcastScreen(
     waitUntil: "domcontentloaded",
     timeout: 20_000,
   });
-  // Simulate OBS color-key (key=black): make black surfaces transparent so the
-  // game capture behind the browser source shows through, matching OBS output.
-  await page.addStyleTag({
-    content: ".bg-black { background-color: transparent !important; }",
-  });
   const speechLocator = page.getByText("こんにちは世界").first();
   await speechLocator.waitFor({ state: "visible", timeout: 10_000 });
   await page
-    .frameLocator('iframe[src="https://www.nahcnuj.work/vigilant-fiesta/"]')
+    .frameLocator(`iframe[src="${GAME_PAGE_URL}"]`)
     .getByText("スタート")
-    .waitFor({ state: "visible", timeout: 30_000 });
-
+    .waitFor({ state: "visible", timeout: 20_000 });
   await page.clock.pauseAt(new Date(FIXED_CLOCK_MS + 60_000));
 }
 
