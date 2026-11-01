@@ -224,11 +224,11 @@ jobs:
           ANSIBLE_SSH_COMMON_ARGS: -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -p 2222
         run: |
           set -euo pipefail
-          DEPLOY_PLAYBOOK=ansible/playbooks/0_bootstrap.yml bin/deploy.sh
-          DEPLOY_PLAYBOOK=ansible/playbooks/0_desktop.yml bin/deploy.sh
-          DEPLOY_PLAYBOOK=ansible/playbooks/0_obs.yml bin/deploy.sh
-          DEPLOY_PLAYBOOK=ansible/playbooks/1_bun.yml bin/deploy.sh
-          DEPLOY_PLAYBOOK=ansible/playbooks/2_makamujo.yml bin/deploy.sh
+          DEPLOY_PLAYBOOK=ansible/playbooks/0_bootstrap.yml bash bin/deploy.sh
+          DEPLOY_PLAYBOOK=ansible/playbooks/0_desktop.yml bash bin/deploy.sh
+          DEPLOY_PLAYBOOK=ansible/playbooks/0_obs.yml bash bin/deploy.sh
+          DEPLOY_PLAYBOOK=ansible/playbooks/1_bun.yml bash bin/deploy.sh
+          DEPLOY_PLAYBOOK=ansible/playbooks/2_makamujo.yml bash bin/deploy.sh
 
       - name: Observe outbound RTMPS traffic
         env:
