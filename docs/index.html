@@ -308,7 +308,10 @@ twq('config','ov0j6');
   if (liveLink) {
     liveLink.addEventListener("click", function () {
       // X conversion tracking event code
-      twq("event", "tw-ov0j6-rdexl", {});
+      twq("event", "tw-ov0j6-rdexl", {
+        value: 5.00,
+        currency: 'USD',
+      });
       // End X conversion tracking event code
     });
   }

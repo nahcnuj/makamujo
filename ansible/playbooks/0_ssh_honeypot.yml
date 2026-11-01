@@ -86,6 +86,19 @@
         dest: /etc/fail2ban/jail.d/sshd-honeypot.conf
         mode: "0644"
 
+    - name: Determine current SSH client IP
+      ansible.builtin.shell: printf '%s' "${SSH_CONNECTION%% *}"
+      register: ssh_client_ip
+      changed_when: false
+      failed_when: false
+
+    - name: Add current SSH client IP to fail2ban ignoreip
+      ansible.builtin.lineinfile:
+        path: /etc/fail2ban/jail.d/sshd-honeypot.conf
+        regexp: '^ignoreip ='
+        line: "ignoreip = 127.0.0.1/8 ::1 100.64.0.0/10 fd7a:115c:a1e0::/48 {{ ssh_client_ip.stdout }}"
+      when: ssh_client_ip.stdout | length > 0
+
     - name: Enable and start fail2ban
       ansible.builtin.systemd:
         name: fail2ban
@@ -93,7 +106,27 @@
         state: started
         daemon_reload: true
 
+    - name: Clear any previously banned IPs so legitimate clients are not locked out
+      ansible.builtin.command:
+        cmd: fail2ban-client unban --all
+      changed_when: false
+      failed_when: false
+
     - name: Reload fail2ban jails
       ansible.builtin.command:
         cmd: fail2ban-client reload
       changed_when: false
+      failed_when: false
+
+    - name: Clear any previously banned IPs so legitimate clients are not locked out (post-reload)
+      ansible.builtin.command:
+        cmd: fail2ban-client unban --all
+      changed_when: false
+      failed_when: false
+
+    - name: Ignore current SSH client IP at runtime
+      ansible.builtin.command:
+        cmd: "fail2ban-client set sshd addignoreip {{ ssh_client_ip.stdout }}"
+      when: ssh_client_ip.stdout | length > 0
+      changed_when: false
+      failed_when: false

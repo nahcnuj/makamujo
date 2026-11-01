@@ -3,5 +3,6 @@
 # lands in the journal under the fail2ban unit. Keeping the [sshd]
 # Found/Ban lines visible via `journalctl -u fail2ban` is what the
 # honeypot-report action pipelines back into its own records.
+allowipv6 = yes
 loglevel = INFO
 logtarget = STDOUT

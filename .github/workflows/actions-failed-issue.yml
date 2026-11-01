@@ -1,0 +1,100 @@
+name: Issue on GitHub Actions failure
+
+# When any GitHub Actions workflow in this repository fails, collect the failed
+# job logs and open an issue (labeled bug, github_actions) so the failure is
+# tracked and can be auto-driven to a fix.
+
+on:
+  workflow_run:
+    workflows:
+      - "A*"
+      - "B*"
+      - "C*"
+      - "D*"
+      - "E*"
+      - "F*"
+      - "G*"
+      - "H*"
+      - "I*"
+      - "J*"
+      - "K*"
+      - "L*"
+      - "M*"
+      - "N*"
+      - "O*"
+      - "P*"
+      - "Q*"
+      - "R*"
+      - "S*"
+      - "T*"
+      - "U*"
+      - "V*"
+      - "W*"
+      - "X*"
+      - "Y*"
+      - "Z*"
+    types: [completed]
+
+permissions:
+  actions: read
+  issues: write
+
+jobs:
+  file-issue:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: File an issue with the failed logs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          set -euo pipefail
+
+          # Avoid filing a duplicate issue for the same run.
+          existing="$(gh issue list --repo "$GH_REPO" --state open --limit 100 --json body --jq "[.[] | select(.body | contains(\"$RUN_URL\"))] | .[0].number" 2>/dev/null || true)"
+          if [ -n "${existing:-}" ] && [ "${existing}" != "null" ]; then
+            echo "An open issue already references $RUN_URL (#$existing); skipping."
+            exit 0
+          fi
+
+          jobs_json="$(gh run view "$RUN_ID" --repo "$GH_REPO" --json jobs 2>/dev/null || echo '{"jobs":[]}')"
+          failed_jobs="$(echo "$jobs_json" | jq -r '[.jobs[] | select(.conclusion == "failure") | .name] | join(", ")')"
+          echo "failed jobs: ${failed_jobs:-none}"
+
+          log_file="$(mktemp)"
+          body_file="$(mktemp)"
+          gh run view "$RUN_ID" --repo "$GH_REPO" --log-failed > "$log_file" 2>&1 || true
+
+          {
+            echo "A GitHub Actions workflow failed."
+            echo
+            echo "- Workflow: $WORKFLOW"
+            echo "- Run: $RUN_URL"
+            echo "- SHA: \`$SHA\`"
+            echo "- Attempt: $ATTEMPT"
+            echo "- Failed jobs: ${failed_jobs:-none}"
+            echo
+            echo "## Failed logs"
+            echo
+            echo '```'
+            tail -c 60000 "$log_file" || true
+            echo
+            echo '```'
+            echo
+            echo "---"
+            echo "*This issue was created automatically (GitHub Actions: Issue on GitHub Actions failure)*"
+          } > "$body_file"
+
+          title="${WORKFLOW} failed on ${SHA:0:7}: ${failed_jobs:-unknown}"
+          gh issue create --repo "$GH_REPO" \
+            --title "$title" \
+            --body-file "$body_file" \
+            --label bug \
+            --label github_actions

@@ -16,6 +16,8 @@
 [![CodeQL](https://github.com/nahcnuj/makamujo/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/nahcnuj/makamujo/actions/workflows/github-code-scanning/codeql)
 [![Copilot code review](https://github.com/nahcnuj/makamujo/actions/workflows/copilot-pull-request-reviewer/copilot-pull-request-reviewer/badge.svg)](https://github.com/nahcnuj/makamujo/actions/workflows/copilot-pull-request-reviewer/copilot-pull-request-reviewer)
 [![GitHub Advanced Security](https://github.com/nahcnuj/makamujo/actions/workflows/agents/github-advanced-security/badge.svg)](https://github.com/nahcnuj/makamujo/actions/workflows/agents/github-advanced-security)
+
+[![GitHub Pages](https://github.com/nahcnuj/makamujo/actions/workflows/pages.yml/badge.svg)](https://www.nahcnuj.work/makamujo/)
 </div>
 
 - AI speech and Markov‑chain talk model
