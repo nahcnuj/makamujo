@@ -203,7 +203,7 @@ try {
       const _day = Math.ceil(
         (next.getTime() - firstDate.getTime()) / 1000 / 60 / 60 / 24,
       );
-      const title = "滅茶苦茶な落ち物パズル実況"; //`滅茶苦茶なクッキークリッカー実況 ${day}日目`;
+      const title = "【Mathch-Three】滅茶苦茶なゲーム実況【自作ゲーム】"; //`滅茶苦茶なクッキークリッカー実況 ${day}日目`;
       await titleInput.fill(title);
       console.debug(`Filled title: "${title}"`);
     }
