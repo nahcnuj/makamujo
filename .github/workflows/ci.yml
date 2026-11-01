@@ -185,17 +185,14 @@ jobs:
       - name: Start Debian 13 and streaming-server stack
         run: docker compose up -d --build --wait
 
-      - name: Prepare container and Ansible
+      - name: Generate SSH key in container
         run: |
           set -euo pipefail
           docker exec makamujo cat /etc/os-release
 
-          ssh-keygen -t ed25519 -N "" -f /tmp/debian13_key
-          docker exec makamujo mkdir -p /root/.ssh
-          docker cp /tmp/debian13_key.pub makamujo:/root/.ssh/authorized_keys
-          docker exec makamujo chown root:root /root/.ssh/authorized_keys
-          docker exec makamujo chmod 700 /root/.ssh
-          docker exec makamujo chmod 600 /root/.ssh/authorized_keys
+          docker exec makamujo sh -c 'rm -f /tmp/debian13_key /tmp/debian13_key.pub; ssh-keygen -t ed25519 -N "" -f /tmp/debian13_key; mkdir -p /root/.ssh; cp /tmp/debian13_key.pub /root/.ssh/authorized_keys; chmod 700 /root/.ssh; chmod 600 /root/.ssh/authorized_keys; chown root:root /root/.ssh/authorized_keys'
+          docker cp makamujo:/tmp/debian13_key /tmp/debian13_key
+          docker cp makamujo:/tmp/debian13_key.pub /tmp/debian13_key.pub
 
           mkdir -p ~/.ssh
           cp /tmp/debian13_key ~/.ssh/id_deploy
@@ -203,10 +200,21 @@ jobs:
 
           ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_deploy root@127.0.0.1 true
 
+      - name: Install Ansible
+        run: |
+          set -euo pipefail
           pip install -r ansible/requirements.txt
           # CI has no real stream key; provide an empty plaintext vault so the
           # production playbooks can run without a vault password.
           printf 'niconama_stream_key: ""\n' > ansible/inventory/group_vars/all/vault.yml
+          # deploy.sh requires a (non-empty) vault password file even for the
+          # plaintext CI vault.
+          printf 'dummy\n' > ansible/.vault_pass
+          chmod 600 ansible/.vault_pass
+
+      - name: Install additional dependencies
+        run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y tcpdump
 

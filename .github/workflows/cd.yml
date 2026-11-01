@@ -8,6 +8,17 @@ on:
   # on: push が発火しないため、`gh workflow run cd.yml --ref main` で同じ経路を
   # 走らせる。workflow_dispatch は GITHUB_TOKEN / App token でも発火する。
   workflow_dispatch:
+  # 他のワークフロー (例: Debian 13 再現 CI) から呼び出せるようにする。
+  workflow_call:
+    secrets:
+      VPS_SSH_PRIVATE_KEY:
+        required: false
+      VPS_SSH_HOST:
+        required: false
+      VPS_SSH_KNOWN_HOSTS:
+        required: false
+      ANSIBLE_VAULT_PASSWORD:
+        required: false
 
 concurrency:
   group: cd-vps
