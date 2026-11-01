@@ -33,6 +33,7 @@ on:
       - "X*"
       - "Y*"
       - "Z*"
+      - "!Stream Health Check"
     types: [completed]
 
 permissions:
