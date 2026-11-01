@@ -11,7 +11,7 @@ services:
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     healthcheck:
-      test: ["CMD-SHELL", "systemctl is-active ssh.service >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "systemctl is-active ssh.service >/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 12

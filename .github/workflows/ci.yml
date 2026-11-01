@@ -183,11 +183,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Start Debian 13 and streaming-server stack
-        run: docker compose up -d --build --wait
-
-      - name: Generate SSH key in container
         run: |
           set -euo pipefail
+          docker compose up -d --build --wait
+
           docker exec makamujo cat /etc/os-release
 
           docker exec makamujo sh -c 'rm -f /tmp/debian13_key /tmp/debian13_key.pub; ssh-keygen -t ed25519 -N "" -f /tmp/debian13_key; mkdir -p /root/.ssh; cp /tmp/debian13_key.pub /root/.ssh/authorized_keys; chmod 700 /root/.ssh; chmod 600 /root/.ssh/authorized_keys; chown root:root /root/.ssh/authorized_keys'
@@ -218,7 +217,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y tcpdump
 
-      - name: Provision production
+      - name: Provision with Ansible
         env:
           VPS_SSH_HOST: 127.0.0.1
           VPS_SSH_USER: root
@@ -227,10 +226,6 @@ jobs:
         run: |
           set -euo pipefail
           DEPLOY_PLAYBOOK=ansible/playbooks/0_bootstrap.yml bash bin/deploy.sh
-          DEPLOY_PLAYBOOK=ansible/playbooks/0_desktop.yml bash bin/deploy.sh
-          DEPLOY_PLAYBOOK=ansible/playbooks/0_obs.yml bash bin/deploy.sh
-          DEPLOY_PLAYBOOK=ansible/playbooks/1_bun.yml bash bin/deploy.sh
-          DEPLOY_PLAYBOOK=ansible/playbooks/2_makamujo.yml bash bin/deploy.sh
 
       - name: Observe outbound RTMPS traffic
         env:

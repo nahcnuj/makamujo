@@ -14,11 +14,11 @@ on:
       VPS_SSH_PRIVATE_KEY:
         required: false
       VPS_SSH_HOST:
-        required: false
+        required: true
       VPS_SSH_KNOWN_HOSTS:
         required: false
       ANSIBLE_VAULT_PASSWORD:
-        required: false
+        required: true
 
 concurrency:
   group: cd-vps
