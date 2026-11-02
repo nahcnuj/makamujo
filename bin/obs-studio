@@ -27,6 +27,7 @@ flatpak run \
     --system \
     --share=network \
     --socket=pulseaudio \
+    --socket=session-bus \
     --filesystem="$REPO_ROOT" \
     --filesystem="$OBS_CONFIG_DIR" \
     --filesystem="$OBS_CACHE_DIR" \
