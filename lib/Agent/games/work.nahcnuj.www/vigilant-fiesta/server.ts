@@ -4,7 +4,7 @@ export const DEFAULT_GAME_HOME_URL =
   "https://www.nahcnuj.work/vigilant-fiesta/";
 
 /** Magnification applied to the game board inside the browser viewport. */
-export const GAME_SCREEN_ZOOM_FACTOR = 1.5 as const;
+export const GAME_SCREEN_ZOOM_FACTOR = 1.4 as const;
 
 /**
  * Home URL for open / redirect / away detection.
