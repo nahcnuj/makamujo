@@ -26,6 +26,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/0/bus}"
+
 # Prefer already-exported DISPLAY (from bin/start etc.).
 # Only auto-detect when DISPLAY is completely unset.
 if [ -z "${DISPLAY:-}" ] && [ -z "$_DISPLAY_EXPLICIT" ]; then

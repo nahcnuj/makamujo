@@ -3,6 +3,7 @@ Description=Makamujo OBS Studio (Flatpak)
 After=makamujo-xvfb.service makamujo-pipewire.service
 Requires=makamujo-pipewire.service
 Wants=makamujo-xvfb.service
+PartOf=makamujo-xvfb.service
 PartOf=makamujo-pipewire.service
 
 [Service]
@@ -12,6 +13,7 @@ User=root
 Environment=PATH=/root/.bun/bin:/usr/local/bin:/usr/bin:/bin
 Environment=DISPLAY=:10
 Environment=XDG_RUNTIME_DIR=/run/user/0
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus
 Environment=PULSE_SERVER=unix:/run/user/0/pulse/native
 Environment=PULSE_RUNTIME_PATH=/run/user/0/pulse
 Environment=XDG_CONFIG_HOME=/opt/src/makamujo

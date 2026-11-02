@@ -18,6 +18,7 @@ export DISPLAY=:10
 
 # Headless PipeWire (makamujo-pipewire.service / Ansible)
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/0}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/0/bus}"
 export PULSE_SERVER="${PULSE_SERVER:-unix:/run/user/0/pulse/native}"
 
 # Wait for headless PipeWire (makamujo-pipewire.service)
