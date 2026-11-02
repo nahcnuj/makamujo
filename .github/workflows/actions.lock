@@ -6,10 +6,10 @@ workflows:
     '.github/workflows/cd.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/setup-python@v7.1.0'
-        - 'tailscale/github-action@v2'
+        - 'tailscale/github-action@v4'
     '.github/workflows/ssh-connectivity-check.yml':
         - 'actions/checkout@v7.0.1'
-        - 'tailscale/github-action@v2'
+        - 'tailscale/github-action@v4'
 dependencies:
     'actions/checkout@v7.0.1':
         ref: 'v7.0.1'
@@ -21,8 +21,8 @@ dependencies:
         commit: 'sha1-6d4fd22b20465ccc0f7354476588e8df7c9ca0e0'
         owner_id: 44036562
         repo_id: 192625525
-    'tailscale/github-action@v2':
-        ref: 'v2'
-        commit: 'sha1-4e4c49acaa9818630ce0bd7a564372c17e33fb4d'
+    'tailscale/github-action@v4':
+        ref: 'v4'
+        commit: 'sha1-064b10558093f38325e838ddea35486bdc6b1d5c'
         owner_id: 48932923
         repo_id: 360548653
