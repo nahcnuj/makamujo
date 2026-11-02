@@ -123,6 +123,7 @@
           flatpak override com.obsproject.Studio
           --system
           --socket=pulseaudio
+          --socket=session-bus
           --env=XDG_RUNTIME_DIR=/run/user/0
       changed_when: true
 
