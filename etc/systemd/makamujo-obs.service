@@ -3,6 +3,7 @@ Description=Makamujo OBS Studio (Flatpak)
 After=makamujo-xvfb.service makamujo-pipewire.service
 Requires=makamujo-pipewire.service
 Wants=makamujo-xvfb.service
+PartOf=makamujo-xvfb.service
 PartOf=makamujo-pipewire.service
 
 [Service]
