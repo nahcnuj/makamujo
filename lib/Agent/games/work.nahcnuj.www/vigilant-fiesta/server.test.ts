@@ -1,8 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  buildSightResult,
-  GAME_HOME_URL,
-} from "./server";
+import { buildSightResult, GAME_HOME_URL } from "./server";
 
 describe("vigilant-fiesta buildSightResult", () => {
   it("parses score and level from HUD text", () => {
