@@ -1,0 +1,30 @@
+services:
+  makamujo:
+    build:
+      context: .
+      dockerfile: docker/makamujo/Dockerfile
+    container_name: makamujo
+    privileged: true
+    cgroup: host
+    ports:
+      - "2222:22"
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    healthcheck:
+      test: ["CMD-SHELL", "systemctl is-active ssh.service >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  rtmp-backend:
+    image: ossrs/srs:5.0.225
+
+  streaming-server:
+    build:
+      context: ./docker/streaming-server
+      dockerfile: Dockerfile
+    depends_on:
+      - rtmp-backend
+    ports:
+      - "8443:443"

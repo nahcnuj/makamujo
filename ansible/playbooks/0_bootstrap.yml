@@ -15,4 +15,5 @@
           - cron
           - curl
           - git
+          - ffmpeg
         state: present
