@@ -18,6 +18,17 @@ import {
 
 const HOME_URL = "https://www.nahcnuj.work/vigilant-fiesta/";
 
+const restoreGlobalProperty = (
+  key: "document" | "window",
+  descriptor: PropertyDescriptor | undefined,
+) => {
+  if (descriptor) {
+    Object.defineProperty(globalThis, key, descriptor);
+    return;
+  }
+  Reflect.deleteProperty(globalThis, key);
+};
+
 describe("cleanupChromiumLockFiles", () => {
   it("removes SingletonLock and SingletonSocket when present", () => {
     const dir = mkdtempSync(join(tmpdir(), "chromium-lock-"));
@@ -380,15 +391,23 @@ describe("applyGameScreenZoom", () => {
           : (injectedStyles.get(id) ?? null),
     };
     const fakeWindow = { scrollTo: () => {} };
-    const originalDocument = globalThis.document;
-    const originalWindow = globalThis.window;
+    const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "document",
+    );
+    const originalWindowDescriptor = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "window",
+    );
     Object.defineProperty(globalThis, "document", {
       value: fakeDocument,
       configurable: true,
+      writable: true,
     });
     Object.defineProperty(globalThis, "window", {
       value: fakeWindow,
       configurable: true,
+      writable: true,
     });
     try {
       const page = {
@@ -396,14 +415,8 @@ describe("applyGameScreenZoom", () => {
       };
       await applyGameScreenZoom(page, 1.25);
     } finally {
-      Object.defineProperty(globalThis, "document", {
-        value: originalDocument,
-        configurable: true,
-      });
-      Object.defineProperty(globalThis, "window", {
-        value: originalWindow,
-        configurable: true,
-      });
+      restoreGlobalProperty("document", originalDocumentDescriptor);
+      restoreGlobalProperty("window", originalWindowDescriptor);
     }
 
     expect(gameContainer.style.zoom).toBe("1.25");
