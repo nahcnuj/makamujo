@@ -352,6 +352,72 @@ describe("applyGameScreenZoom", () => {
     await applyGameScreenZoom(page, Number.NaN);
     expect(called).toBeFalse();
   });
+
+  it("centers the page and hides title-screen extras", async () => {
+    type FakeElement = {
+      id: string;
+      textContent: string;
+      style: Record<string, string>;
+    };
+    const injectedStyles = new Map<string, FakeElement>();
+    const gameContainer: FakeElement = {
+      id: "game-container",
+      textContent: "",
+      style: {},
+    };
+    const fakeDocument = {
+      documentElement: { style: {} as Record<string, string> },
+      body: { style: {} as Record<string, string> },
+      head: {
+        appendChild: (element: FakeElement) => {
+          injectedStyles.set(element.id, element);
+        },
+      },
+      createElement: () => ({ id: "", textContent: "", style: {} }),
+      getElementById: (id: string) =>
+        id === gameContainer.id
+          ? gameContainer
+          : (injectedStyles.get(id) ?? null),
+    };
+    const fakeWindow = { scrollTo: () => {} };
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    Object.defineProperty(globalThis, "document", {
+      value: fakeDocument,
+      configurable: true,
+    });
+    Object.defineProperty(globalThis, "window", {
+      value: fakeWindow,
+      configurable: true,
+    });
+    try {
+      const page = {
+        evaluate: async (fn: (zoom: number) => void, zoom: number) => fn(zoom),
+      };
+      await applyGameScreenZoom(page, 1.25);
+    } finally {
+      Object.defineProperty(globalThis, "document", {
+        value: originalDocument,
+        configurable: true,
+      });
+      Object.defineProperty(globalThis, "window", {
+        value: originalWindow,
+        configurable: true,
+      });
+    }
+
+    expect(gameContainer.style.zoom).toBe("1.25");
+    expect(fakeDocument.documentElement.style.zoom).toBe("1.0");
+    const injectedStyle = injectedStyles.get("makamujo-game-screen-zoom");
+    expect(injectedStyle?.textContent).toContain(
+      "align-items: center !important",
+    );
+    expect(injectedStyle?.textContent).toContain(
+      "#screen-title #controls-help",
+    );
+    expect(injectedStyle?.textContent).toContain(".ad-slot");
+    expect(injectedStyle?.textContent).toContain("margin-bottom: 0 !important");
+  });
 });
 
 describe("isVigilantFiestaGameUrl", () => {

@@ -175,3 +175,124 @@ jobs:
         run: |
           grep -Eq '^backend = systemd$' etc/fail2ban/jail.d/sshd-honeypot.conf
           grep -Eq '^journalmatch = _SYSTEMD_UNIT=ssh\.service \+ _COMM=sshd \+ _COMM=sshd-session$' etc/fail2ban/jail.d/sshd-honeypot.conf
+
+  streaming-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Build and start the Debian 13 container
+        run: |
+          set -euo pipefail
+          docker build -t makamujo-debian13 -f docker/makamujo/Dockerfile docker/makamujo
+          docker run -d --name makamujo \
+            --privileged \
+            --cgroupns host \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+            -p 2222:22 \
+            --add-host=host.docker.internal:host-gateway \
+            makamujo-debian13
+          for _ in $(seq 1 60); do
+            if docker exec makamujo systemctl is-active --quiet ssh.service; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs makamujo
+          exit 1
+
+      - name: Prepare SSH access
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          ssh-keygen -t ed25519 -N "" -f "$RUNNER_TEMP/debian13_key" -q
+          docker exec makamujo install -d -m 700 /root/.ssh
+          docker cp "$RUNNER_TEMP/debian13_key.pub" makamujo:/root/.ssh/authorized_keys
+          # docker cp preserves the runner UID; sshd StrictModes rejects a key
+          # file that root does not own.
+          docker exec makamujo chown root:root /root/.ssh/authorized_keys
+          docker exec makamujo chmod 600 /root/.ssh/authorized_keys
+          docker exec makamujo sshd -T | grep -E '^(permitrootlogin|authorizedkeysfile|strictmodes) '
+          cp "$RUNNER_TEMP/debian13_key" ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh -p 2222 -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -i ~/.ssh/id_deploy root@127.0.0.1 true
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12"
+
+      - name: Install Ansible
+        run: |
+          set -euo pipefail
+          pip install -r ansible/requirements.txt
+          # CI has no real stream key; provide a plaintext vault and a dummy
+          # password file so the production playbooks can run without secrets.
+          printf 'niconama_stream_key: ""\n' > ansible/inventory/group_vars/all/vault.yml
+          printf 'dummy\n' > ansible/.vault_pass
+          chmod 600 ansible/.vault_pass
+
+      - name: Provision with Ansible
+        env:
+          VPS_SSH_HOST: 127.0.0.1
+          VPS_SSH_USER: root
+          ANSIBLE_HOST_KEY_CHECKING: "False"
+          ANSIBLE_SSH_COMMON_ARGS: -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -p 2222
+        run: |
+          set -euo pipefail
+          DEPLOY_PLAYBOOK=ansible/playbooks/0_bootstrap.yml bash bin/deploy.sh
+
+      - name: Install RTMPS capture tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tcpdump
+          docker exec makamujo apt-get update
+          docker exec makamujo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Capture outbound RTMPS traffic
+        run: |
+          set -euo pipefail
+          openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+            -keyout "$RUNNER_TEMP/rtmps-key.pem" \
+            -out "$RUNNER_TEMP/rtmps-cert.pem" \
+            -subj /CN=host.docker.internal
+          openssl s_server -accept 8443 \
+            -cert "$RUNNER_TEMP/rtmps-cert.pem" \
+            -key "$RUNNER_TEMP/rtmps-key.pem" \
+            -quiet -ign_eof >"$RUNNER_TEMP/rtmps-server.log" 2>&1 &
+          RTMPS_SERVER_PID=$!
+          sudo tcpdump -i any -w "$RUNNER_TEMP/rtmps-capture.pcap" \
+            'tcp port 8443' &
+          TCPDUMP_PID=$!
+          sleep 2
+          docker cp bin/observe-rtmps.sh makamujo:/usr/local/bin/observe-rtmps.sh
+          docker exec makamujo chmod 0755 /usr/local/bin/observe-rtmps.sh
+          docker exec \
+            -e RTMPS_URL=rtmps://host.docker.internal:8443/live/stream \
+            -e DURATION=5 \
+            makamujo /usr/local/bin/observe-rtmps.sh
+          sleep 1
+          sudo kill "$TCPDUMP_PID" 2>/dev/null || true
+          wait "$TCPDUMP_PID" 2>/dev/null || true
+          kill "$RTMPS_SERVER_PID" 2>/dev/null || true
+          test -s "$RUNNER_TEMP/rtmps-capture.pcap"
+          sudo tcpdump -r "$RUNNER_TEMP/rtmps-capture.pcap" -nn -c 5
+
+      - name: Upload the RTMPS capture
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rtmps-capture
+          path: |
+            ${{ runner.temp }}/rtmps-capture.pcap
+            ${{ runner.temp }}/rtmps-server.log
+          if-no-files-found: warn
+
+      - name: Stop the container
+        if: always()
+        run: docker rm -f makamujo || true
