@@ -7,8 +7,8 @@ name: Auto-drive
 # stream-health-check.yml, making auto-drive available for any issue.
 
 on:
-  issues:
-    types: [opened, reopened]
+  # issues:
+  #   types: [opened, reopened]
   pull_request_review:
     types: [submitted, edited, dismissed]
   workflow_dispatch:
