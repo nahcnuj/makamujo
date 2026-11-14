@@ -250,7 +250,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends tcpdump
+          sudo apt-get install -y --no-install-recommends tcpdump ffmpeg
           docker exec makamujo apt-get update
           docker exec makamujo apt-get install -y --no-install-recommends ffmpeg
 
@@ -281,6 +281,10 @@ jobs:
           kill "$RTMPS_SERVER_PID" 2>/dev/null || true
           test -s "$RUNNER_TEMP/rtmps-capture.pcap"
           sudo tcpdump -r "$RUNNER_TEMP/rtmps-capture.pcap" -nn -c 5
+          # Decode one frame from the captured RTMPS stream so the committed
+          # regression PNG reflects the actual streamed video.
+          ffmpeg -y -i "$RUNNER_TEMP/rtmps-server.log" \
+            -frames:v 1 "$RUNNER_TEMP/stream-capture.png" || true
 
       - name: Upload RTMPS capture
         if: always()
@@ -290,6 +294,7 @@ jobs:
           path: |
             ${{ runner.temp }}/rtmps-capture.pcap
             ${{ runner.temp }}/rtmps-server.log
+            ${{ runner.temp }}/stream-capture.png
 
       - name: Stop the container
         if: always()

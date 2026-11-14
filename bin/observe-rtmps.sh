@@ -11,8 +11,11 @@ fi
 
 # The capture target may reject the stream (CI uses a dummy TLS listener), so
 # ignore ffmpeg's exit status; the point is the outbound RTMPS traffic.
+# Stream the actual game window shown on the production X display (:10),
+# not a synthetic test pattern, so the captured frame reflects the real stream.
+DISPLAY_TARGET="${DISPLAY:-:10}"
 timeout "${DURATION}" ffmpeg -hide_banner -loglevel error -re \
-  -f lavfi -i testsrc=size=1280x720:rate=10 \
+  -f x11grab -r 10 -s 1280x720 -draw_mouse 0 -i "${DISPLAY_TARGET}.0+1280,40" \
   -f lavfi -i sine=frequency=1000 \
   -c:v libx264 -preset ultrafast -tune zerolatency \
   -c:a aac -shortest \
