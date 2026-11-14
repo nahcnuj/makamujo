@@ -671,7 +671,10 @@ export const applyGameScreenZoom = async (
       style.id = styleId;
       style.textContent = `
         body {
+          display: flex !important;
+          flex-direction: column !important;
           align-items: center !important;
+          justify-content: center !important;
           padding-top: 0 !important;
           padding-bottom: 0 !important;
         }
