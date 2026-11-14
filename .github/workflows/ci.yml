@@ -281,10 +281,9 @@ jobs:
           kill "$RTMPS_SERVER_PID" 2>/dev/null || true
           test -s "$RUNNER_TEMP/rtmps-capture.pcap"
           sudo tcpdump -r "$RUNNER_TEMP/rtmps-capture.pcap" -nn -c 5
-          # Decode one frame from the captured RTMPS stream so the committed
-          # regression PNG reflects the actual streamed video.
-          ffmpeg -y -i "$RUNNER_TEMP/rtmps-server.log" \
-            -frames:v 1 "$RUNNER_TEMP/stream-capture.png" || true
+          # Pull the frame captured from the real game window streamed to RTMPS.
+          docker cp makamujo:/tmp/makamujo-stream-capture.png "$RUNNER_TEMP/stream-capture.png"
+          test -s "$RUNNER_TEMP/stream-capture.png"
 
       - name: Upload RTMPS capture
         if: always()
