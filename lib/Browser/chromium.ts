@@ -644,9 +644,9 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
  *
  * The stream viewport is fixed (1280x720), while the game page is taller than
  * that on the title screen and sits above the vertical centre while playing.
- * Center the page on the cross axis and drop the title-screen extras (controls
- * help and ads) so the title through the game board fit in the middle of the
- * stream frame. The 1.25 board magnification then fits without clipping.
+ * Center the page on the cross axis and drop the title-screen ad so the title
+ * through the game board fit in the middle of the stream frame. The controls
+ * help stays visible; the 1.25 board magnification then fits without clipping.
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
@@ -681,8 +681,7 @@ export const applyGameScreenZoom = async (
         #screen-playing {
           margin-bottom: 0 !important;
         }
-        #screen-title #controls-help,
-        .ad-slot {
+        #ad-title {
           display: none !important;
         }
       `;

@@ -364,7 +364,7 @@ describe("applyGameScreenZoom", () => {
     expect(called).toBeFalse();
   });
 
-  it("centers the page and hides title-screen extras", async () => {
+  it("centers the page and hides only the title-screen ad", async () => {
     type FakeElement = {
       id: string;
       textContent: string;
@@ -425,10 +425,8 @@ describe("applyGameScreenZoom", () => {
     expect(injectedStyle?.textContent).toContain(
       "align-items: center !important",
     );
-    expect(injectedStyle?.textContent).toContain(
-      "#screen-title #controls-help",
-    );
-    expect(injectedStyle?.textContent).toContain(".ad-slot");
+    expect(injectedStyle?.textContent).not.toContain("#controls-help");
+    expect(injectedStyle?.textContent).toContain("#ad-title");
     expect(injectedStyle?.textContent).toContain("margin-bottom: 0 !important");
   });
 });
