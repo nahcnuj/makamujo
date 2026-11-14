@@ -18,6 +18,17 @@ import {
 
 const HOME_URL = "https://www.nahcnuj.work/vigilant-fiesta/";
 
+const restoreGlobalProperty = (
+  key: "document" | "window",
+  descriptor: PropertyDescriptor | undefined,
+) => {
+  if (descriptor) {
+    Object.defineProperty(globalThis, key, descriptor);
+    return;
+  }
+  Reflect.deleteProperty(globalThis, key);
+};
+
 describe("cleanupChromiumLockFiles", () => {
   it("removes SingletonLock and SingletonSocket when present", () => {
     const dir = mkdtempSync(join(tmpdir(), "chromium-lock-"));
@@ -351,6 +362,72 @@ describe("applyGameScreenZoom", () => {
     };
     await applyGameScreenZoom(page, Number.NaN);
     expect(called).toBeFalse();
+  });
+
+  it("centers the page and hides only the title-screen ad", async () => {
+    type FakeElement = {
+      id: string;
+      textContent: string;
+      style: Record<string, string>;
+    };
+    const injectedStyles = new Map<string, FakeElement>();
+    const gameContainer: FakeElement = {
+      id: "game-container",
+      textContent: "",
+      style: {},
+    };
+    const fakeDocument = {
+      documentElement: { style: {} as Record<string, string> },
+      body: { style: {} as Record<string, string> },
+      head: {
+        appendChild: (element: FakeElement) => {
+          injectedStyles.set(element.id, element);
+        },
+      },
+      createElement: () => ({ id: "", textContent: "", style: {} }),
+      getElementById: (id: string) =>
+        id === gameContainer.id
+          ? gameContainer
+          : (injectedStyles.get(id) ?? null),
+    };
+    const fakeWindow = { scrollTo: () => {} };
+    const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "document",
+    );
+    const originalWindowDescriptor = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "window",
+    );
+    Object.defineProperty(globalThis, "document", {
+      value: fakeDocument,
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "window", {
+      value: fakeWindow,
+      configurable: true,
+      writable: true,
+    });
+    try {
+      const page = {
+        evaluate: async (fn: (zoom: number) => void, zoom: number) => fn(zoom),
+      };
+      await applyGameScreenZoom(page, 1.25);
+    } finally {
+      restoreGlobalProperty("document", originalDocumentDescriptor);
+      restoreGlobalProperty("window", originalWindowDescriptor);
+    }
+
+    expect(gameContainer.style.zoom).toBe("1.25");
+    expect(fakeDocument.documentElement.style.zoom).toBe("1.0");
+    const injectedStyle = injectedStyles.get("makamujo-game-screen-zoom");
+    expect(injectedStyle?.textContent).toContain(
+      "align-items: center !important",
+    );
+    expect(injectedStyle?.textContent).not.toContain("#controls-help");
+    expect(injectedStyle?.textContent).toContain("#ad-title");
+    expect(injectedStyle?.textContent).toContain("margin-bottom: 0 !important");
   });
 });
 
