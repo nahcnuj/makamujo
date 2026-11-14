@@ -274,6 +274,7 @@ jobs:
           TCPDUMP_PID=$!
           sleep 2
           docker cp bin/observe-rtmps.sh makamujo:/usr/local/bin/observe-rtmps.sh
+          docker exec makamujo chmod +x /usr/local/bin/observe-rtmps.sh
           docker exec \
             -e RTMPS_URL=rtmps://host.docker.internal:8443/live/stream \
             -e DURATION=5 \
