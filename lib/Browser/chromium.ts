@@ -670,13 +670,17 @@ export const applyGameScreenZoom = async (
       const style = existingStyle ?? document.createElement("style");
       style.id = styleId;
       style.textContent = `
+        html, body {
+          height: 100% !important;
+          margin: 0 !important;
+          overflow: hidden !important;
+        }
         body {
           display: flex !important;
           flex-direction: column !important;
           align-items: center !important;
           justify-content: center !important;
-          padding-top: 0 !important;
-          padding-bottom: 0 !important;
+          padding: 0 !important;
         }
         #screen-title {
           padding-bottom: 0 !important;
