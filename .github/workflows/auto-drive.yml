@@ -33,3 +33,4 @@ jobs:
       repository: ${{ github.repository }}
       environment: conahcnuj
     secrets: inherit
+    environment: conahcnuj
