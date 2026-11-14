@@ -25,7 +25,7 @@ permissions:
   actions: write
 
 jobs:
-  conahcnuj:
+  auto-drive:
     name: Auto-drive issue
     uses: conahcnuj/conahcnuj/.github/workflows/issue-driver.yml@v2026.11.14
     with:
