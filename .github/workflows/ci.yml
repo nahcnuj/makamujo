@@ -283,16 +283,6 @@ jobs:
           test -s "$RUNNER_TEMP/rtmps-capture.pcap"
           sudo tcpdump -r "$RUNNER_TEMP/rtmps-capture.pcap" -nn -c 5
 
-      - name: Upload the RTMPS capture
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: rtmps-capture
-          path: |
-            ${{ runner.temp }}/rtmps-capture.pcap
-            ${{ runner.temp }}/rtmps-server.log
-          if-no-files-found: warn
-
       - name: Stop the container
         if: always()
         run: docker rm -f makamujo || true
