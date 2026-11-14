@@ -283,6 +283,15 @@ jobs:
           test -s "$RUNNER_TEMP/rtmps-capture.pcap"
           sudo tcpdump -r "$RUNNER_TEMP/rtmps-capture.pcap" -nn -c 5
 
+      - name: Upload RTMPS capture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rtmps-capture
+          path: |
+            ${{ runner.temp }}/rtmps-capture.pcap
+            ${{ runner.temp }}/rtmps-server.log
+
       - name: Stop the container
         if: always()
         run: docker rm -f makamujo || true
