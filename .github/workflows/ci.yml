@@ -245,6 +245,9 @@ jobs:
         run: |
           set -euo pipefail
           DEPLOY_PLAYBOOK=ansible/playbooks/0_bootstrap.yml bash bin/deploy.sh
+          DEPLOY_PLAYBOOK=ansible/playbooks/0_desktop.yml bash bin/deploy.sh
+          DEPLOY_PLAYBOOK=ansible/playbooks/2_makamujo.yml \
+            bash bin/deploy.sh -e "makamujo_git_version=${{ github.head_ref || github.ref_name }}"
 
       - name: Install RTMPS capture tools
         run: |

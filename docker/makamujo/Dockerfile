@@ -11,6 +11,8 @@ RUN apt-get update \
         systemd-sysv \
         python3 \
         openssh-server \
+        fonts-noto-cjk \
+        fonts-ipafont-gothic \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
