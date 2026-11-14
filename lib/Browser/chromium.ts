@@ -644,7 +644,7 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
  *
  * The stream viewport is fixed (1280x720), while the game page is taller than
  * that on the title screen and sits above the vertical centre while playing.
- * Center the page on the cross axis and drop the title-screen ad so the title
+ * Center the page on the cross axis and hide the title-screen ad so the title
  * through the game board fit in the middle of the stream frame. The controls
  * help stays visible; the 1.25 board magnification then fits without clipping.
  */
