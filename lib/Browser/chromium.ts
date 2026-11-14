@@ -638,9 +638,15 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
 /**
  * Apply the Agent-provided magnification to the game screen only.
  *
- * The whole document stays at 1.0 so the page layout (title/result screens,
- * HUD) is unaffected; only the game board (and, as a fallback, the playing
- * screen) is scaled up for the captured stream.
+ * The whole document stays at 1.0 so the page's own responsive sizing is
+ * unaffected; only the game board (and, as a fallback, the playing screen) is
+ * scaled up for the captured stream.
+ *
+ * The stream viewport is fixed (1280x720), while the game page is taller than
+ * that on the title screen and sits above the vertical centre while playing.
+ * Center the page on the cross axis and drop the title-screen ad so the title
+ * through the game board fit in the middle of the stream frame. The controls
+ * help stays visible; the 1.25 board magnification then fits without clipping.
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
@@ -658,6 +664,29 @@ export const applyGameScreenZoom = async (
         document.getElementById("screen-playing");
       if (gameScreen) {
         gameScreen.style.zoom = String(value);
+      }
+      const styleId = "makamujo-game-screen-zoom";
+      const existingStyle = document.getElementById(styleId);
+      const style = existingStyle ?? document.createElement("style");
+      style.id = styleId;
+      style.textContent = `
+        body {
+          align-items: center !important;
+          padding-top: 0 !important;
+          padding-bottom: 0 !important;
+        }
+        #screen-title {
+          padding-bottom: 0 !important;
+        }
+        #screen-playing {
+          margin-bottom: 0 !important;
+        }
+        #ad-title {
+          display: none !important;
+        }
+      `;
+      if (!existingStyle) {
+        document.head.appendChild(style);
       }
       window.scrollTo(0, 0);
     }, zoomValue);
