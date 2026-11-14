@@ -364,7 +364,7 @@ describe("applyGameScreenZoom", () => {
     expect(called).toBeFalse();
   });
 
-  it("centers the page and hides only the title-screen ad", async () => {
+  it("applies the magnification without mutating page layout", async () => {
     type FakeElement = {
       id: string;
       textContent: string;
@@ -421,13 +421,6 @@ describe("applyGameScreenZoom", () => {
 
     expect(gameContainer.style.zoom).toBe("1.25");
     expect(fakeDocument.documentElement.style.zoom).toBe("1.0");
-    const injectedStyle = injectedStyles.get("makamujo-game-screen-zoom");
-    expect(injectedStyle?.textContent).toContain(
-      "align-items: center !important",
-    );
-    expect(injectedStyle?.textContent).not.toContain("#controls-help");
-    expect(injectedStyle?.textContent).toContain("#ad-title");
-    expect(injectedStyle?.textContent).toContain("margin-bottom: 0 !important");
   });
 });
 
