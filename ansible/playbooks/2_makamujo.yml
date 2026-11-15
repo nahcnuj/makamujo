@@ -116,6 +116,7 @@
       ansible.builtin.command:
         cmd: flatpak override com.obsproject.Studio --system --reset
       changed_when: true
+      ignore_errors: true
 
     - name: Flatpak OBS uses host headless Pulse
       ansible.builtin.command:
@@ -126,6 +127,7 @@
           --socket=session-bus
           --env=XDG_RUNTIME_DIR=/run/user/0
       changed_when: true
+      ignore_errors: true
 
     - name: Restart streaming infra
       ansible.builtin.systemd:
@@ -163,6 +165,7 @@
           flatpak run --system --command=sh com.obsproject.Studio
           -c 'test -S "${PULSE_SERVER#unix:}"'
       changed_when: false
+      ignore_errors: true
 
     - name: Install makamujo units from repo
       ansible.builtin.copy:
