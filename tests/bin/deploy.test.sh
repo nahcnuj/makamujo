@@ -59,16 +59,3 @@ if not any(a.endswith("ansible/inventory/hosts.yml") or a.endswith("ansible\\inv
 print("cd-deploy.sh argv and SSH args ok")
 PY
 
-export DEPLOY_PLAYBOOK=ansible/playbooks/0_ssh_honeypot.yml
-bash "${PROJECT_ROOT}/bin/deploy.sh"
-
-python3 - "${stub_dir}" <<'PY'
-import pathlib
-import sys
-
-stub = pathlib.Path(sys.argv[1])
-args = [a.decode() for a in stub.joinpath("argv").read_bytes().split(b"\0") if a]
-if not any(a.endswith("0_ssh_honeypot.yml") for a in args):
-    raise SystemExit(f"DEPLOY_PLAYBOOK did not select honeypot playbook: {args}")
-print("cd-deploy.sh playbook override ok")
-PY

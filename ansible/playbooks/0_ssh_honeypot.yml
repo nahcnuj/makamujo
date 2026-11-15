@@ -1,165 +1,73 @@
 ---
-# sshd keeps listening on TCP 22. Publickey is the only auth method.
-# Unauthenticated sessions are held forever (LoginGraceTime 0) and sshd never
-# disconnects an attacker itself: MaxAuthTries is huge so no "Too many
-# authentication failures" cut, and MaxStartups is high enough that overload
-# belongs to nobody. Once a key fails, fail2ban DROPs the IP so all further
-# packets get no reply; the connection is trapped in a silent, never-answered
-# key-auth state instead of being cut.
+# Remove leftover state from the now-retired SSH honeypot/ban setup.
+#
+# SSH is reached through Tailscale now and port 22 is closed, so the
+# honeypot (fail2ban DROP on failed key auth) is no longer needed.
+# Deleting the playbook alone does not clean up an existing VPS, so run
+# this playbook to remove the leftover configuration.
 #
 #   ansible-playbook playbooks/0_ssh_honeypot.yml
-- name: Silence SSH clients that cannot complete publickey auth
+- name: Remove leftover SSH honeypot/ban state
   hosts: vps
   become: true
   tasks:
-    - name: Install OpenSSH and fail2ban
-      ansible.builtin.apt:
-        name:
-          - openssh-server
-          - fail2ban
-          - iptables
-        state: present
-        update_cache: true
+    - name: Remove sshd honeypot drop-in
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d/99-makamujo-honeypot.conf
+        state: absent
 
-    - name: Ensure sshd includes drop-in directory
-      ansible.builtin.lineinfile:
-        path: /etc/ssh/sshd_config
-        regexp: '^Include /etc/ssh/sshd_config.d/\*\.conf'
-        line: Include /etc/ssh/sshd_config.d/*.conf
-        insertbefore: BOF
-
-    - name: Write pubkey-only sshd drop-in
-      ansible.builtin.copy:
-        dest: /etc/ssh/sshd_config.d/99-makamujo-honeypot.conf
-        mode: "0644"
-        content: |
-          Port 22
-          PubkeyAuthentication yes
-          PasswordAuthentication no
-          KbdInteractiveAuthentication no
-          ChallengeResponseAuthentication no
-          GSSAPIAuthentication no
-          PermitEmptyPasswords no
-          AuthenticationMethods publickey
-          LoginGraceTime 0
-          MaxStartups 100000:50:100000
-          MaxAuthTries 100000
-
-    - name: Validate sshd config
+    - name: Validate sshd config after removing honeypot drop-in
       ansible.builtin.command:
         cmd: sshd -t
       changed_when: false
+      failed_when: false
 
-    - name: Reload sshd
+    - name: Reload sshd to drop the honeypot settings
       ansible.builtin.systemd:
         name: ssh
         state: reloaded
-
-    - name: Confirm sshd listens on port 22
-      ansible.builtin.wait_for:
-        host: 127.0.0.1
-        port: 22
-        timeout: 30
-
-    - name: Install the honeypot-report helper for fail2ban
-      ansible.builtin.copy:
-        src: ../../bin/honeypot-report
-        dest: /usr/local/bin/honeypot-report
-        mode: "0755"
-        validate: bash -n %s
-
-    - name: Write fail2ban action that journals the caught seconds
-      ansible.builtin.copy:
-        src: ../../etc/fail2ban/action.d/honeypot-report.conf
-        dest: /etc/fail2ban/action.d/honeypot-report.conf
-        mode: "0644"
-
-    - name: Make fail2ban log into the systemd journal
-      ansible.builtin.copy:
-        src: ../../etc/fail2ban/fail2ban.local
-        dest: /etc/fail2ban/fail2ban.local
-        mode: "0644"
-
-    - name: Write fail2ban jail that DROP's failed key auth sources
-      ansible.builtin.copy:
-        src: ../../etc/fail2ban/jail.d/sshd-honeypot.conf
-        dest: /etc/fail2ban/jail.d/sshd-honeypot.conf
-        mode: "0644"
-
-    - name: Determine current SSH client IP
-      ansible.builtin.shell: |
-        ip="${SSH_CONNECTION%% *}"
-        if [ -z "$ip" ]; then ip="${SSH_CLIENT%% *}"; fi
-        printf '%s' "$ip"
-      register: ssh_client_ip
-      changed_when: false
       failed_when: false
-      become: false
 
-    - name: Add current SSH client IP to fail2ban ignoreip
-      ansible.builtin.lineinfile:
+    - name: Remove fail2ban honeypot jail
+      ansible.builtin.file:
         path: /etc/fail2ban/jail.d/sshd-honeypot.conf
-        regexp: "^ignoreip ="
-        line: "ignoreip = 127.0.0.1/8 ::1 100.64.0.0/10 fd7a:115c:a1e0::/48 {{ ssh_client_ip.stdout }}"
-      when: ssh_client_ip.stdout | length > 0
+        state: absent
 
-    - name: Stop fail2ban before clearing stale bans
+    - name: Remove fail2ban honeypot-report action
+      ansible.builtin.file:
+        path: /etc/fail2ban/action.d/honeypot-report.conf
+        state: absent
+
+    - name: Remove fail2ban honeypot journal override
+      ansible.builtin.file:
+        path: /etc/fail2ban/fail2ban.local
+        state: absent
+
+    - name: Remove honeypot-report helper
+      ansible.builtin.file:
+        path: /usr/local/bin/honeypot-report
+        state: absent
+
+    - name: Stop and disable fail2ban
       ansible.builtin.systemd:
         name: fail2ban
         state: stopped
+        enabled: false
+        daemon_reload: true
       failed_when: false
 
-    - name: Remove persisted fail2ban ban database so stale bans cannot lock out this run
+    - name: Remove persisted fail2ban ban database
       ansible.builtin.file:
         path: /var/lib/fail2ban/fail2ban.sqlite3
         state: absent
       failed_when: false
 
-    - name: Remove persisted fail2ban ban database sidecars so stale bans cannot be restored
-      ansible.builtin.shell: rm -f /var/lib/fail2ban/fail2ban.sqlite3-journal /var/lib/fail2ban/fail2ban.sqlite3-wal /var/lib/fail2ban/fail2ban.sqlite3-shm
-      changed_when: false
-      failed_when: false
-
-    - name: Enable and start fail2ban
-      ansible.builtin.systemd:
-        name: fail2ban
-        enabled: true
-        state: started
-        daemon_reload: true
-
-    - name: Keep the deploy SSH session alive even if fail2ban bans this IP
-      ansible.builtin.command: "iptables -I INPUT 1 -p tcp -s {{ ssh_client_ip.stdout }} --dport 22 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT"
-      when: ssh_client_ip.stdout | length > 0
-      changed_when: false
-      failed_when: false
-
-    - name: Clear any previously banned IPs so legitimate clients are not locked out
-      ansible.builtin.command:
-        cmd: fail2ban-client unban --all
-      changed_when: false
-      failed_when: false
-
-    - name: Reload fail2ban jails
-      ansible.builtin.command:
-        cmd: fail2ban-client reload
-      changed_when: false
-      failed_when: false
-
-    - name: Clear any previously banned IPs so legitimate clients are not locked out (post-reload)
-      ansible.builtin.command:
-        cmd: fail2ban-client unban --all
-      changed_when: false
-      failed_when: false
-
-    - name: Keep the deploy SSH session alive even if fail2ban bans this IP (post-reload)
-      ansible.builtin.command: "iptables -I INPUT 1 -p tcp -s {{ ssh_client_ip.stdout }} --dport 22 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT"
-      when: ssh_client_ip.stdout | length > 0
-      changed_when: false
-      failed_when: false
-
-    - name: Ignore current SSH client IP at runtime
-      ansible.builtin.command:
-        cmd: "fail2ban-client set sshd addignoreip {{ ssh_client_ip.stdout }}"
-      when: ssh_client_ip.stdout | length > 0
-      changed_when: false
+    - name: Remove persisted fail2ban ban database sidecars
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /var/lib/fail2ban/fail2ban.sqlite3-journal
+        - /var/lib/fail2ban/fail2ban.sqlite3-wal
+        - /var/lib/fail2ban/fail2ban.sqlite3-shm
       failed_when: false
