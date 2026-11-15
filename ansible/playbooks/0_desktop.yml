@@ -59,6 +59,7 @@
           - fonts-ipafont-mincho
           - fonts-noto-cjk
         state: present
+
     - name: Install TTS packages
       ansible.builtin.apt:
         name:
