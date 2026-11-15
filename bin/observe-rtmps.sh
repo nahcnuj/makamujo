@@ -3,7 +3,6 @@ set -euo pipefail
 
 RTMPS_URL="${RTMPS_URL:?RTMPS_URL is required}"
 DURATION="${DURATION:-5}"
-CAPTURE_FRAME="${CAPTURE_FRAME:-/tmp/makamujo-stream-capture.png}"
 
 if ! command -v ffmpeg >/dev/null 2>&1; then
   echo "ffmpeg is required" >&2
@@ -11,18 +10,11 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
 fi
 
 # Stream the actual game window shown on the production X display (:10),
-# not a synthetic test pattern, so the captured frame reflects the real stream.
+# not a synthetic test pattern, so the generated RTMPS traffic reflects the
+# real stream. The committed stream-capture.png regression asset is captured
+# from OBS (the composed broadcast), not from this X11 source, so it is
+# updated by hand rather than regenerated here.
 DISPLAY_TARGET="${DISPLAY:-:10}"
-rm -f "${CAPTURE_FRAME}"
-# Capture a frame a couple of seconds in, after the page has settled and the
-# game-screen zoom/centering CSS has been applied, instead of the very first
-# (possibly blank) frame.
-(
-  sleep 2
-  ffmpeg -hide_banner -loglevel error -f x11grab -r 1 -s 1280x720 -draw_mouse 0 \
-    -i "${DISPLAY_TARGET}.0+1280,40" -frames:v 1 -y "${CAPTURE_FRAME}" >/dev/null 2>&1 || true
-) &
-CAPTURE_PID=$!
 
 timeout "${DURATION}" ffmpeg -hide_banner -loglevel error -re \
   -f x11grab -r 10 -s 1280x720 -draw_mouse 0 -i "${DISPLAY_TARGET}.0+1280,40" \
@@ -31,8 +23,5 @@ timeout "${DURATION}" ffmpeg -hide_banner -loglevel error -re \
   -c:v libx264 -preset ultrafast -tune zerolatency \
   -c:a aac -shortest \
   -f flv "${RTMPS_URL}" || true
-
-wait "${CAPTURE_PID}" 2>/dev/null || true
-test -s "${CAPTURE_FRAME}"
 
 echo "Generated RTMPS traffic to ${RTMPS_URL}"
