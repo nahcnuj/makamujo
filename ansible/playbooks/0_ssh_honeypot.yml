@@ -63,6 +63,11 @@
       failed_when: false
 
     - name: Remove persisted fail2ban ban database sidecars
-      ansible.builtin.shell: rm -f /var/lib/fail2ban/fail2ban.sqlite3-journal /var/lib/fail2ban/fail2ban.sqlite3-wal /var/lib/fail2ban/fail2ban.sqlite3-shm
-      changed_when: false
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /var/lib/fail2ban/fail2ban.sqlite3-journal
+        - /var/lib/fail2ban/fail2ban.sqlite3-wal
+        - /var/lib/fail2ban/fail2ban.sqlite3-shm
       failed_when: false
