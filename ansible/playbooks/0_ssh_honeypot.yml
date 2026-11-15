@@ -48,15 +48,10 @@
         path: /usr/local/bin/honeypot-report
         state: absent
 
-    - name: Stop fail2ban
+    - name: Stop and disable fail2ban
       ansible.builtin.systemd:
         name: fail2ban
         state: stopped
-      failed_when: false
-
-    - name: Disable fail2ban
-      ansible.builtin.systemd:
-        name: fail2ban
         enabled: false
         daemon_reload: true
       failed_when: false
