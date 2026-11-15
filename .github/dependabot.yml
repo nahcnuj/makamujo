@@ -28,7 +28,7 @@ updates:
     groups:
       conahcnuj:
         patterns:
-          - "conahcnuj/conahcnuj/*"
+          - "nahcnuj/conahcnuj/*"
   - package-ecosystem: "docker"
     directory: ".devcontainer"
     schedule:
