@@ -3,7 +3,7 @@ name: Auto-drive
 on:
   issues:
     types:
-    # - opened
+      # - opened
       - reopened
   pull_request_review:
     types: [submitted, edited, dismissed]
