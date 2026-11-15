@@ -426,9 +426,12 @@ describe("applyGameScreenZoom", () => {
       "align-items: center !important",
     );
     expect(injectedStyle?.textContent).toContain(
-      "#screen-title #controls-help",
+      "justify-content: center !important",
     );
-    expect(injectedStyle?.textContent).toContain(".ad-slot");
+    expect(injectedStyle?.textContent).toContain("display: flex !important");
+    expect(injectedStyle?.textContent).toContain("height: 100% !important");
+    expect(injectedStyle?.textContent).toContain("#ad-title");
+    expect(injectedStyle?.textContent).not.toContain("#controls-help");
     expect(injectedStyle?.textContent).toContain("margin-bottom: 0 !important");
   });
 });
