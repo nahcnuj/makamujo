@@ -55,6 +55,7 @@
       ansible.builtin.apt:
         name:
           - chromium
+          - flatpak
           - fonts-ipafont-gothic
           - fonts-ipafont-mincho
           - fonts-noto-cjk
