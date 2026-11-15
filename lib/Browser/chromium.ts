@@ -708,7 +708,9 @@ export const applyGameScreenZoom = async (
           overflow: hidden !important;
         }
         body {
-          align-items: center !important;
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: center !important;
           padding: 0 !important;
         }
         #screen-title {
