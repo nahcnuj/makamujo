@@ -27,7 +27,7 @@ permissions:
 jobs:
   auto-drive:
     name: Auto-drive issue
-    uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@865b20c29945049035f20ae8d739a37866fc0494
+    uses: conahcnuj/conahcnuj/.github/workflows/issue-driver.yml@865b20c29945049035f20ae8d739a37866fc0494
     with:
       number: ${{ github.event.pull_request.number || github.event.issue.number || (github.event.inputs.number && fromJSON(github.event.inputs.number)) }}
       repository: ${{ github.repository }}
