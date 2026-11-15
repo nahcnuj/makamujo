@@ -679,7 +679,6 @@ export const applyGameScreenZoom = async (
         }
         body {
           align-items: center !important;
-          justify-content: center !important;
           padding: 0 !important;
         }
         #screen-title {
