@@ -8,15 +8,15 @@
 
 ## 文書一覧
 
-| ファイル / 領域 | 内容 |
-|------|------|
-| [domain-model-redesign.md](./domain-model-redesign.md) | 配信エージェント BC 再設計（#463 マージ済）。CommentPipeline / silence / Publication |
-| [console-domain-model.md](./console-domain-model.md) | **管理コンソール BC**（Access / Status plan）。UI は `console/src`、純関数は `lib/domain/console` |
-| [統計の読み取り](#統計の読み取り) | 配信ページを描画して統計行を読む。視聴者数 / コメント数 / ニコニコ広告ポイント / ギフトポイント |
-| [配信画面の停止回復](#配信画面の停止回復) | 配信ページの描画した映像の動きを測り、複数周期静止し続けた合成出力を systemd 再起動で回復する |
-| `legacy` vs `main` | orphan main の差分整理と取り込み方針は本 README の実装マップで追跡する（個別文書は持たない） |
-| [legacy-vs-main-integration.md](./legacy-vs-main-integration.md) | **`legacy` vs `main` 差分整理と取り込み方針**（orphan main、port 済み/未着手） |
-| [markov-cli.md](./markov-cli.md) | **markov CLI**（`tools/markov/`）。git `parse-options` と同じ「1 コマンド 1 ファイル、そのコマンドのオプション表だけ解析する」形。表は `--help` の出力（[表の確認方法](./markov-cli.md#表の確認方法)） |
+| ファイル / 領域                                                  | 内容                                                                                                                                                                                                   |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [domain-model-redesign.md](./domain-model-redesign.md)           | 配信エージェント BC 再設計（#463 マージ済）。CommentPipeline / silence / Publication                                                                                                                   |
+| [console-domain-model.md](./console-domain-model.md)             | **管理コンソール BC**（Access / Status plan）。UI は `console/src`、純関数は `lib/domain/console`                                                                                                      |
+| [統計の読み取り](#統計の読み取り)                                | 配信ページを描画して統計行を読む。視聴者数 / コメント数 / ニコニコ広告ポイント / ギフトポイント                                                                                                        |
+| [配信画面の停止回復](#配信画面の停止回復)                        | 配信ページの描画した映像の動きを測り、複数周期静止し続けた合成出力を systemd 再起動で回復する                                                                                                          |
+| `legacy` vs `main`                                               | orphan main の差分整理と取り込み方針は本 README の実装マップで追跡する（個別文書は持たない）                                                                                                           |
+| [legacy-vs-main-integration.md](./legacy-vs-main-integration.md) | **`legacy` vs `main` 差分整理と取り込み方針**（orphan main、port 済み/未着手）                                                                                                                         |
+| [markov-cli.md](./markov-cli.md)                                 | **markov CLI**（`tools/markov/`）。git `parse-options` と同じ「1 コマンド 1 ファイル、そのコマンドのオプション表だけ解析する」形。表は `--help` の出力（[表の確認方法](./markov-cli.md#表の確認方法)） |
 
 ## 読み方（実装エージェント向け）
 
@@ -44,12 +44,12 @@
 
 ### 読む値
 
-| 指標 | ページ上の枠 |
-|------|--------------|
-| 視聴者数 → `niconama.meta.total.listeners` | `watch-count-item` |
-| コメント数 → `commentCount` | `comment-count-item` |
-| ニコニコ広告ポイント → `niconama.meta.total.ad` | `nicoad-count-item` |
-| ギフトポイント → `niconama.meta.total.gift` | `gift-count-item` |
+| 指標                                            | ページ上の枠         |
+| ----------------------------------------------- | -------------------- |
+| 視聴者数 → `niconama.meta.total.listeners`      | `watch-count-item`   |
+| コメント数 → `commentCount`                     | `comment-count-item` |
+| ニコニコ広告ポイント → `niconama.meta.total.ad` | `nicoad-count-item`  |
+| ギフトポイント → `niconama.meta.total.gift`     | `gift-count-item`    |
 
 ページが数値を出している項目はそれを公開する。ページが `-` の項目は
 PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い項目は
@@ -59,23 +59,23 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 
 ### モジュール
 
-| モジュール | 層 | 役割 |
-|------------|----|------|
-| `lib/domain/broadcasting/watchPageStatistics.ts` | domain（純関数） | 統計行の表示テキスト → 数値（`-` / `,` / `万` / `億` 対応） |
-| `lib/domain/publication/assemblePublishedPayload.ts` | domain（純関数） | ページの数値だけ統計を更新し、PUT / POST に無い項目は消さない |
-| `composition/watchPageBrowser.ts` | composition | ブラウザ実体の契約（`open` / `read` / `isAlive` / `discard`）と生読み取りの変換。Playwright 非依存 |
-| `composition/chromiumWatchPageBrowser.ts` | composition | Playwright（Chromium）実装。**必要なときだけ動的 import** |
-| `composition/watchPageStatisticsSource.ts` | composition | 環境変数・採取周期・ブラウザの生存確認と作り直し・失敗ログ。`index.ts` はこれを 1 回呼ぶだけ |
+| モジュール                                           | 層               | 役割                                                                                               |
+| ---------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------- |
+| `lib/domain/broadcasting/watchPageStatistics.ts`     | domain（純関数） | 統計行の表示テキスト → 数値（`-` / `,` / `万` / `億` 対応）                                        |
+| `lib/domain/publication/assemblePublishedPayload.ts` | domain（純関数） | ページの数値だけ統計を更新し、PUT / POST に無い項目は消さない                                      |
+| `composition/watchPageBrowser.ts`                    | composition      | ブラウザ実体の契約（`open` / `read` / `isAlive` / `discard`）と生読み取りの変換。Playwright 非依存 |
+| `composition/chromiumWatchPageBrowser.ts`            | composition      | Playwright（Chromium）実装。**必要なときだけ動的 import**                                          |
+| `composition/watchPageStatisticsSource.ts`           | composition      | 環境変数・採取周期・ブラウザの生存確認と作り直し・失敗ログ。`index.ts` はこれを 1 回呼ぶだけ       |
 
 差し替え口は URL ではなく `createBrowser`（ブラウザ実体そのもの）。
 
 ### 環境変数
 
-| 変数 | 既定 | 意味 |
-|------|------|------|
-| `NICONAMA_WATCH_PAGE_READ_INTERVAL_MS` | `30000` | 採取周期。ページは 30〜60 秒粒度なのでこれより短くしても無駄 |
-| `NICONAMA_WATCH_PAGE_URL` | `DEFAULT_NICONAMA_WATCH_PAGE_URL` | **テスト専用の差し替え口**。本番で読むページはコードに固定している |
-| `NICONAMA_WATCH_PAGE_DISABLED` | （未設定 = 有効） | `1` でブラウザ経路を起動しない。ブラウザを使わないテストが設定する（無効時は `POST /api/meta` へフォールバック） |
+| 変数                                   | 既定                              | 意味                                                                                                             |
+| -------------------------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `NICONAMA_WATCH_PAGE_READ_INTERVAL_MS` | `30000`                           | 採取周期。ページは 30〜60 秒粒度なのでこれより短くしても無駄                                                     |
+| `NICONAMA_WATCH_PAGE_URL`              | `DEFAULT_NICONAMA_WATCH_PAGE_URL` | **テスト専用の差し替え口**。本番で読むページはコードに固定している                                               |
+| `NICONAMA_WATCH_PAGE_DISABLED`         | （未設定 = 有効）                 | `1` でブラウザ経路を起動しない。ブラウザを使わないテストが設定する（無効時は `POST /api/meta` へフォールバック） |
 
 ### ブラウザ操作の契約
 
@@ -102,12 +102,12 @@ PUT / POST（`POST /api/meta`）にある値を消さない。どちらも無い
 
 ## 配信画面の停止回復
 
- 配信画面の**合成出力**（XSHM キャプチャ → x264 エンコード → RTMP の
- 配信側機構）が固まり続けると、配信ページ経由で見える配信画面だけが
- 静止する。検知は既存の配信異常検知がする（`scripts/check-stream.ts` は
- 改変しない: owner 契約 #807）。ここで扱うのは**回復する**経路で、
- セッション内監視（gameStall / compositorHeartbeat / Aw, Snap! watchdog は
- Chromium 内しか見えない）の管轄外にあたる。
+配信画面の**合成出力**（XSHM キャプチャ → x264 エンコード → RTMP の
+配信側機構）が固まり続けると、配信ページ経由で見える配信画面だけが
+静止する。検知は既存の配信異常検知がする（`scripts/check-stream.ts` は
+改変しない: owner 契約 #807）。ここで扱うのは**回復する**経路で、
+セッション内監視（gameStall / compositorHeartbeat / Aw, Snap! watchdog は
+Chromium 内しか見えない）の管轄外にあたる。
 
 外からの検知は「配信映像が 1 秒間まったく変わらない」ことを停止とみなす
 （`videoMinFps` / `gameMinFps`）。ゲームが結果画面やフリートークで止まって
@@ -304,14 +304,14 @@ similarity 0.08 / smoothness 0.05）に消されない明るさで塗る。白�
 
 ### モジュールと配線
 
-| モジュール | 層 | 役割 |
-|------------|----|------|
-| `lib/domain/broadcasting/CompositeFreezePolicy.ts` | domain（純関数） | 周期観測 → 回復ラングの決定 |
-| `composition/watchPageBrowser.ts` | composition | 映像の動きの型と判定（Playwright 非依存） |
-| `composition/chromiumWatchPageBrowser.ts` | composition | 1 窓の映像の動きを測る実装。rAF が来ない環境でも上限で帰る |
-| `composition/watchPageStatisticsSource.ts` | composition | 開いたままのページでの測定の代理。無効時 / 未オープン時は `undefined` |
-| `composition/broadcastFreezeWatchdog.ts` | composition | 採取の周期、ポリシーへの投入、systemd 回復の実行口 |
-| `lib/application/compositeFreezeStateStore.ts` | application | ポリシー状態の `var/` への永続化（壊れたファイルは新規扱い） |
+| モジュール                                         | 層               | 役割                                                                  |
+| -------------------------------------------------- | ---------------- | --------------------------------------------------------------------- |
+| `lib/domain/broadcasting/CompositeFreezePolicy.ts` | domain（純関数） | 周期観測 → 回復ラングの決定                                           |
+| `composition/watchPageBrowser.ts`                  | composition      | 映像の動きの型と判定（Playwright 非依存）                             |
+| `composition/chromiumWatchPageBrowser.ts`          | composition      | 1 窓の映像の動きを測る実装。rAF が来ない環境でも上限で帰る            |
+| `composition/watchPageStatisticsSource.ts`         | composition      | 開いたままのページでの測定の代理。無効時 / 未オープン時は `undefined` |
+| `composition/broadcastFreezeWatchdog.ts`           | composition      | 採取の周期、ポリシーへの投入、systemd 回復の実行口                    |
+| `lib/application/compositeFreezeStateStore.ts`     | application      | ポリシー状態の `var/` への永続化（壊れたファイルは新規扱い）          |
 
 `index.ts` が統計の採取と同じ場所で 1 回だけ配線する。回復口は
 `NODE_ENV=production` のときだけ systemd に触り、それ以外は dry run
@@ -322,27 +322,27 @@ similarity 0.08 / smoothness 0.05）に消されない明るさで塗る。白�
 
 ### 環境変数
 
-| 変数 | 既定 | 意味 |
-|------|------|------|
-| `BROADCAST_FREEZE_CHECK_INTERVAL_MS` | `60000` | 観測周期 |
+| 変数                                      | 既定     | 意味                                               |
+| ----------------------------------------- | -------- | -------------------------------------------------- |
+| `BROADCAST_FREEZE_CHECK_INTERVAL_MS`      | `60000`  | 観測周期                                           |
 | `BROADCAST_FREEZE_MEASUREMENT_TIMEOUT_MS` | `180000` | 1 周期の測定の上限。超えたら測定不能として次へ進む |
-| `BROADCAST_FREEZE_CYCLES` | `1` | 回復を打つまでに必要な `still` の連続周期 |
-| `BROADCAST_FREEZE_RECOVERY_COOLDOWN_MS` | `60000` | 二つの回復の最短間隔 |
+| `BROADCAST_FREEZE_CYCLES`                 | `1`      | 回復を打つまでに必要な `still` の連続周期          |
+| `BROADCAST_FREEZE_RECOVERY_COOLDOWN_MS`   | `60000`  | 二つの回復の最短間隔                               |
 
 ## 実装マップ
 
-| 領域 | パス | 状態 |
-|------|------|------|
-| NGram / Silence / Topic / Scripts | `lib/domain/*` | 済 |
-| 統計のページ読み取り | `lib/domain/broadcasting/watchPageStatistics.ts` | 済 |
-| Publication assemble | `lib/domain/publication/` | 済 |
-| AgentSession + services | `lib/application/` | 済 |
-| 統計のブラウザ読み取り | `composition/watchPageBrowser.ts`, `composition/chromiumWatchPageBrowser.ts`, `composition/watchPageStatisticsSource.ts` | 済 |
-| 配信画面の停止回復 | `lib/domain/broadcasting/CompositeFreezePolicy.ts`, `composition/broadcastFreezeWatchdog.ts` | 済 |
-| Console access / status plan / SSE frames | `lib/domain/console/` | 済（Basic auth 純関数含む） |
-| systemd / make install（main から port） | `Makefile`, `etc/systemd/` | 済 |
-| Outer console WS bridge | `composition/consoleOuterWebSocket.ts` | 済 |
-| Console UI | `console/src/AgentStatus/` | ファサード維持 |
+| 領域                                      | パス                                                                                                                     | 状態                        |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------- |
+| NGram / Silence / Topic / Scripts         | `lib/domain/*`                                                                                                           | 済                          |
+| 統計のページ読み取り                      | `lib/domain/broadcasting/watchPageStatistics.ts`                                                                         | 済                          |
+| Publication assemble                      | `lib/domain/publication/`                                                                                                | 済                          |
+| AgentSession + services                   | `lib/application/`                                                                                                       | 済                          |
+| 統計のブラウザ読み取り                    | `composition/watchPageBrowser.ts`, `composition/chromiumWatchPageBrowser.ts`, `composition/watchPageStatisticsSource.ts` | 済                          |
+| 配信画面の停止回復                        | `lib/domain/broadcasting/CompositeFreezePolicy.ts`, `composition/broadcastFreezeWatchdog.ts`                             | 済                          |
+| Console access / status plan / SSE frames | `lib/domain/console/`                                                                                                    | 済（Basic auth 純関数含む） |
+| systemd / make install（main から port）  | `Makefile`, `etc/systemd/`                                                                                               | 済                          |
+| Outer console WS bridge                   | `composition/consoleOuterWebSocket.ts`                                                                                   | 済                          |
+| Console UI                                | `console/src/AgentStatus/`                                                                                               | ファサード維持              |
 
 ## 関連
 

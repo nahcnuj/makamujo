@@ -99,7 +99,7 @@
     - name: Add current SSH client IP to fail2ban ignoreip
       ansible.builtin.lineinfile:
         path: /etc/fail2ban/jail.d/sshd-honeypot.conf
-        regexp: '^ignoreip ='
+        regexp: "^ignoreip ="
         line: "ignoreip = 127.0.0.1/8 ::1 100.64.0.0/10 fd7a:115c:a1e0::/48 {{ ssh_client_ip.stdout }}"
       when: ssh_client_ip.stdout | length > 0
 

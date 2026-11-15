@@ -27,15 +27,15 @@ usage だけが出る。git は全コマンドで 1 つのオプション表を�
 この CLI も同じ形にする。借りるのは「**1 コマンド 1 ファイル、そのコマンドのオプション表
 だけを解析する**」という構造で、git の実装（C の getopt）そのものではない。
 
-| git | この CLI |
-|---|---|
-| `builtin/<cmd>.c` の `struct option[]` | `tools/markov/commands/<name>.ts` の `options` |
-| usage 文字列に書く `<modelPath>` | `args`（宣言順が位置引数の順） |
-| `parse_options()` | `parseArgs`（`strict: true`） |
-| `usage_with_options()` | `usage` と `help`（宣言から作る） |
-| `run_argv()`（コマンドを選んでパサへ渡す） | `dispatch` |
-| `t/tNNNN-<cmd>.sh` | `tools/markov/commands/<name>.test.ts` |
-| `t/test-lib.sh` | `tools/markov/testLib.ts`（モデルファイルと出力の採取） |
+| git                                        | この CLI                                                |
+| ------------------------------------------ | ------------------------------------------------------- |
+| `builtin/<cmd>.c` の `struct option[]`     | `tools/markov/commands/<name>.ts` の `options`          |
+| usage 文字列に書く `<modelPath>`           | `args`（宣言順が位置引数の順）                          |
+| `parse_options()`                          | `parseArgs`（`strict: true`）                           |
+| `usage_with_options()`                     | `usage` と `help`（宣言から作る）                       |
+| `run_argv()`（コマンドを選んでパサへ渡す） | `dispatch`                                              |
+| `t/tNNNN-<cmd>.sh`                         | `tools/markov/commands/<name>.test.ts`                  |
+| `t/test-lib.sh`                            | `tools/markov/testLib.ts`（モデルファイルと出力の採取） |
 
 ## 表は宣言そのもの
 
@@ -100,16 +100,16 @@ Options:
 
 宣言は 2 つだけ。どちらも「名前 → 宣言」の表で、順序がそのまま usage の順序になる。
 
-| 宣言 | 項目 | 意味 |
-|---|---|---|
-| `args` | `help` | 位置引数の説明。`run` には文字列で届く |
-| `args` | `integer` | 1 以上の整数であることを検証する |
-| `options` | `type` | `"string"` なら値を取る。`"boolean"` ならフラグ |
-| `options` | `short` | 短縮形。`-i` の `i` |
+| 宣言      | 項目      | 意味                                                    |
+| --------- | --------- | ------------------------------------------------------- |
+| `args`    | `help`    | 位置引数の説明。`run` には文字列で届く                  |
+| `args`    | `integer` | 1 以上の整数であることを検証する                        |
+| `options` | `type`    | `"string"` なら値を取る。`"boolean"` ならフラグ         |
+| `options` | `short`   | 短縮形。`-i` の `i`                                     |
 | `options` | `default` | 既定値。省くと `undefined` なので「未指定」と区別できる |
-| `options` | `choices` | 許される値。検証し、ヘルプには `a\|b\|c` と出る |
-| `options` | `integer` | 1 以上の整数であることを検証する |
-| `options` | `help` | ヘルプに出す説明 |
+| `options` | `choices` | 許される値。検証し、ヘルプには `a\|b\|c` と出る         |
+| `options` | `integer` | 1 以上の整数であることを検証する                        |
+| `options` | `help`    | ヘルプに出す説明                                        |
 
 受理する名前はこの表に無いと弾かれる。宣言に無いオプションを「内部用」「隠す」ために
 書く方法はない（書けば表に出る）。
@@ -129,20 +129,20 @@ Options:
 
 ## ファイル
 
-| ファイル | 役割 |
-|---|---|
-| `tools/markov/cli.ts` | 入口。`dispatch(markovCommands, Bun.argv.slice(2))` の 1 行 |
-| `tools/markov/commands.ts` | サブコマンドの並び順（`--help` の並び順）だけを持つ |
-| `tools/markov/commands/<name>.ts` | 1 コマンド 1 ファイル。オプション表（`options`）と処理（`run`） |
-| `tools/markov/command.ts` | 宣言から解析・usage・ヘルプ・終了コードを作る土台 |
-| `tools/markov/modelFile.ts` | モデルファイルの読み込み（`readModelJson`）と書き戻し（`emitModel`） |
-| `tools/markov/output.ts` | 人が読む出力（`visibleNGram`, `printCsv`） |
-| `tools/markov/commands/<name>.test.ts` | 1 コマンド 1 テストファイル。宣言（受け付けるオプション）と `run` の出力を確かめる |
-| `tools/markov/testLib.ts` | コマンドのテストで使う道具（モデルファイルの作成・出力の採取・CSV の分割）だけ |
-| `tools/markov/command.test.ts` | 土台（解析・usage・ヘルプ・終了コード）の単体テスト |
-| `tools/markov/commands.test.ts` | 表全体の約束（並び順・説明の妥当性・他コマンドのオプションを持たないこと） |
-| `tools/markov/modelFile.test.ts` / `tools/markov/output.test.ts` | `modelFile` / `output` の単体テスト |
-| `tools/markov/cli.test.ts` | 実プロセスの統合テスト（別コマンドのオプションを弾く等） |
+| ファイル                                                         | 役割                                                                               |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `tools/markov/cli.ts`                                            | 入口。`dispatch(markovCommands, Bun.argv.slice(2))` の 1 行                        |
+| `tools/markov/commands.ts`                                       | サブコマンドの並び順（`--help` の並び順）だけを持つ                                |
+| `tools/markov/commands/<name>.ts`                                | 1 コマンド 1 ファイル。オプション表（`options`）と処理（`run`）                    |
+| `tools/markov/command.ts`                                        | 宣言から解析・usage・ヘルプ・終了コードを作る土台                                  |
+| `tools/markov/modelFile.ts`                                      | モデルファイルの読み込み（`readModelJson`）と書き戻し（`emitModel`）               |
+| `tools/markov/output.ts`                                         | 人が読む出力（`visibleNGram`, `printCsv`）                                         |
+| `tools/markov/commands/<name>.test.ts`                           | 1 コマンド 1 テストファイル。宣言（受け付けるオプション）と `run` の出力を確かめる |
+| `tools/markov/testLib.ts`                                        | コマンドのテストで使う道具（モデルファイルの作成・出力の採取・CSV の分割）だけ     |
+| `tools/markov/command.test.ts`                                   | 土台（解析・usage・ヘルプ・終了コード）の単体テスト                                |
+| `tools/markov/commands.test.ts`                                  | 表全体の約束（並び順・説明の妥当性・他コマンドのオプションを持たないこと）         |
+| `tools/markov/modelFile.test.ts` / `tools/markov/output.test.ts` | `modelFile` / `output` の単体テスト                                                |
+| `tools/markov/cli.test.ts`                                       | 実プロセスの統合テスト（別コマンドのオプションを弾く等）                           |
 
 モデルと CLI の間の処理は、1 つのコマンドでしか使わないものならそのコマンドファイルに
 置き、複数コマンドで使うものだけを上の 2 ファイルに置く。オプション宣言を共有する

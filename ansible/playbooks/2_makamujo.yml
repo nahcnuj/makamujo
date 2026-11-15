@@ -91,7 +91,6 @@
         - makamujo-screen.service
       failed_when: false
 
-
     - name: Install makamujo-pipewire unit from repo
       ansible.builtin.copy:
         src: "{{ makamujo_src }}/etc/systemd/makamujo-pipewire.service"

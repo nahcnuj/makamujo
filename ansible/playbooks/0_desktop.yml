@@ -2,7 +2,6 @@
   hosts: vps
   become: true
   tasks:
-
     - name: Ensure Debian contrib component is enabled (hts-voice)
       ansible.builtin.shell: |
         set -e
