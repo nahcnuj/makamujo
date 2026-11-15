@@ -15,6 +15,7 @@
           - cron
           - curl
           - git
+          - unzip
         state: present
 
     - name: Install Bun
