@@ -477,6 +477,36 @@ export const create = async (
     ),
   );
 
+  // The X11 capture region is fixed at (1280, 40) with a 1280x720 viewport,
+  // but the headed Chromium window carries its own (non-client) chrome, so its
+  // client area would otherwise start below/right of that origin. Shift the
+  // window so the viewport's client area aligns with the capture region.
+  try {
+    const cdpSession = await ctx.newCDPSession(page);
+    const { windowId } = await cdpSession.send("Browser.getWindowForTarget");
+    const { bounds } = await cdpSession.send("Browser.getWindowBounds", {
+      windowId,
+    });
+    const viewportSize = page.viewportSize() ?? { width: 1280, height: 720 };
+    const chromeLeft =
+      (bounds.width ?? viewportSize.width) - viewportSize.width;
+    const chromeTop =
+      (bounds.height ?? viewportSize.height) - viewportSize.height;
+    await cdpSession.send("Browser.setWindowBounds", {
+      windowId,
+      bounds: {
+        left: 1280 - chromeLeft,
+        top: 40 - chromeTop,
+        width: bounds.width,
+        height: bounds.height,
+        windowState: "normal",
+      },
+    });
+    await cdpSession.detach().catch(() => {});
+  } catch {
+    /* best-effort: keep the default window position if CDP is unavailable */
+  }
+
   let closed = false;
 
   return {
@@ -644,9 +674,11 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
  *
  * The stream viewport is fixed (1280x720), while the game page is taller than
  * that on the title screen and sits above the vertical centre while playing.
- * Center the page on the cross axis and hide the title-screen ad so the title
- * through the game board fit in the middle of the stream frame. The controls
- * help stays visible; the 1.25 board magnification then fits without clipping.
+ * Vertically center the page so the title through the game board fit in the
+ * middle of the stream frame, while keeping the side ads in their normal
+ * positions. The controls help stays visible; the title-screen ad is hidden
+ * so the title-through-board block fits; the 1.25 board magnification then
+ * fits without clipping.
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
@@ -676,10 +708,7 @@ export const applyGameScreenZoom = async (
           overflow: hidden !important;
         }
         body {
-          display: flex !important;
-          flex-direction: column !important;
           align-items: center !important;
-          justify-content: center !important;
           padding: 0 !important;
         }
         #screen-title {
