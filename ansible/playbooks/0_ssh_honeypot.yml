@@ -4,10 +4,9 @@
 # SSH is reached through Tailscale now and port 22 is closed, so the
 # honeypot (fail2ban DROP on failed key auth) is no longer needed.
 # Deleting the playbook alone does not clean up an existing VPS, so run
-# this playbook (or rely on CD, which runs the same tasks) to remove
-# the leftover configuration.
+# this playbook to remove the leftover configuration.
 #
-#   ansible-playbook playbooks/0_ssh_honeypot_remove.yml
+#   ansible-playbook playbooks/0_ssh_honeypot.yml
 - name: Remove leftover SSH honeypot/ban state
   hosts: vps
   become: true

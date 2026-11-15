@@ -85,16 +85,16 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 
 ## Playbooks（概要）
 
-| 順  | ファイル                    | 役割                                               |
-| --- | --------------------------- | -------------------------------------------------- |
-| 0   | `0_bootstrap.yml`           | ベース                                             |
-| 0   | `0_tailscale.yml`           | Tailscale のインストールと SSH 有効化              |
-| 0   | `0_ssh_honeypot_remove.yml` | 旧 SSH honeypot/ban の後始末（削除後に 1 回流す）  |
-| 0   | `0_desktop.yml`             | 配信用 Xvfb `:10` / ログイン用 `:11` / VNC / noVNC |
-| 0   | `0_obs.yml`                 | OBS Flatpak                                        |
-| 0   | `0_secrets.yml`             | stream key → service.json                          |
-| 1   | `1_bun.yml`                 | Bun                                                |
-| 2   | `2_makamujo.yml`            | アプリ clone / 依存 / TLS / key 再適用             |
+| 順  | ファイル             | 役割                                               |
+| --- | -------------------- | -------------------------------------------------- |
+| 0   | `0_bootstrap.yml`    | ベース                                             |
+| 0   | `0_tailscale.yml`    | Tailscale のインストールと SSH 有効化              |
+| 0   | `0_ssh_honeypot.yml` | 旧 SSH honeypot/ban の後始末（削除後に 1 回流す）  |
+| 0   | `0_desktop.yml`      | 配信用 Xvfb `:10` / ログイン用 `:11` / VNC / noVNC |
+| 0   | `0_obs.yml`          | OBS Flatpak                                        |
+| 0   | `0_secrets.yml`      | stream key → service.json                          |
+| 1   | `1_bun.yml`          | Bun                                                |
+| 2   | `2_makamujo.yml`     | アプリ clone / 依存 / TLS / key 再適用             |
 
 ## デプロイ後の再起動（ad-hoc）
 

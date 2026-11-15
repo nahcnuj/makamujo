@@ -20,48 +20,6 @@
         version: main
         force: true
 
-    - name: Remove leftover SSH honeypot/ban state
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - /etc/ssh/sshd_config.d/99-makamujo-honeypot.conf
-        - /etc/fail2ban/jail.d/sshd-honeypot.conf
-        - /etc/fail2ban/action.d/honeypot-report.conf
-        - /etc/fail2ban/fail2ban.local
-        - /usr/local/bin/honeypot-report
-
-    - name: Validate sshd config after removing honeypot drop-in
-      ansible.builtin.command:
-        cmd: sshd -t
-      changed_when: false
-      failed_when: false
-
-    - name: Reload sshd to drop the honeypot settings
-      ansible.builtin.systemd:
-        name: ssh
-        state: reloaded
-      failed_when: false
-
-    - name: Stop and disable fail2ban
-      ansible.builtin.systemd:
-        name: fail2ban
-        state: stopped
-        enabled: false
-        daemon_reload: true
-      failed_when: false
-
-    - name: Remove persisted fail2ban ban database
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - /var/lib/fail2ban/fail2ban.sqlite3
-        - /var/lib/fail2ban/fail2ban.sqlite3-journal
-        - /var/lib/fail2ban/fail2ban.sqlite3-wal
-        - /var/lib/fail2ban/fail2ban.sqlite3-shm
-      failed_when: false
-
     - name: Install production dependencies with Bun
       ansible.builtin.command:
         cmd: bun install --production
