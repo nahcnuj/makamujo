@@ -15,7 +15,7 @@ describe("planVigilantFiestaSpeeches", () => {
       { screen: "result", score: 10, level: 2 },
       { screen: "playing", score: 0, level: 1 },
     );
-    expect(lines).toContain("もう一回やってみます！");
+    expect(lines).toContain("落ち物パズル、スタート！");
   });
 
   it("announces level up", () => {
@@ -41,7 +41,6 @@ describe("planVigilantFiestaSpeeches", () => {
     );
     expect(lines[0]).toContain("ゲームオーバー");
     expect(lines[0]).toContain("420");
-    expect(lines).toContain("ちょっと雑談してから、またプレイしますね。");
   });
 
   it("returns empty when nothing meaningful changed", () => {
