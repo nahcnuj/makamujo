@@ -27,10 +27,10 @@ jobs:
     #   emergency: ${{ steps.create-issue.outputs.emergency }}
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: oven-sh/setup-bun@v2.2.0
 
       - name: Install dependencies
         run: bun ci
@@ -151,11 +151,14 @@ jobs:
   #   name: Auto-drive emergency fix
   #   needs: check-stream
   #   if: failure() && needs.check-stream.result == 'failure' && needs.check-stream.outputs.issue-number != '' && needs.check-stream.outputs.emergency == 'true'
-  #   uses: nahcnuj/conahcnuj/.github/workflows/issue-driver.yml@6dade79635b82a169b2351dd6c064466d7ae36d8
+  #   uses: conahcnuj/conahcnuj/.github/workflows/issue-driver.yml@b7a73e3e973c65d517b1c35f639662fb93783b45
   #   with:
   #     number: ${{ fromJSON(needs.check-stream.outputs.issue-number) }}
   #     repository: ${{ github.repository }}
   #     environment: conahcnuj
   #     #runs-on: ubuntu-latest-4-cores
   #     effort: max
-  #   secrets: inherit
+  #   secrets:
+  #     APP_ID: ${{ secrets.APP_ID }}
+  #     INSTALLATION_ID: ${{ secrets.INSTALLATION_ID }}
+  #     PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
