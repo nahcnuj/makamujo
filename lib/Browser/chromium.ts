@@ -477,6 +477,34 @@ export const create = async (
     ),
   );
 
+  // The X11 capture region is fixed at (1280, 40) with a 1280x720 viewport,
+  // but the headed Chromium window carries its own (non-client) chrome, so its
+  // client area would otherwise start below/right of that origin. Shift the
+  // window so the viewport's client area aligns with the capture region.
+  try {
+    const cdpSession = await ctx.newCDPSession(page);
+    const { windowId } = await cdpSession.send("Browser.getWindowForTarget");
+    const { bounds } = await cdpSession.send("Browser.getWindowBounds", {
+      windowId,
+    });
+    const viewportSize = page.viewportSize() ?? { width: 1280, height: 720 };
+    const chromeLeft = (bounds.width ?? viewportSize.width) - viewportSize.width;
+    const chromeTop = (bounds.height ?? viewportSize.height) - viewportSize.height;
+    await cdpSession.send("Browser.setWindowBounds", {
+      windowId,
+      bounds: {
+        left: 1280 - chromeLeft,
+        top: 40 - chromeTop,
+        width: bounds.width,
+        height: bounds.height,
+        windowState: "normal",
+      },
+    });
+    await cdpSession.detach().catch(() => {});
+  } catch {
+    /* best-effort: keep the default window position if CDP is unavailable */
+  }
+
   let closed = false;
 
   return {
