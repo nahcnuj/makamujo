@@ -316,8 +316,8 @@ export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
   "--disable-renderer-backgrounding",
 ] as const;
 
-export const GAME_SCREEN_ZOOM = "1.25" as const;
-export const GAME_SCREEN_ZOOM_FACTOR = 1.25 as const;
+export const GAME_SCREEN_ZOOM = "1.35" as const;
+export const GAME_SCREEN_ZOOM_FACTOR = 1.35 as const;
 
 export type BrowserCreateOptions = {
   /** Magnification for the Agent's game board. */
@@ -677,7 +677,7 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
  * Vertically center the page so the title through the game board fit in the
  * middle of the stream frame, while keeping the side ads in their normal
  * positions. The controls help stays visible; the title-screen ad is hidden
- * so the title-through-board block fits; the 1.25 board magnification then
+ * so the title-through-board block fits; the 1.35 board magnification then
  * fits without clipping.
  */
 export const applyGameScreenZoom = async (
