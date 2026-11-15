@@ -77,11 +77,11 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 
 ### 関連 playbook
 
-| Playbook | 内容 |
-|----------|------|
-| `playbooks/0_secrets.yml` | Vault → `service.json` のみ |
+| Playbook                   | 内容                                           |
+| -------------------------- | ---------------------------------------------- |
+| `playbooks/0_secrets.yml`  | Vault → `service.json` のみ                    |
 | `playbooks/2_makamujo.yml` | デプロイ後、vault があれば同じ書き込みを再実行 |
-| `playbooks/0_obs.yml` | OBS Flatpak のみ（キーは触らない） |
+| `playbooks/0_obs.yml`      | OBS Flatpak のみ（キーは触らない）             |
 
 ## GitHub Actions CD
 
@@ -101,15 +101,15 @@ push イベント経由では CI の push run を待ちます。**その run が
 
 必要な GitHub Secrets（Environment `prod` またはリポジトリ Secrets）:
 
-| Secret | 必須 | 内容 |
-|--------|------|------|
-| `VPS_SSH_PRIVATE_KEY` | yes | VPS に入る SSH 秘密鍵 |
-| `VPS_SSH_HOST` | yes | SSH 先（IP またはホスト名）。inventory の `makamujo` エイリアスは runner では使わない |
-| `ANSIBLE_VAULT_PASSWORD` | yes | `inventory/group_vars/all/vault.yml` の復号パスワード |
-| `VPS_SSH_USER` | no | SSH ユーザー。省略時 `root` |
-| `VPS_SSH_KNOWN_HOSTS` | no | `ssh-keyscan` 形式の known_hosts。未設定時は実行時に `ssh-keyscan` |
-| `TAILSCALE_OAUTH_CLIENT_ID` | no | CD / SSH 疎通確認ワークフロー用 Tailscale OAuth クライアント ID |
-| `TAILSCALE_OAUTH_SECRET` | no | CD / SSH 疎通確認ワークフロー用 Tailscale OAuth クライアントシークレット |
+| Secret                      | 必須 | 内容                                                                                  |
+| --------------------------- | ---- | ------------------------------------------------------------------------------------- |
+| `VPS_SSH_PRIVATE_KEY`       | yes  | VPS に入る SSH 秘密鍵                                                                 |
+| `VPS_SSH_HOST`              | yes  | SSH 先（IP またはホスト名）。inventory の `makamujo` エイリアスは runner では使わない |
+| `ANSIBLE_VAULT_PASSWORD`    | yes  | `inventory/group_vars/all/vault.yml` の復号パスワード                                 |
+| `VPS_SSH_USER`              | no   | SSH ユーザー。省略時 `root`                                                           |
+| `VPS_SSH_KNOWN_HOSTS`       | no   | `ssh-keyscan` 形式の known_hosts。未設定時は実行時に `ssh-keyscan`                    |
+| `TAILSCALE_OAUTH_CLIENT_ID` | no   | CD / SSH 疎通確認ワークフロー用 Tailscale OAuth クライアント ID                       |
+| `TAILSCALE_OAUTH_SECRET`    | no   | CD / SSH 疎通確認ワークフロー用 Tailscale OAuth クライアントシークレット              |
 
 SSH 疎通確認ワークフローで Tailscale OAuth を使う場合は、OAuth クライアントに `auth_keys` の Write スコープとタグ `tag:ci` を付与すること（未付与だと "OAuth identity empty" で失敗する）。
 
@@ -117,16 +117,16 @@ SSH 疎通確認ワークフローで Tailscale OAuth を使う場合は、OAuth
 
 ## Playbooks（概要）
 
-| 順 | ファイル | 役割 |
-|----|----------|------|
-| 0 | `0_bootstrap.yml` | ベース |
-| 0 | `0_ssh_honeypot.yml` | 22 番は sshd のまま。公開鍵認証できない相手は応答せず保持する |
-| 0 | `0_tailscale.yml` | Tailscale のインストールと SSH 有効化 |
-| 0 | `0_desktop.yml` | 配信用 Xvfb `:10` / ログイン用 `:11` / VNC / noVNC |
-| 0 | `0_obs.yml` | OBS Flatpak |
-| 0 | `0_secrets.yml` | stream key → service.json |
-| 1 | `1_bun.yml` | Bun |
-| 2 | `2_makamujo.yml` | アプリ clone / 依存 / TLS / key 再適用 |
+| 順  | ファイル             | 役割                                                          |
+| --- | -------------------- | ------------------------------------------------------------- |
+| 0   | `0_bootstrap.yml`    | ベース                                                        |
+| 0   | `0_ssh_honeypot.yml` | 22 番は sshd のまま。公開鍵認証できない相手は応答せず保持する |
+| 0   | `0_tailscale.yml`    | Tailscale のインストールと SSH 有効化                         |
+| 0   | `0_desktop.yml`      | 配信用 Xvfb `:10` / ログイン用 `:11` / VNC / noVNC            |
+| 0   | `0_obs.yml`          | OBS Flatpak                                                   |
+| 0   | `0_secrets.yml`      | stream key → service.json                                     |
+| 1   | `1_bun.yml`          | Bun                                                           |
+| 2   | `2_makamujo.yml`     | アプリ clone / 依存 / TLS / key 再適用                        |
 
 ## Niconico に人がログインする（noVNC）
 
@@ -142,11 +142,11 @@ SSH 疎通確認ワークフローで Tailscale OAuth を使う場合は、OAuth
 - 認証がない（`x11vnc` も `-nopw`）ため、到達した人はそのまま Niconico のセッションを操作できてしまう
 - ログインが必要なのは `reserve.ts` の実行中だけで、それ以外の時間に 24 時間エンドポイントを残す理由がない
 
-| ポート | 中身 | 束縛 | 稼働 |
-|--------|------|------|------|
-| 5900 | `makamujo-x11vnc`（RFB、配信用 `:10`） | `127.0.0.1` のみ | 常時（従来どおり） |
-| 5901 | `makamujo-login-x11vnc`（RFB、ログイン用 `:11`） | `127.0.0.1` のみ | `reserve.ts` 実行中のみ |
-| 6080 | `makamujo-novnc`（websockify、noVNC の静的ファイルも配信） | `127.0.0.1` のみ | `reserve.ts` 実行中のみ |
+| ポート | 中身                                                       | 束縛             | 稼働                    |
+| ------ | ---------------------------------------------------------- | ---------------- | ----------------------- |
+| 5900   | `makamujo-x11vnc`（RFB、配信用 `:10`）                     | `127.0.0.1` のみ | 常時（従来どおり）      |
+| 5901   | `makamujo-login-x11vnc`（RFB、ログイン用 `:11`）           | `127.0.0.1` のみ | `reserve.ts` 実行中のみ |
+| 6080   | `makamujo-novnc`（websockify、noVNC の静的ファイルも配信） | `127.0.0.1` のみ | `reserve.ts` 実行中のみ |
 
 **認証はありません。** 到達経路は SSH トンネルのみにしてください。セキュリティグループでも 6080 を開かないこと。リポジトリ内のどの playbook にも 6080 を開ける処理はありません。公開は VPS プロバイダのセキュリティグループ側の責務です。
 
@@ -241,6 +241,7 @@ journalctl -u fail2ban
 - リクエスト受信時刻 = その IP の**最初の** fail2ban `Found` イベントに埋め込まれた sshd ログ側のタイムスタンプ。`LoginGraceTime 0` で保持されている間も認証を続けるとイベントが積み上がるため、`Found` が BAN 後も増えていく様子も同じ出力で確認できます。
 - 設定: `ansible/playbooks/0_ssh_honeypot.yml` が `bin/honeypot-report` を `/usr/local/bin/honeypot-report` に導入し（アプリのデプロイとは独立）、`etc/fail2ban/`（action.d / fail2ban.local / jail.d）を `/etc/fail2ban/` に配置するため、sshd jail の `action` に `honeypot-report` が載り、fail2ban は journal にログ出力します。jail は `backend = systemd` + `journalmatch = _SYSTEMD_UNIT=ssh.service + _COMM=sshd + _COMM=sshd-session` で直接 ssh journal を読むため、`/var/log/auth.log` が無い環境（rsyslog 未導入の Ubuntu cloud image など）でも動作します。設定自体は CI の `fail2ban-config` ジョブで `fail2ban-client -t` と journal 読取設定の回帰チェックを行います。
 - 手動再現:
+
   ```sh
   journalctl -u fail2ban --since=-24h | bin/honeypot-report --ip 203.0.113.5
   ```

@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.6.5/schema.json",
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
@@ -23,7 +23,13 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "preset": "recommended"
+      "preset": "recommended",
+      "performance": {
+        "useDomNodeTextContent": "off"
+      },
+      "correctness": {
+        "noComponentHookFactories": "off"
+      }
     }
   },
   "files": {

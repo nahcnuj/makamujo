@@ -3,26 +3,29 @@
 このファイルはAIエージェント専用の指示書です。作業前に一読し、コマンドや契約に従ってください。
 
 ## 実行環境
+
 - Bun プロジェクト。作業開始時に `bun --version` で利用可否を確認する。使えない場合は実行を繰り返さず、原因（環境初期化不足）を解消してから進める。
 - 依存関係は lockfile 準拠の `bun ci` で導入する（`bun install` は lockfile を更新しうるため基本使わない）。
 - 環境初期化は `bun run setup`（`bun --version && bun ci && bun run typecheck`）でも可。
 
 ## コマンド
-| コマンド | 内容 |
-|---|---|
-| `bun run dev` | 開発サーバー: `bun --hot index.ts --port=8777` |
-| `bun run start` | 本番: `NODE_ENV=production bun index.ts --port=7777`（POSIX シェル必需） |
-| `bun run typecheck` | `tsc --noEmit` |
-| `bun run lint` | Biome（`--error-on-warnings .`） |
-| `bun run format` | Biome 自動修正（`--write .`） |
-| `bun run test` | 単体テスト（lib/src/routes/console/src など）。単発は `bun test <path>` |
-| `bun run test:integration` | `bun test tests/integration/` |
-| `bun run test:bin` | `tests/bin/*.sh` のシェルテスト（bash 必需） |
-| `bun run test:e2e` | Playwright E2E（要 `pretest:e2e`、HTTPS 443） |
+
+| コマンド                   | 内容                                                                     |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `bun run dev`              | 開発サーバー: `bun --hot index.ts --port=8777`                           |
+| `bun run start`            | 本番: `NODE_ENV=production bun index.ts --port=7777`（POSIX シェル必需） |
+| `bun run typecheck`        | `tsc --noEmit`                                                           |
+| `bun run lint`             | Biome（`--error-on-warnings .`）                                         |
+| `bun run format`           | Biome 自動修正（`--write .`）                                            |
+| `bun run test`             | 単体テスト（lib/src/routes/console/src など）。単発は `bun test <path>`  |
+| `bun run test:integration` | `bun test tests/integration/`                                            |
+| `bun run test:bin`         | `tests/bin/*.sh` のシェルテスト（bash 必需）                             |
+| `bun run test:e2e`         | Playwright E2E（要 `pretest:e2e`、HTTPS 443）                            |
 
 その他スクリプト（`browser` / `generate-ogp` / `screenshot:console-agent-status` / `markov` 等）は `package.json` 参照。
 
 ### 動作確認の順序
+
 1. `bun run lint`
 2. `bun run typecheck`
 3. `bun run test`
@@ -31,10 +34,12 @@
 シェルスクリプト変更は `bun run test:bin`、UI 変更は `bun run test:e2e` も追加する。作業完了はすべてこの確認が通った時点。
 
 ### git hooks
+
 - `.githooks/` に pre-commit（`bun run format`）と pre-push（typecheck / unit / integration / e2e）がある。
 - ただし `core.hooksPath` は devcontainer 用のパス（`/workspaces/makamujo/.githooks`）に設定されており、手元の環境では hooks が走らないことがある。**チェックは明示的に手動実行する**こと。
 
 ## 技術構成（変更前に把握すること）
+
 - サーバーは **Hono + Bun**。単一入口 `index.ts` が配信画面（`routes/`、`src/`）と管理コンソール（`console/`）の両方を serve し、`composition/` が broadcast / agent 配線 / idle speech timer を組み立てる。
 - **フロントエンドは React ではない**。`package.json` の `imports` が `react` → `hono/jsx/dom` に、`tsconfig.json` の `jsxImportSource` が `"hono/jsx"` にリマップされている。DOM JSX は関数コンポーネントで書く。
 - `automated-gameplay-transmitter` は **npm 依存**（`^0.6.4`）。ソースを改変するなら隣接リポジトリ `~/ghq/github.com/nahcnuj/automated-gameplay-transmitter` を見る。
@@ -45,11 +50,13 @@
 - 統計（視聴者数 / コメント数 / ニコニコ広告ポイント / ギフトポイント）は **わんコメではなく、配信ページをブラウザで描画した画面**から読む。値は unama WebSocket 経由でしか画面に無いため HTML からの取得はできない。読むページは本番ではコードに固定（`DEFAULT_NICONAMA_WATCH_PAGE_URL`）。ブラウザ経路を使わないテストは `NICONAMA_WATCH_PAGE_DISABLED=1` を設定する（その場合は `POST /api/meta` の値をそのまま公開する）。契約は `architecture/README.md` の「統計の読み取り」節。
 
 ## テスト
+
 - 新規に作成する公開関数には必ず単体テストを作成する。
 - テストフレームワークは Bun（`bun:test`、Jest 互換）。`bunfig.toml` で coverage が常時有効（`bun test` はカバレッジ計測つきで若干遅い）。
 - 配置: 単体テストは実装と同階層 `*.test.{ts,tsx}` / 統合 `tests/integration/` / E2E `tests/e2e/` / シェル `tests/bin/`。
 
 ## コーディングスタイル
+
 - TypeScript strict モード、`noUncheckedIndexedAccess` 有効（配列・レコードの添字アクセスは `undefined` になり得る）。
 - 変数宣言は常に `const`。
 - 識別子は具体的に付ける。関数・メソッドは動詞始まり、変数は名詞句始まり。
@@ -58,6 +65,7 @@
 - Biome は `*.test.ts` / `*.test.tsx` も対象。整形は `bun run format` に任せる。
 
 ## 環境・運用手順の注意
+
 - Windows では POSIX 表記のスクリプト（`NODE_ENV=...`、bash 呼び出し）がそのまま動かない。WSL / Git Bash を使うか互換性を確認する。
 - E2E は HTTPS（ポート 443）を要求し、`pretest:e2e` で Chromium を導入する（CI では `scripts/setup-e2e-tls.sh` も実行）。Playwright 設定は `workers: 1`。
 - 生成物（`var/` のログ・TLS、`test-results/`、スクリーンショット）はコミットしない。
