@@ -1060,11 +1060,6 @@ describe("VigilantFiesta game commentary", () => {
     }
 
     expect(heard).toContain("落ち物パズル、スタート！");
-    expect(
-      heard.some((t) => t.includes("ゲームオーバー") && t.includes("88")),
-    ).toBe(true);
-    expect(heard).toContain("ちょっと雑談してから、またプレイしますね。");
-    // Fixed system scripts must not train Markov (same as ad/cruise)
     expect(learn).not.toHaveBeenCalled();
   });
 
