@@ -27,7 +27,7 @@ CPUAccounting=yes
 CPUQuota=100%
 CPUWeight=100
 Nice=-5
-TasksMax=32
+TasksMax=512
 
 [Install]
 WantedBy=multi-user.target
