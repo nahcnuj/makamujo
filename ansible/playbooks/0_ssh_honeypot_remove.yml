@@ -1,0 +1,74 @@
+---
+# Remove leftover state from the now-retired SSH honeypot/ban setup.
+#
+# SSH is reached through Tailscale now and port 22 is closed, so the
+# honeypot (fail2ban DROP on failed key auth) is no longer needed.
+# Deleting the playbook alone does not clean up an existing VPS, so run
+# this playbook (or rely on CD, which runs the same tasks) to remove
+# the leftover configuration.
+#
+#   ansible-playbook playbooks/0_ssh_honeypot_remove.yml
+- name: Remove leftover SSH honeypot/ban state
+  hosts: vps
+  become: true
+  tasks:
+    - name: Remove sshd honeypot drop-in
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d/99-makamujo-honeypot.conf
+        state: absent
+
+    - name: Validate sshd config after removing honeypot drop-in
+      ansible.builtin.command:
+        cmd: sshd -t
+      changed_when: false
+      failed_when: false
+
+    - name: Reload sshd to drop the honeypot settings
+      ansible.builtin.systemd:
+        name: ssh
+        state: reloaded
+      failed_when: false
+
+    - name: Remove fail2ban honeypot jail
+      ansible.builtin.file:
+        path: /etc/fail2ban/jail.d/sshd-honeypot.conf
+        state: absent
+
+    - name: Remove fail2ban honeypot-report action
+      ansible.builtin.file:
+        path: /etc/fail2ban/action.d/honeypot-report.conf
+        state: absent
+
+    - name: Remove fail2ban honeypot journal override
+      ansible.builtin.file:
+        path: /etc/fail2ban/fail2ban.local
+        state: absent
+
+    - name: Remove honeypot-report helper
+      ansible.builtin.file:
+        path: /usr/local/bin/honeypot-report
+        state: absent
+
+    - name: Stop fail2ban
+      ansible.builtin.systemd:
+        name: fail2ban
+        state: stopped
+      failed_when: false
+
+    - name: Disable fail2ban
+      ansible.builtin.systemd:
+        name: fail2ban
+        enabled: false
+        daemon_reload: true
+      failed_when: false
+
+    - name: Remove persisted fail2ban ban database
+      ansible.builtin.file:
+        path: /var/lib/fail2ban/fail2ban.sqlite3
+        state: absent
+      failed_when: false
+
+    - name: Remove persisted fail2ban ban database sidecars
+      ansible.builtin.shell: rm -f /var/lib/fail2ban/fail2ban.sqlite3-journal /var/lib/fail2ban/fail2ban.sqlite3-wal /var/lib/fail2ban/fail2ban.sqlite3-shm
+      changed_when: false
+      failed_when: false
