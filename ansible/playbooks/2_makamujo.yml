@@ -48,6 +48,7 @@
         name: fail2ban
         state: stopped
         enabled: false
+        daemon_reload: true
       failed_when: false
 
     - name: Remove persisted fail2ban ban database
