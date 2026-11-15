@@ -85,7 +85,7 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 
 ## GitHub Actions CD
 
-`main` への push で `.github/workflows/cd.yml` が走り、そのコミットの CI（`.github/workflows/ci.yml` の **push** run）が success になってから、先に `playbooks/0_ssh_honeypot.yml`（22 番 sshd の公開鍵以外を沈黙）、続けて `playbooks/2_makamujo.yml` を VPS に適用します。checkout 対象は playbook どおり `main` です。
+`main` への push で `.github/workflows/cd.yml` が走り、そのコミットの CI（`.github/workflows/ci.yml` の **push** run）が success になってから、`playbooks/2_makamujo.yml` を VPS に適用します。checkout 対象は playbook どおり `main` です。
 
 ### 手動デプロイ
 
@@ -117,16 +117,15 @@ SSH 疎通確認ワークフローで Tailscale OAuth を使う場合は、OAuth
 
 ## Playbooks（概要）
 
-| 順  | ファイル             | 役割                                                          |
-| --- | -------------------- | ------------------------------------------------------------- |
-| 0   | `0_bootstrap.yml`    | ベース                                                        |
-| 0   | `0_ssh_honeypot.yml` | 22 番は sshd のまま。公開鍵認証できない相手は応答せず保持する |
-| 0   | `0_tailscale.yml`    | Tailscale のインストールと SSH 有効化                         |
-| 0   | `0_desktop.yml`      | 配信用 Xvfb `:10` / ログイン用 `:11` / VNC / noVNC            |
-| 0   | `0_obs.yml`          | OBS Flatpak                                                   |
-| 0   | `0_secrets.yml`      | stream key → service.json                                     |
-| 1   | `1_bun.yml`          | Bun                                                           |
-| 2   | `2_makamujo.yml`     | アプリ clone / 依存 / TLS / key 再適用                        |
+| 順  | ファイル          | 役割                                               |
+| --- | ----------------- | -------------------------------------------------- |
+| 0   | `0_bootstrap.yml` | ベース                                             |
+| 0   | `0_tailscale.yml` | Tailscale のインストールと SSH 有効化              |
+| 0   | `0_desktop.yml`   | 配信用 Xvfb `:10` / ログイン用 `:11` / VNC / noVNC |
+| 0   | `0_obs.yml`       | OBS Flatpak                                        |
+| 0   | `0_secrets.yml`   | stream key → service.json                          |
+| 1   | `1_bun.yml`       | Bun                                                |
+| 2   | `2_makamujo.yml`  | アプリ clone / 依存 / TLS / key 再適用             |
 
 ## Niconico に人がログインする（noVNC）
 
@@ -182,70 +181,6 @@ bin/vault-session run ansible-playbook ansible/playbooks/0_desktop.yml
 ```
 
 回帰チェック: `bun test tests/ansible-novnc.test.ts`（`0_desktop.yml` に展開される unit が loopback 束縛であること、**`enabled` になっていないこと**、`:10` を参照しないこと、`2_makamujo.yml` が再起動対象に含まないこと、`reserve.ts` が起動・停止を持ち回すことを検証します）。ライフサイクル本体は `lib/Browser/niconicoSession.ts` で、`bun test lib/Browser/niconicoSession.test.ts` が単体で叩きます。
-
-## SSH ハニーポット
-
-22 番はこれまでどおり OpenSSH が待ち受けます。公開鍵以外の認証は出さず、鍵が通らない接続は切らずに保持します（`LoginGraceTime 0`）。一度失敗した IP は fail2ban が **DROP** するので、以降は応答しません。パスワードでは入れません。CD と手元は鍵のまま 22 番へ入ります。
-
-手元から playbook だけ流す場合（リポジトリルート、Vault セッション利用）:
-
-```sh
-bin/vault-session run ansible-playbook ansible/playbooks/0_ssh_honeypot.yml
-```
-
-### 禁止 IP の確認
-
-1. 鍵で VPS の 22 番へ入る。
-
-```sh
-ssh root@HOST
-```
-
-2. fail2ban の sshd jail を見る。`Banned IP list` が禁止中の IP。
-
-```sh
-fail2ban-client status sshd
-```
-
-jail が無い（`Sorry but the jail 'sshd' does not exist`）場合は `0_ssh_honeypot.yml` がまだ当たっていません。一覧が空なら、まだ誰も BAN されていません。
-
-3. IP だけ欲しいとき、または iptables 側を見るとき。
-
-```sh
-fail2ban-client get sshd banip
-iptables -nL f2b-sshd
-```
-
-4. 誤って自分を DROP したら、VPS 上で解除する。
-
-```sh
-fail2ban-client set sshd unbanip A.B.C.D
-```
-
-sshd / fail2ban のログ:
-
-```sh
-ss -tnp | grep sshd
-journalctl -u ssh -u fail2ban -f
-```
-
-### 捕まえられた時間の確認
-
-`journalctl -u fail2ban` をそのまま実行するだけで、BAN した IP ごとに「SSH リクエストを受け取ってから BAN するまで」の秒数が実績として journal に残ります。fail2ban の BAN 時に `bin/honeypot-report` が計測し、`systemd-cat` で fail2ban の unit に書き込みます（pipe 不要）。fail2ban 自身のログも journal に出す構成（`logtarget = STDOUT`）なので、`[sshd] Found` / `[sshd] Ban` の行も同じ出力に並びます。
-
-```sh
-journalctl -u fail2ban
-# → [sshd] caught 203.0.113.5 for 1s since 2026-09-19 03:11:44
-```
-
-- リクエスト受信時刻 = その IP の**最初の** fail2ban `Found` イベントに埋め込まれた sshd ログ側のタイムスタンプ。`LoginGraceTime 0` で保持されている間も認証を続けるとイベントが積み上がるため、`Found` が BAN 後も増えていく様子も同じ出力で確認できます。
-- 設定: `ansible/playbooks/0_ssh_honeypot.yml` が `bin/honeypot-report` を `/usr/local/bin/honeypot-report` に導入し（アプリのデプロイとは独立）、`etc/fail2ban/`（action.d / fail2ban.local / jail.d）を `/etc/fail2ban/` に配置するため、sshd jail の `action` に `honeypot-report` が載り、fail2ban は journal にログ出力します。jail は `backend = systemd` + `journalmatch = _SYSTEMD_UNIT=ssh.service + _COMM=sshd + _COMM=sshd-session` で直接 ssh journal を読むため、`/var/log/auth.log` が無い環境（rsyslog 未導入の Ubuntu cloud image など）でも動作します。設定自体は CI の `fail2ban-config` ジョブで `fail2ban-client -t` と journal 読取設定の回帰チェックを行います。
-- 手動再現:
-
-  ```sh
-  journalctl -u fail2ban --since=-24h | bin/honeypot-report --ip 203.0.113.5
-  ```
-- 単体テスト: `bash tests/bin/honeypot-report.test.sh`。
 
 ## デプロイ後の再起動（ad-hoc）
 

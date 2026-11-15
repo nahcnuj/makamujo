@@ -140,5 +140,4 @@ jobs:
           ANSIBLE_HOST_KEY_CHECKING: "False"
         run: |
           set -euo pipefail
-          DEPLOY_PLAYBOOK=ansible/playbooks/0_ssh_honeypot.yml bash bin/deploy.sh
           bash bin/deploy.sh
