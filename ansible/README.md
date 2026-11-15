@@ -83,38 +83,6 @@ python3 -c "import json; k=json.load(open('/opt/src/makamujo/obs-studio/basic/pr
 | `playbooks/2_makamujo.yml` | デプロイ後、vault があれば同じ書き込みを再実行 |
 | `playbooks/0_obs.yml`      | OBS Flatpak のみ（キーは触らない）             |
 
-## GitHub Actions CD
-
-`main` への push で `.github/workflows/cd.yml` が走り、そのコミットの CI（`.github/workflows/ci.yml` の **push** run）が success になってから、`playbooks/2_makamujo.yml` を VPS に適用します。checkout 対象は playbook どおり `main` です。
-
-### 手動デプロイ
-
-`cd.yml` は `workflow_dispatch` 対応なので、次のコマンドで `main` を手動デプロイできます。
-
-```bash
-gh workflow run cd.yml --ref main
-```
-
-push イベント経由では CI の push run を待ちます。**その run が存在しない場合は `cd.yml` 自身が `ci.yml` を `workflow_dispatch` で起動し**、その結果（`push` / `workflow_dispatch` どちらの run でもよい）を待ってから deploy します。CI の push run が無い状態で deploy が止まらないようにするためです（`ci.yml` も `workflow_dispatch` 対応）。
-
-なお `main` への push イベントが起きないマージ（token 実行の merge、GITHUB_TOKEN 由来のイベント）は push 自体が発生しないため、`on: push` のワークフロー（CI / CD / Pages）は走りません。CD / CI / Pages が確実に起動し続けるには、マージを **GitHub ネイティブ auto-merge** 経由で行う必要があります（`.github/workflows/auto-merge.yml` 経由。`AUTO_MERGE_TOKEN` には user token を設定します）。
-
-必要な GitHub Secrets（Environment `prod` またはリポジトリ Secrets）:
-
-| Secret                      | 必須 | 内容                                                                                  |
-| --------------------------- | ---- | ------------------------------------------------------------------------------------- |
-| `VPS_SSH_PRIVATE_KEY`       | yes  | VPS に入る SSH 秘密鍵                                                                 |
-| `VPS_SSH_HOST`              | yes  | SSH 先（IP またはホスト名）。inventory の `makamujo` エイリアスは runner では使わない |
-| `ANSIBLE_VAULT_PASSWORD`    | yes  | `inventory/group_vars/all/vault.yml` の復号パスワード                                 |
-| `VPS_SSH_USER`              | no   | SSH ユーザー。省略時 `root`                                                           |
-| `VPS_SSH_KNOWN_HOSTS`       | no   | `ssh-keyscan` 形式の known_hosts。未設定時は実行時に `ssh-keyscan`                    |
-| `TAILSCALE_OAUTH_CLIENT_ID` | no   | CD / SSH 疎通確認ワークフロー用 Tailscale OAuth クライアント ID                       |
-| `TAILSCALE_OAUTH_SECRET`    | no   | CD / SSH 疎通確認ワークフロー用 Tailscale OAuth クライアントシークレット              |
-
-SSH 疎通確認ワークフローで Tailscale OAuth を使う場合は、OAuth クライアントに `auth_keys` の Write スコープとタグ `tag:ci` を付与すること（未付与だと "OAuth identity empty" で失敗する）。
-
-デプロイ job は Environment `prod` を使う（`main` のみ）。required reviewers を付けると、CI 通過後の実デプロイだけ承認待ちにできます。Environment URL は番組ページ（`https://live.nicovideo.jp/watch/user/14171889`）へのショートカットです。
-
 ## Playbooks（概要）
 
 | 順  | ファイル          | 役割                                               |
@@ -126,61 +94,6 @@ SSH 疎通確認ワークフローで Tailscale OAuth を使う場合は、OAuth
 | 0   | `0_secrets.yml`   | stream key → service.json                          |
 | 1   | `1_bun.yml`       | Bun                                                |
 | 2   | `2_makamujo.yml`  | アプリ clone / 依存 / TLS / key 再適用             |
-
-## Niconico に人がログインする（noVNC）
-
-`bin/x/reserve.ts` は `playwright/.auth/` のプロファイルを共有するため、Niconico のセッションが切れるとログインし直しになります。パスワードと Turnstile は人が解くしかないので、`0_desktop.yml` は**そのときだけ**ログイン用の X ディスプレイをブラウザ越しに見せるようにします。
-
-- 配信ディスプレイ `:10`（OBS とゲーム）
-- ログイン用ディスプレイ `:11`（1280x1024、ブラウザ 1 枚だけ）
-
-**この 2 つは別物です。** `reserve.ts` は OBS・ゲーム・配信状態に触れません。`:11` には Chromium が 1 枚あるだけで、OBS のウィンドウも stream key を含む設定画面もゲームセッションも入りません。`:10` を共有しないのは、その中の\|\*\*秘匿情報ごと公開してしまう\*\*ためです。
-
-**常時起動しません。** 3 つの unit はどれも `enabled` にせず、`bin/x/reserve.ts` が実行中にだけ `systemctl start` し、終了時に `systemctl stop` します。理由:
-
-- 認証がない（`x11vnc` も `-nopw`）ため、到達した人はそのまま Niconico のセッションを操作できてしまう
-- ログインが必要なのは `reserve.ts` の実行中だけで、それ以外の時間に 24 時間エンドポイントを残す理由がない
-
-| ポート | 中身                                                       | 束縛             | 稼働                    |
-| ------ | ---------------------------------------------------------- | ---------------- | ----------------------- |
-| 5900   | `makamujo-x11vnc`（RFB、配信用 `:10`）                     | `127.0.0.1` のみ | 常時（従来どおり）      |
-| 5901   | `makamujo-login-x11vnc`（RFB、ログイン用 `:11`）           | `127.0.0.1` のみ | `reserve.ts` 実行中のみ |
-| 6080   | `makamujo-novnc`（websockify、noVNC の静的ファイルも配信） | `127.0.0.1` のみ | `reserve.ts` 実行中のみ |
-
-**認証はありません。** 到達経路は SSH トンネルのみにしてください。セキュリティグループでも 6080 を開かないこと。リポジトリ内のどの playbook にも 6080 を開ける処理はありません。公開は VPS プロバイダのセキュリティグループ側の責務です。
-
-`reserve.ts` を走らせるとログに URL が出ます。ニコロのセッションが切れていると、ログイン用ディスプレイ `:11` にログインページが開き、15 分間ログインを待ちます。トンネルを張ってブラウザでその URL を開き、Niconico にログインしてください。
-
-`-y`（headless）で起動した場合でも、セッションが切れていれば**自動的に headful へ切り替えて** `:11` にログインページを出します。headless のままだと誰も画面を見られないためです。この再起動のあいだも noVNC は稼働しています。
-
-手元からトンネルを張る:
-
-```sh
-ssh -N -L 6080:127.0.0.1:6080 root@HOST
-```
-
-ブラウザで次を開く（`path=websockify` は noVNC の既定 WebSocket パス）:
-
-```
-http://127.0.0.1:6080/vnc.html?path=websockify&autoconnect=true&resize=scale
-```
-
-`autoconnect=true` を付けると接続確認のダイアログを飛ばし、`resize=scale` はウィンドウに収まるようフレームバッファを縮めます。UI を省いた `vnc_lite.html` を使うなら `http://127.0.0.1:6080/vnc_lite.html?path=websockify&autoconnect=true` です。
-
-VPS 側の状態確認:
-
-```sh
-systemctl status makamujo-novnc makamujo-login-x11vnc makamujo-login-xvfb
-ss -ltn | grep -E '6080|5901'   # 127.0.0.1 だけであること。出ていなければ reserve.ts 未実行
-```
-
-CD は `0_desktop.yml` を流しません。`2_makamujo.yml` の "Restart streaming infra" にも `makamujo-novnc.service` / `makamujo-login-*` は含めていないので、CD が意図せず立ち上げることはありません。パッケージと unit が入る machine は `0_desktop.yml` を手動で流したものです。初回は次で適用してください。
-
-```sh
-bin/vault-session run ansible-playbook ansible/playbooks/0_desktop.yml
-```
-
-回帰チェック: `bun test tests/ansible-novnc.test.ts`（`0_desktop.yml` に展開される unit が loopback 束縛であること、**`enabled` になっていないこと**、`:10` を参照しないこと、`2_makamujo.yml` が再起動対象に含まないこと、`reserve.ts` が起動・停止を持ち回すことを検証します）。ライフサイクル本体は `lib/Browser/niconicoSession.ts` で、`bun test lib/Browser/niconicoSession.test.ts` が単体で叩きます。
 
 ## デプロイ後の再起動（ad-hoc）
 
