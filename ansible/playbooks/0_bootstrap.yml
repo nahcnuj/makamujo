@@ -16,3 +16,8 @@
           - curl
           - git
         state: present
+
+    - name: Install Bun
+      ansible.builtin.shell: curl -fsSL https://bun.sh/install | bash
+      args:
+        creates: /root/.bun/bin/bun
