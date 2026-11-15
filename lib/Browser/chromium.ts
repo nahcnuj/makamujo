@@ -662,7 +662,40 @@ export const applyGameScreenZoom = async (
       const gameScreen =
         document.getElementById("game-container") ??
         document.getElementById("screen-playing");
-      if (gameScreen) {\n        gameScreen.style.zoom = String(value);\n      }\n      window.scrollTo(0, 0);
+      if (gameScreen) {
+        gameScreen.style.zoom = String(value);
+      }
+      const styleId = "makamujo-game-screen-zoom";
+      const existingStyle = document.getElementById(styleId);
+      const style = existingStyle ?? document.createElement("style");
+      style.id = styleId;
+      style.textContent = `
+        html, body {
+          height: 100% !important;
+          margin: 0 !important;
+          overflow: hidden !important;
+        }
+        body {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: center !important;
+          padding: 0 !important;
+        }
+        #screen-title {
+          padding-bottom: 0 !important;
+        }
+        #screen-playing {
+          margin-bottom: 0 !important;
+        }
+        #ad-title {
+          display: none !important;
+        }
+      `;
+      if (!existingStyle) {
+        document.head.appendChild(style);
+      }
+      window.scrollTo(0, 0);
     }, zoomValue);
   } catch {
     /* page may not be ready */
@@ -700,4 +733,3 @@ export const createClickByElementId =
   async (id: string): Promise<void> => {
     await page.locator(`#${id}`).first().click({ timeout: 5_000 });
   };
-
