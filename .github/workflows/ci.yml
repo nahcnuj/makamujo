@@ -294,9 +294,8 @@ jobs:
           kill "$RTMPS_SERVER_PID" 2>/dev/null || true
           test -s "$RUNNER_TEMP/rtmps-capture.pcap"
           sudo tcpdump -r "$RUNNER_TEMP/rtmps-capture.pcap" -nn -c 5
-          # The committed stream-capture.png is the regression asset; do not fail CI
-          # if the live frame capture is unavailable in this environment.
-          docker cp makamujo:/tmp/makamujo-stream-capture.png "$RUNNER_TEMP/stream-capture.png" 2>/dev/null || true
+          # The committed regression asset is captured from OBS (the composed
+          # broadcast) and updated by hand; do not generate an X11 frame here.
 
       - name: Upload RTMPS capture
         if: always()
