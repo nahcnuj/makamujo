@@ -51,11 +51,7 @@ export const planVigilantFiestaSpeeches = (
       prevScreen === undefined);
 
   if (enteredPlaying) {
-    speeches.push(
-      prevScreen === "result"
-        ? "もう一回やってみます！"
-        : "落ち物パズル、スタート！",
-    );
+    speeches.push("落ち物パズル、スタート！");
   }
 
   if (
@@ -84,7 +80,6 @@ export const planVigilantFiestaSpeeches = (
     } else {
       speeches.push("ゲームオーバー！");
     }
-    speeches.push("ちょっと雑談してから、またプレイしますね。");
   }
 
   return speeches;
