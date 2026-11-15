@@ -60,6 +60,10 @@
           - fonts-noto-cjk
         state: present
 
+    - name: Rebuild font cache
+      ansible.builtin.command: fc-cache -fv
+      changed_when: true
+
     - name: Install TTS packages
       ansible.builtin.apt:
         name:
