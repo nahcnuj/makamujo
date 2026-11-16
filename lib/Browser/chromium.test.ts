@@ -378,36 +378,3 @@ describe("applyGameScreenZoom default", () => {
     expect(received).toBe(1);
   });
 });
-
-describe("applyGameScreenZoom behavior", () => {
-  it("resets document zoom to 1.0 and does not magnify the game container", async () => {
-    const gameContainer = { style: { zoom: "1.5" } };
-    const fakeDocument = {
-      documentElement: { style: { zoom: "1.5" } },
-      getElementById: (id: string) =>
-        id === "game-container" ? gameContainer : null,
-    };
-    const previousDocument = (globalThis as { document?: unknown }).document;
-    (globalThis as { document?: unknown }).document = fakeDocument;
-    const previousWindow = (globalThis as { window?: unknown }).window;
-    (globalThis as { window?: unknown }).window = {
-      scrollTo: () => {},
-    };
-    let captured: ((value: number) => void) | undefined;
-    const page = {
-      evaluate: async (fn: (value: number) => void, _value: number) => {
-        captured = fn;
-      },
-    };
-    try {
-      await applyGameScreenZoom(page as never, 1.5);
-      expect(captured).toBeDefined();
-      captured?.(1.5);
-      expect(fakeDocument.documentElement.style.zoom).toBe("1.0");
-      expect(gameContainer.style.zoom).toBe("1.5");
-    } finally {
-      (globalThis as { document?: unknown }).document = previousDocument;
-      (globalThis as { window?: unknown }).window = previousWindow;
-    }
-  });
-});

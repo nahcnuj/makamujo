@@ -26,3 +26,4 @@ with open(path, "rb") as stream:
 PY
 
 echo "stream-capture.png is a 1280x720 PNG regression asset"
+
