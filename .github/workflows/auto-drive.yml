@@ -6,7 +6,7 @@ on:
       # - opened
       - reopened
   pull_request_review:
-    types: [submitted, edited, dismissed]
+    types: [submitted, edited]
   workflow_dispatch:
     inputs:
       number:
