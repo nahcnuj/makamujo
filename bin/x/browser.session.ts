@@ -197,7 +197,7 @@ removeStaleBrowserTemporaryDirectories(tmpdir(), [
 
 const browser = await create(executablePath, {
   width: 1280,
-  height: 720, // match stream crop; scale via page zoom
+  height: 720, // match stream crop; OBS enlarges the broadcast
 });
 
 let closed = false;
