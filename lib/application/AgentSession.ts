@@ -39,15 +39,18 @@ export class AgentSession {
   hasPromptedCommentForViewerIncrease = false;
 
   toStreamBaseline(): StreamBaseline {
-    const ms = this.lastCommentAt?.getTime();
+    let lastCommentAt: Date | undefined;
+    if (this.lastCommentAt !== undefined) {
+      const ms = this.lastCommentAt.getTime();
+      if (Number.isFinite(ms)) {
+        lastCommentAt = new Date(ms);
+      }
+    }
     return {
       previousStreamCommentCount: this.previousStreamCommentCount,
       currentProgramUrl: this.currentProgramUrl,
       currentProgramLatestCommentNo: this.currentProgramLatestCommentNo,
-      lastCommentAt:
-        this.lastCommentAt === undefined || !Number.isFinite(ms)
-          ? undefined
-          : new Date(ms as number),
+      lastCommentAt,
     };
   }
 

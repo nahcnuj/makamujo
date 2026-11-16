@@ -137,8 +137,7 @@ describe("anonymous comments are learned only while present", () => {
           hasGift: false,
           userId: "must-not-be-used",
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
 
     expect(learn).toHaveBeenCalledWith("匿名のコメントです。");
