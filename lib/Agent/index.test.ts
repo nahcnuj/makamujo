@@ -1110,10 +1110,8 @@ describe("MakaMujo stream baseline persistence", () => {
     expect(agent.previousStreamCommentCount).toBe(100);
 
     agent.onAir(niconamaLive(10));
-    const state = agent.streamState as {
-      meta?: { total?: { comments?: number } };
-    };
-    expect(state.meta?.total?.comments).toBe(50);
+    const state = agent.streamState;
+    expect(state?.meta?.total?.comments).toBe(50);
   });
 
   it("notifies baseline changes for comment no and stream end", () => {

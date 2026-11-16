@@ -54,9 +54,17 @@ export class AgentSession {
     this.previousStreamCommentCount = baseline.previousStreamCommentCount;
     this.currentProgramUrl = baseline.currentProgramUrl;
     this.currentProgramLatestCommentNo = baseline.currentProgramLatestCommentNo;
-    this.lastCommentAt =
-      baseline.lastCommentAt === undefined
-        ? undefined
-        : new Date(baseline.lastCommentAt.getTime());
+    const restored = baseline.lastCommentAt;
+    if (restored === undefined) {
+      this.lastCommentAt = undefined;
+    } else if (restored instanceof Date) {
+      const ms = restored.getTime();
+      this.lastCommentAt = Number.isFinite(ms) ? new Date(ms) : undefined;
+    } else if (typeof restored === "string") {
+      const ms = Date.parse(restored);
+      this.lastCommentAt = Number.isFinite(ms) ? new Date(ms) : undefined;
+    } else {
+      this.lastCommentAt = undefined;
+    }
   }
 }
