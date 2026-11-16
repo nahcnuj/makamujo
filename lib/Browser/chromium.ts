@@ -655,6 +655,11 @@ export const applyGameScreenZoom = async (
       if (gameScreen) {
         gameScreen.style.zoom = String(value);
       }
+      // Keep the result overlay aligned with the (possibly zoomed) game screen.
+      const resultOverlay = document.getElementById("result-overlay");
+      if (resultOverlay) {
+        resultOverlay.style.zoom = String(value);
+      }
       window.scrollTo(0, 0);
     }, zoomValue);
   } catch {
