@@ -59,6 +59,7 @@ export class AgentSession {
     this.currentProgramUrl = baseline.currentProgramUrl;
     this.currentProgramLatestCommentNo = baseline.currentProgramLatestCommentNo;
     const restored = baseline.lastCommentAt;
+    // lastCommentAt is persisted/restored as a Date (see StreamBaseline).
     if (restored === undefined) {
       this.lastCommentAt = undefined;
     } else if (restored instanceof Date) {
