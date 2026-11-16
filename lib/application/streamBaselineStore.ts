@@ -45,6 +45,7 @@ const toNonNegativeInteger = (value: unknown): number | undefined => {
 };
 
 const toDate = (value: unknown): Date | undefined => {
+  if (value === null || value === undefined) return undefined;
   if (value instanceof Date) {
     const ms = value.getTime();
     return Number.isFinite(ms) ? new Date(ms) : undefined;

@@ -59,7 +59,7 @@ export class AgentSession {
     this.currentProgramUrl = baseline.currentProgramUrl;
     this.currentProgramLatestCommentNo = baseline.currentProgramLatestCommentNo;
     const restored = baseline.lastCommentAt;
-    if (restored === undefined) {
+    if (restored === undefined || restored === null) {
       this.lastCommentAt = undefined;
     } else if (restored instanceof Date) {
       const ms = restored.getTime();
