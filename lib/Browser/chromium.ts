@@ -451,20 +451,8 @@ export const create = async (
     void dismissCloseButtons();
   }, 2000);
 
-  const applyZoom = async (_factor: number) => {
-    try {
-      await page.evaluate(() => {
-        document.documentElement.style.zoom = "1.0";
-        if (
-          typeof window !== "undefined" &&
-          typeof window.scrollTo === "function"
-        ) {
-          window.scrollTo(0, 0);
-        }
-      });
-    } catch {
-      /* page may not be ready */
-    }
+  const applyZoom = async (factor: number) => {
+    await applyGameScreenZoom(page, factor);
   };
   await applyZoom(options.gameScreenZoom ?? 1);
   page.on("load", () => {

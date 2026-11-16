@@ -195,10 +195,17 @@ removeStaleBrowserTemporaryDirectories(tmpdir(), [
   GAME_BROWSER_TEMPORARY_DIRECTORY_PREFIX,
 ]);
 
-const browser = await create(executablePath, {
-  width: 1280,
-  height: 720, // match stream crop; OBS enlarges the broadcast
-});
+const browser = await create(
+  executablePath,
+  {
+    width: 1280,
+    height: 720, // match stream crop; scale via page zoom
+  },
+  {
+    // The game Agent owns how its board is scaled; the browser only applies it.
+    gameScreenZoom: Games.VigilantFiesta.GAME_SCREEN_ZOOM_FACTOR,
+  },
+);
 
 let closed = false;
 const closeBrowser = async () => {

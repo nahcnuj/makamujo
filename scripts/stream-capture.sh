@@ -77,5 +77,3 @@ for _ in range(height):
         colors.add((row[x], row[x + 1], row[x + 2]))
 assert len(colors) > 1, "stream capture is blank"
 PY
-
-echo "stream-capture.png matches VRT baseline (1280x720, non-blank)"
