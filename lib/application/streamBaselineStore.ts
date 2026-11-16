@@ -32,7 +32,7 @@ export type StreamBaseline = {
    * When the last comment was received, surviving process restarts so the
    * 5-minute silence threshold is not reset on restart.
    */
-  lastCommentAt?: Date | string;
+  lastCommentAt?: Date;
   /** Retained watch page statistics from the previous session, surviving restarts. */
   retainedStatistics?: DisplayedStatistics | undefined;
 };

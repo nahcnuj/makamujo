@@ -59,17 +59,11 @@ export class AgentSession {
     this.currentProgramUrl = baseline.currentProgramUrl;
     this.currentProgramLatestCommentNo = baseline.currentProgramLatestCommentNo;
     const restored = baseline.lastCommentAt;
-    // lastCommentAt is persisted/restored as a Date (see StreamBaseline).
     if (restored === undefined) {
       this.lastCommentAt = undefined;
-    } else if (restored instanceof Date) {
+    } else {
       const ms = restored.getTime();
       this.lastCommentAt = Number.isFinite(ms) ? new Date(ms) : undefined;
-    } else if (typeof restored === "string") {
-      const ms = Date.parse(restored);
-      this.lastCommentAt = Number.isFinite(ms) ? new Date(ms) : undefined;
-    } else {
-      this.lastCommentAt = undefined;
     }
   }
 }

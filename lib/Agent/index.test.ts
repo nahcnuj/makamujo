@@ -1114,6 +1114,7 @@ describe("MakaMujo stream baseline persistence", () => {
 
     agent.onAir(niconamaLive(10));
     expect(agent.speechable).toBeTrue();
+    expect(agent.lastCommentAt).toEqual(new Date(1_700_000_000_000 - 60_000));
 
     jest.restoreAllMocks();
   });
@@ -1131,6 +1132,9 @@ describe("MakaMujo stream baseline persistence", () => {
 
     agent.onAir(niconamaLive(10));
     expect(agent.speechable).toBeFalse();
+    expect(agent.lastCommentAt).toEqual(
+      new Date(1_700_000_000_000 - SILENCE_THRESHOLD_MS - 1),
+    );
 
     jest.restoreAllMocks();
   });
