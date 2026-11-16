@@ -57,6 +57,7 @@
           - fonts-ipafont-gothic
           - fonts-ipafont-mincho
           - fonts-noto-cjk
+          - fonts-noto-core
         state: present
 
     - name: Install TTS packages
