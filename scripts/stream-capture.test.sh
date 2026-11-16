@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+PROJECT_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 ASSET="${PROJECT_ROOT}/tests/fixtures/vrt-screenshots/stream-capture.png"
 
 test -f "${ASSET}"
