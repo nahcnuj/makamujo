@@ -632,11 +632,11 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
 };
 
 /**
- * Apply the Agent-provided magnification to the game screen only.
+ * Reset the document zoom to 1.0.
  *
- * The whole document stays at 1.0 so the page layout (title/result screens,
- * HUD) is unaffected; only the game board (and, as a fallback, the playing
- * screen) is scaled up for the captured stream.
+ * Per-element magnification is intentionally not applied anymore: the whole
+ * document stays at 1.0 and OBS handles enlarging the game screen on the
+ * broadcast canvas.
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
