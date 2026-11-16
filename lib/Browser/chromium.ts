@@ -455,7 +455,12 @@ export const create = async (
     try {
       await page.evaluate(() => {
         document.documentElement.style.zoom = "1.0";
-        window.scrollTo(0, 0);
+        if (
+          typeof window !== "undefined" &&
+          typeof window.scrollTo === "function"
+        ) {
+          window.scrollTo(0, 0);
+        }
       });
     } catch {
       /* page may not be ready */
@@ -651,7 +656,12 @@ export const applyGameScreenZoom = async (
       // Stop per-element zoom: keep the whole document at 1.0 and let OBS
       // handle enlarging the broadcast image.
       document.documentElement.style.zoom = "1.0";
-      window.scrollTo(0, 0);
+      if (
+        typeof window !== "undefined" &&
+        typeof window.scrollTo === "function"
+      ) {
+        window.scrollTo(0, 0);
+      }
     }, zoomValue);
   } catch {
     /* page may not be ready */
