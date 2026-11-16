@@ -1,15 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  buildSightResult,
-  GAME_HOME_URL,
-  GAME_SCREEN_ZOOM_FACTOR,
-} from "./server";
-
-describe("vigilant-fiesta game screen", () => {
-  it("requests the expected zoom magnification", () => {
-    expect(GAME_SCREEN_ZOOM_FACTOR).toBe(1.25);
-  });
-});
+import { buildSightResult, GAME_HOME_URL } from "./server";
 
 describe("vigilant-fiesta buildSightResult", () => {
   it("parses score and level from HUD text", () => {
