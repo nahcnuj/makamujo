@@ -28,5 +28,4 @@ for item in matches:
         assert value.get("x") == 1.0, (key, value)
         assert value.get("y") == 1.0, (key, value)
 
-print("OBS scene Display Capture is scaled to 1.0 (game screen enlarged on broadcast)")
 PY
