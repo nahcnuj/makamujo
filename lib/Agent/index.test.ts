@@ -1142,6 +1142,7 @@ describe("MakaMujo stream baseline persistence", () => {
       previousStreamCommentCount: 1,
       currentProgramUrl: undefined,
       currentProgramLatestCommentNo: 0,
+      lastCommentAt: expect.any(Number),
     });
   });
 
@@ -1172,6 +1173,7 @@ describe("MakaMujo stream baseline persistence", () => {
       previousStreamCommentCount: 1,
       currentProgramUrl: "https://live.example/watch/lv2",
       currentProgramLatestCommentNo: 0,
+      lastCommentAt: expect.any(Number),
     });
   });
 

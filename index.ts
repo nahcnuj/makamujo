@@ -184,6 +184,7 @@ const streamer = new MakaMujo(model, tts, {
       previousStreamCommentCount: baseline.previousStreamCommentCount,
       currentProgramUrl: baseline.currentProgramUrl,
       currentProgramLatestCommentNo: baseline.currentProgramLatestCommentNo,
+      lastCommentAt: baseline.lastCommentAt,
     };
     persistStreamBaseline();
   },

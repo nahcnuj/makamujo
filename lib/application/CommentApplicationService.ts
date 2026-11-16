@@ -64,6 +64,7 @@ export class CommentApplicationService {
 
       // Step 2 — all comments refresh silence clock
       this.#session.lastCommentAt = new Date(Date.now());
+      this.#onBaselineChange?.(this.#session.toStreamBaseline());
       // Step 3
       this.#session.hasPromptedCommentForViewerIncrease = false;
 

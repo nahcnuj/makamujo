@@ -28,6 +28,11 @@ export type StreamBaseline = {
   currentProgramUrl?: string;
   /** Last observed comment number of the active program. */
   currentProgramLatestCommentNo: number;
+  /**
+   * Epoch milliseconds of the last received comment, surviving process
+   * restarts so the 5-minute silence threshold is not reset on restart.
+   */
+  lastCommentAt?: number;
   /** Retained watch page statistics from the previous session, surviving restarts. */
   retainedStatistics?: DisplayedStatistics | undefined;
 };
@@ -37,6 +42,22 @@ const toNonNegativeInteger = (value: unknown): number | undefined => {
   if (!Number.isFinite(value)) return undefined;
   if (!Number.isInteger(value)) return undefined;
   return value >= 0 ? value : undefined;
+};
+
+const toTimestampMs = (value: unknown): number | undefined => {
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return undefined;
+    return value >= 0 ? value : undefined;
+  }
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+  }
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isFinite(ms) && ms >= 0 ? ms : undefined;
+  }
+  return undefined;
 };
 
 /**
@@ -59,6 +80,9 @@ export const parseStreamBaseline = (raw: unknown): StreamBaseline => {
         : undefined,
     currentProgramLatestCommentNo:
       toNonNegativeInteger(record?.currentProgramLatestCommentNo) ?? 0,
+    lastCommentAt: toTimestampMs(
+      record?.lastCommentAt ?? record?.lastCommentAtMs,
+    ),
     retainedStatistics:
       record?.retainedStatistics &&
       typeof record.retainedStatistics === "object"
