@@ -9,6 +9,12 @@ ASSET="${PROJECT_ROOT}/tests/fixtures/vrt-screenshots/stream-capture.png"
 # byte-identical so regressions in the broadcast image are detected.
 test -f "${ASSET}"
 
+# The committed baseline must be reproducible by the generator.
+TMP_CAPTURE="$(mktemp -t stream-capture.XXXXXX.png)"
+trap 'rm -f "${TMP_CAPTURE}"' EXIT
+bash "${PROJECT_ROOT}/scripts/stream-capture.sh" "${TMP_CAPTURE}" >/dev/null
+cmp -s "${TMP_CAPTURE}" "${ASSET}"
+
 python3 - "${ASSET}" <<'PY'
 import hashlib
 import struct

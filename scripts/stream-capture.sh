@@ -11,7 +11,7 @@ mkdir -p "${ASSET_DIR}"
 # image. The baseline bytes are embedded so generation is deterministic and
 # does not depend on a live OBS/stream environment. To refresh the baseline,
 # replace the embedded payload and update the hash in tests/bin/obs-scene.test.sh.
-python3 - "${ASSET}" <<'PYGEN'
+python3 - "${1:-${ASSET}}" <<'PYGEN'
 import base64
 import sys
 
