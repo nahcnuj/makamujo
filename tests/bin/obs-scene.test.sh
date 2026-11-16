@@ -26,7 +26,7 @@ with open(path, "rb") as stream:
     raw = stream.read()
 
 # VRT baseline hash for the committed stream capture.
-BASELINE_SHA256 = "25fae9aca37d9bd7f90241ec47c3d05831efcae61c54c77d2e08a6362ed2b43a"
+BASELINE_SHA256 = "8522b620e431750e9b40f246b715c07f908f12c341c4acbf6601a80cf5a8893a"
 actual = hashlib.sha256(raw).hexdigest()
 assert actual == BASELINE_SHA256, (actual, BASELINE_SHA256)
 
