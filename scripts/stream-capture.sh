@@ -6,24 +6,76 @@ ASSET="${PROJECT_ROOT}/tests/fixtures/vrt-screenshots/stream-capture.png"
 
 test -f "${ASSET}"
 python3 - "${ASSET}" <<'PY'
+import hashlib
 import struct
 import sys
+import zlib
 
 path = sys.argv[1]
 with open(path, "rb") as stream:
-    signature = stream.read(8)
-    if signature != b"\x89PNG\r\n\x1a\n":
-        raise SystemExit("stream capture is not a PNG file")
-    length = stream.read(4)
-    if length != b"\x00\x00\x00\x0d":
-        raise SystemExit("invalid PNG IHDR length")
-    chunk_type = stream.read(4)
-    if chunk_type != b"IHDR":
-        raise SystemExit("missing PNG IHDR chunk")
-    width, height = struct.unpack(">II", stream.read(8))
-    if (width, height) != (1280, 720):
-        raise SystemExit(f"unexpected stream capture dimensions: {width}x{height}")
+    raw = stream.read()
+
+# VRT baseline: the committed stream capture must stay byte-identical so that
+# regressions in the broadcast image are detected.
+BASELINE_SHA256 = "25fae9aca37d9bd7f90241ec47c3d05831efcae61c54c77d2e08a6362ed2b43a"
+actual = hashlib.sha256(raw).hexdigest()
+assert actual == BASELINE_SHA256, (actual, BASELINE_SHA256)
+
+# PNG signature + IHDR
+assert raw[:8] == b"\x89PNG\r\n\x1a\n", "stream capture is not a PNG file"
+off = 8
+width = height = 0
+idat = b""
+while off < len(raw):
+    (length,) = struct.unpack(">I", raw[off:off + 4])
+    chunk_type = raw[off + 4:off + 8]
+    data = raw[off + 8:off + 8 + length]
+    if chunk_type == b"IHDR":
+        width, height, bit_depth, color_type = struct.unpack(">IIBB", data[:10])
+        assert (width, height) == (1280, 720), (width, height)
+        assert bit_depth == 8 and color_type == 2, (bit_depth, color_type)
+    elif chunk_type == b"IDAT":
+        idat += data
+    elif chunk_type == b"IEND":
+        break
+    off += 12 + length
+
+# Decode and verify the capture is not blank (VRT: real broadcast content).
+decoded = zlib.decompress(idat)
+bpp = 3
+stride = width * bpp
+prev = bytearray(stride)
+colors = set()
+pos = 0
+for _ in range(height):
+    filt = decoded[pos]
+    pos += 1
+    row = bytearray(decoded[pos:pos + stride])
+    pos += stride
+    if filt == 1:
+        for x in range(bpp, stride):
+            row[x] = (row[x] + row[x - bpp]) & 255
+    elif filt == 2:
+        for x in range(stride):
+            row[x] = (row[x] + prev[x]) & 255
+    elif filt == 3:
+        for x in range(stride):
+            left = row[x - bpp] if x >= bpp else 0
+            up = prev[x]
+            row[x] = (row[x] + ((left + up) // 2)) & 255
+    elif filt == 4:
+        for x in range(stride):
+            left = row[x - bpp] if x >= bpp else 0
+            up = prev[x]
+            ul = prev[x - bpp] if x >= bpp else 0
+            p = left + up - ul
+            pa, pb, pc = abs(p - left), abs(p - up), abs(p - ul)
+            pred = left if pa <= pb and pa <= pc else (up if pb <= pc else ul)
+            row[x] = (row[x] + pred) & 255
+    prev = row
+    for x in range(0, stride, bpp):
+        colors.add((row[x], row[x + 1], row[x + 2]))
+assert len(colors) > 1, "stream capture is blank"
 PY
 
-echo "stream-capture.png is a 1280x720 PNG regression asset"
-
+echo "stream-capture.png matches VRT baseline (1280x720, non-blank)"
