@@ -29,10 +29,10 @@ export type StreamBaseline = {
   /** Last observed comment number of the active program. */
   currentProgramLatestCommentNo: number;
   /**
-   * Epoch milliseconds of the last received comment, surviving process
-   * restarts so the 5-minute silence threshold is not reset on restart.
+   * When the last comment was received, surviving process restarts so the
+   * 5-minute silence threshold is not reset on restart.
    */
-  lastCommentAt?: number;
+  lastCommentAt?: Date;
   /** Retained watch page statistics from the previous session, surviving restarts. */
   retainedStatistics?: DisplayedStatistics | undefined;
 };
@@ -44,18 +44,17 @@ const toNonNegativeInteger = (value: unknown): number | undefined => {
   return value >= 0 ? value : undefined;
 };
 
-const toTimestampMs = (value: unknown): number | undefined => {
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) return undefined;
-    return value >= 0 ? value : undefined;
-  }
-  if (typeof value === "string") {
-    const parsed = Date.parse(value);
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
-  }
+const toDate = (value: unknown): Date | undefined => {
   if (value instanceof Date) {
     const ms = value.getTime();
-    return Number.isFinite(ms) && ms >= 0 ? ms : undefined;
+    return Number.isFinite(ms) ? new Date(ms) : undefined;
+  }
+  if (typeof value === "string") {
+    const ms = Date.parse(value);
+    return Number.isFinite(ms) ? new Date(ms) : undefined;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value >= 0 ? new Date(value) : undefined;
   }
   return undefined;
 };
@@ -80,9 +79,7 @@ export const parseStreamBaseline = (raw: unknown): StreamBaseline => {
         : undefined,
     currentProgramLatestCommentNo:
       toNonNegativeInteger(record?.currentProgramLatestCommentNo) ?? 0,
-    lastCommentAt: toTimestampMs(
-      record?.lastCommentAt ?? record?.lastCommentAtMs,
-    ),
+    lastCommentAt: toDate(record?.lastCommentAt ?? record?.lastCommentAtMs),
     retainedStatistics:
       record?.retainedStatistics &&
       typeof record.retainedStatistics === "object"

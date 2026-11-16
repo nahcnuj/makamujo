@@ -43,7 +43,10 @@ export class AgentSession {
       previousStreamCommentCount: this.previousStreamCommentCount,
       currentProgramUrl: this.currentProgramUrl,
       currentProgramLatestCommentNo: this.currentProgramLatestCommentNo,
-      lastCommentAt: this.lastCommentAt?.getTime(),
+      lastCommentAt:
+        this.lastCommentAt === undefined
+          ? undefined
+          : new Date(this.lastCommentAt.getTime()),
     };
   }
 
@@ -51,8 +54,9 @@ export class AgentSession {
     this.previousStreamCommentCount = baseline.previousStreamCommentCount;
     this.currentProgramUrl = baseline.currentProgramUrl;
     this.currentProgramLatestCommentNo = baseline.currentProgramLatestCommentNo;
-    const restored = baseline.lastCommentAt;
     this.lastCommentAt =
-      restored === undefined ? undefined : new Date(restored);
+      baseline.lastCommentAt === undefined
+        ? undefined
+        : new Date(baseline.lastCommentAt.getTime());
   }
 }

@@ -1136,14 +1136,14 @@ describe("MakaMujo stream baseline persistence", () => {
           previousStreamCommentCount: number;
           currentProgramUrl?: string;
           currentProgramLatestCommentNo: number;
-          lastCommentAt?: number;
+          lastCommentAt?: Date;
         }
       | undefined;
     expect(afterEnd).toEqual({
       previousStreamCommentCount: 1,
       currentProgramUrl: undefined,
       currentProgramLatestCommentNo: 0,
-      lastCommentAt: expect.any(Number),
+      lastCommentAt: expect.any(Date),
     });
   });
 
@@ -1168,14 +1168,14 @@ describe("MakaMujo stream baseline persistence", () => {
           previousStreamCommentCount: number;
           currentProgramUrl: string;
           currentProgramLatestCommentNo: number;
-          lastCommentAt?: number;
+          lastCommentAt?: Date;
         }
       | undefined;
     expect(last).toEqual({
       previousStreamCommentCount: 1,
       currentProgramUrl: "https://live.example/watch/lv2",
       currentProgramLatestCommentNo: 0,
-      lastCommentAt: expect.any(Number),
+      lastCommentAt: expect.any(Date),
     });
   });
 
@@ -1203,7 +1203,7 @@ describe("MakaMujo stream baseline persistence", () => {
           previousStreamCommentCount: number;
           currentProgramUrl: string;
           currentProgramLatestCommentNo: number;
-          lastCommentAt?: number;
+          lastCommentAt?: Date;
         }
       | undefined;
     expect(last).toEqual({
