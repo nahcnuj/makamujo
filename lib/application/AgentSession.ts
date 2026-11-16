@@ -61,9 +61,14 @@ export class AgentSession {
     const restored = baseline.lastCommentAt;
     if (restored === undefined) {
       this.lastCommentAt = undefined;
-    } else {
+    } else if (restored instanceof Date) {
       const ms = restored.getTime();
       this.lastCommentAt = Number.isFinite(ms) ? new Date(ms) : undefined;
+    } else if (typeof restored === "string") {
+      const ms = Date.parse(restored);
+      this.lastCommentAt = Number.isFinite(ms) ? new Date(ms) : undefined;
+    } else {
+      this.lastCommentAt = undefined;
     }
   }
 }
