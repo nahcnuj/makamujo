@@ -3,9 +3,9 @@ set -euo pipefail
 
 PROJECT_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 ASSET_DIR="${PROJECT_ROOT}/tests/fixtures/vrt-screenshots"
-ASSET="${ASSET_DIR}/stream-capture.png"
+ASSET="${1:-${ASSET_DIR}/stream-capture.png}"
 
-mkdir -p "${ASSET_DIR}"
+mkdir -p "$(dirname "${ASSET}")"
 
 # Generate the VRT baseline capture of the broadcast image. The script is the
 # generator (not a verifier): running it (re)creates the committed baseline so
