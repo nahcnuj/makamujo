@@ -39,7 +39,7 @@ jobs:
         run: bunx playwright install chromium
 
       - name: Install Japanese fonts
-        run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk fonts-noto-core
+        run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
 
       - name: Run stream health check
         id: stream-check

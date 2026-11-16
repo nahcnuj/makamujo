@@ -32,10 +32,7 @@ const ensureJapaneseFonts = () => {
 
   const installResult = spawnSync(
     "bash",
-    [
-      "-lc",
-      "sudo apt-get update && sudo apt-get install -y fonts-noto-cjk fonts-noto-core",
-    ],
+    ["-lc", "sudo apt-get update && sudo apt-get install -y fonts-noto-cjk"],
     { stdio: "inherit" },
   );
   if (installResult.status !== 0) {
