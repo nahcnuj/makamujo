@@ -1136,6 +1136,7 @@ describe("MakaMujo stream baseline persistence", () => {
           previousStreamCommentCount: number;
           currentProgramUrl?: string;
           currentProgramLatestCommentNo: number;
+          lastCommentAt?: number;
         }
       | undefined;
     expect(afterEnd).toEqual({
@@ -1167,6 +1168,7 @@ describe("MakaMujo stream baseline persistence", () => {
           previousStreamCommentCount: number;
           currentProgramUrl: string;
           currentProgramLatestCommentNo: number;
+          lastCommentAt?: number;
         }
       | undefined;
     expect(last).toEqual({
@@ -1201,6 +1203,7 @@ describe("MakaMujo stream baseline persistence", () => {
           previousStreamCommentCount: number;
           currentProgramUrl: string;
           currentProgramLatestCommentNo: number;
+          lastCommentAt?: number;
         }
       | undefined;
     expect(last).toEqual({
