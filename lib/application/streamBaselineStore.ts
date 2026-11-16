@@ -53,9 +53,6 @@ const toDate = (value: unknown): Date | undefined => {
     const ms = Date.parse(value);
     return Number.isFinite(ms) ? new Date(ms) : undefined;
   }
-  if (typeof value === "number") {
-    return Number.isFinite(value) && value >= 0 ? new Date(value) : undefined;
-  }
   return undefined;
 };
 

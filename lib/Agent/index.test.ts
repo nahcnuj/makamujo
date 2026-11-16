@@ -7,7 +7,6 @@ import {
   jest,
   mock,
 } from "bun:test";
-import type { StreamBaseline } from "../application/streamBaselineStore";
 import {
   MakaMujo,
   SILENCE_THRESHOLD_MS,
@@ -1119,7 +1118,7 @@ describe("MakaMujo stream baseline persistence", () => {
 
   it("notifies baseline changes for comment no and stream end", () => {
     const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
-    const notifier = jest.fn<(baseline: StreamBaseline) => void>();
+    const notifier = jest.fn();
     const agent = new MakaMujo(stubTalkModel, stubTts, {
       onBaselineChange: notifier,
     });
@@ -1143,7 +1142,7 @@ describe("MakaMujo stream baseline persistence", () => {
 
   it("carries the previous program's comment count over on program url change", () => {
     const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
-    const notifier = jest.fn<(baseline: StreamBaseline) => void>();
+    const notifier = jest.fn();
     const agent = new MakaMujo(stubTalkModel, stubTts, {
       onBaselineChange: notifier,
     });
@@ -1169,7 +1168,7 @@ describe("MakaMujo stream baseline persistence", () => {
   });
 
   it("keeps the existing baseline when a new program starts before any comment", () => {
-    const notifier = jest.fn<(baseline: StreamBaseline) => void>();
+    const notifier = jest.fn();
     const agent = new MakaMujo(stubTalkModel, stubTts, {
       baseline: {
         previousStreamCommentCount: 538,

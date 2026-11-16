@@ -498,7 +498,7 @@ SilencePolicy.evaluate({
   now,
   streamStateDefined: boolean,
   listenersStaleSince?: number, // Date.getTime() 相当
-  lastCommentAt?: number,
+  lastCommentAt?: Date,
   hasPrompted: boolean,
   browserStateName?: string,
   thresholdMs: typeof SILENCE_THRESHOLD_MS,
