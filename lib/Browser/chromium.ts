@@ -647,19 +647,10 @@ export const applyGameScreenZoom = async (
     return;
   }
   try {
-    await page.evaluate((value: number) => {
+    await page.evaluate((_value: number) => {
+      // Stop per-element zoom: keep the whole document at 1.0 and let OBS
+      // handle enlarging the broadcast image.
       document.documentElement.style.zoom = "1.0";
-      const gameScreen =
-        document.getElementById("game-container") ??
-        document.getElementById("screen-playing");
-      if (gameScreen) {
-        gameScreen.style.zoom = String(value);
-      }
-      // Keep the result overlay aligned with the (possibly zoomed) game screen.
-      const resultOverlay = document.getElementById("result-overlay");
-      if (resultOverlay) {
-        resultOverlay.style.zoom = String(value);
-      }
       window.scrollTo(0, 0);
     }, zoomValue);
   } catch {
