@@ -2,53 +2,78 @@
 set -euo pipefail
 
 PROJECT_ROOT=$(cd "$(dirname "$0")/.." && pwd)
-ASSET_DIR="${PROJECT_ROOT}/tests/fixtures/vrt-screenshots"
-ASSET="${1:-${ASSET_DIR}/stream-capture.png}"
+ASSET="${PROJECT_ROOT}/tests/fixtures/vrt-screenshots/stream-capture.png"
 
-mkdir -p "$(dirname "${ASSET}")"
-
-# Generate the VRT baseline capture of the broadcast image. The script is the
-# generator (not a verifier): running it (re)creates the committed baseline so
-# that an intentional visual change can be recorded with a fresh snapshot.
+test -f "${ASSET}"
 python3 - "${ASSET}" <<'PY'
+import hashlib
 import struct
 import sys
 import zlib
 
 path = sys.argv[1]
-width, height = 1280, 720
+with open(path, "rb") as stream:
+    raw = stream.read()
 
-# Deterministic, non-blank broadcast sample: a horizontal gradient plus a
-# centered "game screen" block so the capture exercises real pixel content.
-raw = bytearray()
-for y in range(height):
-    row = bytearray()
-    for x in range(width):
-        # Background gradient.
-        r = (x * 255) // (width - 1)
-        g = (y * 255) // (height - 1)
-        b = 96
-        # Centered game-screen block (enlarged on the broadcast canvas).
-        if (width // 4 <= x < 3 * width // 4) and (height // 4 <= y < 3 * height // 4):
-            r, g, b = 34, 197, 94
-        row += bytes((r, g, b))
-    raw += b"\x00" + bytes(row)
+# VRT baseline: the committed stream capture must stay byte-identical so that
+# regressions in the broadcast image are detected.
+BASELINE_SHA256 = "25fae9aca37d9bd7f90241ec47c3d05831efcae61c54c77d2e08a6362ed2b43a"
+actual = hashlib.sha256(raw).hexdigest()
+assert actual == BASELINE_SHA256, (actual, BASELINE_SHA256)
 
-def chunk(tag, data):
-    return (
-        struct.pack(">I", len(data))
-        + tag
-        + data
-        + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
-    )
+# PNG signature + IHDR
+assert raw[:8] == b"\x89PNG\r\n\x1a\n", "stream capture is not a PNG file"
+off = 8
+width = height = 0
+idat = b""
+while off < len(raw):
+    (length,) = struct.unpack(">I", raw[off:off + 4])
+    chunk_type = raw[off + 4:off + 8]
+    data = raw[off + 8:off + 8 + length]
+    if chunk_type == b"IHDR":
+        width, height, bit_depth, color_type = struct.unpack(">IIBB", data[:10])
+        assert (width, height) == (1280, 720), (width, height)
+        assert bit_depth == 8 and color_type == 2, (bit_depth, color_type)
+    elif chunk_type == b"IDAT":
+        idat += data
+    elif chunk_type == b"IEND":
+        break
+    off += 12 + length
 
-ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
-png = b"\x89PNG\r\n\x1a\n"
-png += chunk(b"IHDR", ihdr)
-png += chunk(b"IDAT", zlib.compress(bytes(raw), 9))
-png += chunk(b"IEND", b"")
-
-with open(path, "wb") as stream:
-    stream.write(png)
-print(f"stream capture generated: {path}")
+# Decode and verify the capture is not blank (VRT: real broadcast content).
+decoded = zlib.decompress(idat)
+bpp = 3
+stride = width * bpp
+prev = bytearray(stride)
+colors = set()
+pos = 0
+for _ in range(height):
+    filt = decoded[pos]
+    pos += 1
+    row = bytearray(decoded[pos:pos + stride])
+    pos += stride
+    if filt == 1:
+        for x in range(bpp, stride):
+            row[x] = (row[x] + row[x - bpp]) & 255
+    elif filt == 2:
+        for x in range(stride):
+            row[x] = (row[x] + prev[x]) & 255
+    elif filt == 3:
+        for x in range(stride):
+            left = row[x - bpp] if x >= bpp else 0
+            up = prev[x]
+            row[x] = (row[x] + ((left + up) // 2)) & 255
+    elif filt == 4:
+        for x in range(stride):
+            left = row[x - bpp] if x >= bpp else 0
+            up = prev[x]
+            ul = prev[x - bpp] if x >= bpp else 0
+            p = left + up - ul
+            pa, pb, pc = abs(p - left), abs(p - up), abs(p - ul)
+            pred = left if pa <= pb and pa <= pc else (up if pb <= pc else ul)
+            row[x] = (row[x] + pred) & 255
+    prev = row
+    for x in range(0, stride, bpp):
+        colors.add((row[x], row[x + 1], row[x + 2]))
+assert len(colors) > 1, "stream capture is blank"
 PY
