@@ -451,11 +451,7 @@ export const create = async (
     void dismissCloseButtons();
   }, 2000);
 
-  const applyZoom = async (factor: number) => {
-    if (isVigilantFiestaGameUrl(page.url())) {
-      await applyGameScreenZoom(page, factor);
-      return;
-    }
+  const applyZoom = async (_factor: number) => {
     try {
       await page.evaluate(() => {
         document.documentElement.style.zoom = "1.0";
