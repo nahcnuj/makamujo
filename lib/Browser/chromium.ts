@@ -451,36 +451,14 @@ export const create = async (
     void dismissCloseButtons();
   }, 2000);
 
-  const applyZoom = async (_factor: number) => {
+  const applyZoom = async (factor: number) => {
+    if (isVigilantFiestaGameUrl(page.url())) {
+      await applyGameScreenZoom(page, factor);
+      return;
+    }
     try {
       await page.evaluate(() => {
         document.documentElement.style.zoom = "1.0";
-        const styleId = "makamujo-game-screen-zoom";
-        const existingStyle = document.getElementById(styleId);
-        const style = existingStyle ?? document.createElement("style");
-        style.id = styleId;
-        style.textContent = `
-          body {
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: center !important;
-            justify-content: center !important;
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-          }
-          #screen-title {
-            padding-bottom: 0 !important;
-          }
-          #screen-playing {
-            margin-bottom: 0 !important;
-          }
-          #ad-title {
-            display: none !important;
-          }
-        `;
-        if (!existingStyle) {
-          document.head.appendChild(style);
-        }
         window.scrollTo(0, 0);
       });
     } catch {
@@ -680,32 +658,6 @@ export const applyGameScreenZoom = async (
         document.getElementById("screen-playing");
       if (gameScreen) {
         gameScreen.style.zoom = String(value);
-      }
-      const styleId = "makamujo-game-screen-zoom";
-      const existingStyle = document.getElementById(styleId);
-      const style = existingStyle ?? document.createElement("style");
-      style.id = styleId;
-      style.textContent = `
-        body {
-          display: flex !important;
-          flex-direction: column !important;
-          align-items: center !important;
-          justify-content: center !important;
-          padding-top: 0 !important;
-          padding-bottom: 0 !important;
-        }
-        #screen-title {
-          padding-bottom: 0 !important;
-        }
-        #screen-playing {
-          margin-bottom: 0 !important;
-        }
-        #ad-title {
-          display: none !important;
-        }
-      `;
-      if (!existingStyle) {
-        document.head.appendChild(style);
       }
       window.scrollTo(0, 0);
     }, zoomValue);
