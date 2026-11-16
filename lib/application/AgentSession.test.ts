@@ -60,7 +60,7 @@ describe("AgentSession stream baseline", () => {
     session.restoreStreamBaseline({
       previousStreamCommentCount: 0,
       currentProgramLatestCommentNo: 0,
-      lastCommentAt: when.toISOString() as unknown as Date,
+      lastCommentAt: when.toISOString(),
     });
 
     expect(session.lastCommentAt).toEqual(when);
