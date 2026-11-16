@@ -49,7 +49,7 @@ export function App() {
             <div className="flex-none">
               <div className="my-1 text-center text-3xl/12 text-white">
                 <span className="px-3 bg-black rounded-sm">
-                  <span className="pr-3 font-normal text-white">U</span>
+                  <span className="pr-3 font-normal text-white">&#x1D54F;</span>
                   &#xFF20;
                   <span className="font-mono">makamujo</span>
                 </span>
