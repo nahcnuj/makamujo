@@ -169,8 +169,7 @@ describe("anonymous comments are learned only while present", () => {
           anonymity: true,
           hasGift: false,
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
     jest.spyOn(Date, "now").mockReturnValue(10 * 60 * 1_000);
     agent.listen([
@@ -182,8 +181,7 @@ describe("anonymous comments are learned only while present", () => {
           anonymity: true,
           hasGift: false,
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
     expect(unlearn).toHaveBeenCalledWith("荒らし。");
   });
@@ -229,8 +227,7 @@ describe("per-program comment tracking", () => {
           anonymity: false,
           hasGift: false,
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
     expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(3);
   });
@@ -263,8 +260,7 @@ describe("per-program comment tracking", () => {
           hasGift: false,
           userId: "onecomme.system",
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
     expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(0);
   });
@@ -433,8 +429,7 @@ describe("speechable", () => {
       }
       return;
     });
-    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-    const spyTts: TTS = { speech: called as any };
+    const spyTts: TTS = { speech: called };
     const agent = new MakaMujo(stubTalkModel, spyTts);
     agent.onAir(niconamaLive(10));
     agent.listen([viewerComment]);
@@ -468,8 +463,7 @@ describe("speechable", () => {
       }
       return;
     });
-    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-    const failTts: TTS = { speech: fail as any };
+    const failTts: TTS = { speech: fail };
     const agent = new MakaMujo(stubTalkModel, failTts);
     agent.onAir(niconamaLive(10));
     agent.listen([viewerComment]);
@@ -791,8 +785,7 @@ describe("CommentPipeline characterization", () => {
           anonymity: false,
           hasGift: false,
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
 
     expect(learn).toHaveBeenCalledWith("オーナーです。");
@@ -815,8 +808,7 @@ describe("CommentPipeline characterization", () => {
           hasGift: false,
           userId: "onecomme.system",
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
     // After any comment, prompted flag is false so speechable not locked by prompt
     expect(agent.speechable).toBe(true);
@@ -841,8 +833,7 @@ describe("CommentPipeline characterization", () => {
           hasGift: true,
           origin: { message: { gift: { advertiserName: "花子" } } },
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
 
     // drain speech queue
@@ -857,15 +848,13 @@ describe("CommentPipeline characterization", () => {
     agent.listen([
       {
         data: { comment: "a", no: 50, anonymity: false, hasGift: false },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
     expect(agent.streamState?.meta?.total?.comments).toBe(50);
     agent.listen([
       {
         data: { comment: "b", no: 10, anonymity: false, hasGift: false },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
     expect(agent.streamState?.meta?.total?.comments).toBe(10);
   });
@@ -887,8 +876,7 @@ describe("CommentPipeline characterization", () => {
           anonymity: false,
           hasGift: false,
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
 
     await new Promise((r) => setTimeout(r, 50));
