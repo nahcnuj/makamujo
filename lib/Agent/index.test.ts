@@ -144,9 +144,9 @@ describe("anonymous comments are learned only while present", () => {
     expect(learn).toHaveBeenCalledWith("匿名のコメントです。");
     expect(unlearn).not.toHaveBeenCalled();
     expect(generate).toHaveBeenCalled();
-    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-    const streamState = agent.streamState as any;
-    expect(streamState?.replyTargetComment?.text).toBe("匿名のコメントです");
+    expect(agent.streamState?.replyTargetComment?.text).toBe(
+      "匿名のコメントです",
+    );
   });
 
   it("unlearns after presence timeout", () => {
@@ -242,14 +242,14 @@ describe("per-program comment tracking", () => {
 
     agent.listen([viewerComment]);
 
-    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-    const streamState = agent.streamState as any;
-    expect(streamState?.replyTargetComment).toBeDefined();
-    expect(streamState.replyTargetComment.text).toBe("こんにちは");
-    expect(typeof streamState.replyTargetComment.pickedTopic).toBe("string");
-    expect(streamState.replyTargetComment.pickedTopic.length).toBeGreaterThan(
-      0,
+    expect(agent.streamState?.replyTargetComment).toBeDefined();
+    expect(agent.streamState?.replyTargetComment?.text).toBe("こんにちは");
+    expect(typeof agent.streamState?.replyTargetComment?.pickedTopic).toBe(
+      "string",
     );
+    expect(
+      (agent.streamState?.replyTargetComment?.pickedTopic ?? "").length,
+    ).toBeGreaterThan(0);
   });
 
   it("does not count system messages as user comments", () => {
@@ -1112,6 +1112,40 @@ describe("MakaMujo stream baseline persistence", () => {
     agent.onAir(niconamaLive(10));
     const state = agent.streamState;
     expect(state?.meta?.total?.comments).toBe(50);
+  });
+
+  it("restores lastCommentAt so the silence threshold survives a restart", () => {
+    jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
+    const agent = new MakaMujo(stubTalkModel, stubTts, {
+      baseline: {
+        previousStreamCommentCount: 0,
+        currentProgramUrl: "https://example.com",
+        currentProgramLatestCommentNo: 0,
+        lastCommentAt: new Date(1_700_000_000_000 - 60_000),
+      },
+    });
+
+    agent.onAir(niconamaLive(10));
+    expect(agent.speechable).toBeTrue();
+
+    jest.restoreAllMocks();
+  });
+
+  it("treats a stale restored lastCommentAt as silent", () => {
+    jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
+    const agent = new MakaMujo(stubTalkModel, stubTts, {
+      baseline: {
+        previousStreamCommentCount: 0,
+        currentProgramUrl: "https://example.com",
+        currentProgramLatestCommentNo: 0,
+        lastCommentAt: new Date(1_700_000_000_000 - SILENCE_THRESHOLD_MS - 1),
+      },
+    });
+
+    agent.onAir(niconamaLive(10));
+    expect(agent.speechable).toBeFalse();
+
+    jest.restoreAllMocks();
   });
 
   it("notifies baseline changes for comment no and stream end", () => {

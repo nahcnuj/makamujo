@@ -40,4 +40,29 @@ describe("AgentSession stream baseline", () => {
 
     expect(session.toStreamBaseline().currentProgramUrl).toBeUndefined();
   });
+
+  test("restores lastCommentAt from a Date", () => {
+    const session = new AgentSession();
+    const when = new Date(1_700_000_000_000);
+    session.restoreStreamBaseline({
+      previousStreamCommentCount: 0,
+      currentProgramLatestCommentNo: 0,
+      lastCommentAt: when,
+    });
+
+    expect(session.lastCommentAt).toEqual(when);
+    expect(session.toStreamBaseline().lastCommentAt).toEqual(when);
+  });
+
+  test("restores lastCommentAt from an ISO string", () => {
+    const session = new AgentSession();
+    const when = new Date(1_700_000_000_000);
+    session.restoreStreamBaseline({
+      previousStreamCommentCount: 0,
+      currentProgramLatestCommentNo: 0,
+      lastCommentAt: when.toISOString() as unknown as Date,
+    });
+
+    expect(session.lastCommentAt).toEqual(when);
+  });
 });

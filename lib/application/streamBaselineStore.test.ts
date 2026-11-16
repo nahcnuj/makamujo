@@ -69,6 +69,24 @@ describe("parseStreamBaseline", () => {
       currentProgramLatestCommentNo: 0,
     });
   });
+
+  it("parses lastCommentAt from an ISO string", () => {
+    const when = new Date(1_700_000_000_000);
+    expect(parseStreamBaseline({ lastCommentAt: when.toISOString() })).toEqual({
+      previousStreamCommentCount: 0,
+      currentProgramUrl: undefined,
+      currentProgramLatestCommentNo: 0,
+      lastCommentAt: when,
+    });
+  });
+
+  it("ignores non-date lastCommentAt values", () => {
+    expect(parseStreamBaseline({ lastCommentAt: 12345 })).toEqual({
+      previousStreamCommentCount: 0,
+      currentProgramUrl: undefined,
+      currentProgramLatestCommentNo: 0,
+    });
+  });
 });
 
 describe("loadStreamBaseline", () => {
@@ -99,6 +117,21 @@ describe("loadStreamBaseline", () => {
     expect(existsSync(path)).toBe(true);
     expect(loadStreamBaseline(path)).toEqual(baseline);
     expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(baseline);
+  });
+
+  it("round-trips lastCommentAt as a Date through saveStreamBaseline", () => {
+    const dir = makeTempDir();
+    const path = join(dir, "baseline.json");
+    const when = new Date(1_700_000_000_000);
+    const baseline = {
+      previousStreamCommentCount: 12,
+      currentProgramUrl: "https://live.example/watch/lv2",
+      currentProgramLatestCommentNo: 34,
+      lastCommentAt: when,
+    };
+
+    saveStreamBaseline(path, baseline);
+    expect(loadStreamBaseline(path)).toEqual(baseline);
   });
 
   it("replaces the previous content without leaving temp files", () => {

@@ -49,10 +49,6 @@ const toDate = (value: unknown): Date | undefined => {
     const ms = value.getTime();
     return Number.isFinite(ms) ? new Date(ms) : undefined;
   }
-  if (typeof value === "number") {
-    // Legacy persisted form (epoch ms) from before lastCommentAt became a Date.
-    return Number.isFinite(value) && value >= 0 ? new Date(value) : undefined;
-  }
   if (typeof value === "string") {
     const ms = Date.parse(value);
     return Number.isFinite(ms) ? new Date(ms) : undefined;
@@ -80,7 +76,7 @@ export const parseStreamBaseline = (raw: unknown): StreamBaseline => {
         : undefined,
     currentProgramLatestCommentNo:
       toNonNegativeInteger(record?.currentProgramLatestCommentNo) ?? 0,
-    lastCommentAt: toDate(record?.lastCommentAt ?? record?.lastCommentAtMs),
+    lastCommentAt: toDate(record?.lastCommentAt),
     retainedStatistics:
       record?.retainedStatistics &&
       typeof record.retainedStatistics === "object"
