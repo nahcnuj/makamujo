@@ -39,6 +39,48 @@ export class MakaMujo {
   /** Latest news lines from sight (for spontaneous topic). */
   #currentNewsLines: string[] = [];
 
+  /** Construct an empty agent with no restored baseline. */
+  static empty(
+    talkModel: TalkModel,
+    tts: TTS,
+    options: Omit<MakaMujoOptions, "baseline"> = {},
+  ): MakaMujo {
+    return new MakaMujo(talkModel, tts, options);
+  }
+
+  /** Construct an agent restored from a persisted baseline. */
+  static fromBaseline(...args: unknown[]): MakaMujo {
+    // Accept either (baseline, talkModel, tts, options?) or
+    // (talkModel, tts, baseline, options?) for call-site flexibility.
+    let baseline: StreamBaseline | undefined;
+    let talkModel: TalkModel | undefined;
+    let tts: TTS | undefined;
+    let options: Omit<MakaMujoOptions, "baseline"> = {};
+    const isBaseline = (v: unknown): v is StreamBaseline =>
+      typeof v === "object" &&
+      v !== null &&
+      "previousStreamCommentCount" in (v as Record<string, unknown>);
+    if (args.length >= 3 && isBaseline(args[0])) {
+      baseline = args[0] as StreamBaseline;
+      talkModel = args[1] as TalkModel;
+      tts = args[2] as TTS;
+      options = (args[3] as Omit<MakaMujoOptions, "baseline">) ?? {};
+    } else {
+      talkModel = args[0] as TalkModel;
+      tts = args[1] as TTS;
+      if (args.length >= 3 && isBaseline(args[2])) {
+        baseline = args[2] as StreamBaseline;
+        options = (args[3] as Omit<MakaMujoOptions, "baseline">) ?? {};
+      } else if (args.length >= 3 && typeof args[2] === "object") {
+        options = args[2] as Omit<MakaMujoOptions, "baseline">;
+      }
+    }
+    return new MakaMujo(talkModel as TalkModel, tts as TTS, {
+      ...options,
+      baseline,
+    });
+  }
+
   constructor(talkModel: TalkModel, tts: TTS, options: MakaMujoOptions = {}) {
     this.#talkModel = talkModel;
     this.#session =

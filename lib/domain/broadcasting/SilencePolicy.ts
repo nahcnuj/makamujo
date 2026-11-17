@@ -63,3 +63,28 @@ export const isCommentsStale = (
     nowMs - lastCommentAt.getTime() >= thresholdMs
   );
 };
+
+/**
+ * Alias matching the documented `SilencePolicy.evaluate` signature.
+ * Delegates to `evaluateSpeechable` so there is a single source of truth.
+ */
+export type SilencePolicyEvaluateInput = {
+  now: number;
+  streamStateDefined: boolean;
+  listenersStaleSince: Date | undefined;
+  lastCommentAt: Date | undefined;
+  hasPrompted: boolean;
+  browserStateName: string | undefined;
+  thresholdMs: number;
+};
+
+export const evaluate = (input: SilencePolicyEvaluateInput): boolean =>
+  evaluateSpeechable({
+    streamLive: input.streamStateDefined,
+    lastCommentAt: input.lastCommentAt,
+    listenersStaleSince: input.listenersStaleSince,
+    hasPromptedCommentForViewerIncrease: input.hasPrompted,
+    browserStateName: input.browserStateName,
+    nowMs: input.now,
+    thresholdMs: input.thresholdMs,
+  });
