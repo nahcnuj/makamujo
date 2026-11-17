@@ -163,5 +163,7 @@ dist/
 
 # actual captures
 tests/vrt/**/.png
+tests/vrt-rtmps/*.png
 # baseline files are excluded
 !tests/vrt/baseline/*.png
+!tests/vrt-rtmps/baseline/*.png

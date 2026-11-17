@@ -183,14 +183,28 @@ jobs:
         run: |
           set -euo pipefail
           docker run -d --name makamujo --privileged --cgroupns=host \
+            --add-host=host.docker.internal:host-gateway \
             -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
-            -p 2222:22 \
+            -p 2222:22 -p 1935:1935 \
             makamujo:prod
           # wait for ssh
           for i in $(seq 1 30); do
             if docker exec makamujo pgrep -x sshd >/dev/null 2>&1; then break; fi
             sleep 2
           done
+
+      - name: Start RTMPS server on host
+        run: |
+          set -euo pipefail
+          curl -fsSL https://github.com/bluenviron/mediamtx/releases/download/v1.9.3/mediamtx_v1.9.3_linux_amd64.tar.gz -o /tmp/mediamtx.tar.gz
+          mkdir -p /tmp/mediamtx && tar -xzf /tmp/mediamtx.tar.gz -C /tmp/mediamtx
+          cat > /tmp/mediamtx/mediamtx.yml <<'EOF'
+          rtmp: yes
+          rtmpAddress: :1935
+          EOF
+          nohup /tmp/mediamtx/mediamtx /tmp/mediamtx/mediamtx.yml >/tmp/mediamtx.log 2>&1 &
+          sleep 2
+          echo "mediamtx started"
 
       - name: Provision container with Ansible
         run: |
@@ -200,10 +214,17 @@ jobs:
           ansible-playbook -i inventories/docker.yml playbooks/0_desktop.yml
           ansible-playbook -i inventories/docker.yml playbooks/0_obs.yml
           ansible-playbook -i inventories/docker.yml playbooks/1_bun.yml
-          ansible-playbook -i inventories/docker.yml playbooks/2_makamujo.yml
+          ansible-playbook -i inventories/docker.yml -e rtmps_server_url=rtmp://host.docker.internal:1935/live/stream playbooks/2_makamujo.yml
 
       - name: Run RTMPS VRT
         run: bash tests/vrt-rtmps.sh
+
+      - name: Upload captured VRT images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vrt-rtmps-captured
+          path: tests/vrt-rtmps/*.png
 
       - name: Cleanup
         if: always()

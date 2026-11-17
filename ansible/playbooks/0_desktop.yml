@@ -27,6 +27,7 @@
           - x11vnc
           - xdotool
           - x11-xserver-utils
+          - ffmpeg
           - dbus-x11
         state: present
         update_cache: true
