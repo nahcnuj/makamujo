@@ -376,7 +376,7 @@ agentBase = normalize(agentStreamState) as object | {}
 
 | サービス                             | 配置                           | 役割                                                           |
 | ------------------------------------ | ------------------------------ | -------------------------------------------------------------- |
-| `SilencePolicy.evaluate`             | `domain/broadcasting`          | 決定表（後述）                                                 |
+| `evaluateSpeechable`                 | `domain/broadcasting`          | 決定表（後述）                                                 |
 | `CommentPromptPolicy.shouldPrompt`   | `domain/broadcasting`          | onAir 用判定のみ                                               |
 | `NGramPolicy`                        | `domain/broadcasting`          | raw/size                                                       |
 | `TopicPicker.pick(text, random)`     | `domain/comments`              | PR-A3 既定: 内部で `Math.random` 可。RandomPort は任意で後付け |
