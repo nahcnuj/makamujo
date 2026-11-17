@@ -62,9 +62,9 @@ export class MakaMujo {
     options?: Omit<MakaMujoOptions, "baseline">,
   ): MakaMujo;
   static fromBaseline(
-    baselineOrTalkModel: StreamBaseline | TalkModel,
-    talkModelOrTts: TalkModel | TTS,
-    ttsOrBaseline: TTS | StreamBaseline,
+    first: StreamBaseline | TalkModel,
+    second: TalkModel | TTS,
+    third: TTS | StreamBaseline,
     options?: Omit<MakaMujoOptions, "baseline">,
   ): MakaMujo {
     const isBaseline = (value: unknown): value is StreamBaseline =>
@@ -72,32 +72,16 @@ export class MakaMujo {
       value !== null &&
       "previousStreamCommentCount" in (value as Record<string, unknown>);
 
-    let baseline: StreamBaseline | undefined;
-    let talkModel: TalkModel;
-    let tts: TTS;
-    let resolvedOptions: Omit<MakaMujoOptions, "baseline"> = options ?? {};
-
-    if (isBaseline(baselineOrTalkModel)) {
-      baseline = baselineOrTalkModel;
-      talkModel = talkModelOrTts as TalkModel;
-      tts = ttsOrBaseline as TTS;
-    } else if (isBaseline(ttsOrBaseline)) {
-      talkModel = baselineOrTalkModel as TalkModel;
-      tts = talkModelOrTts as TTS;
-      baseline = ttsOrBaseline as StreamBaseline;
-    } else {
-      talkModel = baselineOrTalkModel as TalkModel;
-      tts = talkModelOrTts as TTS;
-      const maybeOptions = ttsOrBaseline as
-        | (Omit<MakaMujoOptions, "baseline"> & { baseline?: StreamBaseline })
-        | undefined;
-      baseline = maybeOptions?.baseline;
-      resolvedOptions = maybeOptions ?? {};
+    if (isBaseline(first)) {
+      return new MakaMujo(second as TalkModel, third as TTS, {
+        ...options,
+        baseline: first,
+      });
     }
-
-    return baseline !== undefined
-      ? new MakaMujo(talkModel, tts, { ...resolvedOptions, baseline })
-      : new MakaMujo(talkModel, tts, resolvedOptions);
+    return new MakaMujo(first as TalkModel, second as TTS, {
+      ...options,
+      baseline: third as StreamBaseline,
+    });
   }
 
   constructor(talkModel: TalkModel, tts: TTS, options: MakaMujoOptions = {}) {
