@@ -449,11 +449,11 @@ export type GameViewState = unknown;
 // 定義（thresholdMs = SILENCE_THRESHOLD_MS）
 listenersStale =
   listenersStaleSince !== undefined
-  && (now - listenersStaleSince.getTime()) >= thresholdMs
+  && (now - listenersStaleSince) >= thresholdMs
 
 commentsStale =
   lastCommentAt === undefined
-  || (now - lastCommentAt.getTime()) >= thresholdMs
+  || (now - lastCommentAt) >= thresholdMs
 
 browserOk =
   (browserStateName ?? 'idle') ∈ { 'idle', 'result', 'closed' }
@@ -497,8 +497,8 @@ function evaluateSpeechable(...): boolean {
 SilencePolicy.evaluate({
   now,
   streamStateDefined: boolean,
-  listenersStaleSince?: Date,
-  lastCommentAt?: Date,
+  listenersStaleSince?: number, // Date.getTime() 相当
+  lastCommentAt?: number,
   hasPrompted: boolean,
   browserStateName?: string,
   thresholdMs: typeof SILENCE_THRESHOLD_MS,

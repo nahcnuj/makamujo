@@ -62,7 +62,7 @@ export class CommentApplicationService {
         isOwner: commentData.isOwner,
       });
 
-      // Step 2 — all comments refresh silence clock
+      // Step 2 — all comments refresh silence clock (コメント受信時刻を記録)
       this.#session.lastCommentAt = new Date(Date.now());
       this.#onBaselineChange?.(this.#session.toStreamBaseline());
       // Step 3

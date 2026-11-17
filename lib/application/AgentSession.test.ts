@@ -43,14 +43,15 @@ describe("AgentSession stream baseline", () => {
 
   test("restores lastCommentAt from a Date", () => {
     const session = new AgentSession();
-    const when = new Date(1_700_000_000_000);
+    // コメント受信時刻（永続化前後の同一インスタント）
+    const receivedAt = new Date("2023-11-14T22:13:20.000Z");
     session.restoreStreamBaseline({
       previousStreamCommentCount: 0,
       currentProgramLatestCommentNo: 0,
-      lastCommentAt: when,
+      lastCommentAt: receivedAt,
     });
 
-    expect(session.lastCommentAt).toEqual(when);
-    expect(session.toStreamBaseline().lastCommentAt).toEqual(when);
+    expect(session.lastCommentAt).toEqual(receivedAt);
+    expect(session.toStreamBaseline().lastCommentAt).toEqual(receivedAt);
   });
 });
