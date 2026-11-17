@@ -55,7 +55,7 @@ for case_file in "${vrt_dir}"/*; do
     continue
   fi
 
-  bash tests/rtmps/compare-capture.sh "${actual}" "${baseline}" || status=1
+  bash tests/vrt.sh "${actual}" "${baseline}" || status=1
 done
 
 # An empty case directory must never be reported as a successful VRT run.
