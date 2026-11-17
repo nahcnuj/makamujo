@@ -12,6 +12,6 @@ test -f "${EXPECTATION}"
 ACTUAL="$(mktemp -t stream-capture.XXXXXX.png)"
 trap 'rm -f "${ACTUAL}"' EXIT
 bash "${PROJECT_ROOT}/scripts/stream-capture.sh" "${ACTUAL}" >/dev/null
-cmp -s "${ACTUAL}" "${EXPECTATION}"
+cmp "${ACTUAL}" "${EXPECTATION}"
 
 python3 "${PROJECT_ROOT}/tests/lib/verify-stream-capture.py" "${EXPECTATION}"

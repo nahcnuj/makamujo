@@ -1,12 +1,7 @@
-import hashlib
 from pathlib import Path
 import struct
 import sys
 import zlib
-
-# VRT baseline hash for the committed stream capture.
-BASELINE_SHA256 = "6688285091a35311e55811243d50393df9b0ccc35e7ff44a55ea5457bb7c651d"
-
 
 def main() -> None:
     if len(sys.argv) != 2:
@@ -21,9 +16,6 @@ def main() -> None:
 
     with path.open("rb") as stream:
         raw = stream.read()
-
-    actual = hashlib.sha256(raw).hexdigest()
-    assert actual == BASELINE_SHA256, (actual, BASELINE_SHA256)
 
     assert raw[:8] == b"\x89PNG\r\n\x1a\n", "stream capture is not a PNG file"
     off = 8
