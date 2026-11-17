@@ -12,6 +12,16 @@ cd "${project_root}"
 out_file="$(dirname "$0")/capture-rtmps.png"
 stream_url=${RTMPS_CAPTURE_URL:-rtmps://127.0.0.1:1936/live/stream}
 
+# The regression must exercise the encrypted RTMPS path. A plain RTMP URL or a
+# local file would make the comparison pass without testing the reproduction.
+case "${stream_url}" in
+  rtmps://*) ;;
+  *)
+    echo "RTMPS VRT requires an rtmps:// stream URL (got ${stream_url})" >&2
+    exit 1
+    ;;
+esac
+
 if ! command -v ffmpeg >/dev/null 2>&1; then
   echo "ffmpeg is required" >&2
   exit 1

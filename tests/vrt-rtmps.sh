@@ -29,6 +29,7 @@ compare_with_baseline() {
 }
 
 status=0
+cases_executed=0
 
 for case_file in "${vrt_dir}"/*; do
   [ -f "${case_file}" ] || continue
@@ -37,8 +38,10 @@ for case_file in "${vrt_dir}"/*; do
   esac
   if [ -x "${case_file}" ]; then
     "${case_file}" || status=1
+    cases_executed=$((cases_executed + 1))
   elif [[ "${case_file}" == *.sh ]]; then
     bash "${case_file}" || status=1
+    cases_executed=$((cases_executed + 1))
   else
     continue
   fi
@@ -61,5 +64,11 @@ for case_file in "${vrt_dir}"/*; do
 
   compare_with_baseline "${actual}" "${baseline}" || status=1
 done
+
+# An empty case directory must never be reported as a successful VRT run.
+if [ "${cases_executed}" -eq 0 ]; then
+  echo "VRT: no RTMPS VRT case was executed in ${vrt_dir}" >&2
+  status=1
+fi
 
 exit "${status}"
