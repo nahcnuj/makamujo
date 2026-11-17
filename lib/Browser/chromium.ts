@@ -316,7 +316,6 @@ export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
   "--disable-renderer-backgrounding",
 ] as const;
 
-export const GAME_SCREEN_ZOOM = "1" as const;
 export const GAME_SCREEN_ZOOM_FACTOR = 1 as const;
 
 export type BrowserCreateOptions = {
