@@ -199,7 +199,7 @@ const browser = await create(
   executablePath,
   {
     width: 1280,
-    height: 720, // match stream crop; scale via page zoom
+    height: 720, // match stream crop; scale via OBS Display Capture
   },
   {
     // The game Agent owns how its board is scaled; the browser only applies it.
