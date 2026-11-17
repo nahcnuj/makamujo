@@ -176,8 +176,7 @@ const persistStreamBaseline = (): void => {
   saveStreamBaseline(streamBaselinePath, streamBaseline);
 };
 
-const streamer = new MakaMujo(model, tts, {
-  baseline: initialStreamBaseline,
+const streamer = MakaMujo.fromBaseline(initialStreamBaseline, model, tts, {
   onBaselineChange: (baseline) => {
     streamBaseline = {
       ...streamBaseline,

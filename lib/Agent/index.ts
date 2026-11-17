@@ -49,17 +49,27 @@ export class MakaMujo {
   }
 
   /** Construct an agent restored from a persisted baseline. */
+  static fromBaseline(
+    baseline: StreamBaseline,
+    talkModel: TalkModel,
+    tts: TTS,
+    options?: Omit<MakaMujoOptions, "baseline">,
+  ): MakaMujo;
+  static fromBaseline(
+    talkModel: TalkModel,
+    tts: TTS,
+    baseline: StreamBaseline,
+    options?: Omit<MakaMujoOptions, "baseline">,
+  ): MakaMujo;
   static fromBaseline(...args: unknown[]): MakaMujo {
-    // Accept either (baseline, talkModel, tts, options?) or
-    // (talkModel, tts, baseline, options?) for call-site flexibility.
-    let baseline: StreamBaseline | undefined;
-    let talkModel: TalkModel | undefined;
-    let tts: TTS | undefined;
-    let options: Omit<MakaMujoOptions, "baseline"> = {};
     const isBaseline = (v: unknown): v is StreamBaseline =>
       typeof v === "object" &&
       v !== null &&
       "previousStreamCommentCount" in (v as Record<string, unknown>);
+    let baseline: StreamBaseline | undefined;
+    let talkModel: TalkModel | undefined;
+    let tts: TTS | undefined;
+    let options: Omit<MakaMujoOptions, "baseline"> = {};
     if (args.length >= 3 && isBaseline(args[0])) {
       baseline = args[0] as StreamBaseline;
       talkModel = args[1] as TalkModel;
