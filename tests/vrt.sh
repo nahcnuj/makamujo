@@ -42,14 +42,9 @@ for case_file in "${vrt_dir}"/*; do
     fi
 
     if [ ! -f "${baseline}" ]; then
-        if [ -f "${actual}" ]; then
-            cp "${actual}" "${baseline}"
-            echo "VRT: created baseline for ${stem} (${baseline})"
-        else
-            echo "VRT: missing baseline for ${stem} (${baseline})" >&2
-            status=1
-            continue
-        fi
+        echo "VRT: missing committed baseline for ${stem} (${baseline})" >&2
+        status=1
+        continue
     fi
 
     if ! cmp -s "${actual}" "${baseline}"; then

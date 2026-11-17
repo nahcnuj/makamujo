@@ -271,10 +271,16 @@ jobs:
           docker cp "${RUNNER_TEMP}/certs/ca.pem" \
             makamujo:/usr/local/share/ca-certificates/mediamtx-ca.crt
           docker exec makamujo update-ca-certificates
+          # Flathub's OBS is built with mbedTLS. Its librtmp loads trust anchors
+          # from /etc/ssl/certs and ignores SSL_CERT_FILE, so expose the host
+          # (container) trust store to the Flatpak sandbox as well.
           docker exec makamujo flatpak override --system \
             --filesystem=/usr/local/share/ca-certificates \
+            --filesystem=/etc/ssl/certs \
             --env=SSL_CERT_FILE=/usr/local/share/ca-certificates/mediamtx-ca.crt \
             com.obsproject.Studio
+          docker exec makamujo sh -c \
+            'ls -l /etc/ssl/certs/*mediamtx* /usr/local/share/ca-certificates/mediamtx-ca.crt'
           bash tests/rtmps/configure-obs.sh makamujo
 
       - name: Run RTMPS VRT
@@ -303,6 +309,8 @@ jobs:
             /opt/src/makamujo/obs-studio/basic/profiles/Makamujo/service.json 2>&1 || true
           echo '== Flatpak overrides =='
           docker exec makamujo flatpak override --system --show com.obsproject.Studio 2>&1 || true
+          echo '== CA trust store =='
+          docker exec makamujo sh -c 'ls -l /etc/ssl/certs/*mediamtx* 2>&1; cat /usr/local/share/ca-certificates/mediamtx-ca.crt 2>&1 | head -3' || true
           echo '== Fixture reachability =='
           docker exec makamujo python3 -c \
             'import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:8899/fixture.html", timeout=2).status)' \
