@@ -11,49 +11,33 @@ mkdir -p "${baseline_dir}"
 
 status=0
 
-# Run every test case (any non-PNG file) so it can (re)generate its actual image.
+# Run every executable test case so it can (re)generate its actual image.
 for case_file in "${vrt_dir}"/*; do
     [ -f "${case_file}" ] || continue
-    case "${case_file}" in
-        *.png) continue ;;
-    esac
+    [ -x "${case_file}" ] || continue
 
-    case "${case_file}" in
-        *.sh)
-            bash "${case_file}" || status=1
-            ;;
-        *.ts)
-            bun run "${case_file}" || status=1
-            ;;
-        *.py)
-            python3 "${case_file}" || status=1
-            ;;
-        *)
-            if [ -x "${case_file}" ]; then
-                "${case_file}" || status=1
-            else
-                echo "Unknown VRT case (not executable): ${case_file}" >&2
-                status=1
-            fi
-            ;;
-    esac
-done
+    "${case_file}" || status=1
 
-# Compare each actual output (tests/vrt/*.png) with its baseline.
-for actual in "${vrt_dir}"/*.png; do
-    [ -f "${actual}" ] || continue
-    name=$(basename "${actual}")
-    stem="${name%.png}"
+    # Compare the corresponding actual output with its baseline right away.
+    base=$(basename "${case_file}")
+    stem="${base%.*}"
+    actual="${vrt_dir}/${stem}.png"
     baseline="${baseline_dir}/${stem}.png"
 
+    if [ ! -f "${actual}" ]; then
+        echo "VRT: missing actual output for ${stem} (${actual})" >&2
+        status=1
+        continue
+    fi
+
     if [ ! -f "${baseline}" ]; then
-        echo "VRT: missing baseline for ${name} (${baseline})" >&2
+        echo "VRT: missing baseline for ${stem} (${baseline})" >&2
         status=1
         continue
     fi
 
     if ! cmp -s "${actual}" "${baseline}"; then
-        echo "VRT: mismatch for ${name}" >&2
+        echo "VRT: mismatch for ${stem}.png" >&2
         status=1
     fi
 done
