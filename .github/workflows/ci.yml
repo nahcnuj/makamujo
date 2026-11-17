@@ -185,7 +185,7 @@ jobs:
           docker run -d --name makamujo --privileged --cgroupns=host \
             --add-host=host.docker.internal:host-gateway \
             -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
-            -p 2222:22 -p 1935:1935 \
+            -p 2222:22 \
             makamujo:prod
           # wait for ssh
           for i in $(seq 1 30); do
