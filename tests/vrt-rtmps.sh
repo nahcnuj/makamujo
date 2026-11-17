@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# This is the real VRT for the Docker/Ansible reproduction: the frame is
-# captured from OBS in the provisioned container publishing the actual
-# vigilant-fiesta game page to the in-network MediaMTX RTMPS endpoint.
+# Real VRT for the Docker/Ansible reproduction. A case captures a frame that
+# OBS published from the reproduced production profile over RTMPS; the frame
+# is compared with the expectation committed next to this runner. No synthetic
+# image and no artifact download are involved.
 project_root=$(cd "$(dirname "$0")/.." && pwd)
 cd "${project_root}"
 
 vrt_dir=${1:-tests/vrt-rtmps}
 baseline_dir="${vrt_dir}/baseline"
+min_ssim=${RTMPS_VRT_MIN_SSIM:-0.75}
+
+if ! command -v ffmpeg >/dev/null 2>&1; then
+  echo "ffmpeg is required to compare VRT frames" >&2
+  exit 1
+fi
 
 status=0
 cases_executed=0
@@ -16,8 +23,8 @@ cases_executed=0
 # A case that silently leaves the previous capture in place must not be able to
 # pass by comparing a stale image with the baseline.
 run_marker=$(mktemp)
-touch -d '1 minute ago' "${run_marker}"
 trap 'rm -f "${run_marker}"' EXIT
+touch -d '1 minute ago' "${run_marker}"
 
 for case_file in "${vrt_dir}"/*; do
   [ -f "${case_file}" ] || continue
@@ -32,13 +39,12 @@ for case_file in "${vrt_dir}"/*; do
 
   if [ -x "${case_file}" ]; then
     "${case_file}" "${actual}" || status=1
-    cases_executed=$((cases_executed + 1))
   elif [[ "${case_file}" == *.sh ]]; then
     bash "${case_file}" "${actual}" || status=1
-    cases_executed=$((cases_executed + 1))
   else
     continue
   fi
+  cases_executed=$((cases_executed + 1))
 
   if [ ! -f "${actual}" ]; then
     echo "VRT: missing actual output for ${stem} (${actual})" >&2
@@ -56,7 +62,26 @@ for case_file in "${vrt_dir}"/*; do
     continue
   fi
 
-  bash tests/vrt.sh "${actual}" "${baseline}" || status=1
+  ssim_log=$(mktemp)
+  if ffmpeg -hide_banner -nostdin -i "${actual}" -i "${baseline}" \
+      -lavfi '[0:v][1:v]ssim' -f null - 2>"${ssim_log}"; then
+    score=$(grep -o 'All:[0-9.]*' "${ssim_log}" | tail -n 1 | cut -d: -f2 || true)
+    if [ -z "${score}" ]; then
+      echo "VRT: could not read the SSIM score for ${stem}" >&2
+      status=1
+    elif awk -v score="${score}" -v minimum="${min_ssim}" \
+        'BEGIN { exit !(score >= minimum) }'; then
+      echo "VRT: ${stem} SSIM=${score} (minimum ${min_ssim})"
+    else
+      echo "VRT: ${stem} SSIM=${score} is below ${min_ssim}" >&2
+      status=1
+    fi
+  else
+    echo "VRT: failed to compare ${actual} with ${baseline}" >&2
+    tail -n 20 "${ssim_log}" >&2 || true
+    status=1
+  fi
+  rm -f "${ssim_log}"
 done
 
 # An empty case directory must never be reported as a successful VRT run.

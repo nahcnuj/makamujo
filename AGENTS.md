@@ -21,7 +21,7 @@
 | `bun run test:integration` | `bun test tests/integration/`                                              |
 | `bun run test:bin`         | `tests/bin/*.sh` のシェルテスト（bash 必需）                               |
 | `bun run test:e2e`         | Playwright E2E（要 `pretest:e2e`、HTTPS 443）                              |
-| `bash tests/vrt.sh`        | Visual Regression Testing（RTMPS の実配信フレームを baseline と SSIM比較） |
+| `bash tests/vrt-rtmps.sh`  | Visual Regression Testing（RTMPS の実配信フレームを baseline と SSIM比較） |
 
 その他スクリプト（`browser` / `generate-ogp` / `screenshot:console-agent-status` / `markov` 等）は `package.json` 参照。
 
@@ -55,7 +55,7 @@
 - 新規に作成する公開関数には必ず単体テストを作成する。
 - テストフレームワークは Bun（`bun:test`、Jest 互換）。`bunfig.toml` で coverage が常時有効（`bun test` はカバレッジ計測つきで若干遅い）。
 - 配置: 単体テストは実装と同階層 `*.test.{ts,tsx}` / 統合 `tests/integration/` / E2E `tests/e2e/` / シェル `tests/bin/`。
-- VRT: 合成画像や example ケースは使わない。`tests/vrt-rtmps.sh` が再現環境の OBS から RTMPS 経由で配信された実際の vigilant-fiesta ゲーム画面をキャプチャし、`tests/vrt.sh` が `tests/vrt-rtmps/baseline/` のコミット済み画像と SSIM で比較する。CI では `rtmps` job が RTMPS 配信と比較を一括で行い、キャプチャを成果物としてアップロードする。
+- VRT: 合成画像や example ケースは使わない。`tests/vrt-rtmps.sh` が再現環境の OBS から RTMPS 経由で配信された実際の vigilant-fiesta ゲーム画面をキャプチャし、`tests/vrt-rtmps/baseline/` のコミット済み画像と SSIM で比較する。CI では `rtmps` job が RTMPS 配信と比較を一括で行い、キャプチャを成果物としてアップロードする。
 
 ## コーディングスタイル
 
