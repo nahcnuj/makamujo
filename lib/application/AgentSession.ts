@@ -5,7 +5,7 @@ import {
   initialNGramSize,
   initialNGramSizeRaw,
 } from "../domain/broadcasting/NGramPolicy";
-import type { StreamBaseline } from "./streamBaselineStore";
+import { type StreamBaseline, toDate } from "./streamBaselineStore";
 
 export type PlayingGame = {
   name: GameName;
@@ -64,30 +64,6 @@ export class AgentSession {
     this.previousStreamCommentCount = baseline.previousStreamCommentCount;
     this.currentProgramUrl = baseline.currentProgramUrl;
     this.currentProgramLatestCommentNo = baseline.currentProgramLatestCommentNo;
-    const restored = baseline.lastCommentAt;
-    if (restored === undefined) {
-      this.lastCommentAt = undefined;
-    } else if (restored instanceof Date) {
-      const ms = restored.getTime();
-      this.lastCommentAt = Number.isFinite(ms) ? new Date(ms) : undefined;
-    } else if (typeof restored === "number") {
-      this.lastCommentAt =
-        Number.isFinite(restored) && restored >= 0
-          ? new Date(restored)
-          : undefined;
-    } else if (typeof restored === "string") {
-      const ms = Date.parse(restored);
-      if (Number.isFinite(ms)) {
-        this.lastCommentAt = new Date(ms);
-      } else {
-        const numeric = Number(restored);
-        this.lastCommentAt =
-          Number.isFinite(numeric) && numeric >= 0
-            ? new Date(numeric)
-            : undefined;
-      }
-    } else {
-      this.lastCommentAt = undefined;
-    }
+    this.lastCommentAt = toDate(baseline.lastCommentAt);
   }
 }

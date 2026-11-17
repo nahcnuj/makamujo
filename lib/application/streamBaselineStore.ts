@@ -46,21 +46,21 @@ const toNonNegativeInteger = (value: unknown): number | undefined => {
   return value >= 0 ? value : undefined;
 };
 
-const toDate = (value: unknown): Date | undefined => {
-  if (value instanceof Date) {
-    const ms = value.getTime();
-    return Number.isFinite(ms) ? new Date(ms) : undefined;
+export const toDate = (value: unknown): Date | undefined => {
+  if (value === null || value === undefined || typeof value === "boolean") {
+    return undefined;
   }
-  if (typeof value === "number") {
-    return Number.isFinite(value) && value >= 0 ? new Date(value) : undefined;
+  // Date's constructor accepts a Date, epoch ms, or ISO string directly.
+  const fromConstructor = new Date(value as Date | number | string);
+  if (Number.isFinite(fromConstructor.getTime())) {
+    // Reject negative epoch values, matching the legacy guard.
+    if (typeof value === "number" && value < 0) return undefined;
+    return fromConstructor;
   }
+  // Legacy numeric strings (epoch ms) are not parsed by the Date constructor.
   if (typeof value === "string") {
-    const ms = Date.parse(value);
-    if (Number.isFinite(ms)) return new Date(ms);
-    // Allow a numeric string (epoch ms) for legacy persisted values.
     const numeric = Number(value);
     if (Number.isFinite(numeric) && numeric >= 0) return new Date(numeric);
-    return undefined;
   }
   return undefined;
 };

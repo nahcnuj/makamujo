@@ -23,7 +23,7 @@ export type MakaMujoOptions = {
  */
 export class MakaMujo {
   #talkModel: TalkModel;
-  #session = new AgentSession();
+  #session: AgentSession;
   #speechQueue: SpeechQueue;
   #comments: CommentApplicationService;
   #stream: StreamApplicationService;
@@ -39,47 +39,10 @@ export class MakaMujo {
   /** Latest news lines from sight (for spontaneous topic). */
   #currentNewsLines: string[] = [];
 
-  constructor(
-    talkModelOrOptions:
-      | TalkModel
-      | (MakaMujoOptions & { talkModel: TalkModel; tts: TTS }),
-    tts?: TTS,
-    options: MakaMujoOptions = {},
-  ) {
-    const isOptionsObject =
-      typeof talkModelOrOptions === "object" &&
-      talkModelOrOptions !== null &&
-      "talkModel" in talkModelOrOptions &&
-      "tts" in talkModelOrOptions;
-    const talkModel = isOptionsObject
-      ? (
-          talkModelOrOptions as MakaMujoOptions & {
-            talkModel: TalkModel;
-            tts: TTS;
-          }
-        ).talkModel
-      : (talkModelOrOptions as TalkModel);
-    const resolvedTts = isOptionsObject
-      ? (
-          talkModelOrOptions as MakaMujoOptions & {
-            talkModel: TalkModel;
-            tts: TTS;
-          }
-        ).tts
-      : (tts as TTS);
-    const resolvedOptions = isOptionsObject
-      ? (talkModelOrOptions as MakaMujoOptions & {
-          talkModel: TalkModel;
-          tts: TTS;
-        })
-      : options;
-
+  constructor(talkModel: TalkModel, tts: TTS, options: MakaMujoOptions = {}) {
     this.#talkModel = talkModel;
-    this.#speechQueue = new SpeechQueue(resolvedTts);
-
-    if (resolvedOptions.baseline) {
-      this.#session.restoreStreamBaseline(resolvedOptions.baseline);
-    }
+    this.#session = new AgentSession(options.baseline);
+    this.#speechQueue = new SpeechQueue(tts);
 
     const speechPort = {
       speech: (generated?: AppTalkModelGenerateResult) =>
@@ -90,7 +53,7 @@ export class MakaMujo {
       this.#session,
       talkModel,
       speechPort,
-      resolvedOptions.onBaselineChange,
+      options.onBaselineChange,
     );
     this.#stream = new StreamApplicationService(
       this.#session,
@@ -98,7 +61,7 @@ export class MakaMujo {
       this.#speechQueue,
       {
         silenceThresholdMs: SILENCE_THRESHOLD_MS,
-        onBaselineChange: resolvedOptions.onBaselineChange,
+        onBaselineChange: options.onBaselineChange,
       },
     );
     this.#gameplay = new GameplayApplicationService(
