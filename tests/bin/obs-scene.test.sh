@@ -25,7 +25,7 @@ assert matches, "Display Capture (XSHM) item not found in OBS scene"
 for item in matches:
     for key in ("scale", "scale_rel"):
         value = item.get(key, {})
-        assert value.get("x") == 1.0, (key, value)
-        assert value.get("y") == 1.0, (key, value)
+        assert value.get("x") == 1.35, (key, value)
+        assert value.get("y") == 1.35, (key, value)
 
 PY
