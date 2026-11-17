@@ -1108,13 +1108,13 @@ describe("MakaMujo stream baseline persistence", () => {
         previousStreamCommentCount: 0,
         currentProgramUrl: "https://example.com",
         currentProgramLatestCommentNo: 0,
-        lastCommentAt: new Date(1_700_000_000_000 - 60_000),
+        lastCommentAt: 1_700_000_000_000 - 60_000,
       },
     });
 
     agent.onAir(niconamaLive(10));
     expect(agent.speechable).toBeTrue();
-    expect(agent.lastCommentAt).toEqual(new Date(1_700_000_000_000 - 60_000));
+    expect(agent.lastCommentAt).toEqual(1_700_000_000_000 - 60_000);
 
     jest.restoreAllMocks();
   });
@@ -1126,14 +1126,14 @@ describe("MakaMujo stream baseline persistence", () => {
         previousStreamCommentCount: 0,
         currentProgramUrl: "https://example.com",
         currentProgramLatestCommentNo: 0,
-        lastCommentAt: new Date(1_700_000_000_000 - SILENCE_THRESHOLD_MS - 1),
+        lastCommentAt: 1_700_000_000_000 - SILENCE_THRESHOLD_MS - 1,
       },
     });
 
     agent.onAir(niconamaLive(10));
     expect(agent.speechable).toBeFalse();
     expect(agent.lastCommentAt).toEqual(
-      new Date(1_700_000_000_000 - SILENCE_THRESHOLD_MS - 1),
+      1_700_000_000_000 - SILENCE_THRESHOLD_MS - 1,
     );
 
     jest.restoreAllMocks();
@@ -1158,7 +1158,7 @@ describe("MakaMujo stream baseline persistence", () => {
       previousStreamCommentCount: 1,
       currentProgramUrl: undefined,
       currentProgramLatestCommentNo: 0,
-      lastCommentAt: new Date(1_700_000_000_000),
+      lastCommentAt: 1_700_000_000_000,
     });
     nowSpy.mockRestore();
   });
@@ -1185,7 +1185,7 @@ describe("MakaMujo stream baseline persistence", () => {
       previousStreamCommentCount: 1,
       currentProgramUrl: "https://live.example/watch/lv2",
       currentProgramLatestCommentNo: 0,
-      lastCommentAt: new Date(1_700_000_000_000),
+      lastCommentAt: 1_700_000_000_000,
     });
     nowSpy.mockRestore();
   });

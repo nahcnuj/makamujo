@@ -63,7 +63,7 @@ export class CommentApplicationService {
       });
 
       // Step 2 — all comments refresh silence clock (コメント受信時刻を記録)
-      this.#session.lastCommentAt = new Date(Date.now());
+      this.#session.lastCommentAt = Date.now();
       this.#onBaselineChange?.(this.#session.toStreamBaseline());
       // Step 3
       this.#session.hasPromptedCommentForViewerIncrease = false;

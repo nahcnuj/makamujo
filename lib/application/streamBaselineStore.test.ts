@@ -72,9 +72,11 @@ describe("parseStreamBaseline", () => {
 
   it("parses lastCommentAt from an ISO string", () => {
     // コメント受信時刻（ISO 8601 で永続化・復元される）
-    const receivedAt = new Date("2023-11-14T22:13:20.000Z");
+    const receivedAt = 1_700_000_000_000;
     expect(
-      parseStreamBaseline({ lastCommentAt: receivedAt.toISOString() }),
+      parseStreamBaseline({
+        lastCommentAt: new Date(receivedAt).toISOString(),
+      }),
     ).toEqual({
       previousStreamCommentCount: 0,
       currentProgramUrl: undefined,
@@ -84,7 +86,7 @@ describe("parseStreamBaseline", () => {
   });
 
   it("ignores non-date lastCommentAt values", () => {
-    expect(parseStreamBaseline({ lastCommentAt: 12345 })).toEqual({
+    expect(parseStreamBaseline({ lastCommentAt: "not-a-date" })).toEqual({
       previousStreamCommentCount: 0,
       currentProgramUrl: undefined,
       currentProgramLatestCommentNo: 0,
@@ -125,7 +127,7 @@ describe("loadStreamBaseline", () => {
   it("round-trips lastCommentAt as a Date through saveStreamBaseline", () => {
     const dir = makeTempDir();
     const path = join(dir, "baseline.json");
-    const receivedAt = new Date("2023-11-14T22:13:20.000Z");
+    const receivedAt = 1_700_000_000_000;
     const baseline = {
       previousStreamCommentCount: 12,
       currentProgramUrl: "https://live.example/watch/lv2",
