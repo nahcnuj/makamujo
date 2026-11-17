@@ -4,7 +4,7 @@ set -euo pipefail
 project_root=$(cd "$(dirname "$0")/.." && pwd)
 cd "${project_root}"
 
-vrt_dir="tests/vrt"
+vrt_dir="${1:-tests/vrt}"
 baseline_dir="${vrt_dir}/baseline"
 
 mkdir -p "${baseline_dir}"
