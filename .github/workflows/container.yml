@@ -43,7 +43,7 @@ jobs:
       - name: Provision container with Ansible
         run: |
           cd ansible
-          ansible-playbook -i inventory/hosts.docker.yml playbooks/docker.yml
+          ansible-playbook -i inventory/hosts.docker.yml playbooks/2_makamujo.yml
 
       - name: Verify RTMPS outbound communication is observable
         env:

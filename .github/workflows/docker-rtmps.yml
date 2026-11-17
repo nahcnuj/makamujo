@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           cd ansible
-          ansible-playbook -i inventory/hosts.docker.yml playbooks/docker.yml
+          ansible-playbook -i inventory/hosts.docker.yml playbooks/2_makamujo.yml
 
       - name: Verify RTMPS outbound communication is observable
         env:

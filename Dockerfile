@@ -33,9 +33,8 @@ RUN mkdir -p /run/sshd \
 
 # Provision the container like production using Ansible.
 RUN cd /opt/src/makamujo/ansible \
-    && printf 'docker ansible_connection=local\n' > /tmp/ansible-hosts \
-    && ansible-playbook -i /tmp/ansible-hosts playbooks/docker.yml
-
+    && printf 'vps ansible_connection=local\n' > /tmp/ansible-hosts \
+    && ansible-playbook -i /tmp/ansible-hosts playbooks/2_makamujo.yml
 EXPOSE 22 7777 8777 443
 
 VOLUME ["/sys/fs/cgroup"]
