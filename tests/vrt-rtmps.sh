@@ -14,9 +14,20 @@ status=0
 # Run every executable test case so it can (re)generate its actual image.
 for case_file in "${vrt_dir}"/*; do
     [ -f "${case_file}" ] || continue
-    [ -x "${case_file}" ] || continue
-
-    "${case_file}" || status=1
+    # Skip generated images and other non-case files.
+    case "${case_file}" in
+      *.png|*.jpg|*.jpeg) continue ;;
+    esac
+    # Case files are normally executable, but commits created through the
+    # GitHub API cannot carry the executable bit, so fall back to bash for
+    # shell scripts that lost it.
+    if [ -x "${case_file}" ]; then
+        "${case_file}" || status=1
+    elif [[ "${case_file}" == *.sh ]]; then
+        bash "${case_file}" || status=1
+    else
+        continue
+    fi
 
     # Compare the corresponding actual output with its baseline right away.
     base=$(basename "${case_file}")
