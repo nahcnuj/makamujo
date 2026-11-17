@@ -601,6 +601,8 @@ const makeStreamHandler =
 let mainServer: Bun.Server<WsData> | undefined;
 /** Hoisted for exitHandler safety if startup fails mid-module. */
 let consoleServer: ReturnType<typeof startConsoleServer> | null = null;
+/** Hoisted for exitHandler safety if startup fails mid-module. */
+let runtimeCleanedUp = false;
 
 const getMainServer = (): Bun.Server<WsData> => {
   if (!mainServer) throw new Error("Server not yet initialized");
@@ -864,8 +866,6 @@ function stopWatchPageStatistics(): Promise<void> {
   })();
   return stoppingWatchPageStatistics;
 }
-
-let runtimeCleanedUp = false;
 
 /**
  * @see {@link https://stackoverflow.com/questions/14031763/doing-a-cleanup-action-just-before-node-js-exits}
