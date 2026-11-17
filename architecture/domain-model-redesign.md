@@ -491,10 +491,6 @@ function evaluateSpeechable(...): boolean {
 
 既存 `lib/Agent/index.test.ts` の speechable / prompt 群も回帰ゴールデンとして維持する。特に「視聴者増で 1 回プロンプト後、listeners が新鮮でも `speechable === false`」を characterization に含める（上表 3 行目）。
 
-純関数シグネチャ:
-
-`SilencePolicy.evaluate` は `now` (number)、`streamStateDefined` (boolean)、`listenersStaleSince` (Date | undefined)、`lastCommentAt` (Date | undefined)、`hasPrompted` (boolean)、`browserStateName` (string | undefined)、`thresholdMs` (typeof SILENCE_THRESHOLD_MS) を受け取り boolean を返す。実装は上記 `evaluateSpeechable` と意味的に同一であること。
-
 ### CommentPrompt use case（onAir）
 
 前提: live、番組 URL 処理済み、`listeners` が前回と異なる。
