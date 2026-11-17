@@ -279,9 +279,9 @@ jobs:
             com.obsproject.Studio
 
           # OBS rewrites its profile on exit, so stop it before touching the
-          # files on disk. Only the local streaming endpoint and the game URL
-          # are overridden: every other production setting (scene items,
-          # filters, custom CSS, encoding, ...) is left exactly as deployed.
+          # files on disk. Only the local streaming endpoint and the VRT view
+          # of the real game page are overridden; encoding and the rest of the
+          # deployed profile stay untouched.
           docker compose exec -T makamujo systemctl stop makamujo-obs.service
           for _ in $(seq 1 30); do
             if ! docker compose exec -T makamujo systemctl is-active --quiet makamujo-obs.service; then
@@ -318,15 +318,31 @@ jobs:
               json.dumps(service, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
           )
 
+          # Show the real game page in a fixed 1280x720 viewport and hide only
+          # dynamic ad slots. The committed VRT baseline was captured with the
+          # same view; without this, full-scene overlays and ads make SSIM
+          # fluctuate on every CI run.
+          vrt_css = " ".join(
+              [
+                  "#ad-side-left, #ad-side-right, .ad-slot, ins.adsbygoogle { display: none !important; }",
+                  "html, body { width: 1280px !important; height: 720px !important; overflow: hidden !important; }",
+              ]
+          )
+
           scene = json.loads(scene_path.read_text(encoding="utf-8"))
-          game_sources = [
-              source
-              for source in scene.get("sources", [])
-              if source.get("name") == "Comment" and source.get("id") == "browser_source"
-          ]
-          if len(game_sources) != 1:
-              raise SystemExit(f"expected one Comment browser source, found {len(game_sources)}")
-          game_sources[0].setdefault("settings", {})["url"] = game_url
+          for source in scene.get("sources", []):
+              if source.get("id") == "scene":
+                  for item in source.get("settings", {}).get("items", []):
+                      item["visible"] = item.get("name") == "Comment"
+                  continue
+              source["enabled"] = source.get("name") == "Comment"
+              if source.get("name") == "Comment":
+                  source_settings = source.setdefault("settings", {})
+                  source_settings["url"] = game_url
+                  source_settings["fps"] = 30
+                  source_settings["fps_custom"] = True
+                  source_settings["css"] = vrt_css
+                  source.pop("filters", None)
           scene_path.write_text(
               json.dumps(scene, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
           )
@@ -334,7 +350,7 @@ jobs:
           docker compose exec -T makamujo systemctl start makamujo-obs.service
           for _ in $(seq 1 30); do
             if docker compose exec -T makamujo systemctl is-active --quiet makamujo-obs.service; then
-              echo "OBS publishes ${game_url} to ${rtmps_url}"
+              echo "OBS is streaming vigilant-fiesta (${game_url}) to ${rtmps_url}"
               exit 0
             fi
             sleep 1
