@@ -189,7 +189,9 @@ describe("recoverPreviousStreamCommentCount", () => {
     );
     const path = join(dir, fileName);
     writeFileSync(path, `${lines.join("\n")}\n`, "utf8");
-    utimesSync(path, new Date(mtimeMs), new Date(mtimeMs));
+    const mtime = new Date();
+    mtime.setTime(mtimeMs);
+    utimesSync(path, mtime, mtime);
   };
 
   it("returns 0 when there is no comment record directory", () => {

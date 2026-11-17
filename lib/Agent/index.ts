@@ -54,34 +54,8 @@ export class MakaMujo {
     talkModel: TalkModel,
     tts: TTS,
     options?: Omit<MakaMujoOptions, "baseline">,
-  ): MakaMujo;
-  static fromBaseline(
-    talkModel: TalkModel,
-    tts: TTS,
-    baseline: StreamBaseline,
-    options?: Omit<MakaMujoOptions, "baseline">,
-  ): MakaMujo;
-  static fromBaseline(
-    first: StreamBaseline | TalkModel,
-    second: TalkModel | TTS,
-    third: TTS | StreamBaseline,
-    options?: Omit<MakaMujoOptions, "baseline">,
   ): MakaMujo {
-    const isBaseline = (value: unknown): value is StreamBaseline =>
-      typeof value === "object" &&
-      value !== null &&
-      "previousStreamCommentCount" in (value as Record<string, unknown>);
-
-    if (isBaseline(first)) {
-      return new MakaMujo(second as TalkModel, third as TTS, {
-        ...options,
-        baseline: first,
-      });
-    }
-    return new MakaMujo(first as TalkModel, second as TTS, {
-      ...options,
-      baseline: third as StreamBaseline,
-    });
+    return new MakaMujo(talkModel, tts, { ...options, baseline });
   }
 
   constructor(talkModel: TalkModel, tts: TTS, options: MakaMujoOptions = {}) {

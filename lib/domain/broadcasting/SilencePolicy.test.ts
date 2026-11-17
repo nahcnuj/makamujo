@@ -7,6 +7,12 @@ import {
 
 const thresholdMs = 5 * 60 * 1_000;
 
+const dateFromMs = (ms: number): Date => {
+  const date = new Date();
+  date.setTime(ms);
+  return date;
+};
+
 describe("evaluateSpeechable", () => {
   it("is true when not live and browser idle", () => {
     expect(
@@ -27,8 +33,8 @@ describe("evaluateSpeechable", () => {
     expect(
       evaluateSpeechable({
         streamLive: true,
-        lastCommentAt: new Date(nowMs - thresholdMs - 1),
-        listenersStaleSince: new Date(nowMs), // fresh listeners
+        lastCommentAt: dateFromMs(nowMs - thresholdMs - 1),
+        listenersStaleSince: dateFromMs(nowMs), // fresh listeners
         hasPromptedCommentForViewerIncrease: false,
         browserStateName: "idle",
         nowMs,
@@ -42,8 +48,8 @@ describe("evaluateSpeechable", () => {
     expect(
       evaluateSpeechable({
         streamLive: true,
-        lastCommentAt: new Date(nowMs - thresholdMs - 1),
-        listenersStaleSince: new Date(nowMs),
+        lastCommentAt: dateFromMs(nowMs - thresholdMs - 1),
+        listenersStaleSince: dateFromMs(nowMs),
         hasPromptedCommentForViewerIncrease: true,
         browserStateName: "idle",
         nowMs,
@@ -57,8 +63,8 @@ describe("evaluateSpeechable", () => {
     expect(
       evaluateSpeechable({
         streamLive: true,
-        lastCommentAt: new Date(nowMs - thresholdMs - 1),
-        listenersStaleSince: new Date(nowMs - thresholdMs - 1),
+        lastCommentAt: dateFromMs(nowMs - thresholdMs - 1),
+        listenersStaleSince: dateFromMs(nowMs - thresholdMs - 1),
         hasPromptedCommentForViewerIncrease: false,
         browserStateName: "idle",
         nowMs,
@@ -72,8 +78,8 @@ describe("evaluateSpeechable", () => {
     expect(
       evaluateSpeechable({
         streamLive: true,
-        lastCommentAt: new Date(nowMs - 1_000),
-        listenersStaleSince: new Date(nowMs - thresholdMs - 1),
+        lastCommentAt: dateFromMs(nowMs - 1_000),
+        listenersStaleSince: dateFromMs(nowMs - thresholdMs - 1),
         hasPromptedCommentForViewerIncrease: false,
         browserStateName: "idle",
         nowMs,
@@ -87,8 +93,8 @@ describe("evaluateSpeechable", () => {
     expect(
       evaluateSpeechable({
         streamLive: true,
-        lastCommentAt: new Date(nowMs),
-        listenersStaleSince: new Date(nowMs),
+        lastCommentAt: dateFromMs(nowMs),
+        listenersStaleSince: dateFromMs(nowMs),
         hasPromptedCommentForViewerIncrease: false,
         browserStateName: "loading",
         nowMs,
