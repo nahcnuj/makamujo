@@ -36,10 +36,3 @@
         chdir: "{{ makamujo_src }}"
       environment:
         PATH: "/root/.bun/bin:{{ ansible_env.PATH }}"
-
-    - name: Ensure RTMPS observation tooling is available
-      ansible.builtin.package:
-        name:
-          - tcpdump
-          - iproute2
-        state: present
