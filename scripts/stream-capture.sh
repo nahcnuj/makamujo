@@ -10,7 +10,7 @@ mkdir -p "${ASSET_DIR}"
 # Generator: (re)create the committed VRT baseline capture of the OBS broadcast
 # image. The baseline bytes are embedded so generation is deterministic and
 # does not depend on a live OBS/stream environment. To refresh the baseline,
-# replace the embedded payload and update the hash in tests/bin/obs-scene.test.sh.
+# replace the embedded payload; tests/bin/obs-scene.test.sh compares against the committed baseline.
 python3 - "${1:-${ASSET}}" <<'PYGEN'
 import base64
 import os
