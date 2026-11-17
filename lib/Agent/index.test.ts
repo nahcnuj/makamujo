@@ -1102,45 +1102,49 @@ describe("MakaMujo stream baseline persistence", () => {
   });
 
   it("restores lastCommentAt so the silence threshold survives a restart", () => {
-    jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
+    jest
+      .spyOn(Date, "now")
+      .mockReturnValue(new Date(2023, 10, 14, 22, 13, 20, 0).getTime());
     const agent = new MakaMujo(stubTalkModel, stubTts, {
       baseline: {
         previousStreamCommentCount: 0,
         currentProgramUrl: "https://example.com",
         currentProgramLatestCommentNo: 0,
-        lastCommentAt: new Date(1_700_000_000_000 - 60_000),
+        lastCommentAt: new Date(2023, 10, 14, 22, 12, 20, 0),
       },
     });
 
     agent.onAir(niconamaLive(10));
     expect(agent.speechable).toBeTrue();
-    expect(agent.lastCommentAt).toEqual(new Date(1_700_000_000_000 - 60_000));
+    expect(agent.lastCommentAt).toEqual(new Date(2023, 10, 14, 22, 12, 20, 0));
 
     jest.restoreAllMocks();
   });
 
   it("treats a stale restored lastCommentAt as silent", () => {
-    jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
+    jest
+      .spyOn(Date, "now")
+      .mockReturnValue(new Date(2023, 10, 14, 22, 13, 20, 0).getTime());
     const agent = new MakaMujo(stubTalkModel, stubTts, {
       baseline: {
         previousStreamCommentCount: 0,
         currentProgramUrl: "https://example.com",
         currentProgramLatestCommentNo: 0,
-        lastCommentAt: new Date(1_700_000_000_000 - SILENCE_THRESHOLD_MS - 1),
+        lastCommentAt: new Date(2023, 10, 14, 22, 8, 19, 999),
       },
     });
 
     agent.onAir(niconamaLive(10));
     expect(agent.speechable).toBeFalse();
-    expect(agent.lastCommentAt).toEqual(
-      new Date(1_700_000_000_000 - SILENCE_THRESHOLD_MS - 1),
-    );
+    expect(agent.lastCommentAt).toEqual(new Date(2023, 10, 14, 22, 8, 19, 999));
 
     jest.restoreAllMocks();
   });
 
   it("notifies baseline changes for comment no and stream end", () => {
-    const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
+    const nowSpy = jest
+      .spyOn(Date, "now")
+      .mockReturnValue(new Date(2023, 10, 14, 22, 13, 20, 0).getTime());
     const notifier = jest.fn();
     const agent = new MakaMujo(stubTalkModel, stubTts, {
       onBaselineChange: notifier,
@@ -1158,13 +1162,15 @@ describe("MakaMujo stream baseline persistence", () => {
       previousStreamCommentCount: 1,
       currentProgramUrl: undefined,
       currentProgramLatestCommentNo: 0,
-      lastCommentAt: new Date(1_700_000_000_000),
+      lastCommentAt: new Date(2023, 10, 14, 22, 13, 20, 0),
     });
     nowSpy.mockRestore();
   });
 
   it("carries the previous program's comment count over on program url change", () => {
-    const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
+    const nowSpy = jest
+      .spyOn(Date, "now")
+      .mockReturnValue(new Date(2023, 10, 14, 22, 13, 20, 0).getTime());
     const notifier = jest.fn();
     const agent = new MakaMujo(stubTalkModel, stubTts, {
       onBaselineChange: notifier,
@@ -1185,7 +1191,7 @@ describe("MakaMujo stream baseline persistence", () => {
       previousStreamCommentCount: 1,
       currentProgramUrl: "https://live.example/watch/lv2",
       currentProgramLatestCommentNo: 0,
-      lastCommentAt: new Date(1_700_000_000_000),
+      lastCommentAt: new Date(2023, 10, 14, 22, 13, 20, 0),
     });
     nowSpy.mockRestore();
   });

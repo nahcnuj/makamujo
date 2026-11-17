@@ -73,10 +73,10 @@ describe("parseStreamBaseline", () => {
 
   it("parses lastCommentAt from an ISO string", () => {
     // コメント受信時刻（ISO 8601 で永続化・復元される）
-    const receivedAt = 1_700_000_000_000;
+    const receivedAt = new Date(2023, 10, 14, 22, 13, 20, 0);
     expect(
       parseStreamBaseline({
-        lastCommentAt: new Date(receivedAt).toISOString(),
+        lastCommentAt: receivedAt.toISOString(),
       }),
     ).toEqual({
       previousStreamCommentCount: 0,
@@ -128,7 +128,7 @@ describe("loadStreamBaseline", () => {
   it("round-trips lastCommentAt as a Date through saveStreamBaseline", () => {
     const dir = makeTempDir();
     const path = join(dir, "baseline.json");
-    const receivedAt = 1_700_000_000_000;
+    const receivedAt = new Date(2023, 10, 14, 22, 13, 20, 0);
     const baseline = {
       previousStreamCommentCount: 12,
       currentProgramUrl: "https://live.example/watch/lv2",
@@ -324,19 +324,19 @@ describe("recoverLastCommentAt", () => {
 
   it("recovers the latest comment timestamp across files", () => {
     const dir = commentsDir();
-    const older = 1_700_000_000_000;
-    const newer = 1_700_000_060_000;
+    const older = new Date(2023, 10, 14, 22, 13, 20, 0);
+    const newer = new Date(2023, 10, 14, 22, 14, 20, 0);
     writeFileSync(
       join(dir, "a.jsonl"),
-      `${JSON.stringify({ no: 1, at: new Date(older).toISOString() })}\n`,
+      `${JSON.stringify({ no: 1, at: older.toISOString() })}\n`,
       "utf8",
     );
     writeFileSync(
       join(dir, "b.jsonl"),
-      `${JSON.stringify({ no: 2, at: new Date(newer).toISOString() })}\n`,
+      `${JSON.stringify({ no: 2, at: newer.toISOString() })}\n`,
       "utf8",
     );
-    expect(recoverLastCommentAt(dir)?.getTime()).toBe(newer);
+    expect(recoverLastCommentAt(dir)?.getTime()).toBe(newer.getTime());
   });
 
   it("skips records with non-date at values", () => {
@@ -368,8 +368,8 @@ describe("loadStreamBaselineWithRecovery lastCommentAt", () => {
     const comments = join(dir, "comments");
     mkdirSync(comments, { recursive: true });
     const path = join(dir, "baseline.json");
-    const persisted = 1_700_000_000_000;
-    const recovered = 1_700_000_060_000;
+    const persisted = new Date(2023, 10, 14, 22, 13, 20, 0);
+    const recovered = new Date(2023, 10, 14, 22, 14, 20, 0);
     saveStreamBaseline(path, {
       previousStreamCommentCount: 5,
       currentProgramUrl: "https://live.example/watch/lv300",
@@ -380,12 +380,12 @@ describe("loadStreamBaselineWithRecovery lastCommentAt", () => {
     const fileName = `${fileUrl.replace(/[^a-zA-Z0-9._-]/g, "_")}.jsonl`;
     writeFileSync(
       join(comments, fileName),
-      `${JSON.stringify({ no: 1, at: new Date(recovered).toISOString() })}\n`,
+      `${JSON.stringify({ no: 1, at: recovered.toISOString() })}\n`,
       "utf8",
     );
 
     const result = loadStreamBaselineWithRecovery(path, comments);
-    expect(result.lastCommentAt?.getTime()).toBe(recovered);
+    expect(result.lastCommentAt?.getTime()).toBe(recovered.getTime());
   });
 
   it("keeps the persisted timestamp when it is later", () => {
@@ -393,8 +393,8 @@ describe("loadStreamBaselineWithRecovery lastCommentAt", () => {
     const comments = join(dir, "comments");
     mkdirSync(comments, { recursive: true });
     const path = join(dir, "baseline.json");
-    const persisted = 1_700_000_060_000;
-    const recovered = 1_700_000_000_000;
+    const persisted = new Date(2023, 10, 14, 22, 14, 20, 0);
+    const recovered = new Date(2023, 10, 14, 22, 13, 20, 0);
     saveStreamBaseline(path, {
       previousStreamCommentCount: 5,
       currentProgramUrl: "https://live.example/watch/lv300",
@@ -405,11 +405,11 @@ describe("loadStreamBaselineWithRecovery lastCommentAt", () => {
     const fileName = `${fileUrl.replace(/[^a-zA-Z0-9._-]/g, "_")}.jsonl`;
     writeFileSync(
       join(comments, fileName),
-      `${JSON.stringify({ no: 1, at: new Date(recovered).toISOString() })}\n`,
+      `${JSON.stringify({ no: 1, at: recovered.toISOString() })}\n`,
       "utf8",
     );
 
     const result = loadStreamBaselineWithRecovery(path, comments);
-    expect(result.lastCommentAt?.getTime()).toBe(persisted);
+    expect(result.lastCommentAt?.getTime()).toBe(persisted.getTime());
   });
 });

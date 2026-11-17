@@ -51,13 +51,13 @@ export const toDate = (value: unknown): Date | undefined => {
     return undefined;
   }
   if (value instanceof Date) {
-    return Number.isFinite(value.getTime())
-      ? new Date(value.getTime())
-      : undefined;
+    return Number.isFinite(value.getTime()) ? new Date(value) : undefined;
   }
   if (typeof value === "number") {
     if (!Number.isFinite(value) || value < 0) return undefined;
-    return new Date(value);
+    const date = new Date();
+    date.setTime(value);
+    return date;
   }
   if (typeof value === "string") {
     const trimmed = value.trim();
@@ -65,7 +65,11 @@ export const toDate = (value: unknown): Date | undefined => {
     const parsed = new Date(trimmed);
     if (Number.isFinite(parsed.getTime())) return parsed;
     const numeric = Number(trimmed);
-    if (Number.isFinite(numeric) && numeric >= 0) return new Date(numeric);
+    if (Number.isFinite(numeric) && numeric >= 0) {
+      const date = new Date();
+      date.setTime(numeric);
+      return date;
+    }
     return undefined;
   }
   return undefined;

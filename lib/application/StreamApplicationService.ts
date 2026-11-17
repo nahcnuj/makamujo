@@ -66,7 +66,9 @@ export class StreamApplicationService {
 
           if (this.#session.lastListenerCount !== listeners) {
             this.#session.lastListenerCount = listeners;
-            this.#session.listenersStaleSince = new Date(Date.now());
+            const listenersStaleSince = new Date();
+            listenersStaleSince.setTime(Date.now());
+            this.#session.listenersStaleSince = listenersStaleSince;
             const now = Date.now();
             const commentsStale = isCommentsStale(
               this.#session.lastCommentAt,
