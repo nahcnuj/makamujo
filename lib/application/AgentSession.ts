@@ -44,6 +44,16 @@ export class AgentSession {
     }
   }
 
+  /** Construct an empty session (no restored state). */
+  static empty(): AgentSession {
+    return new AgentSession();
+  }
+
+  /** Construct a session restored from a persisted baseline. */
+  static fromBaseline(baseline: StreamBaseline): AgentSession {
+    return new AgentSession(baseline);
+  }
+
   toStreamBaseline(): StreamBaseline {
     let lastCommentAt: Date | undefined;
     if (

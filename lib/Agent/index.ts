@@ -41,7 +41,10 @@ export class MakaMujo {
 
   constructor(talkModel: TalkModel, tts: TTS, options: MakaMujoOptions = {}) {
     this.#talkModel = talkModel;
-    this.#session = new AgentSession(options.baseline);
+    this.#session =
+      options.baseline !== undefined
+        ? AgentSession.fromBaseline(options.baseline)
+        : AgentSession.empty();
     this.#speechQueue = new SpeechQueue(tts);
 
     const speechPort = {
