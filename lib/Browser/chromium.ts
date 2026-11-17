@@ -629,8 +629,9 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
  *
  * Per-element magnification is intentionally not applied anymore: the whole
  * document stays at 1.0 and OBS handles enlarging the game screen on the
- * broadcast canvas (see obs-studio/basic/scenes/Makamujo.json).
+ * broadcast canvas.
  */
+
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
   zoom: number = 1,
