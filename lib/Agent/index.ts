@@ -39,12 +39,46 @@ export class MakaMujo {
   /** Latest news lines from sight (for spontaneous topic). */
   #currentNewsLines: string[] = [];
 
-  constructor(talkModel: TalkModel, tts: TTS, options: MakaMujoOptions = {}) {
-    this.#talkModel = talkModel;
-    this.#speechQueue = new SpeechQueue(tts);
+  constructor(
+    talkModelOrOptions:
+      | TalkModel
+      | (MakaMujoOptions & { talkModel: TalkModel; tts: TTS }),
+    tts?: TTS,
+    options: MakaMujoOptions = {},
+  ) {
+    const isOptionsObject =
+      typeof talkModelOrOptions === "object" &&
+      talkModelOrOptions !== null &&
+      "talkModel" in talkModelOrOptions &&
+      "tts" in talkModelOrOptions;
+    const talkModel = isOptionsObject
+      ? (
+          talkModelOrOptions as MakaMujoOptions & {
+            talkModel: TalkModel;
+            tts: TTS;
+          }
+        ).talkModel
+      : (talkModelOrOptions as TalkModel);
+    const resolvedTts = isOptionsObject
+      ? (
+          talkModelOrOptions as MakaMujoOptions & {
+            talkModel: TalkModel;
+            tts: TTS;
+          }
+        ).tts
+      : (tts as TTS);
+    const resolvedOptions = isOptionsObject
+      ? (talkModelOrOptions as MakaMujoOptions & {
+          talkModel: TalkModel;
+          tts: TTS;
+        })
+      : options;
 
-    if (options.baseline) {
-      this.#session.restoreStreamBaseline(options.baseline);
+    this.#talkModel = talkModel;
+    this.#speechQueue = new SpeechQueue(resolvedTts);
+
+    if (resolvedOptions.baseline) {
+      this.#session.restoreStreamBaseline(resolvedOptions.baseline);
     }
 
     const speechPort = {
@@ -56,7 +90,7 @@ export class MakaMujo {
       this.#session,
       talkModel,
       speechPort,
-      options.onBaselineChange,
+      resolvedOptions.onBaselineChange,
     );
     this.#stream = new StreamApplicationService(
       this.#session,
@@ -64,7 +98,7 @@ export class MakaMujo {
       this.#speechQueue,
       {
         silenceThresholdMs: SILENCE_THRESHOLD_MS,
-        onBaselineChange: options.onBaselineChange,
+        onBaselineChange: resolvedOptions.onBaselineChange,
       },
     );
     this.#gameplay = new GameplayApplicationService(

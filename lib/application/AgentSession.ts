@@ -38,6 +38,12 @@ export class AgentSession {
   currentNGramSizeRaw = initialNGramSizeRaw();
   hasPromptedCommentForViewerIncrease = false;
 
+  constructor(baseline?: StreamBaseline) {
+    if (baseline !== undefined) {
+      this.restoreStreamBaseline(baseline);
+    }
+  }
+
   toStreamBaseline(): StreamBaseline {
     let lastCommentAt: Date | undefined;
     if (this.lastCommentAt !== undefined) {
