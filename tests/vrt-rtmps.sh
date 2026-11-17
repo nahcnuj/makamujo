@@ -3,35 +3,12 @@ set -euo pipefail
 
 # This is the real VRT for the Docker/Ansible reproduction: the frame is
 # captured from OBS in the provisioned container publishing the actual
-# vigilant-fiesta game page to the in-network MediaMTX RTMPS endpoint. It
-# replaces the 1x1 placeholder under tests/vrt/.
+# vigilant-fiesta game page to the in-network MediaMTX RTMPS endpoint.
 project_root=$(cd "$(dirname "$0")/.." && pwd)
 cd "${project_root}"
 
 vrt_dir=${1:-tests/vrt-rtmps}
 baseline_dir="${vrt_dir}/baseline"
-ssim_threshold=${VRT_SSIM_THRESHOLD:-0.80}
-
-# H.264 compression and browser-source font rasterisation add small per-frame
-# differences even for the same static game page, so compare structurally
-# instead of comparing PNG bytes.
-compare_with_baseline() {
-  local actual=$1
-  local baseline=$2
-  local score
-
-  score=$(ffmpeg -hide_banner -nostdin -i "${actual}" -i "${baseline}" \
-    -lavfi ssim -f null - 2>&1 \
-    | sed -n 's/.*SSIM .*All:\([0-9.]*\).*/\1/p' | tail -n 1)
-  if [ -z "${score}" ]; then
-    echo "VRT: could not compute SSIM for ${actual}" >&2
-    return 1
-  fi
-
-  echo "VRT: SSIM(${actual}, ${baseline}) = ${score} (threshold ${ssim_threshold})"
-  awk -v score="${score}" -v threshold="${ssim_threshold}" \
-    'BEGIN { exit !(score >= threshold) }'
-}
 
 status=0
 cases_executed=0
@@ -78,7 +55,7 @@ for case_file in "${vrt_dir}"/*; do
     continue
   fi
 
-  compare_with_baseline "${actual}" "${baseline}" || status=1
+  bash tests/rtmps/compare-capture.sh "${actual}" "${baseline}" || status=1
 done
 
 # An empty case directory must never be reported as a successful VRT run.

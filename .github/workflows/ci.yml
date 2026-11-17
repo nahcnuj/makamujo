@@ -135,13 +135,22 @@ jobs:
           key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
 
   vrt:
+    # Verify the frame captured by the real RTMPS reproduction instead of a
+    # synthetic example. The capture is uploaded by the rtmps job below.
+    needs: rtmps
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
-        with:
-          python-version: "3.12"
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Run VRT
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: bash tests/vrt.sh
 
   ansible-syntax:
