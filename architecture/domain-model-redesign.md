@@ -376,7 +376,7 @@ agentBase = normalize(agentStreamState) as object | {}
 
 | サービス                             | 配置                           | 役割                                                           |
 | ------------------------------------ | ------------------------------ | -------------------------------------------------------------- |
-| `SilencePolicy.evaluate`             | `domain/broadcasting`          | 決定表（後述）                                                 |
+| `evaluateSpeechable`                 | `domain/broadcasting`          | 決定表（後述）                                                 |
 | `CommentPromptPolicy.shouldPrompt`   | `domain/broadcasting`          | onAir 用判定のみ                                               |
 | `NGramPolicy`                        | `domain/broadcasting`          | raw/size                                                       |
 | `TopicPicker.pick(text, random)`     | `domain/comments`              | PR-A3 既定: 内部で `Math.random` 可。RandomPort は任意で後付け |
@@ -445,36 +445,6 @@ export type GameViewState = unknown;
 
 **正本は順序付きアルゴリズム**であり、ワイルドカード行の決定表ではない。`lib/Agent/index.ts` の `get speechable` と一致させる（PR-A3 抽出時のゴールデン）。
 
-```
-// 定義（thresholdMs = SILENCE_THRESHOLD_MS）
-listenersStale =
-  listenersStaleSince !== undefined
-  && (now - listenersStaleSince) >= thresholdMs
-
-commentsStale =
-  lastCommentAt === undefined
-  || (now - lastCommentAt) >= thresholdMs
-
-browserOk =
-  (browserStateName ?? 'idle') ∈ { 'idle', 'result', 'closed' }
-
-// 評価順（早期 return）— 実装はこの順を崩さない
-function evaluateSpeechable(...): boolean {
-  if (streamStateDefined) {                    // #streamState !== undefined
-    // (1) 促し後: コメントが stale なら listeners の新鮮さに無関係に false
-    if (commentsStale && hasPrompted) {
-      return false
-    }
-    // (2) 視聴者・コメント双方 stale
-    if (listenersStale && commentsStale) {
-      return false
-    }
-  }
-  // (3) ブラウザゲートは常に最後（stream 未設定でも適用）
-  return browserOk
-}
-```
-
 **重要な優先順位**: `commentsStale && hasPrompted` は **`listenersStale` より先**に評価される。したがって:
 
 | streamStateDefined | listenersStale | commentsStale | hasPrompted | browserOk | speechable | 根拠                                        |
@@ -490,21 +460,6 @@ function evaluateSpeechable(...): boolean {
 | T                  | *              | *             | *           | F         | **false**  | (3) ゲーム中など                            |
 
 既存 `lib/Agent/index.test.ts` の speechable / prompt 群も回帰ゴールデンとして維持する。特に「視聴者増で 1 回プロンプト後、listeners が新鮮でも `speechable === false`」を characterization に含める（上表 3 行目）。
-
-純関数シグネチャ:
-
-```typescript
-SilencePolicy.evaluate({
-  now,
-  streamStateDefined: boolean,
-  listenersStaleSince?: number, // Date.getTime() 相当
-  lastCommentAt?: number,
-  hasPrompted: boolean,
-  browserStateName?: string,
-  thresholdMs: typeof SILENCE_THRESHOLD_MS,
-}): boolean
-// 実装は上記 evaluateSpeechable と意味的に同一であること
-```
 
 ### CommentPrompt use case（onAir）
 

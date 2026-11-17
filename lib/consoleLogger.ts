@@ -152,7 +152,9 @@ function formatJstTimestamp(date: Date): string {
 }
 
 function toJstDate(date: Date): Date {
-  return new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  const result = new Date(date);
+  result.setTime(result.getTime() + 9 * 60 * 60 * 1000);
+  return result;
 }
 
 export function formatUnknownError(error: unknown): string {

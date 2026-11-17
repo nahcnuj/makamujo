@@ -33,7 +33,8 @@ const readProgramEndAt = (item: unknown): Date | undefined => {
   const seconds =
     readEpochSeconds(schedule?.endTime) ??
     readEpochSeconds(schedule?.scheduledEndTime);
-  return seconds === undefined ? undefined : new Date(seconds * 1000);
+  if (seconds === undefined) return undefined;
+  return new Date(seconds * 1000);
 };
 
 /**
