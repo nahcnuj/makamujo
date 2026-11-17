@@ -41,10 +41,10 @@ describe("AgentSession stream baseline", () => {
     expect(session.toStreamBaseline().currentProgramUrl).toBeUndefined();
   });
 
-  test("restores lastCommentAt from a number", () => {
+  test("restores lastCommentAt from a Date", () => {
     const session = new AgentSession();
     // コメント受信時刻（永続化前後の同一インスタント）
-    const receivedAt = 1_700_000_000_000;
+    const receivedAt = new Date(1_700_000_000_000);
     session.restoreStreamBaseline({
       previousStreamCommentCount: 0,
       currentProgramLatestCommentNo: 0,

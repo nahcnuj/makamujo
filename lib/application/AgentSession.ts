@@ -24,7 +24,7 @@ export class AgentSession {
 
   lastListenerCount?: number;
   listenersStaleSince?: Date;
-  lastCommentAt?: number;
+  lastCommentAt?: Date;
 
   /** Active program URL (scopes comment tracking). */
   currentProgramUrl?: string;
@@ -39,11 +39,18 @@ export class AgentSession {
   hasPromptedCommentForViewerIncrease = false;
 
   toStreamBaseline(): StreamBaseline {
+    let lastCommentAt: Date | undefined;
+    if (this.lastCommentAt !== undefined) {
+      const ms = this.lastCommentAt.getTime();
+      if (Number.isFinite(ms)) {
+        lastCommentAt = new Date(ms);
+      }
+    }
     return {
       previousStreamCommentCount: this.previousStreamCommentCount,
       currentProgramUrl: this.currentProgramUrl,
       currentProgramLatestCommentNo: this.currentProgramLatestCommentNo,
-      lastCommentAt: this.lastCommentAt,
+      lastCommentAt,
     };
   }
 
@@ -52,8 +59,14 @@ export class AgentSession {
     this.currentProgramUrl = baseline.currentProgramUrl;
     this.currentProgramLatestCommentNo = baseline.currentProgramLatestCommentNo;
     const restored = baseline.lastCommentAt;
-    if (typeof restored === "number" && Number.isFinite(restored)) {
-      this.lastCommentAt = restored;
+    if (restored === undefined) {
+      this.lastCommentAt = undefined;
+    } else if (restored instanceof Date) {
+      const ms = restored.getTime();
+      this.lastCommentAt = Number.isFinite(ms) ? new Date(ms) : undefined;
+    } else if (typeof restored === "string") {
+      const ms = Date.parse(restored);
+      this.lastCommentAt = Number.isFinite(ms) ? new Date(ms) : undefined;
     } else {
       this.lastCommentAt = undefined;
     }
