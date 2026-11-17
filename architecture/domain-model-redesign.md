@@ -493,18 +493,7 @@ function evaluateSpeechable(...): boolean {
 
 純関数シグネチャ:
 
-```typescript
-SilencePolicy.evaluate({
-  now,
-  streamStateDefined: boolean,
-  listenersStaleSince?: Date,
-  lastCommentAt?: Date,
-  hasPrompted: boolean,
-  browserStateName?: string,
-  thresholdMs: typeof SILENCE_THRESHOLD_MS,
-}): boolean
-// 実装は上記 evaluateSpeechable と意味的に同一であること
-```
+`SilencePolicy.evaluate` は `now` (number)、`streamStateDefined` (boolean)、`listenersStaleSince` (Date | undefined)、`lastCommentAt` (Date | undefined)、`hasPrompted` (boolean)、`browserStateName` (string | undefined)、`thresholdMs` (typeof SILENCE_THRESHOLD_MS) を受け取り boolean を返す。実装は上記 `evaluateSpeechable` と意味的に同一であること。
 
 ### CommentPrompt use case（onAir）
 
