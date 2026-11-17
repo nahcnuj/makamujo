@@ -224,18 +224,66 @@ export const recoverPreviousStreamCommentCount = (
  * Load the baseline, then fill in a missing `previousStreamCommentCount` from
  * recorded comments. An already-persisted non-zero count is never overwritten.
  */
+export const recoverLastCommentAt = (commentsDir: string): Date | undefined => {
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(commentsDir, { withFileTypes: true });
+  } catch {
+    return undefined;
+  }
+  let maxMs = Number.NEGATIVE_INFINITY;
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
+    try {
+      for (const line of readFileSync(
+        join(commentsDir, entry.name),
+        "utf8",
+      ).split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        let at: unknown;
+        try {
+          at = (JSON.parse(trimmed) as { at?: unknown }).at;
+        } catch {
+          continue;
+        }
+        const ms =
+          typeof at === "string"
+            ? Date.parse(at)
+            : typeof at === "number"
+              ? at
+              : Number.NaN;
+        if (Number.isFinite(ms) && ms > maxMs) {
+          maxMs = ms;
+        }
+      }
+    } catch {
+      // Skip unreadable record files; best-effort recovery.
+    }
+  }
+  return Number.isFinite(maxMs) ? new Date(maxMs) : undefined;
+};
+
 export const loadStreamBaselineWithRecovery = (
   baselinePath: string,
   commentsDir: string,
 ): StreamBaseline => {
   const baseline = loadStreamBaseline(baselinePath);
-  if (baseline.previousStreamCommentCount > 0) return baseline;
-  const recovered = recoverPreviousStreamCommentCount(
-    commentsDir,
-    baseline.currentProgramUrl,
-  );
-  if (recovered > 0) {
-    return { ...baseline, previousStreamCommentCount: recovered };
+  let result = baseline;
+  if (baseline.previousStreamCommentCount === 0) {
+    const recovered = recoverPreviousStreamCommentCount(
+      commentsDir,
+      baseline.currentProgramUrl,
+    );
+    if (recovered > 0) {
+      result = { ...result, previousStreamCommentCount: recovered };
+    }
   }
-  return baseline;
+  if (result.lastCommentAt === undefined) {
+    const recoveredLastCommentAt = recoverLastCommentAt(commentsDir);
+    if (recoveredLastCommentAt !== undefined) {
+      result = { ...result, lastCommentAt: recoveredLastCommentAt };
+    }
+  }
+  return result;
 };
