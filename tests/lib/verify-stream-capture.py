@@ -1,4 +1,5 @@
 import hashlib
+from pathlib import Path
 import struct
 import sys
 import zlib
@@ -11,8 +12,14 @@ def main() -> None:
     if len(sys.argv) != 2:
         raise SystemExit("usage: verify-stream-capture.py <path>")
 
-    path = sys.argv[1]
-    with open(path, "rb") as stream:
+    repo_root = Path(__file__).resolve().parents[2]
+    path = (repo_root / sys.argv[1]).resolve()
+    try:
+        path.relative_to(repo_root)
+    except ValueError as exc:
+        raise SystemExit("path must be within repository root") from exc
+
+    with path.open("rb") as stream:
         raw = stream.read()
 
     actual = hashlib.sha256(raw).hexdigest()
