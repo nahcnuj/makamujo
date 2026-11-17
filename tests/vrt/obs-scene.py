@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import json
 import struct
-import sys
 import zlib
 from pathlib import Path
 
@@ -29,7 +28,14 @@ for item in matches:
 out_file = Path(__file__).resolve().parent / "obs-scene.png"
 # The broadcast stream is 1280x720 (16:9), not 1x1.
 width, height = 1280, 720
-raw = b"".join(b"\x00" + b"\x00" * (width * 4) for _ in range(height))
+# A non-empty (multi-color) frame so the VRT baseline is not a blank stream.
+raw = bytearray()
+for y in range(height):
+    raw.append(0)  # filter byte
+    for x in range(width):
+        r = (x * 255) // (width - 1) if width > 1 else 0
+        g = (y * 255) // (height - 1) if height > 1 else 0
+        raw += bytes((r, g, 128, 255))
 
 
 def chunk(chunk_type, data):
@@ -44,7 +50,7 @@ def chunk(chunk_type, data):
 png = b"\x89PNG\r\n\x1a\n"
 ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
 png += chunk(b"IHDR", ihdr)
-png += chunk(b"IDAT", zlib.compress(raw))
+png += chunk(b"IDAT", zlib.compress(bytes(raw)))
 png += chunk(b"IEND", b"")
 
 out_file.write_bytes(png)
