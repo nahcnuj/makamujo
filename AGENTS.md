@@ -10,17 +10,18 @@
 
 ## コマンド
 
-| コマンド                   | 内容                                                                     |
-| -------------------------- | ------------------------------------------------------------------------ |
-| `bun run dev`              | 開発サーバー: `bun --hot index.ts --port=8777`                           |
-| `bun run start`            | 本番: `NODE_ENV=production bun index.ts --port=7777`（POSIX シェル必需） |
-| `bun run typecheck`        | `tsc --noEmit`                                                           |
-| `bun run lint`             | Biome（`--error-on-warnings .`）                                         |
-| `bun run format`           | Biome 自動修正（`--write .`）                                            |
-| `bun run test`             | 単体テスト（lib/src/routes/console/src など）。単発は `bun test <path>`  |
-| `bun run test:integration` | `bun test tests/integration/`                                            |
-| `bun run test:bin`         | `tests/bin/*.sh` のシェルテスト（bash 必需）                             |
-| `bun run test:e2e`         | Playwright E2E（要 `pretest:e2e`、HTTPS 443）                            |
+| コマンド                   | 内容                                                                       |
+| -------------------------- | -------------------------------------------------------------------------- |
+| `bun run dev`              | 開発サーバー: `bun --hot index.ts --port=8777`                             |
+| `bun run start`            | 本番: `NODE_ENV=production bun index.ts --port=7777`（POSIX シェル必需）   |
+| `bun run typecheck`        | `tsc --noEmit`                                                             |
+| `bun run lint`             | Biome（`--error-on-warnings .`）                                           |
+| `bun run format`           | Biome 自動修正（`--write .`）                                              |
+| `bun run test`             | 単体テスト（lib/src/routes/console/src など）。単発は `bun test <path>`    |
+| `bun run test:integration` | `bun test tests/integration/`                                              |
+| `bun run test:bin`         | `tests/bin/*.sh` のシェルテスト（bash 必需）                               |
+| `bun run test:e2e`         | Playwright E2E（要 `pretest:e2e`、HTTPS 443）                              |
+| `bash tests/vrt.sh`        | Visual Regression Testing（`tests/vrt/` のケースを実行し baseline と比較） |
 
 その他スクリプト（`browser` / `generate-ogp` / `screenshot:console-agent-status` / `markov` 等）は `package.json` 参照。
 
@@ -54,6 +55,7 @@
 - 新規に作成する公開関数には必ず単体テストを作成する。
 - テストフレームワークは Bun（`bun:test`、Jest 互換）。`bunfig.toml` で coverage が常時有効（`bun test` はカバレッジ計測つきで若干遅い）。
 - 配置: 単体テストは実装と同階層 `*.test.{ts,tsx}` / 統合 `tests/integration/` / E2E `tests/e2e/` / シェル `tests/bin/`。
+- VRT: `tests/vrt.sh` が `tests/vrt/` 配下の実行可能ケース（任意のファイル名・拡張子）を実行し、生成された `tests/vrt/case_name.png` を `tests/vrt/baseline/case_name.png` と比較する。ケースは実行可能ファイルとして配置する（例: `tests/vrt/example.py`）。
 
 ## コーディングスタイル
 
