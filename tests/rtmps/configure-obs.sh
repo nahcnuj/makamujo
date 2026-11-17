@@ -34,16 +34,27 @@ docker exec -i "${container}" python3 - "${rtmps_url}" "${fixture_url}" <<'PY'
 import json
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 rtmps_url, fixture_url = sys.argv[1:3]
 service_path = Path("/opt/src/makamujo/obs-studio/basic/profiles/Makamujo/service.json")
 scene_path = Path("/opt/src/makamujo/obs-studio/basic/scenes/Makamujo.json")
 
-service = json.loads(service_path.read_text(encoding="utf-8"))
-settings = service.setdefault("settings", {})
-settings["protocol"] = "RTMP"
-settings["server"] = rtmps_url
-settings["key"] = "vrt"
+# OBS treats "server" as the URL prefix and appends "key" as the stream name.
+# Keep the published path equal to the URL the VRT capture reads.
+url = urlsplit(rtmps_url)
+stream_key = url.path.rstrip("/").rsplit("/", 1)[-1]
+server_prefix = url._replace(path=url.path.rstrip("/")[: -len(stream_key)].rstrip("/")).geturl()
+
+service = {
+    "type": "rtmp_custom",
+    "settings": {
+        "server": server_prefix,
+        "key": stream_key,
+        "use_auth": False,
+        "bwtest": False,
+    },
+}
 service_path.write_text(
     json.dumps(service, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
 )

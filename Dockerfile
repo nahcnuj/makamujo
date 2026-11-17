@@ -23,6 +23,11 @@ RUN mkdir -p /run/sshd \
     && echo 'root:root' | chpasswd \
     && sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
 
+# In production root gets XDG_RUNTIME_DIR from the systemd login session.
+# Ansible runs non-login commands over SSH, so expose it through PAM here;
+# otherwise flatpak cannot find the Pulse socket during provisioning.
+RUN printf 'XDG_RUNTIME_DIR=/run/user/0\n' >> /etc/environment
+
 VOLUME ["/sys/fs/cgroup"]
 
 CMD ["/sbin/init"]
