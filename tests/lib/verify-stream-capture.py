@@ -1,17 +1,14 @@
 from pathlib import Path
 import struct
-import sys
 import zlib
 
 def main() -> None:
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: verify-stream-capture.py <path>")
-
     repo_root = Path(__file__).resolve().parents[2]
-    path = (repo_root / sys.argv[1]).resolve()
+    # Fixed baseline path: do not trust caller-provided input (CodeQL).
+    path = (repo_root / "tests" / "fixtures" / "vrt-screenshots" / "stream-capture.png").resolve()
     try:
         path.relative_to(repo_root)
-    except ValueError as exc:
+    except ValueError as exc:  # pragma: no cover - defensive
         raise SystemExit("path must be within repository root") from exc
 
     with path.open("rb") as stream:

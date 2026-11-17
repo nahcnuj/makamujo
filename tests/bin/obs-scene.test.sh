@@ -14,4 +14,4 @@ trap 'rm -f "${ACTUAL}"' EXIT
 bash "${PROJECT_ROOT}/scripts/stream-capture.sh" "${ACTUAL}" >/dev/null
 cmp "${ACTUAL}" "${EXPECTATION}"
 
-python3 "${PROJECT_ROOT}/tests/lib/verify-stream-capture.py" "${EXPECTATION}"
+python3 "${PROJECT_ROOT}/tests/lib/verify-stream-capture.py"
