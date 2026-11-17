@@ -61,34 +61,43 @@ export class MakaMujo {
     baseline: StreamBaseline,
     options?: Omit<MakaMujoOptions, "baseline">,
   ): MakaMujo;
-  static fromBaseline(...args: unknown[]): MakaMujo {
-    const isBaseline = (v: unknown): v is StreamBaseline =>
-      typeof v === "object" &&
-      v !== null &&
-      "previousStreamCommentCount" in (v as Record<string, unknown>);
+  static fromBaseline(
+    baselineOrTalkModel: StreamBaseline | TalkModel,
+    talkModelOrTts: TalkModel | TTS,
+    ttsOrBaseline: TTS | StreamBaseline,
+    options?: Omit<MakaMujoOptions, "baseline">,
+  ): MakaMujo {
+    const isBaseline = (value: unknown): value is StreamBaseline =>
+      typeof value === "object" &&
+      value !== null &&
+      "previousStreamCommentCount" in (value as Record<string, unknown>);
+
     let baseline: StreamBaseline | undefined;
-    let talkModel: TalkModel | undefined;
-    let tts: TTS | undefined;
-    let options: Omit<MakaMujoOptions, "baseline"> = {};
-    if (args.length >= 3 && isBaseline(args[0])) {
-      baseline = args[0] as StreamBaseline;
-      talkModel = args[1] as TalkModel;
-      tts = args[2] as TTS;
-      options = (args[3] as Omit<MakaMujoOptions, "baseline">) ?? {};
+    let talkModel: TalkModel;
+    let tts: TTS;
+    let resolvedOptions: Omit<MakaMujoOptions, "baseline"> = options ?? {};
+
+    if (isBaseline(baselineOrTalkModel)) {
+      baseline = baselineOrTalkModel;
+      talkModel = talkModelOrTts as TalkModel;
+      tts = ttsOrBaseline as TTS;
+    } else if (isBaseline(ttsOrBaseline)) {
+      talkModel = baselineOrTalkModel as TalkModel;
+      tts = talkModelOrTts as TTS;
+      baseline = ttsOrBaseline as StreamBaseline;
     } else {
-      talkModel = args[0] as TalkModel;
-      tts = args[1] as TTS;
-      if (args.length >= 3 && isBaseline(args[2])) {
-        baseline = args[2] as StreamBaseline;
-        options = (args[3] as Omit<MakaMujoOptions, "baseline">) ?? {};
-      } else if (args.length >= 3 && typeof args[2] === "object") {
-        options = args[2] as Omit<MakaMujoOptions, "baseline">;
-      }
+      talkModel = baselineOrTalkModel as TalkModel;
+      tts = talkModelOrTts as TTS;
+      const maybeOptions = ttsOrBaseline as
+        | (Omit<MakaMujoOptions, "baseline"> & { baseline?: StreamBaseline })
+        | undefined;
+      baseline = maybeOptions?.baseline;
+      resolvedOptions = maybeOptions ?? {};
     }
-    return new MakaMujo(talkModel as TalkModel, tts as TTS, {
-      ...options,
-      baseline,
-    });
+
+    return baseline !== undefined
+      ? new MakaMujo(talkModel, tts, { ...resolvedOptions, baseline })
+      : new MakaMujo(talkModel, tts, resolvedOptions);
   }
 
   constructor(talkModel: TalkModel, tts: TTS, options: MakaMujoOptions = {}) {

@@ -88,3 +88,14 @@ export const evaluate = (input: SilencePolicyEvaluateInput): boolean =>
     nowMs: input.now,
     thresholdMs: input.thresholdMs,
   });
+
+/**
+ * Namespace-style handle so callers can write `SilencePolicy.evaluate(...)`,
+ * matching the documented contract.
+ */
+export const SilencePolicy = {
+  evaluate,
+  evaluateSpeechable,
+  isCommentsStale,
+  shouldPromptCommentAfterViewerIncrease,
+} as const;
