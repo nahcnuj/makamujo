@@ -5,8 +5,8 @@ PROJECT_ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 EXPECTATION="${PROJECT_ROOT}/tests/fixtures/vrt-screenshots/stream-capture.png"
 SCENE="${PROJECT_ROOT}/obs-studio/basic/scenes/Makamujo.json"
 
-# Visual Regression Test: the committed broadcast capture must stay
-# byte-identical so regressions in the broadcast image are detected.
+# The committed broadcast capture must stay byte-identical so
+# regressions in the broadcast image are detected.
 test -f "${EXPECTATION}"
 
 # The committed baseline must be reproducible by the generator.
