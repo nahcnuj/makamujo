@@ -124,7 +124,7 @@ describe("loadStreamBaseline", () => {
     expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(baseline);
   });
 
-  it("round-trips lastCommentAt as a Date through saveStreamBaseline", () => {
+  it("round-trips lastCommentAt as a number through saveStreamBaseline", () => {
     const dir = makeTempDir();
     const path = join(dir, "baseline.json");
     const receivedAt = 1_700_000_000_000;
