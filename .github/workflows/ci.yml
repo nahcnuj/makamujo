@@ -202,6 +202,9 @@ jobs:
           ansible-playbook -i inventories/docker.yml playbooks/1_bun.yml
           ansible-playbook -i inventories/docker.yml playbooks/2_makamujo.yml
 
+      - name: Run RTMPS VRT
+        run: bash tests/vrt-rtmps.sh
+
       - name: Cleanup
         if: always()
         run: docker rm -f makamujo || true
