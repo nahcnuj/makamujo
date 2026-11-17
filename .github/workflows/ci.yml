@@ -134,6 +134,13 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
 
+  vrt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Run VRT
+        run: bash tests/vrt.sh
+
   ansible-syntax:
     runs-on: ubuntu-latest
     steps:
