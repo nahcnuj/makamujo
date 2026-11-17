@@ -23,12 +23,15 @@ fi
 
 # OBS may take a while to come up after provisioning. Retry until a real
 # 1280x720 frame is available instead of accepting an empty first frame.
+error_log=$(mktemp)
+trap 'rm -f "${error_log}"' EXIT
+first_error=''
 attempts=0
 max_attempts=90
 while [ "${attempts}" -lt "${max_attempts}" ]; do
   rm -f "${out_file}"
   if ffmpeg -hide_banner -loglevel error -nostdin -y \
-      -i "${stream_url}" -frames:v 1 "${out_file}" >/dev/null 2>&1 \
+      -i "${stream_url}" -frames:v 1 "${out_file}" 2>"${error_log}" \
       && [ -s "${out_file}" ]; then
     dimensions=$(ffprobe -v error -select_streams v:0 \
       -show_entries stream=width,height -of csv=s=x:p=0 "${out_file}")
@@ -37,10 +40,16 @@ while [ "${attempts}" -lt "${max_attempts}" ]; do
       exit 0
     fi
     echo "Unexpected captured frame size: ${dimensions}" >&2
+  elif [ -z "${first_error}" ] && [ -s "${error_log}" ]; then
+    first_error=$(<"${error_log}")
   fi
   attempts=$((attempts + 1))
   sleep 2
 done
 
 echo "Failed to capture a 1280x720 frame from ${stream_url}" >&2
+if [ -n "${first_error}" ]; then
+  echo "First ffmpeg error:" >&2
+  printf '%s\n' "${first_error}" >&2
+fi
 exit 1

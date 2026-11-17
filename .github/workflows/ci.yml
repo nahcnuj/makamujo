@@ -186,12 +186,33 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/certs"
+          # Use a real CA + server-certificate chain. A bare self-signed leaf is
+          # rejected by some TLS stacks even when it is placed in the trust
+          # store, and both ffmpeg (capture) and OBS (publisher) must trust it.
           openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+            -keyout "${RUNNER_TEMP}/certs/ca-key.pem" \
+            -out "${RUNNER_TEMP}/certs/ca.pem" \
+            -subj /CN=makamujo-rtmps-ca \
+            -addext 'basicConstraints=critical,CA:TRUE' \
+            -addext 'keyUsage=critical,keyCertSign,cRLSign'
+          openssl req -new -nodes -newkey rsa:2048 \
             -keyout "${RUNNER_TEMP}/certs/key.pem" \
+            -out "${RUNNER_TEMP}/certs/cert.csr" \
+            -subj /CN=mediamtx
+          cat > "${RUNNER_TEMP}/certs/ext.cnf" <<'EOF'
+          basicConstraints=critical,CA:FALSE
+          keyUsage=critical,digitalSignature,keyEncipherment
+          extendedKeyUsage=serverAuth
+          subjectAltName=DNS:mediamtx,DNS:localhost,IP:127.0.0.1
+          EOF
+          openssl x509 -req \
+            -in "${RUNNER_TEMP}/certs/cert.csr" \
+            -CA "${RUNNER_TEMP}/certs/ca.pem" \
+            -CAkey "${RUNNER_TEMP}/certs/ca-key.pem" \
+            -CAcreateserial -days 1 \
             -out "${RUNNER_TEMP}/certs/cert.pem" \
-            -subj /CN=mediamtx \
-            -addext 'subjectAltName=DNS:mediamtx,IP:127.0.0.1'
-          sudo cp "${RUNNER_TEMP}/certs/cert.pem" /usr/local/share/ca-certificates/mediamtx.crt
+            -extfile "${RUNNER_TEMP}/certs/ext.cnf"
+          sudo cp "${RUNNER_TEMP}/certs/ca.pem" /usr/local/share/ca-certificates/mediamtx-ca.crt
           sudo update-ca-certificates
           cat > "${RUNNER_TEMP}/mediamtx.yml" <<'EOF'
           rtmp: yes
@@ -247,17 +268,47 @@ jobs:
       - name: Point OBS at the RTMPS server
         run: |
           set -euo pipefail
-          docker cp "${RUNNER_TEMP}/certs/cert.pem" \
-            makamujo:/usr/local/share/ca-certificates/mediamtx.crt
+          docker cp "${RUNNER_TEMP}/certs/ca.pem" \
+            makamujo:/usr/local/share/ca-certificates/mediamtx-ca.crt
           docker exec makamujo update-ca-certificates
           docker exec makamujo flatpak override --system \
             --filesystem=/usr/local/share/ca-certificates \
-            --env=SSL_CERT_FILE=/usr/local/share/ca-certificates/mediamtx.crt \
+            --env=SSL_CERT_FILE=/usr/local/share/ca-certificates/mediamtx-ca.crt \
             com.obsproject.Studio
           bash tests/rtmps/configure-obs.sh makamujo
 
       - name: Run RTMPS VRT
         run: bash tests/vrt-rtmps.sh
+
+      - name: Dump RTMPS diagnostics
+        if: always()
+        run: |
+          set -uo pipefail
+          echo '== MediaMTX logs =='
+          docker logs mediamtx --tail 200 2>&1 || true
+          echo '== OBS service status =='
+          docker exec makamujo systemctl status makamujo-obs.service --no-pager -l 2>&1 || true
+          echo '== OBS journal =='
+          docker exec makamujo journalctl -u makamujo-obs.service --no-pager -n 300 2>&1 || true
+          echo '== OBS application logs =='
+          docker exec makamujo sh -c '
+            for f in /opt/src/makamujo/obs-studio/logs/*.log; do
+              [ -f "$f" ] || continue
+              echo "--- $f"
+              tail -n 200 "$f"
+            done
+          ' 2>&1 || true
+          echo '== OBS service config =='
+          docker exec makamujo cat \
+            /opt/src/makamujo/obs-studio/basic/profiles/Makamujo/service.json 2>&1 || true
+          echo '== Flatpak overrides =='
+          docker exec makamujo flatpak override --system --show com.obsproject.Studio 2>&1 || true
+          echo '== Fixture reachability =='
+          docker exec makamujo python3 -c \
+            'import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:8899/fixture.html", timeout=2).status)' \
+            2>&1 || true
+          echo '== RTMPS hostname resolution =='
+          docker exec makamujo getent hosts mediamtx 2>&1 || true
 
       - name: Upload captured VRT images
         if: always()

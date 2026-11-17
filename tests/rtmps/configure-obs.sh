@@ -30,6 +30,22 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
+# OBS saves its in-memory settings when it exits. Stopping it *before*
+# rewriting the config is essential: a plain restart lets the old process
+# overwrite service.json / the scene collection on shutdown, and the new
+# process then keeps streaming the original Niconama configuration.
+docker exec "${container}" systemctl stop makamujo-obs.service
+for _ in $(seq 1 30); do
+  if ! docker exec "${container}" systemctl is-active --quiet makamujo-obs.service; then
+    break
+  fi
+  sleep 1
+done
+if docker exec "${container}" systemctl is-active --quiet makamujo-obs.service; then
+  echo "OBS did not stop before rewriting its configuration" >&2
+  exit 1
+fi
+
 docker exec -i "${container}" python3 - "${rtmps_url}" "${fixture_url}" <<'PY'
 import json
 import sys
@@ -77,5 +93,15 @@ scene_path.write_text(
 )
 PY
 
-docker exec "${container}" systemctl restart makamujo-obs.service
-echo "OBS is streaming the VRT fixture to ${rtmps_url}"
+docker exec "${container}" systemctl start makamujo-obs.service
+for _ in $(seq 1 30); do
+  if docker exec "${container}" systemctl is-active --quiet makamujo-obs.service; then
+    echo "OBS is streaming the VRT fixture to ${rtmps_url}"
+    exit 0
+  fi
+  sleep 1
+done
+
+docker exec "${container}" systemctl status makamujo-obs.service --no-pager -l >&2 || true
+echo "OBS failed to start after rewriting its configuration" >&2
+exit 1
