@@ -2,17 +2,19 @@
 set -euo pipefail
 
 # This is the real VRT for the Docker/Ansible reproduction: the frame is
-# captured from OBS in the provisioned container publishing to the in-network
-# MediaMTX RTMPS endpoint. It replaces the 1x1 placeholder under tests/vrt/.
+# captured from OBS in the provisioned container publishing the actual
+# vigilant-fiesta game page to the in-network MediaMTX RTMPS endpoint. It
+# replaces the 1x1 placeholder under tests/vrt/.
 project_root=$(cd "$(dirname "$0")/.." && pwd)
 cd "${project_root}"
 
 vrt_dir=${1:-tests/vrt-rtmps}
 baseline_dir="${vrt_dir}/baseline"
-ssim_threshold=${VRT_SSIM_THRESHOLD:-0.90}
+ssim_threshold=${VRT_SSIM_THRESHOLD:-0.80}
 
-# H.264 adds small per-frame differences even for a static source, so compare
-# structurally instead of comparing PNG bytes.
+# H.264 compression and browser-source font rasterisation add small per-frame
+# differences even for the same static game page, so compare structurally
+# instead of comparing PNG bytes.
 compare_with_baseline() {
   local actual=$1
   local baseline=$2

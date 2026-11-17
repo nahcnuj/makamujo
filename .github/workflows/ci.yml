@@ -334,9 +334,9 @@ jobs:
           docker exec -e XDG_RUNTIME_DIR=/run/user/0 -e DISPLAY=:10 makamujo \
             flatpak run --command=sh com.obsproject.Studio -c \
             'ls -l /etc/ssl/certs/mediamtx-ca.crt' 2>&1 || true
-          echo '== Fixture reachability =='
+          echo '== Game page reachability =='
           docker exec makamujo python3 -c \
-            'import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:8899/fixture.html", timeout=2).status)' \
+            'import urllib.request; print(urllib.request.urlopen("https://www.nahcnuj.work/vigilant-fiesta/", timeout=5).status)' \
             2>&1 || true
           echo '== RTMPS hostname resolution =='
           docker exec makamujo getent hosts mediamtx 2>&1 || true

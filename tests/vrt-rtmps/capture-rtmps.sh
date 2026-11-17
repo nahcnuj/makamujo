@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Visual Regression Test case: capture a frame from the video received by the
-# RTMPS server and write it next to this script as capture-rtmps.png.
-# The stream is published by the OBS instance in the reproduced production
-# container; no synthetic image is generated here.
+# Visual Regression Test case: capture a frame of the vigilant-fiesta stream
+# received by the RTMPS server and write it next to this script as
+# capture-rtmps.png. The stream is published by the OBS instance in the
+# reproduced production container; no synthetic image is generated here.
 
 project_root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "${project_root}"

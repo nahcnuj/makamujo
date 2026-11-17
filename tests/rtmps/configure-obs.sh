@@ -1,34 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Point the OBS instance provisioned by Ansible at the RTMPS server on the
-# Docker network and switch its scene to a deterministic browser fixture.
-# This is reproduction-only wiring: the production playbooks are untouched.
+# VRT setup for the Docker/Ansible reproduction: make OBS publish the actual
+# vigilant-fiesta game stream to the RTMPS server on the Docker network.
+# The scene source is the real game page (not a synthetic fixture); only the
+# ad slots are hidden so the captured frame is reproducible. Production
+# playbooks and the OBS installation are left untouched.
 
 project_root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "${project_root}"
 
 container=${1:?container name is required}
 rtmps_url=${RTMPS_URL:-rtmps://mediamtx:1936/live/stream}
-fixture_url=${FIXTURE_URL:-http://127.0.0.1:8899/fixture.html}
-fixture_dir=/opt/src/makamujo/tests/vrt-rtmps
-
-docker exec "${container}" mkdir -p "${fixture_dir}"
-docker cp tests/vrt-rtmps/fixture.html "${container}:${fixture_dir}/fixture.html"
-
-# Serve the fixture from inside the container so OBS renders exactly the same
-# page on every run (the game screen itself is intentionally non-deterministic).
-docker exec -d "${container}" python3 -m http.server 8899 \
-  --bind 127.0.0.1 --directory "${fixture_dir}"
-
-for _ in $(seq 1 30); do
-  if docker exec "${container}" python3 -c \
-    'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8899/fixture.html", timeout=2).close()' \
-    >/dev/null 2>&1; then
-    break
-  fi
-  sleep 1
-done
+game_url=${VRT_GAME_URL:-https://www.nahcnuj.work/vigilant-fiesta/}
 
 # OBS saves its in-memory settings when it exits. Stopping it *before*
 # rewriting the config is essential: a plain restart lets the old process
@@ -46,13 +30,13 @@ if docker exec "${container}" systemctl is-active --quiet makamujo-obs.service; 
   exit 1
 fi
 
-docker exec -i "${container}" python3 - "${rtmps_url}" "${fixture_url}" <<'PY'
+docker exec -i "${container}" python3 - "${rtmps_url}" "${game_url}" <<'PY'
 import json
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
-rtmps_url, fixture_url = sys.argv[1:3]
+rtmps_url, game_url = sys.argv[1:3]
 service_path = Path("/opt/src/makamujo/obs-studio/basic/profiles/Makamujo/service.json")
 scene_path = Path("/opt/src/makamujo/obs-studio/basic/scenes/Makamujo.json")
 
@@ -75,6 +59,16 @@ service_path.write_text(
     json.dumps(service, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
 )
 
+# Show only the browser source, pointed at the real game. Ads are dynamic and
+# would make the visual comparison flaky, so hide their slots via browser
+# source CSS. Both the OBS frame and the committed baseline use this CSS.
+vrt_css = " ".join(
+    [
+        "#ad-side-left, #ad-side-right, .ad-slot, ins.adsbygoogle { display: none !important; }",
+        "html, body { width: 1280px !important; height: 720px !important; overflow: hidden !important; }",
+    ]
+)
+
 scene = json.loads(scene_path.read_text(encoding="utf-8"))
 for source in scene.get("sources", []):
     if source.get("id") == "scene":
@@ -83,10 +77,10 @@ for source in scene.get("sources", []):
         continue
     source["enabled"] = source.get("name") == "Comment"
     if source.get("name") == "Comment":
-        source["settings"]["url"] = fixture_url
+        source["settings"]["url"] = game_url
         source["settings"]["fps"] = 30
         source["settings"]["fps_custom"] = True
-        source["settings"].pop("css", None)
+        source["settings"]["css"] = vrt_css
         source.pop("filters", None)
 scene_path.write_text(
     json.dumps(scene, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
@@ -96,7 +90,7 @@ PY
 docker exec "${container}" systemctl start makamujo-obs.service
 for _ in $(seq 1 30); do
   if docker exec "${container}" systemctl is-active --quiet makamujo-obs.service; then
-    echo "OBS is streaming the VRT fixture to ${rtmps_url}"
+    echo "OBS is streaming vigilant-fiesta (${game_url}) to ${rtmps_url}"
     exit 0
   fi
   sleep 1
