@@ -279,11 +279,17 @@ export const loadStreamBaselineWithRecovery = (
       result = { ...result, previousStreamCommentCount: recovered };
     }
   }
-  if (result.lastCommentAt === undefined) {
-    const recoveredLastCommentAt = recoverLastCommentAt(commentsDir);
-    if (recoveredLastCommentAt !== undefined) {
-      result = { ...result, lastCommentAt: recoveredLastCommentAt };
-    }
+  // Recover the latest comment timestamp from recorded comments, even when the
+  // baseline already carries a (possibly stale) value: a restart may have
+  // persisted an older timestamp, and using only the stale value would make the
+  // 5-minute silence window expire too early. Take the later of the two.
+  const recoveredLastCommentAt = recoverLastCommentAt(commentsDir);
+  if (
+    recoveredLastCommentAt !== undefined &&
+    (result.lastCommentAt === undefined ||
+      recoveredLastCommentAt.getTime() > result.lastCommentAt.getTime())
+  ) {
+    result = { ...result, lastCommentAt: recoveredLastCommentAt };
   }
   return result;
 };
