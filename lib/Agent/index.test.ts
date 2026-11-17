@@ -137,16 +137,15 @@ describe("anonymous comments are learned only while present", () => {
           hasGift: false,
           userId: "must-not-be-used",
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
 
     expect(learn).toHaveBeenCalledWith("匿名のコメントです。");
     expect(unlearn).not.toHaveBeenCalled();
     expect(generate).toHaveBeenCalled();
-    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-    const streamState = agent.streamState as any;
-    expect(streamState?.replyTargetComment?.text).toBe("匿名のコメントです");
+    expect(agent.streamState?.replyTargetComment?.text).toBe(
+      "匿名のコメントです",
+    );
   });
 
   it("unlearns after presence timeout", () => {
@@ -170,8 +169,7 @@ describe("anonymous comments are learned only while present", () => {
           anonymity: true,
           hasGift: false,
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
     jest.spyOn(Date, "now").mockReturnValue(10 * 60 * 1_000);
     agent.listen([
@@ -183,8 +181,7 @@ describe("anonymous comments are learned only while present", () => {
           anonymity: true,
           hasGift: false,
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
     expect(unlearn).toHaveBeenCalledWith("荒らし。");
   });
@@ -230,8 +227,7 @@ describe("per-program comment tracking", () => {
           anonymity: false,
           hasGift: false,
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
     expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(3);
   });
@@ -242,14 +238,14 @@ describe("per-program comment tracking", () => {
 
     agent.listen([viewerComment]);
 
-    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-    const streamState = agent.streamState as any;
-    expect(streamState?.replyTargetComment).toBeDefined();
-    expect(streamState.replyTargetComment.text).toBe("こんにちは");
-    expect(typeof streamState.replyTargetComment.pickedTopic).toBe("string");
-    expect(streamState.replyTargetComment.pickedTopic.length).toBeGreaterThan(
-      0,
+    expect(agent.streamState?.replyTargetComment).toBeDefined();
+    expect(agent.streamState?.replyTargetComment?.text).toBe("こんにちは");
+    expect(typeof agent.streamState?.replyTargetComment?.pickedTopic).toBe(
+      "string",
     );
+    expect(
+      (agent.streamState?.replyTargetComment?.pickedTopic ?? "").length,
+    ).toBeGreaterThan(0);
   });
 
   it("does not count system messages as user comments", () => {
@@ -264,8 +260,7 @@ describe("per-program comment tracking", () => {
           hasGift: false,
           userId: "onecomme.system",
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
     expect(agent.streamState?.meta?.total?.comments ?? 0).toBe(0);
   });
@@ -434,8 +429,7 @@ describe("speechable", () => {
       }
       return;
     });
-    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-    const spyTts: TTS = { speech: called as any };
+    const spyTts: TTS = { speech: called };
     const agent = new MakaMujo(stubTalkModel, spyTts);
     agent.onAir(niconamaLive(10));
     agent.listen([viewerComment]);
@@ -469,8 +463,7 @@ describe("speechable", () => {
       }
       return;
     });
-    // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-    const failTts: TTS = { speech: fail as any };
+    const failTts: TTS = { speech: fail };
     const agent = new MakaMujo(stubTalkModel, failTts);
     agent.onAir(niconamaLive(10));
     agent.listen([viewerComment]);
@@ -792,8 +785,7 @@ describe("CommentPipeline characterization", () => {
           anonymity: false,
           hasGift: false,
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
 
     expect(learn).toHaveBeenCalledWith("オーナーです。");
@@ -816,8 +808,7 @@ describe("CommentPipeline characterization", () => {
           hasGift: false,
           userId: "onecomme.system",
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
     // After any comment, prompted flag is false so speechable not locked by prompt
     expect(agent.speechable).toBe(true);
@@ -842,8 +833,7 @@ describe("CommentPipeline characterization", () => {
           hasGift: true,
           origin: { message: { gift: { advertiserName: "花子" } } },
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
 
     // drain speech queue
@@ -858,15 +848,13 @@ describe("CommentPipeline characterization", () => {
     agent.listen([
       {
         data: { comment: "a", no: 50, anonymity: false, hasGift: false },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
     expect(agent.streamState?.meta?.total?.comments).toBe(50);
     agent.listen([
       {
         data: { comment: "b", no: 10, anonymity: false, hasGift: false },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
     expect(agent.streamState?.meta?.total?.comments).toBe(10);
   });
@@ -888,8 +876,7 @@ describe("CommentPipeline characterization", () => {
           anonymity: false,
           hasGift: false,
         },
-        // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
-      } as any,
+      },
     ]);
 
     await new Promise((r) => setTimeout(r, 50));
@@ -1110,13 +1097,54 @@ describe("MakaMujo stream baseline persistence", () => {
     expect(agent.previousStreamCommentCount).toBe(100);
 
     agent.onAir(niconamaLive(10));
-    const state = agent.streamState as {
-      meta?: { total?: { comments?: number } };
-    };
-    expect(state.meta?.total?.comments).toBe(50);
+    const state = agent.streamState;
+    expect(state?.meta?.total?.comments).toBe(50);
+  });
+
+  it("restores lastCommentAt so the silence threshold survives a restart", () => {
+    jest
+      .spyOn(Date, "now")
+      .mockReturnValue(new Date(2023, 10, 14, 22, 13, 20, 0).getTime());
+    const agent = new MakaMujo(stubTalkModel, stubTts, {
+      baseline: {
+        previousStreamCommentCount: 0,
+        currentProgramUrl: "https://example.com",
+        currentProgramLatestCommentNo: 0,
+        lastCommentAt: new Date(2023, 10, 14, 22, 12, 20, 0),
+      },
+    });
+
+    agent.onAir(niconamaLive(10));
+    expect(agent.speechable).toBeTrue();
+    expect(agent.lastCommentAt).toEqual(new Date(2023, 10, 14, 22, 12, 20, 0));
+
+    jest.restoreAllMocks();
+  });
+
+  it("treats a stale restored lastCommentAt as silent", () => {
+    jest
+      .spyOn(Date, "now")
+      .mockReturnValue(new Date(2023, 10, 14, 22, 13, 20, 0).getTime());
+    const agent = new MakaMujo(stubTalkModel, stubTts, {
+      baseline: {
+        previousStreamCommentCount: 0,
+        currentProgramUrl: "https://example.com",
+        currentProgramLatestCommentNo: 0,
+        lastCommentAt: new Date(2023, 10, 14, 22, 8, 19, 999),
+      },
+    });
+
+    agent.onAir(niconamaLive(10));
+    expect(agent.speechable).toBeFalse();
+    expect(agent.lastCommentAt).toEqual(new Date(2023, 10, 14, 22, 8, 19, 999));
+
+    jest.restoreAllMocks();
   });
 
   it("notifies baseline changes for comment no and stream end", () => {
+    const nowSpy = jest
+      .spyOn(Date, "now")
+      .mockReturnValue(new Date(2023, 10, 14, 22, 13, 20, 0).getTime());
     const notifier = jest.fn();
     const agent = new MakaMujo(stubTalkModel, stubTts, {
       onBaselineChange: notifier,
@@ -1125,27 +1153,24 @@ describe("MakaMujo stream baseline persistence", () => {
     agent.onAir(niconamaLive(10));
     agent.listen([viewerComment]);
 
-    const afterComment = notifier.mock.calls.at(-1)?.[0] as
-      | { currentProgramLatestCommentNo: number }
-      | undefined;
+    const afterComment = notifier.mock.calls.at(-1)?.[0];
     expect(afterComment?.currentProgramLatestCommentNo).toBe(1);
 
     agent.onAir(niconamaOffline);
-    const afterEnd = notifier.mock.calls.at(-1)?.[0] as
-      | {
-          previousStreamCommentCount: number;
-          currentProgramUrl?: string;
-          currentProgramLatestCommentNo: number;
-        }
-      | undefined;
+    const afterEnd = notifier.mock.calls.at(-1)?.[0];
     expect(afterEnd).toEqual({
       previousStreamCommentCount: 1,
       currentProgramUrl: undefined,
       currentProgramLatestCommentNo: 0,
+      lastCommentAt: new Date(2023, 10, 14, 22, 13, 20, 0),
     });
+    nowSpy.mockRestore();
   });
 
   it("carries the previous program's comment count over on program url change", () => {
+    const nowSpy = jest
+      .spyOn(Date, "now")
+      .mockReturnValue(new Date(2023, 10, 14, 22, 13, 20, 0).getTime());
     const notifier = jest.fn();
     const agent = new MakaMujo(stubTalkModel, stubTts, {
       onBaselineChange: notifier,
@@ -1161,18 +1186,14 @@ describe("MakaMujo stream baseline persistence", () => {
       },
     });
 
-    const last = notifier.mock.calls.at(-1)?.[0] as
-      | {
-          previousStreamCommentCount: number;
-          currentProgramUrl: string;
-          currentProgramLatestCommentNo: number;
-        }
-      | undefined;
+    const last = notifier.mock.calls.at(-1)?.[0];
     expect(last).toEqual({
       previousStreamCommentCount: 1,
       currentProgramUrl: "https://live.example/watch/lv2",
       currentProgramLatestCommentNo: 0,
+      lastCommentAt: new Date(2023, 10, 14, 22, 13, 20, 0),
     });
+    nowSpy.mockRestore();
   });
 
   it("keeps the existing baseline when a new program starts before any comment", () => {
@@ -1194,13 +1215,7 @@ describe("MakaMujo stream baseline persistence", () => {
       },
     });
 
-    const last = notifier.mock.calls.at(-1)?.[0] as
-      | {
-          previousStreamCommentCount: number;
-          currentProgramUrl: string;
-          currentProgramLatestCommentNo: number;
-        }
-      | undefined;
+    const last = notifier.mock.calls.at(-1)?.[0];
     expect(last).toEqual({
       previousStreamCommentCount: 538,
       currentProgramUrl: "https://live.example/watch/lv2",

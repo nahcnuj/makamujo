@@ -40,4 +40,18 @@ describe("AgentSession stream baseline", () => {
 
     expect(session.toStreamBaseline().currentProgramUrl).toBeUndefined();
   });
+
+  test("restores lastCommentAt from a Date", () => {
+    const session = new AgentSession();
+    // コメント受信時刻（永続化前後の同一インスタント）
+    const receivedAt = new Date(2023, 10, 14, 22, 13, 20, 0);
+    session.restoreStreamBaseline({
+      previousStreamCommentCount: 0,
+      currentProgramLatestCommentNo: 0,
+      lastCommentAt: receivedAt,
+    });
+
+    expect(session.lastCommentAt).toEqual(receivedAt);
+    expect(session.toStreamBaseline().lastCommentAt).toEqual(receivedAt);
+  });
 });

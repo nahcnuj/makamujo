@@ -23,7 +23,7 @@ export type MakaMujoOptions = {
  */
 export class MakaMujo {
   #talkModel: TalkModel;
-  #session = new AgentSession();
+  #session: AgentSession;
   #speechQueue: SpeechQueue;
   #comments: CommentApplicationService;
   #stream: StreamApplicationService;
@@ -39,13 +39,32 @@ export class MakaMujo {
   /** Latest news lines from sight (for spontaneous topic). */
   #currentNewsLines: string[] = [];
 
+  /** Construct an empty agent with no restored baseline. */
+  static empty(
+    talkModel: TalkModel,
+    tts: TTS,
+    options: Omit<MakaMujoOptions, "baseline"> = {},
+  ): MakaMujo {
+    return new MakaMujo(talkModel, tts, options);
+  }
+
+  /** Construct an agent restored from a persisted baseline. */
+  static fromBaseline(
+    baseline: StreamBaseline,
+    talkModel: TalkModel,
+    tts: TTS,
+    options?: Omit<MakaMujoOptions, "baseline">,
+  ): MakaMujo {
+    return new MakaMujo(talkModel, tts, { ...options, baseline });
+  }
+
   constructor(talkModel: TalkModel, tts: TTS, options: MakaMujoOptions = {}) {
     this.#talkModel = talkModel;
+    this.#session =
+      options.baseline !== undefined
+        ? AgentSession.fromBaseline(options.baseline)
+        : AgentSession.empty();
     this.#speechQueue = new SpeechQueue(tts);
-
-    if (options.baseline) {
-      this.#session.restoreStreamBaseline(options.baseline);
-    }
 
     const speechPort = {
       speech: (generated?: AppTalkModelGenerateResult) =>
@@ -277,6 +296,10 @@ export class MakaMujo {
 
   get previousStreamCommentCount() {
     return this.#session.previousStreamCommentCount;
+  }
+
+  get lastCommentAt() {
+    return this.#session.lastCommentAt;
   }
 
   get Component() {

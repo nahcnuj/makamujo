@@ -15,6 +15,7 @@ import {
   loadStreamBaseline,
   loadStreamBaselineWithRecovery,
   parseStreamBaseline,
+  recoverLastCommentAt,
   recoverPreviousStreamCommentCount,
   saveStreamBaseline,
 } from "./streamBaselineStore";
@@ -69,6 +70,29 @@ describe("parseStreamBaseline", () => {
       currentProgramLatestCommentNo: 0,
     });
   });
+
+  it("parses lastCommentAt from an ISO string", () => {
+    // コメント受信時刻（ISO 8601 で永続化・復元される）
+    const receivedAt = new Date(2023, 10, 14, 22, 13, 20, 0);
+    expect(
+      parseStreamBaseline({
+        lastCommentAt: receivedAt.toISOString(),
+      }),
+    ).toEqual({
+      previousStreamCommentCount: 0,
+      currentProgramUrl: undefined,
+      currentProgramLatestCommentNo: 0,
+      lastCommentAt: receivedAt,
+    });
+  });
+
+  it("ignores non-date lastCommentAt values", () => {
+    expect(parseStreamBaseline({ lastCommentAt: "not-a-date" })).toEqual({
+      previousStreamCommentCount: 0,
+      currentProgramUrl: undefined,
+      currentProgramLatestCommentNo: 0,
+    });
+  });
 });
 
 describe("loadStreamBaseline", () => {
@@ -99,6 +123,21 @@ describe("loadStreamBaseline", () => {
     expect(existsSync(path)).toBe(true);
     expect(loadStreamBaseline(path)).toEqual(baseline);
     expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(baseline);
+  });
+
+  it("round-trips lastCommentAt as a Date through saveStreamBaseline", () => {
+    const dir = makeTempDir();
+    const path = join(dir, "baseline.json");
+    const receivedAt = new Date(2023, 10, 14, 22, 13, 20, 0);
+    const baseline = {
+      previousStreamCommentCount: 12,
+      currentProgramUrl: "https://live.example/watch/lv2",
+      currentProgramLatestCommentNo: 34,
+      lastCommentAt: receivedAt,
+    };
+
+    saveStreamBaseline(path, baseline);
+    expect(loadStreamBaseline(path)).toEqual(baseline);
   });
 
   it("replaces the previous content without leaving temp files", () => {
@@ -150,7 +189,9 @@ describe("recoverPreviousStreamCommentCount", () => {
     );
     const path = join(dir, fileName);
     writeFileSync(path, `${lines.join("\n")}\n`, "utf8");
-    utimesSync(path, new Date(mtimeMs), new Date(mtimeMs));
+    const mtime = new Date();
+    mtime.setTime(mtimeMs);
+    utimesSync(path, mtime, mtime);
   };
 
   it("returns 0 when there is no comment record directory", () => {
@@ -263,5 +304,103 @@ describe("loadStreamBaselineWithRecovery", () => {
       currentProgramUrl: "https://live.example/watch/lv300",
       currentProgramLatestCommentNo: 5,
     });
+  });
+});
+
+describe("recoverLastCommentAt", () => {
+  const commentsDir = () => {
+    const dir = join(makeTempDir(), "comments");
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  };
+
+  it("returns undefined when the directory is missing", () => {
+    const dir = makeTempDir();
+    expect(recoverLastCommentAt(join(dir, "missing"))).toBeUndefined();
+  });
+
+  it("returns undefined when no comment records exist", () => {
+    const dir = commentsDir();
+    expect(recoverLastCommentAt(dir)).toBeUndefined();
+  });
+
+  it("recovers the latest comment timestamp across files", () => {
+    const dir = commentsDir();
+    const older = new Date(2023, 10, 14, 22, 13, 20, 0);
+    const newer = new Date(2023, 10, 14, 22, 14, 20, 0);
+    writeFileSync(
+      join(dir, "a.jsonl"),
+      `${JSON.stringify({ no: 1, at: older.toISOString() })}\n`,
+      "utf8",
+    );
+    writeFileSync(
+      join(dir, "b.jsonl"),
+      `${JSON.stringify({ no: 2, at: newer.toISOString() })}\n`,
+      "utf8",
+    );
+    expect(recoverLastCommentAt(dir)?.getTime()).toBe(newer.getTime());
+  });
+
+  it("skips records with non-date at values", () => {
+    const dir = commentsDir();
+    const valid = new Date(2023, 10, 14, 22, 14, 20, 0);
+    writeFileSync(
+      join(dir, "mixed.jsonl"),
+      `${JSON.stringify({ no: 1, at: "not-a-date" })}\n${JSON.stringify({ no: 2, at: valid.toISOString() })}\n`,
+      "utf8",
+    );
+    expect(recoverLastCommentAt(dir)?.getTime()).toBe(valid.getTime());
+  });
+});
+
+describe("loadStreamBaselineWithRecovery lastCommentAt", () => {
+  it("takes the later of the persisted and recovered timestamps", () => {
+    const dir = makeTempDir();
+    const comments = join(dir, "comments");
+    mkdirSync(comments, { recursive: true });
+    const path = join(dir, "baseline.json");
+    const persisted = new Date(2023, 10, 14, 22, 13, 20, 0);
+    const recovered = new Date(2023, 10, 14, 22, 14, 20, 0);
+    saveStreamBaseline(path, {
+      previousStreamCommentCount: 5,
+      currentProgramUrl: "https://live.example/watch/lv300",
+      currentProgramLatestCommentNo: 5,
+      lastCommentAt: persisted,
+    });
+    const fileUrl = "https://live.example/watch/lv200";
+    const fileName = `${fileUrl.replace(/[^a-zA-Z0-9._-]/g, "_")}.jsonl`;
+    writeFileSync(
+      join(comments, fileName),
+      `${JSON.stringify({ no: 1, at: recovered.toISOString() })}\n`,
+      "utf8",
+    );
+
+    const result = loadStreamBaselineWithRecovery(path, comments);
+    expect(result.lastCommentAt?.getTime()).toBe(recovered.getTime());
+  });
+
+  it("keeps the persisted timestamp when it is later", () => {
+    const dir = makeTempDir();
+    const comments = join(dir, "comments");
+    mkdirSync(comments, { recursive: true });
+    const path = join(dir, "baseline.json");
+    const persisted = new Date(2023, 10, 14, 22, 14, 20, 0);
+    const recovered = new Date(2023, 10, 14, 22, 13, 20, 0);
+    saveStreamBaseline(path, {
+      previousStreamCommentCount: 5,
+      currentProgramUrl: "https://live.example/watch/lv300",
+      currentProgramLatestCommentNo: 5,
+      lastCommentAt: persisted,
+    });
+    const fileUrl = "https://live.example/watch/lv200";
+    const fileName = `${fileUrl.replace(/[^a-zA-Z0-9._-]/g, "_")}.jsonl`;
+    writeFileSync(
+      join(comments, fileName),
+      `${JSON.stringify({ no: 1, at: recovered.toISOString() })}\n`,
+      "utf8",
+    );
+
+    const result = loadStreamBaselineWithRecovery(path, comments);
+    expect(result.lastCommentAt?.getTime()).toBe(persisted.getTime());
   });
 });
