@@ -5,6 +5,47 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { createReceiverWithPath, createRetrySenderWithPath } from "./socket";
 
+// Unix domain sockets are not supported on every filesystem (e.g. 9p mounts
+// used by some WSL setups). Detect support once so the suite can be skipped
+// there instead of reporting environment failures.
+const socketsSupported = await (async () => {
+  if (process.platform === "win32") return true;
+  const probePath = join(
+    process.cwd(),
+    "var",
+    `socket-support-${process.pid}.sock`,
+  );
+  const { createServer } = await import("node:net");
+  const { existsSync, unlinkSync } = await import("node:fs");
+  try {
+    if (existsSync(probePath)) unlinkSync(probePath);
+  } catch {
+    /* ignore */
+  }
+  return await new Promise<boolean>((resolve) => {
+    const server = createServer();
+    const cleanup = () => {
+      try {
+        if (existsSync(probePath)) unlinkSync(probePath);
+      } catch {
+        /* ignore */
+      }
+    };
+    server.once("error", () => {
+      cleanup();
+      resolve(false);
+    });
+    server.listen(probePath, () => {
+      server.close(() => {
+        cleanup();
+        resolve(true);
+      });
+    });
+  });
+})();
+
+const socketDescribe = socketsSupported ? describe : describe.skip;
+
 const generateSocketPath = () =>
   process.platform === "win32"
     ? `\\\\.\\pipe\\makamujo-socket-test-${Date.now().toString(36) + Math.random().toString(36).slice(2)}`
@@ -20,7 +61,7 @@ const cleanupSocket = (path: string) => {
   }
 };
 
-describe("createRetrySenderWithPath", () => {
+socketDescribe("createRetrySenderWithPath", () => {
   let socketPath: string;
 
   beforeEach(() => {
@@ -124,7 +165,7 @@ describe("createRetrySenderWithPath", () => {
   });
 });
 
-describe("createReceiverWithPath", () => {
+socketDescribe("createReceiverWithPath", () => {
   let socketPath: string;
 
   beforeEach(() => {

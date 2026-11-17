@@ -12,6 +12,42 @@ import { dirname, join, resolve, sep } from "node:path";
 import { resolveExecutablePath } from "./chromium";
 import { createReceiverWithPath, removeStaleUnixIpcSocket } from "./socket";
 
+const socketsSupported = await (async () => {
+  if (process.platform === "win32") return true;
+  const { createServer } = await import("node:net");
+  const { existsSync, unlinkSync } = await import("node:fs");
+  const probePath = join(
+    process.cwd(),
+    "var",
+    `socket-support-${process.pid}.sock`,
+  );
+  try {
+    if (existsSync(probePath)) unlinkSync(probePath);
+  } catch {
+    /* ignore */
+  }
+  return await new Promise<boolean>((resolve) => {
+    const server = createServer();
+    const cleanup = () => {
+      try {
+        if (existsSync(probePath)) unlinkSync(probePath);
+      } catch {
+        /* ignore */
+      }
+    };
+    server.once("error", () => {
+      cleanup();
+      resolve(false);
+    });
+    server.listen(probePath, () => {
+      server.close(() => {
+        cleanup();
+        resolve(true);
+      });
+    });
+  });
+})();
+
 describe("resolveExecutablePath containment", () => {
   it("allows an existing path under an allowlisted root (process.execPath)", () => {
     const exec = process.execPath;
@@ -93,6 +129,7 @@ describe("removeStaleUnixIpcSocket / createReceiverWithPath containment", () => 
   });
 
   it("accepts createReceiverWithPath for a var/*.sock path (missing file is ok)", async () => {
+    if (!socketsSupported) return;
     if (process.platform === "win32") {
       const pipe = `\\\\.\\pipe\\makamujo-path-containment-${Date.now().toString(36)}`;
       const receive = createReceiverWithPath(pipe);

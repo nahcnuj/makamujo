@@ -201,6 +201,8 @@ jobs:
           cat > /tmp/mediamtx/mediamtx.yml <<'EOF'
           rtmp: yes
           rtmpAddress: :1935
+          paths:
+            all:
           EOF
           nohup /tmp/mediamtx/mediamtx /tmp/mediamtx/mediamtx.yml >/tmp/mediamtx.log 2>&1 &
           sleep 2
