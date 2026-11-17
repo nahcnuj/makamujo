@@ -9,6 +9,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         systemd systemd-sysv \
         openssh-server \
+        unzip \
         python3 python3-pip \
         ansible \
         curl ca-certificates git \
