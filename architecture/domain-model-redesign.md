@@ -497,8 +497,8 @@ function evaluateSpeechable(...): boolean {
 SilencePolicy.evaluate({
   now,
   streamStateDefined: boolean,
-  listenersStaleSince?: number, // Date.getTime() 相当
-  lastCommentAt?: number,
+  listenersStaleSince?: Date,
+  lastCommentAt?: Date,
   hasPrompted: boolean,
   browserStateName?: string,
   thresholdMs: typeof SILENCE_THRESHOLD_MS,
