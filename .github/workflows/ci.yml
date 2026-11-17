@@ -278,10 +278,18 @@ jobs:
           # trust store directly.
           docker exec makamujo sh -c '
             set -eu
-            cert_dir=$(find /var/lib/flatpak/runtime /usr/share/flatpak/runtime \
-              -type d -path "*/org.freedesktop.Platform/*/files/etc/ssl/certs" \
-              2>/dev/null | head -n 1)
-            test -n "${cert_dir}" || {
+            runtime_ref=$(flatpak info --show-runtime com.obsproject.Studio)
+            runtime_dir=$(flatpak info --show-location "${runtime_ref}")
+            echo "Flatpak runtime: ${runtime_ref} at ${runtime_dir}"
+            cert_dir="${runtime_dir}/files/etc/ssl/certs"
+            if [ ! -d "${cert_dir}" ]; then
+              cert_dir="${runtime_dir}/files/usr/etc/ssl/certs"
+            fi
+            if [ ! -d "${cert_dir}" ]; then
+              bundle=$(find "${runtime_dir}" -name ca-certificates.crt -print 2>/dev/null | head -n 1 || true)
+              cert_dir=$(dirname "${bundle:-/nonexistent}")
+            fi
+            test -d "${cert_dir}" || {
               echo "Flatpak runtime trust store not found" >&2
               exit 1
             }
