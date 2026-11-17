@@ -4,11 +4,17 @@ on:
   push:
     branches:
       - main
+      - legacy
   pull_request:
     branches:
       - main
+      - legacy
+  # CD（cd.yml）が CI の push run を待てなかったときにここから起動する。
+  # workflow_dispatch は GITHUB_TOKEN / App token でも発火するため、
+  # push イベントが起きないマージでも CI → CD の経路を構成できる。
   workflow_dispatch:
 
+# Least-privilege default for GITHUB_TOKEN across all jobs.
 permissions:
   contents: read
 
@@ -160,74 +166,108 @@ jobs:
 
   rtmps:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
 
-      - name: Install Ansible
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y sshpass
-          pip install "ansible-core>=2.16,<2.19"
-
-      - name: Build Debian 13 production container
-        run: docker build -t makamujo:prod .
-
-      - name: Run container
+      - name: Install tools
         run: |
           set -euo pipefail
-          docker run -d --name makamujo --privileged --cgroupns=host \
-            --add-host=host.docker.internal:host-gateway \
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg openssl sshpass
+          pip install -r ansible/requirements.txt
+
+      - name: Prepare RTMPS server
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/certs"
+          openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+            -keyout "${RUNNER_TEMP}/certs/key.pem" \
+            -out "${RUNNER_TEMP}/certs/cert.pem" \
+            -subj /CN=mediamtx \
+            -addext 'subjectAltName=DNS:mediamtx,IP:127.0.0.1'
+          sudo cp "${RUNNER_TEMP}/certs/cert.pem" /usr/local/share/ca-certificates/mediamtx.crt
+          sudo update-ca-certificates
+          cat > "${RUNNER_TEMP}/mediamtx.yml" <<'EOF'
+          rtmp: yes
+          rtmpEncryption: strict
+          rtmpsAddress: :1936
+          rtmpServerKey: /certs/key.pem
+          rtmpServerCert: /certs/cert.pem
+          paths:
+            all_others:
+          EOF
+          docker network create makamujo
+
+      - name: Build and start the production container
+        run: |
+          set -euo pipefail
+          docker build -t makamujo:prod .
+          docker run -d --name makamujo --network makamujo \
+            --privileged --cgroupns=host \
             -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
             -p 2222:22 \
             makamujo:prod
-          # wait for ssh
-          for i in $(seq 1 30); do
-            if docker exec makamujo pgrep -x sshd >/dev/null 2>&1; then break; fi
+          for _ in $(seq 1 30); do
+            if docker exec makamujo pgrep -x sshd >/dev/null 2>&1; then
+              echo "sshd is ready"
+              exit 0
+            fi
             sleep 2
           done
+          docker logs makamujo
+          exit 1
 
-      - name: Start RTMPS server on host
+      - name: Start the RTMPS server on the Docker network
         run: |
           set -euo pipefail
-          curl -fsSL https://github.com/bluenviron/mediamtx/releases/download/v1.9.3/mediamtx_v1.9.3_linux_amd64.tar.gz -o /tmp/mediamtx.tar.gz
-          mkdir -p /tmp/mediamtx && tar -xzf /tmp/mediamtx.tar.gz -C /tmp/mediamtx
-          cat > /tmp/mediamtx/mediamtx.yml <<'EOF'
-          rtmp: yes
-          rtmpAddress: :1935
-          paths:
-            all:
-          EOF
-          nohup /tmp/mediamtx/mediamtx /tmp/mediamtx/mediamtx.yml >/tmp/mediamtx.log 2>&1 &
+          docker run -d --name mediamtx --network makamujo \
+            -p 1936:1936 \
+            -v "${RUNNER_TEMP}/mediamtx.yml:/mediamtx.yml:ro" \
+            -v "${RUNNER_TEMP}/certs:/certs:ro" \
+            bluenviron/mediamtx:1.9.3
           sleep 2
-          echo "mediamtx started"
+          docker logs mediamtx
 
-      - name: Provision container with Ansible
+      - name: Provision the container with Ansible
+        working-directory: ansible
         run: |
           set -euo pipefail
-          cd ansible
           ansible-playbook -i inventories/docker.yml playbooks/0_bootstrap.yml
           ansible-playbook -i inventories/docker.yml playbooks/0_desktop.yml
           ansible-playbook -i inventories/docker.yml playbooks/0_obs.yml
           ansible-playbook -i inventories/docker.yml playbooks/1_bun.yml
-          ansible-playbook -i inventories/docker.yml -e rtmps_server_url=rtmp://host.docker.internal:1935/live/stream playbooks/2_makamujo.yml
+          ansible-playbook -i inventories/docker.yml playbooks/2_makamujo.yml
+
+      - name: Point OBS at the RTMPS server
+        run: |
+          set -euo pipefail
+          docker cp "${RUNNER_TEMP}/certs/cert.pem" \
+            makamujo:/usr/local/share/ca-certificates/mediamtx.crt
+          docker exec makamujo update-ca-certificates
+          docker exec makamujo flatpak override --system \
+            --filesystem=/usr/local/share/ca-certificates \
+            --env=SSL_CERT_FILE=/usr/local/share/ca-certificates/mediamtx.crt \
+            com.obsproject.Studio
+          bash tests/rtmps/configure-obs.sh makamujo
 
       - name: Run RTMPS VRT
         run: bash tests/vrt-rtmps.sh
 
       - name: Upload captured VRT images
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: vrt-rtmps-captured
           path: tests/vrt-rtmps/*.png
 
       - name: Cleanup
         if: always()
-        run: docker rm -f makamujo || true
+        run: |
+          docker rm -f makamujo mediamtx || true
+          docker network rm makamujo || true

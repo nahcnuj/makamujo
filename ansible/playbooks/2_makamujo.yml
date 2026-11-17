@@ -81,13 +81,6 @@
         - niconama_stream_key is defined
         - (niconama_stream_key | length) > 0
 
-    - name: Override OBS RTMP server for reproduction environment
-      ansible.builtin.replace:
-        path: "{{ makamujo_src }}/obs-studio/basic/profiles/Makamujo/service.json"
-        regexp: '"server": "[^"]*"'
-        replace: '"server": "{{ rtmps_server_url }}"'
-      when: rtmps_server_url is defined and (rtmps_server_url | length) > 0
-
     - name: Stop makamujo app units before infra restart
       ansible.builtin.systemd:
         name: "{{ item }}"

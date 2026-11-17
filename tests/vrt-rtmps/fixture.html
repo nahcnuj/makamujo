@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>RTMPS VRT fixture</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 1280px;
+        height: 720px;
+        overflow: hidden;
+        background: #101820;
+      }
+      .bar {
+        position: absolute;
+        top: 0;
+        height: 120px;
+        width: 320px;
+      }
+      .white {
+        left: 0;
+        background: #ffffff;
+      }
+      .yellow {
+        left: 320px;
+        background: #ffff00;
+      }
+      .cyan {
+        left: 640px;
+        background: #00ffff;
+      }
+      .green {
+        left: 960px;
+        background: #00ff00;
+      }
+      .tile {
+        position: absolute;
+        width: 160px;
+        height: 160px;
+      }
+      .circle {
+        position: absolute;
+        top: 260px;
+        left: 490px;
+        width: 300px;
+        height: 300px;
+        border-radius: 50%;
+        background: #ff2d55;
+        border: 20px solid #ffffff;
+        box-sizing: border-box;
+      }
+      .square {
+        position: absolute;
+        top: 360px;
+        left: 590px;
+        width: 100px;
+        height: 100px;
+        background: #1a1aff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="bar white"></div>
+    <div class="bar yellow"></div>
+    <div class="bar cyan"></div>
+    <div class="bar green"></div>
+    <div class="tile" style="top: 160px; left: 80px; background: #ff8800"></div>
+    <div class="tile" style="top: 160px; left: 240px; background: #8844ff"></div>
+    <div class="tile" style="top: 160px; left: 880px; background: #00ff88"></div>
+    <div class="tile" style="top: 160px; left: 1040px; background: #ff0088"></div>
+    <div class="tile" style="top: 400px; left: 80px; background: #0088ff"></div>
+    <div class="tile" style="top: 400px; left: 240px; background: #ffdd00"></div>
+    <div class="tile" style="top: 400px; left: 880px; background: #5500ff"></div>
+    <div class="tile" style="top: 400px; left: 1040px; background: #00dd55"></div>
+    <div class="circle"></div>
+    <div class="square"></div>
+  </body>
+</html>

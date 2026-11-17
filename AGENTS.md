@@ -55,7 +55,7 @@
 - 新規に作成する公開関数には必ず単体テストを作成する。
 - テストフレームワークは Bun（`bun:test`、Jest 互換）。`bunfig.toml` で coverage が常時有効（`bun test` はカバレッジ計測つきで若干遅い）。
 - 配置: 単体テストは実装と同階層 `*.test.{ts,tsx}` / 統合 `tests/integration/` / E2E `tests/e2e/` / シェル `tests/bin/`。
-- VRT: `tests/vrt.sh` が `tests/vrt/` 配下の実行可能ケース（任意のファイル名・拡張子）を実行し、生成された `tests/vrt/case_name.png` を `tests/vrt/baseline/case_name.png` と比較する。ケースは実行可能ファイルとして配置する。
+- VRT: `tests/vrt.sh` が `tests/vrt/` 配下の実行可能ケース（任意のファイル名・拡張子）を実行し、生成された `tests/vrt/case_name.png` をコミット済みの `tests/vrt/baseline/case_name.png` と比較する。ケースは実行可能ファイルとして配置する。RTMPS 配信の回帰テストは `tests/vrt-rtmps.sh` が行い、RTMPS 経由で取得したフレームを `tests/vrt-rtmps/baseline/` のコミット済み画像と SSIM で比較する。
 
 ## コーディングスタイル
 

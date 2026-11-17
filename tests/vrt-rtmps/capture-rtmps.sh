@@ -3,35 +3,44 @@ set -euo pipefail
 
 # Visual Regression Test case: capture a frame from the video received by the
 # RTMPS server and write it next to this script as capture-rtmps.png.
-#
-# The stream URL can be overridden with RTMPS_CAPTURE_URL; otherwise we read
-# from the local RTMPS server used in the CI reproduction environment.
+# The stream is published by the OBS instance in the reproduced production
+# container; no synthetic image is generated here.
 
 project_root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "${project_root}"
 
 out_file="$(dirname "$0")/capture-rtmps.png"
-stream_url="${RTMPS_CAPTURE_URL:-rtmp://127.0.0.1:1935/live/stream}"
+stream_url=${RTMPS_CAPTURE_URL:-rtmps://127.0.0.1:1936/live/stream}
 
 if ! command -v ffmpeg >/dev/null 2>&1; then
-    echo "ffmpeg is required" >&2
-    exit 1
+  echo "ffmpeg is required" >&2
+  exit 1
+fi
+if ! command -v ffprobe >/dev/null 2>&1; then
+  echo "ffprobe is required" >&2
+  exit 1
 fi
 
-# Wait for the stream to become available, then grab a single frame.
+# OBS may take a while to come up after provisioning. Retry until a real
+# 1280x720 frame is available instead of accepting an empty first frame.
 attempts=0
-max_attempts=60
+max_attempts=90
 while [ "${attempts}" -lt "${max_attempts}" ]; do
-    if ffmpeg -hide_banner -loglevel error -y -i "${stream_url}" \
-            -frames:v 1 -q:v 2 "${out_file}" >/dev/null 2>&1; then
-        if [ -s "${out_file}" ]; then
-            echo "Captured RTMPS frame to ${out_file}"
-            exit 0
-        fi
+  rm -f "${out_file}"
+  if ffmpeg -hide_banner -loglevel error -nostdin -y \
+      -i "${stream_url}" -frames:v 1 "${out_file}" >/dev/null 2>&1 \
+      && [ -s "${out_file}" ]; then
+    dimensions=$(ffprobe -v error -select_streams v:0 \
+      -show_entries stream=width,height -of csv=s=x:p=0 "${out_file}")
+    if [ "${dimensions}" = "1280x720" ]; then
+      echo "Captured RTMPS frame to ${out_file}"
+      exit 0
     fi
-    attempts=$((attempts + 1))
-    sleep 2
+    echo "Unexpected captured frame size: ${dimensions}" >&2
+  fi
+  attempts=$((attempts + 1))
+  sleep 2
 done
 
-echo "Failed to capture a frame from ${stream_url}" >&2
+echo "Failed to capture a 1280x720 frame from ${stream_url}" >&2
 exit 1
