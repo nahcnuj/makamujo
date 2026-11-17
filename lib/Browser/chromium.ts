@@ -316,7 +316,7 @@ export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
   "--disable-renderer-backgrounding",
 ] as const;
 
-export const GAME_SCREEN_ZOOM_FACTOR = 2 as const;
+export const GAME_SCREEN_ZOOM_FACTOR = 1 as const;
 
 export type BrowserCreateOptions = {
   /** Magnification for the Agent's game board. */
@@ -639,19 +639,12 @@ export const applyGameScreenZoom = async (
     return;
   }
   try {
-    await page.evaluate((value: number) => {
-      // Keep the whole document at 1.0 so the page layout (title/result
-      // screens, HUD) is unaffected; only the game board is scaled up for the
-      // captured stream.
+    await page.evaluate((_value: number) => {
+      // Stop per-element zoom: keep the whole document at 1.0 and let OBS
+      // handle enlarging the game screen on the broadcast canvas.
       document.documentElement.style.zoom = "1.0";
-      const gameScreen =
-        document.getElementById("game-container") ??
-        document.getElementById("screen-playing");
-      if (gameScreen) {
-        (gameScreen as HTMLElement).style.zoom = String(value);
-      }
       // Make the broadcast background black and place the game screen at the
-      // top-left so the captured frame shows the game without page margins.
+      // top-left so OBS can enlarge it without showing page margins.
       const styleId = "makamujo-broadcast-layout";
       let style = document.getElementById(styleId) as HTMLStyleElement | null;
       if (!style) {
