@@ -50,17 +50,23 @@ export const toDate = (value: unknown): Date | undefined => {
   if (value === null || value === undefined || typeof value === "boolean") {
     return undefined;
   }
-  // Date's constructor accepts a Date, epoch ms, or ISO string directly.
-  const fromConstructor = new Date(value as Date | number | string);
-  if (Number.isFinite(fromConstructor.getTime())) {
-    // Reject negative epoch values, matching the legacy guard.
-    if (typeof value === "number" && value < 0) return undefined;
-    return fromConstructor;
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime())
+      ? new Date(value.getTime())
+      : undefined;
   }
-  // Legacy numeric strings (epoch ms) are not parsed by the Date constructor.
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || value < 0) return undefined;
+    return new Date(value);
+  }
   if (typeof value === "string") {
-    const numeric = Number(value);
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return undefined;
+    const parsed = new Date(trimmed);
+    if (Number.isFinite(parsed.getTime())) return parsed;
+    const numeric = Number(trimmed);
     if (Number.isFinite(numeric) && numeric >= 0) return new Date(numeric);
+    return undefined;
   }
   return undefined;
 };
@@ -231,37 +237,35 @@ export const recoverLastCommentAt = (commentsDir: string): Date | undefined => {
   } catch {
     return undefined;
   }
-  let maxMs = Number.NEGATIVE_INFINITY;
+  let latest: Date | undefined;
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
+    let content: string;
     try {
-      for (const line of readFileSync(
-        join(commentsDir, entry.name),
-        "utf8",
-      ).split("\n")) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        let at: unknown;
-        try {
-          at = (JSON.parse(trimmed) as { at?: unknown }).at;
-        } catch {
-          continue;
-        }
-        const ms =
-          typeof at === "string"
-            ? Date.parse(at)
-            : typeof at === "number"
-              ? at
-              : Number.NaN;
-        if (Number.isFinite(ms) && ms > maxMs) {
-          maxMs = ms;
-        }
-      }
+      content = readFileSync(join(commentsDir, entry.name), "utf8");
     } catch {
       // Skip unreadable record files; best-effort recovery.
+      continue;
+    }
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      let at: unknown;
+      try {
+        at = (JSON.parse(trimmed) as { at?: unknown }).at;
+      } catch {
+        continue;
+      }
+      const candidate = toDate(at);
+      if (
+        candidate !== undefined &&
+        (latest === undefined || candidate.getTime() > latest.getTime())
+      ) {
+        latest = candidate;
+      }
     }
   }
-  return Number.isFinite(maxMs) ? new Date(maxMs) : undefined;
+  return latest;
 };
 
 export const loadStreamBaselineWithRecovery = (

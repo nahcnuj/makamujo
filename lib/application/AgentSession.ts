@@ -46,11 +46,11 @@ export class AgentSession {
 
   toStreamBaseline(): StreamBaseline {
     let lastCommentAt: Date | undefined;
-    if (this.lastCommentAt !== undefined) {
-      const ms = this.lastCommentAt.getTime();
-      if (Number.isFinite(ms)) {
-        lastCommentAt = new Date(ms);
-      }
+    if (
+      this.lastCommentAt !== undefined &&
+      Number.isFinite(this.lastCommentAt.getTime())
+    ) {
+      lastCommentAt = new Date(this.lastCommentAt);
     }
     return {
       previousStreamCommentCount: this.previousStreamCommentCount,
