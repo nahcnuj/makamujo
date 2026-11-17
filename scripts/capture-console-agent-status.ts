@@ -21,7 +21,10 @@ const ensureJapaneseFonts = () => {
   // `grep -q` exits with 0 when a match is found.
   const fontCheckResult = spawnSync(
     "bash",
-    ["-lc", "fc-list :lang=ja | grep -qi 'Noto Sans CJK'"],
+    [
+      "-lc",
+      "fc-list :lang=ja | grep -qi 'Noto Sans CJK' && fc-list | grep -qi 'Noto Sans Math'",
+    ],
     {
       stdio: "ignore",
     },
