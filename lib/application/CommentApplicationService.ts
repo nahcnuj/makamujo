@@ -63,8 +63,7 @@ export class CommentApplicationService {
       });
 
       // Step 2 — all comments refresh silence clock (コメント受信時刻を記録)
-      const lastCommentAt = new Date();
-      lastCommentAt.setTime(Date.now());
+      const lastCommentAt = new Date(Date.now());
       this.#session.lastCommentAt = lastCommentAt;
       this.#onBaselineChange?.(this.#session.toStreamBaseline());
       // Step 3

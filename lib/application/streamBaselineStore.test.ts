@@ -82,7 +82,7 @@ describe("parseStreamBaseline", () => {
       previousStreamCommentCount: 0,
       currentProgramUrl: undefined,
       currentProgramLatestCommentNo: 0,
-      lastCommentAt: new Date(receivedAt),
+      lastCommentAt: receivedAt,
     });
   });
 
@@ -133,7 +133,7 @@ describe("loadStreamBaseline", () => {
       previousStreamCommentCount: 12,
       currentProgramUrl: "https://live.example/watch/lv2",
       currentProgramLatestCommentNo: 34,
-      lastCommentAt: new Date(receivedAt),
+      lastCommentAt: receivedAt,
     };
 
     saveStreamBaseline(path, baseline);
@@ -365,7 +365,7 @@ describe("loadStreamBaselineWithRecovery lastCommentAt", () => {
       previousStreamCommentCount: 5,
       currentProgramUrl: "https://live.example/watch/lv300",
       currentProgramLatestCommentNo: 5,
-      lastCommentAt: new Date(persisted),
+      lastCommentAt: persisted,
     });
     const fileUrl = "https://live.example/watch/lv200";
     const fileName = `${fileUrl.replace(/[^a-zA-Z0-9._-]/g, "_")}.jsonl`;
@@ -390,7 +390,7 @@ describe("loadStreamBaselineWithRecovery lastCommentAt", () => {
       previousStreamCommentCount: 5,
       currentProgramUrl: "https://live.example/watch/lv300",
       currentProgramLatestCommentNo: 5,
-      lastCommentAt: new Date(persisted),
+      lastCommentAt: persisted,
     });
     const fileUrl = "https://live.example/watch/lv200";
     const fileName = `${fileUrl.replace(/[^a-zA-Z0-9._-]/g, "_")}.jsonl`;

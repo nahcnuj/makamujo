@@ -445,36 +445,6 @@ export type GameViewState = unknown;
 
 **正本は順序付きアルゴリズム**であり、ワイルドカード行の決定表ではない。`lib/Agent/index.ts` の `get speechable` と一致させる（PR-A3 抽出時のゴールデン）。
 
-```
-// 定義（thresholdMs = SILENCE_THRESHOLD_MS）
-listenersStale =
-  listenersStaleSince !== undefined
-  && (now - listenersStaleSince) >= thresholdMs
-
-commentsStale =
-  lastCommentAt === undefined
-  || (now - lastCommentAt) >= thresholdMs
-
-browserOk =
-  (browserStateName ?? 'idle') ∈ { 'idle', 'result', 'closed' }
-
-// 評価順（早期 return）— 実装はこの順を崩さない
-function evaluateSpeechable(...): boolean {
-  if (streamStateDefined) {                    // #streamState !== undefined
-    // (1) 促し後: コメントが stale なら listeners の新鮮さに無関係に false
-    if (commentsStale && hasPrompted) {
-      return false
-    }
-    // (2) 視聴者・コメント双方 stale
-    if (listenersStale && commentsStale) {
-      return false
-    }
-  }
-  // (3) ブラウザゲートは常に最後（stream 未設定でも適用）
-  return browserOk
-}
-```
-
 **重要な優先順位**: `commentsStale && hasPrompted` は **`listenersStale` より先**に評価される。したがって:
 
 | streamStateDefined | listenersStale | commentsStale | hasPrompted | browserOk | speechable | 根拠                                        |

@@ -7,11 +7,7 @@ import {
 
 const thresholdMs = 5 * 60 * 1_000;
 
-const dateFromMs = (ms: number): Date => {
-  const date = new Date();
-  date.setTime(ms);
-  return date;
-};
+const dateFromMs = (ms: number): Date => new Date(ms);
 
 describe("evaluateSpeechable", () => {
   it("is true when not live and browser idle", () => {
