@@ -656,9 +656,6 @@ export const applyGameScreenZoom = async (
   }
 };
 
-export const applyZoomToGameScreen = applyGameScreenZoom;
-export const zoomGameScreen = applyGameScreenZoom;
-export const applyZoom = applyGameScreenZoom;
 
 export const createApplyZoom =
   (page: ZoomablePage, zoom: number = 1) =>
