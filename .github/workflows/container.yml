@@ -42,8 +42,13 @@ jobs:
 
       - name: Provision container with Ansible
         run: |
+          set -euo pipefail
           cd ansible
-          ansible-playbook -i inventory/hosts.docker.yml playbooks/2_makamujo.yml
+          ansible-playbook -i inventories/docker.yml playbooks/0_bootstrap.yml
+          ansible-playbook -i inventories/docker.yml playbooks/0_desktop.yml
+          ansible-playbook -i inventories/docker.yml playbooks/0_obs.yml
+          ansible-playbook -i inventories/docker.yml playbooks/1_bun.yml
+          ansible-playbook -i inventories/docker.yml playbooks/2_makamujo.yml
 
       - name: Verify RTMPS outbound communication is observable
         env:
