@@ -272,15 +272,26 @@ jobs:
             makamujo:/usr/local/share/ca-certificates/mediamtx-ca.crt
           docker exec makamujo update-ca-certificates
           # Flathub's OBS is built with mbedTLS. Its librtmp loads trust anchors
-          # from /etc/ssl/certs and ignores SSL_CERT_FILE, so expose the host
-          # (container) trust store to the Flatpak sandbox as well.
+          # from /etc/ssl/certs *inside its sandbox* and ignores SSL_CERT_FILE.
+          # Flatpak populates that directory from the runtime and refuses to
+          # share the host's /etc or /usr, so install the CA into the runtime's
+          # trust store directly.
+          docker exec makamujo sh -c '
+            set -eu
+            cert_dir=$(find /var/lib/flatpak/runtime /usr/share/flatpak/runtime \
+              -type d -path "*/org.freedesktop.Platform/*/files/etc/ssl/certs" \
+              2>/dev/null | head -n 1)
+            test -n "${cert_dir}" || {
+              echo "Flatpak runtime trust store not found" >&2
+              exit 1
+            }
+            cp /usr/local/share/ca-certificates/mediamtx-ca.crt \
+              "${cert_dir}/mediamtx-ca.crt"
+            ls -l "${cert_dir}/mediamtx-ca.crt"
+          '
           docker exec makamujo flatpak override --system \
-            --filesystem=/usr/local/share/ca-certificates \
-            --filesystem=/etc/ssl/certs \
             --env=SSL_CERT_FILE=/usr/local/share/ca-certificates/mediamtx-ca.crt \
             com.obsproject.Studio
-          docker exec makamujo sh -c \
-            'ls -l /etc/ssl/certs/*mediamtx* /usr/local/share/ca-certificates/mediamtx-ca.crt'
           bash tests/rtmps/configure-obs.sh makamujo
 
       - name: Run RTMPS VRT
@@ -311,6 +322,10 @@ jobs:
           docker exec makamujo flatpak override --system --show com.obsproject.Studio 2>&1 || true
           echo '== CA trust store =='
           docker exec makamujo sh -c 'ls -l /etc/ssl/certs/*mediamtx* 2>&1; cat /usr/local/share/ca-certificates/mediamtx-ca.crt 2>&1 | head -3' || true
+          echo '== CA in Flatpak sandbox =='
+          docker exec -e XDG_RUNTIME_DIR=/run/user/0 -e DISPLAY=:10 makamujo \
+            flatpak run --command=sh com.obsproject.Studio -c \
+            'ls -l /etc/ssl/certs/mediamtx-ca.crt' 2>&1 || true
           echo '== Fixture reachability =='
           docker exec makamujo python3 -c \
             'import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:8899/fixture.html", timeout=2).status)' \
