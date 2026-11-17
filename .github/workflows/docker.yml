@@ -34,11 +34,7 @@ jobs:
 
       - name: Run container
         run: |
-          set -euo pipefail
-          docker run -d --name makamujo --privileged --cgroupns=host \
-            -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
-            -p 2222:22 \
-            makamujo:prod
+          docker run -d --name makamujo --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw -p 2222:22 makamujo:prod
           for i in $(seq 1 30); do
             if docker exec makamujo pgrep -x sshd >/dev/null 2>&1; then break; fi
             sleep 2
@@ -46,9 +42,8 @@ jobs:
 
       - name: Provision container with Ansible
         run: |
-          set -euo pipefail
           cd ansible
-          ansible-playbook -i inventories/docker.yml playbooks/docker.yml
+          ansible-playbook -i inventory/hosts.docker.yml playbooks/docker.yml
 
       - name: Verify RTMPS outbound communication is observable
         env:

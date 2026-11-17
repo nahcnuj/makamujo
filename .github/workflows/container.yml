@@ -1,0 +1,56 @@
+name: Container
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12"
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+          pip install "ansible-core>=2.16,<2.19"
+
+      - name: Build Debian 13 production container
+        run: docker build -t makamujo:prod .
+
+      - name: Run container
+        run: |
+          docker run -d --name makamujo --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw -p 2222:22 makamujo:prod
+          for i in $(seq 1 30); do
+            if docker exec makamujo pgrep -x sshd >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+
+      - name: Provision container with Ansible
+        run: |
+          cd ansible
+          ansible-playbook -i inventory/hosts.docker.yml playbooks/docker.yml
+
+      - name: Verify RTMPS outbound communication is observable
+        env:
+          RTMPS_URL: rtmps://example.com:443/live/test
+          CONTAINER: makamujo
+        run: bash scripts/verify-rtmps.sh
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f makamujo || true
