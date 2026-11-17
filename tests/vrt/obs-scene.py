@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 import json
+import os
+import shutil
 import struct
+import subprocess
+import sys
 import zlib
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCENE = PROJECT_ROOT / "obs-studio" / "basic" / "scenes" / "Makamujo.json"
+OUT_FILE = Path(__file__).resolve().parent / "obs-scene.png"
 
+# Validate the OBS scene: the Display Capture must be enlarged 2x on the
+# broadcast canvas.
 with open(SCENE, encoding="utf-8") as stream:
     data = json.load(stream)
 
@@ -25,32 +32,25 @@ for item in matches:
         assert value.get("x") == 2.0, (key, value)
         assert value.get("y") == 2.0, (key, value)
 
-out_file = Path(__file__).resolve().parent / "obs-scene.png"
-# The broadcast stream is 1280x720 (16:9), not 1x1.
-width, height = 1280, 720
-# A non-empty (multi-color) frame so the VRT baseline is not a blank stream.
-raw = bytearray()
-for y in range(height):
-    raw.append(0)  # filter byte
-    for x in range(width):
-        r = (x * 255) // (width - 1) if width > 1 else 0
-        g = (y * 255) // (height - 1) if height > 1 else 0
-        raw += bytes((r, g, 128, 255))
+# Locate bun so the capture works even when PATH is not populated.
+def find_bun() -> str:
+    found = shutil.which("bun")
+    if found:
+        return found
+    for candidate in (
+        Path.home() / ".bun" / "bin" / "bun",
+        Path("/usr/local/bin/bun"),
+        Path("/opt/bun/bin/bun"),
+    ):
+        if candidate.exists():
+            return str(candidate)
+    raise SystemExit("bun executable not found")
 
-
-def chunk(chunk_type, data):
-    return (
-        struct.pack(">I", len(data))
-        + chunk_type
-        + data
-        + struct.pack(">I", zlib.crc32(chunk_type + data) & 0xFFFFFFFF)
-    )
-
-
-png = b"\x89PNG\r\n\x1a\n"
-ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
-png += chunk(b"IHDR", ihdr)
-png += chunk(b"IDAT", zlib.compress(bytes(raw)))
-png += chunk(b"IEND", b"")
-
-out_file.write_bytes(png)
+bun = find_bun()
+capture_script = PROJECT_ROOT / "scripts" / "capture-stream.ts"
+subprocess.run(
+    [bun, "run", str(capture_script), "--output", str(OUT_FILE)],
+    check=True,
+    cwd=str(PROJECT_ROOT),
+)
+print(f"obs scene capture generated: {OUT_FILE}")
