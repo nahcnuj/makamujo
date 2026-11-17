@@ -13,7 +13,7 @@ RUN apt-get update \
         systemd systemd-sysv \
         openssh-server \
         python3 \
-        iproute2 tcpdump \
+        iproute2 \
         procps dbus \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*

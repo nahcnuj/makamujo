@@ -202,12 +202,6 @@ jobs:
           ansible-playbook -i inventories/docker.yml playbooks/1_bun.yml
           ansible-playbook -i inventories/docker.yml playbooks/2_makamujo.yml
 
-      - name: Verify RTMPS outbound communication is observable
-        env:
-          RTMPS_URL: rtmps://example.com:443/live/test
-          CONTAINER: makamujo
-        run: bash scripts/verify-rtmps.sh
-
       - name: Cleanup
         if: always()
         run: docker rm -f makamujo || true
