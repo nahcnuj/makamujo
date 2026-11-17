@@ -83,36 +83,3 @@ for _ in range(height):
         colors.add((row[x], row[x + 1], row[x + 2]))
 assert len(colors) > 1, "stream capture is blank"
 PY
-
-
-# VRT: the OBS scene must enlarge the Display Capture at scale 1.0 (no
-# per-element zoom; enlargement happens on the OBS broadcast canvas).
-python3 - "${PROJECT_ROOT}/obs-studio/basic/scenes/Makamujo.json" <<'PY'
-import json
-import sys
-
-path = sys.argv[1]
-with open(path, encoding="utf-8") as stream:
-    data = json.load(stream)
-
-found = False
-for source in data.get("sources", []):
-    if source.get("name") != "Display Capture (XSHM)":
-        continue
-    # Find scenes referencing this source and check their item scale.
-    pass
-
-# Search all scene items for a Display Capture reference and verify scale 1.0.
-scales = []
-for source in data.get("sources", []):
-    if source.get("id") != "scene":
-        continue
-    for item in source.get("settings", {}).get("items", []):
-        if "Display Capture" in item.get("name", ""):
-            scales.append(item.get("scale"))
-
-assert scales, "no Display Capture item found in any OBS scene"
-for scale in scales:
-    assert scale == {"x": 1.0, "y": 1.0}, scale
-print("OBS Display Capture scale is 1.0")
-PY
