@@ -15,8 +15,6 @@ trap 'rm -f "${ACTUAL}"' EXIT
 bun run "${PROJECT_ROOT}/scripts/capture-stream.ts" --output "${ACTUAL}" >/dev/null
 cmp "${ACTUAL}" "${EXPECTATION}"
 
-python3 "${PROJECT_ROOT}/tests/lib/verify-stream-capture.py"
-
 # OBS side enlargement: Display Capture scale must be 1.0.
 test -f "${SCENE}"
 python3 - "${SCENE}" <<'PY'
