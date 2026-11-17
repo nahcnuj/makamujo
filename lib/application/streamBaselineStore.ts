@@ -31,8 +31,7 @@ export type StreamBaseline = {
   /**
    * When the last comment was received, surviving process restarts so the
    * 5-minute silence threshold is not reset on restart.
-   * Persisted as a Date (ISO string in JSON); legacy numeric (epoch ms) or
-   * string values are coerced to a Date on load.
+   * Persisted as a Date (ISO string in JSON).
    */
   lastCommentAt?: Date;
   /** Retained watch page statistics from the previous session, surviving restarts. */
@@ -53,23 +52,11 @@ export const toDate = (value: unknown): Date | undefined => {
   if (value instanceof Date) {
     return Number.isFinite(value.getTime()) ? new Date(value) : undefined;
   }
-  if (typeof value === "number") {
-    if (!Number.isFinite(value) || value < 0) return undefined;
-    const date = new Date();
-    date.setTime(value);
-    return date;
-  }
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (trimmed.length === 0) return undefined;
     const parsed = new Date(trimmed);
     if (Number.isFinite(parsed.getTime())) return parsed;
-    const numeric = Number(trimmed);
-    if (Number.isFinite(numeric) && numeric >= 0) {
-      const date = new Date();
-      date.setTime(numeric);
-      return date;
-    }
     return undefined;
   }
   return undefined;

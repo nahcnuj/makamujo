@@ -341,24 +341,13 @@ describe("recoverLastCommentAt", () => {
 
   it("skips records with non-date at values", () => {
     const dir = commentsDir();
-    const valid = 1_700_000_000_000;
+    const valid = new Date(2023, 10, 14, 22, 14, 20, 0);
     writeFileSync(
       join(dir, "mixed.jsonl"),
-      `${JSON.stringify({ no: 1, at: "not-a-date" })}\n${JSON.stringify({ no: 2, at: valid })}\n`,
+      `${JSON.stringify({ no: 1, at: "not-a-date" })}\n${JSON.stringify({ no: 2, at: valid.toISOString() })}\n`,
       "utf8",
     );
-    expect(recoverLastCommentAt(dir)?.getTime()).toBe(valid);
-  });
-
-  it("also accepts numeric epoch ms at values", () => {
-    const dir = commentsDir();
-    const ms = 1_700_000_000_000;
-    writeFileSync(
-      join(dir, "numeric.jsonl"),
-      `${JSON.stringify({ no: 1, at: ms })}\n`,
-      "utf8",
-    );
-    expect(recoverLastCommentAt(dir)?.getTime()).toBe(ms);
+    expect(recoverLastCommentAt(dir)?.getTime()).toBe(valid.getTime());
   });
 });
 
