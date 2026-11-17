@@ -161,9 +161,6 @@ dist/
 .commit-msg
 .c.commit-msg
 
-# actual captures
-tests/vrt/**/.png
+# actual captures (the committed RTMPS baseline is the only VRT image in git)
 tests/vrt-rtmps/*.png
-# baseline files are excluded
-!tests/vrt/baseline/*.png
 !tests/vrt-rtmps/baseline/*.png

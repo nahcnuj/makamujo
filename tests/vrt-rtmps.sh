@@ -24,20 +24,21 @@ for case_file in "${vrt_dir}"/*; do
   case "${case_file}" in
     *.png|*.jpg|*.jpeg|*.html) continue ;;
   esac
-  if [ -x "${case_file}" ]; then
-    "${case_file}" || status=1
-    cases_executed=$((cases_executed + 1))
-  elif [[ "${case_file}" == *.sh ]]; then
-    bash "${case_file}" || status=1
-    cases_executed=$((cases_executed + 1))
-  else
-    continue
-  fi
 
   base=$(basename "${case_file}")
   stem=${base%.*}
   actual="${vrt_dir}/${stem}.png"
   baseline="${baseline_dir}/${stem}.png"
+
+  if [ -x "${case_file}" ]; then
+    "${case_file}" "${actual}" || status=1
+    cases_executed=$((cases_executed + 1))
+  elif [[ "${case_file}" == *.sh ]]; then
+    bash "${case_file}" "${actual}" || status=1
+    cases_executed=$((cases_executed + 1))
+  else
+    continue
+  fi
 
   if [ ! -f "${actual}" ]; then
     echo "VRT: missing actual output for ${stem} (${actual})" >&2

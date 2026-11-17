@@ -9,7 +9,7 @@ set -euo pipefail
 project_root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "${project_root}"
 
-out_file="$(dirname "$0")/capture-rtmps.png"
+out_file=${1:-"$(dirname "$0")/capture-rtmps.png"}
 stream_url=${RTMPS_CAPTURE_URL:-rtmps://127.0.0.1:1936/live/stream}
 
 # The regression must exercise the encrypted RTMPS path. A plain RTMP URL or a
