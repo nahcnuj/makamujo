@@ -38,7 +38,7 @@ const html = `\
     height: ${HEIGHT}px;
     overflow: hidden;
     background: #000;
-    font-family: 'Noto Sans JP', 'Noto Sans Math', 'Noto Sans CJK JP', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+    font-family: 'Noto Sans JP', 'Noto Sans CJK JP', 'Hiragino Sans', 'Yu Gothic', sans-serif;
     color: #ecfdf5;
   }
   .container {

@@ -21,10 +21,7 @@ const ensureJapaneseFonts = () => {
   // `grep -q` exits with 0 when a match is found.
   const fontCheckResult = spawnSync(
     "bash",
-    [
-      "-lc",
-      "fc-list :lang=ja | grep -qi 'Noto Sans CJK' && fc-list | grep -qi 'Noto Sans Math'",
-    ],
+    ["-lc", "fc-list :lang=ja | grep -qi 'Noto Sans CJK'"],
     {
       stdio: "ignore",
     },
@@ -35,15 +32,12 @@ const ensureJapaneseFonts = () => {
 
   const installResult = spawnSync(
     "bash",
-    [
-      "-lc",
-      "sudo apt-get update && sudo apt-get install -y fonts-noto-cjk fonts-noto-core",
-    ],
+    ["-lc", "sudo apt-get update && sudo apt-get install -y fonts-noto-cjk"],
     { stdio: "inherit" },
   );
   if (installResult.status !== 0) {
     throw new Error(
-      "日本語フォントの導入に失敗しました。`sudo apt-get install -y fonts-noto-cjk fonts-noto-core` を実行してください。",
+      "日本語フォントの導入に失敗しました。`sudo apt-get install -y fonts-noto-cjk` を実行してください。",
     );
   }
 };
