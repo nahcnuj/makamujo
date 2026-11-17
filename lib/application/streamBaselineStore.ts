@@ -28,6 +28,12 @@ export type StreamBaseline = {
   currentProgramUrl?: string;
   /** Last observed comment number of the active program. */
   currentProgramLatestCommentNo: number;
+  /**
+   * When the last comment was received, surviving process restarts so the
+   * 5-minute silence threshold is not reset on restart.
+   * Persisted as a Date (ISO string in JSON).
+   */
+  lastCommentAt?: Date;
   /** Retained watch page statistics from the previous session, surviving restarts. */
   retainedStatistics?: DisplayedStatistics | undefined;
 };
@@ -37,6 +43,23 @@ const toNonNegativeInteger = (value: unknown): number | undefined => {
   if (!Number.isFinite(value)) return undefined;
   if (!Number.isInteger(value)) return undefined;
   return value >= 0 ? value : undefined;
+};
+
+export const toDate = (value: unknown): Date | undefined => {
+  if (value === null || value === undefined || typeof value === "boolean") {
+    return undefined;
+  }
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? new Date(value) : undefined;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return undefined;
+    const parsed = new Date(trimmed);
+    if (Number.isFinite(parsed.getTime())) return parsed;
+    return undefined;
+  }
+  return undefined;
 };
 
 /**
@@ -59,6 +82,7 @@ export const parseStreamBaseline = (raw: unknown): StreamBaseline => {
         : undefined,
     currentProgramLatestCommentNo:
       toNonNegativeInteger(record?.currentProgramLatestCommentNo) ?? 0,
+    lastCommentAt: toDate(record?.lastCommentAt),
     retainedStatistics:
       record?.retainedStatistics &&
       typeof record.retainedStatistics === "object"
@@ -197,18 +221,70 @@ export const recoverPreviousStreamCommentCount = (
  * Load the baseline, then fill in a missing `previousStreamCommentCount` from
  * recorded comments. An already-persisted non-zero count is never overwritten.
  */
+export const recoverLastCommentAt = (commentsDir: string): Date | undefined => {
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(commentsDir, { withFileTypes: true });
+  } catch {
+    return undefined;
+  }
+  let latest: Date | undefined;
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
+    let content: string;
+    try {
+      content = readFileSync(join(commentsDir, entry.name), "utf8");
+    } catch {
+      // Skip unreadable record files; best-effort recovery.
+      continue;
+    }
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      let at: unknown;
+      try {
+        at = (JSON.parse(trimmed) as { at?: unknown }).at;
+      } catch {
+        continue;
+      }
+      const candidate = toDate(at);
+      if (
+        candidate !== undefined &&
+        (latest === undefined || candidate.getTime() > latest.getTime())
+      ) {
+        latest = candidate;
+      }
+    }
+  }
+  return latest;
+};
+
 export const loadStreamBaselineWithRecovery = (
   baselinePath: string,
   commentsDir: string,
 ): StreamBaseline => {
   const baseline = loadStreamBaseline(baselinePath);
-  if (baseline.previousStreamCommentCount > 0) return baseline;
-  const recovered = recoverPreviousStreamCommentCount(
-    commentsDir,
-    baseline.currentProgramUrl,
-  );
-  if (recovered > 0) {
-    return { ...baseline, previousStreamCommentCount: recovered };
+  let result = baseline;
+  if (baseline.previousStreamCommentCount === 0) {
+    const recovered = recoverPreviousStreamCommentCount(
+      commentsDir,
+      baseline.currentProgramUrl,
+    );
+    if (recovered > 0) {
+      result = { ...result, previousStreamCommentCount: recovered };
+    }
   }
-  return baseline;
+  // Recover the latest comment timestamp from recorded comments, even when the
+  // baseline already carries a (possibly stale) value: a restart may have
+  // persisted an older timestamp, and using only the stale value would make the
+  // 5-minute silence window expire too early. Take the later of the two.
+  const recoveredLastCommentAt = recoverLastCommentAt(commentsDir);
+  if (
+    recoveredLastCommentAt !== undefined &&
+    (result.lastCommentAt === undefined ||
+      recoveredLastCommentAt.getTime() > result.lastCommentAt.getTime())
+  ) {
+    result = { ...result, lastCommentAt: recoveredLastCommentAt };
+  }
+  return result;
 };

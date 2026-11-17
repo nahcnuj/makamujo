@@ -1,18 +1,15 @@
 # Reproduce the production makamujo streaming server in a Debian 13 (trixie) container.
-# Base image tags: debian:13, debian:trixie
 FROM debian:trixie
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# systemd as PID 1 so the production units (makamujo.service, ...) can run.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         systemd systemd-sysv \
         openssh-server \
-        unzip \
-        python3 python3-pip \
-        ansible \
+        python3 \
         curl ca-certificates git \
+        unzip \
         iproute2 tcpdump \
         procps \
     && apt-get clean \
@@ -22,19 +19,12 @@ RUN apt-get update \
 RUN curl -fsSL https://bun.sh/install | bash \
     && ln -s /root/.bun/bin/bun /usr/local/bin/bun
 
-# Application tree.
 WORKDIR /opt/src/makamujo
 COPY . /opt/src/makamujo
 
-# Allow Ansible to connect locally.
 RUN mkdir -p /run/sshd \
     && echo 'root:root' | chpasswd \
     && sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
-
-# Provision the container like production using Ansible.
-COPY ansible /opt/src/makamujo/ansible
-RUN cd /opt/src/makamujo/ansible \
-    && ansible-playbook -i 'localhost,' -c local playbooks/0_bootstrap.yml || true
 
 EXPOSE 22 7777 8777 443
 

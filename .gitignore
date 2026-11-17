@@ -160,3 +160,8 @@ dist/
 # Driver commit message artifact (never commit)
 .commit-msg
 .c.commit-msg
+
+# actual captures
+tests/vrt/**/.png
+# baseline files are excluded
+!tests/vrt/baseline/*.png
