@@ -656,7 +656,6 @@ export const applyGameScreenZoom = async (
   }
 };
 
-
 export const createApplyZoom =
   (page: ZoomablePage, zoom: number = 1) =>
   async (): Promise<void> => {
