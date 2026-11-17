@@ -630,7 +630,6 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
  * document stays at 1.0 and OBS handles enlarging the game screen on the
  * broadcast canvas.
  */
-
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
   zoom: number = 1,
