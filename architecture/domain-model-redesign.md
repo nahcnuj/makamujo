@@ -453,7 +453,7 @@ listenersStale =
 
 commentsStale =
   lastCommentAt === undefined
-  || (now - lastCommentAt.getTime()) >= thresholdMs
+  || (now - lastCommentAt) >= thresholdMs
 
 browserOk =
   (browserStateName ?? 'idle') ∈ { 'idle', 'result', 'closed' }
