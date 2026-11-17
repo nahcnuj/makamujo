@@ -68,9 +68,8 @@ export class StreamApplicationService {
             this.#session.lastListenerCount = listeners;
             this.#session.listenersStaleSince = new Date(Date.now());
             const now = Date.now();
-            const lastCommentAtMs = this.#session.lastCommentAt?.getTime();
             const commentsStale = isCommentsStale(
-              lastCommentAtMs,
+              this.#session.lastCommentAt,
               now,
               this.#silenceThresholdMs,
             );

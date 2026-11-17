@@ -5,7 +5,7 @@ export const SPEECHABLE_BROWSER_STATES = ["idle", "result", "closed"] as const;
 export type SilenceClockInput = {
   /** When stream is offline / not live, pass undefined to skip silence gates. */
   streamLive: boolean;
-  lastCommentAt: number | undefined;
+  lastCommentAt: Date | undefined;
   listenersStaleSince: Date | undefined;
   hasPromptedCommentForViewerIncrease: boolean;
   browserStateName: string | undefined;
@@ -25,7 +25,7 @@ export const evaluateSpeechable = (input: SilenceClockInput): boolean => {
   if (input.streamLive) {
     const commentsStale =
       input.lastCommentAt === undefined ||
-      input.nowMs - input.lastCommentAt >= input.thresholdMs;
+      input.nowMs - input.lastCommentAt.getTime() >= input.thresholdMs;
 
     if (commentsStale) {
       return false;
@@ -54,9 +54,12 @@ export const shouldPromptCommentAfterViewerIncrease = (
 };
 
 export const isCommentsStale = (
-  lastCommentAt: number | undefined,
+  lastCommentAt: Date | undefined,
   nowMs: number,
   thresholdMs: number,
 ): boolean => {
-  return lastCommentAt === undefined || nowMs - lastCommentAt >= thresholdMs;
+  return (
+    lastCommentAt === undefined ||
+    nowMs - lastCommentAt.getTime() >= thresholdMs
+  );
 };

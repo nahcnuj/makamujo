@@ -27,7 +27,7 @@ describe("evaluateSpeechable", () => {
     expect(
       evaluateSpeechable({
         streamLive: true,
-        lastCommentAt: nowMs - thresholdMs - 1,
+        lastCommentAt: new Date(nowMs - thresholdMs - 1),
         listenersStaleSince: new Date(nowMs), // fresh listeners
         hasPromptedCommentForViewerIncrease: false,
         browserStateName: "idle",
@@ -42,7 +42,7 @@ describe("evaluateSpeechable", () => {
     expect(
       evaluateSpeechable({
         streamLive: true,
-        lastCommentAt: nowMs - thresholdMs - 1,
+        lastCommentAt: new Date(nowMs - thresholdMs - 1),
         listenersStaleSince: new Date(nowMs),
         hasPromptedCommentForViewerIncrease: true,
         browserStateName: "idle",
@@ -57,7 +57,7 @@ describe("evaluateSpeechable", () => {
     expect(
       evaluateSpeechable({
         streamLive: true,
-        lastCommentAt: nowMs - thresholdMs - 1,
+        lastCommentAt: new Date(nowMs - thresholdMs - 1),
         listenersStaleSince: new Date(nowMs - thresholdMs - 1),
         hasPromptedCommentForViewerIncrease: false,
         browserStateName: "idle",
@@ -72,7 +72,7 @@ describe("evaluateSpeechable", () => {
     expect(
       evaluateSpeechable({
         streamLive: true,
-        lastCommentAt: nowMs - 1_000,
+        lastCommentAt: new Date(nowMs - 1_000),
         listenersStaleSince: new Date(nowMs - thresholdMs - 1),
         hasPromptedCommentForViewerIncrease: false,
         browserStateName: "idle",
@@ -87,7 +87,7 @@ describe("evaluateSpeechable", () => {
     expect(
       evaluateSpeechable({
         streamLive: true,
-        lastCommentAt: nowMs,
+        lastCommentAt: new Date(nowMs),
         listenersStaleSince: new Date(nowMs),
         hasPromptedCommentForViewerIncrease: false,
         browserStateName: "loading",

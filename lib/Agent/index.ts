@@ -241,7 +241,7 @@ export class MakaMujo {
     const session = this.#session;
     return evaluateSpeechable({
       streamLive: session.streamState !== undefined,
-      lastCommentAt: session.lastCommentAt?.getTime(),
+      lastCommentAt: session.lastCommentAt,
       listenersStaleSince: session.listenersStaleSince,
       hasPromptedCommentForViewerIncrease:
         session.hasPromptedCommentForViewerIncrease,
