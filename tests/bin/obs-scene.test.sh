@@ -3,8 +3,6 @@ set -euo pipefail
 
 PROJECT_ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 EXPECTATION="${PROJECT_ROOT}/tests/fixtures/vrt-screenshots/stream-capture.png"
-SCENE="${PROJECT_ROOT}/obs-studio/basic/scenes/Makamujo.json"
-
 # The committed broadcast capture must stay byte-identical so
 # regressions in the broadcast image are detected.
 test -f "${EXPECTATION}"
