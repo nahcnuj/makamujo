@@ -27,8 +27,9 @@ for item in matches:
         assert value.get("y") == 2.0, (key, value)
 
 out_file = Path(__file__).resolve().parent / "obs-scene.png"
-width, height = 1, 1
-raw = b"\x00" + b"\x00\x00\x00\x00"
+# The broadcast stream is 1280x720 (16:9), not 1x1.
+width, height = 1280, 720
+raw = b"".join(b"\x00" + b"\x00" * (width * 4) for _ in range(height))
 
 
 def chunk(chunk_type, data):
