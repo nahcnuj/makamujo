@@ -24,7 +24,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install Ansible
-        run: pip install "ansible-core>=2.16,<2.19"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+          pip install "ansible-core>=2.16,<2.19"
 
       - name: Build Debian 13 production container
         run: docker build -t makamujo:prod .
@@ -45,7 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           cd ansible
-          ansible-playbook -i docker-inventory.yml playbooks/docker.yml
+          ansible-playbook -i inventories/docker.yml playbooks/docker.yml
 
       - name: Verify RTMPS outbound communication is observable
         env:
