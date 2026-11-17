@@ -274,43 +274,6 @@ jobs:
           ansible-playbook -i inventories/docker.yml playbooks/1_bun.yml
           ansible-playbook -i inventories/docker.yml playbooks/2_makamujo.yml
 
-      - name: Point OBS at the RTMPS server
-        run: |
-          set -euo pipefail
-          docker cp "${RUNNER_TEMP}/certs/ca.pem" \
-            makamujo:/usr/local/share/ca-certificates/mediamtx-ca.crt
-          docker exec makamujo update-ca-certificates
-          # Flathub's OBS is built with mbedTLS. Its librtmp loads trust anchors
-          # from /etc/ssl/certs *inside its sandbox* and ignores SSL_CERT_FILE.
-          # Flatpak populates that directory from the runtime and refuses to
-          # share the host's /etc or /usr, so install the CA into the runtime's
-          # trust store directly.
-          docker exec makamujo sh -c '
-            set -eu
-            runtime_ref=$(flatpak info --show-runtime com.obsproject.Studio)
-            runtime_dir=$(flatpak info --show-location "${runtime_ref}")
-            echo "Flatpak runtime: ${runtime_ref} at ${runtime_dir}"
-            cert_dir="${runtime_dir}/files/etc/ssl/certs"
-            if [ ! -d "${cert_dir}" ]; then
-              cert_dir="${runtime_dir}/files/usr/etc/ssl/certs"
-            fi
-            if [ ! -d "${cert_dir}" ]; then
-              bundle=$(find "${runtime_dir}" -name ca-certificates.crt -print 2>/dev/null | head -n 1 || true)
-              cert_dir=$(dirname "${bundle:-/nonexistent}")
-            fi
-            test -d "${cert_dir}" || {
-              echo "Flatpak runtime trust store not found" >&2
-              exit 1
-            }
-            cp /usr/local/share/ca-certificates/mediamtx-ca.crt \
-              "${cert_dir}/mediamtx-ca.crt"
-            ls -l "${cert_dir}/mediamtx-ca.crt"
-          '
-          docker exec makamujo flatpak override --system \
-            --env=SSL_CERT_FILE=/usr/local/share/ca-certificates/mediamtx-ca.crt \
-            com.obsproject.Studio
-          bash tests/rtmps/configure-obs.sh makamujo
-
       - name: Run RTMPS VRT
         run: bash tests/vrt-rtmps.sh
 
