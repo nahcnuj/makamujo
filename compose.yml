@@ -1,8 +1,8 @@
 # Reproduce the production streaming stack with Docker Compose.
 # The makamujo service is provisioned from the host by the same Ansible
-# playbooks used for the VPS; mediamtx is the RTMPS endpoint on the shared
-# Docker network. The optional vrt service captures the published stream from
-# inside that network and compares it with the committed baseline.
+# playbooks used for the VPS; mediamtx is the RTMPS endpoint. Services share
+# the default Compose network. The optional vrt service captures the published
+# stream from inside that network and compares it with the committed baseline.
 services:
   makamujo:
     build:
@@ -16,8 +16,12 @@ services:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     ports:
       - "2222:22"
-    networks:
-      - makamujo
+    healthcheck:
+      test: ["CMD", "pgrep", "-x", "sshd"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
     command: ["/sbin/init"]
 
   mediamtx:
@@ -28,8 +32,6 @@ services:
       - ${RTMPS_CERTS_DIR:-/tmp/makamujo-rtmps-certs}:/certs:ro
     ports:
       - "1936:1936"
-    networks:
-      - makamujo
 
   vrt:
     image: debian:trixie
@@ -37,8 +39,6 @@ services:
     profiles: [vrt]
     depends_on:
       - mediamtx
-    networks:
-      - makamujo
     volumes:
       - .:/work
       - ${RTMPS_CERTS_DIR:-/tmp/makamujo-rtmps-certs}/ca.pem:/usr/local/share/ca-certificates/mediamtx-ca.crt:ro
@@ -54,7 +54,3 @@ services:
         update-ca-certificates
         cd /work
         bash tests/vrt-rtmps.sh
-
-networks:
-  makamujo:
-    name: makamujo
