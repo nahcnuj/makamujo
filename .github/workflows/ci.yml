@@ -175,11 +175,49 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install tools
+      - name: Resolve provisioned-image cache key
+        id: provisioned-image-key
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends openssl sshpass ffmpeg
+          main_sha=$(git ls-remote https://github.com/nahcnuj/makamujo.git refs/heads/main | awk '{print $1}')
+          echo "main_sha=${main_sha}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore provisioned image from cache
+        id: provisioned-image-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: makamujo-provisioned.tar
+          key: makamujo-provisioned-${{ steps.provisioned-image-key.outputs.main_sha }}-${{ hashFiles('Dockerfile', 'ansible/**', 'compose.yml', 'bin/**', 'etc/**') }}
+
+      - name: Load provisioned image (if cached)
+        if: steps.provisioned-image-cache.outputs.cache-hit == 'true'
+        run: |
+          set -euo pipefail
+          docker load -i makamujo-provisioned.tar
+
+      - name: Cache ffmpeg binary
+        id: ffmpeg-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/ffmpeg-bin
+          key: ffmpeg-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Install ffmpeg (for VRT frame comparison)
+        run: |
+          set -euo pipefail
+          if [ -x "${HOME}/.cache/ffmpeg-bin/ffmpeg" ] && "${HOME}/.cache/ffmpeg-bin/ffmpeg" -version >/dev/null 2>&1; then
+            sudo install -m 0755 "${HOME}/.cache/ffmpeg-bin/ffmpeg" /usr/local/bin/ffmpeg
+          elif ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ffmpeg
+            mkdir -p "${HOME}/.cache/ffmpeg-bin"
+            cp "$(command -v ffmpeg)" "${HOME}/.cache/ffmpeg-bin/ffmpeg"
+          fi
+
+      - name: Install Ansible (for provisioning, cache-miss only)
+        if: steps.provisioned-image-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
           pip install -r ansible/requirements.txt
 
       - name: Prepare RTMPS certificates
@@ -233,6 +271,7 @@ jobs:
           docker compose up -d --wait --wait-timeout 120 makamujo mediamtx
 
       - name: Provision the container with Ansible
+        if: steps.provisioned-image-cache.outputs.cache-hit != 'true'
         working-directory: ansible
         run: |
           set -euo pipefail
@@ -242,13 +281,31 @@ jobs:
           ansible-playbook -i inventories/docker.yml playbooks/1_bun.yml
           ansible-playbook -i inventories/docker.yml playbooks/2_makamujo.yml
 
+      - name: Commit provisioned container to a cacheable image
+        if: steps.provisioned-image-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          docker commit makamujo makamujo:prod
+          docker save makamujo:prod -o makamujo-provisioned.tar
+
+      - name: Save provisioned image to cache
+        if: steps.provisioned-image-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: makamujo-provisioned.tar
+          key: makamujo-provisioned-${{ steps.provisioned-image-key.outputs.main_sha }}-${{ hashFiles('Dockerfile', 'ansible/**', 'compose.yml', 'bin/**', 'etc/**') }}
+
+      - name: Trust the RTMPS CA inside the container
+        run: |
+          set -euo pipefail
+          docker compose exec -T makamujo sh -c 'cat > /usr/local/share/ca-certificates/mediamtx-ca.crt && update-ca-certificates' < "${RTMPS_CERTS_DIR}/ca.pem"
+
       - name: Point the reproduced OBS at the local RTMPS endpoint
         run: |
           set -euo pipefail
           rtmps_url=rtmps://mediamtx:1936/live/stream
 
-          # The CA is baked into the image trust store (see Dockerfile). OBS
-          # (Flatpak) also needs it in its own runtime trust store.
+          # OBS (Flatpak) needs the per-run CA in its own runtime trust store.
           docker compose exec -T makamujo sh -c '
             set -eu
             runtime_ref=$(flatpak info --show-runtime com.obsproject.Studio)
@@ -320,9 +377,10 @@ jobs:
           exit 1
 
       - name: Run RTMPS VRT against mediamtx
-        run: |
-          set -euo pipefail
-          RTMPS_CAPTURE_URL=rtmps://localhost:1936/live/stream bash tests/vrt-rtmps.sh
+        env:
+          RTMPS_VRT_MIN_SSIM: ${{ vars.RTMPS_VRT_MIN_SSIM }}
+          RTMPS_CAPTURE_URL: "rtmps://localhost:1936/live/stream"
+        run: bash tests/vrt-rtmps.sh
 
       - name: Upload captured VRT images
         if: failure()
@@ -334,5 +392,5 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          rm -f "${GITHUB_WORKSPACE}/ca.pem"
+          rm -f "${GITHUB_WORKSPACE}/ca.pem" makamujo-provisioned.tar
           docker compose down -v --remove-orphans || true
