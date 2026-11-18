@@ -406,6 +406,45 @@ export const create = async (
       throw err;
     });
 
+  // Inject the broadcast layout CSS as early as possible on every navigation
+  // so the game container is pinned to the top-left and the page background
+  // is black even when the later applyZoom() call races the initial load.
+  await ctx.addInitScript(() => {
+    const inject = () => {
+      try {
+        const styleId = "makamujo-broadcast-layout";
+        let style = document.getElementById(styleId) as HTMLStyleElement | null;
+        if (!style) {
+          style = document.createElement("style");
+          style.id = styleId;
+          (document.head ?? document.documentElement).appendChild(style);
+        }
+        style.textContent = [
+          "html,body{background:#000!important;margin:0!important;padding:0!important}",
+          "body{display:block!important;text-align:left!important}",
+          "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
+          "#play-layout{display:block!important;text-align:left!important}",
+          "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
+          "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
+        ].join("\n");
+        document.documentElement.style.zoom = "1.0";
+        if (
+          typeof window !== "undefined" &&
+          typeof window.scrollTo === "function"
+        ) {
+          window.scrollTo(0, 0);
+        }
+      } catch {
+        /* page may not be ready */
+      }
+    };
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", inject, { once: true });
+    } else {
+      inject();
+    }
+  });
+
   // Reuse --app window only (do not open a second tabbed window)
   let page = ctx.pages()[0];
   if (!page) {
@@ -453,10 +492,16 @@ export const create = async (
   const applyZoom = async (factor: number) => {
     await applyGameScreenZoom(page, factor);
   };
-  await applyZoom(options.gameScreenZoom ?? 1);
+  // Register the load handler before the initial call so a load that fires
+  // during/after the first applyZoom() still re-applies the broadcast layout.
   page.on("load", () => {
     void applyZoom(options.gameScreenZoom ?? 1);
   });
+  await applyZoom(options.gameScreenZoom ?? 1);
+  // Re-apply shortly after launch in case the initial call raced the load.
+  globalThis.setTimeout(() => {
+    void applyZoom(options.gameScreenZoom ?? 1);
+  }, 2000);
 
   page.on(
     "framenavigated",
