@@ -195,11 +195,13 @@ jobs:
           set -euo pipefail
           docker load -i makamujo-provisioned.tar
 
-      - name: Install tools
-        if: steps.provisioned-image-cache.outputs.cache-hit != 'true'
+      - name: Install ffmpeg (for VRT frame comparison)
         run: |
           set -euo pipefail
-          pip install -r ansible/requirements.txt
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
 
       - name: Prepare RTMPS certificates
         run: |
