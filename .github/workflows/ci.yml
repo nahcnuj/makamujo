@@ -270,7 +270,7 @@ jobs:
               "${cert_dir}/mediamtx-ca.crt"
           '
           docker compose exec -T makamujo flatpak override --system \
-            --env=SSL_CERT_FILE=/usr/local/share/ca-certificates/mediamtx-ca.crt \
+            --env=SSL_CERT_FILE=/etc/ssl/certs/mediamtx-ca.crt \
             com.obsproject.Studio
 
           # OBS rewrites its profile on exit, so stop it before touching the
