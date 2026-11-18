@@ -246,7 +246,6 @@ jobs:
         run: |
           set -euo pipefail
           rtmps_url=rtmps://mediamtx:1936/live/stream
-          game_url=https://www.nahcnuj.work/vigilant-fiesta/
 
           # The CA is baked into the image trust store (see Dockerfile). OBS
           # (Flatpak) also needs it in its own runtime trust store.
@@ -274,19 +273,19 @@ jobs:
             com.obsproject.Studio
 
           # OBS rewrites its profile on exit, so stop it before touching the
-          # files on disk. Only the local streaming endpoint and the VRT view
-          # of the real game page are overridden; encoding and the rest of the
-          # deployed profile stay untouched.
+          # files on disk. Only the local RTMPS streaming endpoint is
+          # overridden; the deployed profile (including the makamujo overlay
+          # page served on 127.0.0.1:7777) stays untouched so the capture
+          # exercises the reproduced makamujo instance.
           docker compose exec -T makamujo systemctl stop makamujo-obs.service
-          docker compose exec -T makamujo python3 - "${rtmps_url}" "${game_url}" <<'PY'
+          docker compose exec -T makamujo python3 - "${rtmps_url}" <<'PY'
           import json
           import sys
           from pathlib import Path
           from urllib.parse import urlsplit
 
-          rtmps_url, game_url = sys.argv[1:3]
+          rtmps_url = sys.argv[1]
           service_path = Path("/opt/src/makamujo/obs-studio/basic/profiles/Makamujo/service.json")
-          scene_path = Path("/opt/src/makamujo/obs-studio/basic/scenes/Makamujo.json")
 
           url = urlsplit(rtmps_url)
           stream_key = url.path.rstrip("/").rsplit("/", 1)[-1]
@@ -302,14 +301,6 @@ jobs:
           service_path.write_text(
               json.dumps(service, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
           )
-
-          scene = json.loads(scene_path.read_text(encoding="utf-8"))
-          for source in scene.get("sources", []):
-              if source.get("name") == "Comment":
-                  source.setdefault("settings", {})["url"] = game_url
-          scene_path.write_text(
-              json.dumps(scene, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-          )
           PY
           # systemctl start waits for readiness only for units that can report it
           # (Type=notify sends READY=1, Type=dbus waits for the bus name). For
@@ -318,7 +309,7 @@ jobs:
           docker compose exec -T makamujo systemctl start makamujo-obs.service
           for _ in $(seq 1 30); do
             if docker compose exec -T makamujo systemctl is-active --quiet makamujo-obs.service; then
-              echo "OBS is streaming vigilant-fiesta (${game_url}) to ${rtmps_url}"
+              echo "OBS is streaming makamujo to ${rtmps_url}"
               exit 0
             fi
             sleep 1
