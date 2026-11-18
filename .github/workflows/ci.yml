@@ -303,9 +303,10 @@ jobs:
           )
           PY
           # `systemctl start --wait` waits for the unit to *stop* again, not for
-          # readiness, so it is not usable for a long-running Type=simple unit.
-          # `systemctl start` returns once the unit is activated (for Type=simple
-          # that is right after fork); poll is-active to wait for readiness.
+          # readiness, so it is not usable for a long-running unit. `systemctl
+          # start` returns once the unit is activated (for Type=simple that is
+          # right after fork; other types also return after activation, not
+          # readiness); poll is-active to wait for readiness.
           docker compose exec -T makamujo systemctl start makamujo-obs.service
           for _ in $(seq 1 30); do
             if docker compose exec -T makamujo systemctl is-active --quiet makamujo-obs.service; then
