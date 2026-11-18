@@ -221,7 +221,6 @@ jobs:
           # The makamujo service has an sshd healthcheck in compose.yml, so wait
           # for it to become healthy instead of polling pgrep manually.
           docker compose up -d --wait --wait-timeout 120 makamujo mediamtx
-          docker compose logs mediamtx
 
       - name: Provision the container with Ansible
         working-directory: ansible
