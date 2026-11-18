@@ -1,7 +1,10 @@
 # RTMPS endpoint used by the Docker Compose VRT stack. The certificate and key
 # are mounted from RTMPS_CERTS_DIR by compose.yml.
-# Only settings that differ from MediaMTX defaults are overridden here: strict
-# RTMPS encryption plus the mounted certificate/key paths.
 rtmpEncryption: strict
 rtmpServerKey: /certs/key.pem
 rtmpServerCert: /certs/cert.pem
+
+# Allow publishing/reading any path (MediaMTX default). Without this, a custom
+# config file replaces the default `paths: all:` and rejects every stream.
+paths:
+  all:

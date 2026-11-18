@@ -306,17 +306,6 @@ jobs:
               json.dumps(service, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
           )
 
-          # Show the real game page in a fixed 1280x720 viewport and hide only
-          # dynamic ad slots. The committed VRT baseline was captured with the
-          # same view; without this, full-scene overlays and ads make SSIM
-          # fluctuate on every CI run.
-          vrt_css = " ".join(
-              [
-                  "#ad-side-left, #ad-side-right, .ad-slot, ins.adsbygoogle { display: none !important; }",
-                  "html, body { width: 1280px !important; height: 720px !important; overflow: hidden !important; }",
-              ]
-          )
-
           scene = json.loads(scene_path.read_text(encoding="utf-8"))
           for source in scene.get("sources", []):
               if source.get("id") == "scene":
@@ -325,11 +314,7 @@ jobs:
                   continue
               source["enabled"] = source.get("name") == "Comment"
               if source.get("name") == "Comment":
-                  source_settings = source.setdefault("settings", {})
-                  source_settings["url"] = game_url
-                  source_settings["fps"] = 30
-                  source_settings["fps_custom"] = True
-                  source_settings["css"] = vrt_css
+                  source.setdefault("settings", {})["url"] = game_url
                   source.pop("filters", None)
           scene_path.write_text(
               json.dumps(scene, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
