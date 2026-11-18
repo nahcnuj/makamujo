@@ -215,6 +215,12 @@ jobs:
             -out "${cert_dir}/cert.pem" \
             -extfile "${cert_dir}/ext.cnf"
 
+      - name: Trust the RTMPS CA on the runner
+        run: |
+          set -euo pipefail
+          sudo cp "${RTMPS_CERTS_DIR}/ca.pem" /usr/local/share/ca-certificates/mediamtx-ca.crt
+          sudo update-ca-certificates
+
       - name: Start the Docker Compose stack
         run: |
           set -euo pipefail
@@ -308,14 +314,8 @@ jobs:
 
           scene = json.loads(scene_path.read_text(encoding="utf-8"))
           for source in scene.get("sources", []):
-              if source.get("id") == "scene":
-                  for item in source.get("settings", {}).get("items", []):
-                      item["visible"] = item.get("name") == "Comment"
-                  continue
-              source["enabled"] = source.get("name") == "Comment"
               if source.get("name") == "Comment":
                   source.setdefault("settings", {})["url"] = game_url
-                  source.pop("filters", None)
           scene_path.write_text(
               json.dumps(scene, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
           )
@@ -331,12 +331,6 @@ jobs:
           docker compose exec -T makamujo systemctl status makamujo-obs.service --no-pager -l >&2 || true
           echo "OBS failed to start after applying the local overrides" >&2
           exit 1
-
-      - name: Trust the RTMPS CA on the runner
-        run: |
-          set -euo pipefail
-          sudo cp "${RTMPS_CERTS_DIR}/ca.pem" /usr/local/share/ca-certificates/mediamtx-ca.crt
-          sudo update-ca-certificates
 
       - name: Run RTMPS VRT against mediamtx
         run: |
@@ -380,7 +374,7 @@ jobs:
           docker compose exec -T makamujo getent hosts mediamtx 2>&1 || true
 
       - name: Upload captured VRT images
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: vrt-rtmps-captured
