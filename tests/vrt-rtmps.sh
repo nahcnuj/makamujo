@@ -10,7 +10,7 @@ cd "${project_root}"
 
 vrt_dir=${1:-tests/vrt-rtmps}
 baseline_dir="${vrt_dir}/baseline"
-min_ssim=${RTMPS_VRT_MIN_SSIM:-0.75}
+min_ssim=${RTMPS_VRT_MIN_SSIM:-0.95}
 
 if ! command -v ffmpeg >/dev/null 2>&1; then
   echo "ffmpeg is required to compare VRT frames" >&2
