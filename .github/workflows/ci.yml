@@ -377,9 +377,10 @@ jobs:
           exit 1
 
       - name: Run RTMPS VRT against mediamtx
-        run: |
-          set -euo pipefail
-          RTMPS_CAPTURE_URL=rtmps://localhost:1936/live/stream bash tests/vrt-rtmps.sh
+        env:
+          RTMPS_VRT_MIN_SSIM: ${{ vars.RTMPS_VRT_MIN_SSIM }}
+          RTMPS_CAPTURE_URL: "rtmps://localhost:1936/live/stream"
+        run: bash tests/vrt-rtmps.sh
 
       - name: Upload captured VRT images
         if: failure()
