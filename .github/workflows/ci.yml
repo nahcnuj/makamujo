@@ -312,7 +312,16 @@ jobs:
           )
           PY
           docker compose exec -T makamujo systemctl start makamujo-obs.service
-          echo "OBS is streaming vigilant-fiesta (${game_url}) to ${rtmps_url}"
+          for _ in $(seq 1 30); do
+            if docker compose exec -T makamujo systemctl is-active --quiet makamujo-obs.service; then
+              echo "OBS is streaming vigilant-fiesta (${game_url}) to ${rtmps_url}"
+              exit 0
+            fi
+            sleep 1
+          done
+          docker compose exec -T makamujo systemctl status makamujo-obs.service --no-pager -l >&2 || true
+          echo "OBS failed to start after applying the local overrides" >&2
+          exit 1
 
       - name: Run RTMPS VRT against mediamtx
         run: |
