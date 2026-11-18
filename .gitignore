@@ -164,3 +164,6 @@ dist/
 # actual captures (the committed RTMPS baseline is the only VRT image in git)
 tests/vrt-rtmps/*.png
 !tests/vrt-rtmps/baseline/*.png
+
+# RTMPS CA certificate baked into the Docker image during CI (generated per run)
+ca.pem

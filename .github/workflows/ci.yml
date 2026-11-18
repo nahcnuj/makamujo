@@ -215,6 +215,10 @@ jobs:
             -out "${cert_dir}/cert.pem" \
             -extfile "${cert_dir}/ext.cnf"
 
+          # Expose the per-run CA to the Docker build context so the Dockerfile can
+          # bake it into the image's trust store (see Dockerfile).
+          cp "${cert_dir}/ca.pem" "${GITHUB_WORKSPACE}/ca.pem"
+
       - name: Trust the RTMPS CA on the runner
         run: |
           set -euo pipefail
@@ -244,11 +248,8 @@ jobs:
           rtmps_url=rtmps://mediamtx:1936/live/stream
           game_url=https://www.nahcnuj.work/vigilant-fiesta/
 
-          # The OBS publisher (a Flatpak app) and the ffmpeg capture both need
-          # to trust the temporary CA. Flatpak has its own runtime trust store.
-          docker compose cp "${RTMPS_CERTS_DIR}/ca.pem" \
-            makamujo:/usr/local/share/ca-certificates/mediamtx-ca.crt
-          docker compose exec -T makamujo update-ca-certificates
+          # The CA is baked into the image trust store (see Dockerfile). OBS
+          # (Flatpak) also needs it in its own runtime trust store.
           docker compose exec -T makamujo sh -c '
             set -eu
             runtime_ref=$(flatpak info --show-runtime com.obsproject.Studio)
@@ -311,57 +312,12 @@ jobs:
           )
           PY
           docker compose exec -T makamujo systemctl start makamujo-obs.service
-          for _ in $(seq 1 30); do
-            if docker compose exec -T makamujo systemctl is-active --quiet makamujo-obs.service; then
-              echo "OBS is streaming vigilant-fiesta (${game_url}) to ${rtmps_url}"
-              exit 0
-            fi
-            sleep 1
-          done
-          docker compose exec -T makamujo systemctl status makamujo-obs.service --no-pager -l >&2 || true
-          echo "OBS failed to start after applying the local overrides" >&2
-          exit 1
+          echo "OBS is streaming vigilant-fiesta (${game_url}) to ${rtmps_url}"
 
       - name: Run RTMPS VRT against mediamtx
         run: |
           set -euo pipefail
           RTMPS_CAPTURE_URL=rtmps://localhost:1936/live/stream bash tests/vrt-rtmps.sh
-
-      - name: Dump RTMPS diagnostics
-        if: failure()
-        run: |
-          set -uo pipefail
-          echo '== MediaMTX logs =='
-          docker compose logs --no-color --tail 200 mediamtx 2>&1 || true
-          echo '== OBS service status =='
-          docker compose exec -T makamujo systemctl status makamujo-obs.service --no-pager -l 2>&1 || true
-          echo '== OBS journal =='
-          docker compose exec -T makamujo journalctl -u makamujo-obs.service --no-pager -n 300 2>&1 || true
-          echo '== OBS application logs =='
-          docker compose exec -T makamujo sh -c '
-            for f in /opt/src/makamujo/obs-studio/logs/*.log; do
-              [ -f "$f" ] || continue
-              echo "--- $f"
-              tail -n 200 "$f"
-            done
-          ' 2>&1 || true
-          echo '== OBS service config =='
-          docker compose exec -T makamujo cat \
-            /opt/src/makamujo/obs-studio/basic/profiles/Makamujo/service.json 2>&1 || true
-          echo '== Flatpak overrides =='
-          docker compose exec -T makamujo flatpak override --system --show com.obsproject.Studio 2>&1 || true
-          echo '== CA trust store =='
-          docker compose exec -T makamujo sh -c 'ls -l /etc/ssl/certs/*mediamtx* 2>&1; cat /usr/local/share/ca-certificates/mediamtx-ca.crt 2>&1 | head -3' || true
-          echo '== CA in Flatpak sandbox =='
-          docker compose exec -T -e XDG_RUNTIME_DIR=/run/user/0 -e DISPLAY=:10 makamujo \
-            flatpak run --command=sh com.obsproject.Studio -c \
-            'ls -l /etc/ssl/certs/mediamtx-ca.crt' 2>&1 || true
-          echo '== Game page reachability =='
-          docker compose exec -T makamujo python3 -c \
-            'import urllib.request; print(urllib.request.urlopen("https://www.nahcnuj.work/vigilant-fiesta/", timeout=5).status)' \
-            2>&1 || true
-          echo '== RTMPS hostname resolution =='
-          docker compose exec -T makamujo getent hosts mediamtx 2>&1 || true
 
       - name: Upload captured VRT images
         if: failure()
@@ -372,4 +328,6 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: docker compose down -v --remove-orphans || true
+        run: |
+          rm -f "${GITHUB_WORKSPACE}/ca.pem"
+          docker compose down -v --remove-orphans || true

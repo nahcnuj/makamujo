@@ -26,8 +26,11 @@ services:
   mediamtx:
     image: bluenviron/mediamtx:1.9.3
     container_name: mediamtx
+    environment:
+      MTX_RTMPENCRYPTION: strict
+      MTX_RTMPSERVERKEY: /certs/key.pem
+      MTX_RTMPSERVERCERT: /certs/cert.pem
     volumes:
-      - ./mediamtx.yml:/mediamtx.yml:ro
       - ${RTMPS_CERTS_DIR:-/tmp/makamujo-rtmps-certs}:/certs:ro
     ports:
       - "1936:1936"

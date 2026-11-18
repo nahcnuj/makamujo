@@ -15,6 +15,7 @@ RUN apt-get update \
         python3 \
         iproute2 \
         procps dbus \
+        ca-certificates \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -31,3 +32,13 @@ RUN printf 'XDG_RUNTIME_DIR=/run/user/0\n' >> /etc/environment
 VOLUME ["/sys/fs/cgroup"]
 
 CMD ["/sbin/init"]
+
+# Bake the per-run RTMPS CA (generated in CI) into the container trust store so
+# OBS and other TLS clients trust the ephemeral mediamtx certificate without a
+# runtime docker compose cp / update-ca-certificates step.
+RUN --mount=type=bind,source=.,target=/buildctx \
+    if [ -f /buildctx/ca.pem ]; then \
+      mkdir -p /usr/local/share/ca-certificates && \
+      cp /buildctx/ca.pem /usr/local/share/ca-certificates/mediamtx-ca.crt && \
+      update-ca-certificates; \
+    fi
