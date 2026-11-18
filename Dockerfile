@@ -29,12 +29,12 @@ RUN mkdir -p /run/sshd \
 # otherwise flatpak cannot find the Pulse socket during provisioning.
 RUN printf 'XDG_RUNTIME_DIR=/run/user/0\n' >> /etc/environment
 
-VOLUME ["/sys/fs/cgroup"]
-
-CMD ["/sbin/init"]
-
 # Bake the per-run RTMPS CA (generated in CI) into the container trust store so
 # OBS and other TLS clients trust the ephemeral mediamtx certificate without a
 # runtime docker compose cp / update-ca-certificates step.
 COPY ca.pem /usr/local/share/ca-certificates/mediamtx-ca.crt
 RUN update-ca-certificates
+
+VOLUME ["/sys/fs/cgroup"]
+
+CMD ["/sbin/init"]
