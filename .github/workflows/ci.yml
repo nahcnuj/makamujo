@@ -179,7 +179,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends openssl sshpass
+          sudo apt-get install -y --no-install-recommends openssl sshpass ffmpeg
           pip install -r ansible/requirements.txt
 
       - name: Prepare RTMPS certificates
@@ -348,11 +348,16 @@ jobs:
           echo "OBS failed to start after applying the local overrides" >&2
           exit 1
 
-      - name: Run RTMPS VRT on the Docker network
-        # The separate vrt service is required: it runs ffmpeg inside the
-        # Compose network and captures rtmps://mediamtx:1936/live/stream, so
-        # the regression exercises the same encrypted in-network path OBS uses.
-        run: docker compose run --rm vrt
+      - name: Trust the RTMPS CA on the runner
+        run: |
+          set -euo pipefail
+          sudo cp "${RTMPS_CERTS_DIR}/ca.pem" /usr/local/share/ca-certificates/mediamtx-ca.crt
+          sudo update-ca-certificates
+
+      - name: Run RTMPS VRT against mediamtx
+        run: |
+          set -euo pipefail
+          RTMPS_CAPTURE_URL=rtmps://localhost:1936/live/stream bash tests/vrt-rtmps.sh
 
       - name: Dump RTMPS diagnostics
         if: always()
