@@ -56,7 +56,7 @@ while [ "${attempts}" -lt "${max_attempts}" ]; do
             -lavfi '[0:v][1:v]ssim' -f null - >/dev/null 2>"${ssim_log}"; then
           score=$(grep -o 'All:[0-9.]*' "${ssim_log}" | tail -n 1 | cut -d: -f2 || true)
           rm -f "${ssim_log}"
-          if [ -n "${score}" ] && awk -v score="${score}" 'BEGIN { exit !(score >= 0.9) }'; then
+          if [ -n "${score}" ] && awk -v score="${score}" 'BEGIN { exit !(score >= 0.95) }'; then
             echo "Captured RTMPS frame to ${out_file}"
             exit 0
           fi
