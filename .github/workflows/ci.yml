@@ -311,6 +311,8 @@ jobs:
               json.dumps(scene, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
           )
           PY
+          # systemctl start returns immediately for Type=simple units (such as
+          # makamujo-obs.service), so poll is-active to wait for readiness.
           docker compose exec -T makamujo systemctl start makamujo-obs.service
           for _ in $(seq 1 30); do
             if docker compose exec -T makamujo systemctl is-active --quiet makamujo-obs.service; then
