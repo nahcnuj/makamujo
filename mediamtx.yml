@@ -1,0 +1,5 @@
+# RTMPS endpoint used by the Docker Compose VRT stack. The certificate and key
+# are mounted from RTMPS_CERTS_DIR by compose.yml.
+rtmpEncryption: strict
+rtmpServerKey: /certs/key.pem
+rtmpServerCert: /certs/cert.pem

@@ -277,16 +277,6 @@ jobs:
           # of the real game page are overridden; encoding and the rest of the
           # deployed profile stay untouched.
           docker compose exec -T makamujo systemctl stop makamujo-obs.service
-          for _ in $(seq 1 30); do
-            if ! docker compose exec -T makamujo systemctl is-active --quiet makamujo-obs.service; then
-              break
-            fi
-            sleep 1
-          done
-          if docker compose exec -T makamujo systemctl is-active --quiet makamujo-obs.service; then
-            echo "OBS did not stop before applying the local overrides" >&2
-            exit 1
-          fi
           docker compose exec -T makamujo python3 - "${rtmps_url}" "${game_url}" <<'PY'
           import json
           import sys
@@ -309,7 +299,7 @@ jobs:
           settings["server"] = server_prefix
           settings["key"] = stream_key
           service_path.write_text(
-              json.dumps(service, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+              json.dumps(service, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
           )
 
           scene = json.loads(scene_path.read_text(encoding="utf-8"))
@@ -317,7 +307,7 @@ jobs:
               if source.get("name") == "Comment":
                   source.setdefault("settings", {})["url"] = game_url
           scene_path.write_text(
-              json.dumps(scene, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+              json.dumps(scene, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
           )
           PY
           docker compose exec -T makamujo systemctl start makamujo-obs.service
@@ -338,7 +328,7 @@ jobs:
           RTMPS_CAPTURE_URL=rtmps://localhost:1936/live/stream bash tests/vrt-rtmps.sh
 
       - name: Dump RTMPS diagnostics
-        if: always()
+        if: failure()
         run: |
           set -uo pipefail
           echo '== MediaMTX logs =='

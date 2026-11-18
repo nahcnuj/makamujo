@@ -27,7 +27,7 @@ services:
     image: bluenviron/mediamtx:1.9.3
     container_name: mediamtx
     volumes:
-      - ./tests/vrt-rtmps/mediamtx.yml:/mediamtx.yml:ro
+      - ./mediamtx.yml:/mediamtx.yml:ro
       - ${RTMPS_CERTS_DIR:-/tmp/makamujo-rtmps-certs}:/certs:ro
     ports:
       - "1936:1936"
