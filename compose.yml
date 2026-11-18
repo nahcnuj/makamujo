@@ -1,0 +1,36 @@
+# Reproduce the production streaming stack with Docker Compose.
+# The makamujo service is provisioned from the host by the same Ansible
+# playbooks used for the VPS; mediamtx is the RTMPS endpoint. Services share
+# the default Compose network. VRT capture runs on the host against mediamtx.
+services:
+  makamujo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: makamujo:prod
+    container_name: makamujo
+    privileged: true
+    cgroup: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    ports:
+      - "2222:22"
+    healthcheck:
+      test: ["CMD", "pgrep", "-x", "sshd"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    command: ["/sbin/init"]
+
+  mediamtx:
+    image: bluenviron/mediamtx:1.9.3
+    container_name: mediamtx
+    environment:
+      MTX_RTMPENCRYPTION: strict
+      MTX_RTMPSERVERKEY: /certs/key.pem
+      MTX_RTMPSERVERCERT: /certs/cert.pem
+    volumes:
+      - ${RTMPS_CERTS_DIR:-/tmp/makamujo-rtmps-certs}:/certs:ro
+    ports:
+      - "1936:1936"

@@ -163,3 +163,176 @@ jobs:
             echo "==> $f"
             ansible-playbook --syntax-check -i localhost, -c local "$f"
           done
+
+  rtmps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12"
+
+      - name: Install tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends openssl sshpass ffmpeg
+          pip install -r ansible/requirements.txt
+
+      - name: Prepare RTMPS certificates
+        run: |
+          set -euo pipefail
+          cert_dir="${RUNNER_TEMP}/certs"
+          mkdir -p "${cert_dir}"
+          echo "RTMPS_CERTS_DIR=${cert_dir}" >> "${GITHUB_ENV}"
+          # Use a real CA + server-certificate chain. A bare self-signed leaf is
+          # rejected by some TLS stacks even when it is placed in the trust
+          # store, and both ffmpeg (capture) and OBS (publisher) must trust it.
+          openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+            -keyout "${cert_dir}/ca-key.pem" \
+            -out "${cert_dir}/ca.pem" \
+            -subj /CN=makamujo-rtmps-ca \
+            -addext 'basicConstraints=critical,CA:TRUE' \
+            -addext 'keyUsage=critical,keyCertSign,cRLSign'
+          openssl req -new -nodes -newkey rsa:2048 \
+            -keyout "${cert_dir}/key.pem" \
+            -out "${cert_dir}/cert.csr" \
+            -subj /CN=mediamtx
+          cat > "${cert_dir}/ext.cnf" <<'EOF'
+          basicConstraints=critical,CA:FALSE
+          keyUsage=critical,digitalSignature,keyEncipherment
+          extendedKeyUsage=serverAuth
+          subjectAltName=DNS:mediamtx,DNS:localhost,IP:127.0.0.1
+          EOF
+          openssl x509 -req \
+            -in "${cert_dir}/cert.csr" \
+            -CA "${cert_dir}/ca.pem" \
+            -CAkey "${cert_dir}/ca-key.pem" \
+            -CAcreateserial -days 1 \
+            -out "${cert_dir}/cert.pem" \
+            -extfile "${cert_dir}/ext.cnf"
+
+          # Expose the per-run CA to the Docker build context so the Dockerfile can
+          # bake it into the image's trust store (see Dockerfile).
+          cp "${cert_dir}/ca.pem" "${GITHUB_WORKSPACE}/ca.pem"
+
+      - name: Trust the RTMPS CA on the runner
+        run: |
+          set -euo pipefail
+          sudo cp "${RTMPS_CERTS_DIR}/ca.pem" /usr/local/share/ca-certificates/mediamtx-ca.crt
+          sudo update-ca-certificates
+
+      - name: Start the Docker Compose stack
+        run: |
+          set -euo pipefail
+          # The makamujo service has an sshd healthcheck in compose.yml, so wait
+          # for it to become healthy instead of polling pgrep manually.
+          docker compose up -d --wait --wait-timeout 120 makamujo mediamtx
+
+      - name: Provision the container with Ansible
+        working-directory: ansible
+        run: |
+          set -euo pipefail
+          ansible-playbook -i inventories/docker.yml playbooks/0_bootstrap.yml
+          ansible-playbook -i inventories/docker.yml playbooks/0_desktop.yml
+          ansible-playbook -i inventories/docker.yml playbooks/0_obs.yml
+          ansible-playbook -i inventories/docker.yml playbooks/1_bun.yml
+          ansible-playbook -i inventories/docker.yml playbooks/2_makamujo.yml
+
+      - name: Point the reproduced OBS at the local RTMPS endpoint
+        run: |
+          set -euo pipefail
+          rtmps_url=rtmps://mediamtx:1936/live/stream
+
+          # The CA is baked into the image trust store (see Dockerfile). OBS
+          # (Flatpak) also needs it in its own runtime trust store.
+          docker compose exec -T makamujo sh -c '
+            set -eu
+            runtime_ref=$(flatpak info --show-runtime com.obsproject.Studio)
+            runtime_dir=$(flatpak info --show-location "${runtime_ref}")
+            cert_dir="${runtime_dir}/files/etc/ssl/certs"
+            if [ ! -d "${cert_dir}" ]; then
+              cert_dir="${runtime_dir}/files/usr/etc/ssl/certs"
+            fi
+            if [ ! -d "${cert_dir}" ]; then
+              bundle=$(find "${runtime_dir}" -name ca-certificates.crt -print 2>/dev/null | head -n 1 || true)
+              cert_dir=$(dirname "${bundle:-/nonexistent}")
+            fi
+            test -d "${cert_dir}" || {
+              echo "Flatpak runtime trust store not found" >&2
+              exit 1
+            }
+            cp /usr/local/share/ca-certificates/mediamtx-ca.crt \
+              "${cert_dir}/mediamtx-ca.crt"
+          '
+          docker compose exec -T makamujo flatpak override --system \
+            --env=SSL_CERT_FILE=/etc/ssl/certs/mediamtx-ca.crt \
+            com.obsproject.Studio
+
+          # OBS rewrites its profile on exit, so stop it before touching the
+          # files on disk. Only the local RTMPS streaming endpoint is
+          # overridden; the deployed profile (including the makamujo overlay
+          # page served on 127.0.0.1:7777) stays untouched so the capture
+          # exercises the reproduced makamujo instance.
+          docker compose exec -T makamujo systemctl stop makamujo-obs.service
+          docker compose exec -T makamujo python3 - "${rtmps_url}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          from urllib.parse import urlsplit
+
+          rtmps_url = sys.argv[1]
+          service_path = Path("/opt/src/makamujo/obs-studio/basic/profiles/Makamujo/service.json")
+
+          url = urlsplit(rtmps_url)
+          stream_key = url.path.rstrip("/").rsplit("/", 1)[-1]
+          server_prefix = url._replace(
+              path=url.path.rstrip("/")[: -len(stream_key)].rstrip("/")
+          ).geturl()
+
+          service = json.loads(service_path.read_text(encoding="utf-8"))
+          service["type"] = "rtmp_custom"
+          settings = service.setdefault("settings", {})
+          settings["server"] = server_prefix
+          settings["key"] = stream_key
+          service_path.write_text(
+              json.dumps(service, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+          )
+          PY
+          # `systemctl start --wait` waits for the unit to *stop* again, not for
+          # readiness, so it is not usable for a long-running unit. `systemctl
+          # start` returns once the unit is activated (for Type=simple that is
+          # right after fork; other types also return after activation, not
+          # readiness); poll is-active to wait for readiness.
+          docker compose exec -T makamujo systemctl start makamujo-obs.service
+          for _ in $(seq 1 30); do
+            if docker compose exec -T makamujo systemctl is-active --quiet makamujo-obs.service; then
+              echo "OBS is streaming makamujo to ${rtmps_url}"
+              exit 0
+            fi
+            sleep 1
+          done
+          docker compose exec -T makamujo systemctl status makamujo-obs.service --no-pager -l >&2 || true
+          echo "OBS failed to start after applying the local overrides" >&2
+          exit 1
+
+      - name: Run RTMPS VRT against mediamtx
+        run: |
+          set -euo pipefail
+          RTMPS_CAPTURE_URL=rtmps://localhost:1936/live/stream bash tests/vrt-rtmps.sh
+
+      - name: Upload captured VRT images
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: vrt-rtmps-captured
+          path: tests/vrt-rtmps/*.png
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f "${GITHUB_WORKSPACE}/ca.pem"
+          docker compose down -v --remove-orphans || true
