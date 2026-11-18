@@ -316,7 +316,6 @@ export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
   "--disable-renderer-backgrounding",
 ] as const;
 
-export const GAME_SCREEN_ZOOM = "1" as const;
 export const GAME_SCREEN_ZOOM_FACTOR = 1 as const;
 
 export type BrowserCreateOptions = {
@@ -642,8 +641,25 @@ export const applyGameScreenZoom = async (
   try {
     await page.evaluate((_value: number) => {
       // Stop per-element zoom: keep the whole document at 1.0 and let OBS
-      // handle enlarging the broadcast image.
+      // handle enlarging the game screen on the broadcast canvas.
       document.documentElement.style.zoom = "1.0";
+      // Make the broadcast background black and place the game screen at the
+      // top-left so OBS can enlarge it without showing page margins.
+      const styleId = "makamujo-broadcast-layout";
+      let style = document.getElementById(styleId) as HTMLStyleElement | null;
+      if (!style) {
+        style = document.createElement("style");
+        style.id = styleId;
+        (document.head ?? document.documentElement).appendChild(style);
+      }
+      style.textContent = [
+        "html,body{background:#000!important;margin:0!important;padding:0!important}",
+        "body{display:block!important;text-align:left!important}",
+        "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
+        "#play-layout{display:block!important;text-align:left!important}",
+        "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
+        "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
+      ].join("\n");
       if (
         typeof window !== "undefined" &&
         typeof window.scrollTo === "function"
@@ -655,10 +671,6 @@ export const applyGameScreenZoom = async (
     /* page may not be ready */
   }
 };
-
-export const applyZoomToGameScreen = applyGameScreenZoom;
-export const zoomGameScreen = applyGameScreenZoom;
-export const applyZoom = applyGameScreenZoom;
 
 export const createApplyZoom =
   (page: ZoomablePage, zoom: number = 1) =>
