@@ -36,9 +36,5 @@ CMD ["/sbin/init"]
 # Bake the per-run RTMPS CA (generated in CI) into the container trust store so
 # OBS and other TLS clients trust the ephemeral mediamtx certificate without a
 # runtime docker compose cp / update-ca-certificates step.
-RUN --mount=type=bind,source=.,target=/buildctx \
-    if [ -f /buildctx/ca.pem ]; then \
-      mkdir -p /usr/local/share/ca-certificates && \
-      cp /buildctx/ca.pem /usr/local/share/ca-certificates/mediamtx-ca.crt && \
-      update-ca-certificates; \
-    fi
+COPY ca.pem /usr/local/share/ca-certificates/mediamtx-ca.crt
+RUN update-ca-certificates
