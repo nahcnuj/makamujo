@@ -218,20 +218,9 @@ jobs:
       - name: Start the Docker Compose stack
         run: |
           set -euo pipefail
-          docker compose up -d makamujo mediamtx
-          ready=0
-          for _ in $(seq 1 30); do
-            if docker compose exec -T makamujo pgrep -x sshd >/dev/null 2>&1; then
-              echo "sshd is ready"
-              ready=1
-              break
-            fi
-            sleep 2
-          done
-          if [ "${ready}" -ne 1 ]; then
-            docker compose logs makamujo
-            exit 1
-          fi
+          # The makamujo service has an sshd healthcheck in compose.yml, so wait
+          # for it to become healthy instead of polling pgrep manually.
+          docker compose up -d --wait --wait-timeout 120 makamujo mediamtx
           docker compose logs mediamtx
 
       - name: Provision the container with Ansible
@@ -360,9 +349,9 @@ jobs:
           exit 1
 
       - name: Run RTMPS VRT on the Docker network
-        # The vrt service runs ffmpeg inside the Compose network and captures
-        # rtmps://mediamtx:1936/live/stream, so the regression exercises the
-        # same encrypted path OBS uses inside the reproduced stack.
+        # The separate vrt service is required: it runs ffmpeg inside the
+        # Compose network and captures rtmps://mediamtx:1936/live/stream, so
+        # the regression exercises the same encrypted in-network path OBS uses.
         run: docker compose run --rm vrt
 
       - name: Dump RTMPS diagnostics

@@ -1,5 +1,7 @@
 # RTMPS endpoint used by the Docker Compose VRT stack. The certificate and key
 # are mounted from RTMPS_CERTS_DIR by compose.yml.
+# Only the settings that differ from MediaMTX defaults are overridden here:
+# strict RTMPS encryption plus the mounted certificate/key paths.
 rtmp: yes
 rtmpEncryption: strict
 rtmpsAddress: :1936
