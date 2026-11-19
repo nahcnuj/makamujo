@@ -316,9 +316,7 @@ export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
   "--disable-renderer-backgrounding",
 ] as const;
 
-// Zoom adjustments for the streamed game screen are performed on the OBS side
-// (browser-source scale), not via this browser-side constant.
-export const GAME_SCREEN_ZOOM_FACTOR = 1 as const;
+export const GAME_SCREEN_ZOOM_FACTOR = 1.25 as const;
 
 export type BrowserCreateOptions = {
   /** Magnification for the Agent's game board. */
