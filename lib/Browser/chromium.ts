@@ -479,7 +479,7 @@ export const create = async (
     await applyGameScreenZoom(page, factor);
   };
   // Register the load handler before the initial call so a load that fires
-  // during/after the first applyZoom() still re-applies the broadcast layout.
+  // during/after the first applyZoom() still re-applies the whole-document zoom.
   page.on("load", () => {
     void applyZoom(options.gameScreenZoom ?? 1);
   });
