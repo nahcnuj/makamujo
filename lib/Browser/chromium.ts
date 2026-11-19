@@ -409,7 +409,7 @@ export const create = async (
   // Inject the broadcast layout CSS as early as possible on every navigation
   // so the game container is pinned to the top-left and the page background
   // is black even when the later applyZoom() call races the initial load.
-  await ctx.addInitScript(() => {
+  await ctx.addInitScript((factor: number) => {
     const inject = () => {
       try {
         const styleId = "makamujo-broadcast-layout";
@@ -427,7 +427,8 @@ export const create = async (
           "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
           "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
         ].join("\n");
-        document.documentElement.style.zoom = "1.0";
+        const zoom = Number.isFinite(factor) && factor > 0 ? factor : 1;
+        document.documentElement.style.zoom = String(zoom);
         if (
           typeof window !== "undefined" &&
           typeof window.scrollTo === "function"
@@ -443,7 +444,7 @@ export const create = async (
     } else {
       inject();
     }
-  });
+  }, options.gameScreenZoom ?? 1);
 
   // Reuse --app window only (do not open a second tabbed window)
   let page = ctx.pages()[0];
@@ -669,11 +670,9 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
 };
 
 /**
- * Reset the document zoom to 1.0.
- *
- * Per-element magnification is intentionally not applied anymore: the whole
- * document stays at 1.0 and OBS handles enlarging the game screen on the
- * broadcast canvas.
+ * Apply the Agent-provided magnification to the whole document and install the
+ * broadcast layout CSS (black background, game screen at top-left, header/ads
+ * hidden) so OBS can enlarge the captured game screen cleanly.
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
@@ -684,10 +683,12 @@ export const applyGameScreenZoom = async (
     return;
   }
   try {
-    await page.evaluate((_value: number) => {
-      // Stop per-element zoom: keep the whole document at 1.0 and let OBS
-      // handle enlarging the game screen on the broadcast canvas.
-      document.documentElement.style.zoom = "1.0";
+    await page.evaluate((value: number) => {
+      // Apply the Agent-provided magnification to the whole document (not a
+      // single element) so the game screen grows uniformly, then hide the
+      // header/ads via the broadcast layout CSS below.
+      const zoom = Number.isFinite(value) && value > 0 ? value : 1;
+      document.documentElement.style.zoom = String(zoom);
       // Make the broadcast background black and place the game screen at the
       // top-left so OBS can enlarge it without showing page margins.
       const styleId = "makamujo-broadcast-layout";
