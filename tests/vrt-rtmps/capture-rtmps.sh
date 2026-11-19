@@ -33,15 +33,17 @@ fi
 
 # OBS may take a while to come up after provisioning. Retry until a real
 # 1280x720 frame is available instead of accepting an empty first frame.
-# The reproduced overlay is animated, so also require two consecutive
-# 1280x720 frames to be nearly identical before accepting one. This skips
-# transitional frames that would otherwise make the SSIM comparison flaky.
+# The reproduced overlay is animated, so a single frame is not enough to
+# distinguish a settled render from a transitional one; require several
+# consecutive valid 1280x720 captures before accepting. This avoids flaky
+# captures caused by transitional/partial frames.
 error_log=$(mktemp)
-prev_frame=$(mktemp --suffix=.png)
-trap 'rm -f "${error_log}" "${prev_frame}"' EXIT
+trap 'rm -f "${error_log}"' EXIT
 first_error=''
 attempts=0
 max_attempts=90
+valid_streak=0
+required_streak=3
 while [ "${attempts}" -lt "${max_attempts}" ]; do
   rm -f "${out_file}"
   if ffmpeg -hide_banner -loglevel error -nostdin -y \
@@ -50,26 +52,20 @@ while [ "${attempts}" -lt "${max_attempts}" ]; do
     dimensions=$(ffprobe -v error -select_streams v:0 \
       -show_entries stream=width,height -of csv=s=x:p=0 "${out_file}")
     if [ "${dimensions}" = "1280x720" ]; then
-      if [ -s "${prev_frame}" ]; then
-        ssim_log=$(mktemp)
-        if ffmpeg -hide_banner -nostdin -i "${prev_frame}" -i "${out_file}" \
-            -lavfi '[0:v][1:v]ssim' -f null - >/dev/null 2>"${ssim_log}"; then
-          score=$(grep -o 'All:[0-9.]*' "${ssim_log}" | tail -n 1 | cut -d: -f2 || true)
-          rm -f "${ssim_log}"
-          if [ -n "${score}" ] && awk -v score="${score}" 'BEGIN { exit !(score >= 0.95) }'; then
-            echo "Captured RTMPS frame to ${out_file}"
-            exit 0
-          fi
-        else
-          rm -f "${ssim_log}"
-        fi
+      valid_streak=$((valid_streak + 1))
+      if [ "${valid_streak}" -ge "${required_streak}" ]; then
+        echo "Captured RTMPS frame to ${out_file}"
+        exit 0
       fi
-      cp "${out_file}" "${prev_frame}"
     else
       echo "Unexpected captured frame size: ${dimensions}" >&2
+      valid_streak=0
     fi
   elif [ -z "${first_error}" ] && [ -s "${error_log}" ]; then
     first_error=$(<"${error_log}")
+    valid_streak=0
+  else
+    valid_streak=0
   fi
   attempts=$((attempts + 1))
   sleep 2
