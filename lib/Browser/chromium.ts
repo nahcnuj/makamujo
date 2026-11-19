@@ -406,27 +406,12 @@ export const create = async (
       throw err;
     });
 
-  // Inject the broadcast layout CSS as early as possible on every navigation
-  // so the game container is pinned to the top-left and the page background
-  // is black even when the later applyZoom() call races the initial load.
+  // Apply the Agent-provided magnification to the whole document as early as
+  // possible on every navigation, mirroring a normal browser zoom so the game
+  // board and the surrounding UI scale together (no per-element zoom).
   await ctx.addInitScript((factor: number) => {
     const inject = () => {
       try {
-        const styleId = "makamujo-broadcast-layout";
-        let style = document.getElementById(styleId) as HTMLStyleElement | null;
-        if (!style) {
-          style = document.createElement("style");
-          style.id = styleId;
-          (document.head ?? document.documentElement).appendChild(style);
-        }
-        style.textContent = [
-          "html,body{background:#000!important;margin:0!important;padding:0!important}",
-          "body{display:block!important;text-align:left!important}",
-          "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
-          "#play-layout{display:block!important;text-align:left!important}",
-          "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
-          "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
-        ].join("\n");
         const zoom = Number.isFinite(factor) && factor > 0 ? factor : 1;
         document.documentElement.style.zoom = String(zoom);
         if (
@@ -670,9 +655,8 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
 };
 
 /**
- * Apply the Agent-provided magnification to the whole document and install the
- * broadcast layout CSS (black background, game screen at top-left, header/ads
- * hidden) so OBS can enlarge the captured game screen cleanly.
+ * Apply the Agent-provided magnification to the whole document, mirroring a
+ * normal browser zoom so the game board and surrounding UI scale together.
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
@@ -684,28 +668,11 @@ export const applyGameScreenZoom = async (
   }
   try {
     await page.evaluate((value: number) => {
-      // Apply the Agent-provided magnification to the whole document (not a
-      // single element) so the game screen grows uniformly, then hide the
-      // header/ads via the broadcast layout CSS below.
+      // Apply the Agent-provided magnification to the whole document, mirroring
+      // a normal browser zoom so the game board and surrounding UI scale
+      // together (no per-element zoom and no broadcast-layout hiding).
       const zoom = Number.isFinite(value) && value > 0 ? value : 1;
       document.documentElement.style.zoom = String(zoom);
-      // Make the broadcast background black and place the game screen at the
-      // top-left so OBS can enlarge it without showing page margins.
-      const styleId = "makamujo-broadcast-layout";
-      let style = document.getElementById(styleId) as HTMLStyleElement | null;
-      if (!style) {
-        style = document.createElement("style");
-        style.id = styleId;
-        (document.head ?? document.documentElement).appendChild(style);
-      }
-      style.textContent = [
-        "html,body{background:#000!important;margin:0!important;padding:0!important}",
-        "body{display:block!important;text-align:left!important}",
-        "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
-        "#play-layout{display:block!important;text-align:left!important}",
-        "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
-        "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
-      ].join("\n");
       if (
         typeof window !== "undefined" &&
         typeof window.scrollTo === "function"
