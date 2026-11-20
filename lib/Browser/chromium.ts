@@ -406,30 +406,16 @@ export const create = async (
       throw err;
     });
 
-  // Apply the Agent-provided magnification to the whole document as early as
-  // possible on every navigation, mirroring a normal browser zoom so the game
-  // board and the surrounding UI scale together (no per-element zoom).
-  await ctx.addInitScript((factor: number) => {
-    const inject = () => {
-      try {
-        const zoom = Number.isFinite(factor) && factor > 0 ? factor : 1;
-        document.documentElement.style.zoom = String(zoom);
-        if (
-          typeof window !== "undefined" &&
-          typeof window.scrollTo === "function"
-        ) {
-          window.scrollTo(0, 0);
-        }
-      } catch {
-        /* page may not be ready */
-      }
-    };
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", inject, { once: true });
-    } else {
-      inject();
+  // Keep the whole document at 1.0 on every navigation; the Agent-provided
+  // magnification is applied to the game board only (see applyGameScreenZoom),
+  // so the title keeps its original size and the title/board ratio changes.
+  await ctx.addInitScript(() => {
+    try {
+      document.documentElement.style.zoom = "1.0";
+    } catch {
+      /* page may not be ready */
     }
-  }, options.gameScreenZoom ?? 1);
+  });
 
   // Reuse --app window only (do not open a second tabbed window)
   let page = ctx.pages()[0];
@@ -479,7 +465,7 @@ export const create = async (
     await applyGameScreenZoom(page, factor);
   };
   // Register the load handler before the initial call so a load that fires
-  // during/after the first applyZoom() still re-applies the whole-document zoom.
+  // during/after the first applyZoom() still re-applies the game-board zoom.
   page.on("load", () => {
     void applyZoom(options.gameScreenZoom ?? 1);
   });
@@ -655,8 +641,9 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
 };
 
 /**
- * Apply the Agent-provided magnification to the whole document, mirroring a
- * normal browser zoom so the game board and surrounding UI scale together.
+ * Apply the Agent-provided magnification to the game board only, keeping the
+ * whole document at 1.0 so the title keeps its original size and the
+ * title/board ratio changes.
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
@@ -668,8 +655,14 @@ export const applyGameScreenZoom = async (
   }
   try {
     await page.evaluate((value: number) => {
+      document.documentElement.style.zoom = "1.0";
       const zoom = Number.isFinite(value) && value > 0 ? value : 1;
-      document.documentElement.style.zoom = String(zoom);
+      const gameScreen =
+        document.getElementById("game-container") ??
+        document.getElementById("screen-playing");
+      if (gameScreen) {
+        gameScreen.style.zoom = String(zoom);
+      }
       if (
         typeof window !== "undefined" &&
         typeof window.scrollTo === "function"
