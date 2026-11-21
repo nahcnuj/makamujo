@@ -316,6 +316,7 @@ export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
   "--disable-renderer-backgrounding",
 ] as const;
 
+export const GAME_SCREEN_ZOOM = "1.75" as const;
 export const GAME_SCREEN_ZOOM_FACTOR = 1.75 as const;
 
 export type BrowserCreateOptions = {
@@ -496,7 +497,18 @@ export const create = async (
   }, 2000);
 
   const applyZoom = async (factor: number) => {
-    await applyGameScreenZoom(page, factor);
+    if (isVigilantFiestaGameUrl(page.url())) {
+      await applyGameScreenZoom(page, factor);
+      return;
+    }
+    try {
+      await page.evaluate(() => {
+        document.documentElement.style.zoom = "1.0";
+        window.scrollTo(0, 0);
+      });
+    } catch {
+      /* page may not be ready */
+    }
   };
   // Register the load handler before the initial call so a load that fires
   // during/after the first applyZoom() still re-applies the game-board zoom.
@@ -721,6 +733,10 @@ export const applyGameScreenZoom = async (
     /* page may not be ready */
   }
 };
+
+export const applyZoomToGameScreen = applyGameScreenZoom;
+export const zoomGameScreen = applyGameScreenZoom;
+export const applyZoom = applyGameScreenZoom;
 
 export const createApplyZoom =
   (page: ZoomablePage, zoom: number = 1) =>
