@@ -409,8 +409,9 @@ export const create = async (
   // Inject the broadcast layout CSS as early as possible on every navigation
   // so the game container is pinned to the top-left and the page background
   // is black even when the later applyZoom() call races the initial load.
-  // Only #game-container is magnified (document stays 1.0) so the title keeps
-  // its original size and the title/board ratio changes.
+  // The whole document is scaled by the Agent-provided magnification (root
+  // zoom), mirroring an actual browser zoom so the game screen on the
+  // broadcast looks like a zoomed browser window.
   await ctx.addInitScript((factor: number) => {
     const inject = () => {
       try {
@@ -427,15 +428,11 @@ export const create = async (
           "body{display:block!important;text-align:left!important}",
           "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
           "#play-layout{display:block!important;text-align:left!important}",
-          `#game-container{margin:0!important;margin-left:0!important;display:inline-block!important;zoom:${zoom}!important;transform-origin:top left!important}`,
+          "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
           "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
         ].join("\n");
-        // Keep the whole document at 1.0 so only the game container is
-        // magnified: the title keeps its original size and the title/board
-        // ratio changes, matching the review request.
-        document.documentElement.style.zoom = "1";
-        const gc = document.getElementById("game-container");
-        if (gc) gc.style.zoom = String(zoom);
+        // Scale the whole document like a real browser zoom.
+        document.documentElement.style.zoom = String(zoom);
         if (
           typeof window !== "undefined" &&
           typeof window.scrollTo === "function"
@@ -677,12 +674,11 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
 };
 
 /**
- * Apply the Agent-provided magnification to the game container only, keeping
- * the whole document at 1.0 so the title keeps its original size and the
- * title/board ratio changes. The magnification is written both as an inline
- * style on #game-container and into the broadcast-layout stylesheet so it
- * survives re-renders that drop the inline style and is guaranteed to reach
- * the drawing container (#1660 review).
+ * Apply the Agent-provided magnification to the whole document, mirroring a
+ * normal browser zoom so the game board and the surrounding UI scale together.
+ * The magnification is written both as an inline style on the document element
+ * and into the broadcast-layout stylesheet so it survives re-renders that drop
+ * the inline style (#1660 review).
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
@@ -695,8 +691,8 @@ export const applyGameScreenZoom = async (
   try {
     await page.evaluate((value: number) => {
       const zoom = Number.isFinite(value) && value > 0 ? value : 1;
-      // Whole document stays at 1.0; only the game container is magnified.
-      document.documentElement.style.zoom = "1";
+      // Scale the whole document like a real browser zoom.
+      document.documentElement.style.zoom = String(zoom);
       const styleId = "makamujo-broadcast-layout";
       let style = document.getElementById(styleId) as HTMLStyleElement | null;
       if (!style) {
@@ -709,15 +705,9 @@ export const applyGameScreenZoom = async (
         "body{display:block!important;text-align:left!important}",
         "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
         "#play-layout{display:block!important;text-align:left!important}",
-        `#game-container{margin:0!important;margin-left:0!important;display:inline-block!important;zoom:${zoom}!important;transform-origin:top left!important}`,
+        "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
         "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
       ].join("\n");
-      // Reach the drawing container directly; fall back to the playing-screen
-      // wrapper only when the container is not present yet.
-      const target =
-        document.getElementById("game-container") ??
-        document.getElementById("screen-playing");
-      if (target) target.style.zoom = String(zoom);
       if (
         typeof window !== "undefined" &&
         typeof window.scrollTo === "function"
