@@ -424,6 +424,7 @@ export const create = async (
           (document.head ?? document.documentElement).appendChild(style);
         }
         style.textContent = [
+          `html{zoom:${zoom}!important}`,
           "html,body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}",
           "body{display:block!important;text-align:left!important}",
           "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
@@ -701,6 +702,7 @@ export const applyGameScreenZoom = async (
         (document.head ?? document.documentElement).appendChild(style);
       }
       style.textContent = [
+        `html{zoom:${zoom}!important}`,
         "html,body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}",
         "body{display:block!important;text-align:left!important}",
         "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
