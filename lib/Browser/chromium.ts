@@ -368,12 +368,26 @@ export const create = async (
       : "using Playwright bundled Chromium",
   );
 
+  // The game Agent owns how its board is scaled. Emulate a real browser zoom
+  // via the device scale factor so the game page (and its game container) is
+  // laid out exactly as it would be in an actual zoomed browser window, rather
+  // than magnifying the already-rendered 1280px layout with CSS zoom.
+  const gameScreenZoom =
+    Number.isFinite(options.gameScreenZoom) && (options.gameScreenZoom ?? 0) > 0
+      ? (options.gameScreenZoom as number)
+      : 1;
+  const cssViewport = {
+    width: Math.max(1, Math.round(viewport.width / gameScreenZoom)),
+    height: Math.max(1, Math.round(viewport.height / gameScreenZoom)),
+  };
+
   const launchOpts = {
     headless: process.env.CHROMIUM_HEADLESS === "1",
     timeout: launchTimeout,
     ignoreDefaultArgs: ["--no-startup-window"] as string[],
     locale: "ja-JP",
-    viewport,
+    viewport: cssViewport,
+    deviceScaleFactor: gameScreenZoom,
     extraHTTPHeaders: { "Accept-Language": "ja" },
     executablePath: effectiveExecutablePath,
     args: [
@@ -410,13 +424,11 @@ export const create = async (
   // Inject the broadcast layout CSS as early as possible on every navigation
   // so the game container is pinned to the top-left and the page background
   // is black even when the later applyZoom() call races the initial load.
-  // The whole document is scaled by the Agent-provided magnification (root
-  // zoom), mirroring an actual browser zoom so the game screen on the
-  // broadcast looks like a zoomed browser window.
-  await ctx.addInitScript((factor: number) => {
+  // The magnification itself is handled by the browser's device scale factor,
+  // which is set at launch; here we only (re)apply the broadcast layout CSS.
+  await ctx.addInitScript(() => {
     const inject = () => {
       try {
-        const zoom = Number.isFinite(factor) && factor > 0 ? factor : 1;
         const styleId = "makamujo-broadcast-layout";
         let style = document.getElementById(styleId) as HTMLStyleElement | null;
         if (!style) {
@@ -425,7 +437,6 @@ export const create = async (
           (document.head ?? document.documentElement).appendChild(style);
         }
         style.textContent = [
-          `html{zoom:${zoom}!important}`,
           "html,body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}",
           "body{display:block!important;text-align:left!important}",
           "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
@@ -433,8 +444,6 @@ export const create = async (
           "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
           "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
         ].join("\n");
-        // Scale the whole document like a real browser zoom.
-        document.documentElement.style.zoom = String(zoom);
         if (
           typeof window !== "undefined" &&
           typeof window.scrollTo === "function"
@@ -450,7 +459,7 @@ export const create = async (
     } else {
       inject();
     }
-  }, options.gameScreenZoom ?? 1);
+  });
 
   // Reuse --app window only (do not open a second tabbed window)
   let page = ctx.pages()[0];
@@ -687,11 +696,10 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
 };
 
 /**
- * Apply the Agent-provided magnification to the whole document, mirroring a
- * normal browser zoom so the game board and the surrounding UI scale together.
- * The magnification is written both as an inline style on the document element
- * and into the broadcast-layout stylesheet so it survives re-renders that drop
- * the inline style (#1660 review).
+ * (Re)apply the broadcast layout CSS for the game screen. The actual
+ * magnification is provided by the browser's device scale factor, which is set
+ * at launch, so this no longer touches `document.documentElement.style.zoom`.
+ * The magnification argument is retained for API compatibility.
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
@@ -703,9 +711,7 @@ export const applyGameScreenZoom = async (
   }
   try {
     await page.evaluate((value: number) => {
-      const zoom = Number.isFinite(value) && value > 0 ? value : 1;
-      // Scale the whole document like a real browser zoom.
-      document.documentElement.style.zoom = String(zoom);
+      void value;
       const styleId = "makamujo-broadcast-layout";
       let style = document.getElementById(styleId) as HTMLStyleElement | null;
       if (!style) {
@@ -714,7 +720,6 @@ export const applyGameScreenZoom = async (
         (document.head ?? document.documentElement).appendChild(style);
       }
       style.textContent = [
-        `html{zoom:${zoom}!important}`,
         "html,body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}",
         "body{display:block!important;text-align:left!important}",
         "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
