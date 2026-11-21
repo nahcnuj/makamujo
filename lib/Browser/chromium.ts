@@ -368,26 +368,16 @@ export const create = async (
       : "using Playwright bundled Chromium",
   );
 
-  // The game Agent owns how its board is scaled. Emulate a real browser zoom
-  // via the device scale factor so the game page (and its game container) is
-  // laid out exactly as it would be in an actual zoomed browser window, rather
-  // than magnifying the already-rendered 1280px layout with CSS zoom.
-  const gameScreenZoom =
-    Number.isFinite(options.gameScreenZoom) && (options.gameScreenZoom ?? 0) > 0
-      ? (options.gameScreenZoom as number)
-      : 1;
-  const cssViewport = {
-    width: Math.max(1, Math.round(viewport.width / gameScreenZoom)),
-    height: Math.max(1, Math.round(viewport.height / gameScreenZoom)),
-  };
-
+  // The game Agent owns how its board is scaled. The magnification is applied
+  // as a real browser page scale factor (Emulation.setPageScaleFactor) so the
+  // broadcast captures exactly what an actual browser zoom looks like, instead
+  // of reflowing the layout with CSS zoom or changing the device pixel ratio.
   const launchOpts = {
     headless: process.env.CHROMIUM_HEADLESS === "1",
     timeout: launchTimeout,
     ignoreDefaultArgs: ["--no-startup-window"] as string[],
     locale: "ja-JP",
-    viewport: cssViewport,
-    deviceScaleFactor: gameScreenZoom,
+    viewport,
     extraHTTPHeaders: { "Accept-Language": "ja" },
     executablePath: effectiveExecutablePath,
     args: [
@@ -505,9 +495,28 @@ export const create = async (
     void dismissCloseButtons();
   }, 2000);
 
+  let cdpSession: unknown = null;
+  const setPageScaleFactor = async (factor: number): Promise<void> => {
+    const value =
+      Number.isFinite(factor) && (factor ?? 0) > 0 ? (factor as number) : 1;
+    try {
+      if (!cdpSession) {
+        cdpSession = await ctx.newCDPSession(page);
+      }
+      await (
+        cdpSession as {
+          send: (m: string, p?: Record<string, unknown>) => Promise<unknown>;
+        }
+      ).send("Emulation.setPageScaleFactor", { pageScaleFactor: value });
+    } catch {
+      /* CDP may be unavailable in this environment */
+    }
+  };
+
   const applyZoom = async (factor: number) => {
     if (isVigilantFiestaGameUrl(page.url())) {
       await applyGameScreenZoom(page, factor);
+      await setPageScaleFactor(factor);
       return;
     }
     try {
@@ -518,6 +527,7 @@ export const create = async (
     } catch {
       /* page may not be ready */
     }
+    await setPageScaleFactor(1);
   };
   // Register the load handler before the initial call so a load that fires
   // during/after the first applyZoom() still re-applies the game-board zoom.
@@ -708,6 +718,31 @@ export const applyGameScreenZoom = async (
   const zoomValue = resolveGameScreenZoomValue(zoom);
   if (zoomValue === undefined) {
     return;
+  }
+  // Apply the magnification as a real browser page scale factor, matching what
+  // an actual browser zoom does, in addition to (re)injecting the broadcast
+  // layout CSS.
+  try {
+    const context = (
+      page as {
+        context?: () => {
+          newCDPSession?: (p: unknown) => Promise<{
+            send: (
+              m: string,
+              params?: Record<string, unknown>,
+            ) => Promise<unknown>;
+          }>;
+        };
+      }
+    ).context?.();
+    if (context && typeof context.newCDPSession === "function") {
+      const session = await context.newCDPSession(page);
+      await session.send("Emulation.setPageScaleFactor", {
+        pageScaleFactor: zoomValue,
+      });
+    }
+  } catch {
+    /* CDP may be unavailable in this environment */
   }
   try {
     await page.evaluate((value: number) => {
