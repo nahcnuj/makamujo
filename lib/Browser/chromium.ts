@@ -694,6 +694,12 @@ export const applyGameScreenZoom = async (
       if (gameScreen) {
         gameScreen.style.zoom = String(zoom);
       }
+      // Mirror the magnification into the broadcast-layout stylesheet as well
+      // so the zoom survives re-renders that drop the inline style and is
+      // guaranteed to reach the drawing container (#1660 review).
+      const zoomSelector = document.getElementById("game-container")
+        ? "#game-container"
+        : "#screen-playing";
       const styleId = "makamujo-broadcast-layout";
       let style = document.getElementById(styleId) as HTMLStyleElement | null;
       if (!style) {
@@ -708,6 +714,7 @@ export const applyGameScreenZoom = async (
         "#play-layout{display:block!important;text-align:left!important}",
         "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
         "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
+        `${zoomSelector}{zoom:${zoom}!important}`,
       ].join("\n");
       if (
         typeof window !== "undefined" &&
