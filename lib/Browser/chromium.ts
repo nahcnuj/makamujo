@@ -316,8 +316,7 @@ export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
   "--disable-renderer-backgrounding",
 ] as const;
 
-export const GAME_SCREEN_ZOOM = "1.25" as const;
-export const GAME_SCREEN_ZOOM_FACTOR = 1.25 as const;
+export const GAME_SCREEN_ZOOM_FACTOR = 1.75 as const;
 
 export type BrowserCreateOptions = {
   /** Magnification for the Agent's game board. */
@@ -407,6 +406,51 @@ export const create = async (
       throw err;
     });
 
+  // Inject the broadcast layout CSS as early as possible on every navigation
+  // so the game container is pinned to the top-left and the page background
+  // is black even when the later applyZoom() call races the initial load.
+  // The whole document is scaled by the Agent-provided magnification (root
+  // zoom), mirroring an actual browser zoom so the game screen on the
+  // broadcast looks like a zoomed browser window.
+  await ctx.addInitScript((factor: number) => {
+    const inject = () => {
+      try {
+        const zoom = Number.isFinite(factor) && factor > 0 ? factor : 1;
+        const styleId = "makamujo-broadcast-layout";
+        let style = document.getElementById(styleId) as HTMLStyleElement | null;
+        if (!style) {
+          style = document.createElement("style");
+          style.id = styleId;
+          (document.head ?? document.documentElement).appendChild(style);
+        }
+        style.textContent = [
+          `html{zoom:${zoom}!important}`,
+          "html,body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}",
+          "body{display:block!important;text-align:left!important}",
+          "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
+          "#play-layout{display:block!important;text-align:left!important}",
+          "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
+          "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
+        ].join("\n");
+        // Scale the whole document like a real browser zoom.
+        document.documentElement.style.zoom = String(zoom);
+        if (
+          typeof window !== "undefined" &&
+          typeof window.scrollTo === "function"
+        ) {
+          window.scrollTo(0, 0);
+        }
+      } catch {
+        /* page may not be ready */
+      }
+    };
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", inject, { once: true });
+    } else {
+      inject();
+    }
+  }, options.gameScreenZoom ?? 1);
+
   // Reuse --app window only (do not open a second tabbed window)
   let page = ctx.pages()[0];
   if (!page) {
@@ -452,23 +496,18 @@ export const create = async (
   }, 2000);
 
   const applyZoom = async (factor: number) => {
-    if (isVigilantFiestaGameUrl(page.url())) {
-      await applyGameScreenZoom(page, factor);
-      return;
-    }
-    try {
-      await page.evaluate(() => {
-        document.documentElement.style.zoom = "1.0";
-        window.scrollTo(0, 0);
-      });
-    } catch {
-      /* page may not be ready */
-    }
+    await applyGameScreenZoom(page, factor);
   };
-  await applyZoom(options.gameScreenZoom ?? 1);
+  // Register the load handler before the initial call so a load that fires
+  // during/after the first applyZoom() still re-applies the game-board zoom.
   page.on("load", () => {
     void applyZoom(options.gameScreenZoom ?? 1);
   });
+  await applyZoom(options.gameScreenZoom ?? 1);
+  // Re-apply shortly after launch in case the initial call raced the load.
+  globalThis.setTimeout(() => {
+    void applyZoom(options.gameScreenZoom ?? 1);
+  }, 2000);
 
   page.on(
     "framenavigated",
@@ -636,11 +675,11 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
 };
 
 /**
- * Apply the Agent-provided magnification to the game screen only.
- *
- * The whole document stays at 1.0 so the page layout (title/result screens,
- * HUD) is unaffected; only the game board (and, as a fallback, the playing
- * screen) is scaled up for the captured stream.
+ * Apply the Agent-provided magnification to the whole document, mirroring a
+ * normal browser zoom so the game board and the surrounding UI scale together.
+ * The magnification is written both as an inline style on the document element
+ * and into the broadcast-layout stylesheet so it survives re-renders that drop
+ * the inline style (#1660 review).
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
@@ -652,23 +691,36 @@ export const applyGameScreenZoom = async (
   }
   try {
     await page.evaluate((value: number) => {
-      document.documentElement.style.zoom = "1.0";
-      const gameScreen =
-        document.getElementById("game-container") ??
-        document.getElementById("screen-playing");
-      if (gameScreen) {
-        gameScreen.style.zoom = String(value);
+      const zoom = Number.isFinite(value) && value > 0 ? value : 1;
+      // Scale the whole document like a real browser zoom.
+      document.documentElement.style.zoom = String(zoom);
+      const styleId = "makamujo-broadcast-layout";
+      let style = document.getElementById(styleId) as HTMLStyleElement | null;
+      if (!style) {
+        style = document.createElement("style");
+        style.id = styleId;
+        (document.head ?? document.documentElement).appendChild(style);
       }
-      window.scrollTo(0, 0);
+      style.textContent = [
+        `html{zoom:${zoom}!important}`,
+        "html,body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}",
+        "body{display:block!important;text-align:left!important}",
+        "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
+        "#play-layout{display:block!important;text-align:left!important}",
+        "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
+        "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
+      ].join("\n");
+      if (
+        typeof window !== "undefined" &&
+        typeof window.scrollTo === "function"
+      ) {
+        window.scrollTo(0, 0);
+      }
     }, zoomValue);
   } catch {
     /* page may not be ready */
   }
 };
-
-export const applyZoomToGameScreen = applyGameScreenZoom;
-export const zoomGameScreen = applyGameScreenZoom;
-export const applyZoom = applyGameScreenZoom;
 
 export const createApplyZoom =
   (page: ZoomablePage, zoom: number = 1) =>
