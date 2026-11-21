@@ -429,7 +429,7 @@ export const create = async (
           "#play-layout{display:block!important;text-align:left!important}",
           "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
           "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
-        ].join("\\n");
+        ].join("\n");
         document.documentElement.style.zoom = "1.0";
         if (
           typeof window !== "undefined" &&
@@ -708,7 +708,7 @@ export const applyGameScreenZoom = async (
         "#play-layout{display:block!important;text-align:left!important}",
         "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
         "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
-      ].join("\\n");
+      ].join("\n");
       if (
         typeof window !== "undefined" &&
         typeof window.scrollTo === "function"
