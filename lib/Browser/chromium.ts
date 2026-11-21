@@ -316,7 +316,7 @@ export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
   "--disable-renderer-backgrounding",
 ] as const;
 
-export const GAME_SCREEN_ZOOM_FACTOR = 1 as const;
+export const GAME_SCREEN_ZOOM_FACTOR = 1.25 as const;
 
 export type BrowserCreateOptions = {
   /** Magnification for the Agent's game board. */
@@ -406,31 +406,14 @@ export const create = async (
       throw err;
     });
 
-  // Inject the broadcast layout CSS as early as possible on every navigation
-  // so the game container is pinned to the top-left and the page background
-  // is black even when the later applyZoom() call races the initial load.
-  // Per-element magnification is intentionally not applied: the whole document
-  // stays at 1.0 and OBS handles enlarging the game screen on the broadcast
-  // canvas.
-  await ctx.addInitScript(() => {
+  // Apply the Agent-provided magnification to the whole document as early as
+  // possible on every navigation, mirroring a normal browser zoom so the game
+  // board and the surrounding UI scale together (no per-element zoom).
+  await ctx.addInitScript((factor: number) => {
     const inject = () => {
       try {
-        const styleId = "makamujo-broadcast-layout";
-        let style = document.getElementById(styleId) as HTMLStyleElement | null;
-        if (!style) {
-          style = document.createElement("style");
-          style.id = styleId;
-          (document.head ?? document.documentElement).appendChild(style);
-        }
-        style.textContent = [
-          "html,body{background:#000!important;margin:0!important;padding:0!important}",
-          "body{display:block!important;text-align:left!important}",
-          "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
-          "#play-layout{display:block!important;text-align:left!important}",
-          "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
-          "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
-        ].join("\n");
-        document.documentElement.style.zoom = "1.0";
+        const zoom = Number.isFinite(factor) && factor > 0 ? factor : 1;
+        document.documentElement.style.zoom = String(zoom);
         if (
           typeof window !== "undefined" &&
           typeof window.scrollTo === "function"
@@ -446,7 +429,7 @@ export const create = async (
     } else {
       inject();
     }
-  });
+  }, options.gameScreenZoom ?? 1);
 
   // Reuse --app window only (do not open a second tabbed window)
   let page = ctx.pages()[0];
@@ -496,7 +479,7 @@ export const create = async (
     await applyGameScreenZoom(page, factor);
   };
   // Register the load handler before the initial call so a load that fires
-  // during/after the first applyZoom() still re-applies the broadcast layout.
+  // during/after the first applyZoom() still re-applies the whole-document zoom.
   page.on("load", () => {
     void applyZoom(options.gameScreenZoom ?? 1);
   });
@@ -672,12 +655,8 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
 };
 
 /**
- * Apply the broadcast layout for the enlarged game screen.
- *
- * Per-element magnification is intentionally not applied: the whole document
- * stays at 1.0 and OBS handles enlarging the game screen on the broadcast
- * canvas. The page is restyled so the game container is pinned to the
- * top-left and the surrounding UI is hidden.
+ * Apply the Agent-provided magnification to the whole document, mirroring a
+ * normal browser zoom so the game board and surrounding UI scale together.
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
@@ -688,25 +667,9 @@ export const applyGameScreenZoom = async (
     return;
   }
   try {
-    await page.evaluate((_value: number) => {
-      // Stop per-element zoom: keep the whole document at 1.0 and let OBS
-      // handle enlarging the broadcast image.
-      document.documentElement.style.zoom = "1.0";
-      const styleId = "makamujo-broadcast-layout";
-      let style = document.getElementById(styleId) as HTMLStyleElement | null;
-      if (!style) {
-        style = document.createElement("style");
-        style.id = styleId;
-        (document.head ?? document.documentElement).appendChild(style);
-      }
-      style.textContent = [
-        "html,body{background:#000!important;margin:0!important;padding:0!important}",
-        "body{display:block!important;text-align:left!important}",
-        "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
-        "#play-layout{display:block!important;text-align:left!important}",
-        "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
-        "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
-      ].join("\n");
+    await page.evaluate((value: number) => {
+      const zoom = Number.isFinite(value) && value > 0 ? value : 1;
+      document.documentElement.style.zoom = String(zoom);
       if (
         typeof window !== "undefined" &&
         typeof window.scrollTo === "function"
