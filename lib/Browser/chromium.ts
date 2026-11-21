@@ -316,8 +316,8 @@ export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
   "--disable-renderer-backgrounding",
 ] as const;
 
-export const GAME_SCREEN_ZOOM = "1.75" as const;
-export const GAME_SCREEN_ZOOM_FACTOR = 1.75 as const;
+export const GAME_SCREEN_ZOOM = "1" as const;
+export const GAME_SCREEN_ZOOM_FACTOR = 1 as const;
 
 export type BrowserCreateOptions = {
   /** Magnification for the Agent's game board. */
@@ -368,10 +368,8 @@ export const create = async (
       : "using Playwright bundled Chromium",
   );
 
-  // The game Agent owns how its board is scaled. The magnification is applied
-  // as a real browser page scale factor (Emulation.setPageScaleFactor) so the
-  // broadcast captures exactly what an actual browser zoom looks like, instead
-  // of reflowing the layout with CSS zoom or changing the device pixel ratio.
+  // The game Agent owns how its board is scaled. Enlargement is handled on the
+  // OBS side of the broadcast canvas; the browser keeps the document at 1.0.
   const launchOpts = {
     headless: process.env.CHROMIUM_HEADLESS === "1",
     timeout: launchTimeout,
@@ -495,28 +493,9 @@ export const create = async (
     void dismissCloseButtons();
   }, 2000);
 
-  let cdpSession: unknown = null;
-  const setPageScaleFactor = async (factor: number): Promise<void> => {
-    const value =
-      Number.isFinite(factor) && (factor ?? 0) > 0 ? (factor as number) : 1;
-    try {
-      if (!cdpSession) {
-        cdpSession = await ctx.newCDPSession(page);
-      }
-      await (
-        cdpSession as {
-          send: (m: string, p?: Record<string, unknown>) => Promise<unknown>;
-        }
-      ).send("Emulation.setPageScaleFactor", { pageScaleFactor: value });
-    } catch {
-      /* CDP may be unavailable in this environment */
-    }
-  };
-
   const applyZoom = async (factor: number) => {
     if (isVigilantFiestaGameUrl(page.url())) {
       await applyGameScreenZoom(page, factor);
-      await setPageScaleFactor(factor);
       return;
     }
     try {
@@ -527,7 +506,6 @@ export const create = async (
     } catch {
       /* page may not be ready */
     }
-    await setPageScaleFactor(1);
   };
   // Register the load handler before the initial call so a load that fires
   // during/after the first applyZoom() still re-applies the game-board zoom.
@@ -706,9 +684,9 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
 };
 
 /**
- * (Re)apply the broadcast layout CSS for the game screen. The actual
- * magnification is provided by the browser's device scale factor, which is set
- * at launch, so this no longer touches `document.documentElement.style.zoom`.
+ * (Re)apply the broadcast layout CSS for the game screen. Per-element
+ * magnification is intentionally not applied anymore: the whole document stays
+ * at 1.0 and OBS handles enlarging the game screen on the broadcast canvas.
  * The magnification argument is retained for API compatibility.
  */
 export const applyGameScreenZoom = async (
@@ -718,31 +696,6 @@ export const applyGameScreenZoom = async (
   const zoomValue = resolveGameScreenZoomValue(zoom);
   if (zoomValue === undefined) {
     return;
-  }
-  // Apply the magnification as a real browser page scale factor, matching what
-  // an actual browser zoom does, in addition to (re)injecting the broadcast
-  // layout CSS.
-  try {
-    const context = (
-      page as {
-        context?: () => {
-          newCDPSession?: (p: unknown) => Promise<{
-            send: (
-              m: string,
-              params?: Record<string, unknown>,
-            ) => Promise<unknown>;
-          }>;
-        };
-      }
-    ).context?.();
-    if (context && typeof context.newCDPSession === "function") {
-      const session = await context.newCDPSession(page);
-      await session.send("Emulation.setPageScaleFactor", {
-        pageScaleFactor: zoomValue,
-      });
-    }
-  } catch {
-    /* CDP may be unavailable in this environment */
   }
   try {
     await page.evaluate((value: number) => {
