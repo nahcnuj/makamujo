@@ -238,20 +238,20 @@
             "id": 1,
             "group_item_backup": false,
             "pos": {
-              "x": 0.0,
+              "x": -256.0,
               "y": 0.0
             },
             "pos_rel": {
-              "x": -1.7777777910232544,
+              "x": -2.488888888888889,
               "y": -1.0
             },
             "scale": {
-              "x": 1.8,
-              "y": 1.8
+              "x": 2.4,
+              "y": 1.6666666666666667
             },
             "scale_rel": {
-              "x": 1.8,
-              "y": 1.8
+              "x": 2.4,
+              "y": 1.6666666666666667
             },
             "bounds": {
               "x": 0.0,
@@ -474,7 +474,7 @@
       "id": "text_ft2_source",
       "versioned_id": "text_ft2_source_v2",
       "settings": {
-        "text": "\u30de\u30eb\u30b3\u30d5\u30c8\u30fc\u30af\n\u30c6\u30fc\u30de\uff1a",
+        "text": "マルコフトーク\nテーマ：",
         "font": {
           "face": "Noto Sans CJK JP",
           "style": "Bold",
