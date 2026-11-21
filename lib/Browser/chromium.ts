@@ -406,14 +406,45 @@ export const create = async (
       throw err;
     });
 
-  // Keep the whole document at 1.0 on every navigation; the Agent-provided
-  // magnification is applied to the game board only (see applyGameScreenZoom),
-  // so the title keeps its original size and the title/board ratio changes.
+  // Inject the broadcast layout CSS as early as possible on every navigation
+  // so the game container is pinned to the top-left and the page background
+  // is black even when the later applyZoom() call races the initial load.
+  // The whole document stays at 1.0 so the title keeps its original size and
+  // the title/board ratio changes; only the game board is scaled (see
+  // applyGameScreenZoom).
   await ctx.addInitScript(() => {
-    try {
-      document.documentElement.style.zoom = "1.0";
-    } catch {
-      /* page may not be ready */
+    const inject = () => {
+      try {
+        const styleId = "makamujo-broadcast-layout";
+        let style = document.getElementById(styleId) as HTMLStyleElement | null;
+        if (!style) {
+          style = document.createElement("style");
+          style.id = styleId;
+          (document.head ?? document.documentElement).appendChild(style);
+        }
+        style.textContent = [
+          "html,body{background:#000!important;margin:0!important;padding:0!important}",
+          "body{display:block!important;text-align:left!important}",
+          "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
+          "#play-layout{display:block!important;text-align:left!important}",
+          "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
+          "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
+        ].join("\\n");
+        document.documentElement.style.zoom = "1.0";
+        if (
+          typeof window !== "undefined" &&
+          typeof window.scrollTo === "function"
+        ) {
+          window.scrollTo(0, 0);
+        }
+      } catch {
+        /* page may not be ready */
+      }
+    };
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", inject, { once: true });
+    } else {
+      inject();
     }
   });
 
@@ -663,6 +694,21 @@ export const applyGameScreenZoom = async (
       if (gameScreen) {
         gameScreen.style.zoom = String(zoom);
       }
+      const styleId = "makamujo-broadcast-layout";
+      let style = document.getElementById(styleId) as HTMLStyleElement | null;
+      if (!style) {
+        style = document.createElement("style");
+        style.id = styleId;
+        (document.head ?? document.documentElement).appendChild(style);
+      }
+      style.textContent = [
+        "html,body{background:#000!important;margin:0!important;padding:0!important}",
+        "body{display:block!important;text-align:left!important}",
+        "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
+        "#play-layout{display:block!important;text-align:left!important}",
+        "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
+        "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
+      ].join("\\n");
       if (
         typeof window !== "undefined" &&
         typeof window.scrollTo === "function"
