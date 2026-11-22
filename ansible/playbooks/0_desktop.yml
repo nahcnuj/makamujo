@@ -30,6 +30,7 @@
           - dbus-x11
         state: present
         update_cache: true
+        cache_valid_time: 3600
 
     - name: Install noVNC packages (browser VNC client for the sign-in display :11)
       ansible.builtin.apt:

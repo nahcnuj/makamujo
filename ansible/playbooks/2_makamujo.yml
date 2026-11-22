@@ -33,6 +33,7 @@
       ansible.builtin.apt:
         state: fixed
         update_cache: true
+        cache_valid_time: 3600
       environment:
         DEBIAN_FRONTEND: noninteractive
 

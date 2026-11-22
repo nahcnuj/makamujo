@@ -7,6 +7,7 @@
         name: flatpak
         state: present
         update_cache: true
+        cache_valid_time: 3600
 
     - name: Add Flathub remote
       ansible.builtin.command:

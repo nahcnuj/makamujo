@@ -291,6 +291,17 @@ jobs:
           ansible-playbook -i inventories/docker.yml playbooks/1_bun.yml
           ansible-playbook -i inventories/docker.yml playbooks/2_makamujo.yml
 
+      - name: Clean package caches before committing provisioned image
+        if: steps.provisioned-image-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          docker compose exec -T makamujo bash -c '
+            set -e
+            apt-get clean || true
+            rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* 2>/dev/null || true
+            rm -rf /root/.cache/pip /root/.cache/bun /root/.npm 2>/dev/null || true
+          '
+
       - name: Commit provisioned container to a cacheable image
         if: steps.provisioned-image-cache.outputs.cache-hit != 'true'
         run: |
