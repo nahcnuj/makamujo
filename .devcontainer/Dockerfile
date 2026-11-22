@@ -11,6 +11,7 @@ RUN apt-get update \
         ca-certificates \
         libcap2-bin \
         openssl \
+        unzip \
         fonts-noto-cjk \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
