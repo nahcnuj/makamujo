@@ -309,7 +309,7 @@ jobs:
           tar --exclude='./node_modules' --exclude='./.git' --exclude='./var' \
             -C "${GITHUB_WORKSPACE}" -cf - . \
             | docker compose exec -T makamujo tar -xf - -C /opt/src/makamujo
-          docker compose exec -T makamujo bash -c 'cd /opt/src/makamujo && bun install --production'
+          docker compose exec -T makamujo bash -c 'cd /opt/src/makamujo && /root/.bun/bin/bun install --production'
           docker compose exec -T makamujo systemctl restart makamujo-screen.service makamujo-browser.service
           for _ in $(seq 1 30); do
             if docker compose exec -T makamujo systemctl is-active --quiet makamujo-screen.service; then
