@@ -4,16 +4,15 @@ FROM mcr.microsoft.com/devcontainers/base:2.2-debian12
 ARG USERNAME=vscode
 ENV BUN_INSTALL=/usr/local
 ENV NICONAMA_WATCH_PAGE_DISABLED=1
-WORKDIR /workspaces/makamujo
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        curl \
         ca-certificates \
+        curl \
+        fonts-noto-cjk \
         libcap2-bin \
         openssl \
         unzip \
-        fonts-noto-cjk \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -24,16 +23,15 @@ RUN curl -fsSL https://bun.sh/install | bash \
 # Install project dependencies (lockfile-respecting).
 COPY --chown=${USERNAME}:${USERNAME} package.json bun.lock /workspaces/makamujo/
 RUN chown -R ${USERNAME}:${USERNAME} /workspaces/makamujo
-USER ${USERNAME}
-ENV PATH="${BUN_INSTALL}/bin:${PATH}"
-RUN bun ci
+RUN cd /workspaces/makamujo && /usr/local/bin/bun ci
+RUN chown -R ${USERNAME}:${USERNAME} /workspaces/makamujo
 
 # Install system dependencies required by Playwright's Chromium.
-USER root
-RUN bun /workspaces/makamujo/node_modules/.bin/playwright install-deps chromium
+RUN /usr/local/bin/bun /workspaces/makamujo/node_modules/.bin/playwright install-deps chromium
 
 # Install Playwright's Chromium browser.
 USER ${USERNAME}
+ENV PATH="${BUN_INSTALL}/bin:${PATH}"
 RUN bun /workspaces/makamujo/node_modules/.bin/playwright install chromium
 
 # Generate the self-signed TLS certificate used by console E2E tests.
@@ -42,7 +40,5 @@ RUN bash /workspaces/makamujo/scripts/setup-e2e-tls.sh
 
 # Configure git hooks from a stable, image-baked location.
 COPY --chown=${USERNAME}:${USERNAME} .githooks /usr/local/share/makamujo-githooks
-USER root
 RUN chmod +x /usr/local/share/makamujo-githooks/* \
-    && git config --system core.hooksPath /usr/local/share/makamujo-githooks
-USER ${USERNAME}
+    && git config --global core.hooksPath /usr/local/share/makamujo-githooks
