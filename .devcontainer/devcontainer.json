@@ -10,12 +10,13 @@
   },
   "workspaceMount": "source=${localWorkspaceFolder},target=${containerWorkspaceFolder},type=bind,consistency=cached",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
-  "postCreateCommand": "bun ci",
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
   "forwardPorts": [443, 8777],
   "runArgs": ["--cap-add=NET_BIND_SERVICE"],
   "remoteEnv": {
     "CONSOLE_TLS_CERT": "var/e2e-tls/fullchain.pem",
-    "CONSOLE_TLS_KEY": "var/e2e-tls/privkey.pem"
+    "CONSOLE_TLS_KEY": "var/e2e-tls/privkey.pem",
+    "NICONAMA_WATCH_PAGE_DISABLED": "1"
   },
   "remoteUser": "vscode"
 }
