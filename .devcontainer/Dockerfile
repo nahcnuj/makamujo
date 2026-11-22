@@ -50,7 +50,7 @@ RUN curl -fsSL https://opencode.ai/install | bash
 
 # Install the conahcnuj driver so auto-drive can run inside this container.
 # Runs as ${USERNAME}: no root needed (files are owned by the user).
-RUN git clone --depth 1 --branch v2026.11.22 https://github.com/conahcnuj/conahcnuj.git /tmp/conahcnuj \
+RUN git clone --depth 1 https://github.com/conahcnuj/conahcnuj.git /tmp/conahcnuj \
     && mkdir -p /home/${USERNAME}/.config/opencode/gh-app /home/${USERNAME}/.config/opencode/plugins/lib \
               /home/${USERNAME}/.local/bin /home/${USERNAME}/.local/gh-app /home/${USERNAME}/.local/lib \
     && cp /tmp/conahcnuj/gh-app/*.sh /home/${USERNAME}/.config/opencode/gh-app/ \
