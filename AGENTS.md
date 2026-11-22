@@ -1,4 +1,4 @@
-﻿# AGENTS.md
+# AGENTS.md
 
 このファイルはAIエージェント専用の指示書です。作業前に一読し、コマンドや契約に従ってください。
 
@@ -56,6 +56,7 @@
 - テストフレームワークは Bun（`bun:test`、Jest 互換）。`bunfig.toml` で coverage が常時有効（`bun test` はカバレッジ計測つきで若干遅い）。
 - 配置: 単体テストは実装と同階層 `*.test.{ts,tsx}` / 統合 `tests/integration/` / E2E `tests/e2e/` / シェル `tests/bin/`。
 - VRT: 合成画像や example ケースは使わない。`tests/vrt-rtmps.sh` が再現環境の OBS から RTMPS 経由で配信された実際の vigilant-fiesta ゲーム画面をキャプチャし、`tests/vrt-rtmps/baseline/` のコミット済み画像と SSIM で比較する。CI の `rtmps` job は `compose.yml` で `makamujo` / `mediamtx` / `vrt` を同じ Docker ネットワークに起動し、`vrt` サービスが `rtmps://mediamtx:1936/live/stream` をネットワーク内からキャプチャして比較する。キャプチャは成果物としてアップロードする。
+- VRT ベースライン更新: 視覚的変更を意図した場合は、再現環境 (Docker/Ansible, `compose.yml`) を起動して `RTMPS_CAPTURE_URL=rtmps://... bash tests/vrt-rtmps.sh` を実行し、生成された `tests/vrt-rtmps/capture-rtmps.png` (生成物) を確認する。SSIM が閾値 (0.95) を下回る正当な変更なら、そのキャプチャを `tests/vrt-rtmps/baseline/capture-rtmps.png` に上書きコピーしてコミットする (合成画像や手編集は不可)。CI の `rtmps` job が失敗した場合はアップロードされた `vrt-rtmps-captured` 成果物の画像をベースライン更新に使う。`tests/vrt/` (シェル VRT) のベースラインは各ケース実行で生成された `tests/vrt/<name>.png` を `tests/vrt/baseline/<name>.png` にコピーして更新する。
 
 ## コーディングスタイル
 
