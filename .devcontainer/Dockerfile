@@ -49,8 +49,12 @@ RUN chmod -R a+rX /usr/local/share/makamujo-githooks \
 RUN curl -fsSL https://opencode.ai/install | bash
 
 # Install the conahcnuj driver so auto-drive can run inside this container.
+# Resolve the latest release tag at build time (not main, not a pinned tag) so
+# the container always ships the newest published conahcnuj release.
 # Runs as ${USERNAME}: no root needed (files are owned by the user).
-RUN git clone --depth 1 https://github.com/conahcnuj/conahcnuj.git /tmp/conahcnuj \
+RUN LATEST_TAG="$(git ls-remote --tags --sort=-v:refname https://github.com/conahcnuj/conahcnuj.git | head -n 1 | cut -f 2 | sed 's#^refs/tags/##; s/\^{}$//')" \
+    && test -n "$LATEST_TAG" \
+    && git clone --depth 1 --branch "$LATEST_TAG" https://github.com/conahcnuj/conahcnuj.git /tmp/conahcnuj \
     && mkdir -p /home/${USERNAME}/.config/opencode/gh-app /home/${USERNAME}/.config/opencode/plugins/lib \
               /home/${USERNAME}/.local/bin /home/${USERNAME}/.local/gh-app /home/${USERNAME}/.local/lib \
     && cp /tmp/conahcnuj/gh-app/*.sh /home/${USERNAME}/.config/opencode/gh-app/ \
