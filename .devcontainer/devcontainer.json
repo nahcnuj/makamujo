@@ -6,11 +6,15 @@
   },
   "features": {
     "ghcr.io/devcontainers/features/git": "latest",
-    "ghcr.io/devcontainers/features/github-cli": "latest"
+    "ghcr.io/devcontainers/features/github-cli": "latest",
+    "ghcr.io/devcontainers/features/node": "latest"
   },
   "workspaceMount": "source=${localWorkspaceFolder},target=${containerWorkspaceFolder},type=bind,consistency=cached",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
-  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "mounts": [
+    "source=makamujo-node_modules,target=${containerWorkspaceFolder}/node_modules,type=volume",
+    "source=makamujo-e2e-tls,target=${containerWorkspaceFolder}/var/e2e-tls,type=volume"
+  ],
   "forwardPorts": [443, 8777],
   "runArgs": ["--cap-add=NET_BIND_SERVICE"],
   "remoteEnv": {
