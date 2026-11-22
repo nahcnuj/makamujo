@@ -3,6 +3,7 @@ FROM mcr.microsoft.com/devcontainers/base:2.2-debian12
 
 ARG USERNAME=vscode
 ENV BUN_INSTALL=/usr/local
+ENV NICONAMA_WATCH_PAGE_DISABLED=1
 WORKDIR /workspaces/makamujo
 
 RUN apt-get update \
