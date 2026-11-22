@@ -28,6 +28,7 @@ jobs:
       number: ${{ github.event.pull_request.number || github.event.issue.number || (github.event.inputs.number && fromJSON(github.event.inputs.number)) }}
       repository: ${{ github.repository }}
       environment: conahcnuj
+      container_image: ghcr.io/nahcnuj/makamujo/devcontainer:latest
     secrets:
       APP_ID: ${{ secrets.APP_ID }}
       INSTALLATION_ID: ${{ secrets.INSTALLATION_ID }}
