@@ -338,8 +338,9 @@ jobs:
             | docker compose exec -T makamujo tar -xf - -C /opt/src/makamujo
           docker compose exec -T makamujo bash -c 'cd /opt/src/makamujo && /root/.bun/bin/bun install --production --frozen-lockfile'
           docker compose exec -T makamujo systemctl restart makamujo-screen.service makamujo-browser.service
-          for _ in $(seq 1 30); do
-            if docker compose exec -T makamujo systemctl is-active --quiet makamujo-screen.service; then
+          for _ in $(seq 1 60); do
+            if docker compose exec -T makamujo systemctl is-active --quiet makamujo-screen.service \
+               && docker compose exec -T makamujo systemctl is-active --quiet makamujo-browser.service; then
               break
             fi
             sleep 1
