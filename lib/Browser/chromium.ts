@@ -434,7 +434,7 @@ export const create = async (
           "#play-layout{display:grid!important;grid-template-columns:1fr!important;justify-items:center!important;gap:0.75rem!important}",
           "#game-container{margin:0 auto!important;justify-self:center!important;display:block!important}",
           ".ad-slot,#ad-side-left,#ad-side-right{display:none!important}",
-        ].join("\\n");
+        ].join("\n");
         // Scale the whole document like a real browser zoom.
         document.documentElement.style.zoom = String(zoom);
         if (
@@ -724,7 +724,7 @@ export const applyGameScreenZoom = async (
         "#play-layout{display:grid!important;grid-template-columns:1fr!important;justify-items:center!important;gap:0.75rem!important}",
         "#game-container{margin:0 auto!important;justify-self:center!important;display:block!important}",
         ".ad-slot,#ad-side-left,#ad-side-right{display:none!important}",
-      ].join("\\n");
+      ].join("\n");
       if (
         typeof window !== "undefined" &&
         typeof window.scrollTo === "function"
