@@ -427,10 +427,10 @@ export const create = async (
         style.textContent = [
           `html{zoom:${zoom}!important}`,
           "html,body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}",
-          "body{display:block!important;text-align:left!important}",
-          "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
-          "#play-layout{display:block!important;text-align:left!important}",
-          "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
+          "body{display:flex!important;align-items:flex-start!important;justify-content:center!important;padding:0.75rem!important}",
+          "#app{margin:0 auto!important;max-width:40rem!important;width:min(100%,40rem)!important;text-align:center!important}",
+          "#play-layout{display:grid!important;grid-template-columns:1fr!important;justify-items:center!important;gap:0.75rem!important}",
+          "#game-container{margin:0 auto!important;justify-self:center!important;display:block!important}",
           "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
         ].join("\n");
         // Scale the whole document like a real browser zoom.
