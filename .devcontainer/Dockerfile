@@ -23,10 +23,13 @@ RUN curl -fsSL https://bun.sh/install | bash \
 
 # Install project dependencies (lockfile-respecting).
 COPY --chown=${USERNAME}:${USERNAME} package.json bun.lock /workspaces/makamujo/
+USER ${USERNAME}
 RUN cd /workspaces/makamujo && /usr/local/bin/bun ci
 
 # Install system dependencies required by Playwright's Chromium.
-RUN /usr/local/bin/bun /workspaces/makamujo/node_modules/.bin/playwright install-deps chromium
+USER root
+RUN /usr/local/bin/bun /workspaces/makamujo/node_modules/.bin/playwright install-deps chromium \
+    && chown -R ${USERNAME}:${USERNAME} /workspaces/makamujo
 
 # Install Playwright's Chromium browser.
 USER ${USERNAME}
@@ -39,16 +42,14 @@ RUN bash /workspaces/makamujo/scripts/setup-e2e-tls.sh
 
 # Configure git hooks from a stable, image-baked location.
 COPY --chown=${USERNAME}:${USERNAME} .githooks /usr/local/share/makamujo-githooks
-USER root
-RUN chmod -R a+rX /usr/local/share/makamujo-githooks
-USER ${USERNAME}
-RUN git config --global core.hooksPath /usr/local/share/makamujo-githooks
+RUN chmod -R a+rX /usr/local/share/makamujo-githooks \
+    && git config --global core.hooksPath /usr/local/share/makamujo-githooks
 
 # Install opencode CLI.
 RUN curl -fsSL https://opencode.ai/install | bash
 
 # Install the conahcnuj driver so auto-drive can run inside this container.
-USER root
+# Runs as ${USERNAME}: no root needed (files are owned by the user).
 RUN git clone --depth 1 https://github.com/conahcnuj/conahcnuj.git /tmp/conahcnuj \
     && mkdir -p /home/${USERNAME}/.config/opencode/gh-app /home/${USERNAME}/.config/opencode/plugins/lib \
               /home/${USERNAME}/.local/bin /home/${USERNAME}/.local/gh-app /home/${USERNAME}/.local/lib \
@@ -63,11 +64,9 @@ RUN git clone --depth 1 https://github.com/conahcnuj/conahcnuj.git /tmp/conahcnu
     && cp /tmp/conahcnuj/bin/git-vc /home/${USERNAME}/.local/bin/git-vc \
     && chmod +x /home/${USERNAME}/.local/bin/conahcnuj /home/${USERNAME}/.local/bin/git-vc \
     && cp /tmp/conahcnuj/lib/*.sh /home/${USERNAME}/.local/lib/ \
-    && [ ! -f /home/${USERNAME}/.config/opencode/AGENTS.md ] && cp /tmp/conahcnuj/opencode/AGENTS.md /home/${USERNAME}/.config/opencode/AGENTS.md || true \
-    && [ ! -f /home/${USERNAME}/.local/gh-app/app.env ] && cp /home/${USERNAME}/.local/gh-app/app.env.example /home/${USERNAME}/.local/gh-app/app.env || true \
-    && [ ! -f /home/${USERNAME}/.config/opencode/gh-app/app.env ] && cp /home/${USERNAME}/.config/opencode/gh-app/app.env.example /home/${USERNAME}/.config/opencode/gh-app/app.env || true \
-    && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.config/opencode /home/${USERNAME}/.local \
+    && ( [ ! -f /home/${USERNAME}/.config/opencode/AGENTS.md ] && cp /tmp/conahcnuj/opencode/AGENTS.md /home/${USERNAME}/.config/opencode/AGENTS.md ) || true \
+    && ( [ ! -f /home/${USERNAME}/.local/gh-app/app.env ] && cp /home/${USERNAME}/.local/gh-app/app.env.example /home/${USERNAME}/.local/gh-app/app.env ) || true \
+    && ( [ ! -f /home/${USERNAME}/.config/opencode/gh-app/app.env ] && cp /home/${USERNAME}/.config/opencode/gh-app/app.env.example /home/${USERNAME}/.config/opencode/gh-app/app.env ) || true \
     && rm -rf /tmp/conahcnuj
 
-USER ${USERNAME}
 ENV PATH="${BUN_INSTALL}/bin:/home/${USERNAME}/.opencode/bin:/home/${USERNAME}/.local/bin:${PATH}"
