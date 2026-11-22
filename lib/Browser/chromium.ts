@@ -431,7 +431,7 @@ export const create = async (
           "#app{margin:0 auto!important;max-width:40rem!important;width:min(100%,40rem)!important;text-align:center!important}",
           "#play-layout{display:grid!important;grid-template-columns:1fr!important;justify-items:center!important;gap:0.75rem!important}",
           "#game-container{margin:0 auto!important;justify-self:center!important;display:block!important}",
-          "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
+          ".ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
         ].join("\n");
         // Scale the whole document like a real browser zoom.
         document.documentElement.style.zoom = String(zoom);
@@ -709,7 +709,7 @@ export const applyGameScreenZoom = async (
         "#app{margin:0 auto!important;max-width:40rem!important;width:min(100%,40rem)!important;text-align:center!important}",
         "#play-layout{display:grid!important;grid-template-columns:1fr!important;justify-items:center!important;gap:0.75rem!important}",
         "#game-container{margin:0 auto!important;justify-self:center!important;display:block!important}",
-        "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
+        ".ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
       ].join("\n");
       if (
         typeof window !== "undefined" &&
