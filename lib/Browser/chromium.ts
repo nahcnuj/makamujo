@@ -316,8 +316,8 @@ export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
   "--disable-renderer-backgrounding",
 ] as const;
 
-export const GAME_SCREEN_ZOOM = "1" as const;
-export const GAME_SCREEN_ZOOM_FACTOR = 1 as const;
+export const GAME_SCREEN_ZOOM = "1.25" as const;
+export const GAME_SCREEN_ZOOM_FACTOR = 1.25 as const;
 
 export type BrowserCreateOptions = {
   /** Magnification for the Agent's game board. */
@@ -407,6 +407,51 @@ export const create = async (
       throw err;
     });
 
+  // Inject the broadcast layout CSS as early as possible on every navigation
+  // so the game container is pinned to the top-left and the page background
+  // is black even when the later applyZoom() call races the initial load.
+  // The whole document is scaled by the Agent-provided magnification (root
+  // zoom), mirroring an actual browser zoom so the game screen on the
+  // broadcast looks like a zoomed browser window.
+  await ctx.addInitScript((factor: number) => {
+    const inject = () => {
+      try {
+        const zoom = Number.isFinite(factor) && factor > 0 ? factor : 1;
+        const styleId = "makamujo-broadcast-layout";
+        let style = document.getElementById(styleId) as HTMLStyleElement | null;
+        if (!style) {
+          style = document.createElement("style");
+          style.id = styleId;
+          (document.head ?? document.documentElement).appendChild(style);
+        }
+        style.textContent = [
+          `html{zoom:${zoom}!important}`,
+          "html,body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}",
+          "body{display:block!important;text-align:left!important}",
+          "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
+          "#play-layout{display:block!important;text-align:left!important}",
+          "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
+          "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
+        ].join("\n");
+        // Scale the whole document like a real browser zoom.
+        document.documentElement.style.zoom = String(zoom);
+        if (
+          typeof window !== "undefined" &&
+          typeof window.scrollTo === "function"
+        ) {
+          window.scrollTo(0, 0);
+        }
+      } catch {
+        /* page may not be ready */
+      }
+    };
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", inject, { once: true });
+    } else {
+      inject();
+    }
+  }, options.gameScreenZoom ?? 1);
+
   // Reuse --app window only (do not open a second tabbed window)
   let page = ctx.pages()[0];
   if (!page) {
@@ -454,10 +499,16 @@ export const create = async (
   const applyZoom = async (factor: number) => {
     await applyGameScreenZoom(page, factor);
   };
-  await applyZoom(options.gameScreenZoom ?? 1);
+  // Register the load handler before the initial call so a load that fires
+  // during/after the first applyZoom() still re-applies the game-board zoom.
   page.on("load", () => {
     void applyZoom(options.gameScreenZoom ?? 1);
   });
+  await applyZoom(options.gameScreenZoom ?? 1);
+  // Re-apply shortly after launch in case the initial call raced the load.
+  globalThis.setTimeout(() => {
+    void applyZoom(options.gameScreenZoom ?? 1);
+  }, 2000);
 
   page.on(
     "framenavigated",
@@ -631,13 +682,6 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
  * and into the broadcast-layout stylesheet so it survives re-renders that drop
  * the inline style (#1660 review).
  */
-/**
- * Reset the document zoom to 1.0.
- *
- * Per-element magnification is intentionally not applied anymore: the whole
- * document stays at 1.0 and OBS handles enlarging the game screen on the
- * broadcast canvas.
- */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
   zoom: number = 1,
@@ -647,10 +691,26 @@ export const applyGameScreenZoom = async (
     return;
   }
   try {
-    await page.evaluate((_value: number) => {
-      // Stop per-element zoom: keep the whole document at 1.0 and let OBS
-      // handle enlarging the broadcast image.
-      document.documentElement.style.zoom = "1.0";
+    await page.evaluate((value: number) => {
+      const zoom = Number.isFinite(value) && value > 0 ? value : 1;
+      // Scale the whole document like a real browser zoom.
+      document.documentElement.style.zoom = String(zoom);
+      const styleId = "makamujo-broadcast-layout";
+      let style = document.getElementById(styleId) as HTMLStyleElement | null;
+      if (!style) {
+        style = document.createElement("style");
+        style.id = styleId;
+        (document.head ?? document.documentElement).appendChild(style);
+      }
+      style.textContent = [
+        `html{zoom:${zoom}!important}`,
+        "html,body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}",
+        "body{display:block!important;text-align:left!important}",
+        "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
+        "#play-layout{display:block!important;text-align:left!important}",
+        "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
+        "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
+      ].join("\n");
       if (
         typeof window !== "undefined" &&
         typeof window.scrollTo === "function"
