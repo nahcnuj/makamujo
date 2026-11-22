@@ -407,53 +407,6 @@ export const create = async (
       throw err;
     });
 
-  // Inject the broadcast layout CSS as early as possible on every navigation
-  // so the game container is pinned to the top-left and the page background
-  // is black even when the later applyZoom() call races the initial load.
-  // The whole document is scaled by the Agent-provided magnification (root
-  // zoom), mirroring an actual browser zoom so the game screen on the
-  // broadcast looks like a zoomed browser window. Keeping the whole document
-  // scaled (rather than zooming only the game board) preserves the score/HUD
-  // and other display content that used to disappear from the broadcast.
-  await ctx.addInitScript((factor: number) => {
-    const inject = () => {
-      try {
-        const zoom = Number.isFinite(factor) && factor > 0 ? factor : 1;
-        const styleId = "makamujo-broadcast-layout";
-        let style = document.getElementById(styleId) as HTMLStyleElement | null;
-        if (!style) {
-          style = document.createElement("style");
-          style.id = styleId;
-          (document.head ?? document.documentElement).appendChild(style);
-        }
-        style.textContent = [
-          `html{zoom:${zoom}!important}`,
-          "html,body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}",
-          `body{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:flex-start!important;width:${1024 / zoom}px!important;height:auto!important;padding:0!important;margin:0 auto!important}`,
-          "#app{margin:0 auto!important;max-width:40rem!important;width:min(100%,40rem)!important;text-align:center!important}",
-          "#play-layout{display:grid!important;grid-template-columns:1fr!important;justify-items:center!important;gap:0.75rem!important}",
-          "#game-container{margin:0 auto!important;justify-self:center!important;display:block!important}",
-          ".ad-slot,#ad-side-left,#ad-side-right{display:none!important}",
-        ].join("\n");
-        // Scale the whole document like a real browser zoom.
-        document.documentElement.style.zoom = String(zoom);
-        if (
-          typeof window !== "undefined" &&
-          typeof window.scrollTo === "function"
-        ) {
-          window.scrollTo(0, 0);
-        }
-      } catch {
-        /* page may not be ready */
-      }
-    };
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", inject, { once: true });
-    } else {
-      inject();
-    }
-  }, options.gameScreenZoom ?? 1);
-
   // Reuse --app window only (do not open a second tabbed window)
   let page = ctx.pages()[0];
   if (!page) {
@@ -689,11 +642,12 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
 };
 
 /**
- * Apply the Agent-provided magnification to the whole document, mirroring a
- * normal browser zoom so the game board and the surrounding UI scale together.
- * The magnification is written both as an inline style on the document element
- * and into the broadcast-layout stylesheet so it survives re-renders that drop
- * the inline style (#1660 review).
+ * Apply the Agent-provided magnification to the game screen only.
+ *
+ * The whole document stays at 1.0 so the page layout (title/result screens,
+ * HUD) is unaffected; only the game board is scaled up for the captured
+ * stream. Display content is kept visible and the game screen area is
+ * centered.
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
@@ -705,26 +659,22 @@ export const applyGameScreenZoom = async (
   }
   try {
     await page.evaluate((value: number) => {
-      const zoom = Number.isFinite(value) && value > 0 ? value : 1;
-      // Scale the whole document like a real browser zoom so the game board and
-      // the surrounding UI (score/HUD/next) scale together and stay visible.
-      document.documentElement.style.zoom = String(zoom);
-      const styleId = "makamujo-broadcast-layout";
-      let style = document.getElementById(styleId) as HTMLStyleElement | null;
-      if (!style) {
-        style = document.createElement("style");
-        style.id = styleId;
-        (document.head ?? document.documentElement).appendChild(style);
+      // Keep the whole document at 1.0 so the page layout (title/result
+      // screens, HUD) is unaffected; only the game board is scaled up for
+      // the captured stream. This avoids clearing display content that used
+      // to disappear from the broadcast.
+      document.documentElement.style.zoom = "1.0";
+      const gameScreen =
+        document.getElementById("game-container") ??
+        document.getElementById("screen-playing");
+      if (gameScreen) {
+        gameScreen.style.zoom = String(
+          Number.isFinite(value) && value > 0 ? value : 1,
+        );
+        // Center the game screen area within its container.
+        gameScreen.style.margin = "0 auto";
+        gameScreen.style.display = "block";
       }
-      style.textContent = [
-        `html{zoom:${zoom}!important}`,
-        "html,body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}",
-        `body{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:flex-start!important;width:${1024 / zoom}px!important;height:auto!important;padding:0!important;margin:0 auto!important}`,
-        "#app{margin:0 auto!important;max-width:40rem!important;width:min(100%,40rem)!important;text-align:center!important}",
-        "#play-layout{display:grid!important;grid-template-columns:1fr!important;justify-items:center!important;gap:0.75rem!important}",
-        "#game-container{margin:0 auto!important;justify-self:center!important;display:block!important}",
-        ".ad-slot,#ad-side-left,#ad-side-right{display:none!important}",
-      ].join("\n");
       if (
         typeof window !== "undefined" &&
         typeof window.scrollTo === "function"
