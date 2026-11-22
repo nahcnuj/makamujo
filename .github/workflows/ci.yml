@@ -175,19 +175,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Resolve provisioned-image cache key
-        id: provisioned-image-key
-        run: |
-          set -euo pipefail
-          main_sha=$(git ls-remote https://github.com/nahcnuj/makamujo.git refs/heads/main | awk '{print $1}')
-          echo "main_sha=${main_sha}" >> "${GITHUB_OUTPUT}"
-
       - name: Restore provisioned image from cache
         id: provisioned-image-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: makamujo-provisioned.tar
-          key: makamujo-provisioned-${{ steps.provisioned-image-key.outputs.main_sha }}-${{ hashFiles('Dockerfile', 'ansible/**', 'compose.yml', 'bin/**', 'etc/**') }}
+          key: makamujo-provisioned-${{ hashFiles('Dockerfile', 'ansible/**', 'compose.yml', 'bin/**', 'etc/**') }}
 
       - name: Load provisioned image (if cached)
         if: steps.provisioned-image-cache.outputs.cache-hit == 'true'
@@ -200,18 +193,35 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/ffmpeg-bin
-          key: ffmpeg-${{ runner.os }}-${{ runner.arch }}
+          key: ffmpeg-bundle-${{ runner.os }}-${{ runner.arch }}-v1
 
       - name: Install ffmpeg (for VRT frame comparison)
         run: |
           set -euo pipefail
-          if [ -x "${HOME}/.cache/ffmpeg-bin/ffmpeg" ] && "${HOME}/.cache/ffmpeg-bin/ffmpeg" -version >/dev/null 2>&1; then
-            sudo install -m 0755 "${HOME}/.cache/ffmpeg-bin/ffmpeg" /usr/local/bin/ffmpeg
-          elif ! command -v ffmpeg >/dev/null 2>&1; then
+          cache_dir="${HOME}/.cache/ffmpeg-bin"
+          mkdir -p "${cache_dir}/lib"
+          if [ -x "${cache_dir}/ffmpeg" ] && [ -x "${cache_dir}/ffprobe" ] && \
+             LD_LIBRARY_PATH="${cache_dir}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
+             "${cache_dir}/ffmpeg" -version >/dev/null 2>&1; then
+            sudo install -m 0755 "${cache_dir}/ffmpeg" /usr/local/bin/ffmpeg
+            sudo install -m 0755 "${cache_dir}/ffprobe" /usr/local/bin/ffprobe
+            echo "LD_LIBRARY_PATH=${cache_dir}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
+          elif command -v ffmpeg >/dev/null 2>&1 && command -v ffprobe >/dev/null 2>&1; then
+            cp "$(command -v ffmpeg)" "${cache_dir}/ffmpeg"
+            cp "$(command -v ffprobe)" "${cache_dir}/ffprobe"
+            ldd "$(command -v ffmpeg)" | awk '/=>/ {print $3}' | while read -r lib; do [ -f "$lib" ] && cp "$lib" "${cache_dir}/lib/"; done
+            ldd "$(command -v ffprobe)" | awk '/=>/ {print $3}' | while read -r lib; do [ -f "$lib" ] && cp "$lib" "${cache_dir}/lib/"; done
+            sudo install -m 0755 "$(command -v ffmpeg)" /usr/local/bin/ffmpeg
+            sudo install -m 0755 "$(command -v ffprobe)" /usr/local/bin/ffprobe
+          else
             sudo apt-get update
             sudo apt-get install -y --no-install-recommends ffmpeg
-            mkdir -p "${HOME}/.cache/ffmpeg-bin"
-            cp "$(command -v ffmpeg)" "${HOME}/.cache/ffmpeg-bin/ffmpeg"
+            cp "$(command -v ffmpeg)" "${cache_dir}/ffmpeg"
+            cp "$(command -v ffprobe)" "${cache_dir}/ffprobe"
+            ldd "$(command -v ffmpeg)" | awk '/=>/ {print $3}' | while read -r lib; do [ -f "$lib" ] && cp "$lib" "${cache_dir}/lib/"; done
+            ldd "$(command -v ffprobe)" | awk '/=>/ {print $3}' | while read -r lib; do [ -f "$lib" ] && cp "$lib" "${cache_dir}/lib/"; done
+            sudo install -m 0755 "$(command -v ffmpeg)" /usr/local/bin/ffmpeg
+            sudo install -m 0755 "$(command -v ffprobe)" /usr/local/bin/ffprobe
           fi
 
       - name: Install Ansible (for provisioning, cache-miss only)
@@ -293,7 +303,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: makamujo-provisioned.tar
-          key: makamujo-provisioned-${{ steps.provisioned-image-key.outputs.main_sha }}-${{ hashFiles('Dockerfile', 'ansible/**', 'compose.yml', 'bin/**', 'etc/**') }}
+          key: makamujo-provisioned-${{ hashFiles('Dockerfile', 'ansible/**', 'compose.yml', 'bin/**', 'etc/**') }}
 
       - name: Trust the RTMPS CA inside the container
         run: |
@@ -309,7 +319,7 @@ jobs:
           tar --exclude='./node_modules' --exclude='./.git' --exclude='./var' \
             -C "${GITHUB_WORKSPACE}" -cf - . \
             | docker compose exec -T makamujo tar -xf - -C /opt/src/makamujo
-          docker compose exec -T makamujo bash -c 'cd /opt/src/makamujo && /root/.bun/bin/bun install --production'
+          docker compose exec -T makamujo bash -c 'cd /opt/src/makamujo && /root/.bun/bin/bun install --production --frozen-lockfile'
           docker compose exec -T makamujo systemctl restart makamujo-screen.service makamujo-browser.service
           for _ in $(seq 1 30); do
             if docker compose exec -T makamujo systemctl is-active --quiet makamujo-screen.service; then

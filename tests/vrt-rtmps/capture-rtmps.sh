@@ -51,6 +51,10 @@ while [ "${attempts}" -lt "${max_attempts}" ]; do
       -show_entries stream=width,height -of csv=s=x:p=0 "${out_file}")
     if [ "${dimensions}" = "1280x720" ]; then
       if [ -s "${prev_frame}" ]; then
+        if cmp -s "${prev_frame}" "${out_file}"; then
+          echo "Captured RTMPS frame to ${out_file}"
+          exit 0
+        fi
         ssim_log=$(mktemp)
         if ffmpeg -hide_banner -nostdin -i "${prev_frame}" -i "${out_file}" \
             -lavfi '[0:v][1:v]ssim' -f null - >/dev/null 2>"${ssim_log}"; then
@@ -72,7 +76,7 @@ while [ "${attempts}" -lt "${max_attempts}" ]; do
     first_error=$(<"${error_log}")
   fi
   attempts=$((attempts + 1))
-  sleep 2
+  sleep 1
 done
 
 echo "Failed to capture a 1280x720 frame from ${stream_url}" >&2
