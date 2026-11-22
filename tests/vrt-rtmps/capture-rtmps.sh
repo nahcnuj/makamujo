@@ -16,7 +16,10 @@ stream_url=${RTMPS_CAPTURE_URL:-rtmps://127.0.0.1:1936/live/stream}
 # deterministic title screen instead of a mid-game frame.
 if [ "${RTMPS_RESTART_BROWSER:-1}" = "1" ]; then
   if command -v docker >/dev/null 2>&1 && docker compose ps --services 2>/dev/null | grep -qx 'makamujo'; then
-    docker compose exec -T makamujo systemctl set-environment VIGILANT_FIESTA_TITLE_DWELL_MS=8000 >/dev/null 2>&1 || true
+    docker compose exec -T makamujo systemctl set-environment VIGILANT_FIESTA_TITLE_DWELL_MS=3600000 >/dev/null 2>&1 || true
+    docker compose exec -T makamujo systemctl set-environment VRT_MODE=1 >/dev/null 2>&1 || true
+    docker compose exec -T makamujo systemctl restart makamujo-screen.service >/dev/null 2>&1 || true
+    sleep 4
     # Put the broadcast overlay into VRT mode (freeze non-deterministic
     # animated elements such as the heartbeat scanline) by pointing OBS at the
     # vrt query variant of the page.

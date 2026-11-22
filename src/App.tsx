@@ -3,15 +3,7 @@ import { BroadcastHeartbeat } from "./components/BroadcastHeartbeat";
 import { GamePanel } from "./components/GamePanel";
 import { StreamerPanel } from "./components/StreamerPanel";
 import { AgentProvider } from "./contexts/AgentContext";
-
-const isVrtMode = (): boolean => {
-  if (typeof window === "undefined") return false;
-  try {
-    return new URLSearchParams(window.location.search).get("vrt") === "1";
-  } catch {
-    return false;
-  }
-};
+import { isVrtMode } from "./vrtMode";
 
 export function App() {
   return (

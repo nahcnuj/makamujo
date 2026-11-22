@@ -19,13 +19,22 @@ function normalizeMainHtml(source: string): string {
     /src=(['"])\.\/frontend\.tsx\1/,
     "src=$1./frontend.js$1",
   );
-  if (rewrittenHtml.match(/<link[^>]+href=(['"])\.\/frontend\.css\1/)) {
-    return rewrittenHtml;
+  let result = rewrittenHtml;
+  if (!result.match(/<link[^>]+href=(['"])\.\/frontend\.css\1/)) {
+    result = result.replace(
+      /<\/head>/i,
+      '  <link rel="stylesheet" href="./frontend.css" />\n</head>',
+    );
   }
-  return rewrittenHtml.replace(
-    /<\/head>/i,
-    '  <link rel="stylesheet" href="./frontend.css" />\n</head>',
-  );
+  // In VRT mode, expose a flag so the frontend can drop non-deterministic
+  // (animated / time-dependent) elements such as the broadcast heartbeat.
+  if (process.env.VRT_MODE === "1") {
+    result = result.replace(
+      /<head>/i,
+      '<head>\n    <meta name="vrt-mode" content="1" />',
+    );
+  }
+  return result;
 }
 
 async function buildMainFrontend() {

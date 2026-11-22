@@ -148,11 +148,11 @@ export function stepInitialize(
       };
     }
     case "start": {
+      const dwellUntil = state.dwellUntil ?? 0;
+      if (nowMs < dwellUntil) {
+        return { state, action: Action.noop };
+      }
       if (event === undefined) {
-        const dwellUntil = state.dwellUntil ?? 0;
-        if (nowMs < dwellUntil) {
-          return { state, action: Action.noop };
-        }
         return {
           state,
           action: Action.clickByElementId("btn-start"),
