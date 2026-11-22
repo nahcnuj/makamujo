@@ -300,6 +300,24 @@ jobs:
           set -euo pipefail
           docker compose exec -T makamujo sh -c 'cat > /usr/local/share/ca-certificates/mediamtx-ca.crt && update-ca-certificates' < "${RTMPS_CERTS_DIR}/ca.pem"
 
+      - name: Overlay PR source into the container
+        run: |
+          set -euo pipefail
+          # The provisioned image is built from main, so overlay the checked-out
+          # (PR) source on top of it before OBS captures the stream. This keeps
+          # the RTMPS VRT exercising the code under review instead of main.
+          tar --exclude='./node_modules' --exclude='./.git' --exclude='./var' \
+            -C "${GITHUB_WORKSPACE}" -cf - . \
+            | docker compose exec -T makamujo tar -xf - -C /opt/src/makamujo
+          docker compose exec -T makamujo bash -c 'cd /opt/src/makamujo && bun install --production'
+          docker compose exec -T makamujo systemctl restart makamujo-screen.service makamujo-browser.service
+          for _ in $(seq 1 30); do
+            if docker compose exec -T makamujo systemctl is-active --quiet makamujo-screen.service; then
+              break
+            fi
+            sleep 1
+          done
+
       - name: Point the reproduced OBS at the local RTMPS endpoint
         run: |
           set -euo pipefail
