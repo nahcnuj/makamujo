@@ -2,9 +2,10 @@
   hosts: vps
   become: true
   tasks:
-    - name: apt update
+    - name: apt update and upgrade
       ansible.builtin.apt:
         update_cache: true
+        upgrade: dist
         cache_valid_time: 3600
 
     - name: Install base packages

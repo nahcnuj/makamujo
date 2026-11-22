@@ -283,13 +283,17 @@ jobs:
       - name: Provision the container with Ansible
         if: steps.provisioned-image-cache.outputs.cache-hit != 'true'
         working-directory: ansible
+        env:
+          ANSIBLE_PIPELINING: "1"
+          ANSIBLE_GATHERING: explicit
         run: |
           set -euo pipefail
-          ansible-playbook -i inventories/docker.yml playbooks/0_bootstrap.yml
-          ansible-playbook -i inventories/docker.yml playbooks/0_desktop.yml
-          ansible-playbook -i inventories/docker.yml playbooks/0_obs.yml
-          ansible-playbook -i inventories/docker.yml playbooks/1_bun.yml
-          ansible-playbook -i inventories/docker.yml playbooks/2_makamujo.yml
+          ansible-playbook -i inventories/docker.yml \
+            playbooks/0_bootstrap.yml \
+            playbooks/0_desktop.yml \
+            playbooks/0_obs.yml \
+            playbooks/1_bun.yml \
+            playbooks/2_makamujo.yml
 
       - name: Clean package caches before committing provisioned image
         if: steps.provisioned-image-cache.outputs.cache-hit != 'true'
@@ -299,15 +303,17 @@ jobs:
             set -e
             apt-get clean || true
             rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* 2>/dev/null || true
-            rm -rf /root/.cache/pip /root/.cache/bun /root/.npm 2>/dev/null || true
+            rm -rf /root/.cache /root/.npm 2>/dev/null || true
+            rm -rf /opt/src/makamujo/.git 2>/dev/null || true
+            rm -rf /tmp/* /var/tmp/* /var/log/* 2>/dev/null || true
           '
 
       - name: Commit provisioned container to a cacheable image
         if: steps.provisioned-image-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          docker commit makamujo makamujo:prod
-          docker save makamujo:prod -o makamujo-provisioned.tar
+          docker commit --pause=false makamujo makamujo:prod
+          docker save makamujo:prod | gzip -1 > makamujo-provisioned.tar
 
       - name: Save provisioned image to cache
         if: steps.provisioned-image-cache.outputs.cache-hit != 'true'
