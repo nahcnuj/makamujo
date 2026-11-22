@@ -82,7 +82,9 @@ export function hydrate(state: GameState | SolverStart): GameState {
         type: "initialize",
         phase: "phase" in state && state.phase ? state.phase : "open",
         dwellUntil:
-          "dwellUntil" in state ? (state as { dwellUntil?: number }).dwellUntil : undefined,
+          "dwellUntil" in state
+            ? (state as { dwellUntil?: number }).dwellUntil
+            : undefined,
       };
     case "idle":
       return {
@@ -141,9 +143,7 @@ export function stepInitialize(
         state: {
           ...state,
           phase: "start",
-          ...(dwellMs > 0
-            ? { dwellUntil: Date.now() + dwellMs }
-            : {}),
+          ...(dwellMs > 0 ? { dwellUntil: Date.now() + dwellMs } : {}),
         },
       };
     }

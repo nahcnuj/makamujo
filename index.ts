@@ -489,6 +489,14 @@ function normalizeMainHtml(source: string): string {
       '[WARN] normalizeMainHtml: expected <script src="./frontend.tsx"> was not found in HTML',
     );
   }
+  // In VRT mode, expose a flag so the frontend can drop non-deterministic
+  // (animated / time-dependent) elements such as the broadcast heartbeat.
+  if (process.env.VRT_MODE === "1") {
+    return result.replace(
+      /<head>/i,
+      '<head>\n    <meta name="vrt-mode" content="1" />',
+    );
+  }
   return result;
 }
 

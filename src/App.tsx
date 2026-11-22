@@ -4,6 +4,15 @@ import { GamePanel } from "./components/GamePanel";
 import { StreamerPanel } from "./components/StreamerPanel";
 import { AgentProvider } from "./contexts/AgentContext";
 
+const isVrtMode = (): boolean => {
+  if (typeof window === "undefined") return false;
+  try {
+    return new URLSearchParams(window.location.search).get("vrt") === "1";
+  } catch {
+    return false;
+  }
+};
+
 export function App() {
   return (
     <AgentProvider>
@@ -12,11 +21,6 @@ export function App() {
         span={8}
         className="bg-emerald-950/30 text-emerald-50 font-[Noto_Sans_CJK_JP] font-bold"
       >
-        <Container>
-          <div className="text-xs opacity-25">
-            {new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}
-          </div>
-        </Container>
         <Container>
           <div className="h-full flex flex-col justify-between items-center">
             <div className="flex-none">
@@ -73,7 +77,7 @@ export function App() {
           <StreamerPanel />
         </Container>
       </Layout>
-      <BroadcastHeartbeat />
+      {!isVrtMode() && <BroadcastHeartbeat />}
     </AgentProvider>
   );
 }
