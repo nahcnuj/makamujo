@@ -50,6 +50,14 @@ while [ "${attempts}" -lt "${max_attempts}" ]; do
     dimensions=$(ffprobe -v error -select_streams v:0 \
       -show_entries stream=width,height -of csv=s=x:p=0 "${out_file}")
     if [ "${dimensions}" = "1280x720" ]; then
+      yavg=$(ffmpeg -hide_banner -nostdin -i "${out_file}" -vf "signalstats,metadata=print" -f null - 2>&1 | sed -n 's/.*YAVG=\([0-9.]*\).*/\1/p' | tail -n 1)
+      if [ -z "${yavg}" ] || awk -v y="${yavg}" 'BEGIN { exit !(y < 5) }'; then
+        echo "Frame too dark (YAVG=${yavg:-unknown}), waiting for content" >&2
+        rm -f "${out_file}"
+        attempts=$((attempts + 1))
+        sleep 1
+        continue
+      fi
       if [ -s "${prev_frame}" ]; then
         if cmp -s "${prev_frame}" "${out_file}"; then
           echo "Captured RTMPS frame to ${out_file}"
