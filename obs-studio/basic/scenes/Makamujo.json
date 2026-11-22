@@ -246,12 +246,12 @@
               "y": -1.0
             },
             "scale": {
-              "x": 0.796875,
-              "y": 0.7972221970558167
+              "x": 1.0,
+              "y": 1.0
             },
             "scale_rel": {
-              "x": 0.796875,
-              "y": 0.7972221970558167
+              "x": 1.0,
+              "y": 1.0
             },
             "bounds": {
               "x": 0.0,
@@ -474,7 +474,7 @@
       "id": "text_ft2_source",
       "versioned_id": "text_ft2_source_v2",
       "settings": {
-        "text": "マルコフトーク\nテーマ：",
+        "text": "\u30de\u30eb\u30b3\u30d5\u30c8\u30fc\u30af\n\u30c6\u30fc\u30de\uff1a",
         "font": {
           "face": "Noto Sans CJK JP",
           "style": "Bold",
