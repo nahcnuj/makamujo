@@ -427,7 +427,7 @@ export const create = async (
         style.textContent = [
           `html{zoom:${zoom}!important}`,
           "html,body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}",
-          "body{display:flex!important;align-items:flex-start!important;justify-content:center!important;padding:0.75rem!important}",
+          `body{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:flex-start!important;width:${1024 / zoom}px!important;height:auto!important;padding:0!important;margin:0!important}`,
           "#app{margin:0 auto!important;max-width:40rem!important;width:min(100%,40rem)!important;text-align:center!important}",
           "#play-layout{display:grid!important;grid-template-columns:1fr!important;justify-items:center!important;gap:0.75rem!important}",
           "#game-container{margin:0 auto!important;justify-self:center!important;display:block!important}",
@@ -705,7 +705,7 @@ export const applyGameScreenZoom = async (
       style.textContent = [
         `html{zoom:${zoom}!important}`,
         "html,body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}",
-        "body{display:flex!important;align-items:flex-start!important;justify-content:center!important;padding:0.75rem!important}",
+        `body{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:flex-start!important;width:${1024 / zoom}px!important;height:auto!important;padding:0!important;margin:0!important}`,
         "#app{margin:0 auto!important;max-width:40rem!important;width:min(100%,40rem)!important;text-align:center!important}",
         "#play-layout{display:grid!important;grid-template-columns:1fr!important;justify-items:center!important;gap:0.75rem!important}",
         "#game-container{margin:0 auto!important;justify-self:center!important;display:block!important}",
