@@ -465,10 +465,16 @@ export const create = async (
       /* page may not be ready */
     }
   };
-  await applyZoom(options.gameScreenZoom ?? 1);
+  // Register the load handler before the initial call so a load that fires
+  // during/after the first applyZoom() still re-applies the game-board zoom.
   page.on("load", () => {
     void applyZoom(options.gameScreenZoom ?? 1);
   });
+  await applyZoom(options.gameScreenZoom ?? 1);
+  // Re-apply shortly after launch in case the initial call raced the load.
+  globalThis.setTimeout(() => {
+    void applyZoom(options.gameScreenZoom ?? 1);
+  }, 2000);
 
   page.on(
     "framenavigated",
@@ -658,6 +664,12 @@ export const applyGameScreenZoom = async (
         document.getElementById("screen-playing");
       if (gameScreen) {
         gameScreen.style.zoom = String(value);
+        // Keep the game screen area centered in the captured viewport instead
+        // of letting the zoomed board drift to one side (which previously made
+        // it look like display content had disappeared from the broadcast).
+        gameScreen.style.marginLeft = "auto";
+        gameScreen.style.marginRight = "auto";
+        gameScreen.style.display = "block";
       }
       window.scrollTo(0, 0);
     }, zoomValue);
