@@ -316,7 +316,8 @@ export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
   "--disable-renderer-backgrounding",
 ] as const;
 
-export const GAME_SCREEN_ZOOM_FACTOR = 1.75 as const;
+export const GAME_SCREEN_ZOOM = "1.25" as const;
+export const GAME_SCREEN_ZOOM_FACTOR = 1.25 as const;
 
 export type BrowserCreateOptions = {
   /** Magnification for the Agent's game board. */
