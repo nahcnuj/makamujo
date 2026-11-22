@@ -10,6 +10,7 @@ RUN apt-get update \
         ca-certificates \
         curl \
         fonts-noto-cjk \
+        git \
         libcap2-bin \
         openssl \
         unzip \
@@ -22,9 +23,7 @@ RUN curl -fsSL https://bun.sh/install | bash \
 
 # Install project dependencies (lockfile-respecting).
 COPY --chown=${USERNAME}:${USERNAME} package.json bun.lock /workspaces/makamujo/
-RUN chown -R ${USERNAME}:${USERNAME} /workspaces/makamujo
 RUN cd /workspaces/makamujo && /usr/local/bin/bun ci
-RUN chown -R ${USERNAME}:${USERNAME} /workspaces/makamujo
 
 # Install system dependencies required by Playwright's Chromium.
 RUN /usr/local/bin/bun /workspaces/makamujo/node_modules/.bin/playwright install-deps chromium
@@ -40,5 +39,35 @@ RUN bash /workspaces/makamujo/scripts/setup-e2e-tls.sh
 
 # Configure git hooks from a stable, image-baked location.
 COPY --chown=${USERNAME}:${USERNAME} .githooks /usr/local/share/makamujo-githooks
-RUN chmod +x /usr/local/share/makamujo-githooks/* \
-    && git config --global core.hooksPath /usr/local/share/makamujo-githooks
+USER root
+RUN chmod -R a+rX /usr/local/share/makamujo-githooks
+USER ${USERNAME}
+RUN git config --global core.hooksPath /usr/local/share/makamujo-githooks
+
+# Install opencode CLI.
+RUN curl -fsSL https://opencode.ai/install | bash
+
+# Install the conahcnuj driver so auto-drive can run inside this container.
+USER root
+RUN git clone --depth 1 https://github.com/conahcnuj/conahcnuj.git /tmp/conahcnuj \
+    && mkdir -p /home/${USERNAME}/.config/opencode/gh-app /home/${USERNAME}/.config/opencode/plugins/lib \
+              /home/${USERNAME}/.local/bin /home/${USERNAME}/.local/gh-app /home/${USERNAME}/.local/lib \
+    && cp /tmp/conahcnuj/gh-app/*.sh /home/${USERNAME}/.config/opencode/gh-app/ \
+    && cp /tmp/conahcnuj/gh-app/*.sh /home/${USERNAME}/.local/gh-app/ \
+    && cp /tmp/conahcnuj/gh-app/app.env.example /home/${USERNAME}/.config/opencode/gh-app/app.env.example \
+    && cp /tmp/conahcnuj/gh-app/app.env.example /home/${USERNAME}/.local/gh-app/app.env.example \
+    && ( [ -f /tmp/conahcnuj/gh-app/missing-models ] && cp /tmp/conahcnuj/gh-app/missing-models /home/${USERNAME}/.config/opencode/gh-app/missing-models && cp /tmp/conahcnuj/gh-app/missing-models /home/${USERNAME}/.local/gh-app/missing-models ) || true \
+    && cp /tmp/conahcnuj/plugins/gh-app-token.ts /home/${USERNAME}/.config/opencode/plugins/ \
+    && cp /tmp/conahcnuj/plugins/lib/gh-app-commit.ts /home/${USERNAME}/.config/opencode/plugins/lib/ \
+    && cp /tmp/conahcnuj/bin/conahcnuj.sh /home/${USERNAME}/.local/bin/conahcnuj \
+    && cp /tmp/conahcnuj/bin/git-vc /home/${USERNAME}/.local/bin/git-vc \
+    && chmod +x /home/${USERNAME}/.local/bin/conahcnuj /home/${USERNAME}/.local/bin/git-vc \
+    && cp /tmp/conahcnuj/lib/*.sh /home/${USERNAME}/.local/lib/ \
+    && [ ! -f /home/${USERNAME}/.config/opencode/AGENTS.md ] && cp /tmp/conahcnuj/opencode/AGENTS.md /home/${USERNAME}/.config/opencode/AGENTS.md || true \
+    && [ ! -f /home/${USERNAME}/.local/gh-app/app.env ] && cp /home/${USERNAME}/.local/gh-app/app.env.example /home/${USERNAME}/.local/gh-app/app.env || true \
+    && [ ! -f /home/${USERNAME}/.config/opencode/gh-app/app.env ] && cp /home/${USERNAME}/.config/opencode/gh-app/app.env.example /home/${USERNAME}/.config/opencode/gh-app/app.env || true \
+    && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.config/opencode /home/${USERNAME}/.local \
+    && rm -rf /tmp/conahcnuj
+
+USER ${USERNAME}
+ENV PATH="${BUN_INSTALL}/bin:/home/${USERNAME}/.opencode/bin:/home/${USERNAME}/.local/bin:${PATH}"
