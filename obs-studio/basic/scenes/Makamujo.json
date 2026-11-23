@@ -46,7 +46,7 @@
       "id": "browser_source",
       "versioned_id": "browser_source",
       "settings": {
-        "url": "http://127.0.0.1:7777/?vrt=1",
+        "url": "http://127.0.0.1:7777/",
         "width": 1280,
         "height": 720,
         "fps": 30,
