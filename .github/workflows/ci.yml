@@ -337,6 +337,7 @@ jobs:
             -C "${GITHUB_WORKSPACE}" -cf - . \
             | docker compose exec -T makamujo tar -xf - -C /opt/src/makamujo
           docker compose exec -T makamujo bash -c 'cd /opt/src/makamujo && /root/.bun/bin/bun install --production --frozen-lockfile'
+          docker compose exec -T makamujo bash -c 'cd /opt/src/makamujo && /root/.bun/bin/bunx playwright install chromium' || true
           docker compose exec -T makamujo systemctl set-environment VIGILANT_FIESTA_TITLE_DWELL_MS=3600000 VRT_MODE=1
           docker compose exec -T makamujo systemctl restart makamujo-screen.service makamujo-browser.service
           sleep 15
