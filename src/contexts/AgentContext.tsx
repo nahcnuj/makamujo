@@ -7,7 +7,7 @@ import {
 import type { Games } from "../../lib/Agent/games";
 import type { AgentState } from "../../lib/Agent/State";
 import { useInterval } from "../hooks/useInterval";
-import { isVrtMode } from "../vrtMode";
+
 import { updateSpeechState } from "./speechState";
 
 type Data = {
@@ -74,7 +74,6 @@ export const setStreamStateFromMetaApiResponse = (
 };
 
 export const AgentProvider = ({ children }: PropsWithChildren) => {
-  const vrtMode = isVrtMode();
   const [speechLines, setSpeechLines] = useState<string[]>([]);
   const [silent, setSilent] = useState(false);
   const [playing, setPlaying] = useState<Data["playing"]>();
@@ -85,11 +84,6 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
   const [nGram, setNGram] = useState<number>();
 
   useInterval(100, async () => {
-    if (vrtMode) {
-      setSpeechLines([]);
-      setSilent(false);
-      return;
-    }
     const res = await fetch("/api/speech", { unix: "./var/api-speech.sock" })
       .then((res) => (res.ok ? res.json() : null))
       .catch((err) => {
@@ -114,9 +108,6 @@ export const AgentProvider = ({ children }: PropsWithChildren) => {
   });
 
   useInterval(100, async () => {
-    if (vrtMode) {
-      return;
-    }
     const res = await fetch("/api/meta", { unix: "./var/api-meta.sock" })
       .then((res) => (res.ok ? res.json() : null))
       .catch((error) => {
