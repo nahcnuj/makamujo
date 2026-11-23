@@ -180,7 +180,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: makamujo-provisioned.tar
-          key: makamujo-provisioned-${{ hashFiles('Dockerfile', 'ansible/**', 'compose.yml', 'bin/**', 'etc/**') }}
+          key: makamujo-provisioned-${{ hashFiles('Dockerfile', 'ansible/**', 'compose.yml', 'bin/**', 'etc/**', 'package.json', 'bun.lock', 'bun.lockb') }}
 
       - name: Load provisioned image (if cached)
         if: steps.provisioned-image-cache.outputs.cache-hit == 'true'
@@ -320,7 +320,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: makamujo-provisioned.tar
-          key: makamujo-provisioned-${{ hashFiles('Dockerfile', 'ansible/**', 'compose.yml', 'bin/**', 'etc/**') }}
+          key: makamujo-provisioned-${{ hashFiles('Dockerfile', 'ansible/**', 'compose.yml', 'bin/**', 'etc/**', 'package.json', 'bun.lock', 'bun.lockb') }}
 
       - name: Trust the RTMPS CA inside the container
         run: |
