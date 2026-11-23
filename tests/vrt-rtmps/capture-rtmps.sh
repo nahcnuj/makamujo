@@ -20,6 +20,7 @@ if [ "${RTMPS_RESTART_BROWSER:-1}" = "1" ]; then
     docker compose exec -T makamujo systemctl set-environment VRT_MODE=1 >/dev/null 2>&1 || true
     docker compose exec -T makamujo systemctl restart makamujo-screen.service >/dev/null 2>&1 || true
     sleep 8
+    docker compose exec -T makamujo bash -c 'curl -s http://127.0.0.1:7777/ | grep -o vrt-mode || echo NO_VRT_META' || true
     # VRT_MODE=1 (set above) makes the server inject the vrt-mode meta tag,
     # so the default page is already in VRT mode; no OBS URL override needed.
     docker compose exec -T makamujo systemctl restart makamujo-browser.service >/dev/null 2>&1 || true
