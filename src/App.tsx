@@ -3,24 +3,19 @@ import { BroadcastHeartbeat } from "./components/BroadcastHeartbeat";
 import { GamePanel } from "./components/GamePanel";
 import { StreamerPanel } from "./components/StreamerPanel";
 import { AgentProvider } from "./contexts/AgentContext";
+import { isVrtMode } from "./vrtMode";
 
 export function App() {
   return (
     <AgentProvider>
+      {isVrtMode() && (
+        <style>{`*{animation:none!important;transition:none!important;opacity:1!important;filter:none!important;backdrop-filter:none!important;mix-blend-mode:normal!important;box-shadow:none!important;text-shadow:none!important;will-change:auto!important;}`}</style>
+      )}
       <Layout
         count={10}
         span={8}
         className="bg-emerald-950/30 text-emerald-50 font-[Noto_Sans_CJK_JP] font-bold"
       >
-        <Container>
-          <Box
-            bgColor="bg-black"
-            borderColor="border-emerald-300"
-            borderWidth="border-8"
-            borderStyle="border-double"
-            rounded="rounded-xl"
-          />
-        </Container>
         <Container>
           <div className="h-full flex flex-col justify-between items-center">
             <div className="flex-none">
@@ -77,7 +72,7 @@ export function App() {
           <StreamerPanel />
         </Container>
       </Layout>
-      <BroadcastHeartbeat />
+      {!isVrtMode() && <BroadcastHeartbeat />}
     </AgentProvider>
   );
 }

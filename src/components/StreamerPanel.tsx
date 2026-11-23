@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "hono/jsx/dom";
 import { Box, Container } from "../agt-compat";
 import { useAgentContext } from "../contexts/AgentContext";
-
+import { isVrtMode } from "../vrtMode";
 import { CharacterSprite } from "./CharacterSprite";
 import { SilentCaption } from "./SilentCaption";
 import { SpeechLine } from "./SpeechLine";
@@ -90,6 +90,11 @@ export function StreamerPanel() {
   }, [listeners, silent]);
 
   useEffect(() => {
+    if (isVrtMode()) {
+      cancelPendingFade();
+      setVisibility(VISIBLE);
+      return;
+    }
     if (!silent) {
       cancelPendingFade();
       setVisibility(VISIBLE);
