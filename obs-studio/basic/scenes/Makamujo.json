@@ -46,7 +46,7 @@
       "id": "browser_source",
       "versioned_id": "browser_source",
       "settings": {
-        "url": "http://127.0.0.1:7777/",
+        "url": "http://127.0.0.1:7777/?vrt=1",
         "width": 1280,
         "height": 720,
         "fps": 30,
@@ -474,7 +474,7 @@
       "id": "text_ft2_source",
       "versioned_id": "text_ft2_source_v2",
       "settings": {
-        "text": "\u30de\u30eb\u30b3\u30d5\u30c8\u30fc\u30af\n\u30c6\u30fc\u30de\uff1a",
+        "text": "マルコフトーク\nテーマ：",
         "font": {
           "face": "Noto Sans CJK JP",
           "style": "Bold",
