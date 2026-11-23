@@ -65,6 +65,7 @@ while [ "${attempts}" -lt "${max_attempts}" ]; do
       -show_entries stream=width,height -of csv=s=x:p=0 "${out_file}")
     if [ "${dimensions}" = "1280x720" ]; then
       # Reject all-black frames (OBS not yet rendering the page).
+    grep -q 'Reject all-black' "$0" && echo CAPTURE_SCRIPT_HAS_BLACK_REJECTION || echo CAPTURE_SCRIPT_MISSING_BLACK_REJECTION
       if ! python3 - "${out_file}" <<'PY' >/dev/null 2>&1; then
 import struct, zlib, sys
 d = open(sys.argv[1], "rb").read()
