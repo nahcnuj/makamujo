@@ -9,12 +9,12 @@ export function App() {
   return (
     <AgentProvider>
       {isVrtMode() && (
-        <style>{`*{animation:none!important;transition:none!important;opacity:1!important;filter:none!important;backdrop-filter:none!important;mix-blend-mode:normal!important;box-shadow:none!important;text-shadow:none!important;will-change:auto!important;} body,#app{background:#022c22!important;}`}</style>
+        <style>{`*{animation:none!important;transition:none!important;opacity:1!important;filter:none!important;backdrop-filter:none!important;mix-blend-mode:normal!important;box-shadow:none!important;text-shadow:none!important;will-change:auto!important;}`}</style>
       )}
       <Layout
         count={10}
         span={8}
-        className={`${isVrtMode() ? "bg-emerald-950" : "bg-emerald-950/30"} text-emerald-50 font-[Noto_Sans_CJK_JP] font-bold`}
+        className="bg-emerald-950/30 text-emerald-50 font-[Noto_Sans_CJK_JP] font-bold"
       >
         <Container>
           <div className="h-full flex flex-col justify-between items-center">
