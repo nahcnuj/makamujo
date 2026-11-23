@@ -69,6 +69,28 @@ while [ "${attempts}" -lt "${max_attempts}" ]; do
     dimensions=$(ffprobe -v error -select_streams v:0 \
       -show_entries stream=width,height -of csv=s=x:p=0 "${out_file}")
     if [ "${dimensions}" = "1280x720" ]; then
+      # Reject all-black frames (OBS not yet rendering the page).
+      if ! python3 - "${out_file}" <<'PY' >/dev/null 2>&1; then
+import struct, zlib, sys
+d = open(sys.argv[1], "rb").read()
+off = 8
+raw = bytearray()
+while off < len(d):
+    ln = struct.unpack(">I", d[off:off+4])[0]
+    typ = d[off+4:off+8]
+    chunk = d[off+8:off+8+ln]
+    off += 12 + ln
+    if typ == b"IDAT":
+        raw += chunk
+    if typ == b"IEND":
+        break
+dec = zlib.decompress(bytes(raw))
+sys.exit(0 if any(b != 0 for b in dec) else 1)
+PY
+        attempts=$((attempts + 1))
+        sleep 1
+        continue
+      fi
       if [ -s "${prev_frame}" ]; then
         if cmp -s "${prev_frame}" "${out_file}"; then
           echo "Captured RTMPS frame to ${out_file}"
