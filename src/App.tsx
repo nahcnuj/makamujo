@@ -9,7 +9,7 @@ export function App() {
   return (
     <AgentProvider>
       {isVrtMode() && (
-        <style>{`*{animation:none!important;transition:none!important}`}</style>
+        <style>{`*{animation:none!important;transition:none!important;transform:none!important;opacity:1!important;}`}</style>
       )}
       <Layout
         count={10}
