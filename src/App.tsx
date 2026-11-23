@@ -8,6 +8,9 @@ import { isVrtMode } from "./vrtMode";
 export function App() {
   return (
     <AgentProvider>
+      {isVrtMode() && (
+        <style>{`*{animation:none!important;transition:none!important}`}</style>
+      )}
       <Layout
         count={10}
         span={8}
