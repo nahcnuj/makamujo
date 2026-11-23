@@ -20,26 +20,8 @@ if [ "${RTMPS_RESTART_BROWSER:-1}" = "1" ]; then
     docker compose exec -T makamujo systemctl set-environment VRT_MODE=1 >/dev/null 2>&1 || true
     docker compose exec -T makamujo systemctl restart makamujo-screen.service >/dev/null 2>&1 || true
     sleep 8
-    # Put the broadcast overlay into VRT mode (freeze non-deterministic
-    # animated elements such as the heartbeat scanline) by pointing OBS at the
-    # vrt query variant of the page.
-    docker compose exec -T makamujo python3 - <<'PY' >/dev/null 2>&1 || true
-import json
-from pathlib import Path
-for p in [
-    Path("/opt/src/makamujo/obs-studio/basic/profiles/Makamujo/service.json"),
-    Path("/root/.var/app/com.obsproject.Studio/config/obs-studio/basic/profiles/Makamujo/service.json"),
-]:
-    if not p.exists():
-        continue
-    try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-    except Exception:
-        continue
-    settings = data.setdefault("settings", {})
-    settings["url"] = "http://127.0.0.1:7777/?vrt=1"
-    p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-PY
+    # VRT_MODE=1 (set above) makes the server inject the vrt-mode meta tag,
+    # so the default page is already in VRT mode; no OBS URL override needed.
     docker compose exec -T makamujo systemctl restart makamujo-browser.service >/dev/null 2>&1 || true
     sleep 8
     docker compose exec -T makamujo systemctl restart makamujo-obs.service >/dev/null 2>&1 || true
