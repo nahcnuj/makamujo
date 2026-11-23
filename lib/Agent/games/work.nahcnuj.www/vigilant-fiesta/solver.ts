@@ -56,8 +56,10 @@ export type SolverStart =
  * How long to dwell on the title screen before auto-starting the game.
  * Override with `VIGILANT_FIESTA_TITLE_DWELL_MS` (milliseconds).
  */
-export const resolveTitleDwellMs = (): number => {
-  const raw = process.env.VIGILANT_FIESTA_TITLE_DWELL_MS?.trim();
+export const resolveTitleDwellMs = (
+  env: NodeJS.ProcessEnv = process.env,
+): number => {
+  const raw = env.VIGILANT_FIESTA_TITLE_DWELL_MS?.trim();
   if (!raw) return 0;
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
@@ -143,7 +145,7 @@ export function stepInitialize(
         state: {
           ...state,
           phase: "start",
-          ...(dwellMs > 0 ? { dwellUntil: Date.now() + dwellMs } : {}),
+          ...(dwellMs > 0 ? { dwellUntil: nowMs + dwellMs } : {}),
         },
       };
     }
