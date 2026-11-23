@@ -40,6 +40,8 @@ for p in [
     settings["url"] = "http://127.0.0.1:7777/?vrt=1"
     p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
+    docker compose exec -T makamujo systemctl restart makamujo-browser.service >/dev/null 2>&1 || true
+    sleep 8
     docker compose exec -T makamujo systemctl restart makamujo-obs.service >/dev/null 2>&1 || true
     sleep 12
   fi
