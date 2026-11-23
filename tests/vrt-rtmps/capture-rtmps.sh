@@ -12,20 +12,6 @@ cd "${project_root}"
 out_file=${1:-"$(dirname "$0")/capture-rtmps.png"}
 stream_url=${RTMPS_CAPTURE_URL:-rtmps://127.0.0.1:1936/live/stream}
 
-# Restart services so the capture starts from the deterministic title screen.
-if [ "${RTMPS_RESTART_BROWSER:-1}" = "1" ]; then
-  if command -v docker >/dev/null 2>&1 && docker compose ps --services 2>/dev/null | grep -qx 'makamujo'; then
-    docker compose exec -T makamujo systemctl set-environment VIGILANT_FIESTA_TITLE_DWELL_MS=3600000 >/dev/null 2>&1 || true
-    docker compose exec -T makamujo systemctl set-environment VRT_MODE=1 >/dev/null 2>&1 || true
-    docker compose exec -T makamujo systemctl restart makamujo-screen.service >/dev/null 2>&1 || true
-    sleep 10
-    docker compose exec -T makamujo systemctl restart makamujo-browser.service >/dev/null 2>&1 || true
-    sleep 10
-    docker compose exec -T makamujo systemctl restart makamujo-obs.service >/dev/null 2>&1 || true
-    sleep 15
-  fi
-fi
-
 # The regression must exercise the encrypted RTMPS path. A plain RTMP URL or a
 # local file would make the comparison pass without testing the reproduction.
 case "${stream_url}" in
@@ -64,54 +50,6 @@ while [ "${attempts}" -lt "${max_attempts}" ]; do
     dimensions=$(ffprobe -v error -select_streams v:0 \
       -show_entries stream=width,height -of csv=s=x:p=0 "${out_file}")
     if [ "${dimensions}" = "1280x720" ]; then
-      # Reject all-black frames (OBS not yet rendering the page).
-    grep -q 'Reject all-black' "$0" && echo CAPTURE_SCRIPT_HAS_BLACK_REJECTION || echo CAPTURE_SCRIPT_MISSING_BLACK_REJECTION
-      if ! python3 - "${out_file}" <<'PY' >/dev/null 2>&1; then
-import struct, zlib, sys
-d = open(sys.argv[1], "rb").read()
-assert d[:8] == b"\x89PNG\r\n\x1a\n"
-off = 8; w = h = 0; raw = bytearray()
-while off < len(d):
-    ln = struct.unpack(">I", d[off:off+4])[0]
-    typ = d[off+4:off+8]; chunk = d[off+8:off+8+ln]; off += 12 + ln
-    if typ == b"IHDR":
-        w, h = struct.unpack(">II", chunk[:8]); bd, ct = chunk[8], chunk[9]
-    elif typ == b"IDAT":
-        raw += chunk
-    elif typ == b"IEND":
-        break
-bpp = 3 if ct == 2 else 4 if ct == 6 else 1
-stride = w * bpp
-dec = zlib.decompress(bytes(raw))
-prev = bytearray(stride); pos = 0; nonblack = False
-for y in range(h):
-    filt = dec[pos]; pos += 1
-    row = bytearray(dec[pos:pos+stride]); pos += stride
-    for i in range(stride):
-        left = row[i-bpp] if i >= bpp else 0
-        up = prev[i]; ul = prev[i-bpp] if i >= bpp else 0
-        if filt == 0: val = row[i]
-        elif filt == 1: val = (row[i] + left) & 255
-        elif filt == 2: val = (row[i] + up) & 255
-        elif filt == 3: val = (row[i] + ((left + up) // 2)) & 255
-        elif filt == 4:
-            a, b, c = left, up, ul; p = a + b - c
-            pa, pb, pc = abs(p-a), abs(p-b), abs(p-c)
-            pr = a if pa <= pb and pa <= pc else (b if pb <= pc else c)
-            val = (row[i] + pr) & 255
-        else: val = row[i]
-        row[i] = val
-    prev = row
-    for i in range(0, stride, bpp):
-        if row[i] != 0 or row[i+1] != 0 or row[i+2] != 0:
-            nonblack = True; break
-    if nonblack: break
-sys.exit(0 if nonblack else 1)
-PY
-        attempts=$((attempts + 1))
-        sleep 1
-        continue
-      fi
       if [ -s "${prev_frame}" ]; then
         ssim_log=$(mktemp)
         if ffmpeg -hide_banner -nostdin -i "${prev_frame}" -i "${out_file}" \
