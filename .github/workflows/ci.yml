@@ -175,12 +175,19 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Resolve provisioned-image cache key
+        id: provisioned-image-key
+        run: |
+          set -euo pipefail
+          main_sha=$(git ls-remote https://github.com/nahcnuj/makamujo.git refs/heads/main | awk '{print $1}')
+          echo "main_sha=${main_sha}" >> "${GITHUB_OUTPUT}"
+
       - name: Restore provisioned image from cache
         id: provisioned-image-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: makamujo-provisioned.tar
-          key: makamujo-provisioned-${{ hashFiles('Dockerfile', 'ansible/**', 'compose.yml', 'bin/**', 'etc/**') }}
+          key: makamujo-provisioned-${{ steps.provisioned-image-key.outputs.main_sha }}-${{ hashFiles('Dockerfile', 'ansible/**', 'compose.yml', 'bin/**', 'etc/**') }}
 
       - name: Load provisioned image (if cached)
         if: steps.provisioned-image-cache.outputs.cache-hit == 'true'
@@ -320,7 +327,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: makamujo-provisioned.tar
-          key: makamujo-provisioned-${{ hashFiles('Dockerfile', 'ansible/**', 'compose.yml', 'bin/**', 'etc/**') }}
+          key: makamujo-provisioned-${{ steps.provisioned-image-key.outputs.main_sha }}-${{ hashFiles('Dockerfile', 'ansible/**', 'compose.yml', 'bin/**', 'etc/**') }}
 
       - name: Trust the RTMPS CA inside the container
         run: |
