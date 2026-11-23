@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "hono/jsx/dom";
+import { isVrtMode } from "../vrtMode";
 
 const MOVE_MS = 1200;
 
@@ -155,7 +156,9 @@ export function SilentCaption({ text }: { text: string }) {
       }
     };
 
-    void loop();
+    if (!isVrtMode()) {
+      void loop();
+    }
 
     return () => {
       ac.abort();
