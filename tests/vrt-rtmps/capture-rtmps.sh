@@ -19,7 +19,7 @@ if [ "${RTMPS_RESTART_BROWSER:-1}" = "1" ]; then
     docker compose exec -T makamujo systemctl set-environment VIGILANT_FIESTA_TITLE_DWELL_MS=3600000 >/dev/null 2>&1 || true
     docker compose exec -T makamujo systemctl set-environment VRT_MODE=1 >/dev/null 2>&1 || true
     docker compose exec -T makamujo systemctl restart makamujo-screen.service >/dev/null 2>&1 || true
-    sleep 4
+    sleep 8
     # Put the broadcast overlay into VRT mode (freeze non-deterministic
     # animated elements such as the heartbeat scanline) by pointing OBS at the
     # vrt query variant of the page.
@@ -41,9 +41,7 @@ for p in [
     p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
     docker compose exec -T makamujo systemctl restart makamujo-obs.service >/dev/null 2>&1 || true
-    sleep 6
-    docker compose exec -T makamujo systemctl restart makamujo-browser.service >/dev/null 2>&1 || true
-    sleep 4
+    sleep 12
   fi
 fi
 
