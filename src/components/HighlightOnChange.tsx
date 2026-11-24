@@ -1,5 +1,6 @@
 import type { Child } from "hono/jsx/dom";
 import { useEffect, useState } from "hono/jsx/dom";
+import { isVrtMode } from "../vrtMode";
 
 type Props = {
   children?: Child;
@@ -23,6 +24,10 @@ export function HighlightOnChange({
 }: Props) {
   const [isHighlighting, setIsHighlighting] = useState(false);
   useEffect(() => {
+    if (isVrtMode()) {
+      setIsHighlighting(false);
+      return;
+    }
     setIsHighlighting(true);
     const id = setTimeout(() => {
       setIsHighlighting(false);
