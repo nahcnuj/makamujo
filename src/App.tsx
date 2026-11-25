@@ -1,7 +1,7 @@
 import { Box, Container } from "./agt-compat";
 import { BroadcastHeartbeat } from "./components/BroadcastHeartbeat";
 import { GamePanel } from "./components/GamePanel";
-import { AvatarPanel, SpeechPanel } from "./components/StreamerPanel";
+import { StreamerPanel } from "./components/StreamerPanel";
 import { AgentProvider } from "./contexts/AgentContext";
 import { isVrtMode } from "./vrtMode";
 
@@ -9,8 +9,7 @@ import { isVrtMode } from "./vrtMode";
  * Broadcast layout (2x2 grid):
  * - Top-left: game screen (black box keyed transparent to OBS display capture)
  * - Top-right: "馬可無序" title + game info window
- * - Bottom-left: avatar
- * - Bottom-right: speech window
+ * - Bottom: avatar + speech window (rendered by `StreamerPanel`)
  *
  * VRT mode freezes non-deterministic elements so captured frames are reproducible.
  */
@@ -82,12 +81,11 @@ export function App() {
             </div>
           </div>
         </Container>
-        <Container>
-          <AvatarPanel />
-        </Container>
-        <Container>
-          <SpeechPanel />
-        </Container>
+        <div className="col-span-2">
+          <Container>
+            <StreamerPanel />
+          </Container>
+        </div>
       </div>
       {!isVrtMode() && <BroadcastHeartbeat />}
     </AgentProvider>
