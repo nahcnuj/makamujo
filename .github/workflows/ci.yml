@@ -341,6 +341,12 @@ jobs:
           docker compose exec -T makamujo systemctl set-environment VIGILANT_FIESTA_TITLE_DWELL_MS=3600000 GAME_ACTIVITY_TIMEOUT_MS=7200000
           docker compose exec -T makamujo systemctl restart makamujo-screen.service makamujo-browser.service
           sleep 15
+          for _ in $(seq 1 30); do
+            if docker compose exec -T makamujo systemctl is-active --quiet makamujo-browser.service; then
+              break
+            fi
+            sleep 1
+          done
           # Warm up the frontend build so OBS never captures a half-built page.
           for _ in $(seq 1 60); do
             if docker compose exec -T makamujo curl -fsS http://127.0.0.1:7777/ >/dev/null 2>&1; then
