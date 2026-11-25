@@ -417,47 +417,6 @@ export const create = async (
   }
   page = ctx.pages()[0] ?? page;
 
-  const freezeAnimations =
-    process.env.VIGILANT_FIESTA_FREEZE_ANIMATIONS === "1" ||
-    !!process.env.VIGILANT_FIESTA_TITLE_DWELL_MS?.trim();
-  if (freezeAnimations) {
-    await page.addInitScript(() => {
-      const inject = () => {
-        try {
-          const style = document.createElement("style");
-          style.textContent =
-            "*{animation:none!important;transition:none!important;}";
-          (document.head ?? document.documentElement).appendChild(style);
-        } catch {
-          /* best-effort */
-        }
-      };
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", inject, { once: true });
-      } else {
-        inject();
-      }
-    });
-    page.on("load", () => {
-      void page
-        .evaluate(() => {
-          const style = document.createElement("style");
-          style.textContent =
-            "*{animation:none!important;transition:none!important;}";
-          (document.head ?? document.documentElement).appendChild(style);
-        })
-        .catch(() => {});
-    });
-    void page
-      .evaluate(() => {
-        const style = document.createElement("style");
-        style.textContent =
-          "*{animation:none!important;transition:none!important;}";
-        (document.head ?? document.documentElement).appendChild(style);
-      })
-      .catch(() => {});
-  }
-
   if (!page.url().startsWith(gameHomeUrl) && page.url() !== "about:blank") {
     // keep
   } else if (
