@@ -18,20 +18,12 @@ import {
 
 const RISE_MS = 300;
 
-export function StreamerPanel() {
-  const { speechLines, silent, streamState } = useAgentContext();
-  const [displayLines, setDisplayLines] = useState<string[]>(speechLines);
-  const [risePx, setRisePx] = useState(0);
-  const firstRef = useRef<HTMLDivElement | null>(null);
-  const displayRef = useRef(displayLines);
-  displayRef.current = displayLines;
+export function AvatarPanel() {
+  const { silent, streamState } = useAgentContext();
+  const [visibility, setVisibility] = useState<SpriteVisibility>(VISIBLE);
 
   const lastListenersRef = useRef<number | undefined>(undefined);
   const listenersChangedAtRef = useRef<number>(Date.now());
-  const [visibility, setVisibility] = useState<SpriteVisibility>(VISIBLE);
-
-  const silentRef = useRef(silent);
-  silentRef.current = silent;
   const fadeRafRef = useRef<number | null>(null);
 
   const cancelPendingFade = () => {
@@ -43,7 +35,6 @@ export function StreamerPanel() {
 
   const listeners = streamState?.meta?.total?.listeners ?? undefined;
 
-  // 不変条件: 沈黙でなければ常に表示（予約中のフェードも破棄）
   useEffect(() => {
     if (!silent) {
       cancelPendingFade();
@@ -64,7 +55,7 @@ export function StreamerPanel() {
     listenersChangedAtRef.current = result.listenersChangedAtMs;
 
     if (result.visibility === SHOW_THEN_FADE) {
-      if (!silentRef.current) {
+      if (!silent) {
         cancelPendingFade();
         setVisibility(VISIBLE);
         return;
@@ -73,7 +64,7 @@ export function StreamerPanel() {
       setVisibility(VISIBLE);
       fadeRafRef.current = requestAnimationFrame(() => {
         fadeRafRef.current = null;
-        if (!silentRef.current) {
+        if (!silent) {
           setVisibility(VISIBLE);
           return;
         }
@@ -82,7 +73,7 @@ export function StreamerPanel() {
       return;
     }
 
-    if (!silentRef.current) {
+    if (!silent) {
       setVisibility(VISIBLE);
       return;
     }
@@ -102,7 +93,7 @@ export function StreamerPanel() {
     }
 
     const tick = () => {
-      if (!silentRef.current) {
+      if (!silent) {
         setVisibility(VISIBLE);
         return;
       }
@@ -119,6 +110,25 @@ export function StreamerPanel() {
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
   }, [silent]);
+
+  const awayStyle = spriteAwayStyle(visibility, FADE_OUT_MS);
+
+  return (
+    <div className="h-full flex items-center justify-center" style={awayStyle}>
+      <div className="flex-none max-h-full aspect-square">
+        <CharacterSprite />
+      </div>
+    </div>
+  );
+}
+
+export function SpeechPanel() {
+  const { speechLines, silent } = useAgentContext();
+  const [displayLines, setDisplayLines] = useState<string[]>(speechLines);
+  const [risePx, setRisePx] = useState(0);
+  const firstRef = useRef<HTMLDivElement | null>(null);
+  const displayRef = useRef(displayLines);
+  displayRef.current = displayLines;
 
   useEffect(() => {
     const prev = displayRef.current ?? [];
@@ -151,64 +161,65 @@ export function StreamerPanel() {
     });
   }, [speechLines]);
 
-  const awayStyle = spriteAwayStyle(visibility, FADE_OUT_MS);
+  return (
+    <div className="h-full">
+      <Box
+        borderColor="border-emerald-300"
+        borderWidth="border-8"
+        borderStyle="border-double"
+        rounded="rounded-xl"
+      >
+        <Container>
+          <div className="w-full h-full text-3xl/9 break-all overflow-hidden">
+            {shouldShowSilentCaption(silent, displayLines.length) ? (
+              <SilentCaption
+                text={"\uFF08\u30B3\u30E1\u30F3\u30C8\u3057\u3066\u306D\uFF09"}
+              />
+            ) : (
+              <div
+                style={
+                  risePx > 0
+                    ? {
+                        transform: `translateY(-${risePx}px)`,
+                        transition: `transform ${RISE_MS}ms ease-out`,
+                      }
+                    : {}
+                }
+              >
+                {displayLines.map((line, i) => (
+                  <div
+                    key={line}
+                    ref={
+                      i === 0
+                        ? (el: HTMLDivElement | null) => {
+                            firstRef.current = el;
+                          }
+                        : undefined
+                    }
+                  >
+                    <SpeechLine
+                      text={line}
+                      animate={i === displayLines.length - 1}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Container>
+      </Box>
+    </div>
+  );
+}
 
+export function StreamerPanel() {
   return (
     <div className="flex gap-2 h-full">
-      <div
-        className="flex-none w-45 max-h-full -m-1 aspect-square"
-        style={awayStyle}
-      >
-        <CharacterSprite />
+      <div className="flex-1 h-full">
+        <AvatarPanel />
       </div>
-      <div className="flex-auto h-full">
-        <Box
-          borderColor="border-emerald-300"
-          borderWidth="border-8"
-          borderStyle="border-double"
-          rounded="rounded-xl"
-        >
-          <Container>
-            <div className="w-full h-full text-3xl/9 break-all overflow-hidden">
-              {shouldShowSilentCaption(silent, displayLines.length) ? (
-                <SilentCaption
-                  text={
-                    "\uFF08\u30B3\u30E1\u30F3\u30C8\u3057\u3066\u306D\uFF09"
-                  }
-                />
-              ) : (
-                <div
-                  style={
-                    risePx > 0
-                      ? {
-                          transform: `translateY(-${risePx}px)`,
-                          transition: `transform ${RISE_MS}ms ease-out`,
-                        }
-                      : {}
-                  }
-                >
-                  {displayLines.map((line, i) => (
-                    <div
-                      key={line}
-                      ref={
-                        i === 0
-                          ? (el: HTMLDivElement | null) => {
-                              firstRef.current = el;
-                            }
-                          : undefined
-                      }
-                    >
-                      <SpeechLine
-                        text={line}
-                        animate={i === displayLines.length - 1}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </Container>
-        </Box>
+      <div className="flex-1 h-full">
+        <SpeechPanel />
       </div>
     </div>
   );
