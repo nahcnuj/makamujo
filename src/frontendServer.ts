@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
+import { compileTailwindCss } from "../lib/tailwind";
 
 const MAIN_BUILD_PATH = resolve(process.cwd(), "var/main/build");
 const MAIN_SOURCE_HTML_PATH = resolve(process.cwd(), "src/index.html");
@@ -14,12 +15,18 @@ function getContentType(filePath: string): string | undefined {
   return undefined;
 }
 
-function normalizeMainHtml(source: string): string {
+function normalizeMainHtml(source: string, compiledCss?: string): string {
   const rewrittenHtml = source.replace(
     /src=(['"])\.\/frontend\.tsx\1/,
     "src=$1./frontend.js$1",
   );
   let result = rewrittenHtml;
+  if (compiledCss) {
+    result = result.replace(
+      /<\/head>/i,
+      `  <style>${compiledCss}</style>\n</head>`,
+    );
+  }
   if (!result.match(/<link[^>]+href=(['"])\.\/frontend\.css\1/)) {
     result = result.replace(
       /<\/head>/i,
@@ -60,8 +67,10 @@ async function buildMainFrontend() {
     throw new Error("Main frontend build failed");
   }
 
+  const compiledCss = await compileTailwindCss("src/index.css");
   builtMainHtml = normalizeMainHtml(
     readFileSync(MAIN_SOURCE_HTML_PATH, "utf-8"),
+    compiledCss,
   );
 }
 
