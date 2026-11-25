@@ -17,11 +17,6 @@ export function App() {
         className="bg-emerald-950/30 text-emerald-50 font-[Noto_Sans_CJK_JP] font-bold"
       >
         <Container>
-          <div className="text-xs opacity-25">
-            {new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}
-          </div>
-        </Container>
-        <Container>
           <div className="h-full flex flex-col justify-between items-center">
             <div className="flex-none">
               <div
