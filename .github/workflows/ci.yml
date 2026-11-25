@@ -339,19 +339,27 @@ jobs:
           docker compose exec -T makamujo bash -c 'cd /opt/src/makamujo && /root/.bun/bin/bun install --production --frozen-lockfile'
           docker compose exec -T makamujo bash -c 'cd /opt/src/makamujo && /root/.bun/bin/bunx playwright install chromium' || true
           docker compose exec -T makamujo systemctl set-environment VIGILANT_FIESTA_TITLE_DWELL_MS=3600000 GAME_ACTIVITY_TIMEOUT_MS=7200000
-          # The provisioned image can carry an OBS browser-source disk cache
-          # from an earlier run. Replaying it hides the overlay panels and
-          # leaves only the game screen in the captured frame.
-          docker compose exec -T makamujo rm -rf /opt/src/makamujo/.cache
+          # The provisioned image is cached by infrastructure files only, so it
+          # can carry an overlay page cached by OBS's browser source from an
+          # earlier revision. Clearing the Playwright XDG cache alone leaves
+          # that page in the OBS Chromium profile: the browser source then
+          # renders blank and the capture shows only the game screen. Stop OBS
+          # first so it cannot write the cache back while it is being cleared.
+          docker compose exec -T makamujo systemctl stop makamujo-obs.service
+          docker compose exec -T makamujo rm -rf \
+            /opt/src/makamujo/.cache \
+            '/opt/src/makamujo/obs-studio/plugin_config/obs-browser/Default/Cache' \
+            '/opt/src/makamujo/obs-studio/plugin_config/obs-browser/Default/Code Cache' \
+            /opt/src/makamujo/obs-studio/plugin_config/obs-browser/Default/GPUCache \
+            /opt/src/makamujo/obs-studio/plugin_config/obs-browser/GPUPersistentCache
           docker compose exec -T makamujo systemctl restart makamujo-screen.service makamujo-browser.service
-          sleep 15
-          # The Comment browser source in OBS loads the overlay page once when
-          # it starts. Starting OBS before the frontend build is ready makes it
-          # cache the 503/blank page, so the captured stream then contains only
-          # the game screen. Wait until the rebuilt page is actually served.
+          # The Comment browser source loads the overlay page and its JS bundle
+          # once when OBS starts. Wait until both are served with 200 so a 503
+          # from the frontend build cannot be cached as a blank overlay.
           overlay_ready=false
           for _ in $(seq 1 60); do
-            if docker compose exec -T makamujo curl -fsS http://127.0.0.1:7777/ >/dev/null 2>&1; then
+            if docker compose exec -T makamujo curl -fsS http://127.0.0.1:7777/ >/dev/null 2>&1 \
+               && docker compose exec -T makamujo curl -fsS http://127.0.0.1:7777/frontend.js >/dev/null 2>&1; then
               overlay_ready=true
               break
             fi
@@ -361,7 +369,7 @@ jobs:
             echo "Overlay page was not ready before starting OBS" >&2
             exit 1
           fi
-          docker compose exec -T makamujo systemctl restart makamujo-obs.service
+          docker compose exec -T makamujo systemctl start makamujo-obs.service
           sleep 30
           for _ in $(seq 1 30); do
             if docker compose exec -T makamujo systemctl is-active --quiet makamujo-screen.service; then
