@@ -351,12 +351,13 @@ jobs:
           # earlier revision. Clearing the Playwright XDG cache alone leaves
           # that page in the OBS Chromium profile: the browser source then
           # renders blank and the capture shows only the game screen.
+          # Remove the whole OBS browser profile, not only its HTTP cache:
+          # per-origin zoom levels and page state survive in Preferences and
+          # Local Storage and shift the overlay panels out of the 1280x720
+          # browser source even when the cached HTML/CSS is discarded.
           docker compose exec -T makamujo rm -rf \
             /opt/src/makamujo/.cache \
-            '/opt/src/makamujo/obs-studio/plugin_config/obs-browser/Default/Cache' \
-            '/opt/src/makamujo/obs-studio/plugin_config/obs-browser/Default/Code Cache' \
-            /opt/src/makamujo/obs-studio/plugin_config/obs-browser/Default/GPUCache \
-            /opt/src/makamujo/obs-studio/plugin_config/obs-browser/GPUPersistentCache
+            /opt/src/makamujo/obs-studio/plugin_config/obs-browser
           docker compose exec -T makamujo systemctl restart makamujo-screen.service makamujo-browser.service
           # The Comment browser source loads the overlay page and its JS bundle
           # once when OBS starts. Wait until both are served with 200 so a 503
