@@ -330,6 +330,13 @@ jobs:
       - name: Overlay PR source into the container
         run: |
           set -euo pipefail
+          # OBS rewrites its profile and scene collection when it exits. The
+          # cached provisioned image starts OBS with a configuration from an
+          # older revision, so stop it *before* overlaying the checked-out
+          # source. Otherwise stopping it later writes that stale configuration
+          # back over the PR files and the browser source shows an old/blank
+          # overlay instead of the one under review.
+          docker compose exec -T makamujo systemctl stop makamujo-obs.service
           # The provisioned image is built from main, so overlay the checked-out
           # (PR) source on top of it before OBS captures the stream. This keeps
           # the RTMPS VRT exercising the code under review instead of main.
@@ -343,9 +350,7 @@ jobs:
           # can carry an overlay page cached by OBS's browser source from an
           # earlier revision. Clearing the Playwright XDG cache alone leaves
           # that page in the OBS Chromium profile: the browser source then
-          # renders blank and the capture shows only the game screen. Stop OBS
-          # first so it cannot write the cache back while it is being cleared.
-          docker compose exec -T makamujo systemctl stop makamujo-obs.service
+          # renders blank and the capture shows only the game screen.
           docker compose exec -T makamujo rm -rf \
             /opt/src/makamujo/.cache \
             '/opt/src/makamujo/obs-studio/plugin_config/obs-browser/Default/Cache' \
