@@ -1,21 +1,34 @@
-import { Box, Container, Layout } from "./agt-compat";
+import { Box, Container } from "./agt-compat";
 import { BroadcastHeartbeat } from "./components/BroadcastHeartbeat";
 import { GamePanel } from "./components/GamePanel";
 import { StreamerPanel } from "./components/StreamerPanel";
 import { AgentProvider } from "./contexts/AgentContext";
 import { isVrtMode } from "./vrtMode";
 
+/**
+ * Broadcast layout (2x2 grid):
+ * - Top-left: game screen (black box keyed transparent to OBS display capture)
+ * - Top-right: "馬可無序" title + game info window
+ * - Bottom: avatar + speech window (rendered by `StreamerPanel`)
+ *
+ * VRT mode freezes non-deterministic elements so captured frames are reproducible.
+ */
 export function App() {
   return (
     <AgentProvider>
       {isVrtMode() && (
         <style>{`*{animation:none!important;transition:none!important;opacity:1!important;filter:none!important;backdrop-filter:none!important;mix-blend-mode:normal!important;box-shadow:none!important;text-shadow:none!important;will-change:auto!important;}`}</style>
       )}
-      <Layout
-        count={10}
-        span={8}
-        className="bg-emerald-950/30 text-emerald-50 font-[Noto_Sans_CJK_JP] font-bold"
-      >
+      <div className="w-screen h-screen grid grid-cols-2 grid-rows-2 bg-emerald-950/30 text-emerald-50 font-[Noto_Sans_CJK_JP] font-bold">
+        <Container>
+          <Box
+            bgColor="bg-black"
+            borderColor="border-emerald-300"
+            borderWidth="border-8"
+            borderStyle="border-double"
+            rounded="rounded-xl"
+          />
+        </Container>
         <Container>
           <div className="h-full flex flex-col justify-between items-center">
             <div className="flex-none">
@@ -68,10 +81,12 @@ export function App() {
             </div>
           </div>
         </Container>
-        <Container>
-          <StreamerPanel />
-        </Container>
-      </Layout>
+        <div className="col-span-2">
+          <Container>
+            <StreamerPanel />
+          </Container>
+        </div>
+      </div>
       {!isVrtMode() && <BroadcastHeartbeat />}
     </AgentProvider>
   );
