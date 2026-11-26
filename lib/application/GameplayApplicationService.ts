@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { Action, type State } from "automated-gameplay-transmitter";
 import { type GameName, ServerGames as Games } from "../Agent/games/server";
+import { resolveTitleDwellMs } from "../Agent/games/work.nahcnuj.www/vigilant-fiesta/solver";
 import { createReceiver as createSocketReceiver } from "../Browser/socket";
 import {
   type GameActivityState,
@@ -90,7 +91,10 @@ export class GameplayApplicationService {
       );
     let solver = createSolver();
     let activity: GameActivityState = initialGameActivityState();
-    const activityTimeoutMs = resolveGameActivityTimeoutMs();
+    const activityTimeoutMs = Math.max(
+      resolveGameActivityTimeoutMs(),
+      resolveTitleDwellMs() + 60_000,
+    );
     try {
       this.#createReceiver((state: State) => {
         this.#session.browserState = state;
