@@ -28,6 +28,8 @@ export type GameState =
   | {
       type: "initialize";
       phase?: "open" | "start";
+      /** Epoch ms until which the title screen is held before auto-start. */
+      dwellUntil?: number;
     }
   | {
       type: "idle";
@@ -50,6 +52,19 @@ export type SolverStart =
   | { type: "initialize"; data?: string }
   | { type: "closed" };
 
+/**
+ * How long to dwell on the title screen before auto-starting the game.
+ * Override with `VIGILANT_FIESTA_TITLE_DWELL_MS` (milliseconds).
+ */
+export const resolveTitleDwellMs = (
+  env: NodeJS.ProcessEnv = process.env,
+): number => {
+  const raw = env.VIGILANT_FIESTA_TITLE_DWELL_MS?.trim();
+  if (!raw) return 0;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+};
+
 export const States = {
   initialize: (): Extract<GameState, { type: "initialize" }> => ({
     type: "initialize",
@@ -68,6 +83,10 @@ export function hydrate(state: GameState | SolverStart): GameState {
       return {
         type: "initialize",
         phase: "phase" in state && state.phase ? state.phase : "open",
+        dwellUntil:
+          "dwellUntil" in state
+            ? (state as { dwellUntil?: number }).dwellUntil
+            : undefined,
       };
     case "idle":
       return {
@@ -103,6 +122,7 @@ const pickPlayAction = (): Action.Action => {
 export function stepInitialize(
   state: Extract<GameState, { type: "initialize" }>,
   event: State | undefined,
+  nowMs: number = Date.now(),
 ): { state: GameState; action?: Action.Action } {
   if (event?.name === "closed") {
     return { state: { type: "closed" } };
@@ -120,9 +140,20 @@ export function stepInitialize(
       if (event.name === "result" && event.succeeded === false) {
         return { state: { ...state, phase: "open" } };
       }
-      return { state: { ...state, phase: "start" } };
+      const dwellMs = resolveTitleDwellMs();
+      return {
+        state: {
+          ...state,
+          phase: "start",
+          ...(dwellMs > 0 ? { dwellUntil: nowMs + dwellMs } : {}),
+        },
+      };
     }
     case "start": {
+      const dwellUntil = state.dwellUntil ?? 0;
+      if (nowMs < dwellUntil) {
+        return { state, action: Action.noop };
+      }
       if (event === undefined) {
         return {
           state,
@@ -142,12 +173,13 @@ export function* handleInitialize(
   let s: Extract<GameState, { type: "initialize" }> = {
     type: "initialize",
     phase: state.phase ?? "open",
+    dwellUntil: state.dwellUntil,
   };
   let event: State | undefined;
 
   for (;;) {
     const prevPhase = s.phase;
-    const out = stepInitialize(s, event);
+    const out = stepInitialize(s, event, Date.now());
     if (out.state.type !== "initialize") {
       return out.state;
     }

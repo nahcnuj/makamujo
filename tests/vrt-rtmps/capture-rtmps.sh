@@ -50,14 +50,12 @@ while [ "${attempts}" -lt "${max_attempts}" ]; do
     dimensions=$(ffprobe -v error -select_streams v:0 \
       -show_entries stream=width,height -of csv=s=x:p=0 "${out_file}")
     if [ "${dimensions}" = "1280x720" ]; then
-      # Reject (near-)black frames: these are transitional/blank captures
-      # that would otherwise be accepted as a stable frame and make the VRT
-      # compare against an empty image.
-      frame_mean=$(ffmpeg -hide_banner -loglevel error -i "${out_file}" -f rawvideo -pix_fmt gray8 - 2>/dev/null | python3 -c "import sys; d=sys.stdin.buffer.read(); print((sum(d)/len(d)) if d else 0)")
-      if awk -v m="${frame_mean}" 'BEGIN { exit !(m < 4) }'; then
-        echo "Captured frame is (near) black (mean=${frame_mean}); retrying" >&2
+      ymax=$(ffmpeg -hide_banner -nostdin -i "${out_file}" -vf "signalstats,metadata=print" -f null - 2>&1 | sed -n 's/.*YMAX=\([0-9.]*\).*/\1/p' | tail -n 1 || true)
+      if [ -z "${ymax}" ] || awk -v y="${ymax}" 'BEGIN { exit !(y < 50) }'; then
+        echo "Frame too dark (YMAX=${ymax:-unknown}), waiting for content" >&2
+        rm -f "${out_file}"
         attempts=$((attempts + 1))
-        sleep 1
+        sleep 2
         continue
       fi
       if [ -s "${prev_frame}" ]; then

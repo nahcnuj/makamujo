@@ -161,7 +161,7 @@ try {
   do {
     console.debug(`Getting the date of the latest live...`);
     const next = await (async () => {
-      await page.goto(LIVE_PROGRAMS_URL);
+      await page.goto(LIVE_PROGRAMS_URL, { waitUntil: "domcontentloaded" });
       const response = await page.request.get(BROADCAST_HISTORY_URL, {
         headers: { Accept: "application/json" },
       });
