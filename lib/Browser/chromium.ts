@@ -430,8 +430,10 @@ export const create = async (
           "html,body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}",
           `body{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:flex-start!important;width:${1024 / zoom}px!important;height:auto!important;padding:0!important;margin:0 auto!important}`,
           "#app{margin:0 auto!important;max-width:40rem!important;width:min(100%,40rem)!important;text-align:center!important}",
-          "#play-layout{display:grid!important;grid-template-columns:1fr!important;justify-items:center!important;gap:0.75rem!important}",
-          "#game-container{margin:0 auto!important;justify-self:center!important;display:block!important}",
+          '#play-layout{display:grid!important;grid-template-columns:1fr!important;grid-template-areas:"hud" "board"!important;justify-items:center!important;align-items:center!important;gap:0.75rem!important}',
+          "#hud-left{grid-area:hud!important;justify-self:center!important}",
+          "#game-container{grid-area:board!important;margin:0 auto!important;justify-self:center!important;display:block!important;width:fit-content!important;max-width:100%!important;padding:0!important}",
+          "#game-container > canvas{display:block!important;margin:0 auto!important}",
           ".ad-slot,#ad-side-left,#ad-side-right{display:none!important}",
         ].join("\n");
         // Scale the whole document like a real browser zoom.
@@ -714,8 +716,10 @@ export const applyGameScreenZoom = async (
         "html,body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}",
         `body{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:flex-start!important;width:${1024 / zoom}px!important;height:auto!important;padding:0!important;margin:0 auto!important}`,
         "#app{margin:0 auto!important;max-width:40rem!important;width:min(100%,40rem)!important;text-align:center!important}",
-        "#play-layout{display:grid!important;grid-template-columns:1fr!important;justify-items:center!important;gap:0.75rem!important}",
-        "#game-container{margin:0 auto!important;justify-self:center!important;display:block!important}",
+        '#play-layout{display:grid!important;grid-template-columns:1fr!important;grid-template-areas:"hud" "board"!important;justify-items:center!important;align-items:center!important;gap:0.75rem!important}',
+        "#hud-left{grid-area:hud!important;justify-self:center!important}",
+        "#game-container{grid-area:board!important;margin:0 auto!important;justify-self:center!important;display:block!important;width:fit-content!important;max-width:100%!important;padding:0!important}",
+        "#game-container > canvas{display:block!important;margin:0 auto!important}",
         ".ad-slot,#ad-side-left,#ad-side-right{display:none!important}",
       ].join("\n");
       if (
