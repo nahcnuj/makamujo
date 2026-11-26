@@ -316,8 +316,7 @@ export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
   "--disable-renderer-backgrounding",
 ] as const;
 
-export const GAME_SCREEN_ZOOM = "1.25" as const;
-export const GAME_SCREEN_ZOOM_FACTOR = 1.25 as const;
+export const GAME_SCREEN_ZOOM_FACTOR = 1 as const;
 
 export type BrowserCreateOptions = {
   /** Magnification for the Agent's game board. */
@@ -452,18 +451,7 @@ export const create = async (
   }, 2000);
 
   const applyZoom = async (factor: number) => {
-    if (isVigilantFiestaGameUrl(page.url())) {
-      await applyGameScreenZoom(page, factor);
-      return;
-    }
-    try {
-      await page.evaluate(() => {
-        document.documentElement.style.zoom = "1.0";
-        window.scrollTo(0, 0);
-      });
-    } catch {
-      /* page may not be ready */
-    }
+    await applyGameScreenZoom(page, factor);
   };
   await applyZoom(options.gameScreenZoom ?? 1);
   page.on("load", () => {
@@ -636,11 +624,11 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
 };
 
 /**
- * Apply the Agent-provided magnification to the game screen only.
+ * Reset the document zoom to 1.0.
  *
- * The whole document stays at 1.0 so the page layout (title/result screens,
- * HUD) is unaffected; only the game board (and, as a fallback, the playing
- * screen) is scaled up for the captured stream.
+ * Per-element magnification is intentionally not applied anymore: the whole
+ * document stays at 1.0 and OBS handles enlarging the game screen on the
+ * broadcast canvas.
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
@@ -651,15 +639,33 @@ export const applyGameScreenZoom = async (
     return;
   }
   try {
-    await page.evaluate((value: number) => {
+    await page.evaluate((_value: number) => {
+      // Stop per-element zoom: keep the whole document at 1.0 and let OBS
+      // handle enlarging the game screen on the broadcast canvas.
       document.documentElement.style.zoom = "1.0";
-      const gameScreen =
-        document.getElementById("game-container") ??
-        document.getElementById("screen-playing");
-      if (gameScreen) {
-        gameScreen.style.zoom = String(value);
+      // Make the broadcast background black and place the game screen at the
+      // top-left so OBS can enlarge it without showing page margins.
+      const styleId = "makamujo-broadcast-layout";
+      let style = document.getElementById(styleId) as HTMLStyleElement | null;
+      if (!style) {
+        style = document.createElement("style");
+        style.id = styleId;
+        (document.head ?? document.documentElement).appendChild(style);
       }
-      window.scrollTo(0, 0);
+      style.textContent = [
+        "html,body{background:#000!important;margin:0!important;padding:0!important}",
+        "body{display:block!important;text-align:left!important}",
+        "#app{margin:0!important;max-width:none!important;width:100%!important;text-align:left!important}",
+        "#play-layout{display:block!important;text-align:left!important}",
+        "#game-container{margin:0!important;margin-left:0!important;display:inline-block!important}",
+        "#site-header,.ad-slot,#ad-side-left,#ad-side-right,#hud-left{display:none!important}",
+      ].join("\n");
+      if (
+        typeof window !== "undefined" &&
+        typeof window.scrollTo === "function"
+      ) {
+        window.scrollTo(0, 0);
+      }
     }, zoomValue);
   } catch {
     /* page may not be ready */
