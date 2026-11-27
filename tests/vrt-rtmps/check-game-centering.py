@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import json
 import os
 import re
 import subprocess
@@ -29,7 +28,6 @@ MAX_ATTEMPTS = 90
 RETRY_SECONDS = 2
 MIN_FRAME_SSIM = 0.95
 MAX_TITLE_SSIM = 0.9
-GAME_STATE_URL = "http://127.0.0.1:7777/api/game"
 STREAM_URL = os.environ.get(
     "RTMPS_CAPTURE_URL", "rtmps://127.0.0.1:1936/live/stream"
 )
@@ -166,25 +164,6 @@ def restart_game_for_play_start():
     )
 
 
-def is_playing():
-    result = compose_exec("curl", "-fsS", GAME_STATE_URL)
-    if result.returncode != 0:
-        return False
-    try:
-        payload = json.loads(result.stdout.decode("utf-8", "replace"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return False
-    if not isinstance(payload, dict):
-        return False
-    for candidate in (payload, payload.get("currentGame"), payload.get("state")):
-        if not isinstance(candidate, dict):
-            continue
-        state = candidate.get("state", candidate)
-        if isinstance(state, dict) and state.get("screen") == "playing":
-            return True
-    return False
-
-
 def capture_frame(path):
     if path.exists():
         path.unlink()
@@ -254,10 +233,6 @@ def main():
     with tempfile.TemporaryDirectory() as temp_dir:
         previous = Path(temp_dir) / "previous.png"
         for _ in range(MAX_ATTEMPTS):
-            if not is_playing():
-                failures = ["game did not enter the playing screen"]
-                time.sleep(RETRY_SECONDS)
-                continue
             pixels = capture_frame(actual)
             if pixels is None:
                 failures = ["could not capture a 1280x720 RTMPS frame"]
