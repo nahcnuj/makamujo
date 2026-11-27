@@ -16,6 +16,10 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
   echo "ffmpeg is required to compare VRT frames" >&2
   exit 1
 fi
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "python3 is required to verify game-screen centering" >&2
+  exit 1
+fi
 
 status=0
 cases_executed=0
@@ -29,7 +33,7 @@ touch -d '1 minute ago' "${run_marker}"
 for case_file in "${vrt_dir}"/*; do
   [ -f "${case_file}" ] || continue
   case "${case_file}" in
-    *.png|*.jpg|*.jpeg|*.html) continue ;;
+    *.png|*.jpg|*.jpeg|*.html|*.py) continue ;;
   esac
 
   base=$(basename "${case_file}")
@@ -82,6 +86,10 @@ for case_file in "${vrt_dir}"/*; do
     status=1
   fi
   rm -f "${ssim_log}"
+
+  if [ "${stem}" = "capture-rtmps" ] && ! python3 "${vrt_dir}/check-game-centering.py" "${actual}"; then
+    status=1
+  fi
 done
 
 # An empty case directory must never be reported as a successful VRT run.

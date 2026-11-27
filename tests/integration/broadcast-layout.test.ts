@@ -82,6 +82,8 @@ type Rect = {
 
 type Geometry = {
   hud: Rect;
+  overlay: Rect;
+  nextPanel: Rect;
   game: Rect;
   canvas: Rect;
   ad: Rect;
@@ -233,6 +235,8 @@ itWithChromium(
         };
         return {
           hud: rectOf("#hud-left"),
+          overlay: rectOf("#overlay"),
+          nextPanel: rectOf("#next-panel"),
           game: rectOf("#game-container"),
           canvas: rectOf("#game-board"),
           ad: rectOf("#ad-side-left"),
@@ -240,13 +244,22 @@ itWithChromium(
       });
 
       expect(geometry.hud.display).not.toBe("none");
+      expect(geometry.overlay.display).not.toBe("none");
+      expect(geometry.nextPanel.display).not.toBe("none");
       expect(geometry.canvas.display).not.toBe("none");
       expect(geometry.ad.display).toBe("none");
       expect(geometry.hud.bottom).toBeLessThan(geometry.game.top);
+      expect(geometry.overlay.bottom).toBeLessThan(geometry.game.top);
+      expect(geometry.nextPanel.bottom).toBeLessThan(geometry.game.top);
       for (const rect of [geometry.hud, geometry.game, geometry.canvas]) {
         expect(rect.center).toBeCloseTo(GAME_CENTER, 1);
         expect(rect.right).toBeLessThanOrEqual(GAME_SCREEN_AREA_WIDTH);
       }
+      for (const rect of [geometry.overlay, geometry.nextPanel]) {
+        expect(rect.left).toBeGreaterThanOrEqual(0);
+        expect(rect.right).toBeLessThanOrEqual(GAME_SCREEN_AREA_WIDTH);
+      }
+      expect(geometry.nextPanel.left).toBeGreaterThan(geometry.overlay.right);
 
       const centers = await measurePixelCenters(
         context,
@@ -289,25 +302,31 @@ itWithChromium(
           canvas.width,
           canvas.height,
         ).data;
-        let left = areaWidth;
-        let right = -1;
-        for (let y = 80; y < Math.min(canvas.height, 390); y++) {
-          for (let x = 0; x < areaWidth; x++) {
-            const offset = (y * canvas.width + x) * 4;
-            const red = pixels[offset] ?? 0;
-            const green = pixels[offset + 1] ?? 0;
-            const blue = pixels[offset + 2] ?? 0;
-            if ((red + green + blue) / 3 < 45) continue;
-            left = Math.min(left, x);
-            right = Math.max(right, x);
+        const measure = (top: number, bottom: number) => {
+          let count = 0;
+          let weighted = 0;
+          let right = -1;
+          for (let y = top; y < Math.min(canvas.height, bottom); y++) {
+            for (let x = 0; x < areaWidth; x++) {
+              const offset = (y * canvas.width + x) * 4;
+              const red = pixels[offset] ?? 0;
+              const green = pixels[offset + 1] ?? 0;
+              const blue = pixels[offset + 2] ?? 0;
+              if ((red + green + blue) / 3 < 45) continue;
+              count += 1;
+              weighted += x + 0.5;
+              right = Math.max(right, x);
+            }
           }
-        }
-        if (right < left) throw new Error("missing frame content");
-        return { left, right, center: (left + right) / 2 };
+          return { count, center: count === 0 ? 0 : weighted / count, right };
+        };
+        return { content: measure(80, 400), hud: measure(100, 180) };
       }, GAME_SCREEN_AREA_WIDTH);
 
-      expect(bounds.right).toBeLessThan(GAME_SCREEN_AREA_WIDTH);
-      expect(Math.abs(bounds.center - GAME_CENTER)).toBeLessThan(10);
+      expect(bounds.content.count).toBeGreaterThan(4000);
+      expect(bounds.content.right).toBeLessThan(GAME_SCREEN_AREA_WIDTH);
+      expect(Math.abs(bounds.content.center - GAME_CENTER)).toBeLessThan(10);
+      expect(bounds.hud.count).toBeGreaterThan(1000);
     } finally {
       await context.close();
     }
