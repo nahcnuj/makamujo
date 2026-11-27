@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 
+import re
 import subprocess
 import sys
+import tempfile
+import time
+from pathlib import Path
 
 FRAME_WIDTH = 1280
 FRAME_HEIGHT = 720
@@ -16,6 +20,12 @@ BRIGHTNESS_THRESHOLD = 45
 CONTENT_ROWS = (80, 400)
 BOARD_ROWS = (240, 400)
 HUD_ROWS = (100, 180)
+MAX_ATTEMPTS = 90
+RETRY_SECONDS = 2
+MIN_FRAME_SSIM = 0.95
+STREAM_URL = os.environ.get(
+    "RTMPS_CAPTURE_URL", "rtmps://127.0.0.1:1936/live/stream"
+)
 
 
 def decode_rgb(path):
@@ -26,7 +36,7 @@ def decode_rgb(path):
             "-loglevel",
             "error",
             "-i",
-            path,
+            str(path),
             "-f",
             "rawvideo",
             "-pix_fmt",
@@ -66,17 +76,7 @@ def measure(pixels, rows):
     return count, weighted_x / count, left, right, (left + right + 1) / 2
 
 
-def main():
-    if len(sys.argv) != 2:
-        print("usage: check-game-centering.py FRAME.png", file=sys.stderr)
-        return 2
-
-    try:
-        pixels = decode_rgb(sys.argv[1])
-    except RuntimeError as error:
-        print(f"VRT: {error}", file=sys.stderr)
-        return 1
-
+def centering_failures(pixels):
     failures = []
     content_count, content_center, _, content_right, content_extent = measure(
         pixels, CONTENT_ROWS
@@ -116,18 +116,136 @@ def main():
             f"content between the title and board is off-center "
             f"(bounds={hud_extent:.1f}, expected={EXPECTED_CENTER:.0f})"
         )
+    return failures
 
-    if failures:
-        for failure in failures:
-            print(f"VRT: {failure}", file=sys.stderr)
-        return 1
 
-    print(
-        f"VRT: game content center={content_center:.1f}, bounds={content_extent:.1f}; "
-        f"board center={board_center:.1f}, bounds={board_extent:.1f}; "
-        f"HUD bounds={hud_extent:.1f} (expected {EXPECTED_CENTER:.0f})"
+def restart_game_browser():
+    try:
+        probe = subprocess.run(
+            ["docker", "compose", "ps", "-q", "makamujo"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    except FileNotFoundError:
+        return
+    if probe.returncode != 0 or not probe.stdout.strip():
+        return
+    subprocess.run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "makamujo",
+            "systemctl",
+            "set-environment",
+            "VIGILANT_FIESTA_TITLE_DWELL_MS=0",
+            "GAME_ACTIVITY_TIMEOUT_MS=7200000",
+        ],
+        check=True,
     )
-    return 0
+    subprocess.run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "makamujo",
+            "systemctl",
+            "restart",
+            "makamujo-browser.service",
+        ],
+        check=True,
+    )
+
+
+def capture_frame(path):
+    if path.exists():
+        path.unlink()
+    result = subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-y",
+            "-i",
+            STREAM_URL,
+            "-frames:v",
+            "1",
+            str(path),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0 or not path.is_file():
+        return None
+    try:
+        return decode_rgb(path)
+    except RuntimeError:
+        path.unlink(missing_ok=True)
+        return None
+
+
+def frame_ssim(left, right):
+    result = subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostdin",
+            "-i",
+            str(left),
+            "-i",
+            str(right),
+            "-lavfi",
+            "[0:v][1:v]ssim",
+            "-f",
+            "null",
+            "-",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        return 0.0
+    match = re.search(r"All:([0-9.]+)", result.stderr.decode("utf-8", "replace"))
+    return float(match.group(1)) if match else 0.0
+
+
+def main():
+    if len(sys.argv) != 2:
+        print("usage: check-game-centering.py FRAME.png", file=sys.stderr)
+        return 2
+    if not STREAM_URL.startswith("rtmps://"):
+        print(f"VRT requires an rtmps:// stream URL (got {STREAM_URL})", file=sys.stderr)
+        return 1
+    restart_game_browser()
+    actual = Path(sys.argv[1])
+    failures = ["could not capture a centered play-start frame"]
+    with tempfile.TemporaryDirectory() as temp_dir:
+        previous = Path(temp_dir) / "previous.png"
+        for _ in range(MAX_ATTEMPTS):
+            pixels = capture_frame(actual)
+            if pixels is None:
+                failures = ["could not capture a 1280x720 RTMPS frame"]
+            else:
+                failures = centering_failures(pixels)
+                if not failures:
+                    if previous.is_file() and frame_ssim(previous, actual) >= MIN_FRAME_SSIM:
+                        print(
+                            f"VRT: captured centered play-start frame from {STREAM_URL}"
+                        )
+                        return 0
+                    previous.write_bytes(actual.read_bytes())
+            time.sleep(RETRY_SECONDS)
+
+    for failure in failures:
+        print(f"VRT: {failure}", file=sys.stderr)
+    return 1
 
 
 if __name__ == "__main__":

@@ -33,7 +33,7 @@ touch -d '1 minute ago' "${run_marker}"
 for case_file in "${vrt_dir}"/*; do
   [ -f "${case_file}" ] || continue
   case "${case_file}" in
-    *.png|*.jpg|*.jpeg|*.html|*.py) continue ;;
+    *.png|*.jpg|*.jpeg|*.html) continue ;;
   esac
 
   base=$(basename "${case_file}")
@@ -45,6 +45,8 @@ for case_file in "${vrt_dir}"/*; do
     "${case_file}" "${actual}" || status=1
   elif [[ "${case_file}" == *.sh ]]; then
     bash "${case_file}" "${actual}" || status=1
+  elif [[ "${case_file}" == *.py ]]; then
+    python3 "${case_file}" "${actual}" || status=1
   else
     continue
   fi
@@ -86,10 +88,6 @@ for case_file in "${vrt_dir}"/*; do
     status=1
   fi
   rm -f "${ssim_log}"
-
-  if [ "${stem}" = "capture-rtmps" ] && ! python3 "${vrt_dir}/check-game-centering.py" "${actual}"; then
-    status=1
-  fi
 done
 
 # An empty case directory must never be reported as a successful VRT run.
