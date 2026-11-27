@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { removeTemporaryDirectory } from "../temporaryDirectory";
 import {
   applyGameScreenZoom,
-  buildBroadcastLayoutCss,
   cleanupChromiumLockFiles,
   createClickByElementId,
   createPopupPageHandler,
@@ -331,30 +330,8 @@ describe("resolveEvaluateTimeoutMs", () => {
   });
 });
 
-describe("buildBroadcastLayoutCss", () => {
-  it("pins the game document to the left game screen area", () => {
-    const css = buildBroadcastLayoutCss(1.25);
-    const bodyRule = css.split("\n").find((line) => line.startsWith("body{"));
-    expect(bodyRule).toBeDefined();
-    expect(bodyRule).toContain("width:819.2px!important");
-    expect(bodyRule).toContain("margin:0!important");
-    expect(bodyRule).not.toContain("margin:0 auto");
-  });
-
-  it("keeps the HUD visible and hides only ad slots", () => {
-    const css = buildBroadcastLayoutCss(1.25);
-    expect(css).toContain(
-      "#hud-left{grid-area:hud!important;justify-self:center!important;display:flex!important}",
-    );
-    expect(css).not.toContain("#hud-left{display:none");
-    expect(css).toContain(
-      ".ad-slot,#ad-side-left,#ad-side-right{display:none!important}",
-    );
-  });
-});
-
 describe("applyGameScreenZoom", () => {
-  it("applies the Agent-provided magnification with the shared layout CSS", async () => {
+  it("applies the Agent-provided magnification to the page", async () => {
     let received: { zoom: number; css: string } | undefined;
     const page = {
       evaluate: async (
@@ -366,7 +343,6 @@ describe("applyGameScreenZoom", () => {
     };
     await applyGameScreenZoom(page, 1.5);
     expect(received?.zoom).toBe(1.5);
-    expect(received?.css).toBe(buildBroadcastLayoutCss(1.5));
   });
 
   it("skips page.evaluate for an invalid magnification", async () => {
@@ -406,6 +382,5 @@ describe("applyGameScreenZoom default", () => {
     };
     await applyGameScreenZoom(page);
     expect(received?.zoom).toBe(1);
-    expect(received?.css).toBe(buildBroadcastLayoutCss(1));
   });
 });
