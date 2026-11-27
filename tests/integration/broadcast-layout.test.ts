@@ -188,6 +188,23 @@ itWithChromium(
         { evaluate: (fn, options) => page.evaluate(fn, options) },
         GAME_SCREEN_ZOOM,
       );
+
+      const title = await page.evaluate((): Rect => {
+        const element = document.querySelector("#site-header");
+        if (!element) throw new Error("missing #site-header");
+        const rect = element.getBoundingClientRect();
+        return {
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom,
+          center: (rect.left + rect.right) / 2,
+          display: getComputedStyle(element).display,
+        };
+      });
+      expect(title.display).not.toBe("none");
+      expect(title.center).toBeCloseTo(GAME_CENTER, 1);
+
       await page.click("#btn-start");
       await applyGameScreenZoom(
         { evaluate: (fn, options) => page.evaluate(fn, options) },

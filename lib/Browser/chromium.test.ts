@@ -343,7 +343,9 @@ describe("buildBroadcastLayoutCss", () => {
 
   it("keeps the HUD visible and hides only ad slots", () => {
     const css = buildBroadcastLayoutCss(1.25);
-    expect(css).toContain("#hud-left{grid-area:hud!important");
+    expect(css).toContain(
+      "#hud-left{grid-area:hud!important;justify-self:center!important;display:flex!important}",
+    );
     expect(css).not.toContain("#hud-left{display:none");
     expect(css).toContain(
       ".ad-slot,#ad-side-left,#ad-side-right{display:none!important}",
