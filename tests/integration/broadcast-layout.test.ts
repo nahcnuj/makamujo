@@ -8,54 +8,96 @@ import {
 } from "../../lib/Browser/chromium";
 
 const GAME_SCREEN_ZOOM = 1.25;
+const GAME_CENTER = GAME_SCREEN_AREA_WIDTH / 2;
 const VRT_BASELINE_PATH = resolve(
   import.meta.dir,
   "../vrt-rtmps/baseline/capture-rtmps.png",
 );
 const VRT_BASELINE_DATA_URL = `data:image/png;base64,${readFileSync(VRT_BASELINE_PATH).toString("base64")}`;
 
-const LAYOUT_PAGE = `<!doctype html>
+const GAME_PAGE = `<!doctype html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
 <style>
-html,body{background:#000;margin:0 auto;padding:0;overflow:hidden}
-body{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;width:100%;height:auto;padding:0;margin:0 auto}
-#app{margin:0 auto;max-width:40rem;width:min(100%,40rem);text-align:center}
-#play-layout{display:grid;grid-template-columns:1fr;grid-template-areas:"hud" "board";justify-items:center;align-items:center;gap:0.75rem}
-#hud-left{grid-area:hud;justify-self:center}
-#game-container{grid-area:board;display:flex;justify-content:center;width:640px;margin:0 auto}
-#game-container > canvas{width:400px;height:400px;display:inline}
-.ad-slot,#ad-side-left,#ad-side-right{display:block}
+* { box-sizing: border-box; }
+html,body{margin:0;padding:0;min-height:100vh;background:#0f1419;color:#fff;font-family:system-ui,sans-serif}
+body{display:flex;align-items:flex-start;justify-content:center;padding:0.75rem}
+#app{margin:0 auto;width:min(100%,40rem);position:relative}
+#site-header{text-align:center;margin-bottom:0.75rem}
+#site-title{margin:0;font-size:1.6rem}
+.screen{text-align:center;padding:0.5rem 0 1rem}
+.screen.hidden,.screen[hidden]{display:none!important}
+#screen-playing{padding:0;text-align:left;position:relative;margin-bottom:1.25rem;touch-action:none}
+#play-layout{display:grid;grid-template-columns:1fr;grid-template-areas:"hud" "board";gap:0.75rem;justify-items:center}
+#hud-left{grid-area:hud;width:min(100%,22rem);display:flex;flex-direction:row;flex-wrap:wrap;align-items:stretch;justify-content:center;gap:0.5rem}
+#hud-left > div{background:#ff0000;padding:0.55rem 0.75rem;border-radius:0.75rem}
+#game-container{grid-area:board;justify-self:center;background:#1a222c;border-radius:8px;overflow:hidden;line-height:0}
+.ad-gutter,.ad-slot{width:160px;min-height:100vh;background:#000}
 </style>
 </head>
 <body>
+<aside id="ad-side-left" class="ad-gutter ad-slot">AD</aside>
 <div id="app">
+<header id="site-header"><h1 id="site-title">Mathch-Three</h1></header>
+<section id="screen-title" class="screen" data-screen="title">
+<button type="button" id="btn-start">スタート</button>
+</section>
+<section id="screen-playing" class="screen hidden" data-screen="playing" hidden>
 <main id="play-layout">
-<div id="hud-left">HUD</div>
-<div id="game-container"><canvas></canvas></div>
+<aside id="hud-left" aria-label="スコア">
+<div id="overlay">Score: 0</div>
+<div id="next-panel">Next</div>
+</aside>
+<div id="game-container"><canvas id="game-board" width="400" height="400"></canvas></div>
 </main>
+</section>
 </div>
-<aside class="ad-slot" id="ad-side-left">AD</aside>
+<aside id="ad-side-right" class="ad-gutter ad-slot">AD</aside>
+<script>
+document.getElementById("btn-start").addEventListener("click", () => {
+  const title = document.getElementById("screen-title");
+  const playing = document.getElementById("screen-playing");
+  const canvas = document.getElementById("game-board");
+  title.hidden = true;
+  title.classList.add("hidden");
+  playing.hidden = false;
+  playing.classList.remove("hidden");
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#0000ff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+});
+</script>
 </body>
 </html>`;
 
 type Rect = {
   left: number;
   right: number;
+  top: number;
+  bottom: number;
   center: number;
   display: string;
 };
 
-type Geometry = Record<"body" | "hud" | "game" | "canvas" | "ad", Rect>;
+type Geometry = {
+  hud: Rect;
+  game: Rect;
+  canvas: Rect;
+  ad: Rect;
+};
+
+type PixelCenters = { hud: number; board: number };
 
 let browser: import("playwright").Browser | undefined;
 
 try {
   const { chromium } = await import("playwright");
+  const executablePath = process.env.CHROMIUM_EXECUTABLE_PATH?.trim();
   browser = await Promise.race([
     chromium.launch({
       headless: true,
+      executablePath: executablePath || undefined,
       args: ["--no-sandbox", "--disable-dev-shm-usage"],
     }),
     delay(15_000).then(() => {
@@ -76,8 +118,62 @@ afterAll(async () => {
   await browser?.close().catch(() => {});
 });
 
+const measurePixelCenters = async (
+  context: import("playwright").BrowserContext,
+  png: Uint8Array,
+): Promise<PixelCenters> => {
+  const page = await context.newPage();
+  try {
+    await page.goto(
+      `data:image/png;base64,${Buffer.from(png).toString("base64")}`,
+    );
+    return await page.evaluate((areaWidth: number) => {
+      const image = document.querySelector("img");
+      if (!(image instanceof HTMLImageElement)) {
+        throw new Error("missing screenshot image");
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context2d = canvas.getContext("2d");
+      if (!context2d) throw new Error("missing 2d context");
+      context2d.drawImage(image, 0, 0);
+      const pixels = context2d.getImageData(
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      ).data;
+      const centerOf = (kind: keyof PixelCenters): number => {
+        let total = 0;
+        let weighted = 0;
+        for (let y = 0; y < canvas.height; y++) {
+          for (let x = 0; x < areaWidth; x++) {
+            const offset = (y * canvas.width + x) * 4;
+            const red = pixels[offset] ?? 0;
+            const green = pixels[offset + 1] ?? 0;
+            const blue = pixels[offset + 2] ?? 0;
+            const matches =
+              kind === "hud"
+                ? red > 200 && green < 80 && blue < 80
+                : blue > 200 && red < 80 && green < 80;
+            if (!matches) continue;
+            total += 1;
+            weighted += x + 0.5;
+          }
+        }
+        if (total === 0) throw new Error(`missing ${kind} pixels`);
+        return weighted / total;
+      };
+      return { hud: centerOf("hud"), board: centerOf("board") };
+    }, GAME_SCREEN_AREA_WIDTH);
+  } finally {
+    await page.close();
+  }
+};
+
 itWithChromium(
-  "centers the game board inside the left game screen area at production zoom",
+  "keeps the HUD visible above a board centered at production zoom",
   async () => {
     const activeBrowser = browser;
     if (!activeBrowser) return;
@@ -87,11 +183,14 @@ itWithChromium(
     });
     try {
       const page = await context.newPage();
-      await page.setContent(LAYOUT_PAGE, { waitUntil: "load" });
+      await page.setContent(GAME_PAGE, { waitUntil: "load" });
       await applyGameScreenZoom(
-        {
-          evaluate: (fn, options) => page.evaluate(fn, options),
-        },
+        { evaluate: (fn, options) => page.evaluate(fn, options) },
+        GAME_SCREEN_ZOOM,
+      );
+      await page.click("#btn-start");
+      await applyGameScreenZoom(
+        { evaluate: (fn, options) => page.evaluate(fn, options) },
         GAME_SCREEN_ZOOM,
       );
       await page.evaluate(
@@ -109,26 +208,35 @@ itWithChromium(
           return {
             left: rect.left,
             right: rect.right,
+            top: rect.top,
+            bottom: rect.bottom,
             center: (rect.left + rect.right) / 2,
             display: getComputedStyle(element).display,
           };
         };
         return {
-          body: rectOf("body"),
           hud: rectOf("#hud-left"),
           game: rectOf("#game-container"),
-          canvas: rectOf("#game-container > canvas"),
+          canvas: rectOf("#game-board"),
           ad: rectOf("#ad-side-left"),
         };
       });
 
-      expect(geometry.body.left).toBeCloseTo(0, 1);
-      expect(geometry.body.right).toBeCloseTo(GAME_SCREEN_AREA_WIDTH, 1);
-      expect(geometry.hud.center).toBeCloseTo(GAME_SCREEN_AREA_WIDTH / 2, 1);
-      expect(geometry.game.center).toBeCloseTo(GAME_SCREEN_AREA_WIDTH / 2, 1);
-      expect(geometry.canvas.center).toBeCloseTo(GAME_SCREEN_AREA_WIDTH / 2, 1);
       expect(geometry.hud.display).not.toBe("none");
+      expect(geometry.canvas.display).not.toBe("none");
       expect(geometry.ad.display).toBe("none");
+      expect(geometry.hud.bottom).toBeLessThan(geometry.game.top);
+      for (const rect of [geometry.hud, geometry.game, geometry.canvas]) {
+        expect(rect.center).toBeCloseTo(GAME_CENTER, 1);
+        expect(rect.right).toBeLessThanOrEqual(GAME_SCREEN_AREA_WIDTH);
+      }
+
+      const centers = await measurePixelCenters(
+        context,
+        await page.screenshot(),
+      );
+      expect(Math.abs(centers.hud - GAME_CENTER)).toBeLessThan(5);
+      expect(Math.abs(centers.board - GAME_CENTER)).toBeLessThan(5);
     } finally {
       await context.close();
     }
@@ -136,7 +244,7 @@ itWithChromium(
 );
 
 itWithChromium(
-  "keeps the committed VRT baseline centered in the game screen area",
+  "keeps the committed VRT frame's game content centered in the game screen area",
   async () => {
     const activeBrowser = browser;
     if (!activeBrowser) return;
@@ -147,7 +255,7 @@ itWithChromium(
     try {
       const page = await context.newPage();
       await page.goto(VRT_BASELINE_DATA_URL);
-      const centers = await page.evaluate((gameAreaWidth: number) => {
+      const bounds = await page.evaluate((areaWidth: number) => {
         const image = document.querySelector("img");
         if (!(image instanceof HTMLImageElement)) {
           throw new Error("missing baseline image");
@@ -164,33 +272,25 @@ itWithChromium(
           canvas.width,
           canvas.height,
         ).data;
-        const centerOf = (top: number, bottom: number): number => {
-          let total = 0;
-          let weighted = 0;
-          for (let y = top; y < bottom; y++) {
-            for (let x = 0; x < gameAreaWidth; x++) {
-              const offset = (y * canvas.width + x) * 4;
-              const red = pixels[offset] ?? 0;
-              const green = pixels[offset + 1] ?? 0;
-              const blue = pixels[offset + 2] ?? 0;
-              const brightness = (red + green + blue) / 3;
-              if (brightness < 45) continue;
-              total += brightness;
-              weighted += brightness * (x + 0.5);
-            }
+        let left = areaWidth;
+        let right = -1;
+        for (let y = 80; y < Math.min(canvas.height, 390); y++) {
+          for (let x = 0; x < areaWidth; x++) {
+            const offset = (y * canvas.width + x) * 4;
+            const red = pixels[offset] ?? 0;
+            const green = pixels[offset + 1] ?? 0;
+            const blue = pixels[offset + 2] ?? 0;
+            if ((red + green + blue) / 3 < 45) continue;
+            left = Math.min(left, x);
+            right = Math.max(right, x);
           }
-          return weighted / total;
-        };
-        return {
-          hud: centerOf(80, 350),
-          board: centerOf(350, 530),
-        };
+        }
+        if (right < left) throw new Error("missing frame content");
+        return { left, right, center: (left + right) / 2 };
       }, GAME_SCREEN_AREA_WIDTH);
-      const gameCenter = GAME_SCREEN_AREA_WIDTH / 2;
-      expect(centers.hud).toBeGreaterThan(gameCenter - 40);
-      expect(centers.hud).toBeLessThan(gameCenter + 40);
-      expect(centers.board).toBeGreaterThan(gameCenter - 40);
-      expect(centers.board).toBeLessThan(gameCenter + 40);
+
+      expect(bounds.right).toBeLessThan(GAME_SCREEN_AREA_WIDTH);
+      expect(Math.abs(bounds.center - GAME_CENTER)).toBeLessThan(10);
     } finally {
       await context.close();
     }
