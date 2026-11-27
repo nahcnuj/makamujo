@@ -1,11 +1,18 @@
 import { afterAll, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
-  buildBroadcastLayoutCss,
+  applyGameScreenZoom,
   GAME_SCREEN_AREA_WIDTH,
 } from "../../lib/Browser/chromium";
 
 const GAME_SCREEN_ZOOM = 1.25;
+const VRT_BASELINE_PATH = resolve(
+  import.meta.dir,
+  "../vrt-rtmps/baseline/capture-rtmps.png",
+);
+const VRT_BASELINE_DATA_URL = `data:image/png;base64,${readFileSync(VRT_BASELINE_PATH).toString("base64")}`;
 
 const LAYOUT_PAGE = `<!doctype html>
 <html lang="ja">
@@ -81,9 +88,12 @@ itWithChromium(
     try {
       const page = await context.newPage();
       await page.setContent(LAYOUT_PAGE, { waitUntil: "load" });
-      await page.addStyleTag({
-        content: buildBroadcastLayoutCss(GAME_SCREEN_ZOOM),
-      });
+      await applyGameScreenZoom(
+        {
+          evaluate: (fn, options) => page.evaluate(fn, options),
+        },
+        GAME_SCREEN_ZOOM,
+      );
       await page.evaluate(
         () =>
           new Promise<void>((resolve) => {
@@ -119,6 +129,68 @@ itWithChromium(
       expect(geometry.canvas.center).toBeCloseTo(GAME_SCREEN_AREA_WIDTH / 2, 1);
       expect(geometry.hud.display).not.toBe("none");
       expect(geometry.ad.display).toBe("none");
+    } finally {
+      await context.close();
+    }
+  },
+);
+
+itWithChromium(
+  "keeps the committed VRT baseline centered in the game screen area",
+  async () => {
+    const activeBrowser = browser;
+    if (!activeBrowser) return;
+
+    const context = await activeBrowser.newContext({
+      viewport: { width: 1280, height: 720 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto(VRT_BASELINE_DATA_URL);
+      const centers = await page.evaluate((gameAreaWidth: number) => {
+        const image = document.querySelector("img");
+        if (!(image instanceof HTMLImageElement)) {
+          throw new Error("missing baseline image");
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        const context2d = canvas.getContext("2d");
+        if (!context2d) throw new Error("missing 2d context");
+        context2d.drawImage(image, 0, 0);
+        const pixels = context2d.getImageData(
+          0,
+          0,
+          canvas.width,
+          canvas.height,
+        ).data;
+        const centerOf = (top: number, bottom: number): number => {
+          let total = 0;
+          let weighted = 0;
+          for (let y = top; y < bottom; y++) {
+            for (let x = 0; x < gameAreaWidth; x++) {
+              const offset = (y * canvas.width + x) * 4;
+              const red = pixels[offset] ?? 0;
+              const green = pixels[offset + 1] ?? 0;
+              const blue = pixels[offset + 2] ?? 0;
+              const brightness = (red + green + blue) / 3;
+              if (brightness < 45) continue;
+              total += brightness;
+              weighted += brightness * (x + 0.5);
+            }
+          }
+          return weighted / total;
+        };
+        return {
+          hud: centerOf(80, 350),
+          board: centerOf(350, 530),
+        };
+      }, GAME_SCREEN_AREA_WIDTH);
+      const gameCenter = GAME_SCREEN_AREA_WIDTH / 2;
+      expect(centers.hud).toBeGreaterThan(gameCenter - 40);
+      expect(centers.hud).toBeLessThan(gameCenter + 40);
+      expect(centers.board).toBeGreaterThan(gameCenter - 40);
+      expect(centers.board).toBeLessThan(gameCenter + 40);
     } finally {
       await context.close();
     }

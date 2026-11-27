@@ -328,7 +328,9 @@ export const GAME_SCREEN_AREA_WIDTH = 1024 as const;
  * The overlay reserves the right two of its ten columns for comments, so the
  * game document is pinned to the left {@link GAME_SCREEN_AREA_WIDTH}px rather
  * than centered in the full viewport. Centering it in the viewport would move
- * the board 128px to the right of the game screen area.
+ * the board 128px to the right of the game screen area. Both the initial
+ * injection and every later zoom application use this same stylesheet so the
+ * rendered geometry cannot drift between them.
  */
 export const buildBroadcastLayoutCss = (zoom: number): string => {
   const factor = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
@@ -701,8 +703,16 @@ export const createRedirectToHomeHandler = (
   };
 };
 
+export type BroadcastLayoutOptions = {
+  zoom: number;
+  css: string;
+};
+
 export type ZoomablePage = {
-  evaluate: (fn: (zoom: number) => void, zoom: number) => Promise<unknown>;
+  evaluate: (
+    fn: (options: BroadcastLayoutOptions) => void,
+    options: BroadcastLayoutOptions,
+  ) => Promise<unknown>;
 };
 
 const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
@@ -727,35 +737,28 @@ export const applyGameScreenZoom = async (
     return;
   }
   try {
-    await page.evaluate((value: number) => {
-      const zoom = Number.isFinite(value) && value > 0 ? value : 1;
-      // Scale the whole document like a real browser zoom.
-      document.documentElement.style.zoom = String(zoom);
-      const styleId = "makamujo-broadcast-layout";
-      let style = document.getElementById(styleId) as HTMLStyleElement | null;
-      if (!style) {
-        style = document.createElement("style");
-        style.id = styleId;
-        (document.head ?? document.documentElement).appendChild(style);
-      }
-      style.textContent = [
-        `html{zoom:${zoom}!important}`,
-        "html,body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}",
-        `body{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:flex-start!important;width:${1024 / zoom}px!important;height:auto!important;padding:0!important;margin:0!important}`,
-        "#app{margin:0 auto!important;max-width:40rem!important;width:min(100%,40rem)!important;text-align:center!important}",
-        '#play-layout{display:grid!important;grid-template-columns:1fr!important;grid-template-areas:"hud" "board"!important;justify-items:center!important;align-items:center!important;gap:0.75rem!important}',
-        "#hud-left{grid-area:hud!important;justify-self:center!important}",
-        "#game-container{grid-area:board!important;margin:0 auto!important;justify-self:center!important;display:block!important;width:fit-content!important;max-width:100%!important;padding:0!important}",
-        "#game-container > canvas{display:block!important;margin:0 auto!important}",
-        ".ad-slot,#ad-side-left,#ad-side-right{display:none!important}",
-      ].join("\n");
-      if (
-        typeof window !== "undefined" &&
-        typeof window.scrollTo === "function"
-      ) {
-        window.scrollTo(0, 0);
-      }
-    }, zoomValue);
+    await page.evaluate(
+      ({ css, zoom }: BroadcastLayoutOptions) => {
+        const factor = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+        // Scale the whole document like a real browser zoom.
+        document.documentElement.style.zoom = String(factor);
+        const styleId = "makamujo-broadcast-layout";
+        let style = document.getElementById(styleId) as HTMLStyleElement | null;
+        if (!style) {
+          style = document.createElement("style");
+          style.id = styleId;
+          (document.head ?? document.documentElement).appendChild(style);
+        }
+        style.textContent = css;
+        if (
+          typeof window !== "undefined" &&
+          typeof window.scrollTo === "function"
+        ) {
+          window.scrollTo(0, 0);
+        }
+      },
+      { zoom: zoomValue, css: buildBroadcastLayoutCss(zoomValue) },
+    );
   } catch {
     /* page may not be ready */
   }

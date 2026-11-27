@@ -352,15 +352,19 @@ describe("buildBroadcastLayoutCss", () => {
 });
 
 describe("applyGameScreenZoom", () => {
-  it("passes the Agent-provided magnification to page.evaluate", async () => {
-    let received: number | undefined;
+  it("applies the Agent-provided magnification with the shared layout CSS", async () => {
+    let received: { zoom: number; css: string } | undefined;
     const page = {
-      evaluate: async (_fn: (zoom: number) => void, zoom: number) => {
-        received = zoom;
+      evaluate: async (
+        _fn: (options: { zoom: number; css: string }) => void,
+        options: { zoom: number; css: string },
+      ) => {
+        received = options;
       },
     };
     await applyGameScreenZoom(page, 1.5);
-    expect(received).toBe(1.5);
+    expect(received?.zoom).toBe(1.5);
+    expect(received?.css).toBe(buildBroadcastLayoutCss(1.5));
   });
 
   it("skips page.evaluate for an invalid magnification", async () => {
@@ -389,13 +393,17 @@ describe("isVigilantFiestaGameUrl", () => {
 
 describe("applyGameScreenZoom default", () => {
   it("applies the default magnification when none is given", async () => {
-    let received: number | undefined;
+    let received: { zoom: number; css: string } | undefined;
     const page = {
-      evaluate: async (_fn: (zoom: number) => void, zoom: number) => {
-        received = zoom;
+      evaluate: async (
+        _fn: (options: { zoom: number; css: string }) => void,
+        options: { zoom: number; css: string },
+      ) => {
+        received = options;
       },
     };
     await applyGameScreenZoom(page);
-    expect(received).toBe(1);
+    expect(received?.zoom).toBe(1);
+    expect(received?.css).toBe(buildBroadcastLayoutCss(1));
   });
 });
