@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import os
 import re
 import subprocess
@@ -8,7 +9,9 @@ import tempfile
 import time
 from pathlib import Path
 
-FRAME_PATH = Path(__file__).resolve().with_suffix(".png")
+CASE_PATH = Path(__file__).resolve()
+FRAME_PATH = CASE_PATH.with_suffix(".png")
+TITLE_BASELINE_PATH = CASE_PATH.parent / "baseline" / "capture-rtmps.png"
 FRAME_WIDTH = 1280
 FRAME_HEIGHT = 720
 GAME_AREA_WIDTH = 1024
@@ -25,6 +28,8 @@ HUD_ROWS = (100, 180)
 MAX_ATTEMPTS = 90
 RETRY_SECONDS = 2
 MIN_FRAME_SSIM = 0.95
+MAX_TITLE_SSIM = 0.9
+GAME_STATE_URL = "http://127.0.0.1:7777/api/game"
 STREAM_URL = os.environ.get(
     "RTMPS_CAPTURE_URL", "rtmps://127.0.0.1:1936/live/stream"
 )
@@ -121,7 +126,16 @@ def centering_failures(pixels):
     return failures
 
 
-def restart_game_browser():
+def compose_exec(*args, check=False):
+    return subprocess.run(
+        ["docker", "compose", "exec", "-T", "makamujo", *args],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=check,
+    )
+
+
+def restart_game_for_play_start():
     try:
         probe = subprocess.run(
             ["docker", "compose", "ps", "-q", "makamujo"],
@@ -133,33 +147,42 @@ def restart_game_browser():
         return
     if probe.returncode != 0 or not probe.stdout.strip():
         return
-    subprocess.run(
-        [
-            "docker",
-            "compose",
-            "exec",
-            "-T",
-            "makamujo",
-            "systemctl",
-            "set-environment",
-            "VIGILANT_FIESTA_TITLE_DWELL_MS=0",
-            "GAME_ACTIVITY_TIMEOUT_MS=7200000",
-        ],
+    # The title dwell is read by the agent in makamujo-screen.service, not by
+    # the browser process. Restart both services so the solver starts a fresh
+    # round and clicks the start button instead of holding the title screen.
+    compose_exec(
+        "systemctl",
+        "set-environment",
+        "VIGILANT_FIESTA_TITLE_DWELL_MS=0",
+        "GAME_ACTIVITY_TIMEOUT_MS=7200000",
         check=True,
     )
-    subprocess.run(
-        [
-            "docker",
-            "compose",
-            "exec",
-            "-T",
-            "makamujo",
-            "systemctl",
-            "restart",
-            "makamujo-browser.service",
-        ],
+    compose_exec(
+        "systemctl",
+        "restart",
+        "makamujo-screen.service",
+        "makamujo-browser.service",
         check=True,
     )
+
+
+def is_playing():
+    result = compose_exec("curl", "-fsS", GAME_STATE_URL)
+    if result.returncode != 0:
+        return False
+    try:
+        payload = json.loads(result.stdout.decode("utf-8", "replace"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    if not isinstance(payload, dict):
+        return False
+    for candidate in (payload, payload.get("currentGame"), payload.get("state")):
+        if not isinstance(candidate, dict):
+            continue
+        state = candidate.get("state", candidate)
+        if isinstance(state, dict) and state.get("screen") == "playing":
+            return True
+    return False
 
 
 def capture_frame(path):
@@ -213,9 +236,9 @@ def frame_ssim(left, right):
         check=False,
     )
     if result.returncode != 0:
-        return 0.0
+        return None
     match = re.search(r"All:([0-9.]+)", result.stderr.decode("utf-8", "replace"))
-    return float(match.group(1)) if match else 0.0
+    return float(match.group(1)) if match else None
 
 
 def main():
@@ -225,23 +248,45 @@ def main():
     if not STREAM_URL.startswith("rtmps://"):
         print(f"VRT requires an rtmps:// stream URL (got {STREAM_URL})", file=sys.stderr)
         return 1
-    restart_game_browser()
+    restart_game_for_play_start()
     actual = FRAME_PATH
     failures = ["could not capture a centered play-start frame"]
     with tempfile.TemporaryDirectory() as temp_dir:
         previous = Path(temp_dir) / "previous.png"
         for _ in range(MAX_ATTEMPTS):
+            if not is_playing():
+                failures = ["game did not enter the playing screen"]
+                time.sleep(RETRY_SECONDS)
+                continue
             pixels = capture_frame(actual)
             if pixels is None:
                 failures = ["could not capture a 1280x720 RTMPS frame"]
             else:
                 failures = centering_failures(pixels)
+                title_score = frame_ssim(actual, TITLE_BASELINE_PATH)
+                if not failures and (
+                    title_score is None or title_score >= MAX_TITLE_SSIM
+                ):
+                    failures = [
+                        "play-start frame matches the title frame "
+                        f"(SSIM={title_score:.3f}, maximum {MAX_TITLE_SSIM})"
+                        if title_score is not None
+                        else "could not compare the play-start frame with the title frame"
+                    ]
+                stable_score = (
+                    frame_ssim(previous, actual) if previous.is_file() else None
+                )
+                if (
+                    not failures
+                    and stable_score is not None
+                    and stable_score >= MIN_FRAME_SSIM
+                ):
+                    print(
+                        f"VRT: captured centered play-start frame from {STREAM_URL} "
+                        f"(title SSIM={title_score:.3f})"
+                    )
+                    return 0
                 if not failures:
-                    if previous.is_file() and frame_ssim(previous, actual) >= MIN_FRAME_SSIM:
-                        print(
-                            f"VRT: captured centered play-start frame from {STREAM_URL}"
-                        )
-                        return 0
                     previous.write_bytes(actual.read_bytes())
             time.sleep(RETRY_SECONDS)
 
