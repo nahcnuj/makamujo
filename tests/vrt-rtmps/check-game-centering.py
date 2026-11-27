@@ -8,10 +8,13 @@ FRAME_HEIGHT = 720
 GAME_AREA_WIDTH = 1024
 EXPECTED_CENTER = GAME_AREA_WIDTH / 2
 CENTER_TOLERANCE = 24
+BOARD_CENTER_TOLERANCE = 16
 MIN_CONTENT_PIXELS = 4000
+MIN_BOARD_PIXELS = 4000
 MIN_HUD_PIXELS = 1000
 BRIGHTNESS_THRESHOLD = 45
 CONTENT_ROWS = (80, 400)
+BOARD_ROWS = (240, 400)
 HUD_ROWS = (100, 180)
 
 
@@ -85,6 +88,16 @@ def main():
             f"game content is off-center (center={content_center:.1f}, expected={EXPECTED_CENTER:.0f})"
         )
 
+    board_count, board_center, _, board_right = measure(pixels, BOARD_ROWS)
+    if board_count < MIN_BOARD_PIXELS:
+        failures.append(f"game board is missing ({board_count} bright pixels)")
+    if board_count > 0 and abs(board_center - EXPECTED_CENTER) > BOARD_CENTER_TOLERANCE:
+        failures.append(
+            f"game board is off-center (center={board_center:.1f}, expected={EXPECTED_CENTER:.0f})"
+        )
+    if board_count > 0 and board_right >= GAME_AREA_WIDTH:
+        failures.append(f"game board spills into the comment area (right={board_right})")
+
     hud_count, _, _, _ = measure(pixels, HUD_ROWS)
     if hud_count < MIN_HUD_PIXELS:
         failures.append(f"content between the title and board is missing ({hud_count} bright pixels)")
@@ -94,7 +107,10 @@ def main():
             print(f"VRT: {failure}", file=sys.stderr)
         return 1
 
-    print(f"VRT: game content center={content_center:.1f} (expected {EXPECTED_CENTER:.0f})")
+    print(
+        f"VRT: game content center={content_center:.1f}, board center={board_center:.1f} "
+        f"(expected {EXPECTED_CENTER:.0f})"
+    )
     return 0
 
 

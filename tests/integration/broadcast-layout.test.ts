@@ -320,12 +320,19 @@ itWithChromium(
           }
           return { count, center: count === 0 ? 0 : weighted / count, right };
         };
-        return { content: measure(80, 400), hud: measure(100, 180) };
+        return {
+          content: measure(80, 400),
+          board: measure(240, 400),
+          hud: measure(100, 180),
+        };
       }, GAME_SCREEN_AREA_WIDTH);
 
       expect(bounds.content.count).toBeGreaterThan(4000);
       expect(bounds.content.right).toBeLessThan(GAME_SCREEN_AREA_WIDTH);
       expect(Math.abs(bounds.content.center - GAME_CENTER)).toBeLessThan(10);
+      expect(bounds.board.count).toBeGreaterThan(4000);
+      expect(bounds.board.right).toBeLessThan(GAME_SCREEN_AREA_WIDTH);
+      expect(Math.abs(bounds.board.center - GAME_CENTER)).toBeLessThan(16);
       expect(bounds.hud.count).toBeGreaterThan(1000);
     } finally {
       await context.close();
