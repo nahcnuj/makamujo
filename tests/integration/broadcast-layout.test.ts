@@ -89,7 +89,13 @@ type Geometry = {
   ad: Rect;
 };
 
-type PixelCenters = { hud: number; board: number };
+type PixelKind = "hud" | "board";
+type PixelCenters = {
+  hud: number;
+  board: number;
+  hudBounds: number;
+  boardBounds: number;
+};
 
 let browser: import("playwright").Browser | undefined;
 
@@ -146,9 +152,11 @@ const measurePixelCenters = async (
         canvas.width,
         canvas.height,
       ).data;
-      const centerOf = (kind: keyof PixelCenters): number => {
+      const measure = (kind: PixelKind) => {
         let total = 0;
         let weighted = 0;
+        let left = areaWidth;
+        let right = -1;
         for (let y = 0; y < canvas.height; y++) {
           for (let x = 0; x < areaWidth; x++) {
             const offset = (y * canvas.width + x) * 4;
@@ -162,12 +170,21 @@ const measurePixelCenters = async (
             if (!matches) continue;
             total += 1;
             weighted += x + 0.5;
+            left = Math.min(left, x);
+            right = Math.max(right, x);
           }
         }
         if (total === 0) throw new Error(`missing ${kind} pixels`);
-        return weighted / total;
+        return { center: weighted / total, bounds: (left + right + 1) / 2 };
       };
-      return { hud: centerOf("hud"), board: centerOf("board") };
+      const hud = measure("hud");
+      const board = measure("board");
+      return {
+        hud: hud.center,
+        board: board.center,
+        hudBounds: hud.bounds,
+        boardBounds: board.bounds,
+      };
     }, GAME_SCREEN_AREA_WIDTH);
   } finally {
     await page.close();
@@ -267,6 +284,8 @@ itWithChromium(
       );
       expect(Math.abs(centers.hud - GAME_CENTER)).toBeLessThan(5);
       expect(Math.abs(centers.board - GAME_CENTER)).toBeLessThan(5);
+      expect(Math.abs(centers.hudBounds - GAME_CENTER)).toBeLessThan(5);
+      expect(Math.abs(centers.boardBounds - GAME_CENTER)).toBeLessThan(5);
     } finally {
       await context.close();
     }
@@ -305,6 +324,7 @@ itWithChromium(
         const measure = (top: number, bottom: number) => {
           let count = 0;
           let weighted = 0;
+          let left = areaWidth;
           let right = -1;
           for (let y = top; y < Math.min(canvas.height, bottom); y++) {
             for (let x = 0; x < areaWidth; x++) {
@@ -315,10 +335,16 @@ itWithChromium(
               if ((red + green + blue) / 3 < 45) continue;
               count += 1;
               weighted += x + 0.5;
+              left = Math.min(left, x);
               right = Math.max(right, x);
             }
           }
-          return { count, center: count === 0 ? 0 : weighted / count, right };
+          return {
+            count,
+            center: count === 0 ? 0 : weighted / count,
+            bounds: (left + right + 1) / 2,
+            right,
+          };
         };
         return {
           content: measure(80, 400),
@@ -330,10 +356,13 @@ itWithChromium(
       expect(bounds.content.count).toBeGreaterThan(4000);
       expect(bounds.content.right).toBeLessThan(GAME_SCREEN_AREA_WIDTH);
       expect(Math.abs(bounds.content.center - GAME_CENTER)).toBeLessThan(10);
+      expect(Math.abs(bounds.content.bounds - GAME_CENTER)).toBeLessThan(10);
       expect(bounds.board.count).toBeGreaterThan(4000);
       expect(bounds.board.right).toBeLessThan(GAME_SCREEN_AREA_WIDTH);
       expect(Math.abs(bounds.board.center - GAME_CENTER)).toBeLessThan(16);
+      expect(Math.abs(bounds.board.bounds - GAME_CENTER)).toBeLessThan(16);
       expect(bounds.hud.count).toBeGreaterThan(1000);
+      expect(Math.abs(bounds.hud.bounds - GAME_CENTER)).toBeLessThan(24);
     } finally {
       await context.close();
     }

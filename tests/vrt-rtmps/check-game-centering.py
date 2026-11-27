@@ -62,8 +62,8 @@ def measure(pixels, rows):
             left = min(left, x)
             right = max(right, x)
     if count == 0:
-        return 0, 0.0, left, right
-    return count, weighted_x / count, left, right
+        return 0, 0.0, left, right, 0.0
+    return count, weighted_x / count, left, right, (left + right + 1) / 2
 
 
 def main():
@@ -78,7 +78,9 @@ def main():
         return 1
 
     failures = []
-    content_count, content_center, _, content_right = measure(pixels, CONTENT_ROWS)
+    content_count, content_center, _, content_right, content_extent = measure(
+        pixels, CONTENT_ROWS
+    )
     if content_count < MIN_CONTENT_PIXELS:
         failures.append(f"game content is missing ({content_count} bright pixels)")
     if content_right >= GAME_AREA_WIDTH:
@@ -87,20 +89,33 @@ def main():
         failures.append(
             f"game content is off-center (center={content_center:.1f}, expected={EXPECTED_CENTER:.0f})"
         )
+    if content_count > 0 and abs(content_extent - EXPECTED_CENTER) > CENTER_TOLERANCE:
+        failures.append(
+            f"game content bounds are off-center (bounds={content_extent:.1f}, expected={EXPECTED_CENTER:.0f})"
+        )
 
-    board_count, board_center, _, board_right = measure(pixels, BOARD_ROWS)
+    board_count, board_center, _, board_right, board_extent = measure(pixels, BOARD_ROWS)
     if board_count < MIN_BOARD_PIXELS:
         failures.append(f"game board is missing ({board_count} bright pixels)")
     if board_count > 0 and abs(board_center - EXPECTED_CENTER) > BOARD_CENTER_TOLERANCE:
         failures.append(
             f"game board is off-center (center={board_center:.1f}, expected={EXPECTED_CENTER:.0f})"
         )
+    if board_count > 0 and abs(board_extent - EXPECTED_CENTER) > BOARD_CENTER_TOLERANCE:
+        failures.append(
+            f"game board bounds are off-center (bounds={board_extent:.1f}, expected={EXPECTED_CENTER:.0f})"
+        )
     if board_count > 0 and board_right >= GAME_AREA_WIDTH:
         failures.append(f"game board spills into the comment area (right={board_right})")
 
-    hud_count, _, _, _ = measure(pixels, HUD_ROWS)
+    hud_count, _, _, _, hud_extent = measure(pixels, HUD_ROWS)
     if hud_count < MIN_HUD_PIXELS:
         failures.append(f"content between the title and board is missing ({hud_count} bright pixels)")
+    if hud_count > 0 and abs(hud_extent - EXPECTED_CENTER) > CENTER_TOLERANCE:
+        failures.append(
+            f"content between the title and board is off-center "
+            f"(bounds={hud_extent:.1f}, expected={EXPECTED_CENTER:.0f})"
+        )
 
     if failures:
         for failure in failures:
@@ -108,8 +123,9 @@ def main():
         return 1
 
     print(
-        f"VRT: game content center={content_center:.1f}, board center={board_center:.1f} "
-        f"(expected {EXPECTED_CENTER:.0f})"
+        f"VRT: game content center={content_center:.1f}, bounds={content_extent:.1f}; "
+        f"board center={board_center:.1f}, bounds={board_extent:.1f}; "
+        f"HUD bounds={hud_extent:.1f} (expected {EXPECTED_CENTER:.0f})"
     )
     return 0
 
