@@ -4,7 +4,9 @@ import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
   applyGameScreenZoom,
+  create,
   GAME_SCREEN_AREA_WIDTH,
+  GAME_SCREEN_ZOOM_FACTOR,
 } from "../../lib/Browser/chromium";
 
 const GAME_SCREEN_ZOOM = 1.25;
@@ -365,6 +367,100 @@ itWithChromium(
       expect(Math.abs(bounds.hud.bounds - GAME_CENTER)).toBeLessThan(24);
     } finally {
       await context.close();
+    }
+  },
+);
+
+itWithChromium(
+  "centers the broadcast browser's rendered HUD and board after starting the game",
+  async () => {
+    const server = Bun.serve({
+      port: 0,
+      fetch: () =>
+        new Response(GAME_PAGE, {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+    });
+    const originalHomeUrl = process.env.GAME_HOME_URL;
+    const originalHeadless = process.env.CHROMIUM_HEADLESS;
+    process.env.GAME_HOME_URL = `http://127.0.0.1:${server.port}/`;
+    process.env.CHROMIUM_HEADLESS = "1";
+    let gameBrowser: Awaited<ReturnType<typeof create>> | undefined;
+    try {
+      gameBrowser = await create(
+        undefined,
+        { width: 1280, height: 720 },
+        { gameScreenZoom: GAME_SCREEN_ZOOM_FACTOR },
+      );
+      const measuredTitle = await gameBrowser.evaluate((): Rect => {
+        const element = document.querySelector("#site-header");
+        if (!element) throw new Error("missing #site-header");
+        const rect = element.getBoundingClientRect();
+        return {
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom,
+          center: (rect.left + rect.right) / 2,
+          display: getComputedStyle(element).display,
+        };
+      });
+      if (!measuredTitle) throw new Error("missing title geometry");
+      const title: Rect = measuredTitle;
+      expect(title.display).not.toBe("none");
+      expect(title.center).toBeCloseTo(GAME_CENTER, 1);
+
+      await gameBrowser.clickByElementId("btn-start");
+      await delay(200);
+      const measuredGeometry = await gameBrowser.evaluate((): Geometry => {
+        const rectOf = (selector: string): Rect => {
+          const element = document.querySelector(selector);
+          if (!element) throw new Error(`missing ${selector}`);
+          const rect = element.getBoundingClientRect();
+          return {
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+            bottom: rect.bottom,
+            center: (rect.left + rect.right) / 2,
+            display: getComputedStyle(element).display,
+          };
+        };
+        return {
+          hud: rectOf("#hud-left"),
+          overlay: rectOf("#overlay"),
+          nextPanel: rectOf("#next-panel"),
+          game: rectOf("#game-container"),
+          canvas: rectOf("#game-board"),
+          ad: rectOf("#ad-side-left"),
+        };
+      });
+      if (!measuredGeometry) throw new Error("missing gameplay geometry");
+      const geometry: Geometry = measuredGeometry;
+
+      expect(geometry.hud.display).not.toBe("none");
+      expect(geometry.overlay.display).not.toBe("none");
+      expect(geometry.nextPanel.display).not.toBe("none");
+      expect(geometry.canvas.display).not.toBe("none");
+      expect(geometry.ad.display).toBe("none");
+      expect(geometry.hud.bottom).toBeLessThan(geometry.game.top);
+      for (const rect of [geometry.hud, geometry.game, geometry.canvas]) {
+        expect(rect.center).toBeCloseTo(GAME_CENTER, 1);
+        expect(rect.right).toBeLessThanOrEqual(GAME_SCREEN_AREA_WIDTH);
+      }
+    } finally {
+      await gameBrowser?.close().catch(() => {});
+      server.stop(true);
+      if (originalHomeUrl === undefined) {
+        delete process.env.GAME_HOME_URL;
+      } else {
+        process.env.GAME_HOME_URL = originalHomeUrl;
+      }
+      if (originalHeadless === undefined) {
+        delete process.env.CHROMIUM_HEADLESS;
+      } else {
+        process.env.CHROMIUM_HEADLESS = originalHeadless;
+      }
     }
   },
 );
