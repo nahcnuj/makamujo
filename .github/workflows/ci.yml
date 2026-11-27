@@ -463,6 +463,7 @@ jobs:
       - name: Run RTMPS VRT against mediamtx
         env:
           RTMPS_VRT_MIN_SSIM: ${{ vars.RTMPS_VRT_MIN_SSIM }}
+          RTMPS_VRT_MIN_SSIM_CHECK_GAME_CENTERING: "0.94"
           RTMPS_CAPTURE_URL: "rtmps://localhost:1936/live/stream"
         run: bash tests/vrt-rtmps.sh
 

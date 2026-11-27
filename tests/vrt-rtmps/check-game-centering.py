@@ -145,9 +145,6 @@ def restart_game_for_play_start():
         return
     if probe.returncode != 0 or not probe.stdout.strip():
         return
-    # The title dwell is read by the agent in makamujo-screen.service, not by
-    # the browser process. Restart both services so the solver starts a fresh
-    # round and clicks the start button instead of holding the title screen.
     compose_exec(
         "systemctl",
         "set-environment",

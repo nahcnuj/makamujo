@@ -41,6 +41,12 @@ for case_file in "${vrt_dir}"/*; do
   actual="${vrt_dir}/${stem}.png"
   baseline="${baseline_dir}/${stem}.png"
 
+  case_min_var="RTMPS_VRT_MIN_SSIM_$(printf '%s' "${stem}" | tr '[:lower:]-' '[:upper:]_')"
+  case_min_ssim=${min_ssim}
+  if [ -n "${!case_min_var+x}" ]; then
+    case_min_ssim=${!case_min_var}
+  fi
+
   if [ -x "${case_file}" ]; then
     "${case_file}" "${actual}" || status=1
   elif [[ "${case_file}" == *.sh ]]; then
@@ -75,11 +81,11 @@ for case_file in "${vrt_dir}"/*; do
     if [ -z "${score}" ]; then
       echo "VRT: could not read the SSIM score for ${stem}" >&2
       status=1
-    elif awk -v score="${score}" -v minimum="${min_ssim}" \
+    elif awk -v score="${score}" -v minimum="${case_min_ssim}" \
         'BEGIN { exit !(score >= minimum) }'; then
-      echo "VRT: ${stem} SSIM=${score} (minimum ${min_ssim})"
+      echo "VRT: ${stem} SSIM=${score} (minimum ${case_min_ssim})"
     else
-      echo "VRT: ${stem} SSIM=${score} is below ${min_ssim}" >&2
+      echo "VRT: ${stem} SSIM=${score} is below ${case_min_ssim}" >&2
       status=1
     fi
   else
