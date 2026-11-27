@@ -8,6 +8,7 @@ import tempfile
 import time
 from pathlib import Path
 
+FRAME_PATH = Path(__file__).resolve().with_suffix(".png")
 FRAME_WIDTH = 1280
 FRAME_HEIGHT = 720
 GAME_AREA_WIDTH = 1024
@@ -225,7 +226,7 @@ def main():
         print(f"VRT requires an rtmps:// stream URL (got {STREAM_URL})", file=sys.stderr)
         return 1
     restart_game_browser()
-    actual = Path(sys.argv[1])
+    actual = FRAME_PATH
     failures = ["could not capture a centered play-start frame"]
     with tempfile.TemporaryDirectory() as temp_dir:
         previous = Path(temp_dir) / "previous.png"
