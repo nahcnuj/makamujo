@@ -3,8 +3,14 @@ import type { ScreenName, State } from "./State";
 export const DEFAULT_GAME_HOME_URL =
   "https://www.nahcnuj.work/vigilant-fiesta/";
 
-/** Magnification applied to the game board inside the browser viewport. */
-export const GAME_SCREEN_ZOOM_FACTOR = 1.25 as const;
+/**
+ * Magnification applied to the game document inside the browser viewport.
+ *
+ * The board must stay inside the game screen area (the top 8 rows of the
+ * broadcast overlay); a larger zoom pushes its lower half into the stats
+ * panel below that area.
+ */
+export const GAME_SCREEN_ZOOM_FACTOR = 1 as const;
 
 /**
  * Home URL for open / redirect / away detection.

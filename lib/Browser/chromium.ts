@@ -316,11 +316,19 @@ export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
   "--disable-renderer-backgrounding",
 ] as const;
 
-export const GAME_SCREEN_ZOOM = "1.25" as const;
-export const GAME_SCREEN_ZOOM_FACTOR = 1.25 as const;
+export const GAME_SCREEN_ZOOM = "1" as const;
+export const GAME_SCREEN_ZOOM_FACTOR = 1 as const;
 
 /** Width of the game screen area inside the 1280px broadcast frame. */
 export const GAME_SCREEN_AREA_WIDTH = 1024 as const;
+
+/**
+ * Height of the game screen area inside the 1280px broadcast frame.
+ *
+ * The overlay reserves the bottom two of its ten rows for stream stats, so
+ * anything below this line belongs to the stats panel rather than the game.
+ */
+export const GAME_SCREEN_AREA_HEIGHT = 576 as const;
 
 /**
  * Build the stylesheet injected into the game page for broadcasting.
