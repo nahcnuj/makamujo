@@ -9,6 +9,7 @@ out_file=${1:-"${script_dir}/vigilant-fiesta-start.png"}
 baseline="${script_dir}/baseline/vigilant-fiesta-start.png"
 title_baseline="${script_dir}/baseline/capture-rtmps.png"
 stream_url=${RTMPS_CAPTURE_URL:-rtmps://127.0.0.1:1936/live/stream}
+game_home_url="https://www.nahcnuj.work/vigilant-fiesta/?e2e=1"
 max_attempts=90
 retry_seconds=2
 max_title_ssim=0.9
@@ -79,9 +80,14 @@ current_frame=$(mktemp --suffix=.png)
 trap 'rm -f "${previous_frame}" "${current_frame}"' EXIT
 
 docker compose exec -T makamujo systemctl set-environment \
-  VIGILANT_FIESTA_TITLE_DWELL_MS=0 GAME_ACTIVITY_TIMEOUT_MS=7200000
-docker compose exec -T makamujo systemctl restart \
-  makamujo-screen.service makamujo-browser.service
+  VIGILANT_FIESTA_TITLE_DWELL_MS=0 GAME_ACTIVITY_TIMEOUT_MS=7200000 \
+  GAME_HOME_URL="${game_home_url}" VIGILANT_FIESTA_HOME_URL="${game_home_url}" \
+  VIGILANT_FIESTA_VRT_FREEZE=1
+docker compose exec -T makamujo systemctl stop makamujo-browser.service
+docker compose exec -T makamujo sh -c \
+  'find /tmp -mindepth 1 -maxdepth 1 -type d -name "makamujo-game-*" -exec rm -rf -- {} +'
+docker compose exec -T makamujo systemctl restart makamujo-screen.service
+docker compose exec -T makamujo systemctl start makamujo-browser.service
 
 attempts=0
 failure='could not capture a play-start frame'
