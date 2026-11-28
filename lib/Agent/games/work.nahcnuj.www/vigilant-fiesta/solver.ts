@@ -30,6 +30,8 @@ export type GameState =
       phase?: "open" | "start";
       /** Epoch ms until which the title screen is held before auto-start. */
       dwellUntil?: number;
+      /** Whether the Start button click has already been emitted. */
+      startClicked?: boolean;
     }
   | {
       type: "idle";
@@ -89,6 +91,10 @@ export function hydrate(state: GameState | SolverStart): GameState {
         dwellUntil:
           "dwellUntil" in state
             ? (state as { dwellUntil?: number }).dwellUntil
+            : undefined,
+        startClicked:
+          "startClicked" in state
+            ? (state as { startClicked?: boolean }).startClicked
             : undefined,
       };
     case "idle":
@@ -158,9 +164,9 @@ export function stepInitialize(
       if (nowMs < dwellUntil) {
         return { state, action: Action.noop };
       }
-      if (event === undefined) {
+      if (!state.startClicked) {
         return {
-          state,
+          state: { ...state, startClicked: true },
           action: Action.clickByElementId("btn-start"),
         };
       }

@@ -5,6 +5,7 @@ import {
   DEFAULT_FREE_TALK_MS,
   FREE_TALK_MS,
   resolveFreeTalkMs,
+  resolveTitleDwellMs,
   States,
   solver,
   stepIdle,
@@ -14,6 +15,7 @@ import {
 afterEach(() => {
   delete process.env.VIGILANT_FIESTA_HOME_URL;
   delete process.env.VIGILANT_FIESTA_FREE_TALK_MS;
+  delete process.env.VIGILANT_FIESTA_TITLE_DWELL_MS;
   delete process.env.VIGILANT_FIESTA_VRT_FREEZE;
 });
 
@@ -49,6 +51,16 @@ describe("resolveFreeTalkMs / getGameHomeUrl", () => {
     process.env.VIGILANT_FIESTA_HOME_URL = "http://127.0.0.1:9/game/";
     expect(getGameHomeUrl()).toBe("http://127.0.0.1:9/game/");
   });
+
+  it("reads title dwell override from env", () => {
+    process.env.VIGILANT_FIESTA_TITLE_DWELL_MS = "60000";
+    expect(resolveTitleDwellMs()).toBe(60000);
+  });
+
+  it("falls back on invalid title dwell env", () => {
+    process.env.VIGILANT_FIESTA_TITLE_DWELL_MS = "nope";
+    expect(resolveTitleDwellMs()).toBe(0);
+  });
 });
 
 describe("vigilant-fiesta stepInitialize", () => {
@@ -77,9 +89,56 @@ describe("vigilant-fiesta stepInitialize", () => {
     expect(startClick.action).toEqual(Action.clickByElementId("btn-start"));
   });
 
+  it("waits on the title until the configured dwell elapses", () => {
+    process.env.VIGILANT_FIESTA_TITLE_DWELL_MS = "60000";
+    const afterOpen = stepInitialize(
+      States.initialize(),
+      ok(Action.open(getGameHomeUrl())),
+      1_000,
+    );
+    expect(afterOpen.state).toEqual({
+      type: "initialize",
+      phase: "start",
+      dwellUntil: 61_000,
+    });
+
+    const startState = {
+      type: "initialize",
+      phase: "start",
+      dwellUntil: 61_000,
+    } as const;
+    const beforeDwell = stepInitialize(startState, undefined, 60_999);
+    expect(beforeDwell.action).toEqual(Action.noop);
+
+    const afterDwell = stepInitialize(
+      startState,
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
+      idleAt("title") as any,
+      61_000,
+    );
+    expect(afterDwell.action).toEqual(Action.clickByElementId("btn-start"));
+    expect(afterDwell.state).toEqual({
+      ...startState,
+      startClicked: true,
+    });
+
+    const clickedState = {
+      type: "initialize",
+      phase: "start",
+      dwellUntil: 61_000,
+      startClicked: true,
+    } as const;
+    const idle = stepInitialize(
+      clickedState,
+      ok(Action.clickByElementId("btn-start")),
+      61_000,
+    );
+    expect(idle.state).toEqual(States.idle());
+  });
+
   it("enters idle after start click result", () => {
     const out = stepInitialize(
-      { type: "initialize", phase: "start" },
+      { type: "initialize", phase: "start", startClicked: true },
       ok(Action.clickByElementId("btn-start")),
     );
     expect(out.state).toEqual(States.idle());
