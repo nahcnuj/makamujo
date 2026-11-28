@@ -319,6 +319,34 @@ export const GAME_BROWSER_ANTI_THROTTLE_FLAGS = [
 export const GAME_SCREEN_ZOOM = "1.25" as const;
 export const GAME_SCREEN_ZOOM_FACTOR = 1.25 as const;
 
+/** Width of the game screen area inside the 1280px broadcast frame. */
+export const GAME_SCREEN_AREA_WIDTH = 1024 as const;
+
+/**
+ * Build the stylesheet injected into the game page for broadcasting.
+ *
+ * The overlay reserves the right two of its ten columns for comments, so the
+ * game document is pinned to the left {@link GAME_SCREEN_AREA_WIDTH}px rather
+ * than centered in the full viewport. Centering it in the viewport would move
+ * the board 128px to the right of the game screen area. Both the initial
+ * injection and every later zoom application use this same stylesheet so the
+ * rendered geometry cannot drift between them.
+ */
+export const buildBroadcastLayoutCss = (zoom: number): string => {
+  const factor = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  return [
+    `html{zoom:${factor}!important}`,
+    "html,body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}",
+    `body{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:flex-start!important;width:${GAME_SCREEN_AREA_WIDTH / factor}px!important;height:auto!important;padding:0!important;margin:0!important}`,
+    "#app{margin:0 auto!important;max-width:40rem!important;width:min(100%,40rem)!important;text-align:center!important}",
+    '#play-layout{display:grid!important;grid-template-columns:1fr!important;grid-template-areas:"hud" "board"!important;justify-items:center!important;align-items:center!important;gap:0.75rem!important}',
+    "#hud-left{grid-area:hud!important;justify-self:center!important;display:flex!important;flex-direction:row!important;flex-wrap:wrap!important;align-items:stretch!important;justify-content:center!important;gap:0.5rem!important}",
+    "#game-container{grid-area:board!important;margin:0 auto!important;justify-self:center!important;display:block!important;width:fit-content!important;max-width:100%!important;padding:0!important}",
+    "#game-container > canvas{display:block!important;margin:0 auto!important}",
+    ".ad-slot,#ad-side-left,#ad-side-right{display:none!important}",
+  ].join("\n");
+};
+
 export type BrowserCreateOptions = {
   /** Magnification for the Agent's game board. */
   gameScreenZoom?: number;
@@ -406,6 +434,54 @@ export const create = async (
       removeTemporaryDirectory(userDataDir);
       throw err;
     });
+
+  // Inject the broadcast layout CSS as early as possible on every navigation
+  // so the game container is centered in the game screen area and the page
+  // background is black even when the later applyZoom() call races the
+  // initial load. The whole document is scaled by the Agent-provided
+  // magnification (root zoom), mirroring an actual browser zoom so the game
+  // screen on the broadcast looks like a zoomed browser window. Content
+  // between the title and the game board (e.g. the HUD) is kept visible; only
+  // ad slots are hidden.
+  //
+  // The broadcast overlay uses a 10-column grid and reserves 2 columns on the
+  // right for comments, so the game screen area is the left 1024px of the
+  // 1280px frame. Keep the game document pinned to that area instead of
+  // centering it in the whole viewport, which would shift it 128px right.
+  const layout = {
+    css: buildBroadcastLayoutCss(options.gameScreenZoom ?? 1),
+    zoom: options.gameScreenZoom ?? 1,
+  };
+  await ctx.addInitScript(({ css, zoom }: { css: string; zoom: number }) => {
+    const inject = () => {
+      try {
+        const styleId = "makamujo-broadcast-layout";
+        let style = document.getElementById(styleId) as HTMLStyleElement | null;
+        if (!style) {
+          style = document.createElement("style");
+          style.id = styleId;
+          (document.head ?? document.documentElement).appendChild(style);
+        }
+        style.textContent = css;
+        const factor = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+        // Scale the whole document like a real browser zoom.
+        document.documentElement.style.zoom = String(factor);
+        if (
+          typeof window !== "undefined" &&
+          typeof window.scrollTo === "function"
+        ) {
+          window.scrollTo(0, 0);
+        }
+      } catch {
+        /* page may not be ready */
+      }
+    };
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", inject, { once: true });
+    } else {
+      inject();
+    }
+  }, layout);
 
   // Reuse --app window only (do not open a second tabbed window)
   let page = ctx.pages()[0];
@@ -627,8 +703,16 @@ export const createRedirectToHomeHandler = (
   };
 };
 
+export type BroadcastLayoutOptions = {
+  zoom: number;
+  css: string;
+};
+
 export type ZoomablePage = {
-  evaluate: (fn: (zoom: number) => void, zoom: number) => Promise<unknown>;
+  evaluate: (
+    fn: (options: BroadcastLayoutOptions) => void,
+    options: BroadcastLayoutOptions,
+  ) => Promise<unknown>;
 };
 
 const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
@@ -636,11 +720,13 @@ const resolveGameScreenZoomValue = (zoom: number): number | undefined => {
 };
 
 /**
- * Apply the Agent-provided magnification to the game screen only.
- *
- * The whole document stays at 1.0 so the page layout (title/result screens,
- * HUD) is unaffected; only the game board (and, as a fallback, the playing
- * screen) is scaled up for the captured stream.
+ * Apply the Agent-provided magnification to the whole document, mirroring a
+ * normal browser zoom so the game board and the surrounding UI scale together.
+ * Content between the title and the game board (such as the HUD) is kept
+ * visible, ad slots are hidden, and the game screen area is centered within
+ * the left 1024px of the frame (the part not covered by the comment panel).
+ * The magnification is written both as an inline style on the document element
+ * and into the broadcast-layout stylesheet so it survives re-renders.
  */
 export const applyGameScreenZoom = async (
   page: ZoomablePage,
@@ -651,16 +737,28 @@ export const applyGameScreenZoom = async (
     return;
   }
   try {
-    await page.evaluate((value: number) => {
-      document.documentElement.style.zoom = "1.0";
-      const gameScreen =
-        document.getElementById("game-container") ??
-        document.getElementById("screen-playing");
-      if (gameScreen) {
-        gameScreen.style.zoom = String(value);
-      }
-      window.scrollTo(0, 0);
-    }, zoomValue);
+    await page.evaluate(
+      ({ css, zoom }: BroadcastLayoutOptions) => {
+        const factor = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+        // Scale the whole document like a real browser zoom.
+        document.documentElement.style.zoom = String(factor);
+        const styleId = "makamujo-broadcast-layout";
+        let style = document.getElementById(styleId) as HTMLStyleElement | null;
+        if (!style) {
+          style = document.createElement("style");
+          style.id = styleId;
+          (document.head ?? document.documentElement).appendChild(style);
+        }
+        style.textContent = css;
+        if (
+          typeof window !== "undefined" &&
+          typeof window.scrollTo === "function"
+        ) {
+          window.scrollTo(0, 0);
+        }
+      },
+      { zoom: zoomValue, css: buildBroadcastLayoutCss(zoomValue) },
+    );
   } catch {
     /* page may not be ready */
   }

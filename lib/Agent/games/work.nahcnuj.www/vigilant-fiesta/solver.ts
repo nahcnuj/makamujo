@@ -65,6 +65,9 @@ export const resolveTitleDwellMs = (
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 };
 
+const isVrtCaptureFrozen = (env: NodeJS.ProcessEnv = process.env): boolean =>
+  env.VIGILANT_FIESTA_VRT_FREEZE === "1";
+
 export const States = {
   initialize: (): Extract<GameState, { type: "initialize" }> => ({
     type: "initialize",
@@ -107,6 +110,7 @@ type SightLike = {
 };
 
 const pickPlayAction = (): Action.Action => {
+  if (isVrtCaptureFrozen()) return Action.noop;
   // Lightweight random policy: move / rotate / hard-drop.
   // Weights favor hard-drop so the board progresses for stream viewers.
   const roll = Math.random();

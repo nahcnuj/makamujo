@@ -299,6 +299,12 @@ jobs:
         if: steps.provisioned-image-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
+          # The provisioned image is committed with --pause=false. OBS keeps
+          # rewriting its browser profile cache while it runs, so committing a
+          # live container races those writes and fails with a missing file.
+          # Stop the services that write to the filesystem before cleaning it;
+          # the overlay step restarts them after the PR source is copied in.
+          docker compose exec -T makamujo systemctl stop makamujo-obs.service makamujo-browser.service
           docker compose exec -T makamujo bash -c '
             set -e
             apt-get clean || true

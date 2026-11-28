@@ -14,6 +14,7 @@ import {
 afterEach(() => {
   delete process.env.VIGILANT_FIESTA_HOME_URL;
   delete process.env.VIGILANT_FIESTA_FREE_TALK_MS;
+  delete process.env.VIGILANT_FIESTA_VRT_FREEZE;
 });
 
 const ok = (action: Action.Action) => ({
@@ -197,6 +198,16 @@ describe("vigilant-fiesta stepIdle", () => {
         out.action.key,
       );
     }
+  });
+
+  it("keeps the board still during VRT capture", () => {
+    process.env.VIGILANT_FIESTA_VRT_FREEZE = "1";
+    const out = stepIdle(
+      { type: "idle", phase: "sight" },
+      // biome-ignore lint/suspicious/noExplicitAny: test-only partial state/action cast
+      idleAt("playing") as any,
+    );
+    expect(out.action).toEqual(Action.noop);
   });
 
   it("returns to sight after act", () => {
