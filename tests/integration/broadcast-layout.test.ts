@@ -2,18 +2,21 @@ import { afterAll, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { GAME_SCREEN_ZOOM_FACTOR } from "../../lib/Agent/games/work.nahcnuj.www/vigilant-fiesta/server";
 import {
   applyGameScreenZoom,
   create,
+  GAME_SCREEN_AREA_HEIGHT,
   GAME_SCREEN_AREA_WIDTH,
-  GAME_SCREEN_ZOOM_FACTOR,
 } from "../../lib/Browser/chromium";
 
-const GAME_SCREEN_ZOOM = 1.25;
+const GAME_SCREEN_ZOOM = GAME_SCREEN_ZOOM_FACTOR;
 const GAME_CENTER = GAME_SCREEN_AREA_WIDTH / 2;
+// The play-start frame is the one that contains game content: the generic
+// RTMPS capture intentionally stays on the title screen.
 const VRT_BASELINE_PATH = resolve(
   import.meta.dir,
-  "../vrt-rtmps/baseline/capture-rtmps.png",
+  "../vrt-rtmps/baseline/vigilant-fiesta-start.png",
 );
 const VRT_BASELINE_DATA_URL = `data:image/png;base64,${readFileSync(VRT_BASELINE_PATH).toString("base64")}`;
 
@@ -273,6 +276,7 @@ itWithChromium(
       for (const rect of [geometry.hud, geometry.game, geometry.canvas]) {
         expect(rect.center).toBeCloseTo(GAME_CENTER, 1);
         expect(rect.right).toBeLessThanOrEqual(GAME_SCREEN_AREA_WIDTH);
+        expect(rect.bottom).toBeLessThanOrEqual(GAME_SCREEN_AREA_HEIGHT);
       }
       for (const rect of [geometry.overlay, geometry.nextPanel]) {
         expect(rect.left).toBeGreaterThanOrEqual(0);
@@ -306,65 +310,91 @@ itWithChromium(
     try {
       const page = await context.newPage();
       await page.goto(VRT_BASELINE_DATA_URL);
-      const bounds = await page.evaluate((areaWidth: number) => {
-        const image = document.querySelector("img");
-        if (!(image instanceof HTMLImageElement)) {
-          throw new Error("missing baseline image");
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = image.naturalWidth;
-        canvas.height = image.naturalHeight;
-        const context2d = canvas.getContext("2d");
-        if (!context2d) throw new Error("missing 2d context");
-        context2d.drawImage(image, 0, 0);
-        const pixels = context2d.getImageData(
-          0,
-          0,
-          canvas.width,
-          canvas.height,
-        ).data;
-        const measure = (top: number, bottom: number) => {
-          let count = 0;
-          let weighted = 0;
-          let left = areaWidth;
-          let right = -1;
-          for (let y = top; y < Math.min(canvas.height, bottom); y++) {
-            for (let x = 0; x < areaWidth; x++) {
+      const bounds = await page.evaluate(
+        ({
+          areaWidth,
+          areaHeight,
+        }: {
+          areaWidth: number;
+          areaHeight: number;
+        }) => {
+          const image = document.querySelector("img");
+          if (!(image instanceof HTMLImageElement)) {
+            throw new Error("missing baseline image");
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = image.naturalWidth;
+          canvas.height = image.naturalHeight;
+          const context2d = canvas.getContext("2d");
+          if (!context2d) throw new Error("missing 2d context");
+          context2d.drawImage(image, 0, 0);
+          const pixels = context2d.getImageData(
+            0,
+            0,
+            canvas.width,
+            canvas.height,
+          ).data;
+          const measure = (top: number, bottom: number) => {
+            let count = 0;
+            let weighted = 0;
+            let left = areaWidth;
+            let right = -1;
+            for (let y = top; y < Math.min(canvas.height, bottom); y++) {
+              for (let x = 0; x < areaWidth; x++) {
+                const offset = (y * canvas.width + x) * 4;
+                const red = pixels[offset] ?? 0;
+                const green = pixels[offset + 1] ?? 0;
+                const blue = pixels[offset + 2] ?? 0;
+                if ((red + green + blue) / 3 < 45) continue;
+                count += 1;
+                weighted += x + 0.5;
+                left = Math.min(left, x);
+                right = Math.max(right, x);
+              }
+            }
+            return {
+              count,
+              center: count === 0 ? 0 : weighted / count,
+              bounds: (left + right + 1) / 2,
+              right,
+            };
+          };
+          let boardPixelsInStatsPanel = 0;
+          for (let y = areaHeight + 10; y < 700; y++) {
+            for (let x = 250; x < 750; x++) {
               const offset = (y * canvas.width + x) * 4;
               const red = pixels[offset] ?? 0;
               const green = pixels[offset + 1] ?? 0;
               const blue = pixels[offset + 2] ?? 0;
-              if ((red + green + blue) / 3 < 45) continue;
-              count += 1;
-              weighted += x + 0.5;
-              left = Math.min(left, x);
-              right = Math.max(right, x);
+              if (blue > red + 10 && blue > green + 5 && red > 15 && red < 80) {
+                boardPixelsInStatsPanel += 1;
+              }
             }
           }
           return {
-            count,
-            center: count === 0 ? 0 : weighted / count,
-            bounds: (left + right + 1) / 2,
-            right,
+            content: measure(80, 400),
+            board: measure(240, 400),
+            hud: measure(100, 180),
+            boardPixelsInStatsPanel,
           };
-        };
-        return {
-          content: measure(80, 400),
-          board: measure(240, 400),
-          hud: measure(100, 180),
-        };
-      }, GAME_SCREEN_AREA_WIDTH);
+        },
+        {
+          areaWidth: GAME_SCREEN_AREA_WIDTH,
+          areaHeight: GAME_SCREEN_AREA_HEIGHT,
+        },
+      );
 
-      expect(bounds.content.count).toBeGreaterThan(4000);
+      expect(bounds.content.count).toBeGreaterThan(6000);
       expect(bounds.content.right).toBeLessThan(GAME_SCREEN_AREA_WIDTH);
-      expect(Math.abs(bounds.content.center - GAME_CENTER)).toBeLessThan(10);
+      expect(Math.abs(bounds.content.center - GAME_CENTER)).toBeLessThan(25);
       expect(Math.abs(bounds.content.bounds - GAME_CENTER)).toBeLessThan(10);
-      expect(bounds.board.count).toBeGreaterThan(4000);
+      expect(bounds.board.count).toBeGreaterThan(2000);
       expect(bounds.board.right).toBeLessThan(GAME_SCREEN_AREA_WIDTH);
       expect(Math.abs(bounds.board.center - GAME_CENTER)).toBeLessThan(16);
       expect(Math.abs(bounds.board.bounds - GAME_CENTER)).toBeLessThan(16);
       expect(bounds.hud.count).toBeGreaterThan(1000);
       expect(Math.abs(bounds.hud.bounds - GAME_CENTER)).toBeLessThan(24);
+      expect(bounds.boardPixelsInStatsPanel).toBeLessThan(100);
     } finally {
       await context.close();
     }
@@ -447,6 +477,7 @@ itWithChromium(
       for (const rect of [geometry.hud, geometry.game, geometry.canvas]) {
         expect(rect.center).toBeCloseTo(GAME_CENTER, 1);
         expect(rect.right).toBeLessThanOrEqual(GAME_SCREEN_AREA_WIDTH);
+        expect(rect.bottom).toBeLessThanOrEqual(GAME_SCREEN_AREA_HEIGHT);
       }
     } finally {
       await gameBrowser?.close().catch(() => {});

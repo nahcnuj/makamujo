@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { removeTemporaryDirectory } from "../temporaryDirectory";
 import {
   applyGameScreenZoom,
+  type BroadcastLayoutOptions,
   cleanupChromiumLockFiles,
   createClickByElementId,
   createPopupPageHandler,
@@ -332,11 +333,11 @@ describe("resolveEvaluateTimeoutMs", () => {
 
 describe("applyGameScreenZoom", () => {
   it("applies the Agent-provided magnification to the page", async () => {
-    let received: { zoom: number; css: string } | undefined;
+    let received: BroadcastLayoutOptions | undefined;
     const page = {
       evaluate: async (
-        _fn: (options: { zoom: number; css: string }) => void,
-        options: { zoom: number; css: string },
+        _fn: (options: BroadcastLayoutOptions) => void,
+        options: BroadcastLayoutOptions,
       ) => {
         received = options;
       },
@@ -371,11 +372,11 @@ describe("isVigilantFiestaGameUrl", () => {
 
 describe("applyGameScreenZoom default", () => {
   it("applies the default magnification when none is given", async () => {
-    let received: { zoom: number; css: string } | undefined;
+    let received: BroadcastLayoutOptions | undefined;
     const page = {
       evaluate: async (
-        _fn: (options: { zoom: number; css: string }) => void,
-        options: { zoom: number; css: string },
+        _fn: (options: BroadcastLayoutOptions) => void,
+        options: BroadcastLayoutOptions,
       ) => {
         received = options;
       },
