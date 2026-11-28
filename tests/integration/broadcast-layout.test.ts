@@ -12,9 +12,11 @@ import {
 
 const GAME_SCREEN_ZOOM = GAME_SCREEN_ZOOM_FACTOR;
 const GAME_CENTER = GAME_SCREEN_AREA_WIDTH / 2;
+// The play-start frame is the one that contains game content: the generic
+// RTMPS capture intentionally stays on the title screen.
 const VRT_BASELINE_PATH = resolve(
   import.meta.dir,
-  "../vrt-rtmps/baseline/capture-rtmps.png",
+  "../vrt-rtmps/baseline/vigilant-fiesta-start.png",
 );
 const VRT_BASELINE_DATA_URL = `data:image/png;base64,${readFileSync(VRT_BASELINE_PATH).toString("base64")}`;
 
