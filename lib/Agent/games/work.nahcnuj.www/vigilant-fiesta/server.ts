@@ -6,11 +6,12 @@ export const DEFAULT_GAME_HOME_URL =
 /**
  * Magnification applied to the game document inside the browser viewport.
  *
- * The board must stay inside the game screen area (the top 8 rows of the
- * broadcast overlay); a larger zoom pushes its lower half into the stats
- * panel below that area.
+ * The title screen keeps this magnification. Once the game starts, the
+ * playing screen is scaled back inside the browser so the board stays in the
+ * game screen area (the top 8 rows of the broadcast overlay) instead of
+ * spilling into the stats panel below it.
  */
-export const GAME_SCREEN_ZOOM_FACTOR = 1 as const;
+export const GAME_SCREEN_ZOOM_FACTOR = 1.25 as const;
 
 /**
  * Home URL for open / redirect / away detection.
